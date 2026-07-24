@@ -7,14 +7,29 @@ export function normalizeProjectSequentialScope(value: unknown): Project['sequen
     return undefined;
 }
 
-const PROJECT_TASK_SORT_BY_VALUES = new Set<TaskSortBy>([
-    'due',
-    'start',
-    'review',
-    'title',
-    'created',
-    'created-desc',
-]);
+/** Every task sort mode, including 'default' (= manual project order).
+ *  Wire-level allowlist: the cloud server validates against this, so it must
+ *  stay a superset of what any client can persist. */
+export const TASK_SORT_BY_VALUES = [
+    'default', 'due', 'start', 'review', 'title', 'created', 'created-desc',
+] as const;
+
+export const TASK_SORT_BY_VALUE_SET: ReadonlySet<TaskSortBy> =
+    new Set<TaskSortBy>(TASK_SORT_BY_VALUES);
+
+// Compile-time exhaustiveness assertion: adding a member to the TaskSortBy
+// union in types.ts without updating TASK_SORT_BY_VALUES is a typecheck error.
+type _TaskSortByValuesAreExhaustive =
+    Exclude<TaskSortBy, (typeof TASK_SORT_BY_VALUES)[number]> extends never ? true : never;
+const _assertTaskSortByValuesAreExhaustive: _TaskSortByValuesAreExhaustive = true;
+void _assertTaskSortByValuesAreExhaustive;
+
+// 'default' means "no explicit sort" — normalizing it to undefined is what
+// keeps sync signatures stable between a client that writes 'default' and
+// one that omits the field (sync-signatures.ts:158).
+const PROJECT_TASK_SORT_BY_VALUES = new Set<TaskSortBy>(
+    TASK_SORT_BY_VALUES.filter((value) => value !== 'default'),
+);
 
 export function normalizeProjectTaskSortBy(value: unknown): TaskSortBy | undefined {
     if (typeof value === 'string' && PROJECT_TASK_SORT_BY_VALUES.has(value as TaskSortBy)) {

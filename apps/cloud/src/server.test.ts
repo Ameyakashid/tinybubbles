@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { CLOUD_SYNC_TOKEN_PATTERN, cloudHeadJson, cloudPutJson, type AppData, type Task } from '@mindwtr/core';
+import { CLOUD_SYNC_TOKEN_PATTERN, cloudHeadJson, cloudPutJson, TASK_SORT_BY_VALUES, type AppData, type Task } from '@mindwtr/core';
 import {
     getAuthFailureRateKey,
     getAuthFailureTokenRateKey,
@@ -1163,6 +1163,47 @@ describe('cloud server api', () => {
         const getResponse = await fetch(`${baseUrl}/v1/data`, { headers: authHeaders });
         const stored = await getResponse.json() as AppData;
         expect(stored.tasks.map((task) => task.id)).toEqual(['server-only']);
+    });
+
+    test('PUT /v1/data accepts every core TaskSortBy value and rejects a bogus one', async () => {
+        const iso = '2026-01-01T00:00:00.000Z';
+        const projects = TASK_SORT_BY_VALUES.map((taskSortBy, index) => ({
+            id: `p-${index}`,
+            title: `Project ${taskSortBy}`,
+            status: 'active' as const,
+            color: '#000000',
+            order: index,
+            tagIds: [],
+            taskSortBy,
+            createdAt: iso,
+            updatedAt: iso,
+        }));
+
+        const acceptedResponse = await fetch(`${baseUrl}/v1/data`, {
+            method: 'PUT',
+            headers: {
+                ...authHeaders,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({ tasks: [], projects, sections: [], areas: [], settings: {} }),
+        });
+        expect(acceptedResponse.status).toBe(200);
+
+        const rejectedResponse = await fetch(`${baseUrl}/v1/data`, {
+            method: 'PUT',
+            headers: {
+                ...authHeaders,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                tasks: [],
+                projects: [{ ...projects[0], taskSortBy: 'bogus-sort-mode' }],
+                sections: [],
+                areas: [],
+                settings: {},
+            }),
+        });
+        expect(rejectedResponse.status).toBe(400);
     });
 
     test('auth failure throttling never bypasses token checks for PUT /v1/data', async () => {

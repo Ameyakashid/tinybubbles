@@ -589,6 +589,8 @@ export {
     type ProjectSequenceTaskCue,
     projectHasNextAction,
     shouldPromptForProjectNextAction,
+    TASK_SORT_BY_VALUE_SET,
+    TASK_SORT_BY_VALUES,
 } from './project-utils';
 
 export {

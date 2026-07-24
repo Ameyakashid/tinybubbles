@@ -5,6 +5,7 @@ import {
     normalizeRepeatReminderMinutes,
     normalizeTimeSpentMinutes,
     searchAll,
+    TASK_SORT_BY_VALUE_SET,
     type Area,
     type AppData,
     type Project,
@@ -48,16 +49,6 @@ const CLOUD_RECURRENCE_ALLOWED_KEYS = new Set([
     'dueAnchorDay',
     'reviewAnchorDay',
     'rrule',
-]);
-
-const PROJECT_TASK_SORT_BY_VALUES = new Set<NonNullable<Project['taskSortBy']>>([
-    'default',
-    'due',
-    'start',
-    'review',
-    'title',
-    'created',
-    'created-desc',
 ]);
 
 function validateTaskRepeatReminderMinutes(value: Record<string, unknown>): string | null {
@@ -125,7 +116,7 @@ function validateProjectPropValues(value: Record<string, unknown>): string | nul
     const taskSortBy = value.taskSortBy;
     if (taskSortBy === undefined || taskSortBy === null) return null;
     if (typeof taskSortBy === 'string'
-        && PROJECT_TASK_SORT_BY_VALUES.has(taskSortBy as NonNullable<Project['taskSortBy']>)) {
+        && TASK_SORT_BY_VALUE_SET.has(taskSortBy as NonNullable<Project['taskSortBy']>)) {
         return null;
     }
     return 'Invalid project taskSortBy';
