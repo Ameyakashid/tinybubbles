@@ -256,10 +256,10 @@ function TaskListComponent({
     reorderProjectTasks,
     reorderSections,
     settings,
-    focusedCount,
     updateSettings,
     highlightTaskId,
     setHighlightTask,
+    getDerivedState,
   } = useTaskStore((state) => ({
     tasks: taskSource ?? (includeArchived ? state._allTasks : state.tasks),
     projects: state.projects,
@@ -276,15 +276,10 @@ function TaskListComponent({
     reorderProjectTasks: state.reorderProjectTasks,
     reorderSections: state.reorderSections,
     settings: state.settings,
-    focusedCount: state.tasks.reduce(
-      (count, task) => count + (
-        task.isFocusedToday && task.status !== 'done' && task.status !== 'reference' ? 1 : 0
-      ),
-      0,
-    ),
     updateSettings: state.updateSettings,
     highlightTaskId: state.highlightTaskId,
     setHighlightTask: state.setHighlightTask,
+    getDerivedState: state.getDerivedState,
   }), shallow);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [quickAddFocus, setQuickAddFocus] = useState(false);
@@ -440,6 +435,7 @@ function TaskListComponent({
   const aiEnabled = settings?.ai?.enabled === true;
   const quickAddCopilotEnabled = quickAddAvailable && enableCopilot && aiEnabled;
   const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
+  const focusedCount = getDerivedState().focusedCount;
   const canQuickAddFocus = quickAddFocus || canStarNewCapture({ focusedCount, focusTaskLimit });
   const quickAddFocusDisabledReason = formatFocusTaskLimitText(
     tFallback(t, 'agenda.maxFocusItems', 'Max {{count}} focus items.'),

@@ -828,6 +828,39 @@ describe('TaskList project quick add', () => {
     });
   });
 
+  it('reads focusedCount from the memoized derived state, not a fresh scan of the rendered task list (#766)', async () => {
+    const visibleTask = makeTask('task-row-context-derived', 'Review launch notes');
+    // state.tasks intentionally disagrees with _allTasks here: if focusedCount
+    // were computed by scanning state.tasks (the pre-fix regression) it would
+    // report 5; the memoized getDerivedState() correctly counts _allTasks.
+    storeState.tasks = Array.from(
+      { length: 5 },
+      (_, index) => makeTask(`misleading-focused-${index}`, `Misleading ${index}`, { isFocusedToday: true }),
+    );
+    storeState._allTasks = [visibleTask];
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <TaskList
+          allowAdd={false}
+          showHeader={false}
+          statusFilter="next"
+          taskSource={[visibleTask]}
+          title="Next"
+        />,
+      );
+    });
+
+    const row = tree.root.findByType('SwipeableTaskItem' as unknown as React.ElementType);
+    expect(row.props.rowContext.focusedCount).toBe(0);
+    expect(storeState.getDerivedState).toHaveBeenCalled();
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
   it('uses compact draggable rows without extra placeholder or scale overlays for long project reorder lists', async () => {
     const longTaskList = Array.from({ length: 130 }, (_, index) => makeTask(
       `task-${index}`,
