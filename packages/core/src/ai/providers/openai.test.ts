@@ -321,7 +321,7 @@ describe('openai structured outputs', () => {
         );
     });
 
-    it('falls back to json_object on custom OpenAI-compatible endpoints', async () => {
+    it('uses json_object first on custom OpenAI-compatible endpoints', async () => {
         const fetchMock = vi.fn(async () => mockOpenAiSuccess());
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -335,6 +335,40 @@ describe('openai structured outputs', () => {
 
         const body = readBody(fetchMock);
         expect(body.response_format).toEqual({ type: 'json_object' });
+    });
+
+    it('retries custom endpoints with json_schema when the server requires it', async () => {
+        const requiresSchema = () =>
+            new Response(
+                JSON.stringify({ error: { message: "'response_format.type' must be 'json_schema'" } }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
+            );
+        let call = 0;
+        const fetchMock = vi.fn(async () => {
+            call += 1;
+            return call === 1 ? requiresSchema() : mockOpenAiSuccess();
+        });
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const provider = createOpenAIProvider({
+            provider: 'openai',
+            endpoint: 'http://localhost:1234/v1/chat/completions',
+            apiKey: '',
+            model: 'meta-llama-3-8b-instruct',
+        });
+        const result = await provider.clarifyTask({ title: 'Plan trip' });
+
+        expect(result.question).toBe('What is the next action?');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const first = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, unknown>;
+        const second = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body)) as Record<string, unknown>;
+        expect(first.response_format).toEqual({ type: 'json_object' });
+        expect(second.response_format).toEqual(
+            expect.objectContaining({
+                type: 'json_schema',
+                json_schema: expect.objectContaining({ name: 'clarify_response', strict: true }),
+            }),
+        );
     });
 
     it('sends the operation-specific schema for each method', async () => {

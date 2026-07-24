@@ -201,6 +201,14 @@ const isUnsupportedResponseFormatError = (info: OpenAIErrorInfo): boolean => {
     return haystack.includes('response_format') || haystack.includes('json_schema') || haystack.includes('structured output');
 };
 
+const requiresJsonSchemaResponseFormat = (info: OpenAIErrorInfo): boolean => {
+    if (info.status !== 400) return false;
+    const haystack = `${info.message} ${info.code} ${info.type}`.toLowerCase();
+    return haystack.includes('response_format')
+        && haystack.includes('json_schema')
+        && (haystack.includes('must') || haystack.includes('only'));
+};
+
 function buildOpenAIError(info: OpenAIErrorInfo, usingOfficialOpenAI: boolean): Error {
     const { status, message, code, type, raw } = info;
 
@@ -254,13 +262,15 @@ async function requestOpenAI(config: AIProviderConfig, prompt: { system: string;
     // behavior changes in the future.
     const hasExplicitTemperature = Object.prototype.hasOwnProperty.call(extraBodyParams, 'temperature');
 
-    // Prefer strict Structured Outputs on the official endpoint for reliable JSON;
-    // custom OpenAI-compatible endpoints keep json_object since many don't support
-    // json_schema. response_format is a protected core field (set below, after the
-    // extraBodyParams spread) so parsing always receives JSON — unlike temperature,
-    // it is intentionally NOT overridable via extraBodyParams.
-    const responseFormat = usingOfficialOpenAI && schema
+    // Prefer strict Structured Outputs on the official endpoint. Custom endpoints
+    // start with json_object for compatibility, then retry with json_schema if the
+    // server explicitly requires it (LM Studio). response_format stays protected
+    // from extraBodyParams so every operation uses its matching schema.
+    const jsonSchemaResponseFormat = schema
         ? { type: 'json_schema', json_schema: { name: schema.name, strict: true, schema: schema.schema } }
+        : undefined;
+    const responseFormat = usingOfficialOpenAI && jsonSchemaResponseFormat
+        ? jsonSchemaResponseFormat
         : { type: 'json_object' };
 
     const body = {
@@ -324,12 +334,14 @@ async function requestOpenAI(config: AIProviderConfig, prompt: { system: string;
 
     let response = await dispatch(body);
 
-    // If a (user-entered) official model rejects json_schema, retry once with
-    // json_object so pre-Structured-Outputs models keep working.
-    if (!response.ok && usingOfficialOpenAI && schema && response.status === 400) {
+    // Negotiate the opposite structured-output mode when an endpoint names the
+    // one it requires: older official models use json_object; LM Studio uses json_schema.
+    if (!response.ok && jsonSchemaResponseFormat && response.status === 400) {
         const info = await readOpenAIErrorInfo(response);
-        if (isUnsupportedResponseFormatError(info)) {
+        if (usingOfficialOpenAI && isUnsupportedResponseFormatError(info)) {
             response = await dispatch({ ...body, response_format: { type: 'json_object' } });
+        } else if (!usingOfficialOpenAI && requiresJsonSchemaResponseFormat(info)) {
+            response = await dispatch({ ...body, response_format: jsonSchemaResponseFormat });
         } else {
             throw buildOpenAIError(info, usingOfficialOpenAI);
         }
