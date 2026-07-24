@@ -94,6 +94,8 @@ import {
 } from './lib/desktop-sync-runtime';
 import { resolveCloseBehavior } from './lib/window-behavior';
 import { handleDesktopCloseRequest } from './lib/close-request-handler';
+import { raceCloseFlush } from './lib/close-flush-race';
+import { useConfirmDialog } from './hooks/useConfirmDialog';
 import { subscribeNavigateEvent } from './lib/navigation-events';
 import { shouldOpenDesktopFirstRunOnboarding, subscribeDesktopOnboardingEvent } from './lib/desktop-onboarding-events';
 import { QUICK_ADD_SAVED_EVENT } from './lib/quick-add-saved-event';
@@ -133,6 +135,11 @@ const DONATION_PROMPT_ENABLED = (
     || import.meta.env.VITE_DONATION_PROMPT_ENABLED === 'true'
 );
 const DONATION_PROMPT_STARTUP_DELAY_MS = 2000;
+// #913: a hung save_data invoke used to leave the pre-close flush awaited with
+// no bound, wedging the window shut forever. Past this, stop blocking and ask
+// the user — generously past any normal save, and past the native watchdog's
+// 5s so its forced trace lands first if the whole channel is dead.
+const CLOSE_FLUSH_TIMEOUT_MS = 10_000;
 const MS_STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=9N0V5B0B6FRX';
 const MAC_APP_STORE_REVIEW_URL = 'macappstore://itunes.apple.com/app/id6758597144?action=write-review';
 
@@ -266,6 +273,7 @@ function App() {
     const settingsTimeFormat = useTaskStore((state) => state.settings?.timeFormat);
     const updateSettings = useTaskStore((state) => state.updateSettings);
     const showToast = useUiStore((state) => state.showToast);
+    const { requestConfirmation, confirmModal } = useConfirmDialog();
     const { t, language, setLanguage } = useLanguage();
     const isActiveRef = useRef(true);
     const lastSyncErrorRef = useRef<string | null>(null);
@@ -611,6 +619,14 @@ function App() {
     const translateOrFallback = useCallback((key: string, fallback: string) => {
         return translateWithFallback(t, key, fallback);
     }, [t]);
+    // `t` is rebuilt on every LanguageProvider render (translations loading,
+    // language switch), so translateOrFallback is not referentially stable.
+    // The desktop setup effect below registers close listeners, file watchers
+    // and notifications — depending on it directly would tear all of that down
+    // and re-run fetchData every time translations settle. Read it through a
+    // ref instead so the effect keeps only stable dependencies.
+    const translateOrFallbackRef = useRef(translateOrFallback);
+    translateOrFallbackRef.current = translateOrFallback;
 
     const donationPromptAnnouncement = useMemo<AppAnnouncement>(() => ({
         ...DONATION_PROMPT_ANNOUNCEMENT,
@@ -696,15 +712,43 @@ function App() {
                         // Forced close-path trace: #913 reports the quit chain dying
                         // silently on Windows, so each hop logs even with
                         // diagnostics off — a stuck run's log then names the hop.
-                        void logInfo('Close trace: flush before close started', { scope: 'app', force: true });
-                        closingPromise = flushPendingSave()
-                            .catch((error) => reportError('Save failed', error))
-                            .finally(() => {
-                                closingPromise = null;
-                                isClosing = false;
-                                void logInfo('Close trace: flush before close settled', { scope: 'app', force: true });
-                            });
-                        await closingPromise;
+                        const logStep = (step: string) => {
+                            void logInfo(`Close trace: ${step}`, { scope: 'app', force: true });
+                        };
+                        const racePromise = raceCloseFlush({
+                            flush: flushPendingSave,
+                            timeoutMs: CLOSE_FLUSH_TIMEOUT_MS,
+                            logStep,
+                            reportError,
+                        });
+                        closingPromise = racePromise.then(() => undefined);
+                        let timedOut = false;
+                        try {
+                            ({ timedOut } = await racePromise);
+                        } finally {
+                            // Un-latch as soon as the bounded race is over so a repeat
+                            // close attempt (Alt+F4 again) is never silently swallowed
+                            // forever — the #913 reporter's "nothing happened at all".
+                            closingPromise = null;
+                            isClosing = false;
+                        }
+                        if (!timedOut) return;
+                        const closeAnyway = await requestConfirmation({
+                            title: translateOrFallbackRef.current('app.closeStillSavingTitle', 'Mindwtr is still saving'),
+                            description: translateOrFallbackRef.current(
+                                'app.closeStillSavingBody',
+                                'Mindwtr has not finished saving your recent changes. '
+                                + 'Close anyway? Unsaved changes will be lost.'
+                            ),
+                            confirmLabel: translateOrFallbackRef.current('common.close', 'Close'),
+                            cancelLabel: translateOrFallbackRef.current('common.cancel', 'Cancel'),
+                        });
+                        if (!closeAnyway) {
+                            logStep('user kept the window open while save continues');
+                            return;
+                        }
+                        logStep('user chose to close while save still pending');
+                        await quitApp().catch((error) => reportError('Quit failed', error));
                     });
                     if (disposed) {
                         unlisten();
@@ -844,7 +888,7 @@ function App() {
             SyncService.stopFileWatcher().catch((error) => reportError('File watcher failed', error));
             unsubscribeExternalSync();
         };
-    }, [fetchData, setError, showToast]);
+    }, [fetchData, quitApp, requestConfirmation, setError, showToast]);
 
     useEffect(() => {
         if (!isTauriRuntime()) return;
@@ -1473,6 +1517,7 @@ function App() {
                     </Suspense>
                     <GlobalSearch onNavigate={(view, _id) => handleViewChange(view)} />
                     <QuickAddModal />
+                    {confirmModal}
                     <CloseBehaviorModal
                         isOpen={closePromptOpen}
                         title={translateOrFallback('settings.closeBehaviorPromptTitle', 'Close Mindwtr?')}

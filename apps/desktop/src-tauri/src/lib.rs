@@ -1330,11 +1330,15 @@ pub fn run() {
                             &handle,
                             "Close trace: native close fallback timed out waiting for acknowledgement",
                         );
+                        // #913: the app cannot close right now, which is exactly when
+                        // the user must be able to see it and act on it. Hiding here
+                        // used to turn a stuck save into a silent zombie process that
+                        // still held the only copy of unsaved edits.
                         if let Some(w) = handle.get_webview_window("main") {
-                            if w.is_visible().unwrap_or(true) {
-                                let _ = w.set_skip_taskbar(true);
-                                let _ = w.hide();
+                            if !w.is_visible().unwrap_or(true) {
+                                let _ = w.show();
                             }
+                            let _ = w.set_focus();
                         }
                     });
                 }

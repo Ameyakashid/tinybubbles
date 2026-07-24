@@ -2,6 +2,8 @@ export const viOverrides: Record<string, string> = {
         'taskEdit.quickAddTokenHint': 'Thêm nhanh: {{token}}',
         // App
         'app.name': 'Mindwtr',
+        'app.closeStillSavingTitle': "Mindwtr vẫn đang lưu",
+        'app.closeStillSavingBody': "Mindwtr chưa lưu xong các thay đổi gần đây của bạn. Vẫn đóng ứng dụng? Các thay đổi chưa lưu sẽ bị mất.",
         'donationPrompt.title': "Giữ Mindwtr miễn phí và độc lập",
         'donationPrompt.body': "Mindwtr không có quảng cáo, theo dõi hay tường phí. Ứng dụng được xây dựng bởi một người và được hỗ trợ bởi những người thấy nó hữu ích. Nếu Mindwtr giúp bạn giữ đầu óc rõ ràng, một khoản đóng góp nhỏ sẽ giúp ứng dụng tiếp tục được cải thiện.",
         'donationPrompt.dismiss': "Có thể để sau",

@@ -1,4 +1,4 @@
-import { AppData, SQLITE_SCHEMA_VERSION, StorageAdapter, TaskQueryOptions, type Task } from '@mindwtr/core';
+import { AppData, SQLITE_SCHEMA_VERSION, StorageAdapter, TaskQueryOptions, useTaskStore, type Task } from '@mindwtr/core';
 import { invoke } from '@tauri-apps/api/core';
 import { logInfo, logWarn } from './app-log';
 import { reportError } from './report-error';
@@ -7,6 +7,25 @@ import { markLocalSqliteWrite, markLocalWrite } from './local-data-watcher';
 const STORAGE_SCHEMA_VERSION_KEY = 'mindwtr-storage-schema-version';
 let storageInitLogged = false;
 let saveQueue: Promise<void> = Promise.resolve();
+
+// #913: save_data can hang indefinitely without ever rejecting, so the normal
+// catch block never fires and the UI looks fine while edits sit unsaved. This
+// only observes and surfaces that through the store's error channel — it must
+// never alter save/retry semantics (see the handoff's Do NOT list).
+const SAVE_DATA_STUCK_WARNING_MS = 15_000;
+
+const buildSaveDataStuckMessage = (): string => (
+    `Save has not completed after ${SAVE_DATA_STUCK_WARNING_MS / 1000}s. `
+    + 'Recent changes may not be saved yet.'
+);
+
+const setStorageWarning = (message: string | null) => {
+    try {
+        useTaskStore.getState().setError(message);
+    } catch {
+        // Store not initialized yet (e.g. very early startup); nothing to surface.
+    }
+};
 
 const enqueueSave = (operation: () => Promise<void>): Promise<void> => {
     const run = saveQueue.catch(() => undefined).then(operation);
@@ -82,6 +101,15 @@ export const tauriStorage: StorageAdapter = {
     saveData: async (data: AppData): Promise<void> => enqueueSave(async () => {
         markLocalWrite(data);
         markLocalSqliteWrite();
+        let stuckMessage: string | null = null;
+        const stuckTimer = setTimeout(() => {
+            stuckMessage = buildSaveDataStuckMessage();
+            void logWarn('save_data invoke has not completed', {
+                scope: 'storage',
+                extra: { thresholdMs: SAVE_DATA_STUCK_WARNING_MS },
+            });
+            setStorageWarning(stuckMessage);
+        }, SAVE_DATA_STUCK_WARNING_MS);
         try {
             await invoke<void>('save_data' as any, { data } as any);
             markLocalSqliteWrite();
@@ -90,6 +118,19 @@ export const tauriStorage: StorageAdapter = {
             reportError('saveData failure', error, { category: 'storage', scope: 'storage' });
             const detail = error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to save data: ${detail}`);
+        } finally {
+            clearTimeout(stuckTimer);
+            // Only clear our own warning — never clobber an unrelated error that
+            // may have been set (by the catch above, or elsewhere) in the meantime.
+            if (stuckMessage) {
+                try {
+                    if (useTaskStore.getState().error === stuckMessage) {
+                        setStorageWarning(null);
+                    }
+                } catch {
+                    // Store not initialized; nothing to clear.
+                }
+            }
         }
     }),
     saveTask: async (task: Task): Promise<void> => enqueueSave(async () => {

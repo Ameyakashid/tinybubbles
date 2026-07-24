@@ -2,6 +2,8 @@
 export const en: Record<string, string> = {
         // App
         'app.name': 'Mindwtr',
+        'app.closeStillSavingTitle': 'Mindwtr is still saving',
+        'app.closeStillSavingBody': 'Mindwtr has not finished saving your recent changes. Close anyway? Unsaved changes will be lost.',
         'donationPrompt.title': "Keep Mindwtr free and independent",
         'donationPrompt.body': "Mindwtr has no ads, tracking, or paywalls. It is built by one person and supported by people who find it useful. If it helps you stay clear, a small donation helps keep it improving.",
         'donationPrompt.dismiss': "Maybe later",

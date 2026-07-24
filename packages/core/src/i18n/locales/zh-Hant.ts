@@ -1,6 +1,8 @@
 // Split from i18n-translations.ts to make community translation contributions easier.
 export const zhHant: Record<string, string> = {
         'app.name': 'Mindwtr',
+        'app.closeStillSavingTitle': "Mindwtr 仍在儲存",
+        'app.closeStillSavingBody': "Mindwtr 尚未儲存完最近的變更。仍要關閉嗎？未儲存的變更將會遺失。",
         'donationPrompt.title': "讓 Mindwtr 保持免費和獨立",
         'donationPrompt.body': "Mindwtr 沒有廣告、追蹤或付費牆。它由一個人開發，並由覺得它有幫助的使用者支持。如果它幫助你保持清晰，一筆小額捐贈可以幫助它持續改進。",
         'donationPrompt.dismiss': "稍後再說",
