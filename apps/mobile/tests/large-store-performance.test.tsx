@@ -23,10 +23,7 @@ import FocusScreen from '../app/(drawer)/(tabs)/focus';
 import ArchivedScreen from '../app/(drawer)/archived';
 import TrashScreen from '../app/(drawer)/trash';
 import { ProjectRow } from '../components/projects-screen/ProjectRow';
-import {
-  buildProjectListRows,
-  buildProjectTaskSummaryById,
-} from '../components/projects-screen/project-list-model';
+import { buildProjectListRows } from '../components/projects-screen/project-list-model';
 import { TaskEditModal } from '../components/task-edit-modal';
 
 const LARGE_TASK_COUNT = 5_000;
@@ -905,8 +902,11 @@ describe('large-store mobile interaction performance', () => {
     });
 
     const projectsData = createLargeStoreData();
+    loadLargeStore(projectsData);
     const projectAreaById = buildMap(projectsData.areas);
-    const projectTaskSummaryById = buildProjectTaskSummaryById(projectsData.tasks);
+    // Core's real computeTaskDerivedState output (#927) — the same summary the
+    // screen reads via getDerivedState(), not a test-local reimplementation.
+    const projectTaskSummaryById = useTaskStore.getState().getDerivedState().projectTaskSummaryById;
     const projectRows = buildProjectListRows({
       areaById: projectAreaById,
       collapsedAreas: {},

@@ -60,6 +60,21 @@ function buildTask(id: string, title: string, status: TaskStatus, projectId: str
     };
 }
 
+type ProjectTaskSummary = { activeTaskCount: number; nextAction?: Task };
+
+// Mirrors core's projectTaskSummaryById shape (store-helpers.ts computeTaskDerivedState):
+// one open-task count and lowest-order 'next' task per project.
+function buildProjectTaskSummaryById(tasksByProject: Record<string, Task[]>): Map<string, ProjectTaskSummary> {
+    const summaries = new Map<string, ProjectTaskSummary>();
+    for (const [projectId, tasks] of Object.entries(tasksByProject)) {
+        summaries.set(projectId, {
+            activeTaskCount: tasks.length,
+            nextAction: tasks.find((task) => task.status === 'next'),
+        });
+    }
+    return summaries;
+}
+
 function SidebarHarness() {
     const [projects, setProjects] = useState<Project[]>([
         buildProject('project-alpha', 'Alpha', 0),
@@ -128,7 +143,7 @@ function SidebarHarness() {
                 selectedProjectId={selectedProjectId}
                 onSelectProject={setSelectedProjectId}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={projects}
                 focusedProjectCount={projects.filter((project) => project.isFocused && !project.deletedAt).length}
                 toggleProjectFocus={vi.fn()}
@@ -145,7 +160,7 @@ function renderSidebarWithSpy(
         buildProject('project-alpha', 'Alpha', 0),
         buildProject('project-beta', 'Beta', 1),
     ],
-    tasksByProject: Record<string, Task[]> = {}
+    projectTaskSummaryById: Map<string, ProjectTaskSummary> = new Map()
 ) {
 
     render(
@@ -180,7 +195,7 @@ function renderSidebarWithSpy(
             selectedProjectId={'project-alpha'}
             onSelectProject={onSelectProject}
             getProjectColor={(project) => project.color}
-            tasksByProject={tasksByProject}
+            projectTaskSummaryById={projectTaskSummaryById}
             projects={projects}
             focusedProjectCount={projects.filter((project) => project.isFocused && !project.deletedAt).length}
             toggleProjectFocus={vi.fn()}
@@ -229,7 +244,7 @@ describe('ProjectsSidebar', () => {
                 selectedProjectId={null}
                 onSelectProject={vi.fn()}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={[buildProject('project-alpha', 'Alpha', 0)]}
                 focusedProjectCount={0}
                 toggleProjectFocus={vi.fn()}
@@ -285,7 +300,7 @@ describe('ProjectsSidebar', () => {
                 selectedProjectId={null}
                 onSelectProject={vi.fn()}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={[]}
                 focusedProjectCount={0}
                 toggleProjectFocus={vi.fn()}
@@ -317,11 +332,11 @@ describe('ProjectsSidebar', () => {
         renderSidebarWithSpy(
             vi.fn(),
             [focusedWithoutNext, unfocusedWithoutNext, focusedWithNext],
-            {
+            buildProjectTaskSummaryById({
                 'focused-inbox': [buildTask('inbox-focused', 'Focused inbox task', 'inbox', 'focused-inbox')],
                 'unfocused-inbox': [buildTask('inbox-unfocused', 'Unfocused inbox task', 'inbox', 'unfocused-inbox')],
                 'focused-next': [buildTask('next-focused', 'Focused next task', 'next', 'focused-next')],
-            }
+            })
         );
 
         expect(screen.getAllByText('No next action')).toHaveLength(1);
@@ -389,7 +404,7 @@ describe('ProjectsSidebar', () => {
                 selectedProjectId={null}
                 onSelectProject={vi.fn()}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={[buildProject('project-long', longTitle, 0)]}
                 focusedProjectCount={0}
                 toggleProjectFocus={vi.fn()}
@@ -454,7 +469,7 @@ describe('ProjectsSidebar', () => {
                 selectedProjectId={null}
                 onSelectProject={vi.fn()}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={[waitingProject, archivedProject]}
                 focusedProjectCount={0}
                 toggleProjectFocus={vi.fn()}
@@ -513,7 +528,7 @@ describe('ProjectsSidebar', () => {
                 selectedProjectId={null}
                 onSelectProject={vi.fn()}
                 getProjectColor={(project) => project.color}
-                tasksByProject={{}}
+                projectTaskSummaryById={new Map()}
                 projects={[activeProject, waitingProject]}
                 focusedProjectCount={0}
                 toggleProjectFocus={vi.fn()}

@@ -150,6 +150,7 @@ vi.mock('./projects/useProjectsViewStore', () => ({
             allContexts: [],
             allTags: [],
         }),
+        projectTaskSummaryById: new Map(),
     }),
 }));
 

@@ -7,7 +7,6 @@ export const useProjectsViewStore = () =>
     useTaskStore(
         (state) => ({
             projects: state.projects,
-            tasks: state.tasks,
             areas: state.areas,
             addArea: state.addArea,
             updateArea: state.updateArea,
@@ -23,6 +22,7 @@ export const useProjectsViewStore = () =>
             highlightTaskId: state.highlightTaskId,
             settings: state.settings,
             focusedProjectCount: state.getDerivedState().focusedProjectCount,
+            projectTaskSummaryById: state.getDerivedState().projectTaskSummaryById,
         }),
         shallow
     );

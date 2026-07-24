@@ -4,7 +4,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, ChevronsLeft, CornerDownRight
 import { cn } from '../../../lib/utils';
 import { FocusStarIcon } from '../../FocusStarIcon';
 import { SortableProjectRow } from './SortableRows';
-import { compareTasksByProjectOrder, tFallback, type Area, type Project, type Task } from '@mindwtr/core';
+import { tFallback, type Area, type Project, type Task } from '@mindwtr/core';
 import { ProjectAreaDropZone } from './project-area-dnd';
 import {
     isProjectAreaCollapsed,
@@ -30,7 +30,9 @@ type TagOptionList = {
 
 type GroupedProjects = Array<[string, Project[]]>;
 
-type TasksByProject = Record<string, Task[]>;
+// Matches core's projectTaskSummaryById value shape (store-types.ts DerivedState),
+// computed once in store-helpers.ts computeTaskDerivedState. See #927.
+type ProjectTaskSummary = { activeTaskCount: number; nextAction?: Task };
 
 interface ProjectsSidebarProps {
     t: (key: string) => string;
@@ -64,7 +66,7 @@ interface ProjectsSidebarProps {
     selectedProjectId: string | null;
     onSelectProject: (projectId: string) => void;
     getProjectColor: (project: Project) => string;
-    tasksByProject: TasksByProject;
+    projectTaskSummaryById: Map<string, ProjectTaskSummary>;
     projects: Project[];
     focusedProjectCount: number;
     toggleProjectFocus: (projectId: string) => void;
@@ -106,7 +108,7 @@ export function ProjectsSidebar({
     selectedProjectId,
     onSelectProject,
     getProjectColor,
-    tasksByProject,
+    projectTaskSummaryById,
     focusedProjectCount,
     toggleProjectFocus,
     onDuplicateProject,
@@ -393,13 +395,9 @@ export function ProjectsSidebar({
                                     {!isCollapsed && (
                                             <SortableContext items={areaProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
                                                 {areaProjects.map((project) => {
-                                            const projTasks = tasksByProject[project.id] || [];
-                                            let nextAction = undefined;
-                                            for (const task of projTasks) {
-                                                if (task.status === 'next' && (!nextAction || compareTasksByProjectOrder(task, nextAction) < 0)) {
-                                                    nextAction = task;
-                                                }
-                                            }
+                                            const summary = projectTaskSummaryById.get(project.id);
+                                            const activeTaskCount = summary?.activeTaskCount ?? 0;
+                                            const nextAction = summary?.nextAction;
 
                                             return (
                                                 <SortableProjectRow key={project.id} projectId={project.id} section="active">
@@ -456,7 +454,7 @@ export function ProjectsSidebar({
                                                                     {project.title}
                                                                 </span>
                                                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground min-w-5 text-center">
-                                                                    {projTasks.length}
+                                                                    {activeTaskCount}
                                                                 </span>
                                                             </div>
                                                             <div className="px-2 pb-2 pl-10">
@@ -465,7 +463,7 @@ export function ProjectsSidebar({
                                                                         <CornerDownRight className="w-3 h-3" />
                                                                         {nextAction.title}
                                                                     </span>
-                                                                ) : project.isFocused && projTasks.length > 0 ? (
+                                                                ) : project.isFocused && activeTaskCount > 0 ? (
                                                                     <span className="text-xs text-warning flex items-center gap-1">
                                                                         <AlertTriangle className="w-3 h-3" />
                                                                         {t('projects.noNextAction')}

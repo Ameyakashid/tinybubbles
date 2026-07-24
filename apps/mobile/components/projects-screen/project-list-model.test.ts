@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Area, Project, Task } from '@mindwtr/core';
+import type { Area, Project } from '@mindwtr/core';
 
-import { buildProjectListRows, buildProjectTaskSummaryById } from './project-list-model';
+import { buildProjectListRows } from './project-list-model';
 
 const now = '2026-04-19T00:00:00.000Z';
 
@@ -25,19 +25,6 @@ function buildArea(id: string, name: string, color = '#22c55e'): Area {
     name,
     order: 0,
     color,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function buildTask(id: string, projectId: string | undefined, status: Task['status']): Task {
-  return {
-    id,
-    title: id,
-    status,
-    projectId,
-    contexts: [],
-    tags: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -143,29 +130,5 @@ describe('buildProjectListRows', () => {
       'project',
     ]);
     expect(rows.find((row) => row.type === 'project' && row.project.title === 'Waiting Project')).toBeTruthy();
-  });
-
-  it('summarizes open project tasks in one pass for project rows', () => {
-    const laterNext = { ...buildTask('next-2', 'project-1', 'next'), order: 2 };
-    const firstNext = { ...buildTask('next-1', 'project-1', 'next'), order: 1 };
-    const summaries = buildProjectTaskSummaryById([
-      buildTask('inbox-1', 'project-1', 'inbox'),
-      laterNext,
-      firstNext,
-      buildTask('done-1', 'project-1', 'done'),
-      buildTask('reference-1', 'project-1', 'reference'),
-      buildTask('archived-1', 'project-1', 'archived'),
-      { ...buildTask('deleted-1', 'project-1', 'waiting'), deletedAt: now },
-      buildTask('waiting-1', 'project-2', 'waiting'),
-      buildTask('no-project', undefined, 'next'),
-    ]);
-
-    expect(summaries.get('project-1')).toMatchObject({
-      activeTaskCount: 3,
-      nextAction: firstNext,
-    });
-    expect(summaries.get('project-2')).toMatchObject({ activeTaskCount: 1 });
-    expect(summaries.get('project-2')?.nextAction).toBeUndefined();
-    expect(summaries.has('project-3')).toBe(false);
   });
 });

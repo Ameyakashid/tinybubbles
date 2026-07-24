@@ -146,7 +146,6 @@ export function ProjectsView() {
     const perf = usePerformanceMonitor('ProjectsView');
     const {
         projects,
-        tasks,
         areas,
         addArea,
         updateArea,
@@ -162,6 +161,7 @@ export function ProjectsView() {
         highlightTaskId,
         settings,
         focusedProjectCount,
+        projectTaskSummaryById,
     } = useProjectsViewStore();
     const { t, language } = useLanguage();
     const selectedProjectId = useUiStore((state) => state.projectView.selectedProjectId);
@@ -453,30 +453,6 @@ export function ProjectsView() {
 
     const sortAreasByName = () => reorderAreas(sortAreasByNameIds(sortedAreas));
     const sortAreasByColor = () => reorderAreas(sortAreasByColorIds(sortedAreas));
-
-    // Group tasks by project to avoid O(N*M) filtering
-    const { tasksByProject } = useMemo(() => {
-        const map = projects.reduce((acc, project) => {
-            acc[project.id] = [];
-            return acc;
-        }, {} as Record<string, Task[]>);
-        tasks.forEach(task => {
-            if (
-                task.projectId
-                && !task.deletedAt
-                && task.status !== 'done'
-                && task.status !== 'reference'
-                && task.status !== 'archived'
-            ) {
-                if (map[task.projectId]) {
-                    map[task.projectId].push(task);
-                }
-            }
-        });
-        return {
-            tasksByProject: map,
-        };
-    }, [projects, tasks]);
 
     const tagOptions = useMemo(() => {
         const visibleProjects = projects.filter(p => !p.deletedAt);
@@ -810,7 +786,7 @@ export function ProjectsView() {
                                         if (isCompactProjectsLayout) setCompactSidebarOpen(false);
                                     }}
                                     getProjectColor={getProjectColorForTask}
-                                    tasksByProject={tasksByProject}
+                                    projectTaskSummaryById={projectTaskSummaryById}
                                     projects={projects}
                                     focusedProjectCount={focusedProjectCount}
                                     toggleProjectFocus={toggleProjectFocus}

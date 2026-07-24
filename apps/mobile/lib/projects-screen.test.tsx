@@ -39,6 +39,16 @@ const testProject: Project = {
   createdAt: now,
   updatedAt: now,
 };
+const testNextActionTask: Task = {
+  id: 'task-next',
+  title: 'Do the thing',
+  status: 'next',
+  projectId: testProject.id,
+  tags: [],
+  contexts: [],
+  createdAt: now,
+  updatedAt: now,
+};
 
 const storeState: {
   projects: Project[];
@@ -69,7 +79,11 @@ const storeState: {
   setHighlightTask: vi.fn(),
   getDerivedState: () => ({
     focusedProjectCount: 0,
-    projectTaskSummaryById: new Map(),
+    // Mirrors core's real computeTaskDerivedState output shape (#927) so the
+    // screen's live selector-driven wiring to ProjectRow is exercised.
+    projectTaskSummaryById: new Map([
+      [testProject.id, { activeTaskCount: 1, nextAction: testNextActionTask }],
+    ]),
     tasksByProjectId: new Map(),
   }),
 };
@@ -240,7 +254,9 @@ vi.mock('@/components/list-layout', () => ({
   defaultListContentStyle: {},
 }));
 vi.mock('@/components/projects-screen/ProjectRow', () => ({
-  ProjectRow: ({ project }: { project: Project }) => <Text testID="project-row">{project.title}</Text>,
+  ProjectRow: ({ project, taskSummary }: { project: Project; taskSummary?: { activeTaskCount: number; nextAction?: Task } }) => (
+    <Text testID="project-row">{project.title}:{taskSummary?.activeTaskCount ?? 0}:{taskSummary?.nextAction?.title ?? ''}</Text>
+  ),
 }));
 vi.mock('@/lib/task-meta-navigation', () => ({
   openContextsScreen: vi.fn(),
@@ -279,5 +295,24 @@ describe('ProjectsScreen view state hydration', () => {
     expect(asyncStorageMock.getItem).toHaveBeenCalledWith('mindwtr:view:projects:v1');
     const hydratedList = tree.root.findByType(FlatList);
     expect(hydratedList.props.data.some((row: { type: string }) => row.type === 'project')).toBe(false);
+  });
+
+  it('passes the store\'s live projectTaskSummaryById through to each project row', async () => {
+    let tree!: ReturnType<typeof create>;
+
+    await act(async () => {
+      tree = create(<ProjectsScreen />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const list = tree.root.findByType(FlatList);
+    const projectRow = list.props.data.find((row: { type: string }) => row.type === 'project');
+    expect(projectRow).toBeTruthy();
+
+    // renderItem returns the <ProjectRow /> element without needing FlatList's
+    // native windowing/layout, which react-test-renderer can't provide here.
+    const rendered = list.props.renderItem({ item: projectRow, index: 0 });
+    expect(rendered.props.taskSummary).toEqual({ activeTaskCount: 1, nextAction: testNextActionTask });
   });
 });

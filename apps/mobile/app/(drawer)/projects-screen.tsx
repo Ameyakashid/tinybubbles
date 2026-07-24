@@ -30,7 +30,6 @@ import { ProjectImagePreviewModal, ProjectLinkModal, ProjectTagPickerModal } fro
 import { ProjectRow } from '@/components/projects-screen/ProjectRow';
 import {
   buildProjectListRows,
-  buildProjectTaskSummaryById,
   type ProjectListRow,
 } from '@/components/projects-screen/project-list-model';
 import { useProjectAttachments } from '@/components/projects-screen/use-project-attachments';
@@ -78,6 +77,7 @@ export default function ProjectsScreen() {
     reorderAreas,
     updateTask,
     setHighlightTask,
+    projectTaskSummaryById,
   } = useTaskStore((state) => ({
     projects: state.projects,
     tasks: state.tasks,
@@ -98,6 +98,7 @@ export default function ProjectsScreen() {
     reorderAreas: state.reorderAreas,
     updateTask: state.updateTask,
     setHighlightTask: state.setHighlightTask,
+    projectTaskSummaryById: state.getDerivedState().projectTaskSummaryById,
   }), shallow);
   const { t, language } = useLanguage();
   const { showToast } = useToast();
@@ -110,10 +111,6 @@ export default function ProjectsScreen() {
       0,
     ),
     [projects],
-  );
-  const projectTaskSummaryById = useMemo(
-    () => buildProjectTaskSummaryById(tasks),
-    [tasks],
   );
   const insets = useSafeAreaInsets();
   const router = useRouter();
