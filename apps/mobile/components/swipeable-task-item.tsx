@@ -301,13 +301,16 @@ function SwipeableTaskItemInner({
     }, [onStatusChange, openProjectNextActionPromptIfNeeded, showActionFailure, showToast, t, task.id, task.isFocusedToday, task.status, task.title]);
 
     const [completedAtPicker, setCompletedAtPicker] = useState<null | 'complete' | 'edit'>(null);
-    const applyCompletedAt = useCallback((iso: string) => {
+    const applyCompletedAt = useCallback((iso: string, timeSpentMinutes?: number) => {
         const mode = completedAtPicker;
         setCompletedAtPicker(null);
         if (!mode) return;
         const updates: Partial<Task> = mode === 'complete'
             ? { status: 'done', completedAt: iso }
             : { completedAt: iso };
+        if (mode === 'complete' && timeSpentEnabled) {
+            updates.timeSpentMinutes = timeSpentMinutes;
+        }
         void Promise.resolve(updateTask(task.id, updates))
             .then((result) => {
                 const failure = getActionFailureMessage(result);
@@ -322,7 +325,7 @@ function SwipeableTaskItemInner({
             .catch((error) => {
                 showActionFailure(getUnknownErrorMessage(error));
             });
-    }, [completedAtPicker, openProjectNextActionPromptIfNeeded, showActionFailure, task.id, task.status, updateTask]);
+    }, [completedAtPicker, openProjectNextActionPromptIfNeeded, showActionFailure, task.id, task.status, timeSpentEnabled, updateTask]);
 
     const handlePromoteProjectNextAction = useCallback((nextTaskId: string) => {
         if (isProjectNextActionSubmitting) return;
@@ -663,6 +666,8 @@ function SwipeableTaskItemInner({
             {completedAtPicker ? (
                 <CompletedAtPicker
                     initialValue={completedAtPicker === 'edit' ? (task.completedAt || task.updatedAt) : undefined}
+                    initialTimeSpentMinutes={task.timeSpentMinutes}
+                    showTimeSpent={completedAtPicker === 'complete' && timeSpentEnabled}
                     onCancel={() => setCompletedAtPicker(null)}
                     onConfirm={applyCompletedAt}
                     t={t}

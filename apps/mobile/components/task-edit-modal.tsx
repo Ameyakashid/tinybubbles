@@ -581,11 +581,14 @@ function TaskEditModalInner({
     const requestBackdatedCompletion = useCallback(() => {
         setCompletedAtPickerVisible(true);
     }, []);
-    const confirmBackdatedCompletion = useCallback((completedAt: string) => {
+    const confirmBackdatedCompletion = useCallback((completedAt: string, timeSpentMinutes?: number) => {
         setCompletedAtPickerVisible(false);
         setDraftField('status', 'done');
         setDraftField('completedAt', completedAt);
-    }, [setDraftField]);
+        if (timeSpentEnabled) {
+            setDraftField('timeSpentMinutes', timeSpentMinutes);
+        }
+    }, [setDraftField, timeSpentEnabled]);
     const toggleQuickContextToken = useCallback((token: string) => {
         const next = new Set(parseTokenList(contextInputDraft, '@'));
         if (next.has(token)) {
@@ -1102,6 +1105,8 @@ function TaskEditModalInner({
         {visible && completedAtPickerVisible ? (
             <CompletedAtPicker
                 initialValue={mergedTask.completedAt ?? (task.status === 'done' ? task.updatedAt : undefined)}
+                initialTimeSpentMinutes={mergedTask.timeSpentMinutes}
+                showTimeSpent={timeSpentEnabled}
                 onCancel={() => setCompletedAtPickerVisible(false)}
                 onConfirm={confirmBackdatedCompletion}
                 t={t}

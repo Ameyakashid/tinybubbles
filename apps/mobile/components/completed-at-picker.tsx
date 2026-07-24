@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { tFallback } from '@mindwtr/core';
+import { normalizeTimeSpentMinutes, tFallback } from '@mindwtr/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
 type CompletedAtPickerProps = {
     /** ISO timestamp the picker starts from; defaults to now. */
     initialValue?: string;
+    initialTimeSpentMinutes?: number;
+    showTimeSpent?: boolean;
     onCancel: () => void;
-    onConfirm: (iso: string) => void;
+    onConfirm: (iso: string, timeSpentMinutes?: number) => void;
     t: (key: string) => string;
     tc: ThemeColors;
 };
@@ -23,11 +25,22 @@ const toValidDate = (value?: string): Date => {
  * Date + time picker for a task's completion timestamp. iOS shows a single
  * datetime spinner in a modal; Android chains the native date and time dialogs.
  */
-export function CompletedAtPicker({ initialValue, onCancel, onConfirm, t, tc }: CompletedAtPickerProps) {
+export function CompletedAtPicker({
+    initialValue,
+    initialTimeSpentMinutes,
+    showTimeSpent = false,
+    onCancel,
+    onConfirm,
+    t,
+    tc,
+}: CompletedAtPickerProps) {
     const [draft, setDraft] = useState<Date>(() => toValidDate(initialValue));
-    const [androidStep, setAndroidStep] = useState<'date' | 'time'>('date');
+    const [timeSpentDraft, setTimeSpentDraft] = useState(
+        () => normalizeTimeSpentMinutes(initialTimeSpentMinutes)?.toString() ?? ''
+    );
+    const [androidStep, setAndroidStep] = useState<'date' | 'time' | 'details'>('date');
 
-    if (Platform.OS === 'android') {
+    if (Platform.OS === 'android' && androidStep !== 'details') {
         return (
             <DateTimePicker
                 key={androidStep}
@@ -48,6 +61,11 @@ export function CompletedAtPicker({ initialValue, onCancel, onConfirm, t, tc }: 
                     }
                     const next = new Date(draft);
                     next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                    if (showTimeSpent) {
+                        setDraft(next);
+                        setAndroidStep('details');
+                        return;
+                    }
                     onConfirm(next.toISOString());
                 }}
             />
@@ -64,24 +82,60 @@ export function CompletedAtPicker({ initialValue, onCancel, onConfirm, t, tc }: 
                     <Text style={[styles.title, { color: tc.text }]} accessibilityRole="header">
                         {tFallback(t, 'task.completedAtPromptTitle', 'Completion time')}
                     </Text>
-                    <DateTimePicker
-                        value={draft}
-                        mode="datetime"
-                        display="spinner"
-                        textColor={tc.text}
-                        onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                            if (selected) setDraft(selected);
-                        }}
-                    />
+                    {Platform.OS === 'android' ? (
+                        <Text style={[styles.completionValue, { color: tc.text }]}>
+                            {draft.toLocaleString()}
+                        </Text>
+                    ) : (
+                        <DateTimePicker
+                            value={draft}
+                            mode="datetime"
+                            display="spinner"
+                            textColor={tc.text}
+                            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                                if (selected) setDraft(selected);
+                            }}
+                        />
+                    )}
+                    {showTimeSpent ? (
+                        <>
+                            <Text style={[styles.fieldLabel, { color: tc.secondaryText }]}>
+                                {tFallback(t, 'taskEdit.timeSpentLabel', 'Time Spent')}
+                            </Text>
+                            <TextInput
+                                value={timeSpentDraft}
+                                onChangeText={(text) => setTimeSpentDraft(text.replace(/[^0-9]/g, ''))}
+                                keyboardType="number-pad"
+                                placeholder={tFallback(t, 'taskEdit.timeSpentPlaceholder', 'minutes')}
+                                placeholderTextColor={tc.secondaryText}
+                                accessibilityLabel={tFallback(t, 'taskEdit.timeSpentLabel', 'Time Spent')}
+                                style={[
+                                    styles.input,
+                                    { backgroundColor: tc.inputBg, borderColor: tc.border, color: tc.text },
+                                ]}
+                            />
+                        </>
+                    ) : null}
                     <View style={styles.actions}>
-                        <Pressable onPress={onCancel} accessibilityRole="button" style={styles.actionButton}>
+                        <Pressable
+                            onPress={onCancel}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('common.cancel') || 'Cancel'}
+                            style={styles.actionButton}
+                        >
                             <Text style={[styles.actionText, { color: tc.secondaryText }]}>
                                 {t('common.cancel') || 'Cancel'}
                             </Text>
                         </Pressable>
                         <Pressable
-                            onPress={() => onConfirm(draft.toISOString())}
+                            onPress={() => onConfirm(
+                                draft.toISOString(),
+                                showTimeSpent
+                                    ? normalizeTimeSpentMinutes(Number(timeSpentDraft))
+                                    : undefined
+                            )}
                             accessibilityRole="button"
+                            accessibilityLabel={t('common.save') || 'Save'}
                             style={styles.actionButton}
                         >
                             <Text style={[styles.actionText, { color: tc.tint }]}>
@@ -115,6 +169,23 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 8,
         textAlign: 'center',
+    },
+    completionValue: {
+        fontSize: 15,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    fieldLabel: {
+        fontSize: 13,
+        fontWeight: '500',
+        marginBottom: 6,
+    },
+    input: {
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 16,
     },
     actions: {
         flexDirection: 'row',

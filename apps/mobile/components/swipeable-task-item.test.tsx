@@ -1136,9 +1136,14 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     expect(hapticsMocks.notificationAsync).toHaveBeenCalledWith('success');
   });
 
-  it('opens the completion-time picker when the revealed Done action is long-pressed', async () => {
+  it('saves completion time and time spent from the revealed Done action', async () => {
     const onStatusChange = vi.fn();
     const completedAt = '2026-07-14T18:30:00.000Z';
+    storeState.settings = {
+      features: { pomodoro: true },
+      appearance: {},
+      gtd: { pomodoro: { linkTask: true } },
+    } as any;
 
     let tree!: renderer.ReactTestRenderer;
     renderer.act(() => {
@@ -1148,6 +1153,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
             id: 'task-1',
             title: 'Plan release',
             status: 'next',
+            timeSpentMinutes: 15,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           } as any}
@@ -1179,14 +1185,17 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     expect(doneAction.props.accessibilityHint).toBe('Long-press to complete with a different time');
 
     const picker = tree.root.findByType('CompletedAtPicker' as any);
+    expect(picker.props.showTimeSpent).toBe(true);
+    expect(picker.props.initialTimeSpentMinutes).toBe(15);
     await renderer.act(async () => {
-      picker.props.onConfirm(completedAt);
+      picker.props.onConfirm(completedAt, 45);
       await Promise.resolve();
     });
 
     expect(updateTask).toHaveBeenCalledWith('task-1', {
       status: 'done',
       completedAt,
+      timeSpentMinutes: 45,
     });
     expect(onStatusChange).not.toHaveBeenCalled();
   });
