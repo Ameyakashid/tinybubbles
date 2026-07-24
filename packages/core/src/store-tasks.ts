@@ -656,7 +656,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
         }
         const persistenceDispatchMs = Date.now() - persistenceStartedAt;
         const totalMs = Date.now() - updateStartedAt;
-        if (totalMs >= SLOW_TASK_UPDATE_LOG_THRESHOLD_MS) {
+        if (notifyProfilingEnabled && totalMs >= SLOW_TASK_UPDATE_LOG_THRESHOLD_MS) {
             logInfo('Slow task update pipeline', {
                 scope: 'store',
                 category: 'storage',

@@ -231,4 +231,35 @@ describe('fetchData notify profiling log fields', () => {
         expect(context).not.toHaveProperty('taskId');
         expect(context).not.toHaveProperty('title');
     });
+
+    it('does not log the slow task update pipeline at all when diagnostics logging is disabled (#766)', async () => {
+        const task: Task = {
+            id: 'task-2',
+            title: 'Private task title',
+            status: 'next',
+            tags: [],
+            contexts: [],
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        };
+        useTaskStore.setState({
+            tasks: [task],
+            _allTasks: [task],
+            _tasksById: new Map([[task.id, task]]),
+            settings: {
+                deviceId: 'device-a',
+                diagnostics: { loggingEnabled: false },
+            },
+        });
+        const unsubscribe = useTaskStore.subscribe(() =>
+            vi.advanceTimersByTime(1_001),
+        );
+        try {
+            await useTaskStore.getState().updateTask(task.id, { status: 'done' });
+        } finally {
+            unsubscribe();
+        }
+
+        expect(logs.find((entry) => entry.message === 'Slow task update pipeline')).toBeUndefined();
+    });
 });
