@@ -8,7 +8,7 @@ export type CalendarSyncEntry = {
     lastSyncedAt: string;
 };
 import { SEARCH_RESULT_LIMIT, type SearchProjectResult, type SearchResults, type SearchTaskResult, type TaskQueryOptions } from './storage';
-import { SQLITE_BASE_SCHEMA, SQLITE_FTS_SCHEMA, SQLITE_INDEX_SCHEMA } from './sqlite-schema';
+import { FTS_MAINTENANCE_TRIGGERS, SQLITE_BASE_SCHEMA, SQLITE_FTS_SCHEMA, SQLITE_INDEX_SCHEMA } from './sqlite-schema';
 import { normalizeTaskStatus } from './task-status';
 import { normalizeRecurrenceForLoad } from './recurrence';
 import { normalizeRelativeStartOffset } from './task-relative-start';
@@ -651,6 +651,15 @@ export class SqliteAdapter {
         const hasAssignedTo = columns.some((column) => column.name === 'assignedTo');
         if (hasChecklist && hasAssignedTo) return false;
 
+        // These DROPs run outside ensureFtsTriggers' BEGIN IMMEDIATE (deliberately —
+        // widening that transaction to cover this DROP TABLE is a bigger change than
+        // this method warrants), so a crash or SQLITE_BUSY here can leave the task
+        // triggers gone. That's fine: ensureSchemaInternal always calls
+        // ensureFtsTriggers(schemaChanged) right after this returns true, and
+        // ensureFtsTriggers now verifies each trigger against sqlite_master before
+        // trusting the migration marker — restoration is guaranteed by that check,
+        // not by hoping this ran back-to-back with SQLITE_FTS_SCHEMA's blanket
+        // CREATE TRIGGER IF NOT EXISTS re-exec on the next launch.
         await this.client.run('DROP TRIGGER IF EXISTS tasks_ai');
         await this.client.run('DROP TRIGGER IF EXISTS tasks_ad');
         await this.client.run('DROP TRIGGER IF EXISTS tasks_au');
@@ -671,13 +680,35 @@ export class SqliteAdapter {
         return true;
     }
 
+    /** Trigger names from FTS_MAINTENANCE_TRIGGERS actually present in sqlite_master. */
+    private async getExistingFtsTriggerNames(): Promise<Set<string>> {
+        const names = FTS_MAINTENANCE_TRIGGERS.map((trigger) => trigger.name);
+        const placeholders = names.map(() => '?').join(', ');
+        const rows = await this.client.all<{ name?: string }>(
+            `SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN (${placeholders})`,
+            names
+        );
+        return new Set(rows.map((row) => row.name).filter((name): name is string => Boolean(name)));
+    }
+
     private async ensureFtsTriggers(force = false): Promise<boolean> {
         if (!force) {
             const hasCurrentTriggers = await this.client.get<{ applied?: number }>(
                 'SELECT 1 as applied FROM schema_migrations WHERE version = ? LIMIT 1',
                 [FTS_TRIGGER_MIGRATION_VERSION]
             );
-            if (hasCurrentTriggers?.applied === 1) return false;
+            if (hasCurrentTriggers?.applied === 1) {
+                // Don't trust the marker alone: a mid-migration SQLITE_BUSY from a
+                // concurrent MCP/CLI writer could leave triggers missing while
+                // schema_migrations still records this version as applied. Verify
+                // against sqlite_master and force a re-migration if anything is gone.
+                const existingTriggers = await this.getExistingFtsTriggerNames();
+                const allTriggersPresent = FTS_MAINTENANCE_TRIGGERS.every(
+                    (trigger) => existingTriggers.has(trigger.name)
+                );
+                if (allTriggersPresent) return false;
+                force = true;
+            }
         }
 
         try {
@@ -694,46 +725,12 @@ export class SqliteAdapter {
                     return false;
                 }
 
-                await this.client.run('DROP TRIGGER IF EXISTS tasks_ai');
-                await this.client.run('DROP TRIGGER IF EXISTS tasks_ad');
-                await this.client.run('DROP TRIGGER IF EXISTS tasks_au');
-                await this.client.run('DROP TRIGGER IF EXISTS projects_ad');
-                await this.client.run('DROP TRIGGER IF EXISTS projects_au');
-
-                await this.client.run(`
-                CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
-                  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
-                  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
-                END
-            `);
-                await this.client.run(`
-                CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-                  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
-                  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
-                END
-            `);
-                await this.client.run(`
-                CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-                  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
-                  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
-                  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
-                  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
-                END
-            `);
-                await this.client.run(`
-                CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
-                  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
-                  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
-                END
-            `);
-                await this.client.run(`
-                CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
-                  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
-                  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
-                  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
-                  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
-                END
-            `);
+                for (const trigger of FTS_MAINTENANCE_TRIGGERS) {
+                    await this.client.run(`DROP TRIGGER IF EXISTS ${trigger.name}`);
+                }
+                for (const trigger of FTS_MAINTENANCE_TRIGGERS) {
+                    await this.client.run(trigger.sql);
+                }
 
                 await this.client.run(
                     'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',

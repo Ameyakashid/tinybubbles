@@ -247,6 +247,65 @@ CREATE INDEX IF NOT EXISTS idx_people_updatedAt_rev ON people(updatedAt, rev);
 CREATE INDEX IF NOT EXISTS idx_saved_filters_view ON saved_filters(view);
 `;
 
+export type FtsMaintenanceTrigger = { name: string; sql: string };
+
+/**
+ * The five FTS5 maintenance triggers that `ensureFtsTriggers`
+ * (sqlite-adapter.ts) migrates under `BEGIN IMMEDIATE` and verifies against
+ * `sqlite_master`, plus `projects_ai` (stateless, never needed migration).
+ * Single source of truth: SQLITE_FTS_SCHEMA below composes its trigger
+ * section from this array, and ensureFtsTriggers iterates the same array —
+ * the SQL text can no longer drift between the two call sites.
+ */
+export const FTS_MAINTENANCE_TRIGGERS: readonly FtsMaintenanceTrigger[] = [
+    {
+        name: 'tasks_ai',
+        sql: `CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
+END;`,
+    },
+    {
+        name: 'tasks_ad',
+        sql: `CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
+END;`,
+    },
+    {
+        name: 'tasks_au',
+        sql: `CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
+END;`,
+    },
+    {
+        name: 'projects_ai',
+        sql: `CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
+  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
+END;`,
+    },
+    {
+        name: 'projects_ad',
+        sql: `CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
+  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
+END;`,
+    },
+    {
+        name: 'projects_au',
+        sql: `CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
+  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
+  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
+END;`,
+    },
+];
+
 export const SQLITE_FTS_SCHEMA = `
 CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
   id UNINDEXED,
@@ -269,39 +328,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
   content=''
 );
 
-CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
-  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
-  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
-  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
-  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
-  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
-  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
-  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
-END;
-
-CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
-  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
-  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
-  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
-END;
+${FTS_MAINTENANCE_TRIGGERS.map((trigger) => trigger.sql).join('\n\n')}
 `;
 
 export const SQLITE_SCHEMA = `${SQLITE_BASE_SCHEMA}\n${SQLITE_FTS_SCHEMA}`;

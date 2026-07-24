@@ -1359,6 +1359,58 @@ describeSqlite('SqliteAdapter', () => {
             .toHaveLength(1);
     });
 
+    it('restores a dropped FTS trigger even when schema_migrations already records the current version', async () => {
+        // Simulates the gap this item closes: ensureFtsSchema's DROPs run outside
+        // ensureFtsTriggers' BEGIN IMMEDIATE, so a crash or SQLITE_BUSY between them
+        // can leave a trigger missing while the migration marker still says applied.
+        db.exec(SQLITE_BASE_SCHEMA);
+        db.exec(SQLITE_FTS_SCHEMA);
+        db.exec('DROP TRIGGER tasks_au');
+        db.exec('INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)');
+
+        await adapter.ensureSchema();
+
+        const triggerNames = allSql<{ name: string }>(
+            db,
+            `SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN
+                ('tasks_ai', 'tasks_ad', 'tasks_au', 'projects_ai', 'projects_ad', 'projects_au')`
+        ).map((row) => row.name);
+        expect(triggerNames).toEqual(expect.arrayContaining([
+            'tasks_ai', 'tasks_ad', 'tasks_au', 'projects_ai', 'projects_ad', 'projects_au',
+        ]));
+
+        runSql(db, `
+            INSERT INTO tasks (id, title, status, tags, contexts, checklist, createdAt, updatedAt)
+            VALUES ('task-before-trigger-repair', 'Present before update', 'next', '[]', '[]', '[]', '2026-07-24', '2026-07-24')
+        `);
+        runSql(db, `UPDATE tasks SET title = 'Present after update' WHERE id = 'task-before-trigger-repair'`);
+        expect(allSql(db, `SELECT rowid FROM tasks_fts WHERE tasks_fts MATCH 'after'`)).toHaveLength(1);
+    });
+
+    it('forces a trigger re-migration via ensureFtsTriggers itself when sqlite_master disagrees with the marker', async () => {
+        // Calls the private method directly (not ensureSchema()): ensureSchemaInternal
+        // always execs SQLITE_FTS_SCHEMA's blanket CREATE TRIGGER IF NOT EXISTS first,
+        // which would coincidentally restore a dropped trigger and mask a broken
+        // sqlite_master check. Isolating ensureFtsTriggers proves its own guard works.
+        db.exec(SQLITE_BASE_SCHEMA);
+        db.exec(SQLITE_FTS_SCHEMA);
+        db.exec('DROP TRIGGER tasks_au');
+        db.exec('INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)');
+
+        const migrated = await (adapter as unknown as { ensureFtsTriggers: (force?: boolean) => Promise<boolean> })
+            .ensureFtsTriggers();
+        expect(migrated).toBe(true);
+
+        const triggerNames = allSql<{ name: string }>(
+            db,
+            `SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN
+                ('tasks_ai', 'tasks_ad', 'tasks_au', 'projects_ai', 'projects_ad', 'projects_au')`
+        ).map((row) => row.name);
+        expect(triggerNames).toEqual(expect.arrayContaining([
+            'tasks_ai', 'tasks_ad', 'tasks_au', 'projects_ai', 'projects_ad', 'projects_au',
+        ]));
+    });
+
     it('rejects invalid task status values at the database layer', async () => {
         await adapter.ensureSchema();
 
