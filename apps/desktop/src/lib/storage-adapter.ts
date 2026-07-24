@@ -8,14 +8,15 @@ const STORAGE_SCHEMA_VERSION_KEY = 'mindwtr-storage-schema-version';
 let storageInitLogged = false;
 let saveQueue: Promise<void> = Promise.resolve();
 
-// #913: save_data can hang indefinitely without ever rejecting, so the normal
-// catch block never fires and the UI looks fine while edits sit unsaved. This
-// only observes and surfaces that through the store's error channel — it must
-// never alter save/retry semantics (see the handoff's Do NOT list).
-const SAVE_DATA_STUCK_WARNING_MS = 15_000;
+// #913: save_data (and save_task, the same shape) can hang indefinitely
+// without ever rejecting, so the normal catch block never fires and the UI
+// looks fine while edits sit unsaved. This only observes and surfaces that
+// through the store's error channel — it must never alter save/retry
+// semantics (see the handoff's Do NOT list).
+const SAVE_STUCK_WARNING_MS = 15_000;
 
-const buildSaveDataStuckMessage = (): string => (
-    `Save has not completed after ${SAVE_DATA_STUCK_WARNING_MS / 1000}s. `
+const buildStuckSaveMessage = (label: string): string => (
+    `${label} has not completed after ${SAVE_STUCK_WARNING_MS / 1000}s. `
     + 'Recent changes may not be saved yet.'
 );
 
@@ -24,6 +25,38 @@ const setStorageWarning = (message: string | null) => {
         useTaskStore.getState().setError(message);
     } catch {
         // Store not initialized yet (e.g. very early startup); nothing to surface.
+    }
+};
+
+// Shared by saveData and saveTask: runs `run`, surfacing a store warning if it
+// hasn't settled after SAVE_STUCK_WARNING_MS, and clearing that warning (and
+// only that warning) once it does. Observation only — never rejects, cancels,
+// or retries `run` itself.
+const withStuckSaveWarning = async <T>(command: string, label: string, run: () => Promise<T>): Promise<T> => {
+    let stuckMessage: string | null = null;
+    const stuckTimer = setTimeout(() => {
+        stuckMessage = buildStuckSaveMessage(label);
+        void logWarn(`${command} invoke has not completed`, {
+            scope: 'storage',
+            extra: { thresholdMs: SAVE_STUCK_WARNING_MS },
+        });
+        setStorageWarning(stuckMessage);
+    }, SAVE_STUCK_WARNING_MS);
+    try {
+        return await run();
+    } finally {
+        clearTimeout(stuckTimer);
+        // Only clear our own warning — never clobber an unrelated error that
+        // may have been set (by the catch below, or elsewhere) in the meantime.
+        if (stuckMessage) {
+            try {
+                if (useTaskStore.getState().error === stuckMessage) {
+                    setStorageWarning(null);
+                }
+            } catch {
+                // Store not initialized; nothing to clear.
+            }
+        }
     }
 };
 
@@ -98,18 +131,9 @@ export const tauriStorage: StorageAdapter = {
             }
         }
     },
-    saveData: async (data: AppData): Promise<void> => enqueueSave(async () => {
+    saveData: async (data: AppData): Promise<void> => enqueueSave(() => withStuckSaveWarning('save_data', 'Save', async () => {
         markLocalWrite(data);
         markLocalSqliteWrite();
-        let stuckMessage: string | null = null;
-        const stuckTimer = setTimeout(() => {
-            stuckMessage = buildSaveDataStuckMessage();
-            void logWarn('save_data invoke has not completed', {
-                scope: 'storage',
-                extra: { thresholdMs: SAVE_DATA_STUCK_WARNING_MS },
-            });
-            setStorageWarning(stuckMessage);
-        }, SAVE_DATA_STUCK_WARNING_MS);
         try {
             await invoke<void>('save_data' as any, { data } as any);
             markLocalSqliteWrite();
@@ -118,22 +142,9 @@ export const tauriStorage: StorageAdapter = {
             reportError('saveData failure', error, { category: 'storage', scope: 'storage' });
             const detail = error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to save data: ${detail}`);
-        } finally {
-            clearTimeout(stuckTimer);
-            // Only clear our own warning — never clobber an unrelated error that
-            // may have been set (by the catch above, or elsewhere) in the meantime.
-            if (stuckMessage) {
-                try {
-                    if (useTaskStore.getState().error === stuckMessage) {
-                        setStorageWarning(null);
-                    }
-                } catch {
-                    // Store not initialized; nothing to clear.
-                }
-            }
         }
-    }),
-    saveTask: async (task: Task): Promise<void> => enqueueSave(async () => {
+    })),
+    saveTask: async (task: Task): Promise<void> => enqueueSave(() => withStuckSaveWarning('save_task', 'Task save', async () => {
         markLocalSqliteWrite();
         try {
             await invoke<void>('save_task' as any, { task } as any);
@@ -144,7 +155,7 @@ export const tauriStorage: StorageAdapter = {
             const detail = error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to save task: ${detail}`);
         }
-    }),
+    })),
     queryTasks: async (options: TaskQueryOptions) => {
         return invokeWithError('query tasks', 'query_tasks', { options });
     },

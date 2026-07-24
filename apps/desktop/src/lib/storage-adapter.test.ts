@@ -91,3 +91,76 @@ describe('tauriStorage.saveData stuck-save warning (#913)', () => {
         );
     });
 });
+
+// saveTask is the incremental persistence path for updateTask/completeTask —
+// same hang-without-rejecting shape as saveData, sharing the same warning helper.
+describe('tauriStorage.saveTask stuck-save warning (#913)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        useTaskStore.setState({ error: null });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        useTaskStore.setState({ error: null });
+        vi.clearAllMocks();
+    });
+
+    it('does not warn when save_task resolves before the threshold', async () => {
+        invokeMock.mockResolvedValue(undefined);
+
+        await tauriStorage.saveTask!({} as any);
+
+        expect(useTaskStore.getState().error).toBeNull();
+    });
+
+    it('surfaces a store error once save_task has not resolved after the threshold, and clears it once it resolves', async () => {
+        let resolveInvoke!: () => void;
+        invokeMock.mockImplementation(() => new Promise<void>((resolve) => {
+            resolveInvoke = resolve;
+        }));
+
+        const savePromise = tauriStorage.saveTask!({} as any);
+
+        await vi.advanceTimersByTimeAsync(14_999);
+        expect(useTaskStore.getState().error).toBeNull();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(useTaskStore.getState().error).toMatch(/has not completed/);
+
+        resolveInvoke();
+        await savePromise;
+
+        expect(useTaskStore.getState().error).toBeNull();
+    });
+
+    it('leaves an unrelated error in place if one was set while the save was stuck', async () => {
+        let resolveInvoke!: () => void;
+        invokeMock.mockImplementation(() => new Promise<void>((resolve) => {
+            resolveInvoke = resolve;
+        }));
+
+        const savePromise = tauriStorage.saveTask!({} as any);
+        await vi.advanceTimersByTimeAsync(15_000);
+        expect(useTaskStore.getState().error).toMatch(/has not completed/);
+
+        useTaskStore.getState().setError('Some unrelated error');
+        resolveInvoke();
+        await savePromise;
+
+        expect(useTaskStore.getState().error).toBe('Some unrelated error');
+    });
+
+    it('does not reject the invoke early or add a retry when save_task eventually fails', async () => {
+        invokeMock.mockRejectedValue(new Error('disk full'));
+
+        await expect(tauriStorage.saveTask!({} as any)).rejects.toThrow('Failed to save task: disk full');
+
+        expect(invokeMock).toHaveBeenCalledTimes(1);
+        expect(reportErrorMock).toHaveBeenCalledWith(
+            'saveTask failure',
+            expect.any(Error),
+            expect.objectContaining({ category: 'storage' }),
+        );
+    });
+});
