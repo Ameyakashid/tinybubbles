@@ -94,7 +94,7 @@ import {
 } from './lib/desktop-sync-runtime';
 import { resolveCloseBehavior } from './lib/window-behavior';
 import { handleDesktopCloseRequest } from './lib/close-request-handler';
-import { raceCloseFlush } from './lib/close-flush-race';
+import { beginCloseFlush, resetCloseFlushGate } from './lib/close-flush-gate';
 import { useConfirmDialog } from './hooks/useConfirmDialog';
 import { subscribeNavigateEvent } from './lib/navigation-events';
 import { shouldOpenDesktopFirstRunOnboarding, subscribeDesktopOnboardingEvent } from './lib/desktop-onboarding-events';
@@ -645,6 +645,12 @@ function App() {
     }), [translateOrFallback]);
 
     const hideToTray = useCallback(async () => {
+        // Hiding abandons the close: the process keeps running, so the next close
+        // must flush again rather than reuse this one's settled gate. This is the
+        // tray-side counterpart to quitApp's gate — every tray path (the modal's
+        // "keep running", and handleDesktopCloseRequest's direct 'tray' branch,
+        // which cannot reset the gate itself) funnels through here.
+        resetCloseFlushGate();
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const window = getCurrentWindow();
         try {
@@ -656,6 +662,20 @@ function App() {
     }, []);
 
     const quitApp = useCallback(async () => {
+        // Never exit while a pre-close flush is in flight (see close-flush-gate.ts).
+        // Single-flight: instant when a close path already settled it; starts a
+        // bounded flush when a quit arrives without one — that gap is the race
+        // this gate exists to close (#913 follow-up).
+        await beginCloseFlush({
+            flush: flushPendingSave,
+            timeoutMs: CLOSE_FLUSH_TIMEOUT_MS,
+            logStep: (step) => {
+                void logInfo(`Close trace: ${step}`, { scope: 'app', force: true });
+            },
+            reportError: (label, error) => {
+                void logError(error, { scope: 'app', step: label });
+            },
+        });
         const { invoke } = await import('@tauri-apps/api/core');
         void logInfo('Close trace: invoking quit_app', { scope: 'app', force: true });
         await invoke('quit_app');
@@ -715,7 +735,7 @@ function App() {
                         const logStep = (step: string) => {
                             void logInfo(`Close trace: ${step}`, { scope: 'app', force: true });
                         };
-                        const racePromise = raceCloseFlush({
+                        const racePromise = beginCloseFlush({
                             flush: flushPendingSave,
                             timeoutMs: CLOSE_FLUSH_TIMEOUT_MS,
                             logStep,
@@ -745,6 +765,9 @@ function App() {
                         });
                         if (!closeAnyway) {
                             logStep('user kept the window open while save continues');
+                            // Abandoned close: the next close attempt must flush
+                            // again rather than reuse this settled result.
+                            resetCloseFlushGate();
                             return;
                         }
                         logStep('user chose to close while save still pending');
@@ -1531,13 +1554,20 @@ function App() {
                         cancelLabel={translateOrFallback('common.cancel', 'Cancel')}
                         remember={closePromptRemember}
                         onRememberChange={setClosePromptRememberValue}
-                        onCancel={() => setClosePromptOpenValue(false)}
+                        onCancel={() => {
+                            setClosePromptOpenValue(false);
+                            // Abandoned close: the next close attempt must flush
+                            // again rather than reuse this settled result.
+                            resetCloseFlushGate();
+                        }}
                         onStay={() => {
                             const apply = async () => {
                                 if (closePromptRememberRef.current) {
                                     await persistCloseBehavior('tray');
                                 }
                                 setClosePromptOpenValue(false);
+                                // hideToTray resets the close-flush gate — it is the
+                                // single owner for every tray path.
                                 await hideToTray();
                             };
                             apply().catch((error) => {

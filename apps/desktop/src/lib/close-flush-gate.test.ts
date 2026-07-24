@@ -1,0 +1,49 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beginCloseFlush, resetCloseFlushGate } from './close-flush-gate';
+
+// #913 follow-up: quitApp() must never let two overlapping close paths each
+// start their own flush, and a cancelled close must not leave a later close
+// reusing a stale settled result. Assertions here count actual flush
+// invocations (not just resolved values) so a regression that silently
+// re-runs — or silently stops running — the flush is caught.
+describe('close-flush-gate', () => {
+    beforeEach(() => {
+        resetCloseFlushGate();
+    });
+
+    const options = () => ({
+        flush: vi.fn().mockResolvedValue(undefined),
+        timeoutMs: 1_000,
+        reportError: vi.fn(),
+    });
+
+    it('runs the underlying flush once for concurrent callers and gives them the same result', async () => {
+        const opts = options();
+
+        const [a, b] = await Promise.all([beginCloseFlush(opts), beginCloseFlush(opts)]);
+
+        expect(opts.flush).toHaveBeenCalledTimes(1);
+        expect(a).toEqual({ timedOut: false });
+        expect(b).toBe(a);
+    });
+
+    it('starts a new flush after resetCloseFlushGate()', async () => {
+        const opts = options();
+
+        await beginCloseFlush(opts);
+        resetCloseFlushGate();
+        await beginCloseFlush(opts);
+
+        expect(opts.flush).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns the settled result instantly without re-running the flush', async () => {
+        const opts = options();
+
+        await beginCloseFlush(opts);
+        const second = await beginCloseFlush(opts);
+
+        expect(opts.flush).toHaveBeenCalledTimes(1);
+        expect(second).toEqual({ timedOut: false });
+    });
+});
