@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Area, Project } from '@mindwtr/core';
+import type { Area, Project, Task, TaskStatus } from '@mindwtr/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectsSidebar } from './ProjectsSidebar';
@@ -42,6 +42,19 @@ function buildProject(id: string, title: string, order: number): Project {
         color: '#22c55e',
         order,
         tagIds: [],
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+function buildTask(id: string, title: string, status: TaskStatus, projectId: string): Task {
+    return {
+        id,
+        title,
+        status,
+        projectId,
+        tags: [],
+        contexts: [],
         createdAt: now,
         updatedAt: now,
     };
@@ -126,11 +139,14 @@ function SidebarHarness() {
     );
 }
 
-function renderSidebarWithSpy(onSelectProject = vi.fn()) {
-    const projects = [
+function renderSidebarWithSpy(
+    onSelectProject = vi.fn(),
+    projects = [
         buildProject('project-alpha', 'Alpha', 0),
         buildProject('project-beta', 'Beta', 1),
-    ];
+    ],
+    tasksByProject: Record<string, Task[]> = {}
+) {
 
     render(
         <ProjectsSidebar
@@ -164,7 +180,7 @@ function renderSidebarWithSpy(onSelectProject = vi.fn()) {
             selectedProjectId={'project-alpha'}
             onSelectProject={onSelectProject}
             getProjectColor={(project) => project.color}
-            tasksByProject={{}}
+            tasksByProject={tasksByProject}
             projects={projects}
             focusedProjectCount={projects.filter((project) => project.isFocused && !project.deletedAt).length}
             toggleProjectFocus={vi.fn()}
@@ -291,6 +307,27 @@ describe('ProjectsSidebar', () => {
         renderSidebarWithSpy();
 
         expect(screen.queryByLabelText('Area')).not.toBeInTheDocument();
+    });
+
+    it('only warns focused projects and only displays tasks with next status', () => {
+        const focusedWithoutNext = { ...buildProject('focused-inbox', 'Focused inbox', 0), isFocused: true };
+        const unfocusedWithoutNext = buildProject('unfocused-inbox', 'Unfocused inbox', 1);
+        const focusedWithNext = { ...buildProject('focused-next', 'Focused next', 2), isFocused: true };
+
+        renderSidebarWithSpy(
+            vi.fn(),
+            [focusedWithoutNext, unfocusedWithoutNext, focusedWithNext],
+            {
+                'focused-inbox': [buildTask('inbox-focused', 'Focused inbox task', 'inbox', 'focused-inbox')],
+                'unfocused-inbox': [buildTask('inbox-unfocused', 'Unfocused inbox task', 'inbox', 'unfocused-inbox')],
+                'focused-next': [buildTask('next-focused', 'Focused next task', 'next', 'focused-next')],
+            }
+        );
+
+        expect(screen.getAllByText('No next action')).toHaveLength(1);
+        expect(screen.queryByText('Focused inbox task')).not.toBeInTheDocument();
+        expect(screen.queryByText('Unfocused inbox task')).not.toBeInTheDocument();
+        expect(screen.getByText('Focused next task')).toBeInTheDocument();
     });
 
     it('selects a project on primary mouse down so blur-driven rerenders cannot swallow the switch', () => {

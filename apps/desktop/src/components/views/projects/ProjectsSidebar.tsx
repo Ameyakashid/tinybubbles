@@ -395,16 +395,11 @@ export function ProjectsSidebar({
                                                 {areaProjects.map((project) => {
                                             const projTasks = tasksByProject[project.id] || [];
                                             let nextAction = undefined;
-                                            let nextCandidate = undefined;
                                             for (const task of projTasks) {
-                                                if (task.status === 'next' && (!nextCandidate || compareTasksByProjectOrder(task, nextCandidate) < 0)) {
-                                                    nextCandidate = task;
-                                                }
-                                                if (task.status === 'inbox' && (!nextAction || compareTasksByProjectOrder(task, nextAction) < 0)) {
+                                                if (task.status === 'next' && (!nextAction || compareTasksByProjectOrder(task, nextAction) < 0)) {
                                                     nextAction = task;
                                                 }
                                             }
-                                            nextAction = nextAction || nextCandidate;
 
                                             return (
                                                 <SortableProjectRow key={project.id} projectId={project.id} section="active">
@@ -470,7 +465,7 @@ export function ProjectsSidebar({
                                                                         <CornerDownRight className="w-3 h-3" />
                                                                         {nextAction.title}
                                                                     </span>
-                                                                ) : projTasks.length > 0 ? (
+                                                                ) : project.isFocused && projTasks.length > 0 ? (
                                                                     <span className="text-xs text-warning flex items-center gap-1">
                                                                         <AlertTriangle className="w-3 h-3" />
                                                                         {t('projects.noNextAction')}
