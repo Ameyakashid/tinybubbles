@@ -56,3 +56,52 @@ describe('PromptModal browse', () => {
         expect(screen.queryByText('common.validationRequired')).toBeNull();
     });
 });
+
+describe('PromptModal numericField', () => {
+    it('does not render a numeric field or widen onConfirm when the prop is absent', () => {
+        const onConfirm = vi.fn();
+        render(<PromptModal {...baseProps} defaultValue="Task title" onConfirm={onConfirm} />);
+
+        expect(screen.queryByLabelText('Time Spent')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(onConfirm).toHaveBeenCalledWith('Task title');
+        expect(onConfirm.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('renders the numeric field, seeds it from defaultValue, strips non-digits, and normalizes on confirm', () => {
+        const onConfirm = vi.fn();
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                onConfirm={onConfirm}
+                numericField={{ label: 'Time Spent', placeholder: 'minutes', defaultValue: '30' }}
+            />
+        );
+
+        const numericInput = screen.getByLabelText('Time Spent') as HTMLInputElement;
+        expect(numericInput.value).toBe('30');
+
+        fireEvent.change(numericInput, { target: { value: 'ab45cd' } });
+        expect(numericInput.value).toBe('45');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(onConfirm).toHaveBeenCalledWith('Task title', 45);
+    });
+
+    it('normalizes a blank numeric field to undefined instead of 0', () => {
+        const onConfirm = vi.fn();
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                onConfirm={onConfirm}
+                numericField={{ label: 'Time Spent', defaultValue: '30' }}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText('Time Spent'), { target: { value: '' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(onConfirm).toHaveBeenCalledWith('Task title', undefined);
+    });
+});

@@ -21,6 +21,7 @@ import {
     parseProjectNextActionInput,
     isNaturalLanguageDatesEnabled,
     getPersonOptionNames,
+    normalizeTimeSpentMinutes,
     useTaskStore,
     areDraftAttachmentsDirty,
     isTaskDraftDirty,
@@ -963,16 +964,23 @@ export const TaskItem = memo(function TaskItem({
     const requestBackdatedComplete = useCallback(() => setCompletedAtPrompt('complete'), []);
     const requestEditCompletedAt = useCallback(() => setCompletedAtPrompt('edit'), []);
     const closeCompletedAtPrompt = useCallback(() => setCompletedAtPrompt(null), []);
-    const applyCompletedAtPrompt = useCallback((value: string) => {
+    const applyCompletedAtPrompt = useCallback((value: string, timeSpentMinutes?: number) => {
         const mode = completedAtPrompt;
         setCompletedAtPrompt(null);
         const parsed = new Date(value);
         if (!mode || Number.isNaN(parsed.getTime())) return;
         const completedAt = parsed.toISOString();
+        // Mirrors mobile's `mode === 'complete' && timeSpentEnabled` gate
+        // (swipeable-task-item.tsx), plus desktop's editor-complete mode.
+        const includeTimeSpent = (mode === 'complete' || mode === 'editor-complete') && timeSpentEnabled;
         if (mode === 'editor-complete') {
             const previousStatus = task.status;
             const wasFocusedToday = task.isFocusedToday === true;
-            void handleSubmit(undefined, { statusOverride: 'done', completedAtOverride: completedAt })
+            void handleSubmit(undefined, {
+                statusOverride: 'done',
+                completedAtOverride: completedAt,
+                ...(includeTimeSpent ? { timeSpentMinutesOverride: timeSpentMinutes } : {}),
+            })
                 .then((result) => {
                     if (!result?.success) return;
                     handleTaskCompleted(previousStatus, wasFocusedToday);
@@ -983,7 +991,11 @@ export const TaskItem = memo(function TaskItem({
         if (mode === 'complete') {
             const previousStatus = task.status;
             const wasFocusedToday = task.isFocusedToday === true;
-            void updateTask(task.id, { status: 'done', completedAt })
+            const updates: Partial<Task> = { status: 'done', completedAt };
+            if (includeTimeSpent) {
+                updates.timeSpentMinutes = timeSpentMinutes;
+            }
+            void updateTask(task.id, updates)
                 .then((result) => {
                     if (!result.success) {
                         throw new Error(result.error || 'Failed to complete task');
@@ -1002,7 +1014,7 @@ export const TaskItem = memo(function TaskItem({
                 }
             })
             .catch((error) => reportError('Failed to update completion time', error));
-    }, [completedAtPrompt, handleSubmit, handleTaskCompleted, task.id, task.isFocusedToday, task.status, updateTask]);
+    }, [completedAtPrompt, handleSubmit, handleTaskCompleted, task.id, task.isFocusedToday, task.status, timeSpentEnabled, updateTask]);
     const handleStatusChange = useCallback((nextStatus: TaskStatus) => {
         if (nextStatus === 'waiting' && task.status !== 'waiting') {
             setShowWaitingAssignmentPrompt(true);
@@ -1575,6 +1587,15 @@ export const TaskItem = memo(function TaskItem({
                             : new Date().toISOString()
                     )}
                     inputType="datetime-local"
+                    numericField={
+                        (completedAtPrompt === 'complete' || completedAtPrompt === 'editor-complete') && timeSpentEnabled
+                            ? {
+                                label: tFallback(t, 'taskEdit.timeSpentLabel', 'Time Spent'),
+                                placeholder: tFallback(t, 'taskEdit.timeSpentPlaceholder', 'minutes'),
+                                defaultValue: normalizeTimeSpentMinutes(task.timeSpentMinutes)?.toString() ?? '',
+                            }
+                            : undefined
+                    }
                     confirmLabel={t('common.save')}
                     cancelLabel={t('common.cancel')}
                     onCancel={closeCompletedAtPrompt}

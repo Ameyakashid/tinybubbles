@@ -325,6 +325,191 @@ describe('TaskItem', () => {
         });
     });
 
+    it('logs time spent when completing through the backdated-complete prompt with the gate on', async () => {
+        const editableTask: Task = {
+            ...mockTask,
+            id: 'time-spent-complete-task',
+            status: 'next',
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [editableTask],
+                _allTasks: [editableTask],
+                _tasksById: new Map([[editableTask.id, editableTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+                settings: {
+                    features: { pomodoro: true },
+                    gtd: { pomodoro: { linkTask: true } },
+                },
+            }));
+        });
+        const { getAllByRole, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={editableTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.contextMenu(getAllByRole('button', { name: 'Done' })[0]);
+        const dialog = getByRole('dialog', { name: 'Completion time' });
+        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        fireEvent.change(within(dialog).getByLabelText('Time Spent'), { target: { value: '45' } });
+        await act(async () => {
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+        });
+
+        await waitFor(() => {
+            const updatedTask = useTaskStore.getState()._tasksById.get('time-spent-complete-task');
+            expect(updatedTask?.status).toBe('done');
+            expect(updatedTask?.completedAt).toBe(new Date('2026-07-20T09:30').toISOString());
+            expect(updatedTask?.timeSpentMinutes).toBe(45);
+        });
+    });
+
+    it('does not show the time-spent field or touch timeSpentMinutes when the gate is off', async () => {
+        const editableTask: Task = {
+            ...mockTask,
+            id: 'time-spent-gate-off-task',
+            status: 'next',
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [editableTask],
+                _allTasks: [editableTask],
+                _tasksById: new Map([[editableTask.id, editableTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+                settings: {},
+            }));
+        });
+        const { getAllByRole, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={editableTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.contextMenu(getAllByRole('button', { name: 'Done' })[0]);
+        const dialog = getByRole('dialog', { name: 'Completion time' });
+        expect(within(dialog).queryByLabelText('Time Spent')).toBeNull();
+        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        await act(async () => {
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+        });
+
+        await waitFor(() => {
+            const updatedTask = useTaskStore.getState()._tasksById.get('time-spent-gate-off-task');
+            expect(updatedTask?.status).toBe('done');
+            expect(updatedTask?.timeSpentMinutes).toBeUndefined();
+        });
+    });
+
+    it('clears timeSpentMinutes when the time-spent field is left blank', async () => {
+        const editableTask: Task = {
+            ...mockTask,
+            id: 'time-spent-blank-task',
+            status: 'next',
+            timeSpentMinutes: 30,
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [editableTask],
+                _allTasks: [editableTask],
+                _tasksById: new Map([[editableTask.id, editableTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+                settings: {
+                    features: { pomodoro: true },
+                    gtd: { pomodoro: { linkTask: true } },
+                },
+            }));
+        });
+        const { getAllByRole, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={editableTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.contextMenu(getAllByRole('button', { name: 'Done' })[0]);
+        const dialog = getByRole('dialog', { name: 'Completion time' });
+        const timeSpentInput = within(dialog).getByLabelText('Time Spent') as HTMLInputElement;
+        expect(timeSpentInput.value).toBe('30');
+        fireEvent.change(timeSpentInput, { target: { value: '' } });
+        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        await act(async () => {
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+        });
+
+        await waitFor(() => {
+            const updatedTask = useTaskStore.getState()._tasksById.get('time-spent-blank-task');
+            expect(updatedTask?.status).toBe('done');
+            expect(updatedTask?.timeSpentMinutes).toBeUndefined();
+        });
+    });
+
+    it('never shows the time-spent field when only editing the completion time of an already-done task', async () => {
+        const doneTask: Task = {
+            ...mockTask,
+            id: 'time-spent-edit-mode-task',
+            status: 'done',
+            completedAt: new Date('2026-07-01T10:00:00.000Z').toISOString(),
+            timeSpentMinutes: 20,
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [doneTask],
+                _allTasks: [doneTask],
+                _tasksById: new Map([[doneTask.id, doneTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+                settings: {
+                    features: { pomodoro: true },
+                    gtd: { pomodoro: { linkTask: true } },
+                },
+            }));
+        });
+        const { getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={doneTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.click(getByRole('button', { name: 'Edit completion time' }));
+        const dialog = getByRole('dialog', { name: 'Completion time' });
+        expect(within(dialog).queryByLabelText('Time Spent')).toBeNull();
+    });
+
     it("stars even an unclarified inbox task for Today's Focus from the editor header", async () => {
         const editableTask: Task = {
             ...mockTask,

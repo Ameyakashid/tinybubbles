@@ -22,6 +22,7 @@ type UseTaskItemSubmitParams = {
 type TaskItemSubmitOptions = {
     statusOverride?: TaskStatus;
     completedAtOverride?: string;
+    timeSpentMinutesOverride?: number;
 };
 
 export function useTaskItemSubmit({
@@ -43,6 +44,13 @@ export function useTaskItemSubmit({
         if (!patch) return;
         if (options?.completedAtOverride !== undefined) {
             patch.completedAt = options.completedAtOverride;
+        }
+        // Presence check, not `!== undefined`: an explicit undefined override
+        // means "the time-spent field was shown but left blank," which clears
+        // timeSpentMinutes rather than leaving it untouched (mirrors mobile's
+        // completed-at-picker.tsx / #896).
+        if (options && 'timeSpentMinutesOverride' in options) {
+            patch.timeSpentMinutes = options.timeSpentMinutesOverride;
         }
 
         const result = await updateTask(task.id, patch);

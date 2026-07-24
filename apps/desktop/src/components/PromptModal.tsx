@@ -1,8 +1,15 @@
 import { useEffect, useId, useState, type MouseEvent } from 'react';
+import { normalizeTimeSpentMinutes } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { ModalPortal } from './ModalPortal';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { Button } from './ui/Button';
+
+interface PromptModalNumericField {
+    label: string;
+    defaultValue?: string;
+    placeholder?: string;
+}
 
 interface PromptModalProps {
     isOpen: boolean;
@@ -17,9 +24,11 @@ interface PromptModalProps {
     onBrowse?: () => Promise<string | null>;
     secondaryLabel?: string;
     onSecondary?: (value: string) => void;
+    /** Optional secondary numeric field (e.g. time spent), rendered below the primary input. */
+    numericField?: PromptModalNumericField;
     confirmLabel: string;
     cancelLabel: string;
-    onConfirm: (value: string) => void;
+    onConfirm: (value: string, numericValue?: number) => void;
     onCancel: () => void;
 }
 
@@ -36,6 +45,7 @@ export function PromptModal({
     onBrowse,
     secondaryLabel,
     onSecondary,
+    numericField,
     confirmLabel,
     cancelLabel,
     onConfirm,
@@ -44,18 +54,30 @@ export function PromptModal({
     const { t } = useLanguage();
     const [value, setValue] = useState(defaultValue ?? '');
     const [hasInteracted, setHasInteracted] = useState(false);
+    const [numericDraft, setNumericDraft] = useState(numericField?.defaultValue ?? '');
     const titleId = useId();
     const descriptionId = useId();
     const validationId = useId();
+    const numericFieldId = useId();
 
     useEffect(() => {
         if (isOpen) {
             setValue(defaultValue ?? '');
             setHasInteracted(false);
+            setNumericDraft(numericField?.defaultValue ?? '');
         }
-    }, [isOpen, defaultValue]);
+    }, [isOpen, defaultValue, numericField?.defaultValue]);
     const canConfirm = allowEmptyConfirm || value.trim().length > 0;
     const showValidation = !allowEmptyConfirm && hasInteracted && !canConfirm;
+    // Only pass a second argument when numericField opted in — existing callers
+    // that pass a single-arg onConfirm must keep seeing exactly one argument.
+    const confirmWithValue = () => {
+        if (numericField) {
+            onConfirm(value, normalizeTimeSpentMinutes(Number(numericDraft)));
+        } else {
+            onConfirm(value);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -107,7 +129,7 @@ export function PromptModal({
                             if (e.key === 'Enter') {
                                 e.preventDefault();
                                 if (canConfirm) {
-                                    onConfirm(value);
+                                    confirmWithValue();
                                 } else {
                                     setHasInteracted(true);
                                 }
@@ -122,6 +144,23 @@ export function PromptModal({
                         <p id={validationId} className="text-xs text-destructive">
                             {t('common.validationRequired')}
                         </p>
+                    )}
+                    {numericField && (
+                        <div className="flex flex-col gap-1">
+                            <label htmlFor={numericFieldId} className="text-xs font-medium text-muted-foreground">
+                                {numericField.label}
+                            </label>
+                            <input
+                                id={numericFieldId}
+                                type="text"
+                                inputMode="numeric"
+                                value={numericDraft}
+                                onChange={(e) => setNumericDraft(e.target.value.replace(/[^0-9]/g, ''))}
+                                placeholder={numericField.placeholder}
+                                aria-label={numericField.label}
+                                className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                            />
+                        </div>
                     )}
                     <div className="flex justify-end gap-2">
                         {browseLabel && onBrowse && (
@@ -164,7 +203,7 @@ export function PromptModal({
                             onMouseDown={keepInputFocus}
                             onClick={() => {
                                 if (canConfirm) {
-                                    onConfirm(value);
+                                    confirmWithValue();
                                 } else {
                                     setHasInteracted(true);
                                 }
