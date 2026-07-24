@@ -23,6 +23,13 @@ import {
     TASK_CONTENT_COMPARISON_EXCLUDED_KEYS,
 } from '../packages/core/src/sync-signatures';
 import { CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS } from '../apps/cloud/src/server-config';
+import cloudKitProductionSchema from '../packages/core/src/cloudkit-production-schema.json';
+
+// Stable releases must not ship a CloudKit-mapped field that isn't confirmed live in
+// Apple's Production container (see the header comment in task-sync-schema.ts). RCs may
+// still have fields pending — only `--release-gate` (wired into release.yml, not
+// release-rc.yml) turns a non-empty pendingProduction list into a failure.
+const RELEASE_GATE = process.argv.includes('--release-gate');
 
 type Entity = 'task' | 'project' | 'section';
 type Surface = 'cloud' | 'sqlite';
@@ -450,6 +457,47 @@ const runNativeTaskMapperFixtureChecks = (): string[] => {
     return failures;
 };
 
+// Falsifiable guard for the CloudKit Production-container deploy step (see
+// cloudkit-production-schema.json and the task-sync-schema.ts header comment).
+const checkCloudKitProductionSchema = (): string[] => {
+    const failures: string[] = [];
+    const mappedKeys = TASK_SYNC_FIELD_SCHEMA
+        .filter((field) => field.cloudKit !== null)
+        .map((field) => field.cloudKit!.key);
+    const mappedKeySet = new Set(mappedKeys);
+    const { deployed, pendingProduction } = cloudKitProductionSchema;
+    const deployedSet = new Set(deployed);
+    const pendingSet = new Set(pendingProduction);
+
+    const listedInBoth = deployed.filter((key) => pendingSet.has(key));
+    if (listedInBoth.length > 0) {
+        failures.push(`cloudkit-production-schema.json: keys listed in both deployed and pendingProduction: ${listedInBoth.join(', ')}`);
+    }
+
+    const stale = [...deployed, ...pendingProduction].filter((key) => !mappedKeySet.has(key));
+    if (stale.length > 0) {
+        failures.push(`cloudkit-production-schema.json: keys no longer mapped in TASK_SYNC_FIELD_SCHEMA (stale): ${stale.join(', ')}`);
+    }
+
+    const unlisted = mappedKeys.filter((key) => !deployedSet.has(key) && !pendingSet.has(key));
+    if (unlisted.length > 0) {
+        failures.push(`cloudkit-production-schema.json: CloudKit-mapped task fields missing from both lists (add to deployed or pendingProduction): ${unlisted.join(', ')}`);
+    }
+
+    if (pendingProduction.length > 0) {
+        const message = `CloudKit fields pending Production deployment: ${pendingProduction.join(', ')}. `
+            + 'Deploy them in the CloudKit Dashboard (Production container), then move them to '
+            + '"deployed" in packages/core/src/cloudkit-production-schema.json.';
+        if (RELEASE_GATE) {
+            failures.push(message);
+        } else {
+            console.log(message);
+        }
+    }
+
+    return failures;
+};
+
 const failures: string[] = [];
 
 const coreTypes = read(PATHS.coreTypes);
@@ -528,6 +576,7 @@ failures.push(...compareNativeTaskFieldSpecs(
 failures.push(...compareNativeTaskFixtureRoundTrip('iOS CloudKit task mapper', swiftTaskFieldSpecs));
 failures.push(...compareNativeTaskFixtureRoundTrip('macOS CloudKit task mapper', objcTaskFieldSpecs));
 failures.push(...runNativeTaskMapperFixtureChecks());
+failures.push(...checkCloudKitProductionSchema());
 
 // MCP read tools promise core Task/Project entities. Keep their SELECT lists
 // schema-derived, and ensure the manual Project row mapper exposes every core
