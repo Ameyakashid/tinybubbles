@@ -987,4 +987,14 @@ describe('ProjectDetailModal archived projects', () => {
             includeDone: true,
         });
     });
+
+    it('keeps done tasks in sequence for sequential projects', () => {
+        expect(getProjectDetailTaskListOptions({ ...project('active'), isSequential: true }, true)).toEqual({
+            allowAdd: true,
+            enableProjectReorder: true,
+            groupCompletedTasksLast: false,
+            includeArchived: false,
+            includeDone: true,
+        });
+    });
 });

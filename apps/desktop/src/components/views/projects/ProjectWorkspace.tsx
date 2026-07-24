@@ -396,7 +396,9 @@ export function ProjectWorkspace({
     const pendingProjectScrollRestoreRef = useRef<ProjectScrollSnapshot | null>(null);
     const selectedProjectIdRef = useRef<string | null>(selectedProjectId);
     const isArchivedProject = selectedProject?.status === 'archived';
-    const shouldGroupCompletedTasks = Boolean(selectedProject && !isArchivedProject && showCompletedTasks);
+    const shouldGroupCompletedTasks = Boolean(
+        selectedProject && !selectedProject.isSequential && !isArchivedProject && showCompletedTasks
+    );
     const resolveText = useCallback((key: string, fallback: string) => {
         const value = t(key);
         return value && value !== key ? value : fallback;

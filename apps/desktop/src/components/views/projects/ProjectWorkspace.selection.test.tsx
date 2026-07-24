@@ -383,6 +383,25 @@ describe('ProjectWorkspace Select mode', () => {
         ]);
     });
 
+    it('keeps completed tasks in sequence for sequential projects', () => {
+        const { container } = renderWorkspace({
+            selectedProject: { ...project, isSequential: true },
+            showCompletedTasks: true,
+            allTasks: [
+                task('first', 'First', { order: 0 }),
+                task('finished', 'Finished', { status: 'done', order: 1 }),
+                task('last', 'Last', { order: 2 }),
+            ],
+        });
+
+        expect(container.querySelector('[data-project-completed-toggle]')).not.toBeInTheDocument();
+        expect(Array.from(container.querySelectorAll('[data-task-id]')).map((row) => row.getAttribute('data-task-id'))).toEqual([
+            'first',
+            'finished',
+            'last',
+        ]);
+    });
+
     it('restores project scroll after expanding completed tasks and entering selection mode', () => {
         const { container, getByRole } = renderWorkspace({
             showCompletedTasks: true,

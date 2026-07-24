@@ -1688,6 +1688,6 @@ export function getProjectDetailTaskListOptions(selectedProject: Project | null,
         enableProjectReorder: !isArchived,
         includeArchived: isArchived,
         includeDone: isArchived || showCompletedTasks,
-        groupCompletedTasksLast: !isArchived && showCompletedTasks,
+        groupCompletedTasksLast: !isArchived && showCompletedTasks && !selectedProject?.isSequential,
     };
 }
