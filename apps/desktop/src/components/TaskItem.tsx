@@ -1592,7 +1592,14 @@ export const TaskItem = memo(function TaskItem({
                             ? {
                                 label: tFallback(t, 'taskEdit.timeSpentLabel', 'Time Spent'),
                                 placeholder: tFallback(t, 'taskEdit.timeSpentPlaceholder', 'minutes'),
-                                defaultValue: normalizeTimeSpentMinutes(task.timeSpentMinutes)?.toString() ?? '',
+                                // Seed from the draft in editor-complete mode: the editor
+                                // may hold an unsaved Time Spent edit, and the confirmed
+                                // value overrides the draft patch. Seeding from the saved
+                                // task would silently discard it. Mirrors mobile's
+                                // `initialTimeSpentMinutes={mergedTask.timeSpentMinutes}`.
+                                defaultValue: normalizeTimeSpentMinutes(
+                                    completedAtPrompt === 'editor-complete' ? draft.timeSpentMinutes : task.timeSpentMinutes
+                                )?.toString() ?? '',
                             }
                             : undefined
                     }
