@@ -19,6 +19,8 @@ MINDWTR_CLOUD_AUTH_TOKENS=replace_with_a_token_at_least_20_characters_long
 MINDWTR_CLOUD_CORS_ORIGIN=http://localhost:5173
 ```
 
+`MINDWTR_CLOUD_CORS_ORIGIN` must be the exact address you open the PWA at in your browser, including scheme and port. `http://localhost:5173` only works when the browser runs on the Docker host itself. From any other machine, use the host's address, for example `http://192.168.1.20:5173`. Only one origin can be set.
+
 Then pull and start the published images:
 
 ```bash
