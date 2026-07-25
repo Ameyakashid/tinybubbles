@@ -36,7 +36,44 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+// These five moved out of attachment-sync-utils.ts and into core
+// (packages/core/src/attachment-paths.ts) so desktop and mobile compute the
+// same cloud-key wire format from one place; mirror the real, pure
+// implementations here rather than pulling in the whole real module.
+const attachmentPathMocks = vi.hoisted(() => {
+  const extractExtension = (value?: string) => {
+    if (!value) return '';
+    const stripped = value.split('?')[0].split('#')[0];
+    const leaf = stripped.split(/[\\/]/).pop() || '';
+    const match = leaf.match(/\.[A-Za-z0-9]{1,8}$/);
+    return match ? match[0].toLowerCase() : '';
+  };
+  return {
+    ATTACHMENTS_DIR_NAME: 'attachments',
+    extractExtension,
+    buildCloudKey: (attachment: { id: string; title: string; uri: string }) => (
+      `attachments/${attachment.id}${extractExtension(attachment.title) || extractExtension(attachment.uri)}`
+    ),
+    getBaseSyncUrl: (fullUrl: string) => {
+      const trimmed = fullUrl.replace(/\/+$/, '');
+      if (trimmed.toLowerCase().endsWith('.json')) {
+        const lastSlash = trimmed.lastIndexOf('/');
+        return lastSlash >= 0 ? trimmed.slice(0, lastSlash) : trimmed;
+      }
+      return trimmed;
+    },
+    getCloudBaseUrl: (fullUrl: string) => {
+      const trimmed = fullUrl.replace(/\/+$/, '');
+      if (trimmed.toLowerCase().endsWith('/data')) {
+        return trimmed.slice(0, -'/data'.length);
+      }
+      return trimmed;
+    },
+  };
+});
+
 vi.mock('@mindwtr/core', () => ({
+  ...attachmentPathMocks,
   validateAttachmentForUpload: vi.fn().mockResolvedValue({ valid: true }),
   cloudGetFile: vi.fn(),
   cloudDeleteFile: vi.fn(),
