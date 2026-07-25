@@ -26,6 +26,7 @@ type MobilePerformanceInput = {
   listItemCount?: number;
   visibleItemCount?: number;
   filterCount?: number;
+  instanceId?: number;
 };
 
 type MobilePerformanceMeasurement = ReturnType<typeof beginPerformanceLogMeasurement>;

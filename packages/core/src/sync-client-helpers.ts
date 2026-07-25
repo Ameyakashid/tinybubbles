@@ -1,4 +1,5 @@
 import { useTaskStore } from './store';
+import { computeSyncChangeFingerprint } from './sync-helpers';
 import { cloneAppData } from './sync-runtime-utils';
 import type { AppData } from './types';
 
@@ -42,6 +43,25 @@ export const ensureFreshLocalSyncSnapshot = ({
 export const getInMemoryAppDataSnapshot = (): AppData => {
     const state = useTaskStore.getState();
     return cloneAppData({
+        tasks: state._allTasks ?? state.tasks ?? [],
+        projects: state._allProjects ?? state.projects ?? [],
+        sections: state._allSections ?? state.sections ?? [],
+        areas: state._allAreas ?? state.areas ?? [],
+        people: state._allPeople ?? state.people ?? [],
+        settings: state.settings ?? {},
+    });
+};
+
+/**
+ * Change fingerprint of the live store, without the deep clone
+ * getInMemoryAppDataSnapshot needs — this only reads. Callers that just want to
+ * know "did anything sync-worthy change" (auto-sync triggers) must use this:
+ * cloning + fingerprinting the whole payload instead cost seconds per store
+ * change on large Android libraries (#766).
+ */
+export const getInMemorySyncChangeFingerprint = (): string => {
+    const state = useTaskStore.getState();
+    return computeSyncChangeFingerprint({
         tasks: state._allTasks ?? state.tasks ?? [],
         projects: state._allProjects ?? state.projects ?? [],
         sections: state._allSections ?? state.sections ?? [],

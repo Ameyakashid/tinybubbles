@@ -269,6 +269,58 @@ describe('mobile storage adapter', () => {
     expect(updateMobileWidgetFromDataMock).toHaveBeenCalledWith(currentSnapshot);
   }, 10_000);
 
+  it('skips a JSON backup Android could never read back, and refuses it as a fallback (#766)', async () => {
+    const makeTask = (id: string): Task => ({
+      id,
+      title: `Task ${id} ${'padding '.repeat(20)}`,
+      status: 'next',
+      tags: [],
+      contexts: [],
+      createdAt: '2026-06-15T00:00:00.000Z',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+    });
+    const hugeSnapshot: AppData = {
+      tasks: Array.from({ length: 6_000 }, (_, index) => makeTask(`task-${index}`)),
+      projects: [],
+      sections: [],
+      areas: [],
+      people: [],
+      settings: {},
+    };
+    expect(JSON.stringify(hugeSnapshot).length).toBeGreaterThan(1_500_000);
+
+    const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+    if (!mobileStorage.saveTask) {
+      throw new Error('Expected mobile storage to support saveTask');
+    }
+    __mobileStorageTestUtils.setSqliteStateForTests({
+      adapter: { saveTask: sqliteAdapterSaveTask },
+      client: {},
+    });
+
+    await mobileStorage.saveTask(hugeSnapshot.tasks[0], hugeSnapshot);
+    await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
+
+    // Past Android's ~2MB CursorWindow the row cannot be read back, so writing it
+    // is seconds of JS thread for a copy nothing can load.
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', expect.anything());
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith(
+      'mindwtr-data:startup-backup-version',
+      expect.anything(),
+    );
+    expect(logWarnMock).toHaveBeenCalledWith(
+      '[Storage] Skipped JSON backup; library exceeds the readable AsyncStorage size',
+      expect.objectContaining({ scope: 'storage' }),
+    );
+
+    // A failing SQLite read must now surface instead of pinning every read to a
+    // backup that only throws "Row too big" behind a 60s cooldown.
+    __mobileStorageTestUtils.setSqliteInitializerForTests(async () => {
+      throw new Error('SQLite read timed out');
+    });
+    await expect(mobileStorage.getData()).rejects.toThrow('SQLite read timed out');
+  }, 20_000);
+
   it('coalesces a burst of task saves into a single backup write with the newest payload (#766)', async () => {
     const makeTask = (id: string): Task => ({
       id,

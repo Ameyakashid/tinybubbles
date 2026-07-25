@@ -1,6 +1,7 @@
 import type { AppData, Attachment, GtdSettings } from './types';
 import { normalizeSavedFilters } from './saved-filters';
 import { GTD_SYNCED_FIELD_KEYS, type GtdSyncedFieldKey } from './settings-options';
+import { normalizeRevision } from './sync-revision';
 import { SYNC_FILE_NAME } from './sync-service-utils';
 
 const MISSING_ATTACHMENT_TIMESTAMP_SENTINEL = '1970-01-01T00:00:00.000Z';
@@ -140,6 +141,78 @@ export const hasPendingSyncSideEffects = (data: AppData): boolean => (
     || Boolean(data.settings.attachments?.pendingRemoteDeletes?.length)
 );
 
+const sanitizeSettingsForRemote = (settings: AppData['settings']): AppData['settings'] => {
+    const prefs = settings.syncPreferences ?? {};
+    const next: AppData['settings'] = {
+        syncPreferences: { ...prefs },
+        syncPreferencesUpdatedAt: settings.syncPreferencesUpdatedAt
+            ? { ...settings.syncPreferencesUpdatedAt }
+            : undefined,
+    };
+
+    if (prefs.appearance === true) {
+        next.theme = settings.theme;
+        next.appearance = settings.appearance ? { ...settings.appearance } : settings.appearance;
+        next.keybindingStyle = settings.keybindingStyle;
+        // Desktop global shortcut registration is local runtime behavior and should never sync.
+        next.globalQuickAddShortcut = undefined;
+    }
+
+    if (prefs.language === true) {
+        next.language = settings.language;
+        next.weekStart = settings.weekStart;
+        next.dateFormat = settings.dateFormat;
+        next.timeFormat = settings.timeFormat;
+    }
+
+    if (prefs.gtd === true && settings.gtd) {
+        // Driven by GTD_SYNCED_FIELD_KEYS (settings-options.ts) — the single
+        // source of truth shared with the gtd mergeGroup in
+        // mergeSettingsForSync (sync-merge-settings.ts). A field missing from
+        // that list silently never leaves the device (naturalLanguageDates
+        // bug); add new synced gtd fields there, not here.
+        const gtd = settings.gtd;
+        const hasSyncedGtdField = GTD_SYNCED_FIELD_KEYS.some((key) => gtd[key] !== undefined);
+        if (hasSyncedGtdField) {
+            const nextGtd: Pick<GtdSettings, GtdSyncedFieldKey> = {};
+            for (const key of GTD_SYNCED_FIELD_KEYS) {
+                const value = gtd[key];
+                if (value !== undefined) {
+                    (nextGtd as Record<GtdSyncedFieldKey, unknown>)[key] = value;
+                }
+            }
+            next.gtd = nextGtd;
+        }
+    }
+
+    if (prefs.savedFilters === true) {
+        next.savedFilters = normalizeSavedFilters(settings.savedFilters);
+    }
+
+    if (prefs.externalCalendars === true) {
+        next.externalCalendars = settings.externalCalendars
+            ? settings.externalCalendars
+                .filter((item) => !isLocalCalendarSourceUrl(item.url))
+                .map((item) => ({ ...item }))
+            : settings.externalCalendars;
+    }
+
+    if (prefs.ai === true && settings.ai) {
+        next.ai = {
+            ...settings.ai,
+            apiKey: undefined,
+            speechToText: settings.ai.speechToText
+                ? {
+                    ...settings.ai.speechToText,
+                    offlineModelPath: undefined,
+                }
+                : settings.ai.speechToText,
+        };
+    }
+
+    return next;
+};
+
 export const sanitizeAppDataForRemote = (data: AppData): AppData => {
     const hasNonEmptyValue = (value: unknown): boolean => (
         typeof value === 'string' && value.trim().length > 0
@@ -169,78 +242,6 @@ export const sanitizeAppDataForRemote = (data: AppData): AppData => {
                 localStatus: undefined,
             };
         });
-    };
-
-    const sanitizeSettingsForRemote = (settings: AppData['settings']): AppData['settings'] => {
-        const prefs = settings.syncPreferences ?? {};
-        const next: AppData['settings'] = {
-            syncPreferences: { ...prefs },
-            syncPreferencesUpdatedAt: settings.syncPreferencesUpdatedAt
-                ? { ...settings.syncPreferencesUpdatedAt }
-                : undefined,
-        };
-
-        if (prefs.appearance === true) {
-            next.theme = settings.theme;
-            next.appearance = settings.appearance ? { ...settings.appearance } : settings.appearance;
-            next.keybindingStyle = settings.keybindingStyle;
-            // Desktop global shortcut registration is local runtime behavior and should never sync.
-            next.globalQuickAddShortcut = undefined;
-        }
-
-        if (prefs.language === true) {
-            next.language = settings.language;
-            next.weekStart = settings.weekStart;
-            next.dateFormat = settings.dateFormat;
-            next.timeFormat = settings.timeFormat;
-        }
-
-        if (prefs.gtd === true && settings.gtd) {
-            // Driven by GTD_SYNCED_FIELD_KEYS (settings-options.ts) — the single
-            // source of truth shared with the gtd mergeGroup in
-            // mergeSettingsForSync (sync-merge-settings.ts). A field missing from
-            // that list silently never leaves the device (naturalLanguageDates
-            // bug); add new synced gtd fields there, not here.
-            const gtd = settings.gtd;
-            const hasSyncedGtdField = GTD_SYNCED_FIELD_KEYS.some((key) => gtd[key] !== undefined);
-            if (hasSyncedGtdField) {
-                const nextGtd: Pick<GtdSettings, GtdSyncedFieldKey> = {};
-                for (const key of GTD_SYNCED_FIELD_KEYS) {
-                    const value = gtd[key];
-                    if (value !== undefined) {
-                        (nextGtd as Record<GtdSyncedFieldKey, unknown>)[key] = value;
-                    }
-                }
-                next.gtd = nextGtd;
-            }
-        }
-
-        if (prefs.savedFilters === true) {
-            next.savedFilters = normalizeSavedFilters(settings.savedFilters);
-        }
-
-        if (prefs.externalCalendars === true) {
-            next.externalCalendars = settings.externalCalendars
-                ? settings.externalCalendars
-                    .filter((item) => !isLocalCalendarSourceUrl(item.url))
-                    .map((item) => ({ ...item }))
-                : settings.externalCalendars;
-        }
-
-        if (prefs.ai === true && settings.ai) {
-            next.ai = {
-                ...settings.ai,
-                apiKey: undefined,
-                speechToText: settings.ai.speechToText
-                    ? {
-                        ...settings.ai.speechToText,
-                        offlineModelPath: undefined,
-                    }
-                    : settings.ai.speechToText,
-            };
-        }
-
-        return next;
     };
 
     return {
@@ -299,6 +300,49 @@ export const computeStableValueFingerprint = (value: unknown): string => {
 
 export const computeSyncPayloadFingerprint = (data: AppData): string =>
     computeStableValueFingerprint(sanitizeAppDataForRemote(data));
+
+type RevisionedEntity = {
+    id: string;
+    rev?: number;
+    revBy?: string;
+    updatedAt?: string;
+    deletedAt?: string;
+    purgedAt?: string;
+};
+
+const appendEntityRevisions = (parts: string[], entities: readonly RevisionedEntity[] | undefined): void => {
+    parts.push(String(entities?.length ?? 0));
+    for (const entity of entities ?? []) {
+        parts.push(
+            `${entity.id}|${normalizeRevision(entity.rev)}|${entity.revBy ?? ''}|${entity.updatedAt ?? ''}|${entity.deletedAt ?? ''}|${entity.purgedAt ?? ''}`
+        );
+    }
+};
+
+/**
+ * Cheap "did anything sync-worthy change since last time" fingerprint.
+ *
+ * computeSyncPayloadFingerprint answers the same question, but it deep clones,
+ * sanitizes, key-sorts and hashes the whole library — measured at ~5 s per
+ * store change on a 5k-task Android library, blocking every tap behind it
+ * (#766). Every synced write bumps rev/updatedAt, and that same tuple is what
+ * reconcileEntityCollection already trusts when it decides an in-memory entity
+ * is unchanged, so digesting the tuples plus the (small) sanitized settings
+ * answers the change question at a fraction of the cost. Use the payload
+ * fingerprint when the bytes themselves matter (remote comparison); use this
+ * one when the only question is whether to schedule work.
+ */
+export const computeSyncChangeFingerprint = (data: AppData): string => {
+    const parts: string[] = [];
+    appendEntityRevisions(parts, data.tasks);
+    appendEntityRevisions(parts, data.projects);
+    appendEntityRevisions(parts, data.sections);
+    appendEntityRevisions(parts, data.areas);
+    appendEntityRevisions(parts, data.people);
+    parts.push(computeStableValueFingerprint(sanitizeSettingsForRemote(data.settings ?? {})));
+    const digest = parts.join('\n');
+    return `change-v1:${digest.length}:${hashStableSyncJson(digest)}`;
+};
 
 type ExternalCalendarProvider = {
     load: () => Promise<AppData['settings']['externalCalendars'] | undefined>;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     areSyncPayloadsEqual,
     assertNoPendingAttachmentUploads,
+    computeSyncChangeFingerprint,
     computeSyncPayloadFingerprint,
     findPendingAttachmentUploads,
     hasPendingSyncSideEffects,
@@ -590,6 +591,49 @@ describe('sync-helpers computeSyncPayloadFingerprint', () => {
         right.tasks[0].title = 'Changed';
 
         expect(computeSyncPayloadFingerprint(left)).not.toBe(computeSyncPayloadFingerprint(right));
+    });
+
+    it('agrees with the cheap change fingerprint on what counts as a change', () => {
+        const unchanged = createData([]);
+        const edited = createData([]);
+        edited.tasks[0].updatedAt = '2026-02-20T00:00:00.000Z';
+        edited.tasks[0].rev = 2;
+
+        expect(computeSyncChangeFingerprint(unchanged)).toBe(computeSyncChangeFingerprint(createData([])));
+        expect(computeSyncChangeFingerprint(unchanged)).not.toBe(computeSyncChangeFingerprint(edited));
+    });
+
+    it('cheap change fingerprint ignores device-local sync status churn', () => {
+        const before = createData([]);
+        const after: AppData = {
+            ...before,
+            settings: {
+                ...before.settings,
+                lastSyncAt: '2026-04-02T00:00:00.000Z',
+                lastSyncStatus: 'error',
+                lastSyncError: 'temporary network error',
+                lastSyncHistory: [{ at: '2026-04-02T00:00:00.000Z', status: 'error' }],
+            } as AppData['settings'],
+        };
+
+        expect(computeSyncChangeFingerprint(after)).toBe(computeSyncChangeFingerprint(before));
+    });
+
+    it('cheap change fingerprint notices added, removed and deleted entities', () => {
+        const base = createData([]);
+        const added: AppData = { ...base, tasks: [...base.tasks, { ...base.tasks[0], id: 'task-2' }] };
+        const removed: AppData = { ...base, tasks: [] };
+        const deleted: AppData = { ...base, tasks: [{ ...base.tasks[0], deletedAt: now }] };
+        const projectAdded: AppData = {
+            ...base,
+            projects: [{ id: 'project-1', name: 'P', color: '#fff', tagIds: [], createdAt: now, updatedAt: now }],
+        };
+
+        const baseFingerprint = computeSyncChangeFingerprint(base);
+        expect(computeSyncChangeFingerprint(added)).not.toBe(baseFingerprint);
+        expect(computeSyncChangeFingerprint(removed)).not.toBe(baseFingerprint);
+        expect(computeSyncChangeFingerprint(deleted)).not.toBe(baseFingerprint);
+        expect(computeSyncChangeFingerprint(projectAdded)).not.toBe(baseFingerprint);
     });
 
     it('uses a deterministic fallback timestamp for missing file attachments', () => {

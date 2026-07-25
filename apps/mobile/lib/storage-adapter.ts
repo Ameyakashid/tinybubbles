@@ -309,13 +309,32 @@ const parseStoredAppDataJson = (jsonValue: string): AppData => (
     normalizeStoredAppData(JSON.parse(jsonValue) as AppData)
 );
 
+// Android hands an AsyncStorage row back through a ~2MB CursorWindow, so a
+// backup past that limit can never be read again ("Row too big to fit into
+// CursorWindow"): writing it costs seconds of JS thread for a copy nothing can
+// load, and trusting it turns a transient SQLite timeout into a hard sync
+// failure. Past the limit the backup is skipped and treated as absent (#766).
+const JSON_BACKUP_MAX_CHARS = 1_500_000;
+let jsonBackupSkippedOversize = false;
+
+const isJsonBackupUsable = (): boolean => !jsonBackupSkippedOversize;
+
 const saveStartupJsonBackup = async (
     AsyncStorage: any,
     data: AppData,
     phasePrefix: string,
     minimumUpdatedAtMs = 0,
-): Promise<{ sizeChars: number }> => {
+): Promise<{ sizeChars: number; skipped: boolean }> => {
     const jsonValue = await measureStartupPhase(`${phasePrefix}.json_backup_stringify`, async () => JSON.stringify(data));
+    if (jsonValue.length > JSON_BACKUP_MAX_CHARS) {
+        jsonBackupSkippedOversize = true;
+        logStorageWarn('[Storage] Skipped JSON backup; library exceeds the readable AsyncStorage size', undefined, {
+            sizeChars: String(jsonValue.length),
+            maxChars: String(JSON_BACKUP_MAX_CHARS),
+        });
+        return { sizeChars: jsonValue.length, skipped: true };
+    }
+    jsonBackupSkippedOversize = false;
     const updatedAtMs = Math.max(Date.now(), minimumUpdatedAtMs);
     await measureStartupPhase(`${phasePrefix}.json_backup_set`, async () =>
         AsyncStorage.setItem(DATA_KEY, jsonValue)
@@ -326,7 +345,7 @@ const saveStartupJsonBackup = async (
     await measureStartupPhase(`${phasePrefix}.json_backup_updated_at_set`, async () =>
         AsyncStorage.setItem(STARTUP_BACKUP_UPDATED_AT_KEY, String(updatedAtMs))
     );
-    return { sizeChars: jsonValue.length };
+    return { sizeChars: jsonValue.length, skipped: false };
 };
 
 // The full-dataset JSON backup (stringify + AsyncStorage write) and the widget
@@ -393,8 +412,9 @@ const writeNextJsonBackup = (): Promise<void> => {
             jsonBackupWriteInFlight = true;
             const backupStartedAt = Date.now();
             let sizeChars = 0;
+            let skipped = false;
             try {
-                ({ sizeChars } = await saveStartupJsonBackup(AsyncStorage, pending.data, pending.phasePrefix, pending.minimumUpdatedAtMs));
+                ({ sizeChars, skipped } = await saveStartupJsonBackup(AsyncStorage, pending.data, pending.phasePrefix, pending.minimumUpdatedAtMs));
             } finally {
                 lastJsonBackupEndedAtMs = Date.now();
                 jsonBackupWriteInFlight = false;
@@ -407,6 +427,7 @@ const writeNextJsonBackup = (): Promise<void> => {
                     // ~2MB CursorWindow limit; the size tells a shared log
                     // whether this backup is usable as a fallback at all.
                     sizeChars: String(sizeChars),
+                    skipped: String(skipped),
                     coalescedSaves: String(pending.coalescedSaves),
                 });
             }
@@ -416,6 +437,14 @@ const writeNextJsonBackup = (): Promise<void> => {
             armJsonBackupTimer();
         });
     return jsonBackupWriter;
+};
+
+// Only for the paths where the JSON copy IS the durable one (SQLite write
+// failed). An oversized library writes no backup, so the save must fail loudly
+// instead of reporting success with nothing persisted anywhere (#766).
+const assertJsonFallbackLanded = (): void => {
+    if (isJsonBackupUsable()) return;
+    throw new Error('SQLite is unavailable and the library is too large for the JSON backup, so this change could not be saved.');
 };
 
 const flushPendingStartupJsonBackup = async (): Promise<void> => {
@@ -844,6 +873,12 @@ const createStorage = (): StorageAdapter => {
                 // A deferred backup may still be pending; land it before trusting
                 // the stored copy (and before the freshness assert reads its stamp).
                 await flushPendingStartupJsonBackup();
+                if (!isJsonBackupUsable()) {
+                    // Reading it would spend seconds only to throw "Row too big";
+                    // whatever is on disk predates the writes SQLite has taken since.
+                    logStorageWarn('[Storage] Refusing oversized JSON backup fallback', undefined, { phase });
+                    throw new Error('The library is too large for the local JSON backup; SQLite is the only readable copy.');
+                }
                 await assertJsonBackupFreshEnough(AsyncStorage, phase);
                 const jsonValue = await getLegacyJson(AsyncStorage);
                 if (jsonValue == null) {
@@ -908,6 +943,15 @@ const createStorage = (): StorageAdapter => {
                 markStartupPhase('mobile.storage.get_data.end');
                 return data;
             } catch (e) {
+                if (!isJsonBackupUsable()) {
+                    // There is no readable fallback, so pinning reads to it would
+                    // only stall every read for the whole cooldown and fail the
+                    // sync cycle waiting behind it. Surface the SQLite failure and
+                    // let the next read retry SQLite instead (#766).
+                    logStorageWarn('[Storage] SQLite load failed and the JSON backup is oversized; retrying SQLite next read', e);
+                    markStartupPhase('mobile.storage.get_data.error');
+                    throw e;
+                }
                 if (__DEV__ && sqliteUnavailableReason) {
                     logStorageWarn(`[Storage] ${sqliteUnavailableReason}; falling back to JSON backup`);
                 } else {
@@ -983,6 +1027,7 @@ const createStorage = (): StorageAdapter => {
                         // must land before this save reports success.
                         scheduleStartupJsonBackup(data, 'mobile.storage.save_data.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
+                        assertJsonFallbackLanded();
                         markStartupPhase('mobile.storage.save_data.end');
                     } catch (e) {
                         markStartupPhase('mobile.storage.save_data.error');
@@ -1024,6 +1069,7 @@ const createStorage = (): StorageAdapter => {
                         // must land before this save reports success.
                         scheduleStartupJsonBackup(snapshot, 'mobile.storage.save_task.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
+                        assertJsonFallbackLanded();
                     } catch (fallbackError) {
                         logStorageError('Failed to save task fallback data', fallbackError);
                         throw new Error('Failed to save task: ' + (fallbackError as Error).message);
@@ -1131,6 +1177,7 @@ export const __mobileStorageTestUtils = {
         pendingJsonBackup = null;
         jsonBackupWriter = Promise.resolve();
         jsonBackupWriteInFlight = false;
+        jsonBackupSkippedOversize = false;
         lastJsonBackupEndedAtMs = 0;
         if (widgetRefreshTimer) {
             clearTimeout(widgetRefreshTimer);

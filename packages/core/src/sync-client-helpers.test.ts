@@ -9,6 +9,7 @@ import {
     createAbortableFetch,
     ensureFreshLocalSyncSnapshot,
     getInMemoryAppDataSnapshot,
+    getInMemorySyncChangeFingerprint,
     normalizeCloudProvider,
     shouldRunAttachmentCleanup,
 } from './sync-client-helpers';
@@ -32,6 +33,32 @@ describe('sync-client-helpers', () => {
 
         expect(useTaskStore.getState()._allTasks[0]!.title).toBe('Task');
         expect(useTaskStore.getState()._allPeople[0]!.name).toBe('Alex');
+    });
+
+    it('fingerprints store changes without cloning, and ignores device-local sync status', () => {
+        const now = '2026-01-01T00:00:00.000Z';
+        useTaskStore.setState((state) => ({
+            ...state,
+            _allTasks: [{ id: 't1', title: 'Task', status: 'inbox', createdAt: now, updatedAt: now, rev: 1 }],
+            _allProjects: [],
+            _allSections: [],
+            _allAreas: [],
+            _allPeople: [],
+            settings: { gtd: { autoArchiveDays: 7 } },
+        }));
+        const before = getInMemorySyncChangeFingerprint();
+
+        // Sync bookkeeping is patched straight into settings after every cycle;
+        // it must never look like a change worth syncing again (#766).
+        useTaskStore.setState((state) => ({
+            settings: { ...state.settings, lastSyncAt: now, lastSyncStatus: 'success' },
+        }));
+        expect(getInMemorySyncChangeFingerprint()).toBe(before);
+
+        useTaskStore.setState((state) => ({
+            _allTasks: [{ ...state._allTasks[0]!, title: 'Edited', updatedAt: '2026-01-02T00:00:00.000Z', rev: 2 }],
+        }));
+        expect(getInMemorySyncChangeFingerprint()).not.toBe(before);
     });
 
     it('evaluates attachment cleanup windows', () => {

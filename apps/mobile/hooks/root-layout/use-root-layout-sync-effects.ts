@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { computeSyncPayloadFingerprint, flushPendingSave, getInMemoryAppDataSnapshot, useTaskStore, type AppData } from '@mindwtr/core';
+import { flushPendingSave, getInMemorySyncChangeFingerprint, useTaskStore } from '@mindwtr/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { getNotificationPermissionStatus, startMobileNotifications, stopMobileNotifications } from '@/lib/notification-service';
@@ -97,36 +97,6 @@ const logAppError = (error: unknown) => {
     void logError(error, { scope: 'app' });
 };
 
-const stripAutoSyncFingerprintBookkeeping = (data: AppData): AppData => {
-    const {
-        network,
-        lastSyncAt,
-        lastSyncStatus,
-        lastSyncError,
-        pendingRemoteWriteAt,
-        pendingRemoteWriteRetryAt,
-        pendingRemoteWriteAttempts,
-        lastSyncStats,
-        lastSyncHistory,
-        ...settings
-    } = data.settings ?? {};
-
-    void network;
-    void lastSyncAt;
-    void lastSyncStatus;
-    void lastSyncError;
-    void pendingRemoteWriteAt;
-    void pendingRemoteWriteRetryAt;
-    void pendingRemoteWriteAttempts;
-    void lastSyncStats;
-    void lastSyncHistory;
-
-    return {
-        ...data,
-        settings,
-    };
-};
-
 const reconcileBackgroundSyncTask = () => {
     void syncMobileBackgroundSyncRegistration().catch(logAppError);
 };
@@ -192,9 +162,12 @@ export function useRootLayoutSyncEffects({
         return syncCadenceRef.current;
     }, []);
 
+    // Device-local bookkeeping (lastSync*, pendingRemoteWrite*, network) is not
+    // part of a sync payload, so the change fingerprint ignores it for free —
+    // no separate strip pass needed.
     const readCurrentSyncPayloadFingerprint = useCallback((): string | null => {
         try {
-            return computeSyncPayloadFingerprint(stripAutoSyncFingerprintBookkeeping(getInMemoryAppDataSnapshot()));
+            return getInMemorySyncChangeFingerprint();
         } catch (error) {
             logAppError(error);
             return null;

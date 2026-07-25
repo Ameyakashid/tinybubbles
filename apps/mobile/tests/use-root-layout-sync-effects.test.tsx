@@ -9,9 +9,8 @@ const {
   appState,
   appStateListeners,
   asyncStorageGetItem,
-  computeSyncPayloadFingerprint,
   flushPendingSave,
-  getInMemoryAppDataSnapshot,
+  getInMemorySyncChangeFingerprint,
   getCalendarPushEnabled,
   hasActiveMobileNotificationFeature,
   performMobileSync,
@@ -24,9 +23,8 @@ const {
   appState: { currentState: 'active' },
   appStateListeners: new Set<(state: 'active' | 'background' | 'inactive') => void>(),
   asyncStorageGetItem: vi.fn(async () => 'cloud'),
-  computeSyncPayloadFingerprint: vi.fn((_data?: unknown) => 'sync-payload:initial'),
   flushPendingSave: vi.fn(async () => undefined),
-  getInMemoryAppDataSnapshot: vi.fn(() => ({ tasks: [], projects: [], sections: [], areas: [], settings: {} })),
+  getInMemorySyncChangeFingerprint: vi.fn(() => 'sync-change:initial'),
   getCalendarPushEnabled: vi.fn(async () => false),
   hasActiveMobileNotificationFeature: vi.fn(() => false),
   performMobileSync: vi.fn(async () => ({ success: true })),
@@ -65,9 +63,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 vi.mock('@mindwtr/core', () => ({
-  computeSyncPayloadFingerprint,
   flushPendingSave,
-  getInMemoryAppDataSnapshot,
+  getInMemorySyncChangeFingerprint,
   useTaskStore: {
     getState: () => ({ settings: {} }),
     subscribe: storeSubscribe,
@@ -143,11 +140,9 @@ describe('useRootLayoutSyncEffects', () => {
     appStateListeners.clear();
     asyncStorageGetItem.mockClear();
     asyncStorageGetItem.mockResolvedValue('cloud');
-    computeSyncPayloadFingerprint.mockClear();
-    computeSyncPayloadFingerprint.mockReturnValue('sync-payload:initial');
+    getInMemorySyncChangeFingerprint.mockClear();
+    getInMemorySyncChangeFingerprint.mockReturnValue('sync-change:initial');
     flushPendingSave.mockClear();
-    getInMemoryAppDataSnapshot.mockClear();
-    getInMemoryAppDataSnapshot.mockReturnValue({ tasks: [], projects: [], sections: [], areas: [], settings: {} });
     getCalendarPushEnabled.mockClear();
     getCalendarPushEnabled.mockResolvedValue(false);
     hasActiveMobileNotificationFeature.mockClear();
@@ -220,7 +215,7 @@ describe('useRootLayoutSyncEffects', () => {
     vi.useRealTimers();
   });
 
-  it('strips sync bookkeeping fields before comparing auto-sync payload fingerprints', async () => {
+  it('skips auto-sync when the change fingerprint is unchanged (device-local sync bookkeeping)', async () => {
     vi.useFakeTimers();
     const storeListeners: Array<(state: { lastDataChangeAt: number }, prevState: { lastDataChangeAt: number }) => void> = [];
     storeSubscribe.mockImplementation((...args: unknown[]) => {
@@ -229,21 +224,10 @@ describe('useRootLayoutSyncEffects', () => {
       return vi.fn();
     });
 
-    let snapshot = {
-      tasks: [],
-      projects: [],
-      sections: [],
-      areas: [],
-      people: [],
-      settings: {
-        lastSyncAt: '2026-01-01T00:00:00.000Z',
-        lastSyncStatus: 'success',
-        pendingRemoteWriteAt: '2026-01-01T00:00:01.000Z',
-        theme: 'dark',
-      },
-    };
-    getInMemoryAppDataSnapshot.mockImplementation(() => snapshot);
-    computeSyncPayloadFingerprint.mockImplementation((data?: unknown) => JSON.stringify(data));
+    // Sync status stamps (lastSyncAt/lastSyncStatus/...) are never part of a sync
+    // payload, so the core change fingerprint returns the same value across them;
+    // core's own test covers which fields it ignores.
+    getInMemorySyncChangeFingerprint.mockReturnValue('sync-change:stable');
 
     let tree: ReturnType<typeof create>;
     await act(async () => {
@@ -254,16 +238,6 @@ describe('useRootLayoutSyncEffects', () => {
     const storeListener = storeListeners.find((callback) => callback.length >= 2);
     expect(storeListener).toBeTypeOf('function');
 
-    snapshot = {
-      ...snapshot,
-      settings: {
-        lastSyncAt: '2026-01-01T00:05:00.000Z',
-        lastSyncStatus: 'success',
-        pendingRemoteWriteAt: '2026-01-01T00:05:01.000Z',
-        theme: 'dark',
-      },
-    };
-
     await act(async () => {
       storeListener?.({ lastDataChangeAt: 2 }, { lastDataChangeAt: 1 });
       await vi.advanceTimersByTimeAsync(5_000);
@@ -271,9 +245,7 @@ describe('useRootLayoutSyncEffects', () => {
     });
 
     expect(performMobileSync).not.toHaveBeenCalled();
-    expect(computeSyncPayloadFingerprint).toHaveBeenLastCalledWith(expect.objectContaining({
-      settings: { theme: 'dark' },
-    }));
+    expect(getInMemorySyncChangeFingerprint).toHaveBeenCalled();
 
     await act(async () => {
       tree.unmount();
@@ -296,7 +268,7 @@ describe('useRootLayoutSyncEffects', () => {
       await flushMicrotasks();
     });
     performMobileSync.mockClear();
-    computeSyncPayloadFingerprint.mockReturnValue('sync-payload:changed');
+    getInMemorySyncChangeFingerprint.mockReturnValue('sync-change:changed');
     const storeListener = storeListeners.find((callback) => callback.length >= 2);
     expect(storeListener).toBeTypeOf('function');
 
@@ -357,7 +329,7 @@ describe('useRootLayoutSyncEffects', () => {
       tree = create(<TestHarness />);
       await flushMicrotasks();
     });
-    computeSyncPayloadFingerprint.mockClear();
+    getInMemorySyncChangeFingerprint.mockClear();
     const storeListener = storeListeners.find((callback) => callback.length >= 2);
     expect(storeListener).toBeTypeOf('function');
 
@@ -366,7 +338,7 @@ describe('useRootLayoutSyncEffects', () => {
       await flushMicrotasks();
     });
 
-    expect(computeSyncPayloadFingerprint).not.toHaveBeenCalled();
+    expect(getInMemorySyncChangeFingerprint).not.toHaveBeenCalled();
 
     await act(async () => {
       tree.unmount();
@@ -382,7 +354,7 @@ describe('useRootLayoutSyncEffects', () => {
       return vi.fn();
     });
     let fingerprintVersion = 0;
-    computeSyncPayloadFingerprint.mockImplementation(() => `sync-payload:${fingerprintVersion}`);
+    getInMemorySyncChangeFingerprint.mockImplementation(() => `sync-change:${fingerprintVersion}`);
     // Each sync cycle takes 20s, so the adaptive interval becomes 40s from cycle end.
     performMobileSync.mockImplementation(
       () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 20_000)),

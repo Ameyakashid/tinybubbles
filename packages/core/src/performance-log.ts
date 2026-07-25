@@ -34,6 +34,10 @@ export type PerformanceLogInput = {
     listItemCount?: number;
     visibleItemCount?: number;
     filterCount?: number;
+    // Mount ordinal of the emitting list; two ordinals in one burst mean two
+    // mounted lists doing the same work, one repeated means one list rendering
+    // twice (#766).
+    instanceId?: number;
     platform?: PerformancePlatform;
     appVersion?: string;
 };
@@ -47,6 +51,7 @@ export type PerformanceLogMeasurementFinishInput = Partial<Pick<PerformanceLogIn
     | 'listItemCount'
     | 'visibleItemCount'
     | 'filterCount'
+    | 'instanceId'
     | 'platform'
     | 'appVersion'
 >>;
@@ -98,6 +103,7 @@ export const PERFORMANCE_LOG_CONTEXT_KEYS: readonly string[] = [
     'listItemCount',
     'visibleItemCount',
     'filterCount',
+    'instanceId',
     'platform',
     'appVersion',
 ];
@@ -181,6 +187,7 @@ export function buildPerformanceLogContext(input: PerformanceLogInput): Record<s
     addCount(context, 'listItemCount', input.listItemCount);
     addCount(context, 'visibleItemCount', input.visibleItemCount);
     addCount(context, 'filterCount', input.filterCount);
+    addCount(context, 'instanceId', input.instanceId);
 
     if (isPerformancePlatform(input.platform)) {
         context.platform = input.platform;
@@ -234,6 +241,7 @@ const mergeMeasurementInput = (
     areaCount: finishInput?.areaCount ?? input.areaCount,
     sectionCount: finishInput?.sectionCount ?? input.sectionCount,
     listItemCount: finishInput?.listItemCount ?? input.listItemCount,
+    instanceId: finishInput?.instanceId ?? input.instanceId,
     visibleItemCount: finishInput?.visibleItemCount ?? input.visibleItemCount,
     filterCount: finishInput?.filterCount ?? input.filterCount,
     platform: finishInput?.platform ?? input.platform,
