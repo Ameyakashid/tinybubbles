@@ -2025,6 +2025,47 @@ describe('TaskStore', () => {
         }
     });
 
+    it('does not enqueue a second save when reloading data a prior fetch already migrated', async () => {
+        mockStorage.getData = vi.fn().mockResolvedValue({
+            tasks: [
+                {
+                    id: 't-legacy',
+                    title: 'Legacy task',
+                    status: 'inbox',
+                    tags: [],
+                    contexts: [],
+                    createdAt: '2026-02-01T00:00:00.000Z',
+                    updatedAt: '2026-02-01T00:00:00.000Z',
+                },
+            ],
+            projects: [],
+            sections: [],
+            areas: [],
+            settings: {},
+        });
+
+        await useTaskStore.getState().fetchData({ silent: true });
+        await flushPendingSave();
+        const firstSaveCount = (mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls.length;
+        expect(firstSaveCount).toBeGreaterThan(0);
+
+        const loaded = useTaskStore.getState();
+        await loaded.fetchData({
+            silent: true,
+            preloadedData: {
+                tasks: loaded._allTasks,
+                projects: loaded._allProjects,
+                sections: loaded._allSections,
+                areas: loaded._allAreas,
+                people: loaded._allPeople,
+                settings: loaded.settings,
+            },
+        });
+        await flushPendingSave();
+
+        expect((mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls.length).toBe(firstSaveCount);
+    });
+
     it('does not overwrite same-millisecond task completions made during an in-flight fetch', async () => {
         const fixedNow = new Date('2026-03-22T10:00:00.000Z').getTime();
         vi.setSystemTime(fixedNow);
