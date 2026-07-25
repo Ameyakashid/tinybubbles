@@ -198,6 +198,18 @@ const WEBVIEW2_PHONE_HOME_ARGS: [&str; 3] = [
     "--disable-domain-reliability",
     "--no-pings",
 ];
+#[cfg(any(target_os = "windows", test))]
+const WEBVIEW2_DISABLE_FEATURES_PREFIX: &str = "--disable-features=";
+// wry supplies these itself, but only while the app passes no browser arguments
+// of its own (wry 0.53 webview2/mod.rs). This environment value can replace that
+// block wholesale, so carry the defaults here or Windows silently loses the
+// WebView2 mini-menu suppression, SmartScreen (phone-home traffic #909 removed)
+// and gesture-free audio playback for the Pomodoro alarm (#913).
+#[cfg(any(target_os = "windows", test))]
+const WEBVIEW2_WRY_DEFAULT_DISABLED_FEATURES: [&str; 3] =
+    ["msWebOOUI", "msPdfOOUI", "msSmartScreenProtection"];
+#[cfg(any(target_os = "windows", test))]
+const WEBVIEW2_AUTOPLAY_ARG: &str = "--autoplay-policy=no-user-gesture-required";
 #[cfg(any(target_os = "linux", test))]
 const WEBKIT_DISABLE_DMABUF_RENDERER_ENV: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
 #[cfg(any(target_os = "linux", test))]
@@ -803,24 +815,48 @@ fn with_windows_webview2_arguments(
     disable_hardware_acceleration: bool,
 ) -> String {
     let existing = existing.unwrap_or_default().trim();
-    let existing_arguments = existing.split_whitespace().collect::<Vec<_>>();
-    let mut appended = WEBVIEW2_PHONE_HOME_ARGS
-        .iter()
-        .copied()
-        .filter(|argument| !existing_arguments.contains(argument))
-        .collect::<Vec<_>>();
-    if disable_hardware_acceleration && !existing_arguments.contains(&WEBVIEW2_DISABLE_GPU_ARG) {
-        appended.push(WEBVIEW2_DISABLE_GPU_ARG);
+    let mut passthrough: Vec<&str> = Vec::new();
+    let mut disabled_features: Vec<&str> = Vec::new();
+    for argument in existing.split_whitespace() {
+        // Chromium keeps only the LAST --disable-features it is given, so a
+        // caller's list and ours would silently cancel each other out. Merge
+        // both into one flag instead (#913).
+        if let Some(values) = argument.strip_prefix(WEBVIEW2_DISABLE_FEATURES_PREFIX) {
+            for value in values.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+                if !disabled_features.contains(&value) {
+                    disabled_features.push(value);
+                }
+            }
+            continue;
+        }
+        passthrough.push(argument);
+    }
+    for value in WEBVIEW2_WRY_DEFAULT_DISABLED_FEATURES {
+        if !disabled_features.contains(&value) {
+            disabled_features.push(value);
+        }
     }
 
-    let appended = appended.join(" ");
-    if existing.is_empty() {
-        appended
-    } else if appended.is_empty() {
-        existing.to_string()
-    } else {
-        format!("{existing} {appended}")
+    // Merged feature flag first, then the caller's other arguments, then ours:
+    // a stable order keeps this idempotent when an already-built value is fed
+    // back in (a user re-exporting the variable).
+    let mut arguments: Vec<String> = vec![format!(
+        "{WEBVIEW2_DISABLE_FEATURES_PREFIX}{}",
+        disabled_features.join(",")
+    )];
+    arguments.extend(passthrough.iter().map(|value| (*value).to_string()));
+    let mut appended = vec![WEBVIEW2_AUTOPLAY_ARG];
+    appended.extend(WEBVIEW2_PHONE_HOME_ARGS);
+    if disable_hardware_acceleration {
+        appended.push(WEBVIEW2_DISABLE_GPU_ARG);
     }
+    for argument in appended {
+        if !passthrough.contains(&argument) {
+            arguments.push(argument.to_string());
+        }
+    }
+
+    arguments.join(" ")
 }
 
 fn bool_setting_enabled(value: Option<&str>) -> bool {
@@ -1782,31 +1818,37 @@ arch=x86_64
     }
 
     #[test]
-    fn webview2_browser_arguments_use_append_path_and_preserve_existing_values() {
-        assert_eq!(
-            with_windows_webview2_arguments(None, false),
-            "--disable-component-update --disable-domain-reliability --no-pings",
-        );
+    fn webview2_browser_arguments_carry_wry_defaults_and_preserve_existing_values() {
+        const DEFAULTS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+--autoplay-policy=no-user-gesture-required --disable-component-update \
+--disable-domain-reliability --no-pings";
+
+        // wry only passes its own defaults while the app supplies no arguments;
+        // this environment value can replace them, so it must carry them (#913).
+        assert_eq!(with_windows_webview2_arguments(None, false), DEFAULTS);
         assert_eq!(
             with_windows_webview2_arguments(Some("--foo=bar"), false),
-            "--foo=bar --disable-component-update --disable-domain-reliability --no-pings",
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --foo=bar \
+--autoplay-policy=no-user-gesture-required --disable-component-update \
+--disable-domain-reliability --no-pings",
         );
+        // Switches the caller already set are never duplicated.
         assert_eq!(
-            with_windows_webview2_arguments(
-                Some("--foo=bar --disable-component-update"),
-                true,
-            ),
-            "--foo=bar --disable-component-update --disable-domain-reliability --no-pings --disable-gpu",
+            with_windows_webview2_arguments(Some("--disable-component-update"), true),
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+--disable-component-update --autoplay-policy=no-user-gesture-required \
+--disable-domain-reliability --no-pings --disable-gpu",
         );
+        // A caller's own --disable-features must survive: Chromium keeps only
+        // the last one, so the two lists are merged instead of overwriting.
         assert_eq!(
-            with_windows_webview2_arguments(
-                Some(
-                    "--disable-component-update --disable-domain-reliability --no-pings --disable-gpu",
-                ),
-                true,
-            ),
-            "--disable-component-update --disable-domain-reliability --no-pings --disable-gpu",
+            with_windows_webview2_arguments(Some("--disable-features=Translate"), false),
+            "--disable-features=Translate,msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+--autoplay-policy=no-user-gesture-required --disable-component-update \
+--disable-domain-reliability --no-pings",
         );
+        // Idempotent: re-exporting a value we already built changes nothing.
+        assert_eq!(with_windows_webview2_arguments(Some(DEFAULTS), false), DEFAULTS);
     }
 
     #[test]
