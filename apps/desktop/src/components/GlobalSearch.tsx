@@ -23,7 +23,7 @@ import { cn } from '../lib/utils';
 import { ModalPortal } from './ModalPortal';
 import { PromptModal } from './PromptModal';
 import { useUiStore } from '../store/ui-store';
-import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from './global-search-filtering';
+import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from '@mindwtr/core/global-search-filter';
 import { resolveTaskNavigationView } from '../lib/task-navigation';
 
 interface GlobalSearchProps {

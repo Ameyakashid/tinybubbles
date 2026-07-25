@@ -238,6 +238,21 @@ describe('SearchScreen task results', () => {
         expect(hint).toBeUndefined();
     });
 
+    it('returns a done task looked up by id even though done matches are hidden by default', () => {
+        routeParams.q = 'id:task-1';
+        storeState._allTasks = [
+            makeTask('task-1', 'Launch checklist', { status: 'done' }),
+            makeTask('task-2', 'Home errands'),
+        ];
+
+        let tree!: ReturnType<typeof create>;
+        act(() => {
+            tree = create(<SearchScreen />);
+        });
+
+        expect(tree.root.findByType(FlatList).props.data.map((result: any) => result.item.id)).toEqual(['task-1']);
+    });
+
     it('keeps literal CJK substring matches when SQLite search returns partial token matches', async () => {
         vi.useFakeTimers();
         try {

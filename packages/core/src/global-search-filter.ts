@@ -1,22 +1,14 @@
-import {
-    matchesHierarchicalToken,
-    parseSearchQuery,
-    safeParseDueDate,
-    searchAll,
-    shouldShowTaskForStart,
-    getWeekStartsOnIndex,
-    type Project,
-    type SearchProjectResult,
-    type SearchResults,
-    type SearchTaskResult,
-    type Task,
-    type TaskStatus,
-} from '@mindwtr/core';
+import { getWeekStartsOnIndex, safeParseDueDate } from './date';
+import { matchesHierarchicalToken } from './hierarchy-utils';
+import { parseSearchQuery, searchAll } from './search';
+import { SEARCH_RESULT_LIMIT, type SearchProjectResult, type SearchResults, type SearchTaskResult } from './storage';
+import { shouldShowTaskForStart } from './task-utils';
+import type { Project, Task, TaskStatus } from './types';
 
 export type GlobalSearchScope = 'all' | 'projects' | 'tasks' | 'project_tasks';
 export type DuePreset = 'any' | 'none' | 'overdue' | 'today' | 'tomorrow' | 'this_week' | 'next_week';
 
-type ComputeGlobalSearchResultsInput = {
+export type ComputeGlobalSearchResultsInput = {
     query: string;
     tasks: Task[];
     projects: Project[];
@@ -30,7 +22,8 @@ type ComputeGlobalSearchResultsInput = {
     locationQuery?: string;
     duePreset: DuePreset;
     scope: GlobalSearchScope;
-    weekStart: 'sunday' | 'monday' | 'saturday';
+    /** Raw or normalized week-start setting; resolved via getWeekStartsOnIndex. */
+    weekStart?: string | null;
     ftsResults?: SearchResults | null;
 };
 
@@ -73,6 +66,35 @@ const hasPositiveTaskIdLookup = (query: string) => {
     );
 };
 
+/**
+ * Merge policy: full-text results are UNIONED with the in-memory fallback, not
+ * substituted for it. FTS wins ordering (its hits come first) but can miss what
+ * the in-memory matcher finds - field terms, hierarchical tokens, and rows
+ * written since the last index update - so replacing it would silently drop
+ * real matches. `limited`/`limit` propagate from either source so the "200+"
+ * label stays honest about a truncated source.
+ */
+const mergeSearchResults = (ftsResults: SearchResults, fallbackResults: SearchResults): SearchResults => {
+    const seenTaskIds = new Set(ftsResults.tasks.map((task) => task.id));
+    const seenProjectIds = new Set(ftsResults.projects.map((project) => project.id));
+    const limited = ftsResults.limited === true || fallbackResults.limited === true;
+    const limit = ftsResults.limit ?? fallbackResults.limit;
+    return {
+        tasks: [...ftsResults.tasks, ...fallbackResults.tasks.filter((task) => !seenTaskIds.has(task.id))],
+        projects: [
+            ...ftsResults.projects,
+            ...fallbackResults.projects.filter((project) => !seenProjectIds.has(project.id)),
+        ],
+        limited: limited || undefined,
+        limit: limited ? limit : undefined,
+    };
+};
+
+/**
+ * The single global-search pipeline for every platform: takes already-fetched
+ * FTS results plus the raw collections and filter state, returns the rendered
+ * result list. Pure - no storage adapter, no React, no platform imports.
+ */
 export const computeGlobalSearchResults = ({
     query,
     tasks,
@@ -120,7 +142,7 @@ export const computeGlobalSearchResults = ({
     const effectiveResults = trimmedQuery !== ''
         && ftsResults
         && (ftsResults.tasks.length + ftsResults.projects.length) > 0
-        ? ftsResults
+        ? mergeSearchResults(ftsResults, fallbackResults)
         : fallbackResults;
 
     const hasStatusFilter = selectedStatuses.length > 0;
@@ -130,6 +152,7 @@ export const computeGlobalSearchResults = ({
     const areaById = new Map(areas.map((area) => [area.id, area]));
 
     const matchesArea = (areaId?: string | null) => {
+        // An id pointing at a deleted area belongs in the "No area" bucket.
         const normalized = areaId && areaById.has(areaId) ? areaId : null;
         if (selectedArea === 'all') return true;
         if (selectedArea === 'none') return !normalized;
@@ -157,13 +180,7 @@ export const computeGlobalSearchResults = ({
 
     const matchesDue = buildDueMatcher(duePreset, getWeekStartsOnIndex(weekStart));
 
-    const filteredTasks = effectiveResults.tasks.filter((task) => {
-        if (hasStatusFilter) {
-            if (!selectedStatuses.includes(task.status)) return false;
-        } else {
-            if (!shouldBypassDefaultStatusHiding && !includeCompleted && ['done', 'archived'].includes(task.status)) return false;
-            if (!shouldBypassDefaultStatusHiding && !includeReference && task.status === 'reference') return false;
-        }
+    const passesNonStatusTaskFilters = (task: SearchTaskResult) => {
         if (!shouldShowTaskForStart(task, { showFutureStarts: !hideFutureTasks })) return false;
         if (scope === 'project_tasks' && !task.projectId) return false;
         if (!matchesTaskArea(task)) return false;
@@ -171,6 +188,18 @@ export const computeGlobalSearchResults = ({
         if (!matchesLocation(task)) return false;
         if (!matchesDue(task)) return false;
         return true;
+    };
+
+    const filteredTasks = effectiveResults.tasks.filter((task) => {
+        if (hasStatusFilter) {
+            if (!selectedStatuses.includes(task.status)) return false;
+        } else {
+            // A positive `id:` term is an unambiguous request for one task, so it
+            // outranks the default done/archived/reference hiding.
+            if (!shouldBypassDefaultStatusHiding && !includeCompleted && ['done', 'archived'].includes(task.status)) return false;
+            if (!shouldBypassDefaultStatusHiding && !includeReference && task.status === 'reference') return false;
+        }
+        return passesNonStatusTaskFilters(task);
     });
 
     const filteredProjects = effectiveResults.projects.filter((project: SearchProjectResult) => {
@@ -180,11 +209,30 @@ export const computeGlobalSearchResults = ({
         return true;
     });
 
+    // Matches that only the default done/archived exclusion is hiding. Surfacing
+    // them keeps the search honest: a completed task must stay findable (#806).
+    const hiddenCompletedTaskCount = !hasStatusFilter
+        && !includeCompleted
+        && !shouldBypassDefaultStatusHiding
+        && scope !== 'projects'
+        ? effectiveResults.tasks.filter((task) =>
+            (task.status === 'done' || task.status === 'archived') && passesNonStatusTaskFilters(task)
+        ).length
+        : 0;
+    const hiddenArchivedProjectCount = !includeCompleted
+        && scope !== 'tasks'
+        && scope !== 'project_tasks'
+        && !normalizedLocationQuery
+        ? effectiveResults.projects.filter(
+            (project) => project.status === 'archived' && matchesArea(project.areaId ?? null)
+        ).length
+        : 0;
+
     const scopedProjects = scope === 'tasks' || scope === 'project_tasks' ? [] : filteredProjects;
     const scopedTasks = scope === 'projects' ? [] : filteredTasks;
     const totalResults = scopedProjects.length + scopedTasks.length;
     const sourceLimited = effectiveResults.limited === true;
-    const sourceLimit = effectiveResults.limit ?? 200;
+    const sourceLimit = effectiveResults.limit ?? SEARCH_RESULT_LIMIT;
     const results = !hasActiveSearch ? [] : [
         ...scopedProjects.map((project) => ({ type: 'project' as const, item: project })),
         ...scopedTasks.map((task) => ({ type: 'task' as const, item: task })),
@@ -197,5 +245,7 @@ export const computeGlobalSearchResults = ({
         results,
         isTruncated,
         hasActiveSearch,
+        hasActiveFilters,
+        hiddenCompletedCount: hiddenCompletedTaskCount + hiddenArchivedProjectCount,
     };
 };

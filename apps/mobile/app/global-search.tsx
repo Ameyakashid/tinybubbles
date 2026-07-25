@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import {
     useTaskStore,
-    searchAll,
     generateUUID,
     SavedSearch,
     SearchProjectResult,
@@ -26,13 +25,10 @@ import {
     TaskStatus,
     PRESET_CONTEXTS,
     PRESET_TAGS,
-    getWeekStartsOnIndex,
-    matchesHierarchicalToken,
-    safeParseDueDate,
     shallow,
-    shouldShowTaskForStart,
     translateWithFallback,
 } from '@mindwtr/core';
+import { computeGlobalSearchResults } from '@mindwtr/core/global-search-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useLanguage } from '../contexts/language-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -104,22 +100,6 @@ export default function SearchScreen() {
   const trimmedQuery = query.trim();
   const shouldUseFts = debouncedQuery.length > 0 && !/\b\w+:/i.test(debouncedQuery);
 
-  const hasTaskOnlyFilters = (
-    selectedStatuses.length > 0
-    || selectedTokens.length > 0
-    || locationQuery.trim().length > 0
-    || duePreset !== 'any'
-    || !includeReference
-    || hideFutureTasks
-  );
-  const hasActiveFilters = (
-    hasTaskOnlyFilters
-    || selectedArea !== 'all'
-    || scope !== 'all'
-    || includeCompleted
-  );
-  const hasActiveSearch = trimmedQuery !== '' || hasActiveFilters;
-
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(trimmedQuery), 200);
     return () => clearTimeout(handle);
@@ -154,142 +134,55 @@ export default function SearchScreen() {
     };
   }, [debouncedQuery, shouldUseFts]);
 
-  const filterOnlyResults = useMemo<SearchResults>(() => {
-    if (!hasActiveFilters) return { tasks: [], projects: [] };
-    return {
-      tasks: _allTasks.filter((task) => !task.deletedAt),
-      projects: hasTaskOnlyFilters ? [] : projects,
-    };
-  }, [_allTasks, hasActiveFilters, hasTaskOnlyFilters, projects]);
-  const fallbackResults = trimmedQuery === ''
-    ? filterOnlyResults
-    : searchAll(_allTasks, projects, trimmedQuery);
-  const effectiveResults = useMemo(() => {
-    if (!ftsResults || (ftsResults.tasks.length + ftsResults.projects.length) === 0) {
-      return fallbackResults;
-    }
-    const seenTaskIds = new Set(ftsResults.tasks.map((task) => task.id));
-    const seenProjectIds = new Set(ftsResults.projects.map((project) => project.id));
-    const fallbackOnlyTasks = fallbackResults.tasks.filter((task) => !seenTaskIds.has(task.id));
-    const fallbackOnlyProjects = fallbackResults.projects.filter((project) => !seenProjectIds.has(project.id));
-    const limited = ftsResults.limited === true || fallbackResults.limited === true;
-    const limit = ftsResults.limit ?? fallbackResults.limit;
-    return {
-      tasks: [...ftsResults.tasks, ...fallbackOnlyTasks],
-      projects: [...ftsResults.projects, ...fallbackOnlyProjects],
-      limited: limited || undefined,
-      limit: limited ? limit : undefined,
-    };
-  }, [fallbackResults, ftsResults]);
-  const { tasks: taskResults, projects: projectResults } = effectiveResults;
-    const sourceLimited = effectiveResults.limited === true;
-    const sourceLimit = effectiveResults.limit ?? 200;
-    const hasStatusFilter = selectedStatuses.length > 0;
-    const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-    const matchesArea = (areaId?: string | null) => {
-        if (selectedArea === 'all') return true;
-        if (selectedArea === 'none') return !areaId;
-        return areaId === selectedArea;
-    };
-    const matchesTaskArea = (task: SearchTaskResult) => {
-        if (selectedArea === 'all') return true;
-        if (task.projectId) {
-            const project = projectById.get(task.projectId);
-            return matchesArea(project?.areaId ?? null);
-        }
-        return matchesArea(task.areaId ?? null);
-    };
-    const matchesTokens = (task: SearchTaskResult) => {
-        if (selectedTokens.length === 0) return true;
-        const taskTokens = [...(task.contexts || []), ...(task.tags || [])];
-        return selectedTokens.every((token) =>
-            taskTokens.some((taskToken) => matchesHierarchicalToken(token, taskToken))
-        );
-    };
-    const normalizedLocationQuery = locationQuery.trim().toLowerCase();
-    const matchesLocation = (task: SearchTaskResult) => {
-        if (!normalizedLocationQuery) return true;
-        return String(task.location ?? '').toLowerCase().includes(normalizedLocationQuery);
-    };
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = getWeekStartsOnIndex(settings?.weekStart);
-    const startOfWeek = new Date(startOfToday);
-    const weekday = startOfWeek.getDay();
-    const diffToWeekStart = (weekday - weekStart + 7) % 7;
-    startOfWeek.setDate(startOfWeek.getDate() - diffToWeekStart);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
-    const nextWeekStart = new Date(endOfWeek);
-    const nextWeekEnd = new Date(nextWeekStart);
-    nextWeekEnd.setDate(nextWeekStart.getDate() + 7);
-    const matchesDue = (task: SearchTaskResult) => {
-        if (duePreset === 'any') return true;
-        if (duePreset === 'none') return !task.dueDate;
-        if (!task.dueDate) return false;
-        const due = safeParseDueDate(task.dueDate);
-        if (!due) return false;
-        if (duePreset === 'overdue') return due < startOfToday;
-        if (duePreset === 'today') return due >= startOfToday && due < new Date(startOfToday.getTime() + 86400000);
-        if (duePreset === 'tomorrow') {
-            const tomorrow = new Date(startOfToday.getTime() + 86400000);
-            const nextDay = new Date(startOfToday.getTime() + 2 * 86400000);
-            return due >= tomorrow && due < nextDay;
-        }
-        if (duePreset === 'this_week') return due >= startOfWeek && due < endOfWeek;
-        if (duePreset === 'next_week') return due >= nextWeekStart && due < nextWeekEnd;
-        return true;
-    };
-    const passesNonStatusTaskFilters = (task: SearchTaskResult) => {
-        if (!shouldShowTaskForStart(task, { showFutureStarts: !hideFutureTasks })) return false;
-        if (scope === 'project_tasks' && !task.projectId) return false;
-        if (!matchesTaskArea(task)) return false;
-        if (!matchesTokens(task)) return false;
-        if (!matchesLocation(task)) return false;
-        if (!matchesDue(task)) return false;
-        return true;
-    };
-    const filteredTasks = taskResults.filter((task) => {
-        if (hasStatusFilter) {
-            if (!selectedStatuses.includes(task.status)) return false;
-        } else {
-            if (!includeCompleted && (task.status === 'done' || task.status === 'archived')) return false;
-            if (!includeReference && task.status === 'reference') return false;
-        }
-        return passesNonStatusTaskFilters(task);
-    });
-    const filteredProjects = projectResults.filter((project) => {
-        if (normalizedLocationQuery) return false;
-        if (!includeCompleted && project.status === 'archived') return false;
-        if (!matchesArea(project.areaId ?? null)) return false;
-        return true;
-    });
-    // Matches that only the default done/archived exclusion is hiding. Surfacing
-    // them keeps the search honest: a completed task must stay findable (#806).
-    const hiddenCompletedTaskCount = !hasStatusFilter && !includeCompleted && scope !== 'projects'
-        ? taskResults.filter((task) =>
-            (task.status === 'done' || task.status === 'archived') && passesNonStatusTaskFilters(task)
-        ).length
-        : 0;
-    const hiddenArchivedProjectCount = !includeCompleted && scope !== 'tasks' && scope !== 'project_tasks' && !normalizedLocationQuery
-        ? projectResults.filter((project) => project.status === 'archived' && matchesArea(project.areaId ?? null)).length
-        : 0;
-    const hiddenCompletedCount = hiddenCompletedTaskCount + hiddenArchivedProjectCount;
+    const {
+        totalResultsLabel,
+        results,
+        isTruncated,
+        hasActiveSearch,
+        hasActiveFilters,
+        hiddenCompletedCount,
+    } = useMemo(
+        () => computeGlobalSearchResults({
+            query,
+            tasks: _allTasks,
+            projects,
+            areas,
+            includeCompleted,
+            includeReference,
+            hideFutureTasks,
+            selectedStatuses,
+            selectedArea,
+            selectedTokens,
+            locationQuery,
+            duePreset,
+            scope,
+            weekStart: settings?.weekStart,
+            ftsResults,
+        }),
+        [
+            query,
+            _allTasks,
+            projects,
+            areas,
+            includeCompleted,
+            includeReference,
+            hideFutureTasks,
+            selectedStatuses,
+            selectedArea,
+            selectedTokens,
+            locationQuery,
+            duePreset,
+            scope,
+            settings?.weekStart,
+            ftsResults,
+        ]
+    );
     const editingTask = useMemo<Task | null>(
         () => editingTaskId
             ? _allTasks.find((task) => task.id === editingTaskId && !task.deletedAt) ?? null
             : null,
         [_allTasks, editingTaskId]
     );
-    const scopedProjects = scope === 'tasks' || scope === 'project_tasks' ? [] : filteredProjects;
-    const scopedTasks = scope === 'projects' ? [] : filteredTasks;
-    const totalResults = scopedProjects.length + scopedTasks.length;
-    const totalResultsLabel = sourceLimited ? `${sourceLimit}+` : String(totalResults);
-    const results = !hasActiveSearch ? [] : [
-        ...scopedProjects.map(p => ({ type: 'project' as const, item: p })),
-        ...scopedTasks.map(t => ({ type: 'task' as const, item: t })),
-    ].slice(0, 50);
-    const isTruncated = totalResults > results.length || sourceLimited;
     const noResultsLabel = trimmedQuery ? t('search.noResults') + ' "' + trimmedQuery + '"' : t('search.noResults');
 
     const savedSearches = settings?.savedSearches || [];
