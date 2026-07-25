@@ -1,11 +1,11 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { labelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 import { SettingsAdvancedPage } from './SettingsAdvancedPage';
 
 const baseProps: Parameters<typeof SettingsAdvancedPage>[0] = {
-    t: labelFallback.en,
+    t: getEnglishSettingsLabels(),
     isTauri: true,
     localApiStatus: {
         enabled: false,

@@ -25,6 +25,7 @@ import {
 import {
   resolveDateLocaleTag,
   DEFAULT_ANTHROPIC_THINKING_BUDGET,
+  getEnglishI18nValue,
   safeFormatDate,
   summarizeMergeStats,
   translateText,
@@ -52,9 +53,8 @@ import {
 } from "../../lib/settings-open-diagnostics";
 import {
   buildNavKeywords,
-  getSettingsLabelFallback,
-  labelFallback,
   labelKeyOverrides,
+  SETTINGS_LABEL_KEYS,
   SETTINGS_PAGE_LABEL_KEYS,
   type SettingsLabels,
 } from "./settings/labels";
@@ -432,15 +432,12 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
   const [isCleaningAttachments, setIsCleaningAttachments] = useState(false);
 
   const t = useMemo(() => {
-    const labelsFallback = getSettingsLabelFallback(language);
     const result = {} as SettingsLabels;
-    (Object.keys(labelFallback.en) as Array<keyof SettingsLabels>).forEach(
-      (key) => {
-        const i18nKey = labelKeyOverrides[key] ?? `settings.${key}`;
-        const translated = translate(i18nKey);
-        result[key] = translated !== i18nKey ? translated : labelsFallback[key];
-      },
-    );
+    SETTINGS_LABEL_KEYS.forEach((key) => {
+      const i18nKey = labelKeyOverrides[key] ?? `settings.${key}`;
+      const englishFallback = getEnglishI18nValue(i18nKey) ?? key;
+      result[key] = translateWithFallback(translate, i18nKey, englishFallback);
+    });
     return result;
   }, [language, translate]);
 

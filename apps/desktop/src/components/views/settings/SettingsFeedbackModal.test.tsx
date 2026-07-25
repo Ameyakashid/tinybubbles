@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { labelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 import { SettingsFeedbackModal } from './SettingsFeedbackModal';
+
+const t = getEnglishSettingsLabels();
 
 const renderFeedbackModal = (props?: Partial<Parameters<typeof SettingsFeedbackModal>[0]>) => {
     const baseProps: Parameters<typeof SettingsFeedbackModal>[0] = {
@@ -11,7 +13,7 @@ const renderFeedbackModal = (props?: Partial<Parameters<typeof SettingsFeedbackM
         onClose: vi.fn(),
         onOpenIssue: vi.fn(),
         onSubmit: vi.fn().mockResolvedValue(undefined),
-        t: labelFallback.en,
+        t,
     };
     return render(<SettingsFeedbackModal {...baseProps} {...props} />);
 };
@@ -20,26 +22,26 @@ describe('SettingsFeedbackModal', () => {
     it('uses category-specific message placeholders', () => {
         renderFeedbackModal();
 
-        expect(screen.getByPlaceholderText(labelFallback.en.feedbackMessagePlaceholderBug)).toBeInTheDocument();
-        expect(screen.getByRole('combobox', { name: labelFallback.en.feedbackWhere })).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(t.feedbackMessagePlaceholderBug)).toBeInTheDocument();
+        expect(screen.getByRole('combobox', { name: t.feedbackWhere })).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: labelFallback.en.feedbackCategoryFeature }));
+        fireEvent.click(screen.getByRole('button', { name: t.feedbackCategoryFeature }));
 
-        expect(screen.getByPlaceholderText(labelFallback.en.feedbackMessagePlaceholderFeature)).toBeInTheDocument();
-        expect(screen.queryByRole('combobox', { name: labelFallback.en.feedbackWhere })).not.toBeInTheDocument();
+        expect(screen.getByPlaceholderText(t.feedbackMessagePlaceholderFeature)).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: t.feedbackWhere })).not.toBeInTheDocument();
     });
 
     it('includes the selected bug location in the submitted message', async () => {
         const onSubmit = vi.fn().mockResolvedValue(undefined);
         renderFeedbackModal({ onSubmit });
 
-        fireEvent.change(screen.getByRole('combobox', { name: labelFallback.en.feedbackWhere }), {
+        fireEvent.change(screen.getByRole('combobox', { name: t.feedbackWhere }), {
             target: { value: 'sync' },
         });
-        fireEvent.change(screen.getByRole('textbox', { name: labelFallback.en.feedbackMessage }), {
+        fireEvent.change(screen.getByRole('textbox', { name: t.feedbackMessage }), {
             target: { value: 'CloudKit sync failed' },
         });
-        fireEvent.click(screen.getByRole('button', { name: labelFallback.en.feedbackSubmit }));
+        fireEvent.click(screen.getByRole('button', { name: t.feedbackSubmit }));
 
         await waitFor(() => {
             expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
@@ -53,9 +55,9 @@ describe('SettingsFeedbackModal', () => {
         const onOpenIssue = vi.fn();
         renderFeedbackModal({ isConfigured: false, onOpenIssue });
 
-        expect(screen.getByText(labelFallback.en.feedbackUnavailableDesc)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: labelFallback.en.feedbackSubmit })).toBeDisabled();
-        fireEvent.click(screen.getByRole('button', { name: labelFallback.en.feedbackOpenGitHubIssue }));
+        expect(screen.getByText(t.feedbackUnavailableDesc)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: t.feedbackSubmit })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: t.feedbackOpenGitHubIssue }));
 
         expect(onOpenIssue).toHaveBeenCalled();
     });

@@ -1,7 +1,7 @@
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { labelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 import { SettingsGtdPage } from './SettingsGtdPage';
 
 describe('SettingsGtdPage', () => {
@@ -11,7 +11,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole, queryByText } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { taskEditor: { presentation: 'inline' } } }}
                 updateSettings={updateSettings}
@@ -42,7 +42,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { defaultProjectFlowMode: 'parallel' } }}
                 updateSettings={updateSettings}
@@ -69,7 +69,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { defaultAreaId: null } }}
                 updateSettings={updateSettings}
@@ -107,7 +107,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { timeEstimatePresets: ['5min', '30min'] } }}
                 updateSettings={updateSettings}
@@ -136,7 +136,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { timeEstimatePresets: ['5min', '30min'] } }}
                 updateSettings={updateSettings}
@@ -165,7 +165,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: { defaultAreaId: null } }}
                 updateSettings={updateSettings}
@@ -196,7 +196,7 @@ describe('SettingsGtdPage', () => {
 
         const { getByRole } = render(
             <SettingsGtdPage
-                t={labelFallback.en}
+                t={getEnglishSettingsLabels()}
                 language="en"
                 settings={{ gtd: {} }}
                 updateSettings={updateSettings}

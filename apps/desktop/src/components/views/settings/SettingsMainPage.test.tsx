@@ -1,11 +1,11 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { labelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 import { SettingsMainPage, type SettingsMainPageProps } from './SettingsMainPage';
 
 const baseProps: SettingsMainPageProps = {
-    t: labelFallback.en,
+    t: getEnglishSettingsLabels(),
     themeMode: 'system',
     onThemeChange: vi.fn(),
     densityMode: 'comfortable',

@@ -1,11 +1,11 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { labelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 import { SettingsCalendarPage } from './SettingsCalendarPage';
 
 const baseProps = {
-    t: labelFallback.en,
+    t: getEnglishSettingsLabels(),
     newCalendarName: '',
     newCalendarUrl: '',
     calendarError: null,

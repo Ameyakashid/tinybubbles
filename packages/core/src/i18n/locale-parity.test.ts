@@ -50,21 +50,27 @@ const nonLatinOverrideLocales: Record<string, Record<string, string>> = {
     ru: ruOverrides,
 };
 
+// Floors ratchet against silent regression: they are measured values, never aspirations.
+// The 2026-07-24 settings-i18n migration moved 162 desktop-only settings strings into
+// en.ts, growing englishKeyCount 1957 -> 2119. Every partial locale's numerator was
+// unchanged, so each percentage fell by ~3-5 points with no translation lost. cs and vi
+// were deliberately near-full-parity locales and were backfilled instead of relaxed, so
+// their 99 floors stand. The partial locales below are re-pinned to the new measurement.
 const overrideLocaleCoverageFloors: Record<string, number> = {
-    ar: 69,
+    ar: 66,
     cs: 99,
-    de: 71,
-    es: 64,
+    de: 67,
+    es: 62,
     fr: 70,
-    hi: 69,
-    it: 77,
-    ja: 69,
-    ko: 68,
+    hi: 65,
+    it: 72,
+    ja: 65,
+    ko: 64,
     nl: 22,
-    pl: 70,
-    pt: 71,
-    ru: 69,
-    tr: 71,
+    pl: 66,
+    pt: 67,
+    ru: 65,
+    tr: 67,
     vi: 99,
 };
 

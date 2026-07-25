@@ -2,7 +2,7 @@ import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSettingsAboutPage } from './useSettingsAboutPage';
-import { getSettingsLabelFallback } from './labels';
+import { getEnglishSettingsLabels } from './labels';
 
 const runtimeMock = vi.hoisted(() => ({
     isTauriRuntime: vi.fn(() => true),
@@ -38,7 +38,7 @@ vi.mock('../../../lib/app-log', async (importOriginal) => ({
 }));
 
 function Harness() {
-    useSettingsAboutPage({ t: getSettingsLabelFallback('en') });
+    useSettingsAboutPage({ t: getEnglishSettingsLabels() });
     return null;
 }
 

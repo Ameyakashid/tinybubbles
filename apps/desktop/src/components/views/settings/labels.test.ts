@@ -1,13 +1,37 @@
 import { describe, expect, it } from 'vitest';
 
+import { getEnglishI18nValue, getTranslationsSync, loadTranslations, type Language } from '@mindwtr/core';
+
 import {
     buildNavKeywords,
-    getSettingsLabelFallback,
-    labelFallback,
+    getEnglishSettingsLabels,
+    labelKeyOverrides,
+    SETTINGS_LABEL_KEYS,
     SETTINGS_PAGE_LABEL_KEYS,
-    zhHantLabelOverrides,
+    type SettingsLabels,
 } from './labels';
 
+function i18nKeyFor(key: keyof SettingsLabels): string {
+    return labelKeyOverrides[key] ?? `settings.${key}`;
+}
+
+async function buildLabels(language: Language): Promise<SettingsLabels> {
+    await loadTranslations(language);
+    const translations = getTranslationsSync(language);
+    const result = {} as SettingsLabels;
+    for (const key of SETTINGS_LABEL_KEYS) {
+        const i18nKey = i18nKeyFor(key);
+        result[key] = translations[i18nKey] ?? i18nKey;
+    }
+    return result;
+}
+
+// These were the specific desktop settings labels a user reported still
+// showing Simplified characters in the zh-Hant UI. The fix moved every
+// settings string into core's locale files, where locale-parity.test.ts now
+// enforces full zh/zh-Hant coverage; this keeps a direct regression check on
+// the originally reported keys since parity alone wouldn't catch Simplified
+// text quietly shipping inside the zh-Hant file.
 const reportedZhHantLabels = {
     searchPlaceholder: '搜索設置…',
     lookAndFeel: '外觀與風格',
@@ -53,23 +77,28 @@ const reportedZhHantLabels = {
     obsidianVaultDesc: '從本地 Obsidian 資料庫導入任務。Obsidian 保留筆記與捕獲來源，Mindwtr 管理原生承諾事項。',
 } as const;
 
-describe('settings label fallbacks', () => {
-    it('uses Traditional Chinese overrides for reported desktop settings labels', () => {
-        expect(zhHantLabelOverrides).toMatchObject(reportedZhHantLabels);
-        expect(getSettingsLabelFallback('zh-Hant')).toMatchObject(reportedZhHantLabels);
+describe('settings label registry', () => {
+    it('resolves every settings label key to a translated core i18n string', () => {
+        const missing = SETTINGS_LABEL_KEYS.filter((key) => !getEnglishI18nValue(i18nKeyFor(key)));
+        expect(missing).toEqual([]);
     });
 
-    it('keeps Simplified Chinese fallbacks unchanged for zh', () => {
-        const labels = getSettingsLabelFallback('zh');
+    it('uses Traditional Chinese text for the originally reported desktop settings labels', async () => {
+        const zhHant = await buildLabels('zh-Hant');
+        for (const [key, expected] of Object.entries(reportedZhHantLabels)) {
+            expect(zhHant[key as keyof SettingsLabels], key).toBe(expected);
+        }
+    });
 
-        expect(labels.searchPlaceholder).toBe(labelFallback.zh.searchPlaceholder);
-        expect(labels.searchPlaceholder).toBe('搜索设置…');
+    it('keeps Simplified Chinese fallbacks unchanged for zh', async () => {
+        const zh = await buildLabels('zh');
+        expect(zh.searchPlaceholder).toBe('搜索设置…');
     });
 });
 
 describe('settings nav search keywords', () => {
     it('derives GTD keywords from the translated setting labels it renders', () => {
-        const keywords = buildNavKeywords(labelFallback.en, SETTINGS_PAGE_LABEL_KEYS.gtd, [
+        const keywords = buildNavKeywords(getEnglishSettingsLabels(), SETTINGS_PAGE_LABEL_KEYS.gtd, [
             'auto-archive',
             'pomodoro',
         ]);
@@ -83,18 +112,19 @@ describe('settings nav search keywords', () => {
         expect(keywords).toContain('auto-archive');
     });
 
-    it('only lists label keys that exist in the fallback registry', () => {
+    it('only lists label keys that exist in the settings label registry', () => {
+        const known = new Set<string>(SETTINGS_LABEL_KEYS);
         const missing: string[] = [];
         for (const keys of Object.values(SETTINGS_PAGE_LABEL_KEYS)) {
             for (const key of keys) {
-                if (!(key in labelFallback.en)) missing.push(key);
+                if (!known.has(key)) missing.push(key);
             }
         }
         expect(missing).toEqual([]);
     });
 
-    it('localizes derived keywords and drops duplicates', () => {
-        const zh = getSettingsLabelFallback('zh');
+    it('localizes derived keywords and drops duplicates', async () => {
+        const zh = await buildLabels('zh');
         const keywords = buildNavKeywords(zh, SETTINGS_PAGE_LABEL_KEYS.gtd, [
             zh.defaultProjectFlowMode,
         ]);
