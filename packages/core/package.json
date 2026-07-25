@@ -43,7 +43,6 @@
     "./digest-utils": "./src/digest-utils.ts",
     "./saved-filters": "./src/saved-filters.ts",
     "./search": "./src/search.ts",
-    "./global-search-filter": "./src/global-search-filter.ts",
     "./hierarchy-utils": "./src/hierarchy-utils.ts",
     "./markdown": "./src/markdown.ts",
     "./webdav": "./src/webdav.ts",
