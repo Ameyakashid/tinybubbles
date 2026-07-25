@@ -1,12 +1,5 @@
-import { safeParseDate, type Task, type TaskStatus } from '@mindwtr/core';
+import { shouldShowTaskForStart, type Task, type TaskStatus } from '@mindwtr/core';
 import type { DesktopViewId } from './navigation-events';
-
-function isDeferredForPrimaryFocus(task: Task, now: Date = new Date()): boolean {
-    const start = safeParseDate(task.startTime);
-    if (!start) return false;
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    return start > endOfToday;
-}
 
 export function resolveTaskNavigationView(task: Task, now: Date = new Date()): DesktopViewId {
     const statusViewMap: Record<TaskStatus, DesktopViewId> = {
@@ -20,7 +13,11 @@ export function resolveTaskNavigationView(task: Task, now: Date = new Date()): D
     };
     const primaryView = statusViewMap[task.status] || 'next';
     const hidesDeferredTasks = primaryView === 'next';
-    if (hidesDeferredTasks && isDeferredForPrimaryFocus(task, now)) {
+    // Deferral belongs to core shouldShowTaskForStart and nowhere else. The local
+    // copy this replaced read task.startTime alone, so a recurring task deferred
+    // by its due date looked visible here: opening it from search or an internal
+    // link navigated to Next, where it is hidden and therefore unreachable (#867).
+    if (hidesDeferredTasks && !shouldShowTaskForStart(task, { now })) {
         return 'review';
     }
     return primaryView;
