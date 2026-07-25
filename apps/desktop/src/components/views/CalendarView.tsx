@@ -20,6 +20,8 @@ import {
     hasCalendarTaskDragData,
     setCalendarTaskDragData,
 } from '../../lib/calendar-task-drag';
+import { useTaskListScope } from './list/task-list-scope';
+import { collectCalendarKeyboardTasks } from './calendar/calendar-keyboard-tasks';
 import { CalendarOpenTaskModal, CalendarTaskComposerModal } from './calendar/CalendarModals';
 import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
 import { CalendarSelectedDayPanel } from './calendar/CalendarSelectedDayPanel';
@@ -103,6 +105,16 @@ export function CalendarView() {
         weekdayHeaders,
         yearOptions,
     } = controller;
+    // One registration covers the whole view: the grid, the planning panel and
+    // the selected-day panel all render inside it, so document order already
+    // flattens them in the order the user sees.
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: collectCalendarKeyboardTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+    });
     const handleCalendarTaskDragStart = useCallback((event: DragEvent<HTMLElement>, task: Task, itemKind: CalendarCellItem['kind']) => {
         if (itemKind === 'event') return;
         if (isProjectedRecurringTask(task)) return;

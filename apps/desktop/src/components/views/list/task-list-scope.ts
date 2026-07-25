@@ -50,7 +50,12 @@ function findTaskRow(taskId: string): HTMLElement | null {
 
 // Keyboard actions must hit the row DOM focus is actually inside, not a stale
 // index: clicking or tabbing into a row moves the user's cursor there without
-// going through the view's selection state.
+// going through the view's selection state. This is deliberately AgendaView's
+// pre-scope semantics (the old fallback's resolveFallbackSelectionIndex read
+// activeElement first), applied to every view rather than only the unregistered
+// ones. ListView is the only view that wires row clicks to a selection index;
+// the rest have no index and no selection ring, so focus is their only signal
+// and a pure-index rule would silently act on the wrong row.
 function getFocusedTaskId(): string | null {
     if (typeof document === 'undefined') return null;
     const active = document.activeElement;
@@ -58,15 +63,20 @@ function getFocusedTaskId(): string | null {
     return active.closest<HTMLElement>('[data-task-id]')?.dataset.taskId ?? null;
 }
 
+const FOCUSABLE_ROW_SELECTOR = 'button, [tabindex]:not([tabindex="-1"])';
+
 function revealTaskRow(taskId: string): void {
     const row = findTaskRow(taskId);
     if (!row) return;
     row.scrollIntoView?.({ block: 'nearest' });
     // A comma selector returns the first match in document order, which is the
     // done button — Enter would then complete the task (#847). Prefer the title
-    // toggle so Enter opens the task instead.
+    // toggle so Enter opens the task instead. Calendar chips carry data-task-id
+    // on the control itself, so fall back to the row when it is focusable: the
+    // descendant lookups find nothing there.
     const focusTarget = row.querySelector<HTMLElement>('[data-task-view-toggle]')
-        ?? row.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])');
+        ?? row.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')
+        ?? (row.matches(FOCUSABLE_ROW_SELECTOR) ? row : null);
     focusTarget?.focus();
 }
 
