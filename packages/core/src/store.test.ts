@@ -3523,6 +3523,38 @@ describe('TaskStore', () => {
         expect(openTimeblocks[0]?.id).toBe(existingFollowUp.id);
     });
 
+    // Completing an occurrence and then the one it just spawned, both on the same
+    // day, gives the second candidate the same due date as the first. The dedupe
+    // scan sees the pre-update snapshot, where the task being completed still reads
+    // as live, so it used to match itself and the series silently ended (#867).
+    it('keeps spawning when a fluid occurrence and its follow-up are completed the same day', async () => {
+        vi.setSystemTime(new Date('2026-07-22T09:30:00.000Z'));
+
+        const chore: Task = {
+            id: 'chore',
+            title: 'Biweekly chore',
+            status: 'next',
+            recurrence: { rule: 'weekly', strategy: 'fluid', rrule: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=SA' },
+            dueDate: '2026-07-25',
+            createdAt: '2026-07-11T09:00:00.000Z',
+            updatedAt: '2026-07-11T09:00:00.000Z',
+        };
+
+        useTaskStore.setState({ tasks: [chore], _allTasks: [chore] });
+
+        await useTaskStore.getState().updateTask(chore.id, { status: 'done' });
+        const spawned = useTaskStore.getState()._allTasks.find((task) => task.id !== chore.id);
+        expect(spawned).toBeTruthy();
+
+        await useTaskStore.getState().updateTask(spawned!.id, { status: 'done' });
+
+        const live = useTaskStore.getState()._allTasks.filter((task) => task.status !== 'done');
+        expect(live).toHaveLength(1);
+        expect(live[0]?.id).not.toBe(chore.id);
+        expect(live[0]?.id).not.toBe(spawned!.id);
+        expect(live[0]?.recurrence).toBeTruthy();
+    });
+
     it('should roll a fluid recurring task from completion date', () => {
         const { addTask, updateTask, moveTask } = useTaskStore.getState();
         addTask('Fluid Task', {

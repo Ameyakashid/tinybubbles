@@ -129,9 +129,18 @@ const isExistingRecurringFollowUp = (existing: Task, candidate: Task): boolean =
     return recurrenceKeyForDuplicateCheck(existing) === recurrenceKeyForDuplicateCheck(candidate);
 };
 
-const findExistingRecurringFollowUp = (tasks: readonly Task[], candidate: Task | null): Task | null => {
+// excludeId is the task being completed in this same update. The snapshot being
+// scanned is taken before the update lands, so that task still reads as live and
+// would match its own follow-up: completing an occurrence and then the one it just
+// spawned, on the same day, made the second candidate look like a duplicate of the
+// first and silently ended the series (#867).
+const findExistingRecurringFollowUp = (
+    tasks: readonly Task[],
+    candidate: Task | null,
+    excludeId?: string,
+): Task | null => {
     if (!candidate) return null;
-    return tasks.find((task) => isExistingRecurringFollowUp(task, candidate)) ?? null;
+    return tasks.find((task) => task.id !== excludeId && isExistingRecurringFollowUp(task, candidate)) ?? null;
 };
 
 const stampNewRecurringFollowUp = (task: Task | null, deviceId: string): Task | null => {
@@ -602,7 +611,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                     now
                 );
                 const stampedNextRecurringTask = stampNewRecurringFollowUp(nextRecurringTask, deviceState.deviceId);
-                const recurringFollowUpTask = findExistingRecurringFollowUp(state._allTasks, stampedNextRecurringTask)
+                const recurringFollowUpTask = findExistingRecurringFollowUp(state._allTasks, stampedNextRecurringTask, oldTask.id)
                     ? null
                     : stampedNextRecurringTask;
                 incrementalPersistence.task = updatedTask;
@@ -1122,7 +1131,8 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 const stampedNextRecurringTask = stampNewRecurringFollowUp(nextRecurringTask, deviceState.deviceId);
                 const duplicateFollowUp = findExistingRecurringFollowUp(
                     [...newAllTasksBase, ...nextRecurringTasks],
-                    stampedNextRecurringTask
+                    stampedNextRecurringTask,
+                    task.id
                 );
                 if (stampedNextRecurringTask && !duplicateFollowUp) {
                     nextRecurringTasks = [...nextRecurringTasks, stampedNextRecurringTask];
