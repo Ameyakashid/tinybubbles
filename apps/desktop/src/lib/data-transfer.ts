@@ -2,8 +2,6 @@ import {
     addBreadcrumb,
     createBackupFileName,
     flushPendingSave,
-    prepareRestoredBackupDataForSync,
-    runDataTransferTransaction,
     serializeBackupData,
     validateBackupJson,
     type AppData,
@@ -11,28 +9,28 @@ import {
     useTaskStore,
 } from '@mindwtr/core';
 import {
-    applyDgtImport,
+    runImport,
+    type DataTransferBoundaries,
+} from '@mindwtr/core/import-runner';
+import {
     parseDgtImportSource,
     type DgtImportExecutionResult,
     type DgtImportParseResult,
     type ParsedDgtImportData,
 } from '@mindwtr/core/dgt-import';
 import {
-    applyOmniFocusImport,
     parseOmniFocusImportSource,
     type OmniFocusImportExecutionResult,
     type OmniFocusImportParseResult,
     type ParsedOmniFocusImportData,
 } from '@mindwtr/core/omnifocus-import';
 import {
-    applyTodoistImport,
     parseTodoistImportSource,
     type ParsedTodoistProject,
     type TodoistImportExecutionResult,
     type TodoistImportParseResult,
 } from '@mindwtr/core/todoist-import';
 import {
-    applyTickTickImport,
     parseTickTickImportSource,
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
@@ -172,37 +170,25 @@ const downloadTextFile = async (fileName: string, text: string): Promise<void> =
     }
 };
 
-const runDesktopDataTransfer = async <TResult>(
-    operation: string,
-    apply: (currentData: AppData) => { data: AppData; result: TResult }
-): Promise<DesktopTransferResult & { result: TResult }> => {
-    const transaction = await runDataTransferTransaction({
-        operation,
-        flushPendingSave,
-        getCurrentChangeAt: getLocalChangeAt,
-        readCurrentData: () => getStorage().getData(),
-        createRecoverySnapshot: async () => (
-            isTauriRuntime() ? SyncService.createDataSnapshot() : null
-        ),
-        apply,
-        persistData: (data) => getStorage().saveData(data),
-        refreshData: () => useTaskStore.getState().fetchData({ silent: true }),
-        onStale: ({ operation: staleOperation, localSnapshotChangeAt, currentChangeAt }) => {
-            void logInfo('Data transfer aborted after local data changed', {
-                scope: 'transfer',
-                extra: {
-                    operation: staleOperation,
-                    snapshotChangeAt: String(localSnapshotChangeAt),
-                    currentChangeAt: String(currentChangeAt),
-                },
-            });
-        },
-    });
-
-    return {
-        snapshotName: transaction.snapshot,
-        result: transaction.result,
-    };
+const desktopBoundaries: DataTransferBoundaries = {
+    flushPendingSave,
+    getCurrentChangeAt: getLocalChangeAt,
+    readCurrentData: () => getStorage().getData(),
+    createRecoverySnapshot: async () => (
+        isTauriRuntime() ? SyncService.createDataSnapshot() : null
+    ),
+    persistData: (data) => getStorage().saveData(data),
+    refreshData: () => useTaskStore.getState().fetchData({ silent: true }),
+    onStale: ({ operation: staleOperation, localSnapshotChangeAt, currentChangeAt }) => {
+        void logInfo('Data transfer aborted after local data changed', {
+            scope: 'transfer',
+            extra: {
+                operation: staleOperation,
+                snapshotChangeAt: String(localSnapshotChangeAt),
+                currentChangeAt: String(currentChangeAt),
+            },
+        });
+    },
 };
 
 export const exportDesktopBackup = async (data: AppData): Promise<void> => {
@@ -302,182 +288,39 @@ export const inspectDesktopOmniFocusImport = async (): Promise<OmniFocusImportPa
     });
 };
 
+const desktopLog = { logInfo, logError };
+
 export const restoreDesktopBackup = async (data: AppData): Promise<DesktopTransferResult> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('Backup restore started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'restoreBackup',
-            source: 'backup',
-        },
-    });
-    try {
-        const { snapshotName } = await runDesktopDataTransfer('restoreBackup', () => {
-            return {
-                data: prepareRestoredBackupDataForSync(data),
-                result: undefined,
-            };
-        });
-        void logInfo('Backup restore complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'restoreBackup',
-                source: 'backup',
-                ...toCountExtra(data),
-            },
-        });
-        return { snapshotName };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'restoreBackup' } });
-        throw error;
-    }
+    const { snapshotName } = await runImport<AppData, AppData>('backup', data, desktopBoundaries, desktopLog);
+    return { snapshotName };
 };
 
 export const importDesktopTodoistData = async (
     parsedProjects: ParsedTodoistProject[]
-): Promise<DesktopTransferResult & { result: TodoistImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('Todoist import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importTodoist',
-            source: 'todoist',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runDesktopDataTransfer('importTodoist', (currentData) => {
-            const result = applyTodoistImport(currentData, parsedProjects);
-            return { data: result.data, result };
-        });
-        void logInfo('Todoist import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importTodoist',
-                source: 'todoist',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                sections: String(result.importedSectionCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importTodoist' } });
-        throw error;
-    }
-};
+): Promise<DesktopTransferResult & { result: TodoistImportExecutionResult }> => (
+    runImport<ParsedTodoistProject[], TodoistImportExecutionResult>(
+        'todoist', parsedProjects, desktopBoundaries, desktopLog
+    )
+);
 
 export const importDesktopTickTickData = async (
     parsedData: ParsedTickTickImportData
-): Promise<DesktopTransferResult & { result: TickTickImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('TickTick import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importTickTick',
-            source: 'ticktick',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runDesktopDataTransfer('importTickTick', (currentData) => {
-            const result = applyTickTickImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('TickTick import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importTickTick',
-                source: 'ticktick',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importTickTick' } });
-        throw error;
-    }
-};
+): Promise<DesktopTransferResult & { result: TickTickImportExecutionResult }> => (
+    runImport<ParsedTickTickImportData, TickTickImportExecutionResult>(
+        'ticktick', parsedData, desktopBoundaries, desktopLog
+    )
+);
 
 export const importDesktopDgtData = async (
     parsedData: ParsedDgtImportData
-): Promise<DesktopTransferResult & { result: DgtImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('DGT import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importDgt',
-            source: 'dgt',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runDesktopDataTransfer('importDgt', (currentData) => {
-            const result = applyDgtImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('DGT import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importDgt',
-                source: 'dgt',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importDgt' } });
-        throw error;
-    }
-};
+): Promise<DesktopTransferResult & { result: DgtImportExecutionResult }> => (
+    runImport<ParsedDgtImportData, DgtImportExecutionResult>('dgt', parsedData, desktopBoundaries, desktopLog)
+);
 
 export const importDesktopOmniFocusData = async (
     parsedData: ParsedOmniFocusImportData
-): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('OmniFocus import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importOmniFocus',
-            source: 'omnifocus',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runDesktopDataTransfer('importOmniFocus', (currentData) => {
-            const result = applyOmniFocusImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('OmniFocus import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importOmniFocus',
-                source: 'omnifocus',
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                standaloneTasks: String(result.importedStandaloneTaskCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importOmniFocus' } });
-        throw error;
-    }
-};
+): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> => (
+    runImport<ParsedOmniFocusImportData, OmniFocusImportExecutionResult>(
+        'omnifocus', parsedData, desktopBoundaries, desktopLog
+    )
+);

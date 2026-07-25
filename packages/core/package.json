@@ -66,6 +66,8 @@
     "./ai/types": "./src/ai/types.ts",
     "./ai/catalog": "./src/ai/catalog.ts",
     "./ai-config": "./src/ai-config.ts",
+    "./import-apply": "./src/import-apply.ts",
+    "./import-runner": "./src/import-runner.ts",
     "./whisper-models": "./src/whisper-models.ts",
     "./sqlite-schema": "./src/sqlite-schema.ts",
     "./sqlite-adapter": "./src/sqlite-adapter.ts",

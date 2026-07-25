@@ -1,10 +1,10 @@
 import { strFromU8, unzipSync } from 'fflate';
 
-import { DEFAULT_AREA_COLOR, DEFAULT_PROJECT_COLOR } from './color-constants';
 import { safeParseDate } from './date';
+import { applyImport } from './import-apply';
 import { normalizeRecurrenceForLoad } from './recurrence';
-import { ensureDeviceId, normalizeTagId } from './store-helpers';
-import type { AppData, Area, ChecklistItem, Project, Task, TaskPriority, TaskStatus } from './types';
+import { normalizeTagId } from './store-helpers';
+import type { AppData, ChecklistItem, Task, TaskPriority, TaskStatus } from './types';
 import { generateDeterministicUUID, generateUUID as uuidv4 } from './uuid';
 
 const TICKTICK_REQUIRED_COLUMNS = ['TITLE', 'LIST NAME'];
@@ -18,7 +18,7 @@ const TICKTICK_IMPORT_ID_NAMESPACE = 'mindwtr:ticktick-import:v1';
 const TICKTICK_CHECKLIST_UNCHECKED = '▫';
 const TICKTICK_CHECKLIST_CHECKED = '▪';
 
-const createTickTickImportId = (kind: 'area' | 'project' | 'task', sourceKey: string): string => (
+const createTickTickImportId = (kind: 'area' | 'project' | 'section' | 'task', sourceKey: string): string => (
     generateDeterministicUUID(`${TICKTICK_IMPORT_ID_NAMESPACE}:${kind}:${sourceKey}`)
 );
 
@@ -741,232 +741,41 @@ export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImp
     };
 };
 
-const resolveUniqueName = (title: string, usedTitles: Set<string>, fallback: string): string => {
-    const trimmed = title.trim() || fallback;
-    if (!usedTitles.has(trimmed.toLowerCase())) {
-        usedTitles.add(trimmed.toLowerCase());
-        return trimmed;
-    }
-
-    const base = `${trimmed}${TICKTICK_IMPORT_SUFFIX}`;
-    if (!usedTitles.has(base.toLowerCase())) {
-        usedTitles.add(base.toLowerCase());
-        return base;
-    }
-
-    let suffix = 2;
-    while (true) {
-        const next = `${base} ${suffix}`;
-        const normalized = next.toLowerCase();
-        if (!usedTitles.has(normalized)) {
-            usedTitles.add(normalized);
-            return next;
-        }
-        suffix += 1;
-    }
-};
-
-const resolveTimestamp = (value: string | undefined, fallback: string): string => {
+// TickTick's raw CSV timestamps aren't ISO — normalize before handing them to applyImport's
+// shared resolveTimestamp, which only validates-and-falls-back (see import-apply.ts).
+const normalizeParsedTimestamp = (value: string | undefined): string | undefined => {
     const parsed = safeParseDate(value);
-    return parsed ? parsed.toISOString() : fallback;
+    return parsed ? parsed.toISOString() : undefined;
 };
 
 const resolveImportedTaskStatus = (status: TaskStatus, projectId: string | undefined): TaskStatus => (
     status === 'inbox' && projectId ? 'next' : status
 );
 
+// TickTick derives stable ids from source keys (namespaced UUIDv5-style hash), so re-importing
+// the same export is idempotent: existing areas/projects/tasks are matched by id and skipped.
 export const applyTickTickImport = (
     currentData: AppData,
     parsedData: ParsedTickTickImportData,
     options: { now?: Date | string } = {}
 ): TickTickImportExecutionResult => {
-    const resolvedNow = options.now instanceof Date
-        ? options.now
-        : typeof options.now === 'string' && options.now.trim()
-            ? new Date(options.now)
-            : new Date();
-    const nowIso = Number.isFinite(resolvedNow.getTime()) ? resolvedNow.toISOString() : new Date().toISOString();
-    const deviceState = ensureDeviceId(currentData.settings ?? {});
-    const settings = deviceState.settings;
-    const nextData: AppData = {
-        tasks: [...currentData.tasks],
-        projects: [...currentData.projects],
-        sections: [...currentData.sections],
-        areas: [...currentData.areas],
-        people: [...(currentData.people ?? [])],
-        settings,
-    };
-
-    const usedAreaNames = new Set(nextData.areas.filter((area) => !area.deletedAt).map((area) => area.name.trim().toLowerCase()));
-    const usedProjectTitles = new Set(nextData.projects.filter((project) => !project.deletedAt).map((project) => project.title.trim().toLowerCase()));
-    const warnings = [...parsedData.warnings];
-    const areaIdBySourceKey = new Map<string, string>();
-    const projectIdBySourceKey = new Map<string, string>();
-    const existingAreaById = new Map(nextData.areas.map((area) => [area.id, area]));
-    const existingProjectById = new Map(nextData.projects.map((project) => [project.id, project]));
-    const existingTaskIds = new Set(nextData.tasks.map((task) => task.id));
-    let importedAreaCount = 0;
-    let importedProjectCount = 0;
-    let importedTaskCount = 0;
-    let importedChecklistItemCount = 0;
-
-    const nextAreaOrder = nextData.areas
-        .filter((area) => !area.deletedAt)
-        .reduce((max, area) => Math.max(max, Number.isFinite(area.order) ? area.order : -1), -1) + 1;
-
-    parsedData.areas
-        .slice()
-        .sort((left, right) => left.order - right.order || left.sourceKey.localeCompare(right.sourceKey))
-        .forEach((area, index) => {
-            const areaId = createTickTickImportId('area', area.sourceKey);
-            const existingArea = existingAreaById.get(areaId);
-            if (existingArea) {
-                if (!existingArea.deletedAt) areaIdBySourceKey.set(area.sourceKey, existingArea.id);
-                return;
-            }
-            const areaName = resolveUniqueName(area.name, usedAreaNames, TICKTICK_AREA_FALLBACK);
-            if (areaName !== area.name) {
-                warnings.push(`Imported area "${area.name}" was renamed to "${areaName}" to avoid a name conflict.`);
-            }
-            const nextArea: Area = {
-                id: areaId,
-                name: areaName,
-                color: DEFAULT_AREA_COLOR,
-                order: nextAreaOrder + index,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                rev: 1,
-                revBy: deviceState.deviceId,
-            };
-            nextData.areas.push(nextArea);
-            areaIdBySourceKey.set(area.sourceKey, nextArea.id);
-            importedAreaCount += 1;
-        });
-
-    parsedData.projects
-        .slice()
-        .sort((left, right) => left.order - right.order || left.sourceKey.localeCompare(right.sourceKey))
-        .forEach((project) => {
-            const projectId = createTickTickImportId('project', project.sourceKey);
-            const existingProject = existingProjectById.get(projectId);
-            if (existingProject) {
-                if (!existingProject.deletedAt) projectIdBySourceKey.set(project.sourceKey, existingProject.id);
-                return;
-            }
-            const areaId = project.areaSourceKey ? areaIdBySourceKey.get(project.areaSourceKey) : undefined;
-            const projectTitle = resolveUniqueName(project.name, usedProjectTitles, TICKTICK_PROJECT_FALLBACK);
-            if (projectTitle !== project.name) {
-                warnings.push(`Imported project "${project.name}" was renamed to "${projectTitle}" to avoid a title conflict.`);
-            }
-            const siblingMaxOrder = nextData.projects
-                .filter((item) => !item.deletedAt && (item.areaId ?? undefined) === areaId)
-                .reduce((max, item) => Math.max(max, Number.isFinite(item.order) ? item.order : -1), -1);
-            const nextProject: Project = {
-                id: projectId,
-                title: projectTitle,
-                status: 'active',
-                color: DEFAULT_PROJECT_COLOR,
-                order: siblingMaxOrder + 1,
-                tagIds: [],
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                rev: 1,
-                revBy: deviceState.deviceId,
-                ...(areaId ? { areaId } : {}),
-            };
-            nextData.projects.push(nextProject);
-            projectIdBySourceKey.set(project.sourceKey, nextProject.id);
-            importedProjectCount += 1;
-        });
-
-    const getTaskBucketKey = (projectId?: string, areaId?: string): string => {
-        if (projectId) return `project:${projectId}`;
-        if (areaId) return `area:${areaId}`;
-        return 'inbox';
-    };
-
-    const nextTaskOrderByBucket = new Map<string, number>();
-    nextData.tasks.forEach((task) => {
-        if (task.deletedAt) return;
-        const bucket = getTaskBucketKey(task.projectId, task.areaId);
-        const candidate = typeof task.order === 'number'
-            ? task.order
-            : typeof task.orderNum === 'number'
-                ? task.orderNum
-                : -1;
-        nextTaskOrderByBucket.set(bucket, Math.max(nextTaskOrderByBucket.get(bucket) ?? -1, candidate));
-    });
-    nextTaskOrderByBucket.forEach((maxOrder, bucket) => {
-        nextTaskOrderByBucket.set(bucket, maxOrder + 1);
-    });
-
-    const allocateTaskOrder = (projectId?: string, areaId?: string): number => {
-        const bucket = getTaskBucketKey(projectId, areaId);
-        const cached = nextTaskOrderByBucket.get(bucket);
-        if (cached !== undefined) {
-            nextTaskOrderByBucket.set(bucket, cached + 1);
-            return cached;
+    const areas = [...parsedData.areas].sort((left, right) => left.order - right.order || left.sourceKey.localeCompare(right.sourceKey));
+    const projects = [...parsedData.projects].sort((left, right) => left.order - right.order || left.sourceKey.localeCompare(right.sourceKey));
+    const tasks = parsedData.tasks.map((task) => ({
+        ...task,
+        sourceKey: `${task.projectSourceKey ?? 'none'}:${task.sourceId}`,
+        createdAt: normalizeParsedTimestamp(task.createdAt),
+        updatedAt: normalizeParsedTimestamp(task.updatedAt),
+    }));
+    return applyImport(
+        currentData,
+        { areas, projects, tasks, warnings: parsedData.warnings },
+        {
+            fallbacks: { area: TICKTICK_AREA_FALLBACK, project: TICKTICK_PROJECT_FALLBACK },
+            idFor: createTickTickImportId,
+            now: options.now,
+            resolveTaskStatus: resolveImportedTaskStatus,
+            suffix: TICKTICK_IMPORT_SUFFIX,
         }
-        const nextOrder = 0;
-        nextTaskOrderByBucket.set(bucket, nextOrder + 1);
-        return nextOrder;
-    };
-
-    parsedData.tasks.forEach((task) => {
-        const taskId = createTickTickImportId('task', `${task.projectSourceKey ?? 'none'}:${task.sourceId}`);
-        if (existingTaskIds.has(taskId)) return;
-        const projectId = task.projectSourceKey ? projectIdBySourceKey.get(task.projectSourceKey) : undefined;
-        const areaId = !projectId && task.areaSourceKey ? areaIdBySourceKey.get(task.areaSourceKey) : undefined;
-        const order = allocateTaskOrder(projectId, areaId);
-        const checklist = task.checklist.length > 0
-            ? task.checklist.map((item) => ({
-                id: uuidv4(),
-                title: item.title,
-                isCompleted: item.isCompleted,
-            }))
-            : undefined;
-        const createdAt = resolveTimestamp(task.createdAt, nowIso);
-        const updatedAt = resolveTimestamp(task.updatedAt, createdAt);
-        const completedAt = task.status === 'done' || task.status === 'archived'
-            ? task.completedAt ?? updatedAt
-            : undefined;
-        const status = resolveImportedTaskStatus(task.status, projectId);
-        const nextTask: Task = {
-            id: taskId,
-            title: task.title,
-            status,
-            taskMode: checklist ? 'list' : 'task',
-            priority: task.priority,
-            contexts: [],
-            tags: task.tags,
-            description: task.description,
-            startTime: task.startTime,
-            dueDate: task.dueDate,
-            recurrence: task.recurrence,
-            completedAt,
-            checklist,
-            pushCount: 0,
-            createdAt,
-            updatedAt,
-            rev: 1,
-            revBy: deviceState.deviceId,
-            order,
-            orderNum: order,
-            ...(projectId ? { projectId } : {}),
-            ...(areaId ? { areaId } : {}),
-        };
-        nextData.tasks.push(nextTask);
-        existingTaskIds.add(taskId);
-        importedTaskCount += 1;
-        importedChecklistItemCount += checklist?.length ?? 0;
-    });
-
-    return {
-        data: nextData,
-        importedAreaCount,
-        importedProjectCount,
-        importedTaskCount,
-        importedChecklistItemCount,
-        warnings,
-    };
+    );
 };

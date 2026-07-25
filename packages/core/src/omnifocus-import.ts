@@ -1,12 +1,11 @@
 import { strFromU8, unzipSync } from 'fflate';
 
-import { DEFAULT_AREA_COLOR, DEFAULT_PROJECT_COLOR } from './color-constants';
 import { safeParseDate } from './date';
+import { applyImport } from './import-apply';
 import { buildRRuleString, parseRRuleString } from './recurrence';
-import { ensureDeviceId, normalizeTagId } from './store-helpers';
+import { normalizeTagId } from './store-helpers';
 import type {
     AppData,
-    Area,
     ChecklistItem,
     Project,
     Recurrence,
@@ -1263,31 +1262,6 @@ const parseOmniFocusImportData = (
     return parseCsvImport(rawText, counters);
 };
 
-const resolveUniqueName = (title: string, usedTitles: Set<string>, fallback: string): string => {
-    const trimmed = title.trim() || fallback;
-    if (!usedTitles.has(trimmed.toLowerCase())) {
-        usedTitles.add(trimmed.toLowerCase());
-        return trimmed;
-    }
-
-    const base = `${trimmed}${OMNIFOCUS_IMPORT_SUFFIX}`;
-    if (!usedTitles.has(base.toLowerCase())) {
-        usedTitles.add(base.toLowerCase());
-        return base;
-    }
-
-    let suffix = 2;
-    while (true) {
-        const next = `${base} ${suffix}`;
-        const normalized = next.toLowerCase();
-        if (!usedTitles.has(normalized)) {
-            usedTitles.add(normalized);
-            return next;
-        }
-        suffix += 1;
-    }
-};
-
 const buildPreview = (fileName: string, parsedData: ParsedOmniFocusImportData): OmniFocusImportPreview => {
     const taskCountByProject = new Map<string, number>();
     let standaloneTaskCount = 0;
@@ -1351,180 +1325,23 @@ export const parseOmniFocusImportSource = (input: OmniFocusFileInput): OmniFocus
     }
 };
 
+// OmniFocus has no stable per-item source id to key off, so it always mints a fresh id (the
+// default in applyImport) — re-importing the same export creates duplicates, exactly as before.
 export const applyOmniFocusImport = (
     currentData: AppData,
     parsedData: ParsedOmniFocusImportData,
     options: { now?: Date | string } = {}
-): OmniFocusImportExecutionResult => {
-    const resolvedNow = options.now instanceof Date
-        ? options.now
-        : typeof options.now === 'string' && options.now.trim()
-            ? new Date(options.now)
-            : new Date();
-    const nowIso = Number.isFinite(resolvedNow.getTime()) ? resolvedNow.toISOString() : new Date().toISOString();
-    const deviceState = ensureDeviceId(currentData.settings ?? {});
-    const settings = deviceState.settings;
-    const nextData: AppData = {
-        tasks: [...currentData.tasks],
-        projects: [...currentData.projects],
-        sections: [...currentData.sections],
-        areas: [...currentData.areas],
-        people: [...(currentData.people ?? [])],
-        settings,
-    };
-
-    const usedAreaNames = new Set(
-        nextData.areas
-            .filter((area) => !area.deletedAt)
-            .map((area) => area.name.trim().toLowerCase())
-    );
-    const usedProjectTitles = new Set(
-        nextData.projects
-            .filter((project) => !project.deletedAt)
-            .map((project) => project.title.trim().toLowerCase())
-    );
-    const warnings = [...parsedData.warnings];
-    const areaIdBySourceKey = new Map<string, string>();
-    const projectIdBySourceKey = new Map<string, string>();
-    let importedAreaCount = 0;
-    let importedChecklistItemCount = 0;
-    let importedProjectCount = 0;
-    let importedTaskCount = 0;
-    let importedStandaloneTaskCount = 0;
-
-    const nextAreaOrder = nextData.areas
-        .filter((area) => !area.deletedAt)
-        .reduce((max, area) => Math.max(max, Number.isFinite(area.order) ? area.order : -1), -1) + 1;
-
-    parsedData.areas
-        .slice()
-        .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name))
-        .forEach((parsedArea, index) => {
-            const areaName = resolveUniqueName(parsedArea.name, usedAreaNames, OMNIFOCUS_AREA_FALLBACK);
-            if (areaName !== parsedArea.name) {
-                warnings.push(`Imported area "${parsedArea.name}" was renamed to "${areaName}" to avoid a name conflict.`);
-            }
-            const area: Area = {
-                id: uuidv4(),
-                name: areaName,
-                color: DEFAULT_AREA_COLOR,
-                order: nextAreaOrder + index,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                rev: 1,
-                revBy: deviceState.deviceId,
-            };
-            nextData.areas.push(area);
-            areaIdBySourceKey.set(parsedArea.sourceKey, area.id);
-            importedAreaCount += 1;
-        });
-
-    parsedData.projects
-        .slice()
-        .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name))
-        .forEach((parsedProject) => {
-            const areaId = parsedProject.areaSourceKey ? areaIdBySourceKey.get(parsedProject.areaSourceKey) : undefined;
-            const projectTitle = resolveUniqueName(parsedProject.name, usedProjectTitles, OMNIFOCUS_PROJECT_FALLBACK);
-            if (projectTitle !== parsedProject.name) {
-                warnings.push(`Imported project "${parsedProject.name}" was renamed to "${projectTitle}" to avoid a title conflict.`);
-            }
-            const siblingMaxOrder = nextData.projects
-                .filter((project) => !project.deletedAt && (project.areaId ?? undefined) === areaId)
-                .reduce((max, project) => Math.max(max, Number.isFinite(project.order) ? project.order : -1), -1);
-            const project: Project = {
-                id: uuidv4(),
-                title: projectTitle,
-                status: parsedProject.status,
-                color: DEFAULT_PROJECT_COLOR,
-                order: siblingMaxOrder + 1,
-                tagIds: parsedProject.tagIds,
-                supportNotes: parsedProject.supportNotes,
-                dueDate: parsedProject.dueDate,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                rev: 1,
-                revBy: deviceState.deviceId,
-                ...(areaId ? { areaId } : {}),
-            };
-            nextData.projects.push(project);
-            projectIdBySourceKey.set(parsedProject.sourceKey, project.id);
-            importedProjectCount += 1;
-        });
-
-    const nextTaskOrderByBucket = new Map<string, number>();
-    const getTaskBucketKey = (projectId?: string, areaId?: string): string => {
-        if (projectId) return `project:${projectId}`;
-        if (areaId) return `area:${areaId}`;
-        return 'inbox';
-    };
-    const allocateTaskOrder = (projectId?: string, areaId?: string): number => {
-        const bucket = getTaskBucketKey(projectId, areaId);
-        const cached = nextTaskOrderByBucket.get(bucket);
-        if (cached !== undefined) {
-            nextTaskOrderByBucket.set(bucket, cached + 1);
-            return cached;
-        }
-        const currentMax = nextData.tasks
-            .filter((task) => !task.deletedAt && (task.projectId ?? undefined) === projectId && (task.areaId ?? undefined) === areaId)
-            .reduce((max, task) => {
-                const candidate = typeof task.order === 'number'
-                    ? task.order
-                    : typeof task.orderNum === 'number'
-                        ? task.orderNum
-                        : -1;
-                return Math.max(max, candidate);
-            }, -1);
-        const nextOrder = currentMax + 1;
-        nextTaskOrderByBucket.set(bucket, nextOrder + 1);
-        return nextOrder;
-    };
-
-    parsedData.tasks
-        .slice()
-        .sort((left, right) => left.order - right.order || left.title.localeCompare(right.title))
-        .forEach((parsedTask) => {
-            const projectId = parsedTask.projectSourceKey ? projectIdBySourceKey.get(parsedTask.projectSourceKey) : undefined;
-            const areaId = !projectId && parsedTask.areaSourceKey ? areaIdBySourceKey.get(parsedTask.areaSourceKey) : undefined;
-            const order = allocateTaskOrder(projectId, areaId);
-            const task: Task = {
-                id: uuidv4(),
-                title: parsedTask.title,
-                status: parsedTask.status,
-                taskMode: parsedTask.checklist?.length ? 'list' : 'task',
-                priority: parsedTask.priority,
-                contexts: parsedTask.contexts,
-                tags: parsedTask.tags,
-                checklist: parsedTask.checklist,
-                description: parsedTask.description,
-                startTime: parsedTask.startTime,
-                dueDate: parsedTask.dueDate,
-                recurrence: parsedTask.recurrence,
-                completedAt: parsedTask.completedAt,
-                pushCount: 0,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                rev: 1,
-                revBy: deviceState.deviceId,
-                order,
-                orderNum: order,
-                ...(projectId ? { projectId } : {}),
-                ...(areaId ? { areaId } : {}),
-            };
-            nextData.tasks.push(task);
-            importedTaskCount += 1;
-            importedChecklistItemCount += parsedTask.checklist?.length ?? 0;
-            if (!projectId) {
-                importedStandaloneTaskCount += 1;
-            }
-        });
-
-    return {
-        data: nextData,
-        importedAreaCount,
-        importedChecklistItemCount,
-        importedProjectCount,
-        importedStandaloneTaskCount,
-        importedTaskCount,
-        warnings,
-    };
-};
+): OmniFocusImportExecutionResult => applyImport(
+    currentData,
+    {
+        areas: [...parsedData.areas].sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
+        projects: [...parsedData.projects].sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
+        tasks: [...parsedData.tasks].sort((left, right) => left.order - right.order || left.title.localeCompare(right.title)),
+        warnings: parsedData.warnings,
+    },
+    {
+        fallbacks: { area: OMNIFOCUS_AREA_FALLBACK, project: OMNIFOCUS_PROJECT_FALLBACK },
+        now: options.now,
+        suffix: OMNIFOCUS_IMPORT_SUFFIX,
+    }
+);

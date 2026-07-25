@@ -7,8 +7,6 @@ import {
     addBreadcrumb,
     createBackupFileName,
     flushPendingSave,
-    prepareRestoredBackupDataForSync,
-    runDataTransferTransaction,
     runDataTransferTransactionWithoutSnapshot,
     serializeBackupData,
     type AppData,
@@ -17,28 +15,28 @@ import {
     useTaskStore,
 } from '@mindwtr/core';
 import {
-    applyDgtImport,
+    runImport,
+    type DataTransferBoundaries,
+} from '@mindwtr/core/import-runner';
+import {
     parseDgtImportSource,
     type DgtImportExecutionResult,
     type DgtImportParseResult,
     type ParsedDgtImportData,
 } from '@mindwtr/core/dgt-import';
 import {
-    applyOmniFocusImport,
     parseOmniFocusImportSource,
     type OmniFocusImportExecutionResult,
     type OmniFocusImportParseResult,
     type ParsedOmniFocusImportData,
 } from '@mindwtr/core/omnifocus-import';
 import {
-    applyTodoistImport,
     parseTodoistImportSource,
     type ParsedTodoistProject,
     type TodoistImportExecutionResult,
     type TodoistImportParseResult,
 } from '@mindwtr/core/todoist-import';
 import {
-    applyTickTickImport,
     parseTickTickImportSource,
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
@@ -254,22 +252,12 @@ const mobileDataTransferBoundaries = () => ({
     onStale: logStaleDataTransfer,
 });
 
-const runMobileDataTransfer = async <TResult>(
-    operation: string,
-    apply: (currentData: AppData) => { data: AppData; result: TResult }
-): Promise<SnapshotApplyResult & { result: TResult }> => {
-    const transaction = await runDataTransferTransaction({
-        ...mobileDataTransferBoundaries(),
-        operation,
-        createRecoverySnapshot: saveCurrentDataSnapshot,
-        apply,
-    });
-
-    return {
-        snapshotName: transaction.snapshot,
-        result: transaction.result,
-    };
+const mobileBoundaries: DataTransferBoundaries = {
+    ...mobileDataTransferBoundaries(),
+    createRecoverySnapshot: saveCurrentDataSnapshot,
 };
+
+const mobileLog = { logInfo, logError };
 
 const runMobileDataTransferWithoutSnapshot = async (
     operation: string,
@@ -373,184 +361,47 @@ export const inspectOmniFocusDocument = async (
     });
 };
 
+// Mobile's snapshot writer never returns null (unlike desktop's Tauri-only snapshot), so the
+// shared `string | null` contract can be narrowed back for mobile's public result type.
 export const restoreDataFromBackup = async (backupData: AppData): Promise<SnapshotApplyResult> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('Backup restore started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'restoreBackup',
-            source: 'backup',
-        },
-    });
-    try {
-        const { snapshotName } = await runMobileDataTransfer('restoreBackup', () => {
-            return {
-                data: prepareRestoredBackupDataForSync(backupData),
-                result: undefined,
-            };
-        });
-        void logInfo('Backup restore complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'restoreBackup',
-                source: 'backup',
-                ...toCountExtra(backupData),
-            },
-        });
-        return { snapshotName };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'restoreBackup' } });
-        throw error;
-    }
+    const { snapshotName } = await runImport<AppData, AppData>('backup', backupData, mobileBoundaries, mobileLog);
+    return { snapshotName: snapshotName as string };
 };
 
 export const importTodoistData = async (
     parsedProjects: ParsedTodoistProject[]
 ): Promise<SnapshotApplyResult & { result: TodoistImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('Todoist import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importTodoist',
-            source: 'todoist',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runMobileDataTransfer('importTodoist', (currentData) => {
-            const result = applyTodoistImport(currentData, parsedProjects);
-            return { data: result.data, result };
-        });
-        void logInfo('Todoist import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importTodoist',
-                source: 'todoist',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                sections: String(result.importedSectionCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importTodoist' } });
-        throw error;
-    }
+    const { result, snapshotName } = await runImport<ParsedTodoistProject[], TodoistImportExecutionResult>(
+        'todoist', parsedProjects, mobileBoundaries, mobileLog
+    );
+    return { snapshotName: snapshotName as string, result };
 };
 
 export const importTickTickData = async (
     parsedData: ParsedTickTickImportData
 ): Promise<SnapshotApplyResult & { result: TickTickImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('TickTick import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importTickTick',
-            source: 'ticktick',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runMobileDataTransfer('importTickTick', (currentData) => {
-            const result = applyTickTickImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('TickTick import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importTickTick',
-                source: 'ticktick',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importTickTick' } });
-        throw error;
-    }
+    const { result, snapshotName } = await runImport<ParsedTickTickImportData, TickTickImportExecutionResult>(
+        'ticktick', parsedData, mobileBoundaries, mobileLog
+    );
+    return { snapshotName: snapshotName as string, result };
 };
 
 export const importDgtData = async (
     parsedData: ParsedDgtImportData
 ): Promise<SnapshotApplyResult & { result: DgtImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('DGT import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importDgt',
-            source: 'dgt',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runMobileDataTransfer('importDgt', (currentData) => {
-            const result = applyDgtImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('DGT import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importDgt',
-                source: 'dgt',
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importDgt' } });
-        throw error;
-    }
+    const { result, snapshotName } = await runImport<ParsedDgtImportData, DgtImportExecutionResult>(
+        'dgt', parsedData, mobileBoundaries, mobileLog
+    );
+    return { snapshotName: snapshotName as string, result };
 };
 
 export const importOmniFocusData = async (
     parsedData: ParsedOmniFocusImportData
 ): Promise<SnapshotApplyResult & { result: OmniFocusImportExecutionResult }> => {
-    addBreadcrumb('transfer:restore');
-    void logInfo('OmniFocus import started', {
-        scope: 'transfer',
-        extra: {
-            operation: 'importOmniFocus',
-            source: 'omnifocus',
-        },
-    });
-    try {
-        const { result, snapshotName } = await runMobileDataTransfer('importOmniFocus', (currentData) => {
-            const result = applyOmniFocusImport(currentData, parsedData);
-            return { data: result.data, result };
-        });
-        void logInfo('OmniFocus import complete', {
-            scope: 'transfer',
-            extra: {
-                operation: 'importOmniFocus',
-                source: 'omnifocus',
-                areas: String(result.importedAreaCount),
-                checklistItems: String(result.importedChecklistItemCount),
-                tasks: String(result.importedTaskCount),
-                projects: String(result.importedProjectCount),
-                standaloneTasks: String(result.importedStandaloneTaskCount),
-            },
-        });
-        return {
-            snapshotName,
-            result,
-        };
-    } catch (error) {
-        void logError(error, { scope: 'transfer', extra: { operation: 'importOmniFocus' } });
-        throw error;
-    }
+    const { result, snapshotName } = await runImport<ParsedOmniFocusImportData, OmniFocusImportExecutionResult>(
+        'omnifocus', parsedData, mobileBoundaries, mobileLog
+    );
+    return { snapshotName: snapshotName as string, result };
 };
 
 export const listLocalDataSnapshots = async (): Promise<string[]> => {

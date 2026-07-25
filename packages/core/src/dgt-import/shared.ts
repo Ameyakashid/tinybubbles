@@ -455,32 +455,3 @@ export const resolveTaskStatus = (
   return { status: 'inbox' };
 };
 
-export const resolveUniqueName = (title: string, usedTitles: Set<string>, fallback: string): string => {
-  const trimmed = title.trim() || fallback;
-  if (!usedTitles.has(trimmed.toLowerCase())) {
-    usedTitles.add(trimmed.toLowerCase());
-    return trimmed;
-  }
-
-  const base = `${trimmed}${DGT_IMPORT_SUFFIX}`;
-  if (!usedTitles.has(base.toLowerCase())) {
-    usedTitles.add(base.toLowerCase());
-    return base;
-  }
-
-  let suffix = 2;
-  while (true) {
-    const next = `${base} ${suffix}`;
-    const normalized = next.toLowerCase();
-    if (!usedTitles.has(normalized)) {
-      usedTitles.add(normalized);
-      return next;
-    }
-    suffix += 1;
-  }
-};
-
-export const resolveTimestamp = (value: string | undefined, fallback: string): string => {
-  const parsed = safeParseDate(value);
-  return parsed ? (value as string) : fallback;
-};
