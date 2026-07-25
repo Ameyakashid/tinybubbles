@@ -1,3 +1,5 @@
+import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@mindwtr/core/whisper-models';
+
 import type { Language } from '@/contexts/language-context';
 
 export type SettingsScreen =
@@ -148,13 +150,16 @@ export const LANGUAGES: { id: Language; native: string }[] = [
     { id: 'nl', native: 'Nederlands' },
 ];
 
-export const WHISPER_MODEL_BASE_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
-export const WHISPER_MODELS: { id: string; fileName: string; label: string; minBytes: number; sha256: string; sizeBytes: number }[] = [
-    { id: 'whisper-tiny', fileName: 'ggml-tiny.bin', label: 'whisper-tiny', minBytes: 77691713, sizeBytes: 77691713, sha256: 'be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21' },
-    { id: 'whisper-tiny.en', fileName: 'ggml-tiny.en.bin', label: 'whisper-tiny.en', minBytes: 77704715, sizeBytes: 77704715, sha256: '921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f' },
-    { id: 'whisper-base', fileName: 'ggml-base.bin', label: 'whisper-base', minBytes: 147951465, sizeBytes: 147951465, sha256: '60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe' },
-    { id: 'whisper-base.en', fileName: 'ggml-base.en.bin', label: 'whisper-base.en', minBytes: 147964211, sizeBytes: 147964211, sha256: 'a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002' },
-];
+export { WHISPER_MODEL_BASE_URL };
+
+// Mobile only offers the small models people can realistically download over
+// a phone connection — the full catalogue (including whisper-large-v3-turbo,
+// desktop-only) lives in core as the single source of truth for hashes and
+// sizes. This subset is a product decision, not a data copy: the numbers
+// themselves always come from @mindwtr/core/whisper-models.
+const MOBILE_WHISPER_MODEL_IDS = new Set(['whisper-tiny', 'whisper-tiny.en', 'whisper-base', 'whisper-base.en']);
+export const WHISPER_MODELS: WhisperModelDescriptor[] = CORE_WHISPER_MODELS
+    .filter((model) => MOBILE_WHISPER_MODEL_IDS.has(model.id));
 export const DEFAULT_WHISPER_MODEL = WHISPER_MODELS[0]?.id ?? 'whisper-tiny';
 
 export const UPDATE_BADGE_AVAILABLE_KEY = 'mindwtr-update-available';

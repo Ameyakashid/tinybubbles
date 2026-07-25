@@ -32,6 +32,8 @@ export type WhisperModelNativeStatResult = {
     isDirectory?: () => boolean;
 };
 
+export type WhisperModelDownloadProgress = { bytesWritten: number; contentLength?: number };
+
 export type WhisperModelNativeFs = {
     downloadFile: (options: {
         fromUrl: string;
@@ -40,6 +42,8 @@ export type WhisperModelNativeFs = {
         cacheable?: boolean;
         readTimeout?: number;
         backgroundTimeout?: number;
+        progress?: (progress: WhisperModelDownloadProgress) => void;
+        progressDivider?: number;
     }) => { promise: Promise<WhisperModelNativeDownloadResult> };
     stat?: (path: string) => Promise<WhisperModelNativeStatResult>;
 };
@@ -200,32 +204,27 @@ export type WhisperModelExpoDownloadFile<TFile extends WhisperModelDownloadFile>
     options?: { idempotent?: boolean }
 ) => Promise<TFile>;
 
-export const toWhisperNativeDownloadPath = (uri: string): string => {
-    let nativePath = uri;
-    if (uri.startsWith('file://')) {
-        nativePath = uri.slice('file://'.length);
-    } else if (uri.startsWith('file:/')) {
-        nativePath = uri.replace(/^file:\//u, '/');
-    }
-    try {
-        return decodeURI(nativePath);
-    } catch {
-        return nativePath;
-    }
-};
-
 export const downloadWhisperModelFile = async <TFile extends WhisperModelDownloadFile>({
     url,
     targetFile,
+    nativeTargetPath,
     nativeFs,
     resolveDownloadUrl,
     logger,
+    onProgress,
 }: {
     url: string;
     targetFile: TFile;
+    // Native fs (react-native-fs) wants a bare, percent-decoded filesystem path, not
+    // a file:// URI. Callers own URI<->path normalization (apps/mobile/lib/
+    // whisper-model-store.ts is the one implementation) and pass the result in here,
+    // so this module stays a pure download primitive with no path-normalization
+    // logic of its own.
+    nativeTargetPath: string;
     nativeFs?: WhisperModelNativeFs | null;
     resolveDownloadUrl?: WhisperModelResolveDownloadUrl;
     logger?: WhisperModelDownloadLogger;
+    onProgress?: (loaded: number, total?: number) => void;
     expoDownloadFile: WhisperModelExpoDownloadFile<TFile>;
 }): Promise<WhisperModelDownloadSuccess<TFile>> => {
     const downloadFile = nativeFs?.downloadFile;
@@ -248,7 +247,6 @@ export const downloadWhisperModelFile = async <TFile extends WhisperModelDownloa
         }
     }
 
-    const nativeTargetPath = toWhisperNativeDownloadPath(targetFile.uri);
     const startedAt = Date.now();
     await emitDownloadLog(logger, 'native-download-start', {
         originalUrlParts: describeWhisperDownloadUrl(url),
@@ -266,6 +264,10 @@ export const downloadWhisperModelFile = async <TFile extends WhisperModelDownloa
             cacheable: false,
             readTimeout: 10 * 60 * 1000,
             backgroundTimeout: 30 * 60 * 1000,
+            ...(onProgress ? {
+                progress: (progress) => onProgress(progress.bytesWritten, progress.contentLength),
+                progressDivider: 10,
+            } : {}),
         }).promise;
         const statusCode = result.statusCode;
         await emitDownloadLog(logger, 'native-download-complete', {

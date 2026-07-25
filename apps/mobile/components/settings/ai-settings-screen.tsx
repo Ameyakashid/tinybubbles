@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Constants from 'expo-constants';
-import { Directory, File, Paths } from 'expo-file-system';
-import { Alert, KeyboardAvoidingView, Modal, NativeModules, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,204 +24,23 @@ import { loadAIKey, saveAIKey } from '@/lib/ai-config';
 import { useToast } from '@/contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { logSettingsError, logSettingsWarn } from '@/lib/settings-utils';
+import * as whisperModelStore from '@/lib/whisper-model-store';
+import type { WhisperModelLocation } from '@/lib/whisper-model-store';
 
 import { AiSettingsAssistantCard } from './ai-settings-assistant-card';
 import { AiSettingsSpeechCard } from './ai-settings-speech-card';
-import {
-    downloadWhisperModelFile,
-    isWhisperModelFileReady,
-    isWhisperModelSafeDeleteTarget,
-    resolveWhisperModelDownloadUrl,
-    resolveWhisperNativeFsModule,
-    resolveWhisperNativeHashModule,
-    verifyWhisperModelFileHash,
-    type WhisperModelNativeFs,
-    type WhisperModelNativeHashFs,
-    type WhisperModelPathInfo,
-} from './ai-settings-whisper-model';
+import { isWhisperModelFileReady } from './ai-settings-whisper-model';
 import {
     AI_PROVIDER_CONSENT_KEY,
     DEFAULT_WHISPER_MODEL,
     FOSS_LOCAL_LLM_COPILOT_OPTIONS,
     FOSS_LOCAL_LLM_MODEL_OPTIONS,
     MobileExtraConfig,
-    WHISPER_MODEL_BASE_URL,
     WHISPER_MODELS,
 } from './settings.constants';
 import { useSettingsLocalization, useSettingsScrollContent } from './settings.hooks';
 import { SettingsTopBar } from './settings.shell';
 import { styles } from './settings.styles';
-
-type RNFSModule = typeof import('react-native-fs');
-let rnfsModuleCache: unknown | null | undefined;
-let rnfsHashModuleCache: WhisperModelNativeHashFs | null | undefined;
-let rnfsDownloadModuleCache: WhisperModelNativeFs | null | undefined;
-
-const buildWhisperModelDirectoryUri = (rootUri: string): string => {
-    const normalized = rootUri.endsWith('/') ? rootUri : `${rootUri}/`;
-    return `${normalized}whisper-models`;
-};
-
-const hasRNFSNativeModule = (): boolean => Boolean(
-    (NativeModules as Record<string, unknown> | undefined)?.RNFSManager
-);
-
-const getRNFSModule = (): unknown | null => {
-    if (rnfsModuleCache !== undefined) return rnfsModuleCache;
-    if (!hasRNFSNativeModule()) {
-        rnfsModuleCache = null;
-        return null;
-    }
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        rnfsModuleCache = require('react-native-fs') as RNFSModule;
-        return rnfsModuleCache;
-    } catch {
-        rnfsModuleCache = null;
-        return null;
-    }
-};
-
-const getRNFSHashModule = (): WhisperModelNativeHashFs | null => {
-    if (rnfsHashModuleCache !== undefined) return rnfsHashModuleCache;
-    rnfsHashModuleCache = resolveWhisperNativeHashModule(getRNFSModule());
-    return rnfsHashModuleCache;
-};
-
-const getRNFSDownloadModule = (): WhisperModelNativeFs | null => {
-    if (rnfsDownloadModuleCache !== undefined) return rnfsDownloadModuleCache;
-    rnfsDownloadModuleCache = resolveWhisperNativeFsModule(getRNFSModule());
-    return rnfsDownloadModuleCache;
-};
-
-const toNativeHashPath = (uri: string): string => {
-    if (uri.startsWith('file://')) return uri.replace(/^file:\/\//u, '');
-    if (uri.startsWith('file:/')) return uri.replace(/^file:\//u, '/');
-    return uri;
-};
-
-const hashWhisperModelFile = async (uri: string): Promise<string> => {
-    const rnfs = getRNFSHashModule();
-    if (!rnfs) {
-        throw new Error('Whisper model hashing is unavailable in this build. Use a dev build or production build.');
-    }
-    return rnfs.hash(toNativeHashPath(uri), 'sha256');
-};
-
-const getWhisperNativePathInfo = async (uri: string): Promise<WhisperModelPathInfo | null> => {
-    const rnfs = getRNFSDownloadModule();
-    if (!rnfs || typeof rnfs.stat !== 'function') {
-        return null;
-    }
-    const nativePath = toNativeHashPath(uri);
-    try {
-        const stat = await rnfs.stat(nativePath);
-        const isDirectory = typeof stat.isDirectory === 'function' ? stat.isDirectory() : false;
-        const isFile = typeof stat.isFile === 'function' ? stat.isFile() : !isDirectory;
-        const size = typeof stat.size === 'number' && Number.isFinite(stat.size) ? stat.size : 0;
-        return {
-            exists: Boolean(isFile || isDirectory),
-            isDirectory,
-            size,
-        };
-    } catch {
-        return null;
-    }
-};
-
-const getWhisperDirectories = () => {
-    const candidates: Directory[] = [];
-    try {
-        candidates.push(new Directory(buildWhisperModelDirectoryUri(Paths.document.uri)));
-    } catch (error) {
-        logSettingsWarn('Whisper document directory unavailable', error);
-    }
-    try {
-        candidates.push(new Directory(buildWhisperModelDirectoryUri(Paths.cache.uri)));
-    } catch (error) {
-        logSettingsWarn('Whisper cache directory unavailable', error);
-    }
-    return candidates;
-};
-
-const getWhisperDirectory = () => {
-    const candidates = getWhisperDirectories();
-    return candidates.length ? candidates[0] : null;
-};
-
-const normalizeWhisperPath = (uri: string) => {
-    if (uri.startsWith('file://')) return uri;
-    if (uri.startsWith('file:/')) {
-        const stripped = uri.replace(/^file:\//, '/');
-        return `file://${stripped}`;
-    }
-    if (uri.startsWith('/')) {
-        return `file://${uri}`;
-    }
-    return uri;
-};
-
-const safePathInfo = (uri: string) => {
-    const normalized = normalizeWhisperPath(uri);
-    let pathInfo: ReturnType<typeof Paths.info> | null = null;
-    try {
-        pathInfo = Paths.info(normalized);
-    } catch (error) {
-        logSettingsWarn('Whisper path info failed', error);
-    }
-    try {
-        const file = new File(normalized);
-        if (file.exists) {
-            const size = typeof file.size === 'number' && Number.isFinite(file.size) && file.size > 0
-                ? file.size
-                : (pathInfo && 'size' in pathInfo && typeof pathInfo.size === 'number' ? pathInfo.size : undefined);
-            return { exists: true, isDirectory: false, size };
-        }
-    } catch {
-    }
-    try {
-        const dir = new Directory(normalized);
-        if (dir.exists) {
-            return { exists: true, isDirectory: true, size: 0 };
-        }
-    } catch {
-    }
-    return pathInfo ?? null;
-};
-
-const resolveWhisperModelPath = (modelId: string) => {
-    const model = WHISPER_MODELS.find((entry) => entry.id === modelId);
-    if (!model) return undefined;
-    const base = getWhisperDirectory();
-    if (!base) return undefined;
-    const baseUri = base.uri.endsWith('/') ? base.uri : `${base.uri}/`;
-    return new File(`${baseUri}${model.fileName}`).uri;
-};
-
-const findExistingWhisperModelPath = (modelId: string) => {
-    const model = WHISPER_MODELS.find((entry) => entry.id === modelId);
-    if (!model) return undefined;
-    const fileName = model.fileName;
-    const candidates: string[] = [];
-    const appendCandidates = (base?: string | null) => {
-        if (!base) return;
-        const normalized = base.endsWith('/') ? base : `${base}/`;
-        candidates.push(`${normalized}whisper-models/${fileName}`);
-        candidates.push(`${normalized}${fileName}`);
-    };
-    appendCandidates(Paths.document?.uri ?? null);
-    appendCandidates(Paths.cache?.uri ?? null);
-    for (const candidate of candidates) {
-        try {
-            const info = safePathInfo(candidate);
-            if (isWhisperModelFileReady(model, info)) {
-                return candidate;
-            }
-        } catch {
-        }
-    }
-    return undefined;
-};
 
 
 export function AISettingsScreen() {
@@ -238,7 +56,6 @@ export function AISettingsScreen() {
     const [speechApiKey, setSpeechApiKey] = useState('');
     const [whisperDownloadState, setWhisperDownloadState] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
     const [whisperDownloadError, setWhisperDownloadError] = useState('');
-    const [whisperNativePathInfo, setWhisperNativePathInfo] = useState<{ uri: string; info: WhisperModelPathInfo } | null>(null);
     const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
     const [speechOpen, setSpeechOpen] = useState(false);
     const [modelPicker, setModelPicker] = useState<null | 'model' | 'copilot' | 'speech'>(null);
@@ -484,111 +301,8 @@ export function AISettingsScreen() {
         });
     }, [updateAISettings]);
 
-    const normalizeWhisperDirectoryUri = (uri: string) => normalizeWhisperPath(uri).replace(/\/+$/u, '');
-
-    const isKnownWhisperDirectoryTarget = (uri: string) => {
-        const normalized = normalizeWhisperDirectoryUri(uri);
-        return getWhisperDirectories().some((directory) => normalizeWhisperDirectoryUri(directory.uri) === normalized);
-    };
-
-    const unlinkWhisperPathWithNativeFs = async (uri: string) => {
-        const rnfs = getRNFSModule() as { unlink?: (path: string) => Promise<void> } | null;
-        if (typeof rnfs?.unlink !== 'function') return false;
-        await rnfs.unlink(toNativeHashPath(uri));
-        return true;
-    };
-
-    const cleanupWhisperDirectoryBlockingFile = async (uri: string, _reason: string) => {
-        const normalized = normalizeWhisperDirectoryUri(uri);
-        if (!isKnownWhisperDirectoryTarget(normalized)) {
-            logSettingsWarn('Refusing to repair unsafe Whisper model directory target', new Error(normalized));
-            return false;
-        }
-        const expoInfo = safePathInfo(normalized);
-        const nativeInfo = expoInfo?.exists && expoInfo.isDirectory === true
-            ? null
-            : await getWhisperNativePathInfo(normalized);
-        const exists = Boolean(expoInfo?.exists || nativeInfo?.exists);
-        const isDirectory = expoInfo?.isDirectory === true || nativeInfo?.isDirectory === true;
-        if (!exists || isDirectory) return false;
-        let deleted = false;
-        try {
-            new File(normalized).delete();
-            deleted = true;
-        } catch (error) {
-            logSettingsWarn('Whisper model directory file cleanup with Expo failed', error);
-        }
-        if (!deleted) {
-            try {
-                deleted = await unlinkWhisperPathWithNativeFs(normalized);
-            } catch (error) {
-                logSettingsWarn('Whisper model directory file cleanup with native fs failed', error);
-            }
-        }
-        const afterExpo = safePathInfo(normalized);
-        const afterNative = afterExpo?.exists && afterExpo.isDirectory === true
-            ? null
-            : await getWhisperNativePathInfo(normalized);
-        const repaired = !afterExpo?.exists && !afterNative?.exists
-            || afterExpo?.isDirectory === true
-            || afterNative?.isDirectory === true;
-        return repaired;
-    };
-
-    const ensureWhisperDownloadDirectory = async (directory: Directory) => {
-        const createDirectory = () => directory.create({ intermediates: true, idempotent: true });
-        const info = safePathInfo(directory.uri);
-        if (info?.exists && info.isDirectory === false) {
-            await cleanupWhisperDirectoryBlockingFile(directory.uri, 'pre-create');
-        }
-        try {
-            createDirectory();
-        } catch (error) {
-            const repaired = await cleanupWhisperDirectoryBlockingFile(directory.uri, 'create-failed');
-            if (!repaired) throw error;
-            createDirectory();
-        }
-        const afterInfo = safePathInfo(directory.uri);
-        const afterNativeInfo = afterInfo?.isDirectory === true ? null : await getWhisperNativePathInfo(directory.uri);
-        const ready = afterInfo?.isDirectory === true || afterNativeInfo?.isDirectory === true;
-        if (!ready) {
-            throw new Error(`Whisper model directory is blocked by a file: ${normalizeWhisperDirectoryUri(directory.uri)}`);
-        }
-    };
-
-    const isWhisperModelFilePath = (uri?: string) => {
-        if (!uri) return false;
-        const baseName = Paths.basename(uri);
-        return Boolean(baseName && baseName.endsWith('.bin'));
-    };
-
-    const getWhisperTargetUris = (fileName: string) => getWhisperDirectories().map((directory) => {
-        const dirUri = directory.uri.endsWith('/') ? directory.uri : `${directory.uri}/`;
-        return `${dirUri}${fileName}`;
-    });
-
-    const isSafeWhisperModelTarget = (uri: string, model: (typeof WHISPER_MODELS)[number]) => isWhisperModelSafeDeleteTarget({
-        uri: normalizeWhisperPath(uri),
-        fileName: model.fileName,
-        allowedUris: getWhisperTargetUris(model.fileName).map(normalizeWhisperPath),
-    });
-
-    const getWhisperPathInfoSize = (info: unknown): number => {
-        if (!info || typeof info !== 'object') return 0;
-        const size = (info as { size?: unknown }).size;
-        return typeof size === 'number' ? size : 0;
-    };
-
-    const getWhisperReadiness = (model: (typeof WHISPER_MODELS)[number], uri: string) => {
-        const info = safePathInfo(uri);
-        return {
-            info,
-            ready: isWhisperModelFileReady(model, info),
-        };
-    };
-
     const applyWhisperModel = (modelId: string) => {
-        updateSpeechSettings({ model: modelId, offlineModelPath: resolveWhisperModelPath(modelId) });
+        updateSpeechSettings({ model: modelId, offlineModelPath: whisperModelStore.getPreferredModelUri(modelId) });
     };
 
     const handleSpeechProviderChange = useCallback((provider: 'openai' | 'gemini' | 'whisper') => {
@@ -600,7 +314,7 @@ export function AISettingsScreen() {
                     ? 'gemini-2.5-flash'
                     : DEFAULT_WHISPER_MODEL,
             offlineModelPath: provider === 'whisper'
-                ? resolveWhisperModelPath(DEFAULT_WHISPER_MODEL)
+                ? whisperModelStore.getPreferredModelUri(DEFAULT_WHISPER_MODEL)
                 : undefined,
         });
     }, [updateSpeechSettings]);
@@ -616,77 +330,57 @@ export function AISettingsScreen() {
         updateSpeechSettings({ language: trimmed ? trimmed : 'auto' });
     }, [updateSpeechSettings]);
 
+    const selectedWhisperModel = WHISPER_MODELS.find((model) => model.id === speechModel) ?? WHISPER_MODELS[0];
+
+    // Lazy initializer runs synchronously on first render, so a model that's
+    // already downloaded shows "ready" from frame one instead of flashing
+    // "not downloaded" until the effect below confirms it. locateSync is the
+    // same Expo-only fast path locate() itself uses before falling back to
+    // the native RNFS pass.
+    const [whisperResolved, setWhisperResolved] = useState<WhisperModelLocation | null>(() => (
+        speechProvider === 'whisper' && selectedWhisperModel
+            ? whisperModelStore.locateSync(speechModel, speechSettings.offlineModelPath)
+            : null
+    ));
+
+    // Single source of "where is the model, and is it there": locate() runs the
+    // whole candidate ladder (Expo sync pass, then native RNFS pass per ADR 0019
+    // #10) and, if the stored path has drifted from where the file actually is
+    // (or nowhere), reconciles offlineModelPath to match.
     useEffect(() => {
-        if (speechProvider !== 'whisper') return;
-        const storedPath = speechSettings.offlineModelPath;
-        if (!storedPath) return;
-        const info = safePathInfo(storedPath);
-        if (info?.exists && info.isDirectory) {
-            const resolved = resolveWhisperModelPath(speechModel);
-            if (resolved && resolved !== storedPath) {
-                updateSpeechSettings({ offlineModelPath: resolved });
-            }
+        if (speechProvider !== 'whisper' || !selectedWhisperModel) {
+            setWhisperResolved(null);
             return;
         }
-        if (!info?.exists || info.isDirectory) {
-            const existing = findExistingWhisperModelPath(speechModel);
-            if (existing && existing !== storedPath) {
-                updateSpeechSettings({ offlineModelPath: existing });
-                return;
-            }
-        }
-        if (!isWhisperModelFilePath(storedPath)) {
-            const resolved = resolveWhisperModelPath(speechModel);
-            if (resolved && resolved !== storedPath) {
-                updateSpeechSettings({ offlineModelPath: resolved });
-            }
-        }
-    }, [speechModel, speechProvider, speechSettings.offlineModelPath, updateSpeechSettings]);
-
-    const selectedWhisperModel = WHISPER_MODELS.find((model) => model.id === speechModel) ?? WHISPER_MODELS[0];
-    const whisperModelPath = speechProvider === 'whisper'
-        ? (speechSettings.offlineModelPath ?? resolveWhisperModelPath(speechModel))
-        : undefined;
-
-    useEffect(() => {
         let cancelled = false;
-        const normalizedPath = whisperModelPath ? normalizeWhisperPath(whisperModelPath) : '';
-        if (speechProvider !== 'whisper' || !normalizedPath || !selectedWhisperModel) {
-            setWhisperNativePathInfo(null);
-            return () => {
-                cancelled = true;
-            };
-        }
-        const expoInfo = safePathInfo(normalizedPath);
-        if (isWhisperModelFileReady(selectedWhisperModel, expoInfo)) {
-            setWhisperNativePathInfo(null);
-            return () => {
-                cancelled = true;
-            };
-        }
-        void getWhisperNativePathInfo(normalizedPath).then((info) => {
+        const storedPath = speechSettings.offlineModelPath;
+        // Re-seed with the sync fast path immediately (covers switching models
+        // mid-session, where the lazy initializer above only ran once at mount)
+        // before the slower native-confirming pass lands.
+        setWhisperResolved(whisperModelStore.locateSync(speechModel, storedPath));
+        void whisperModelStore.locate(speechModel, storedPath).then((resolved) => {
             if (cancelled) return;
-            setWhisperNativePathInfo(info ? { uri: normalizedPath, info } : null);
+            setWhisperResolved(resolved);
+            if (!storedPath) return;
+            const nextPath = resolved.exists ? resolved.uri : whisperModelStore.getPreferredModelUri(speechModel);
+            if (nextPath && nextPath !== storedPath) {
+                updateSpeechSettings({ offlineModelPath: nextPath });
+            }
         });
         return () => {
             cancelled = true;
         };
-    }, [speechModel, speechProvider, whisperModelPath, selectedWhisperModel]);
+    }, [speechModel, speechProvider, selectedWhisperModel, speechSettings.offlineModelPath, updateSpeechSettings]);
 
-    let whisperDownloaded = false;
-    let whisperSizeLabel = '';
-    if (whisperModelPath && selectedWhisperModel) {
-        const normalizedPath = normalizeWhisperPath(whisperModelPath);
-        const { info, ready } = getWhisperReadiness(selectedWhisperModel, normalizedPath);
-        const nativeInfo = whisperNativePathInfo?.uri === normalizedPath ? whisperNativePathInfo.info : null;
-        const nativeReady = isWhisperModelFileReady(selectedWhisperModel, nativeInfo);
-        whisperDownloaded = ready || nativeReady;
-        const size = getWhisperPathInfoSize(ready ? info : (nativeInfo ?? info));
-        if (whisperDownloaded && size > 0) {
-            whisperSizeLabel = `${(size / (1024 * 1024)).toFixed(1)} MB`;
-        }
-    }
-
+    // A file can exist without being a complete model (interrupted download) —
+    // validate the exact expected byte count, not just presence.
+    const whisperDownloaded = Boolean(selectedWhisperModel && whisperResolved && isWhisperModelFileReady(
+        selectedWhisperModel,
+        { exists: whisperResolved.exists, isDirectory: false, size: whisperResolved.size }
+    ));
+    const whisperSizeLabel = whisperDownloaded && whisperResolved && whisperResolved.size > 0
+        ? `${(whisperResolved.size / (1024 * 1024)).toFixed(1)} MB`
+        : '';
 
     const handleDownloadWhisperModel = async () => {
         if (!selectedWhisperModel) return;
@@ -709,108 +403,21 @@ export function AISettingsScreen() {
             setTimeout(() => setWhisperDownloadState('idle'), 2000);
         };
         try {
-            const directories = getWhisperDirectories();
-            if (!directories.length) {
-                throw new Error('Whisper storage unavailable');
-            }
-            const fileName = selectedWhisperModel.fileName;
-            if (!fileName) {
-                throw new Error('Whisper model filename missing');
-            }
-            const url = `${WHISPER_MODEL_BASE_URL}/${fileName}`;
-            let lastError: Error | null = null;
-            for (const directory of directories) {
-                try {
-                    await ensureWhisperDownloadDirectory(directory);
-                    const dirUri = directory.uri.endsWith('/') ? directory.uri : `${directory.uri}/`;
-                    const targetFile = new File(`${dirUri}${fileName}`);
-                    const conflictInfo = safePathInfo(targetFile.uri);
-                    const safeTarget = isSafeWhisperModelTarget(targetFile.uri, selectedWhisperModel);
-                    if (conflictInfo?.exists && conflictInfo.isDirectory) {
-                        throw new Error(tr('settings.aiMobile.offlineModelPathIsFolder', { path: targetFile.uri }));
-                    }
-                    if (!safeTarget) {
-                        throw new Error(tr('settings.aiMobile.offlineModelPathIsUnsafe', { path: targetFile.uri }));
-                    }
-                    const existingInfo = safePathInfo(targetFile.uri);
-                    const existingNativeInfo = existingInfo?.exists ? null : await getWhisperNativePathInfo(targetFile.uri);
-                    const existingReady = isWhisperModelFileReady(selectedWhisperModel, existingInfo)
-                        || isWhisperModelFileReady(selectedWhisperModel, existingNativeInfo);
-                    if ((existingInfo?.exists && existingInfo.isDirectory === false) || existingNativeInfo?.exists) {
-                        if (existingReady) {
-                            try {
-                                await verifyWhisperModelFileHash(selectedWhisperModel, targetFile.uri, hashWhisperModelFile);
-                                updateSpeechSettings({ offlineModelPath: targetFile.uri, model: selectedWhisperModel.id });
-                                setWhisperNativePathInfo(existingNativeInfo ? { uri: normalizeWhisperPath(targetFile.uri), info: existingNativeInfo } : null);
-                                setWhisperDownloadState('success');
-                                clearSuccess();
-                                return;
-                            } catch (error) {
-                                logSettingsWarn('Whisper existing model hash verification failed', error);
-                            }
-                        }
-                        try {
-                            targetFile.delete();
-                        } catch (error) {
-                            logSettingsWarn('Whisper incomplete file cleanup failed', error);
-                        }
-                    }
-                    try {
-                        const nativeDownloadModule = getRNFSDownloadModule();
-                        const downloadResult = await downloadWhisperModelFile({
-                            url,
-                            targetFile,
-                            nativeFs: nativeDownloadModule,
-                            resolveDownloadUrl: resolveWhisperModelDownloadUrl,
-                            expoDownloadFile: async (downloadUrl, destination, options) => {
-                                await File.downloadFileAsync(downloadUrl, destination, options);
-                                return destination;
-                            },
-                        });
-                        const { file, bytesWritten } = downloadResult;
-                        const downloadedInfo = safePathInfo(file.uri);
-                        const nativeDownloadedInfo = await getWhisperNativePathInfo(file.uri);
-                        const expoReady = isWhisperModelFileReady(selectedWhisperModel, downloadedInfo, bytesWritten);
-                        const nativeReady = isWhisperModelFileReady(selectedWhisperModel, nativeDownloadedInfo, bytesWritten);
-                        const ready = expoReady || nativeReady;
-                        if (!ready) {
-                            try {
-                                file.delete();
-                            } catch (error) {
-                                logSettingsWarn('Whisper incomplete download cleanup failed', error);
-                            }
-                            throw new Error('Downloaded Whisper model file looks incomplete. Please retry on Wi-Fi.');
-                        }
-                        try {
-                            await verifyWhisperModelFileHash(selectedWhisperModel, file.uri, hashWhisperModelFile);
-                        } catch (error) {
-                            try {
-                                file.delete();
-                            } catch (cleanupError) {
-                                logSettingsWarn('Whisper failed integrity cleanup failed', cleanupError);
-                            }
-                            throw error;
-                        }
-                        updateSpeechSettings({ offlineModelPath: file.uri, model: selectedWhisperModel.id });
-                        setWhisperNativePathInfo(nativeDownloadedInfo ? { uri: normalizeWhisperPath(file.uri), info: nativeDownloadedInfo } : null);
-                    } catch (downloadError) {
-                        const fallbackMessage = tr('settings.aiMobile.downloadFailedPleaseRetryOnWiFiLargeModelsCannot');
-                        throw new Error(downloadError instanceof Error
-                            ? `${fallbackMessage}
-${downloadError.message}`
-                            : fallbackMessage);
-                    }
-                    setWhisperDownloadState('success');
-                    clearSuccess();
-                    return;
-                } catch (error) {
-                    lastError = error instanceof Error ? error : new Error(String(error));
-                    logSettingsWarn('Whisper model download failed', error);
-                }
-            }
-            throw lastError ?? new Error('Whisper storage unavailable');
+            const downloadedUri = await whisperModelStore.download(selectedWhisperModel.id);
+            updateSpeechSettings({ offlineModelPath: downloadedUri, model: selectedWhisperModel.id });
+            setWhisperResolved(await whisperModelStore.locate(selectedWhisperModel.id, downloadedUri));
+            setWhisperDownloadState('success');
+            clearSuccess();
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            // The store cannot translate, so the actionable hint lives here — but only
+            // for the store's retryOnWifi-tagged errors (the actual network/streaming
+            // attempt), matching the pre-store code's scope: a setup/safety failure
+            // (blocked directory, unsafe target) isn't a network issue and "retry on
+            // Wi-Fi" would be misleading for it.
+            const detail = error instanceof Error ? error.message : String(error);
+            const message = error instanceof Error && (error as whisperModelStore.WhisperDownloadError).retryOnWifi
+                ? `${tr('settings.aiMobile.downloadFailedPleaseRetryOnWiFiLargeModelsCannot')}\n${detail}`
+                : detail;
             setWhisperDownloadError(message);
             setWhisperDownloadState('error');
             logSettingsWarn('Whisper model download failed', error);
@@ -823,17 +430,12 @@ ${downloadError.message}`
         }
     };
 
-    const handleDeleteWhisperModel = () => {
+    const handleDeleteWhisperModel = async () => {
         try {
-            if (whisperModelPath && selectedWhisperModel) {
-                const info = safePathInfo(whisperModelPath);
-                if (info?.exists && info.isDirectory === false && isSafeWhisperModelTarget(whisperModelPath, selectedWhisperModel)) {
-                    const file = new File(normalizeWhisperPath(whisperModelPath));
-                    file.delete();
-                } else if (info?.exists) {
-                    logSettingsWarn('Refusing to delete unsafe Whisper model target', new Error(whisperModelPath));
-                }
+            if (selectedWhisperModel) {
+                await whisperModelStore.remove(selectedWhisperModel.id);
             }
+            setWhisperResolved(null);
             updateSpeechSettings({ offlineModelPath: undefined });
         } catch (error) {
             logSettingsWarn('Whisper model delete failed', error);
@@ -898,7 +500,7 @@ ${downloadError.message}`
                         isExpoGo={isExpoGo}
                         isFossBuild={isFossBuild}
                         tr={tr}
-                        onDeleteWhisperModel={handleDeleteWhisperModel}
+                        onDeleteWhisperModel={() => void handleDeleteWhisperModel()}
                         onDownloadWhisperModel={() => void handleDownloadWhisperModel()}
                         onOpenModelPicker={() => setModelPicker('speech')}
                         onSpeechApiKeyChange={handleSpeechApiKeyChange}

@@ -172,13 +172,12 @@ vi.mock('whisper.rn/realtime-transcription/adapters/AudioPcmStreamAdapter.js', (
 vi.mock('whisper.rn/realtime-transcription/index.js', () => ({}));
 
 import {
-  ensureWhisperModelPathForConfig,
+  ensureWhisperModelPathForConfigAsync,
   prepareAudioForLocalWhisper,
   resolveWhisperModelPathForConfigAsync,
   processAudioCapture,
   REMOTE_SPEECH_TO_TEXT_FOSS_ERROR,
   resolveSpeechToTextRuntimeSettings,
-  resolveWhisperModelPathForConfig,
   startWhisperRealtimeCapture,
 } from './speech-to-text';
 
@@ -289,16 +288,16 @@ describe('speech-to-text', () => {
     );
   });
 
-  it('finds a downloaded Whisper model when the stored root path is stale', () => {
+  it('finds a downloaded Whisper model when the stored root path is stale', async () => {
     fileSystemMock.existingUris = new Set([
       'file:///document/whisper-models/ggml-tiny.en.bin',
     ]);
     fileSystemMock.fileSizes.set('file:///document/whisper-models/ggml-tiny.en.bin', 77704715);
 
-    expect(resolveWhisperModelPathForConfig(
+    await expect(resolveWhisperModelPathForConfigAsync(
       'whisper-tiny.en',
       'file:///document/ggml-tiny.en.bin'
-    )).toMatchObject({
+    )).resolves.toMatchObject({
       uri: 'file:///document/whisper-models/ggml-tiny.en.bin',
       exists: true,
       size: 77704715,
@@ -392,13 +391,13 @@ describe('speech-to-text', () => {
     }
   });
 
-  it('resolves a missing Whisper model to the current container whisper-models path', () => {
+  it('resolves a missing Whisper model to the current container whisper-models path', async () => {
     fileSystemMock.existingUris = new Set([
       'file:///document/',
       'file:///cache/',
     ]);
 
-    expect(ensureWhisperModelPathForConfig('whisper-tiny.en')).toMatchObject({
+    await expect(ensureWhisperModelPathForConfigAsync('whisper-tiny.en')).resolves.toMatchObject({
       uri: 'file:///document/whisper-models/ggml-tiny.en.bin',
       path: '/document/whisper-models/ggml-tiny.en.bin',
       exists: false,
@@ -406,7 +405,7 @@ describe('speech-to-text', () => {
     });
   });
 
-  it('repairs a file blocking the Whisper model directory before resolving the model path', () => {
+  it('repairs a file blocking the Whisper model directory before resolving the model path', async () => {
     fileSystemMock.directoryUris = new Set([
       'file:///document',
       'file:///cache',
@@ -415,7 +414,7 @@ describe('speech-to-text', () => {
       'file:///document/whisper-models',
     ]);
 
-    expect(ensureWhisperModelPathForConfig('whisper-tiny.en')).toMatchObject({
+    await expect(ensureWhisperModelPathForConfigAsync('whisper-tiny.en')).resolves.toMatchObject({
       uri: 'file:///document/whisper-models/ggml-tiny.en.bin',
       path: '/document/whisper-models/ggml-tiny.en.bin',
       exists: false,
@@ -425,7 +424,7 @@ describe('speech-to-text', () => {
     expect(fileSystemMock.directoryUris.has('file:///document/whisper-models')).toBe(true);
   });
 
-  it('does not create a file over the Whisper model directory while resolving the model path', () => {
+  it('does not create a file over the Whisper model directory while resolving the model path', async () => {
     fileSystemMock.emulateDirectoryFileConstructorBug = true;
     fileSystemMock.directoryUris = new Set([
       'file:///document',
@@ -437,7 +436,7 @@ describe('speech-to-text', () => {
     ]);
     fileSystemMock.fileSizes.set('file:///document/whisper-models/ggml-tiny.en.bin', 77704715);
 
-    expect(ensureWhisperModelPathForConfig('whisper-tiny.en')).toMatchObject({
+    await expect(ensureWhisperModelPathForConfigAsync('whisper-tiny.en')).resolves.toMatchObject({
       uri: 'file:///document/whisper-models/ggml-tiny.en.bin',
       path: '/document/whisper-models/ggml-tiny.en.bin',
       exists: true,
@@ -447,16 +446,16 @@ describe('speech-to-text', () => {
     expect(fileSystemMock.directoryUris.has('file:///document/whisper-models')).toBe(true);
   });
 
-  it('logs Whisper model search directories and candidates when the model is missing', () => {
+  it('logs Whisper model search directories and candidates when the model is missing', async () => {
     fileSystemMock.existingUris = new Set([
       'file:///document/',
       'file:///cache/',
     ]);
 
-    expect(ensureWhisperModelPathForConfig(
+    await expect(ensureWhisperModelPathForConfigAsync(
       'whisper-tiny.en',
       'file:///document/ggml-tiny.en.bin'
-    )).toMatchObject({
+    )).resolves.toMatchObject({
       uri: 'file:///document/whisper-models/ggml-tiny.en.bin',
       exists: false,
       size: 0,

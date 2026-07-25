@@ -103,6 +103,7 @@ describe('ai settings whisper model helpers', () => {
         await expect(downloadWhisperModelFile({
             url: 'https://example.test/ggml-tiny.bin',
             targetFile: { uri: 'file:///document/whisper-models/ggml-tiny.bin' },
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
             nativeFs: null,
             expoDownloadFile: async (_url, targetFile) => {
                 expoUsed = true;
@@ -156,6 +157,7 @@ describe('ai settings whisper model helpers', () => {
         await downloadWhisperModelFile({
             url: 'https://example.test/redirect/ggml-tiny.bin',
             targetFile,
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
             nativeFs: {
                 downloadFile: (options: unknown) => {
                     calls.push(options);
@@ -201,6 +203,7 @@ describe('ai settings whisper model helpers', () => {
         const result = await downloadWhisperModelFile({
             url: 'https://example.test/ggml-tiny.bin',
             targetFile,
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
             nativeFs,
             expoDownloadFile: async () => {
                 throw new Error('Expo download should not be used when native streaming is available');
@@ -215,6 +218,54 @@ describe('ai settings whisper model helpers', () => {
         })]);
     });
 
+    it('forwards native download progress when a callback is provided', async () => {
+        const progressCalls: unknown[] = [];
+        const seen: { options: { progress?: (p: { bytesWritten: number; contentLength?: number }) => void; progressDivider?: number } | null } = { options: null };
+        const nativeFs = {
+            downloadFile: (options: { progress?: (p: { bytesWritten: number; contentLength?: number }) => void; progressDivider?: number }) => {
+                seen.options = options;
+                options.progress?.({ bytesWritten: 1024, contentLength: sizeBytes });
+                return { promise: Promise.resolve({ statusCode: 200, bytesWritten: sizeBytes }) };
+            },
+        };
+
+        await downloadWhisperModelFile({
+            url: 'https://example.test/ggml-tiny.bin',
+            targetFile: { uri: 'file:///document/whisper-models/ggml-tiny.bin' },
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
+            nativeFs,
+            onProgress: (loaded, total) => { progressCalls.push({ loaded, total }); },
+            expoDownloadFile: async () => {
+                throw new Error('Expo download should not be used when native streaming is available');
+            },
+        });
+
+        expect(progressCalls).toEqual([{ loaded: 1024, total: sizeBytes }]);
+        expect(seen.options?.progressDivider).toBe(10);
+    });
+
+    it('does not pass a progress callback to native fs when onProgress is omitted', async () => {
+        const seen: { options: { progress?: unknown } | null } = { options: null };
+        const nativeFs = {
+            downloadFile: (options: { progress?: unknown }) => {
+                seen.options = options;
+                return { promise: Promise.resolve({ statusCode: 200, bytesWritten: sizeBytes }) };
+            },
+        };
+
+        await downloadWhisperModelFile({
+            url: 'https://example.test/ggml-tiny.bin',
+            targetFile: { uri: 'file:///document/whisper-models/ggml-tiny.bin' },
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
+            nativeFs,
+            expoDownloadFile: async () => {
+                throw new Error('Expo download should not be used when native streaming is available');
+            },
+        });
+
+        expect(seen.options?.progress).toBeUndefined();
+    });
+
     it('rejects non-2xx native Whisper downloads before file-size validation', async () => {
         let deleted = false;
 
@@ -224,6 +275,7 @@ describe('ai settings whisper model helpers', () => {
                 uri: 'file:///document/whisper-models/ggml-tiny.bin',
                 delete: () => { deleted = true; },
             },
+            nativeTargetPath: '/document/whisper-models/ggml-tiny.bin',
             nativeFs: {
                 downloadFile: () => ({
                     promise: Promise.resolve({ statusCode: 302, bytesWritten: 1093 }),
