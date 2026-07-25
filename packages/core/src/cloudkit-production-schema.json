@@ -41,9 +41,8 @@
         "deletedAt",
         "purgedAt",
         "sortOrder",
-        "orderNum"
-    ],
-    "pendingProduction": [
+        "orderNum",
         "focusOrder"
-    ]
+    ],
+    "pendingProduction": []
 }
