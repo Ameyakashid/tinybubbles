@@ -3,7 +3,7 @@ import type { AppData } from '@mindwtr/core';
 
 import { corsOrigin, logWarn } from './server-config';
 import {
-    loadAppData as loadAppDataFromStorage,
+    loadAppDataUncached,
     writeData,
 } from './server-storage';
 
@@ -132,7 +132,7 @@ export const loadAppData = (filePath: string): AppData => {
         parsedDataCache.delete(filePath);
     }
 
-    const data = loadAppDataFromStorage(filePath);
+    const data = loadAppDataUncached(filePath);
     rememberParsedDataFile(filePath, data);
     return data;
 };

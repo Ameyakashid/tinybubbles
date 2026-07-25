@@ -26,14 +26,10 @@ import {
 import {
     getAuthFailureRateKey,
     getAuthFailureTokenRateKey,
-    getToken,
-    isAuthorizedToken,
     normalizeAllowedAuthTokens,
     parseBoolEnv,
     parseTrustedProxyIps,
     resolveAllowedAuthTokensFromEnv,
-    toRateLimitRoute,
-    tokenToKey,
     type AllowedAuthTokenInput,
 } from './server-auth';
 import {
@@ -75,14 +71,7 @@ import {
     asStatus,
     pickTaskList,
     validateAppData,
-    validateAreaCreationProps,
-    validateAreaPatchProps,
-    validateProjectCreationProps,
-    validateProjectPatchProps,
-    validateSectionCreationProps,
-    validateSectionPatchProps,
-    validateTaskCreationProps,
-    validateTaskPatchProps,
+    validateEntityProps,
 } from './server-validation';
 import {
     dataMetadataResponse,
@@ -94,11 +83,10 @@ import {
     writeCloudData,
 } from './server-data-cache';
 import { createRateLimiter } from './server-rate-limit';
+import { ensureNamespaceWriteAllowed, normalizeRequestPathname, withNamespace, type ServerConfig } from './server-request';
 
 const normalizeAttachmentContentType = (value: string | null): string => value?.split(';', 1)[0]?.trim().toLowerCase() || '';
 const ANY_TOKEN_NAMESPACE_LIMIT_DEFAULT = 32;
-const TOKEN_NAMESPACE_FILE_PATTERN = /^([a-f0-9]{64})\.json$/;
-const TOKEN_NAMESPACE_DIR_PATTERN = /^[a-f0-9]{64}$/;
 // Relies on POSIX mtime; do not lower below 1 minute without auditing filesystem timestamp resolution and batching.
 const ORPHAN_ATTACHMENT_GC_GRACE_MS = 5 * 60 * 1000;
 const getBlockedAttachmentSignature = (bytes: Uint8Array): string | null => {
@@ -277,8 +265,8 @@ type CloudEntity = {
     rev?: number;
     revBy?: string;
 };
-type EntityCollectionKey = 'projects' | 'sections' | 'areas';
-type EntityItemKey = 'project' | 'section' | 'area';
+type EntityCollectionKey = 'tasks' | 'projects' | 'sections' | 'areas';
+type EntityItemKey = 'task' | 'project' | 'section' | 'area';
 
 type EntityRouteDefinition<T extends CloudEntity> = {
     path: string;
@@ -287,7 +275,11 @@ type EntityRouteDefinition<T extends CloudEntity> = {
     listKey: EntityCollectionKey;
     label: string;
     invalidIdMessage: string;
-    listItems: (data: AppData, url: URL) => T[];
+    /** Defaults to parseEntityRouteId. Tasks override it to keep requiring a UUID. */
+    parseId?: (rawValue: string) => string | null;
+    /** Defaults to {} (repair-then-validate). Tasks pass FINALIZE_REJECT_INVALID_REST_WRITE. */
+    finalizeOptions?: FinalizeCloudDataForWriteOptions;
+    listItems: (data: AppData, url: URL) => T[] | Response;
     createEntity: (body: Record<string, unknown>, data: AppData, nowIso: string) => T | Response;
     canPatchDeletedEntity?: (body: Record<string, unknown>) => boolean;
     patchEntity: (body: Record<string, unknown>, existing: T, data: AppData, nowIso: string) => T | Response;
@@ -341,6 +333,7 @@ const handleEntityRoute = async <T extends CloudEntity>(
         if ('error' in pagination) return errorResponse(pagination.error, 400);
         const data = loadAppData(context.filePath);
         const items = route.listItems(data, url);
+        if (isResponse(items)) return items;
         const total = items.length;
         return jsonResponse({
             [route.listKey]: items.slice(pagination.offset, pagination.offset + pagination.limit),
@@ -361,17 +354,19 @@ const handleEntityRoute = async <T extends CloudEntity>(
             const entity = route.createEntity(bodyResult.body, data, nowIso);
             if (isResponse(entity)) return entity;
             getEntityCollection(data, route).push(entity);
-            const finalized = finalizeCloudDataForWrite(data, nowIso);
+            const finalized = finalizeCloudDataForWrite(data, nowIso, route.finalizeOptions);
             if ('error' in finalized) return finalized.error;
             throwIfRequestAborted(context.signal);
             writeCloudData(context.filePath, finalized);
-            return jsonResponse({ [route.itemKey]: entity }, { status: 201 });
+            const savedEntity = getEntityCollection(finalized, route).find((item) => item.id === entity.id) ?? entity;
+            return jsonResponse({ [route.itemKey]: savedEntity }, { status: 201 });
         });
     }
 
     const entityMatch = pathname.match(new RegExp(`^${route.path}/([^/]+)$`));
     if (!entityMatch) return null;
-    const entityId = parseEntityRouteId(entityMatch[1]);
+    const parseId = route.parseId ?? parseEntityRouteId;
+    const entityId = parseId(entityMatch[1]);
     if (!entityId) return errorResponse(route.invalidIdMessage, 400);
 
     if (req.method === 'GET') {
@@ -398,7 +393,7 @@ const handleEntityRoute = async <T extends CloudEntity>(
             const updated = route.patchEntity(bodyResult.body, collection[idx], data, nowIso);
             if (isResponse(updated)) return updated;
             collection[idx] = updated;
-            const finalized = finalizeCloudDataForWrite(data, nowIso);
+            const finalized = finalizeCloudDataForWrite(data, nowIso, route.finalizeOptions);
             if ('error' in finalized) return finalized.error;
             throwIfRequestAborted(context.signal);
             writeCloudData(context.filePath, finalized);
@@ -423,7 +418,7 @@ const handleEntityRoute = async <T extends CloudEntity>(
                 rev: normalizeRevision(existing.rev) + 1,
                 revBy: CLOUD_API_REV_BY,
             };
-            const finalized = finalizeCloudDataForWrite(data, nowIso);
+            const finalized = finalizeCloudDataForWrite(data, nowIso, route.finalizeOptions);
             if ('error' in finalized) return finalized.error;
             throwIfRequestAborted(context.signal);
             writeCloudData(context.filePath, finalized);
@@ -437,6 +432,124 @@ const handleEntityRoute = async <T extends CloudEntity>(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- The route table is heterogeneous; each route owns its entity type.
 const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
     {
+        path: '/v1/tasks',
+        collectionKey: 'tasks',
+        itemKey: 'task',
+        listKey: 'tasks',
+        label: 'Task',
+        invalidIdMessage: 'Invalid task id',
+        parseId: parseTaskRouteId,
+        finalizeOptions: FINALIZE_REJECT_INVALID_REST_WRITE,
+        listItems: (data, url): Task[] | Response => {
+            const query = url.searchParams.get('query') || '';
+            const includeAll = url.searchParams.get('all') === '1';
+            const includeDeleted = url.searchParams.get('deleted') === '1';
+            const rawStatus = url.searchParams.get('status');
+            const status = asStatus(rawStatus);
+            if (rawStatus !== null && status === null) {
+                return errorResponse('Invalid task status');
+            }
+            return pickTaskList(data, { includeDeleted, includeCompleted: includeAll, status, query });
+        },
+        createEntity: (bodyRecord, data, nowIso): Task | Response => {
+            const input = typeof bodyRecord.input === 'string' ? bodyRecord.input : '';
+            const rawTitle = typeof bodyRecord.title === 'string' ? bodyRecord.title : '';
+            const rawInitialProps = readObjectBody(bodyRecord.props) ?? {};
+            const validatedInitialProps = validateEntityProps('task', 'create', rawInitialProps);
+            if (!validatedInitialProps.ok) {
+                return errorResponse(validatedInitialProps.error, 400);
+            }
+            const initialProps = validatedInitialProps.props;
+            if (input.trim().length > MAX_TASK_QUICK_ADD_LENGTH) {
+                return errorResponse(`Quick-add input too long (max ${MAX_TASK_QUICK_ADD_LENGTH} characters)`, 400);
+            }
+
+            const parsed = input
+                ? parseQuickAdd(input, data.projects, new Date(nowIso), data.areas)
+                : { title: rawTitle, props: {} };
+            const title = (parsed.title || rawTitle || input).trim();
+            if (!title) return errorResponse('Missing task title');
+            if (title.length > MAX_TASK_TITLE_LENGTH) {
+                return errorResponse(`Task title too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
+            }
+
+            const props: Partial<Task> = {
+                ...parsed.props,
+                ...initialProps,
+            };
+
+            const rawStatus = props.status;
+            const parsedStatus = asStatus(rawStatus);
+            if (rawStatus !== undefined && parsedStatus === null) {
+                return errorResponse('Invalid task status', 400);
+            }
+            // Mirrors the store's create-side promotion (addTasks): a
+            // start date at capture is a clarify decision, so a task
+            // created with a start date and no explicit status enters
+            // as Next rather than Inbox.
+            const status = resolveCaptureStatusForStart(props, parsedStatus || 'inbox');
+            const tags = Array.isArray(props.tags) ? props.tags : [];
+            const contexts = Array.isArray(props.contexts) ? props.contexts : [];
+            const {
+                id: _id,
+                title: _title,
+                createdAt: _createdAt,
+                updatedAt: _updatedAt,
+                status: _status,
+                tags: _tags,
+                contexts: _contexts,
+                ...restProps
+            } = props;
+            const task: Task = {
+                id: generateUUID(),
+                title,
+                ...restProps,
+                status,
+                tags,
+                contexts,
+                rev: 1,
+                revBy: CLOUD_API_REV_BY,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+            } as Task;
+            if ((status === 'done' || status === 'archived') && !task.completedAt) {
+                task.completedAt = nowIso;
+            }
+            return task;
+        },
+        patchEntity: (bodyRecord, existing: Task, data, nowIso): Task | Response => {
+            const validatedPatch = validateEntityProps('task', 'patch', bodyRecord);
+            if (!validatedPatch.ok) {
+                return errorResponse(validatedPatch.error, 400);
+            }
+            const updates = validatedPatch.props;
+            if (typeof updates.title === 'string' && updates.title.length > MAX_TASK_TITLE_LENGTH) {
+                return errorResponse(`Task title too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
+            }
+            const rawStatus = updates.status;
+            if (rawStatus !== undefined && asStatus(rawStatus) === null) {
+                return errorResponse('Invalid task status', 400);
+            }
+            // Applies the same store invariants the apps get (inbox
+            // start-date promotion, star/status promotion+demotion,
+            // boardOrder/focusOrder clearing) before the shared core
+            // completion/recurrence logic in applyTaskUpdates runs, so
+            // REST writes obey the same rules as the desktop/mobile store.
+            const normalizedUpdates = normalizeTaskUpdate(existing, updates);
+            const { updatedTask, nextRecurringTask } = applyTaskUpdates(
+                existing,
+                {
+                    ...normalizedUpdates,
+                    rev: normalizeRevision(existing.rev) + 1,
+                    revBy: CLOUD_API_REV_BY,
+                },
+                nowIso,
+            );
+            if (nextRecurringTask) data.tasks.push(nextRecurringTask);
+            return updatedTask;
+        },
+    },
+    {
         path: '/v1/projects',
         collectionKey: 'projects',
         itemKey: 'project',
@@ -448,7 +561,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
         ),
         createEntity: (bodyRecord, data, nowIso): Project | Response => {
             const rawProps = isRecord(bodyRecord.props) ? bodyRecord.props : {};
-            const validatedProps = validateProjectCreationProps(rawProps);
+            const validatedProps = validateEntityProps('project', 'create', rawProps);
             if (!validatedProps.ok) return errorResponse(validatedProps.error, 400);
             const title = typeof bodyRecord.title === 'string' ? bodyRecord.title.trim() : '';
             if (!title) return errorResponse('Missing project title');
@@ -491,7 +604,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
         },
         canPatchDeletedEntity: isProjectPurgePatch,
         patchEntity: (bodyRecord, existing: Project, data, nowIso): Project | Response => {
-            const validatedPatch = validateProjectPatchProps(bodyRecord);
+            const validatedPatch = validateEntityProps('project', 'patch', bodyRecord);
             if (!validatedPatch.ok) return errorResponse(validatedPatch.error, 400);
             const updates = validatedPatch.props;
             const purgingProject = isProjectPurgePatch(bodyRecord);
@@ -548,7 +661,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
         },
         createEntity: (bodyRecord, data, nowIso): Section | Response => {
             const rawProps = isRecord(bodyRecord.props) ? bodyRecord.props : {};
-            const validatedProps = validateSectionCreationProps(rawProps);
+            const validatedProps = validateEntityProps('section', 'create', rawProps);
             if (!validatedProps.ok) return errorResponse(validatedProps.error, 400);
             const title = typeof bodyRecord.title === 'string' ? bodyRecord.title.trim() : '';
             const projectId = typeof bodyRecord.projectId === 'string' ? bodyRecord.projectId.trim() : '';
@@ -578,7 +691,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
             };
         },
         patchEntity: (bodyRecord, existing: Section, data, nowIso): Section | Response => {
-            const validatedPatch = validateSectionPatchProps(bodyRecord);
+            const validatedPatch = validateEntityProps('section', 'patch', bodyRecord);
             if (!validatedPatch.ok) return errorResponse(validatedPatch.error, 400);
             const updates = validatedPatch.props;
             if (typeof updates.title === 'string' && !updates.title.trim()) return errorResponse('Missing section title');
@@ -616,7 +729,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
         ),
         createEntity: (bodyRecord, data, nowIso): Area | Response => {
             const rawProps = isRecord(bodyRecord.props) ? bodyRecord.props : {};
-            const validatedProps = validateAreaCreationProps(rawProps);
+            const validatedProps = validateEntityProps('area', 'create', rawProps);
             if (!validatedProps.ok) return errorResponse(validatedProps.error, 400);
             const name = typeof bodyRecord.name === 'string' ? bodyRecord.name.trim() : '';
             if (!name) return errorResponse('Missing area name');
@@ -638,7 +751,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
             };
         },
         patchEntity: (bodyRecord, existing: Area, _data, nowIso): Area | Response => {
-            const validatedPatch = validateAreaPatchProps(bodyRecord);
+            const validatedPatch = validateEntityProps('area', 'patch', bodyRecord);
             if (!validatedPatch.ok) return errorResponse(validatedPatch.error, 400);
             const updates = validatedPatch.props;
             if (typeof updates.name === 'string' && !updates.name.trim()) return errorResponse('Missing area name');
@@ -656,23 +769,6 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
         },
     },
 ];
-
-function namespaceExists(dataDir: string, key: string): boolean {
-    return existsSync(join(dataDir, `${key}.json`)) || existsSync(join(dataDir, key));
-}
-
-function countTokenNamespaces(dataDir: string): number {
-    const namespaces = new Set<string>();
-    for (const entry of readdirSync(dataDir, { withFileTypes: true })) {
-        if (entry.isFile()) {
-            const match = entry.name.match(TOKEN_NAMESPACE_FILE_PATTERN);
-            if (match?.[1]) namespaces.add(match[1]);
-        } else if (entry.isDirectory() && TOKEN_NAMESPACE_DIR_PATTERN.test(entry.name)) {
-            namespaces.add(entry.name);
-        }
-    }
-    return namespaces.size;
-}
 
 export function resolveServerMergeTimestamp(..._dataSets: AppData[]): string {
     return new Date().toISOString();
@@ -896,18 +992,6 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const requestTimeoutMs = Number(options.requestTimeoutMs ?? process.env.MINDWTR_CLOUD_REQUEST_TIMEOUT_MS ?? 30_000);
     const rateLimiter = createRateLimiter({ windowMs, maxKeys: RATE_LIMIT_MAX_KEYS });
 
-    const ensureNamespaceWriteAllowed = (key: string): Response | null => {
-        if (allowedAuthTokens) return null;
-        if (namespaceExists(dataDir, key)) return null;
-        if (maxAnyTokenNamespaces <= 0) {
-            return errorResponse('Token namespace creation is disabled', 403);
-        }
-        if (countTokenNamespaces(dataDir) >= maxAnyTokenNamespaces) {
-            return errorResponse('Token namespace limit reached', 403);
-        }
-        return null;
-    };
-
     const unauthorizedResponse = (req: Request, token?: string | null): Response => {
         const requestIp = (() => {
             const bunServer = server as { requestIP?: (request: Request) => { address?: string | null } | null };
@@ -934,6 +1018,36 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         }
         return errorResponse('Unauthorized', 401);
     };
+
+    const baseServerConfig: ServerConfig = {
+        allowedAuthTokens,
+        dataDir,
+        maxAnyTokenNamespaces,
+        rateLimiter,
+        maxPerWindow,
+        unauthorizedResponse,
+    };
+    // /v1/data only ever guarded PUT explicitly; GET guards itself inline only when
+    // creating an empty doc, and HEAD/other methods were never guarded (an unmatched
+    // method like POST falls through this route entirely to a 404, not the cap).
+    // Restricting the auto-guard to PUT here keeps that exactly as it was.
+    const dataServerConfig: ServerConfig = { ...baseServerConfig, guardMethods: (method) => method === 'PUT' };
+    const attachmentServerConfig: ServerConfig = { ...baseServerConfig, maxPerWindow: maxAttachmentPerWindow };
+    // /v1/attachments/orphans previously checked "is this POST or DELETE" *before*
+    // ever consulting the namespace guard, so an unsupported method (e.g. PATCH)
+    // fell straight through to 405 regardless of cap state; only guard POST/DELETE
+    // here so that stays true and the guard-response fix stays scoped to the two
+    // write methods this route actually supports.
+    const orphansServerConfig: ServerConfig = {
+        ...attachmentServerConfig,
+        guardMethods: (method) => method === 'POST' || method === 'DELETE',
+    };
+    // /v1/attachments/:path only ever guarded PUT (the only method that can create a
+    // new file). DELETE was never guarded pre-refactor; kept that way here rather
+    // than folding it into the default non-GET guard, since extending the cap to
+    // DELETE is a real behavior change this task did not ask for and isn't flagged
+    // as one of the routes with a missing-guard bug.
+    const attachmentPathServerConfig: ServerConfig = { ...attachmentServerConfig, guardMethods: (method) => method === 'PUT' };
 
     const cleanupTimer = setInterval(() => {
         rateLimiter.prune(Date.now());
@@ -997,7 +1111,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                 if (req.method === 'OPTIONS') return preflightResponse();
 
                 const url = new URL(req.url);
-                const pathname = url.pathname.replace(/\/+$/, '') || '/';
+                const pathname = normalizeRequestPathname(url);
 
                 if (req.method === 'GET' && pathname === '/health') {
                     return jsonResponse({ ok: true });
@@ -1014,323 +1128,95 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     || pathname.startsWith('/v1/sections/')
                     || pathname.startsWith('/v1/areas/')
                 ) {
-                    const token = getToken(req);
-                    if (!token) return unauthorizedResponse(req);
-                    if (!isAuthorizedToken(token, allowedAuthTokens)) return unauthorizedResponse(req, token);
-                    const key = tokenToKey(token);
-                    const routeKey = toRateLimitRoute(pathname);
-                    const rateKey = `${key}:${req.method}:${routeKey}`;
-                    const rateLimitResponse = rateLimiter.check(rateKey, maxPerWindow);
-                    if (rateLimitResponse) return rateLimitResponse;
-                    const filePath = join(dataDir, `${key}.json`);
-                    if (req.method !== 'GET') {
-                        const namespaceResponse = ensureNamespaceWriteAllowed(key);
-                        if (namespaceResponse) return namespaceResponse;
-                    }
+                    const groupResponse = await withNamespace(req, url, baseServerConfig, async (ctx) => {
+                        const actionMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/(complete|archive)$/);
+                        if (actionMatch && req.method === 'POST') {
+                            const taskId = parseTaskRouteId(actionMatch[1]);
+                            if (!taskId) return errorResponse('Invalid task id', 400);
+                            const action = actionMatch[2];
+                            const status: TaskStatus = action === 'archive' ? 'archived' : 'done';
 
-                    if (req.method === 'GET' && pathname === '/v1/tasks') {
-                        const query = url.searchParams.get('query') || '';
-                        const includeAll = url.searchParams.get('all') === '1';
-                        const includeDeleted = url.searchParams.get('deleted') === '1';
-                        const rawStatus = url.searchParams.get('status');
-                        const pagination = parsePagination(url.searchParams);
-                        if ('error' in pagination) return errorResponse(pagination.error, 400);
-                        const status = asStatus(rawStatus);
-                        if (rawStatus !== null && status === null) {
-                            return errorResponse('Invalid task status');
-                        }
-                        const data = loadAppData(filePath);
-                        const tasks = pickTaskList(data, {
-                            includeDeleted,
-                            includeCompleted: includeAll,
-                            status,
-                            query,
-                        });
-                        const total = tasks.length;
-                        const pageTasks = tasks.slice(pagination.offset, pagination.offset + pagination.limit);
-                        return jsonResponse({ tasks: pageTasks, total, limit: pagination.limit, offset: pagination.offset });
-                    }
-
-                    if (req.method === 'POST' && pathname === '/v1/tasks') {
-                        const body = await readJsonBody(req, maxBodyBytes, requestAbortController.signal);
-                        if (isBodyReadError(body)) {
-                            const err = body.__mindwtrError;
-                            return errorResponse(String(err?.message || 'Payload too large'), Number(err?.status) || 413);
-                        }
-                        const bodyRecord = readObjectBody(body);
-                        if (!bodyRecord) return errorResponse('Invalid JSON body');
-
-                        return await withWriteLock(key, async () => {
-                            throwIfRequestAborted(requestAbortController.signal);
-                            const data = loadAppData(filePath);
-                            const nowIso = new Date().toISOString();
-
-                            const input = typeof bodyRecord.input === 'string' ? bodyRecord.input : '';
-                            const rawTitle = typeof bodyRecord.title === 'string' ? bodyRecord.title : '';
-                            const rawInitialProps = readObjectBody(bodyRecord.props) ?? {};
-                            const validatedInitialProps = validateTaskCreationProps(rawInitialProps);
-                            if (!validatedInitialProps.ok) {
-                                return errorResponse(validatedInitialProps.error, 400);
-                            }
-                            const initialProps = validatedInitialProps.props;
-                            if (input.trim().length > MAX_TASK_QUICK_ADD_LENGTH) {
-                                return errorResponse(`Quick-add input too long (max ${MAX_TASK_QUICK_ADD_LENGTH} characters)`, 400);
-                            }
-
-                            const parsed = input
-                                ? parseQuickAdd(input, data.projects, new Date(nowIso), data.areas)
-                                : { title: rawTitle, props: {} };
-                            const title = (parsed.title || rawTitle || input).trim();
-                            if (!title) return errorResponse('Missing task title');
-                            if (title.length > MAX_TASK_TITLE_LENGTH) {
-                                return errorResponse(`Task title too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
-                            }
-
-                            const props: Partial<Task> = {
-                                ...parsed.props,
-                                ...initialProps,
-                            };
-
-                            const rawStatus = props.status;
-                            const parsedStatus = asStatus(rawStatus);
-                            if (rawStatus !== undefined && parsedStatus === null) {
-                                return errorResponse('Invalid task status', 400);
-                            }
-                            // Mirrors the store's create-side promotion (addTasks): a
-                            // start date at capture is a clarify decision, so a task
-                            // created with a start date and no explicit status enters
-                            // as Next rather than Inbox.
-                            const status = resolveCaptureStatusForStart(props, parsedStatus || 'inbox');
-                            const tags = Array.isArray(props.tags) ? props.tags : [];
-                            const contexts = Array.isArray(props.contexts) ? props.contexts : [];
-                            const {
-                                id: _id,
-                                title: _title,
-                                createdAt: _createdAt,
-                                updatedAt: _updatedAt,
-                                status: _status,
-                                tags: _tags,
-                                contexts: _contexts,
-                                ...restProps
-                            } = props;
-                            const task: Task = {
-                                id: generateUUID(),
-                                title,
-                                ...restProps,
-                                status,
-                                tags,
-                                contexts,
-                                rev: 1,
-                                revBy: CLOUD_API_REV_BY,
-                                createdAt: nowIso,
-                                updatedAt: nowIso,
-                            } as Task;
-                            if ((status === 'done' || status === 'archived') && !task.completedAt) {
-                                task.completedAt = nowIso;
-                            }
-
-                            data.tasks.push(task);
-                            const finalized = finalizeCloudDataForWrite(data, nowIso, FINALIZE_REJECT_INVALID_REST_WRITE);
-                            if ('error' in finalized) return finalized.error;
-                            const finalizedTask = finalized.tasks.find((item) => item.id === task.id) || task;
-                            throwIfRequestAborted(requestAbortController.signal);
-                            writeCloudData(filePath, finalized);
-                            return jsonResponse({ task: finalizedTask }, { status: 201 });
-                        });
-                    }
-
-                    const actionMatch = pathname.match(/^\/v1\/tasks\/([^/]+)\/(complete|archive)$/);
-                    if (actionMatch && req.method === 'POST') {
-                        const taskId = parseTaskRouteId(actionMatch[1]);
-                        if (!taskId) return errorResponse('Invalid task id', 400);
-                        const action = actionMatch[2];
-                        const status: TaskStatus = action === 'archive' ? 'archived' : 'done';
-
-                        return await withWriteLock(key, async () => {
-                            throwIfRequestAborted(requestAbortController.signal);
-                            const data = loadAppData(filePath);
-                            const idx = data.tasks.findIndex((t) => t.id === taskId && !t.deletedAt);
-                            if (idx < 0) return errorResponse('Task not found', 404);
-
-                            const nowIso = new Date().toISOString();
-                            const existing = data.tasks[idx];
-                            const { updatedTask, nextRecurringTask } = applyTaskUpdates(
-                                existing,
-                                {
-                                    status,
-                                    rev: normalizeRevision(existing.rev) + 1,
-                                    revBy: CLOUD_API_REV_BY,
-                                },
-                                nowIso,
-                            );
-                            data.tasks[idx] = updatedTask;
-                            if (nextRecurringTask) data.tasks.push(nextRecurringTask);
-                            const finalized = finalizeCloudDataForWrite(data, nowIso, FINALIZE_REJECT_INVALID_REST_WRITE);
-                            if ('error' in finalized) return finalized.error;
-                            const finalizedTask = finalized.tasks.find((item) => item.id === updatedTask.id) || updatedTask;
-                            throwIfRequestAborted(requestAbortController.signal);
-                            writeCloudData(filePath, finalized);
-                            return jsonResponse({ task: finalizedTask });
-                        });
-                    }
-
-                    const taskMatch = pathname.match(/^\/v1\/tasks\/([^/]+)$/);
-                    if (taskMatch) {
-                        const taskId = parseTaskRouteId(taskMatch[1]);
-                        if (!taskId) return errorResponse('Invalid task id', 400);
-
-                        if (req.method === 'GET') {
-                            const data = loadAppData(filePath);
-                            const task = data.tasks.find((t) => t.id === taskId && !t.deletedAt);
-                            if (!task) return errorResponse('Task not found', 404);
-                            return jsonResponse({ task });
-                        }
-
-                        if (req.method === 'PATCH') {
-                            const body = await readJsonBody(req, maxBodyBytes, requestAbortController.signal);
-                            if (isBodyReadError(body)) {
-                                const err = body.__mindwtrError;
-                                return errorResponse(String(err?.message || 'Payload too large'), Number(err?.status) || 413);
-                            }
-                            const bodyRecord = readObjectBody(body);
-                            if (!bodyRecord) return errorResponse('Invalid JSON body');
-                            const validatedPatch = validateTaskPatchProps(bodyRecord);
-                            if (!validatedPatch.ok) {
-                                return errorResponse(validatedPatch.error, 400);
-                            }
-                            const updates = validatedPatch.props;
-                            if (typeof updates.title === 'string' && updates.title.length > MAX_TASK_TITLE_LENGTH) {
-                                return errorResponse(`Task title too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
-                            }
-                            const rawStatus = updates.status;
-                            if (rawStatus !== undefined && asStatus(rawStatus) === null) {
-                                return errorResponse('Invalid task status', 400);
-                            }
-
-                            return await withWriteLock(key, async () => {
+                            return await withWriteLock(ctx.key, async () => {
                                 throwIfRequestAborted(requestAbortController.signal);
-                                const data = loadAppData(filePath);
+                                const data = loadAppData(ctx.filePath);
                                 const idx = data.tasks.findIndex((t) => t.id === taskId && !t.deletedAt);
                                 if (idx < 0) return errorResponse('Task not found', 404);
 
                                 const nowIso = new Date().toISOString();
                                 const existing = data.tasks[idx];
-                                // Applies the same store invariants the apps get (inbox
-                                // start-date promotion, star/status promotion+demotion,
-                                // boardOrder/focusOrder clearing) before the shared core
-                                // completion/recurrence logic in applyTaskUpdates runs, so
-                                // REST writes obey the same rules as the desktop/mobile store.
-                                const normalizedUpdates = normalizeTaskUpdate(existing, updates);
                                 const { updatedTask, nextRecurringTask } = applyTaskUpdates(
                                     existing,
                                     {
-                                        ...normalizedUpdates,
+                                        status,
                                         rev: normalizeRevision(existing.rev) + 1,
                                         revBy: CLOUD_API_REV_BY,
                                     },
                                     nowIso,
                                 );
-
                                 data.tasks[idx] = updatedTask;
                                 if (nextRecurringTask) data.tasks.push(nextRecurringTask);
                                 const finalized = finalizeCloudDataForWrite(data, nowIso, FINALIZE_REJECT_INVALID_REST_WRITE);
                                 if ('error' in finalized) return finalized.error;
                                 const finalizedTask = finalized.tasks.find((item) => item.id === updatedTask.id) || updatedTask;
                                 throwIfRequestAborted(requestAbortController.signal);
-                                writeCloudData(filePath, finalized);
+                                writeCloudData(ctx.filePath, finalized);
                                 return jsonResponse({ task: finalizedTask });
                             });
                         }
 
-                        if (req.method === 'DELETE') {
-                            return await withWriteLock(key, async () => {
-                                throwIfRequestAborted(requestAbortController.signal);
-                                const data = loadAppData(filePath);
-                                const idx = data.tasks.findIndex((t) => t.id === taskId && !t.deletedAt);
-                                if (idx < 0) return errorResponse('Task not found', 404);
+                        for (const entityRoute of ENTITY_ROUTES) {
+                            const entityRouteResponse = await handleEntityRoute(entityRoute, req, pathname, url, {
+                                key: ctx.key,
+                                filePath: ctx.filePath,
+                                maxBodyBytes,
+                                signal: requestAbortController.signal,
+                                withWriteLock,
+                            });
+                            if (entityRouteResponse) return entityRouteResponse;
+                        }
 
-                                const nowIso = new Date().toISOString();
-                                const existing = data.tasks[idx];
-                                data.tasks[idx] = {
-                                    ...existing,
-                                    deletedAt: nowIso,
-                                    updatedAt: nowIso,
-                                    rev: normalizeRevision(existing.rev) + 1,
-                                    revBy: CLOUD_API_REV_BY,
-                                };
-                                const finalized = finalizeCloudDataForWrite(data, nowIso, FINALIZE_REJECT_INVALID_REST_WRITE);
-                                if ('error' in finalized) return finalized.error;
-                                throwIfRequestAborted(requestAbortController.signal);
-                                writeCloudData(filePath, finalized);
-                                return jsonResponse({ ok: true });
+                        if (req.method === 'GET' && pathname === '/v1/search') {
+                            throwIfRequestAborted(requestAbortController.signal);
+                            const query = url.searchParams.get('query') || '';
+                            const pagination = parsePagination(url.searchParams);
+                            if ('error' in pagination) return errorResponse(pagination.error, 400);
+                            const taskOffset = parseSearchPaginationValue(url.searchParams, 'taskOffset', pagination.offset);
+                            if (typeof taskOffset !== 'number') return errorResponse(taskOffset.error, 400);
+                            const projectOffset = parseSearchPaginationValue(url.searchParams, 'projectOffset', pagination.offset);
+                            if (typeof projectOffset !== 'number') return errorResponse(projectOffset.error, 400);
+                            const taskLimit = parseSearchPaginationValue(url.searchParams, 'taskLimit', pagination.limit);
+                            if (typeof taskLimit !== 'number') return errorResponse(taskLimit.error, 400);
+                            const projectLimit = parseSearchPaginationValue(url.searchParams, 'projectLimit', pagination.limit);
+                            if (typeof projectLimit !== 'number') return errorResponse(projectLimit.error, 400);
+                            const data = loadAppData(ctx.filePath);
+                            const tasks = filterNotDeleted(data.tasks);
+                            const projects = filterNotDeleted(data.projects);
+                            const results = searchAll(tasks, projects, query);
+                            const taskTotal = results.tasks.length;
+                            const projectTotal = results.projects.length;
+                            return jsonResponse({
+                                tasks: results.tasks.slice(taskOffset, taskOffset + taskLimit),
+                                projects: results.projects.slice(projectOffset, projectOffset + projectLimit),
+                                taskTotal,
+                                projectTotal,
+                                limit: pagination.limit,
+                                offset: pagination.offset,
+                                taskLimit,
+                                taskOffset,
+                                projectLimit,
+                                projectOffset,
                             });
                         }
-                    }
 
-                    for (const entityRoute of ENTITY_ROUTES) {
-                        const entityRouteResponse = await handleEntityRoute(entityRoute, req, pathname, url, {
-                            key,
-                            filePath,
-                            maxBodyBytes,
-                            signal: requestAbortController.signal,
-                            withWriteLock,
-                        });
-                        if (entityRouteResponse) return entityRouteResponse;
-                    }
-
-                    if (req.method === 'GET' && pathname === '/v1/search') {
-                        throwIfRequestAborted(requestAbortController.signal);
-                        const query = url.searchParams.get('query') || '';
-                        const pagination = parsePagination(url.searchParams);
-                        if ('error' in pagination) return errorResponse(pagination.error, 400);
-                        const taskOffset = parseSearchPaginationValue(url.searchParams, 'taskOffset', pagination.offset);
-                        if (typeof taskOffset !== 'number') return errorResponse(taskOffset.error, 400);
-                        const projectOffset = parseSearchPaginationValue(url.searchParams, 'projectOffset', pagination.offset);
-                        if (typeof projectOffset !== 'number') return errorResponse(projectOffset.error, 400);
-                        const taskLimit = parseSearchPaginationValue(url.searchParams, 'taskLimit', pagination.limit);
-                        if (typeof taskLimit !== 'number') return errorResponse(taskLimit.error, 400);
-                        const projectLimit = parseSearchPaginationValue(url.searchParams, 'projectLimit', pagination.limit);
-                        if (typeof projectLimit !== 'number') return errorResponse(projectLimit.error, 400);
-                        const data = loadAppData(filePath);
-                        const tasks = filterNotDeleted(data.tasks);
-                        const projects = filterNotDeleted(data.projects);
-                        const results = searchAll(tasks, projects, query);
-                        const taskTotal = results.tasks.length;
-                        const projectTotal = results.projects.length;
-                        return jsonResponse({
-                            tasks: results.tasks.slice(taskOffset, taskOffset + taskLimit),
-                            projects: results.projects.slice(projectOffset, projectOffset + projectLimit),
-                            taskTotal,
-                            projectTotal,
-                            limit: pagination.limit,
-                            offset: pagination.offset,
-                            taskLimit,
-                            taskOffset,
-                            projectLimit,
-                            projectOffset,
-                        });
-                    }
-
-                    if (
-                        pathname.startsWith('/v1/tasks')
-                        || pathname.startsWith('/v1/projects')
-                        || pathname.startsWith('/v1/sections')
-                        || pathname.startsWith('/v1/areas')
-                        || pathname === '/v1/search'
-                    ) {
                         return errorResponse('Method not allowed', 405);
-                    }
+                    });
+                    if (groupResponse) return groupResponse;
                 }
 
                 if (pathname === '/v1/data') {
-                    const token = getToken(req);
-                    if (!token) return unauthorizedResponse(req);
-                    if (!isAuthorizedToken(token, allowedAuthTokens)) return unauthorizedResponse(req, token);
-                    const key = tokenToKey(token);
-                    const dataRateKey = `${key}:${req.method}:${toRateLimitRoute(pathname)}`;
-                    const dataRateLimitResponse = rateLimiter.check(dataRateKey, maxPerWindow);
-                    if (dataRateLimitResponse) return dataRateLimitResponse;
-                    const filePath = join(dataDir, `${key}.json`);
+                    const dataResponse = await withNamespace(req, url, dataServerConfig, async (ctx) => {
+                    const key = ctx.key;
+                    const filePath = ctx.filePath;
 
                     if (req.method === 'HEAD') {
                         return await withWriteLock(key, async () => {
@@ -1344,7 +1230,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         return await withWriteLock(key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
                             if (!existsSync(filePath)) {
-                                const namespaceResponse = ensureNamespaceWriteAllowed(key);
+                                const namespaceResponse = ensureNamespaceWriteAllowed(baseServerConfig, key);
                                 if (namespaceResponse) return namespaceResponse;
                                 const emptyData: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
                                 throwIfRequestAborted(requestAbortController.signal);
@@ -1374,8 +1260,8 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     }
 
                     if (req.method === 'PUT') {
-                        const namespaceResponse = ensureNamespaceWriteAllowed(key);
-                        if (namespaceResponse) return namespaceResponse;
+                        // Namespace write cap already enforced by withNamespace's
+                        // guardMethods override (dataServerConfig) before this runs.
                         const body = await readJsonBody(req, maxBodyBytes, requestAbortController.signal);
                         if (isBodyReadError(body)) {
                             const err = body.__mindwtrError;
@@ -1438,115 +1324,111 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             });
                         });
                     }
+
+                    // Unmatched method (only HEAD/GET/PUT are handled): fall through to
+                    // later routes exactly as before, instead of a route-specific 405.
+                    return null;
+                    });
+                    if (dataResponse) return dataResponse;
                 }
 
                 if (pathname === '/v1/attachments/orphans') {
-                    const token = getToken(req);
-                    if (!token) return unauthorizedResponse(req);
-                    if (!isAuthorizedToken(token, allowedAuthTokens)) return unauthorizedResponse(req, token);
-                    const key = tokenToKey(token);
-                    const attachmentRateKey = `${key}:${req.method}:${toRateLimitRoute(pathname)}`;
-                    const attachmentRateLimitResponse = rateLimiter.check(attachmentRateKey, maxAttachmentPerWindow);
-                    if (attachmentRateLimitResponse) return attachmentRateLimitResponse;
-                    if (req.method !== 'POST' && req.method !== 'DELETE') {
-                        return errorResponse('Method not allowed', 405);
-                    }
-
-                    return await withWriteLock(key, async () => {
-                        throwIfRequestAborted(requestAbortController.signal);
-                        const filePath = join(dataDir, `${key}.json`);
-                        const data = loadAppData(filePath);
-                        const validated = validateAppData(data);
-                        if (!validated.ok) {
-                            logWarn('Stored cloud data failed validation before attachment GC', { key, error: validated.error });
-                            return errorResponse('Stored data failed validation', 500);
+                    const orphansResponse = await withNamespace(req, url, orphansServerConfig, async (ctx) => {
+                        if (req.method !== 'POST' && req.method !== 'DELETE') {
+                            return errorResponse('Method not allowed', 405);
                         }
-                        const result = garbageCollectOrphanAttachments(dataDir, key, data);
-                        return jsonResponse({ ok: result.errors.length === 0, ...result });
+
+                        return await withWriteLock(ctx.key, async () => {
+                            throwIfRequestAborted(requestAbortController.signal);
+                            const data = loadAppData(ctx.filePath);
+                            const validated = validateAppData(data);
+                            if (!validated.ok) {
+                                logWarn('Stored cloud data failed validation before attachment GC', { key: ctx.key, error: validated.error });
+                                return errorResponse('Stored data failed validation', 500);
+                            }
+                            const result = garbageCollectOrphanAttachments(dataDir, ctx.key, data);
+                            return jsonResponse({ ok: result.errors.length === 0, ...result });
+                        });
                     });
+                    if (orphansResponse) return orphansResponse;
                 }
 
                 if (pathname.startsWith('/v1/attachments/')) {
-                    const token = getToken(req);
-                    if (!token) return unauthorizedResponse(req);
-                    if (!isAuthorizedToken(token, allowedAuthTokens)) return unauthorizedResponse(req, token);
-                    const key = tokenToKey(token);
-                    const attachmentRateKey = `${key}:${req.method}:${toRateLimitRoute(pathname)}`;
-                    const attachmentRateLimitResponse = rateLimiter.check(attachmentRateKey, maxAttachmentPerWindow);
-                    if (attachmentRateLimitResponse) return attachmentRateLimitResponse;
-
-                    const resolvedAttachmentPath = resolveAttachmentPath(dataDir, key, pathname.slice('/v1/attachments/'.length));
-                    if (!resolvedAttachmentPath) {
-                        return errorResponse('Invalid attachment path', 400);
-                    }
-                    const { rootRealPath, filePath } = resolvedAttachmentPath;
-
-                    if (req.method === 'GET') {
-                        if (!existsSync(filePath)) return errorResponse('Not found', 404);
-                        try {
-                            const realFilePath = realpathSync(filePath);
-                            if (!isPathWithinRoot(realFilePath, rootRealPath)) {
-                                return errorResponse('Invalid attachment path', 400);
-                            }
-                            const file = readFileSync(realFilePath);
-                            const headers = new Headers();
-                            headers.set('Access-Control-Allow-Origin', corsOrigin);
-                            headers.set('Content-Type', 'application/octet-stream');
-                            return new Response(file, { status: 200, headers });
-                        } catch {
-                            return errorResponse('Failed to read attachment', 500);
+                    const attachmentPathResponse = await withNamespace(req, url, attachmentPathServerConfig, async (ctx) => {
+                        const resolvedAttachmentPath = resolveAttachmentPath(dataDir, ctx.key, pathname.slice('/v1/attachments/'.length));
+                        if (!resolvedAttachmentPath) {
+                            return errorResponse('Invalid attachment path', 400);
                         }
-                    }
+                        const { rootRealPath, filePath } = resolvedAttachmentPath;
 
-                    if (req.method === 'PUT') {
-                        const namespaceResponse = ensureNamespaceWriteAllowed(key);
-                        if (namespaceResponse) return namespaceResponse;
-                        const contentType = normalizeAttachmentContentType(req.headers.get('content-type'));
-                        if (contentType) {
-                            const validation = await validateAttachmentForUpload({
-                                id: 'attachment-upload',
-                                kind: 'file',
-                                title: pathname,
-                                uri: '',
-                                createdAt: '1970-01-01T00:00:00.000Z',
-                                updatedAt: '1970-01-01T00:00:00.000Z',
-                                mimeType: contentType,
-                            } satisfies Attachment, 0);
-                            if (!validation.valid && validation.error === 'mime_type_blocked') {
-                                return errorResponse(`Blocked attachment content type: ${validation.details}`, 400);
+                        if (req.method === 'GET') {
+                            if (!existsSync(filePath)) return errorResponse('Not found', 404);
+                            try {
+                                const realFilePath = realpathSync(filePath);
+                                if (!isPathWithinRoot(realFilePath, rootRealPath)) {
+                                    return errorResponse('Invalid attachment path', 400);
+                                }
+                                const file = readFileSync(realFilePath);
+                                const headers = new Headers();
+                                headers.set('Access-Control-Allow-Origin', corsOrigin);
+                                headers.set('Content-Type', 'application/octet-stream');
+                                return new Response(file, { status: 200, headers });
+                            } catch {
+                                return errorResponse('Failed to read attachment', 500);
                             }
                         }
-                        const body = await readRequestBytes(req, maxAttachmentBytes, requestAbortController.signal);
-                        if (isBodyReadError(body)) {
-                            return errorResponse(body.__mindwtrError.message, body.__mindwtrError.status);
-                        }
-                        const blockedSignature = getBlockedAttachmentSignature(body);
-                        if (blockedSignature) {
-                            return errorResponse(`Blocked executable attachment signature: ${blockedSignature}`, 400);
-                        }
-                        throwIfRequestAborted(requestAbortController.signal);
-                        const wrote = writeAttachmentFileSafely(rootRealPath, filePath, body);
-                        if (!wrote) return errorResponse('Invalid attachment path', 400);
-                        return jsonResponse({ ok: true });
-                    }
 
-                    if (req.method === 'DELETE') {
-                        if (!existsSync(filePath)) {
+                        if (req.method === 'PUT') {
+                            // Namespace write cap already enforced by withNamespace's
+                            // guardMethods override (attachmentPathServerConfig) above.
+                            const contentType = normalizeAttachmentContentType(req.headers.get('content-type'));
+                            if (contentType) {
+                                const validation = await validateAttachmentForUpload({
+                                    id: 'attachment-upload',
+                                    kind: 'file',
+                                    title: pathname,
+                                    uri: '',
+                                    createdAt: '1970-01-01T00:00:00.000Z',
+                                    updatedAt: '1970-01-01T00:00:00.000Z',
+                                    mimeType: contentType,
+                                } satisfies Attachment, 0);
+                                if (!validation.valid && validation.error === 'mime_type_blocked') {
+                                    return errorResponse(`Blocked attachment content type: ${validation.details}`, 400);
+                                }
+                            }
+                            const body = await readRequestBytes(req, maxAttachmentBytes, requestAbortController.signal);
+                            if (isBodyReadError(body)) {
+                                return errorResponse(body.__mindwtrError.message, body.__mindwtrError.status);
+                            }
+                            const blockedSignature = getBlockedAttachmentSignature(body);
+                            if (blockedSignature) {
+                                return errorResponse(`Blocked executable attachment signature: ${blockedSignature}`, 400);
+                            }
+                            throwIfRequestAborted(requestAbortController.signal);
+                            const wrote = writeAttachmentFileSafely(rootRealPath, filePath, body);
+                            if (!wrote) return errorResponse('Invalid attachment path', 400);
                             return jsonResponse({ ok: true });
                         }
-                        try {
-                            const realFilePath = realpathSync(filePath);
-                            if (!isPathWithinRoot(realFilePath, rootRealPath)) {
-                                return errorResponse('Invalid attachment path', 400);
-                            }
-                            unlinkSync(realFilePath);
-                            return jsonResponse({ ok: true });
-                        } catch {
-                            return errorResponse('Failed to delete attachment', 500);
-                        }
-                    }
 
-                    return errorResponse('Method not allowed', 405);
+                        if (req.method === 'DELETE') {
+                            if (!existsSync(filePath)) {
+                                return jsonResponse({ ok: true });
+                            }
+                            try {
+                                const realFilePath = realpathSync(filePath);
+                                if (!isPathWithinRoot(realFilePath, rootRealPath)) {
+                                    return errorResponse('Invalid attachment path', 400);
+                                }
+                                unlinkSync(realFilePath);
+                                return jsonResponse({ ok: true });
+                            } catch {
+                                return errorResponse('Failed to delete attachment', 500);
+                            }
+                        }
+
+                        return errorResponse('Method not allowed', 405);
+                    });
+                    if (attachmentPathResponse) return attachmentPathResponse;
                 }
 
                 return errorResponse('Not found', 404);

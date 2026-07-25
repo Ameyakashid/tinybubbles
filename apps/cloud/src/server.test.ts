@@ -17,6 +17,14 @@ import {
 } from './server-auth';
 import {
     BEARER_TOKEN_PATTERN,
+    CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS,
+    CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS,
+    CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS,
+    CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS,
+    CLOUD_SECTION_CREATION_ALLOWED_PROP_KEYS,
+    CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS,
+    CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS,
+    CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS,
     corsOrigin,
     createInternalServerErrorResponse,
     errorResponse,
@@ -42,8 +50,7 @@ import {
 import {
     asStatus,
     validateAppData,
-    validateTaskCreationProps,
-    validateTaskPatchProps,
+    validateEntityProps,
 } from './server-validation';
 import { resolveServerMergeTimestamp, startCloudServer } from './server';
 
@@ -448,8 +455,48 @@ describe('cloud server utils', () => {
         expect(asStatus('in-progress')).toBeNull();
     });
 
+    // Table test for the validateEntityProps() consolidation: covers all 8
+    // (kind, mode) pairs that used to be eight near-identical
+    // validate{Task,Project,Section,Area}{Creation,Patch}Props functions. Each
+    // pair is checked against a real allowlisted key (pulled from the same
+    // CLOUD_*_ALLOWED_PROP_KEYS the server enforces, so this can't drift out of
+    // sync with the allowlist) and a key no kind/mode ever allows.
+    const ENTITY_PROPS_ALLOWED_KEYS: Record<'task' | 'project' | 'section' | 'area', Record<'create' | 'patch', ReadonlySet<string>>> = {
+        task: { create: CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS, patch: CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS },
+        project: { create: CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS, patch: CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS },
+        section: { create: CLOUD_SECTION_CREATION_ALLOWED_PROP_KEYS, patch: CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS },
+        area: { create: CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS, patch: CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS },
+    };
+
+    test('validateEntityProps enforces the right allowlist for every (kind, mode) pair', () => {
+        for (const kind of ['task', 'project', 'section', 'area'] as const) {
+            for (const mode of ['create', 'patch'] as const) {
+                const label = `${kind} ${mode}`;
+                const allowedKeys = ENTITY_PROPS_ALLOWED_KEYS[kind][mode];
+                const [sampleValidKey] = allowedKeys;
+                if (!sampleValidKey) throw new Error(`${label} allowlist should be non-empty`);
+
+                const validResult = validateEntityProps(kind, mode, { [sampleValidKey]: undefined });
+                if (!validResult.ok) throw new Error(`${label} should accept ${sampleValidKey}, got: ${validResult.error}`);
+
+                const invalidResult = validateEntityProps(kind, mode, { __never_a_real_prop__: true });
+                if (invalidResult.ok) throw new Error(`${label} should reject an unlisted key`);
+                expect(invalidResult.error).toContain('__never_a_real_prop__');
+                expect(invalidResult.error).toContain(kind);
+            }
+        }
+
+        // Non-object input is rejected for every pair too.
+        for (const kind of ['task', 'project', 'section', 'area'] as const) {
+            for (const mode of ['create', 'patch'] as const) {
+                const result = validateEntityProps(kind, mode, 'not-an-object');
+                expect(result.ok).toBe(false);
+            }
+        }
+    });
+
     test('rejects reserved task creation props', () => {
-        expect(validateTaskCreationProps({
+        expect(validateEntityProps('task', 'create', {
             status: 'next',
             energyLevel: 'medium',
             assignedTo: 'person-1',
@@ -458,7 +505,7 @@ describe('cloud server utils', () => {
             suppressMindwtrReminders: true,
         }).ok).toBe(true);
 
-        const invalid = validateTaskCreationProps({
+        const invalid = validateEntityProps('task', 'create', {
             status: 'next',
             rev: 99,
             deletedAt: '2026-01-01T00:00:00.000Z',
@@ -470,7 +517,7 @@ describe('cloud server utils', () => {
     });
 
     test('rejects reserved task patch props', () => {
-        expect(validateTaskPatchProps({
+        expect(validateEntityProps('task', 'patch', {
             title: 'Renamed',
             status: 'next',
             energyLevel: 'low',
@@ -479,7 +526,7 @@ describe('cloud server utils', () => {
             suppressMindwtrReminders: false,
         }).ok).toBe(true);
 
-        const invalid = validateTaskPatchProps({
+        const invalid = validateEntityProps('task', 'patch', {
             id: 'override',
             createdAt: '2026-01-01T00:00:00.000Z',
             arbitrary: 'value',
@@ -492,33 +539,33 @@ describe('cloud server utils', () => {
     });
 
     test('validates schedule task prop values before REST writes', () => {
-        expect(validateTaskCreationProps({
+        expect(validateEntityProps('task', 'create', {
             status: 'next',
             repeatReminderMinutes: 15,
             relativeStartOffset: { amount: -3, unit: 'day' },
             recurrence: { rule: 'weekly', byDay: ['MO'] },
         }).ok).toBe(true);
-        expect(validateTaskPatchProps({
+        expect(validateEntityProps('task', 'patch', {
             repeatReminderMinutes: 0,
             recurrence: 'FREQ=DAILY;INTERVAL=2',
         }).ok).toBe(true);
 
-        const invalidRepeat = validateTaskCreationProps({ repeatReminderMinutes: 7 });
+        const invalidRepeat = validateEntityProps('task', 'create', { repeatReminderMinutes: 7 });
         expect(invalidRepeat.ok).toBe(false);
         if (invalidRepeat.ok) throw new Error('Expected invalid repeatReminderMinutes');
         expect(invalidRepeat.error).toContain('repeatReminderMinutes');
 
-        const invalidOffset = validateTaskPatchProps({ relativeStartOffset: { amount: 3, unit: 'day' } });
+        const invalidOffset = validateEntityProps('task', 'patch', { relativeStartOffset: { amount: 3, unit: 'day' } });
         expect(invalidOffset.ok).toBe(false);
         if (invalidOffset.ok) throw new Error('Expected invalid relativeStartOffset');
         expect(invalidOffset.error).toContain('relativeStartOffset');
 
-        const invalidRecurrence = validateTaskPatchProps({ recurrence: { rule: 'daily', arbitrary: true } });
+        const invalidRecurrence = validateEntityProps('task', 'patch', { recurrence: { rule: 'daily', arbitrary: true } });
         expect(invalidRecurrence.ok).toBe(false);
         if (invalidRecurrence.ok) throw new Error('Expected invalid recurrence');
         expect(invalidRecurrence.error).toContain('recurrence');
 
-        const invalidRecurrenceValue = validateTaskPatchProps({ recurrence: { rule: 'weekly', byDay: ['NOPE'] } });
+        const invalidRecurrenceValue = validateEntityProps('task', 'patch', { recurrence: { rule: 'weekly', byDay: ['NOPE'] } });
         expect(invalidRecurrenceValue.ok).toBe(false);
         if (invalidRecurrenceValue.ok) throw new Error('Expected invalid recurrence value');
         expect(invalidRecurrenceValue.error).toContain('recurrence');
@@ -1036,6 +1083,104 @@ describe('cloud server namespace mode', () => {
                 body: JSON.stringify({ tasks: [], projects: [], sections: [], areas: [], settings: {} }),
             });
             expect(existingNamespaceResponse.status).toBe(200);
+        } finally {
+            server.stop();
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    // Table test for the withNamespace() extraction: every namespaced write route
+    // must consult the namespace cap through the same shared guard, so a route
+    // added later can't silently skip it the way /v1/attachments/orphans did
+    // (it copied the auth/rate-limit preamble by hand and dropped the guard call).
+    // Regression coverage: this test fails against the pre-refactor server.ts for
+    // the two /v1/attachments/orphans cases (verified manually: they returned 200
+    // instead of 403 before withNamespace existed).
+    const NAMESPACED_WRITE_ROUTES: Array<{ name: string; method: string; path: string; body?: unknown }> = [
+        { name: 'POST /v1/tasks', method: 'POST', path: '/v1/tasks', body: { title: 'Namespace probe' } },
+        { name: 'PATCH /v1/tasks/:id', method: 'PATCH', path: '/v1/tasks/00000000-0000-4000-8000-000000000000', body: { title: 'x' } },
+        { name: 'DELETE /v1/tasks/:id', method: 'DELETE', path: '/v1/tasks/00000000-0000-4000-8000-000000000000' },
+        { name: 'POST /v1/tasks/:id/complete', method: 'POST', path: '/v1/tasks/00000000-0000-4000-8000-000000000000/complete' },
+        { name: 'POST /v1/tasks/:id/archive', method: 'POST', path: '/v1/tasks/00000000-0000-4000-8000-000000000000/archive' },
+        { name: 'POST /v1/projects', method: 'POST', path: '/v1/projects', body: { title: 'Namespace probe' } },
+        { name: 'PATCH /v1/projects/:id', method: 'PATCH', path: '/v1/projects/probe-id', body: { title: 'x' } },
+        { name: 'DELETE /v1/projects/:id', method: 'DELETE', path: '/v1/projects/probe-id' },
+        { name: 'POST /v1/sections', method: 'POST', path: '/v1/sections', body: { title: 'Namespace probe', projectId: 'p1' } },
+        { name: 'PATCH /v1/sections/:id', method: 'PATCH', path: '/v1/sections/probe-id', body: { title: 'x' } },
+        { name: 'DELETE /v1/sections/:id', method: 'DELETE', path: '/v1/sections/probe-id' },
+        { name: 'POST /v1/areas', method: 'POST', path: '/v1/areas', body: { name: 'Namespace probe' } },
+        { name: 'PATCH /v1/areas/:id', method: 'PATCH', path: '/v1/areas/probe-id', body: { name: 'x' } },
+        { name: 'DELETE /v1/areas/:id', method: 'DELETE', path: '/v1/areas/probe-id' },
+        {
+            name: 'PUT /v1/data',
+            method: 'PUT',
+            path: '/v1/data',
+            body: { tasks: [], projects: [], sections: [], areas: [], settings: {} },
+        },
+        { name: 'POST /v1/attachments/orphans', method: 'POST', path: '/v1/attachments/orphans' },
+        { name: 'DELETE /v1/attachments/orphans', method: 'DELETE', path: '/v1/attachments/orphans' },
+        { name: 'PUT /v1/attachments/:path', method: 'PUT', path: '/v1/attachments/probe.bin', body: 'raw-bytes' },
+    ];
+
+    test('enforces the namespace cap and the rate limiter on every namespaced write route', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-routes-test-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: tempDataDir,
+            allowedAuthTokens: null,
+            // Disabling namespace creation outright means ANY brand-new token's first
+            // write must be rejected by the guard, regardless of which route it hits.
+            maxAnyTokenNamespaces: 0,
+        });
+        const url = `http://127.0.0.1:${server.port}`;
+        try {
+            for (const [index, route] of NAMESPACED_WRITE_ROUTES.entries()) {
+                const token = `namespace-route-probe-token-${index}-1234567890`;
+                const isJsonBody = typeof route.body === 'object';
+                const response = await fetch(`${url}${route.path}`, {
+                    method: route.method,
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        ...(route.body !== undefined ? { 'content-type': isJsonBody ? 'application/json' : 'application/octet-stream' } : {}),
+                    },
+                    body: route.body === undefined ? undefined : isJsonBody ? JSON.stringify(route.body) : String(route.body),
+                });
+                const payload = await response.json().catch(() => null);
+                if (response.status !== 403 || payload?.error !== 'Token namespace creation is disabled') {
+                    throw new Error(`${route.name}: expected 403 "Token namespace creation is disabled", got ${response.status} ${JSON.stringify(payload)}`);
+                }
+            }
+        } finally {
+            server.stop();
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('rate limits a namespaced write route the same as its read route', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-rate-test-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: tempDataDir,
+            windowMs: 60_000,
+            maxPerWindow: 2,
+            maxAttachmentPerWindow: 2,
+            allowedAuthTokens: new Set(['rate-limit-probe-token-1234567890']),
+        });
+        const url = `http://127.0.0.1:${server.port}`;
+        const authHeaders = { Authorization: 'Bearer rate-limit-probe-token-1234567890' };
+        try {
+            let lastStatus = 0;
+            for (let i = 0; i < 5; i += 1) {
+                const response = await fetch(`${url}/v1/attachments/orphans`, {
+                    method: 'POST',
+                    headers: authHeaders,
+                });
+                lastStatus = response.status;
+                if (lastStatus === 429) break;
+            }
+            expect(lastStatus).toBe(429);
         } finally {
             server.stop();
             rmSync(tempDataDir, { recursive: true, force: true });

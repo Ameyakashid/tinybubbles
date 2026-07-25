@@ -280,7 +280,10 @@ export function readData(filePath: string): AppData | null {
     }
 }
 
-export function loadAppData(filePath: string): AppData {
+// Raw, uncached disk read. server-data-cache.ts wraps this as the process-local-cached
+// `loadAppData` that the rest of the server imports; this uncached name stays distinct
+// so an import site can tell at a glance which one it's getting.
+export function loadAppDataUncached(filePath: string): AppData {
     const raw = readData(filePath);
     if (!raw) return createDefaultData();
     const nowIso = new Date().toISOString();

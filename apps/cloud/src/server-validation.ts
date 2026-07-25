@@ -386,124 +386,67 @@ export function asStatus(value: unknown): TaskStatus | null {
     return allowed.includes(value as TaskStatus) ? (value as TaskStatus) : null;
 }
 
-export function validateTaskCreationProps(
+type EntityPropsMap = { task: Task; project: Project; section: Section; area: Area };
+export type EntityPropsKind = keyof EntityPropsMap;
+export type EntityPropsMode = 'create' | 'patch';
+
+type EntityPropsConfigEntry = {
+    allowedKeys: Record<EntityPropsMode, ReadonlySet<string>>;
+    validateValues?: (value: Record<string, unknown>) => string | null;
+};
+
+// One allowlist-plus-value-check config per (entity, create|patch) pair, replacing
+// eight near-identical validate{Task,Project,Section,Area}{Creation,Patch}Props
+// functions that differed only by this data.
+const ENTITY_PROPS_CONFIG: Record<EntityPropsKind, EntityPropsConfigEntry> = {
+    task: {
+        allowedKeys: {
+            create: CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+            patch: CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+        },
+        validateValues: validateTaskPropValues,
+    },
+    project: {
+        allowedKeys: {
+            create: CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+            patch: CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+        },
+        validateValues: validateProjectPropValues,
+    },
+    section: {
+        allowedKeys: {
+            create: CLOUD_SECTION_CREATION_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+            patch: CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+        },
+    },
+    area: {
+        allowedKeys: {
+            create: CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+            patch: CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS as ReadonlySet<string>,
+        },
+    },
+};
+
+const ENTITY_PROPS_NOUN: Record<EntityPropsMode, string> = { create: 'props', patch: 'updates' };
+
+export function validateEntityProps<K extends EntityPropsKind>(
+    kind: K,
+    mode: EntityPropsMode,
     value: unknown
-): { ok: true; props: Partial<Task> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid task props' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS.has(key as keyof Task));
+): { ok: true; props: Partial<EntityPropsMap[K]> } | { ok: false; error: string } {
+    const noun = ENTITY_PROPS_NOUN[mode];
+    if (!isRecord(value)) return { ok: false, error: `Invalid ${kind} ${noun}` };
+    const config = ENTITY_PROPS_CONFIG[kind];
+    const invalidKeys = Object.keys(value).filter((key) => !config.allowedKeys[mode].has(key));
     if (invalidKeys.length > 0) {
         return {
             ok: false,
-            error: `Unsupported task props: ${invalidKeys.slice(0, 10).join(', ')}`,
+            error: `Unsupported ${kind} ${noun}: ${invalidKeys.slice(0, 10).join(', ')}`,
         };
     }
-    const valueError = validateTaskPropValues(value);
+    const valueError = config.validateValues?.(value);
     if (valueError) return { ok: false, error: valueError };
-    return { ok: true, props: value as Partial<Task> };
-}
-
-export function validateTaskPatchProps(
-    value: unknown
-): { ok: true; props: Partial<Task> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid task updates' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS.has(key as keyof Task));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported task updates: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    const valueError = validateTaskPropValues(value);
-    if (valueError) return { ok: false, error: valueError };
-    return { ok: true, props: value as Partial<Task> };
-}
-
-export function validateProjectCreationProps(
-    value: unknown
-): { ok: true; props: Partial<Project> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid project props' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS.has(key as keyof Project));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported project props: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    const valueError = validateProjectPropValues(value);
-    if (valueError) return { ok: false, error: valueError };
-    return { ok: true, props: value as Partial<Project> };
-}
-
-export function validateProjectPatchProps(
-    value: unknown
-): { ok: true; props: Partial<Project> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid project updates' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS.has(key as keyof Project));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported project updates: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    const valueError = validateProjectPropValues(value);
-    if (valueError) return { ok: false, error: valueError };
-    return { ok: true, props: value as Partial<Project> };
-}
-
-export function validateSectionCreationProps(
-    value: unknown
-): { ok: true; props: Partial<Section> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid section props' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_SECTION_CREATION_ALLOWED_PROP_KEYS.has(key as keyof Section));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported section props: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    return { ok: true, props: value as Partial<Section> };
-}
-
-export function validateSectionPatchProps(
-    value: unknown
-): { ok: true; props: Partial<Section> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid section updates' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS.has(key as keyof Section));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported section updates: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    return { ok: true, props: value as Partial<Section> };
-}
-
-export function validateAreaCreationProps(
-    value: unknown
-): { ok: true; props: Partial<Area> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid area props' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS.has(key as keyof Area));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported area props: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    return { ok: true, props: value as Partial<Area> };
-}
-
-export function validateAreaPatchProps(
-    value: unknown
-): { ok: true; props: Partial<Area> } | { ok: false; error: string } {
-    if (!isRecord(value)) return { ok: false, error: 'Invalid area updates' };
-    const invalidKeys = Object.keys(value).filter((key) => !CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS.has(key as keyof Area));
-    if (invalidKeys.length > 0) {
-        return {
-            ok: false,
-            error: `Unsupported area updates: ${invalidKeys.slice(0, 10).join(', ')}`,
-        };
-    }
-    return { ok: true, props: value as Partial<Area> };
+    return { ok: true, props: value as Partial<EntityPropsMap[K]> };
 }
 
 export function pickTaskList(
