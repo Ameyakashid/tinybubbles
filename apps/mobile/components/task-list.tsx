@@ -547,6 +547,7 @@ function TaskListComponent({
     t,
     visibility: metadataFilterVisibility,
   });
+  const { criteria: filterCriteria, searchQuery: filterSearchQuery } = selections;
   const timeEstimateFilterOptions = useMemo(
     () => resolveTimeEstimateFilterOptions(settings?.gtd?.timeEstimatePresets),
     [settings?.gtd?.timeEstimatePresets],
@@ -582,8 +583,9 @@ function TaskListComponent({
 
   // Memoize filtered and sorted tasks for performance
   const filteredTasks = useMemo(() => {
-    return filterableTasks.filter((task) => taskMatchesFilterSelections(task, selections));
-  }, [filterableTasks, selections.criteria, selections.searchQuery]);
+    const filterSelections = { criteria: filterCriteria, searchQuery: filterSearchQuery };
+    return filterableTasks.filter((task) => taskMatchesFilterSelections(task, filterSelections));
+  }, [filterCriteria, filterSearchQuery, filterableTasks]);
 
   const orderedTasks = useMemo(() => {
     if (projectId && enableProjectReorder && sortBy === 'default') {
