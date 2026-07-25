@@ -23,7 +23,7 @@ import {
     withTimeout,
     buildSaveSnapshot,
 } from './store-helpers';
-import { buildLoadContext, didApplyLastDataChangeTrackedMigration, runAutoArchive, runLoadMigrations } from './store-load-migrations';
+import { buildLoadContext, runAutoArchive, runLoadMigrations } from './store-load-migrations';
 import { createSeedGettingStartedAction } from './getting-started-seed';
 import { beginNotifyProfile, endNotifyProfile, type NotifyProfile } from './store-notify-profiler';
 
@@ -237,7 +237,7 @@ export const createSettingsActions = ({
                         projectsReplaced = nextProjects.replacedCount;
                         settingsReused = settingsForState === state.settings;
                         visibleTasksReused = visibleTasks === state.tasks;
-                        const nextLastDataChangeAt = didApplyLastDataChangeTrackedMigration(applied)
+                        const nextLastDataChangeAt = applied.length > 0
                             ? getNextDataChangeAt(state.lastDataChangeAt)
                             : state.lastDataChangeAt;
                         if (

@@ -83,7 +83,6 @@ export type LoadMigration = {
      * both kinds trigger a save. See runLoadMigrations' caller for how this
      * is used; do not use it to gate persistence, only the causality bump.
      */
-    bumpsLastDataChangeAt: boolean;
 };
 
 const normalizeAreaForLoad = (area: Area, fallbackOrder: number, nowIso: string): Area => {
@@ -103,7 +102,6 @@ const normalizeAreaForLoad = (area: Area, fallbackOrder: number, nowIso: string)
 
 const normalizeAreaTimestampsMigration: LoadMigration = {
     name: 'normalize-area-timestamps',
-    bumpsLastDataChangeAt: false,
     run: (data, ctx) => {
         let changed = false;
         const areas = data.areas.map((area, index) => {
@@ -119,7 +117,6 @@ const normalizeAreaTimestampsMigration: LoadMigration = {
 
 const bumpMigrationsVersionMigration: LoadMigration = {
     name: 'bump-migrations-version',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunSchemaMigration,
     run: (data) => ({
         ...data,
@@ -132,7 +129,6 @@ const bumpMigrationsVersionMigration: LoadMigration = {
 
 const bumpAutoArchiveTimestampMigration: LoadMigration = {
     name: 'bump-auto-archive-timestamp',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunAutoArchive,
     run: (data, ctx) => ({
         ...data,
@@ -145,7 +141,6 @@ const bumpAutoArchiveTimestampMigration: LoadMigration = {
 
 const bumpTombstoneCleanupTimestampMigration: LoadMigration = {
     name: 'bump-tombstone-cleanup-timestamp',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunTombstoneCleanup,
     run: (data, ctx) => ({
         ...data,
@@ -158,7 +153,6 @@ const bumpTombstoneCleanupTimestampMigration: LoadMigration = {
 
 const ensureDeviceIdMigration: LoadMigration = {
     name: 'ensure-device-id',
-    bumpsLastDataChangeAt: false,
     run: (data) => {
         const result = ensureDeviceId(data.settings);
         return result.updated ? { ...data, settings: result.settings } : null;
@@ -167,7 +161,6 @@ const ensureDeviceIdMigration: LoadMigration = {
 
 const freshInstallNotificationsDefaultMigration: LoadMigration = {
     name: 'fresh-install-notifications-default',
-    bumpsLastDataChangeAt: false,
     run: (data, ctx) => {
         if (!ctx.isFreshInstall || data.settings.notificationsEnabled !== undefined) return null;
         return { ...data, settings: { ...data.settings, notificationsEnabled: false } };
@@ -176,7 +169,6 @@ const freshInstallNotificationsDefaultMigration: LoadMigration = {
 
 const taskEditorDefaultsMigration: LoadMigration = {
     name: 'task-editor-defaults',
-    bumpsLastDataChangeAt: false,
     run: (data) => {
         const existing = data.settings.gtd?.taskEditor;
         const currentVersion = existing?.defaultsVersion ?? 0;
@@ -215,7 +207,6 @@ const taskEditorDefaultsMigration: LoadMigration = {
 
 const focusGroupByDefaultsMigration: LoadMigration = {
     name: 'focus-group-by-defaults',
-    bumpsLastDataChangeAt: false,
     run: (data, ctx) => {
         const currentVersion = data.settings.gtd?.focusGroupByDefaultsVersion ?? 0;
         if (currentVersion >= FOCUS_GROUP_BY_DEFAULTS_VERSION) return null;
@@ -247,7 +238,6 @@ const focusGroupByDefaultsMigration: LoadMigration = {
 
 const clearDeletedTaskProjectArchiveMetadataMigration: LoadMigration = {
     name: 'clear-deleted-task-project-archive-metadata',
-    bumpsLastDataChangeAt: true,
     run: (data) => {
         let changed = false;
         const tasks = data.tasks.map((task) => {
@@ -281,7 +271,6 @@ function shouldPromoteScheduledTask(task: Task, nowMs: number): boolean {
 
 const promoteScheduledTasksMigration: LoadMigration = {
     name: 'promote-scheduled-tasks',
-    bumpsLastDataChangeAt: true,
     run: (data, ctx) => {
         let changed = false;
         const tasks = data.tasks.map((task) => {
@@ -363,7 +352,6 @@ export const runAutoArchive = (
 
 const autoArchiveStaleTasksMigration: LoadMigration = {
     name: 'auto-archive-stale-tasks',
-    bumpsLastDataChangeAt: true,
     shouldRun: (ctx) => ctx.shouldRunAutoArchive,
     run: (data, ctx) => {
         const result = runAutoArchive(data.tasks, data.settings, {
@@ -377,7 +365,6 @@ const autoArchiveStaleTasksMigration: LoadMigration = {
 
 const normalizePeopleForLoadMigration: LoadMigration = {
     name: 'normalize-people-for-load',
-    bumpsLastDataChangeAt: true,
     // Depends on the task list above: assignedTo -> Person derivation reads
     // the already promoted/archived tasks.
     run: (data, ctx) => {
@@ -393,7 +380,6 @@ const normalizePeopleForLoadMigration: LoadMigration = {
 // for a project/area that itself needed no repair).
 const normalizeProjectStatusAndTagsMigration: LoadMigration = {
     name: 'normalize-project-status-and-tags',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunSchemaMigration,
     run: (data) => {
         const projects = data.projects.map((project) => {
@@ -415,7 +401,6 @@ const normalizeProjectStatusAndTagsMigration: LoadMigration = {
 
 const migrateProjectOrderMigration: LoadMigration = {
     name: 'migrate-project-order',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunSchemaMigration,
     // Consumes normalize-project-status-and-tags' output.
     run: (data) => {
@@ -434,7 +419,6 @@ const migrateProjectOrderMigration: LoadMigration = {
 
 const migrateLegacyAreasMigration: LoadMigration = {
     name: 'migrate-legacy-areas',
-    bumpsLastDataChangeAt: false,
     shouldRun: (ctx) => ctx.shouldRunSchemaMigration,
     // Consumes migrate-project-order's output; must run after
     // normalize-area-timestamps so area order/timestamps are already filled in.
@@ -497,7 +481,6 @@ const migrateLegacyAreasMigration: LoadMigration = {
 
 const dedupeAreasByNameMigration: LoadMigration = {
     name: 'dedupe-areas-by-name',
-    bumpsLastDataChangeAt: false,
     // Runs unconditionally (not just for legacy installs) so duplicate area
     // names introduced by a sync merge get cleaned up on every load. Must run
     // after migrate-legacy-areas so any areas it created are included in the
@@ -557,7 +540,6 @@ const dedupeAreasByNameMigration: LoadMigration = {
 
 const archiveDescendantsOfArchivedProjectsMigration: LoadMigration = {
     name: 'archive-descendants-of-archived-projects',
-    bumpsLastDataChangeAt: true,
     // Reads project.status === 'archived', so must run after any step above
     // that can change project status (normalize-project-status-and-tags).
     run: (data, ctx) => {
@@ -587,7 +569,6 @@ const archiveDescendantsOfArchivedProjectsMigration: LoadMigration = {
 
 const repairDanglingEntityReferencesMigration: LoadMigration = {
     name: 'repair-dangling-entity-references',
-    bumpsLastDataChangeAt: true,
     // Must run after the archive pass above: section archival there changes
     // which sections are "active", which this repair depends on.
     run: (data, ctx) => {
@@ -647,7 +628,6 @@ const repairDanglingEntityReferencesMigration: LoadMigration = {
 
 const purgeExpiredTombstonesMigration: LoadMigration = {
     name: 'purge-expired-tombstones',
-    bumpsLastDataChangeAt: true,
     shouldRun: (ctx) => ctx.shouldRunTombstoneCleanup,
     // Must run last: purge only after every repair pass above has settled,
     // so nothing still-referenced above gets purged prematurely.
@@ -725,14 +705,6 @@ const LOAD_MIGRATIONS: LoadMigration[] = [
     repairDanglingEntityReferencesMigration,
     purgeExpiredTombstonesMigration,
 ];
-
-const LAST_DATA_CHANGE_TRACKED_MIGRATION_NAMES = new Set(
-    LOAD_MIGRATIONS.filter((migration) => migration.bumpsLastDataChangeAt).map((migration) => migration.name)
-);
-
-/** See LoadMigration.bumpsLastDataChangeAt for why this is not just `applied.length > 0`. */
-export const didApplyLastDataChangeTrackedMigration = (applied: readonly string[]): boolean =>
-    applied.some((name) => LAST_DATA_CHANGE_TRACKED_MIGRATION_NAMES.has(name));
 
 export const runLoadMigrations = (data: AppData, ctx: LoadContext): { data: AppData; applied: string[] } => {
     let current = data;

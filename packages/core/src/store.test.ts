@@ -2025,6 +2025,33 @@ describe('TaskStore', () => {
         }
     });
 
+    it('advances lastDataChangeAt when a load migration mutates synced entities', async () => {
+        // dedupe-areas-by-name tombstones a duplicate area and remaps the projects pointing at
+        // it. That is a synced-entity mutation, so a sync in flight during the load has to see
+        // the local change and requeue -- otherwise it can write a pre-dedupe snapshot and
+        // resurrect the tombstoned area.
+        mockStorage.getData = vi.fn().mockResolvedValue({
+            tasks: [],
+            projects: [{
+                id: 'p1', title: 'P', status: 'active', color: '#000', order: 0, tagIds: [],
+                areaId: 'area-b', createdAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-02-01T00:00:00.000Z',
+            }],
+            sections: [],
+            areas: [
+                { id: 'area-a', name: 'Work', order: 0, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+                { id: 'area-b', name: 'Work', order: 1, createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' },
+            ],
+            settings: {},
+        });
+
+        const before = useTaskStore.getState().lastDataChangeAt;
+        await useTaskStore.getState().fetchData({ silent: true });
+
+        const loaded = useTaskStore.getState();
+        expect(loaded._allAreas.find((area) => area.id === 'area-b')?.deletedAt).toBeTruthy();
+        expect(loaded.lastDataChangeAt).toBeGreaterThan(before);
+    });
+
     it('does not enqueue a second save when reloading data a prior fetch already migrated', async () => {
         mockStorage.getData = vi.fn().mockResolvedValue({
             tasks: [
