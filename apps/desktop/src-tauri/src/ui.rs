@@ -6,6 +6,7 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow},
 };
 
+const QUIT_WATCHDOG_SECONDS: u64 = 5;
 const QUICK_ADD_WINDOW_WIDTH: f64 = 620.0;
 const QUICK_ADD_WINDOW_HEIGHT: f64 = 420.0;
 const GNOME_INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
@@ -347,10 +348,21 @@ pub(crate) fn quit_app(app: tauri::AppHandle) {
         "Close trace: quit_app command invoked, calling app.exit(0)",
     );
     app.exit(0);
-    crate::logging::append_native_log_line(
-        &app,
-        "Close trace: app.exit(0) returned without terminating",
-    );
+    // app.exit only asks the event loop to exit and returns straight away, so a
+    // line logged right here printed on every healthy quit and read like a
+    // failure in shared logs (#913). Report only if the process is genuinely
+    // still alive well after the request; this thread dies with the process
+    // when the exit works, so a clean quit stays silent.
+    let watchdog_app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(
+            QUIT_WATCHDOG_SECONDS,
+        ));
+        crate::logging::append_native_log_line(
+            &watchdog_app,
+            "Close trace: still running after app.exit(0); the exit did not terminate the process",
+        );
+    });
 }
 
 #[tauri::command]
