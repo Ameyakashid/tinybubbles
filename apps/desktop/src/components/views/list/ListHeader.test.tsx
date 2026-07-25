@@ -71,7 +71,7 @@ describe('ListHeader', () => {
     it('wraps translated titles instead of truncating them', () => {
         render(
             <ListHeader
-                title="Algum dia/Talvez"
+                title="Aguardando"
                 showNextCount={false}
                 nextCount={0}
                 taskCount={12}
@@ -90,9 +90,14 @@ describe('ListHeader', () => {
             />
         );
 
-        const title = screen.getByRole('heading', { level: 2, name: 'Algum dia/Talvez' });
+        const title = screen.getByRole('heading', { level: 2, name: 'Aguardando' });
         expect(title).toHaveClass('break-words');
         expect(title).not.toHaveClass('truncate');
+        // The heading classes alone are not enough: the title column shares a flex
+        // row with the toolbar, so a zero minimum width let the toolbar squeeze a
+        // single long word until it broke mid-word ("Aguardand / o"). Keeping the
+        // column's content-based floor is what actually holds the word together.
+        expect(title.parentElement).not.toHaveClass('min-w-0');
     });
 
     it('renders supplied group-by options including tags', () => {
