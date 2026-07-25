@@ -354,10 +354,37 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
 
     useEffect(() => clearCalendarDragNavTimeout, [clearCalendarDragNavTimeout]);
 
+    // This nav item is the only place a task dragged out of a list can be dropped,
+    // and nothing pointed at it: the row-wide grab cursor in lists without manual
+    // ordering read as "reorder me" and the capability was undiscoverable (#867).
+    // The drag starts on a task row anywhere in the app, so the flag comes from a
+    // document listener rather than being threaded through every list view.
+    const [taskDragActive, setTaskDragActive] = useState(false);
+    const [calendarDragOver, setCalendarDragOver] = useState(false);
+
+    useEffect(() => {
+        const handleDragStart = (event: globalThis.DragEvent) => {
+            if (hasCalendarTaskDragData(event.dataTransfer)) setTaskDragActive(true);
+        };
+        const handleDragFinished = () => {
+            setTaskDragActive(false);
+            setCalendarDragOver(false);
+        };
+        document.addEventListener('dragstart', handleDragStart);
+        document.addEventListener('dragend', handleDragFinished);
+        document.addEventListener('drop', handleDragFinished);
+        return () => {
+            document.removeEventListener('dragstart', handleDragStart);
+            document.removeEventListener('dragend', handleDragFinished);
+            document.removeEventListener('drop', handleDragFinished);
+        };
+    }, []);
+
     const handleCalendarNavDragEnter = useCallback((event: DragEvent<HTMLButtonElement>) => {
         if (!hasCalendarTaskDragData(event.dataTransfer)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
+        setCalendarDragOver(true);
         if (currentView === 'calendar' || calendarDragNavTimeoutRef.current !== null) return;
         calendarDragNavTimeoutRef.current = window.setTimeout(() => {
             onViewChange('calendar');
@@ -372,11 +399,13 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const handleCalendarNavDragLeave = useCallback((event: DragEvent<HTMLButtonElement>) => {
         const relatedTarget = event.relatedTarget;
         if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) return;
+        setCalendarDragOver(false);
         clearCalendarDragNavTimeout();
     }, [clearCalendarDragNavTimeout]);
     const handleCalendarNavDrop = useCallback((event: DragEvent<HTMLButtonElement>) => {
         if (!hasCalendarTaskDragData(event.dataTransfer)) return;
         event.preventDefault();
+        setCalendarDragOver(false);
         clearCalendarDragNavTimeout();
         if (currentView !== 'calendar') {
             onViewChange('calendar');
@@ -674,7 +703,11 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                             "w-full flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
                                             itemWeightClass,
                                             isActiveItem ? "bg-primary/5 text-primary" : inactiveItemClass,
-                                            isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5"
+                                            isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5",
+                                            // Last so they win the merge: the drop target has to read as
+                                            // available even on the active item's own tinted background.
+                                            item.id === 'calendar' && taskDragActive && "ring-1 ring-primary/50 bg-primary/5 text-primary",
+                                            item.id === 'calendar' && calendarDragOver && "ring-2 ring-primary bg-primary/15 text-primary"
                                         )}
                                         aria-current={isActiveItem ? 'page' : undefined}
                                         title={itemLabel}

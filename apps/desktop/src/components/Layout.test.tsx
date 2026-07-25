@@ -7,6 +7,7 @@ import { KeybindingProvider } from '../contexts/keybinding-context';
 import { useUiStore } from '../store/ui-store';
 import { useObsidianStore } from '../store/obsidian-store';
 import { SyncService } from '../lib/sync-service';
+import { CALENDAR_TASK_DRAG_MIME } from '../lib/calendar-task-drag';
 import { Layout } from './Layout';
 
 const initialTaskState = useTaskStore.getState();
@@ -487,5 +488,32 @@ describe('Layout sync security warning', () => {
             webdavSpy.mockRestore();
             cloudSpy.mockRestore();
         }
+    });
+
+    // This nav item is the only place a task dragged out of a list can be dropped,
+    // and it gave no sign of that while a drag was in flight, so the capability was
+    // undiscoverable (#867).
+    it('highlights the calendar nav item while a task drag is in flight', () => {
+        const { getByRole } = renderLayout();
+        const calendarItem = getByRole('button', { name: 'Calendar' });
+        expect(calendarItem.className).not.toContain('ring-1');
+
+        const dispatchDrag = (type: string, withTaskData: boolean) => act(() => {
+            const event = new Event(type, { bubbles: true });
+            Object.defineProperty(event, 'dataTransfer', {
+                value: { types: withTaskData ? [CALENDAR_TASK_DRAG_MIME] : ['text/plain'], getData: () => '' },
+            });
+            document.dispatchEvent(event);
+        });
+
+        dispatchDrag('dragstart', true);
+        expect(calendarItem.className).toContain('ring-1');
+
+        dispatchDrag('dragend', true);
+        expect(calendarItem.className).not.toContain('ring-1');
+
+        // An unrelated drag (text, a file) must not advertise the calendar.
+        dispatchDrag('dragstart', false);
+        expect(calendarItem.className).not.toContain('ring-1');
     });
 });
