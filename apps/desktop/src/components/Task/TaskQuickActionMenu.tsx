@@ -11,9 +11,7 @@ import { createPortal } from 'react-dom';
 import { BookOpen, Calendar, CalendarClock, ChevronRight, Copy, FolderPlus, MapPin, Pencil, Tag, Trash2 } from 'lucide-react';
 import {
     getAdvancedReviewDate,
-    hasTimeComponent,
     isDueForReview,
-    safeFormatDate,
     safeParseDate,
     tFallback,
     type Area,
@@ -21,6 +19,7 @@ import {
     type Task,
     type TaskStatus,
 } from '@mindwtr/core';
+import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
 
 import { reportError } from '../../lib/report-error';
 import { cn } from '../../lib/utils';
@@ -83,16 +82,6 @@ const preserveFocusedDatePanelLayout = (event: ReactMouseEvent<HTMLDivElement>) 
     event.preventDefault();
 };
 
-const getDueDateDraft = (value?: string) => {
-    if (!value) return { date: '', time: '' };
-    const parsed = safeParseDate(value);
-    if (!parsed) return { date: '', time: '' };
-    return {
-        date: safeFormatDate(parsed, 'yyyy-MM-dd', value),
-        time: hasTimeComponent(value) ? safeFormatDate(parsed, 'HH:mm', value) : '',
-    };
-};
-
 export function TaskQuickActionMenu({
     task,
     x,
@@ -126,9 +115,9 @@ export function TaskQuickActionMenu({
     const [activePanel, setActivePanel] = useState<QuickPanelId>(null);
     const [panelPosition, setPanelPosition] = useState<{ left: number; top: number } | null>(null);
     const [menuSize, setMenuSize] = useState({ width: MENU_WIDTH_PX, height: 1 });
-    const initialStartDraft = getDueDateDraft(task.startTime);
-    const initialDueDraft = getDueDateDraft(task.dueDate);
-    const initialReviewDraft = getDueDateDraft(task.reviewAt);
+    const initialStartDraft = splitDateTime(task.startTime);
+    const initialDueDraft = splitDateTime(task.dueDate);
+    const initialReviewDraft = splitDateTime(task.reviewAt);
     const initialAreaDraft = task.areaId || '';
     const initialContextsDraft = task.contexts?.join(', ') || '';
     const [startDateDraft, setStartDateDraft] = useState(initialStartDraft.date);
@@ -170,9 +159,9 @@ export function TaskQuickActionMenu({
     const contextsDraftChanged = normalizedDraftContexts.join('\u0000') !== normalizedInitialContexts.join('\u0000');
 
     useEffect(() => {
-        const nextStartDraft = getDueDateDraft(task.startTime);
-        const nextDueDraft = getDueDateDraft(task.dueDate);
-        const nextReviewDraft = getDueDateDraft(task.reviewAt);
+        const nextStartDraft = splitDateTime(task.startTime);
+        const nextDueDraft = splitDateTime(task.dueDate);
+        const nextReviewDraft = splitDateTime(task.reviewAt);
         setStartDateDraft(nextStartDraft.date);
         setStartTimeDraft(nextStartDraft.time);
         setDueDateDraft(nextDueDraft.date);
@@ -407,15 +396,15 @@ export function TaskQuickActionMenu({
         }
         setPanelPosition(null);
         if (panelId === 'startTime') {
-            const nextStartDraft = getDueDateDraft(task.startTime);
+            const nextStartDraft = splitDateTime(task.startTime);
             setStartDateDraft(nextStartDraft.date);
             setStartTimeDraft(nextStartDraft.time);
         } else if (panelId === 'dueDate') {
-            const nextDueDraft = getDueDateDraft(task.dueDate);
+            const nextDueDraft = splitDateTime(task.dueDate);
             setDueDateDraft(nextDueDraft.date);
             setDueTimeDraft(nextDueDraft.time);
         } else if (panelId === 'reviewAt') {
-            const nextReviewDraft = getDueDateDraft(task.reviewAt);
+            const nextReviewDraft = splitDateTime(task.reviewAt);
             setReviewDateDraft(nextReviewDraft.date);
             setReviewTimeDraft(nextReviewDraft.time);
         } else if (panelId === 'area') {
@@ -433,9 +422,7 @@ export function TaskQuickActionMenu({
         setSavingPanel('startTime');
         try {
             const normalizedDate = normalizeDateInputValue(dateDraft);
-            const nextStartTime = normalizedDate
-                ? (timeDraft ? `${normalizedDate}T${timeDraft}` : normalizedDate)
-                : undefined;
+            const nextStartTime = normalizedDate ? joinDateTime(normalizedDate, timeDraft) : undefined;
             const result = await onUpdateTask({ startTime: nextStartTime });
             if (!result.success) {
                 throw new Error(result.error || 'Failed to update task start date');
@@ -455,9 +442,7 @@ export function TaskQuickActionMenu({
         setSavingPanel('dueDate');
         try {
             const normalizedDate = normalizeDateInputValue(dateDraft);
-            const nextDueDate = normalizedDate
-                ? (timeDraft ? `${normalizedDate}T${timeDraft}` : normalizedDate)
-                : undefined;
+            const nextDueDate = normalizedDate ? joinDateTime(normalizedDate, timeDraft) : undefined;
             const result = await onUpdateTask({ dueDate: nextDueDate });
             if (!result.success) {
                 throw new Error(result.error || 'Failed to update task due date');
@@ -477,9 +462,7 @@ export function TaskQuickActionMenu({
         setSavingPanel('reviewAt');
         try {
             const normalizedDate = normalizeDateInputValue(dateDraft);
-            const nextReviewAt = normalizedDate
-                ? (timeDraft ? `${normalizedDate}T${timeDraft}` : normalizedDate)
-                : undefined;
+            const nextReviewAt = normalizedDate ? joinDateTime(normalizedDate, timeDraft) : undefined;
             const result = await onUpdateTask({ reviewAt: nextReviewAt });
             if (!result.success) {
                 throw new Error(result.error || 'Failed to update task review date');

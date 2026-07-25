@@ -52,8 +52,8 @@ import {
     getProjectColor,
     parseTagInput,
     toDateInputValue,
-    toDateTimeLocalValue,
 } from './projects-utils';
+import { toDateTimeLocalValue } from '../../Task/task-item-helpers';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 
 const PROJECT_TASK_VIRTUALIZATION_THRESHOLD = 80;

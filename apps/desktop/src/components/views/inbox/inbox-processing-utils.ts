@@ -1,4 +1,5 @@
-import { hasTimeComponent, normalizeClockTimeInput, safeFormatDate, safeParseDate } from '@mindwtr/core';
+import { normalizeClockTimeInput } from '@mindwtr/core';
+import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
 
 export const parseTokenListInput = (value: string, prefix: '@' | '#'): string[] => Array.from(
     new Set(
@@ -17,17 +18,8 @@ export const mergeSuggestedTokens = (...groups: string[][]): string[] =>
 export const normalizeTimeInput = normalizeClockTimeInput;
 
 export const getDateFieldDraft = (value?: string): { date: string; time: string; timeDraft: string } => {
-    const parsed = value ? safeParseDate(value) : null;
-    const date = parsed ? safeFormatDate(parsed, 'yyyy-MM-dd') : '';
-    const time = parsed && value && hasTimeComponent(value)
-        ? safeFormatDate(parsed, 'HH:mm')
-        : '';
-
-    return {
-        date,
-        time,
-        timeDraft: time,
-    };
+    const { date, time } = splitDateTime(value);
+    return { date, time, timeDraft: time };
 };
 
 export const resolveCommittedTime = (
@@ -56,5 +48,5 @@ export const buildDateTimeUpdate = (
     if (!date) return undefined;
     const normalized = normalizeTimeInput(timeDraft);
     const resolvedTime = normalized === null ? committedTime : normalized;
-    return resolvedTime ? `${date}T${resolvedTime}` : date;
+    return joinDateTime(date, resolvedTime);
 };

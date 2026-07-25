@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GEMINI_DEFAULT_MODEL, Attachment, DEFAULT_PROJECT_COLOR, buildTaskUpdatesFromSpeechResult, findSelectableProjectByTitleAndArea, generateUUID, normalizeLinkAttachmentInput, translateWithFallback, useTaskStore, type Task } from '@mindwtr/core';
+import { Attachment, DEFAULT_PROJECT_COLOR, buildTaskUpdatesFromSpeechResult, findSelectableProjectByTitleAndArea, generateUUID, normalizeLinkAttachmentInput, translateWithFallback, useTaskStore, type Task } from '@mindwtr/core';
 import { dataDir } from '@tauri-apps/api/path';
 import { BaseDirectory, readFile, readTextFile } from '@tauri-apps/plugin-fs';
-import { loadAIKey } from '../../lib/ai-config';
 import { importPickedFileAttachment } from '../../lib/attachment-import';
 import { normalizeAttachmentPathForUrl, resolveAttachmentOpenTarget } from '../../lib/attachment-paths';
 import { normalizeAttachmentInput } from '../../lib/attachment-utils';
@@ -10,8 +9,7 @@ import { openAttachmentTarget } from '../../lib/open-attachment-target';
 import { isTauriRuntime } from '../../lib/runtime';
 import { logWarn } from '../../lib/app-log';
 import { getManagedDataDir } from '../../lib/managed-paths';
-import { processAudioCapture } from '../../lib/speech-to-text';
-import { DEFAULT_PARAKEET_MODEL, DEFAULT_WHISPER_MODEL } from '../../lib/speech-models';
+import { processAudioCapture, resolveSpeechCapture } from '../../lib/speech-to-text';
 import {
     isAudioAttachment,
     isImageAttachment,
@@ -201,22 +199,7 @@ export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps)
                 throw new Error(resolveText('attachments.transcriptionFailed', 'Transcription failed. Please try again.'));
             }
 
-            const speech = currentSettings.ai?.speechToText;
-            if (!speech?.enabled) {
-                throw new Error(resolveText('attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
-            }
-
-            const provider = speech.provider ?? 'gemini';
-            const model = speech.model ?? (
-                provider === 'openai' ? 'gpt-4o-transcribe'
-                    : provider === 'gemini' ? GEMINI_DEFAULT_MODEL
-                        : provider === 'parakeet' ? DEFAULT_PARAKEET_MODEL
-                            : DEFAULT_WHISPER_MODEL
-            );
-            const apiSpeechProvider = provider === 'openai' || provider === 'gemini' ? provider : null;
-            const apiKey = apiSpeechProvider ? await loadAIKey(apiSpeechProvider).catch(() => '') : '';
-            const modelPath = apiSpeechProvider ? undefined : speech.offlineModelPath;
-            const speechReady = apiSpeechProvider ? Boolean(apiKey) : Boolean(modelPath);
+            const { ready: speechReady, config: speechConfig } = await resolveSpeechCapture(currentSettings.ai);
             if (!speechReady) {
                 throw new Error(resolveText('attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
             }
@@ -233,14 +216,7 @@ export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps)
                     path,
                 },
                 {
-                    provider,
-                    apiKey,
-                    model,
-                    modelPath,
-                    language: speech.language,
-                    mode: speech.mode ?? 'smart_parse',
-                    fieldStrategy: speech.fieldStrategy ?? 'smart',
-                    parseModel: provider === 'openai' && currentSettings.ai?.provider === 'openai' ? currentSettings.ai?.model : undefined,
+                    ...speechConfig,
                     now: new Date(),
                     timeZone,
                 },

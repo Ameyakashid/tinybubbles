@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import {
-    GEMINI_DEFAULT_MODEL,
     applyMarkdownKeyboardShortcut,
     applyMarkdownPairInsertion,
     applyMarkdownToolbarAction,
@@ -51,6 +50,7 @@ import {
     type TaskStatus,
     type TimeEstimate,
 } from '@mindwtr/core';
+import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
 import { readFile, remove } from '@tauri-apps/plugin-fs';
 
 import { usePointerPress } from '../../hooks/usePointerPress';
@@ -78,11 +78,9 @@ import {
     keepTextareaSelectionVisible,
     restoreScrollSnapshotSoon,
 } from '../../lib/scroll-preservation';
-import { loadAIKey } from '../../lib/ai-config';
 import { logWarn } from '../../lib/app-log';
 import { isTauriRuntime } from '../../lib/runtime';
-import { processAudioCapture } from '../../lib/speech-to-text';
-import { DEFAULT_PARAKEET_MODEL, DEFAULT_WHISPER_MODEL } from '../../lib/speech-models';
+import { processAudioCapture, resolveSpeechCapture } from '../../lib/speech-to-text';
 
 const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_POPOVER_WIDTH = 418;
@@ -1139,22 +1137,7 @@ export function TaskItemFieldRenderer({
             setDescriptionAudioState('transcribing');
 
             const currentSettings = useTaskStore.getState().settings;
-            const speech = currentSettings.ai?.speechToText;
-            if (!speech?.enabled) {
-                throw new Error(tFallback(t, 'attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
-            }
-
-            const provider = speech.provider ?? 'gemini';
-            const model = speech.model ?? (
-                provider === 'openai' ? 'gpt-4o-transcribe'
-                    : provider === 'gemini' ? GEMINI_DEFAULT_MODEL
-                        : provider === 'parakeet' ? DEFAULT_PARAKEET_MODEL
-                            : DEFAULT_WHISPER_MODEL
-            );
-            const apiSpeechProvider = provider === 'openai' || provider === 'gemini' ? provider : null;
-            const apiKey = apiSpeechProvider ? await loadAIKey(apiSpeechProvider).catch(() => '') : '';
-            const modelPath = apiSpeechProvider ? undefined : speech.offlineModelPath;
-            const speechReady = apiSpeechProvider ? Boolean(apiKey) : Boolean(modelPath);
+            const { ready: speechReady, config: speechConfig } = await resolveSpeechCapture(currentSettings.ai);
             if (!speechReady) {
                 throw new Error(tFallback(t, 'attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
             }
@@ -1172,14 +1155,9 @@ export function TaskItemFieldRenderer({
                     path: capture.path,
                 },
                 {
-                    provider,
-                    apiKey,
-                    model,
-                    modelPath,
-                    language: speech.language,
+                    ...speechConfig,
                     mode: 'transcribe_only',
                     fieldStrategy: 'description_only',
-                    parseModel: provider === 'openai' && currentSettings.ai?.provider === 'openai' ? currentSettings.ai?.model : undefined,
                     now: new Date(),
                     timeZone,
                 },
@@ -1327,36 +1305,18 @@ export function TaskItemFieldRenderer({
             );
         case 'startTime':
             {
-                const hasTime = hasTimeComponent(editStartTime);
+                const { date: dateValue, time: timeValue } = splitDateTime(editStartTime);
+                const hasTime = Boolean(timeValue);
                 const parsed = editStartTime ? safeParseDate(editStartTime) : null;
-                const dateValue = parsed ? safeFormatDate(parsed, 'yyyy-MM-dd') : '';
-                const timeValue = hasTime && parsed ? safeFormatDate(parsed, 'HH:mm') : '';
                 const handleDateChange = (value: string) => {
                     setEditRelativeStartOffset(undefined);
                     const normalizedDate = normalizeDateInputValue(value);
-                    if (!normalizedDate) {
-                        setEditStartTime('');
-                        return;
-                    }
-                    if (hasTime && timeValue) {
-                        setEditStartTime(`${normalizedDate}T${timeValue}`);
-                        return;
-                    }
-                    if (defaultScheduleTime) {
-                        setEditStartTime(`${normalizedDate}T${defaultScheduleTime}`);
-                        return;
-                    }
-                    setEditStartTime(normalizedDate);
+                    setEditStartTime(joinDateTime(normalizedDate, timeValue, { defaultTime: defaultScheduleTime }));
                 };
                 const handleTimeChange = (value: string) => {
                     setEditRelativeStartOffset(undefined);
-                    if (!value) {
-                        if (dateValue) setEditStartTime(dateValue);
-                        else setEditStartTime('');
-                        return;
-                    }
-                    const datePart = dateValue || safeFormatDate(new Date(), 'yyyy-MM-dd');
-                    setEditStartTime(`${datePart}T${value}`);
+                    const datePart = dateValue || (value ? safeFormatDate(new Date(), 'yyyy-MM-dd') : '');
+                    setEditStartTime(joinDateTime(datePart, value));
                 };
                 const dueDateHasTime = hasTimeComponent(editDueDate);
                 const relativeUnit = editRelativeStartOffset?.unit ?? 'day';
@@ -1465,10 +1425,9 @@ export function TaskItemFieldRenderer({
             }
         case 'dueDate':
             {
-                const hasTime = hasTimeComponent(editDueDate);
+                const { date: dateValue, time: timeValue } = splitDateTime(editDueDate);
+                const hasTime = Boolean(timeValue);
                 const parsed = editDueDate ? safeParseDate(editDueDate) : null;
-                const dateValue = parsed ? safeFormatDate(parsed, 'yyyy-MM-dd') : '';
-                const timeValue = hasTime && parsed ? safeFormatDate(parsed, 'HH:mm') : '';
                 const updateDueDate = (nextDueDate: string) => {
                     setEditDueDate(nextDueDate);
                     if (!editRelativeStartOffset) return;
@@ -1485,28 +1444,11 @@ export function TaskItemFieldRenderer({
                 };
                 const handleDateChange = (value: string) => {
                     const normalizedDate = normalizeDateInputValue(value);
-                    if (!normalizedDate) {
-                        updateDueDate('');
-                        return;
-                    }
-                    if (hasTime && timeValue) {
-                        updateDueDate(`${normalizedDate}T${timeValue}`);
-                        return;
-                    }
-                    if (defaultScheduleTime) {
-                        updateDueDate(`${normalizedDate}T${defaultScheduleTime}`);
-                        return;
-                    }
-                    updateDueDate(normalizedDate);
+                    updateDueDate(joinDateTime(normalizedDate, timeValue, { defaultTime: defaultScheduleTime }));
                 };
                 const handleTimeChange = (value: string) => {
-                    if (!value) {
-                        if (dateValue) updateDueDate(dateValue);
-                        else updateDueDate('');
-                        return;
-                    }
-                    const datePart = dateValue || safeFormatDate(new Date(), 'yyyy-MM-dd');
-                    updateDueDate(`${datePart}T${value}`);
+                    const datePart = dateValue || (value ? safeFormatDate(new Date(), 'yyyy-MM-dd') : '');
+                    updateDueDate(joinDateTime(datePart, value));
                 };
                 return (
                     <>
@@ -1612,34 +1554,16 @@ export function TaskItemFieldRenderer({
             }
         case 'reviewAt':
             {
-                const hasTime = hasTimeComponent(editReviewAt);
+                const { date: dateValue, time: timeValue } = splitDateTime(editReviewAt);
+                const hasTime = Boolean(timeValue);
                 const parsed = editReviewAt ? safeParseDate(editReviewAt) : null;
-                const dateValue = parsed ? safeFormatDate(parsed, 'yyyy-MM-dd') : '';
-                const timeValue = hasTime && parsed ? safeFormatDate(parsed, 'HH:mm') : '';
                 const handleDateChange = (value: string) => {
                     const normalizedDate = normalizeDateInputValue(value);
-                    if (!normalizedDate) {
-                        setEditReviewAt('');
-                        return;
-                    }
-                    if (hasTime && timeValue) {
-                        setEditReviewAt(`${normalizedDate}T${timeValue}`);
-                        return;
-                    }
-                    if (defaultScheduleTime) {
-                        setEditReviewAt(`${normalizedDate}T${defaultScheduleTime}`);
-                        return;
-                    }
-                    setEditReviewAt(normalizedDate);
+                    setEditReviewAt(joinDateTime(normalizedDate, timeValue, { defaultTime: defaultScheduleTime }));
                 };
                 const handleTimeChange = (value: string) => {
-                    if (!value) {
-                        if (dateValue) setEditReviewAt(dateValue);
-                        else setEditReviewAt('');
-                        return;
-                    }
-                    const datePart = dateValue || safeFormatDate(new Date(), 'yyyy-MM-dd');
-                    setEditReviewAt(`${datePart}T${value}`);
+                    const datePart = dateValue || (value ? safeFormatDate(new Date(), 'yyyy-MM-dd') : '');
+                    setEditReviewAt(joinDateTime(datePart, value));
                 };
                 return renderDateField({
                     label: t('taskEdit.reviewDateLabel'),

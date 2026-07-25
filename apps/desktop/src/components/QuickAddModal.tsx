@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent } from 'react';
 import {
-    GEMINI_DEFAULT_MODEL,
     executeCaptureTransaction,
     canStarNewCapture,
     shallow,
@@ -40,12 +39,10 @@ import { cn } from '../lib/utils';
 import { isFlatpakRuntime, isTauriRuntime } from '../lib/runtime';
 import { reportError } from '../lib/report-error';
 import { logWarn } from '../lib/app-log';
-import { loadAIKey } from '../lib/ai-config';
 import { encodeWav, resampleAudio } from '../lib/audio-utils';
 import { appendAudioChunkWithLimit, getMaxAudioSamples, MAX_AUDIO_RECORDING_SECONDS } from '../lib/audio-capture-buffer';
 import { getPreferredDesktopAudioCaptureBackend } from '../lib/audio-capture-backend';
-import { processAudioCapture, type SpeechToTextResult } from '../lib/speech-to-text';
-import { DEFAULT_PARAKEET_MODEL, DEFAULT_WHISPER_MODEL } from '../lib/speech-models';
+import { processAudioCapture, resolveSpeechCapture, type SpeechToTextResult } from '../lib/speech-to-text';
 import { dispatchNavigateEvent } from '../lib/navigation-events';
 import { ModalPortal } from './ModalPortal';
 import { useUiStore } from '../store/ui-store';
@@ -564,14 +561,9 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         // Voice capture is speech-to-text: if no model/key is configured, transcription
         // can never run, so guard before showing the recording indicator. Keep the dialog
         // open and point the user at Settings instead of silently aborting (#886).
-        const speech = settings.ai?.speechToText;
-        const speechProvider = speech?.provider ?? 'gemini';
-        const speechApiProvider = speechProvider === 'openai' || speechProvider === 'gemini' ? speechProvider : null;
-        const speechConfigured = speech?.enabled
-            ? speechApiProvider
-                ? Boolean(await loadAIKey(speechApiProvider).catch(() => ''))
-                : Boolean(speech?.offlineModelPath)
-            : false;
+        // This must derive from the same resolveSpeechCapture call the transcribe gate
+        // below uses, or the two can silently disagree.
+        const { ready: speechConfigured } = await resolveSpeechCapture(settings.ai);
         if (!speechConfigured) {
             showToast(
                 tFallback(t, 'quickAdd.speechNotConfigured', 'Enable a speech-to-text model in Settings to use voice input.'),
@@ -657,7 +649,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             const message = error instanceof Error ? error.message : String(error);
             setRecordingError(`${t('quickAdd.audioErrorBody')} (${message})`);
         }
-    }, [isRecording, recordingBusy, settings.ai?.speechToText, showToast, t]);
+    }, [isRecording, recordingBusy, settings.ai, showToast, t]);
 
     const stopRecording = useCallback(async ({ saveTask }: { saveTask: boolean }) => {
         if (recordingBusy) return;
@@ -742,22 +734,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
 
             const nowIso = now.toISOString();
             const displayTitle = `${t('quickAdd.audioNoteTitle')} ${safeFormatDate(now, 'Pp')}`;
-            const speech = settings.ai?.speechToText;
-            const provider = speech?.provider ?? 'gemini';
-            const model = speech?.model ?? (
-                provider === 'openai' ? 'gpt-4o-transcribe'
-                    : provider === 'gemini' ? GEMINI_DEFAULT_MODEL
-                        : provider === 'parakeet' ? DEFAULT_PARAKEET_MODEL
-                            : DEFAULT_WHISPER_MODEL
-            );
-            const apiSpeechProvider = provider === 'openai' || provider === 'gemini' ? provider : null;
-            const apiKey = apiSpeechProvider ? await loadAIKey(apiSpeechProvider).catch(() => '') : '';
-            const modelPath = apiSpeechProvider ? undefined : speech?.offlineModelPath;
-            const speechReady = speech?.enabled
-                ? apiSpeechProvider
-                    ? Boolean(apiKey)
-                    : Boolean(modelPath)
-                : false;
+            const { ready: speechReady, config: speechConfig } = await resolveSpeechCapture(settings.ai);
             const saveAudioAttachments = settings.gtd?.saveAudioAttachments !== false || !speechReady;
 
             const attachment: Attachment | null = saveAudioAttachments
@@ -802,14 +779,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                 void processAudioCapture(
                     { bytes, mimeType: 'audio/wav', name: fileName, path: absolutePath },
                     {
-                        provider,
-                        apiKey,
-                        model,
-                        modelPath,
-                        language: speech?.language,
-                        mode: speech?.mode ?? 'smart_parse',
-                        fieldStrategy: speech?.fieldStrategy ?? 'smart',
-                        parseModel: provider === 'openai' && settings.ai?.provider === 'openai' ? settings.ai?.model : undefined,
+                        ...speechConfig,
                         now: new Date(),
                         timeZone,
                     }
@@ -882,9 +852,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         refreshStandaloneData,
         notifyStandaloneTaskSaved,
         standaloneWindow,
-        settings.ai?.model,
-        settings.ai?.provider,
-        settings.ai?.speechToText,
+        settings.ai,
         settings.gtd?.saveAudioAttachments,
         t,
     ]);

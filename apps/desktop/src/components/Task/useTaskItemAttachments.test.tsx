@@ -38,6 +38,7 @@ vi.mock('../../lib/ai-config', () => ({
 
 vi.mock('../../lib/speech-to-text', () => ({
     processAudioCapture: vi.fn(),
+    resolveSpeechCapture: vi.fn(async () => ({ ready: false, reason: 'disabled', config: { provider: 'gemini', model: '' } })),
 }));
 
 vi.mock('../../lib/open-attachment-target', () => ({

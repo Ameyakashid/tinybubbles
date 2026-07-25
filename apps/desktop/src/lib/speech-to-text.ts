@@ -1,17 +1,21 @@
 import type {
+    AiSettings,
     SpeechToTaskCaptureConfig,
     SpeechToTaskResult,
 } from '@mindwtr/core';
 import {
     buildSpeechToTaskPrompt,
+    GEMINI_DEFAULT_MODEL,
     normalizeSpeechLanguage,
     parseSpeechToTaskResult,
     resolveGeminiModel,
     runSpeechToTaskCapture,
 } from '@mindwtr/core';
 
+import { loadAIKey } from './ai-config';
 import { isTauriRuntime } from './runtime';
 import { logWarn } from './app-log';
+import { DEFAULT_PARAKEET_MODEL, DEFAULT_WHISPER_MODEL } from './speech-models';
 
 export type SpeechToTextResult = SpeechToTaskResult;
 
@@ -21,6 +25,54 @@ export type SpeechToTextConfig = SpeechToTaskCaptureConfig & {
     parseModel?: string;
     modelPath?: string;
 };
+
+export type SpeechCaptureReadyReason = 'disabled' | 'no-key' | 'no-model';
+
+export type ResolvedSpeechCapture = {
+    ready: boolean;
+    reason?: SpeechCaptureReadyReason;
+    config: SpeechToTextConfig;
+};
+
+/**
+ * Resolves the desktop speech-to-text settings into a fully-usable capture
+ * config, plus whether recording/transcription is actually ready to run.
+ * This is the single source both the "can I record?" gate and the
+ * "can I transcribe?" gate must derive from — deriving them separately from
+ * `settings.ai?.speechToText` is exactly how they can silently disagree.
+ */
+export async function resolveSpeechCapture(settings: AiSettings | undefined): Promise<ResolvedSpeechCapture> {
+    const speech = settings?.speechToText;
+    const provider = speech?.provider ?? 'gemini';
+    const model = speech?.model ?? (
+        provider === 'openai' ? 'gpt-4o-transcribe'
+            : provider === 'gemini' ? GEMINI_DEFAULT_MODEL
+                : provider === 'parakeet' ? DEFAULT_PARAKEET_MODEL
+                    : DEFAULT_WHISPER_MODEL
+    );
+    const apiSpeechProvider = provider === 'openai' || provider === 'gemini' ? provider : null;
+    const modelPath = apiSpeechProvider ? undefined : speech?.offlineModelPath;
+    const baseConfig = {
+        provider,
+        model,
+        modelPath,
+        language: speech?.language,
+        mode: speech?.mode ?? 'smart_parse',
+        fieldStrategy: speech?.fieldStrategy ?? 'smart',
+        parseModel: provider === 'openai' && settings?.provider === 'openai' ? settings?.model : undefined,
+    };
+    if (!speech?.enabled) {
+        // Skip the key lookup entirely when the feature is off — no reason to
+        // touch the keychain/Tauri IPC on every record-button press.
+        return { ready: false, reason: 'disabled', config: { ...baseConfig, apiKey: '' } };
+    }
+    const apiKey = apiSpeechProvider ? await loadAIKey(apiSpeechProvider).catch(() => '') : '';
+    const config: SpeechToTextConfig = { ...baseConfig, apiKey };
+    if (apiSpeechProvider ? !apiKey : !modelPath) {
+        return { ready: false, reason: apiSpeechProvider ? 'no-key' : 'no-model', config };
+    }
+    return { ready: true, config };
+}
 
 export type AudioInput = {
     bytes: Uint8Array;

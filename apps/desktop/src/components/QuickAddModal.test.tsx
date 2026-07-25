@@ -767,4 +767,50 @@ describe('QuickAddModal', () => {
         expect(screen.getByRole('button', { name: 'Start recording' })).toBeInTheDocument();
         expect(tauriMocks.invoke).not.toHaveBeenCalledWith('start_audio_recording');
     });
+
+    it('starts recording when speech-to-text is configured (record gate agrees with the transcribe gate)', async () => {
+        // The record gate and the transcribe gate both resolve readiness through
+        // resolveSpeechCapture from the same settings snapshot, so a configured
+        // offline provider must let recording proceed rather than showing the
+        // "unconfigured" notice from the test above.
+        (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+        act(() => {
+            useUiStore.setState({ toasts: [] });
+            useTaskStore.setState((state) => ({
+                ...state,
+                settings: {
+                    ...state.settings,
+                    ai: {
+                        ...state.settings?.ai,
+                        speechToText: {
+                            enabled: true,
+                            provider: 'whisper',
+                            offlineModelPath: '/models/whisper.bin',
+                        },
+                    },
+                },
+            }));
+        });
+
+        renderQuickAddModal();
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+                detail: { initialValue: 'Voice note' },
+            }));
+            await Promise.resolve();
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Audio' }));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
+            await Promise.resolve();
+        });
+
+        expect(tauriMocks.invoke).toHaveBeenCalledWith('start_audio_recording');
+        expect(useUiStore.getState().toasts.some((toast) => (
+            toast.message === 'Enable a speech-to-text model in Settings to use voice input.'
+        ))).toBe(false);
+    });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRecurrenceRRuleValue, normalizeDateInputValue } from './task-item-helpers';
+import { getRecurrenceRRuleValue, normalizeDateInputValue, toDateTimeLocalValue } from './task-item-helpers';
 
 describe('normalizeDateInputValue', () => {
     const referenceNow = new Date('2026-02-24T12:00:00.000Z');
@@ -30,5 +30,20 @@ describe('getRecurrenceRRuleValue', () => {
             strategy: 'strict',
             byMonthDay: [9],
         })).toBe('FREQ=MONTHLY;BYMONTHDAY=9');
+    });
+});
+
+describe('toDateTimeLocalValue', () => {
+    it('renders a date-only value as date-only, not with an implicit T00:00 (project reviewAt, #cheap-cuts)', () => {
+        expect(toDateTimeLocalValue('2025-06-01')).toBe('2025-06-01');
+    });
+
+    it('renders a value with an explicit time as a datetime-local string', () => {
+        expect(toDateTimeLocalValue('2025-06-01T09:30')).toBe('2025-06-01T09:30');
+    });
+
+    it('returns an empty string for an empty/undefined value', () => {
+        expect(toDateTimeLocalValue(undefined)).toBe('');
+        expect(toDateTimeLocalValue('')).toBe('');
     });
 });

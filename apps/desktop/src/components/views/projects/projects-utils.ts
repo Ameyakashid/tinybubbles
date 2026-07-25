@@ -2,13 +2,6 @@ import { DEFAULT_AREA_COLOR as CORE_DEFAULT_AREA_COLOR, safeFormatDate, safePars
 
 export const DEFAULT_AREA_COLOR = CORE_DEFAULT_AREA_COLOR;
 
-export function toDateTimeLocalValue(dateStr: string | undefined): string {
-    if (!dateStr) return '';
-    const parsed = safeParseDate(dateStr);
-    if (!parsed) return dateStr;
-    return safeFormatDate(parsed, "yyyy-MM-dd'T'HH:mm", dateStr);
-}
-
 export function toDateInputValue(dateStr: string | undefined): string {
     if (!dateStr) return '';
     const parsed = safeParseDate(dateStr);

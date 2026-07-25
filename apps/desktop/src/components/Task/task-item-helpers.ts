@@ -9,10 +9,8 @@ import {
     buildRRuleString,
     getRecurrenceCountValue,
     getRecurrenceUntilValue,
-    hasTimeComponent,
-    safeFormatDate,
-    safeParseDate,
 } from '@mindwtr/core';
+import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
 
 export const DEFAULT_TASK_EDITOR_ORDER: TaskEditorFieldId[] = [
     'status',
@@ -128,15 +126,11 @@ export const getTaskEditorSectionOpenDefaults = (
     };
 };
 
-// Convert stored ISO or datetime-local strings into datetime-local input values.
+// Convert stored ISO or date-only strings into datetime-local input values.
+// A date-only value never gains an implicit time here — see date-draft.ts.
 export function toDateTimeLocalValue(dateStr: string | undefined): string {
-    if (!dateStr) return '';
-    const parsed = safeParseDate(dateStr);
-    if (!parsed) return dateStr;
-    if (!hasTimeComponent(dateStr)) {
-        return safeFormatDate(parsed, 'yyyy-MM-dd', dateStr);
-    }
-    return safeFormatDate(parsed, "yyyy-MM-dd'T'HH:mm", dateStr);
+    const { date, time } = splitDateTime(dateStr);
+    return joinDateTime(date, time);
 }
 
 export function normalizeDateInputValue(value: string, now: Date = new Date()): string {
