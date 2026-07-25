@@ -537,6 +537,9 @@ export {
     SUPPORTED_LANGUAGES,
 } from './i18n/i18n-constants';
 
+export { LOCALES } from './i18n/i18n-locales';
+export type { Locale, LocaleDescriptor, LocaleMode } from './i18n/i18n-locales';
+
 export {
     buildRRuleString,
     createNextRecurringTask,
@@ -1374,3 +1377,16 @@ export * from './focus-grouping';
 export * from './context-color';
 export * from './capture';
 export * from './session-restore';
+
+// Mobile's Metro resolver collapses every '@mindwtr/core/<module>' subpath onto this
+// barrel, so a module reachable only by subpath is `undefined` on a real device even
+// though vitest (Node resolution, honouring package.json exports) resolves it fine.
+// Anything imported by subpath from apps/mobile MUST be re-exported here.
+export * from './whisper-models';
+export * from './import-apply';
+export * from './import-runner';
+export * from './global-search-filter';
+export * from './calendar-composer';
+export * from './calendar-day-items';
+export * from './calendar-push-scheduler';
+export * from './date-draft';
