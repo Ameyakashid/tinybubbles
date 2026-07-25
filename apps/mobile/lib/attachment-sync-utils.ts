@@ -2,9 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from './file-system';
 import type { AppData, Attachment } from '@mindwtr/core';
 import {
+  ATTACHMENTS_DIR_NAME,
+  buildCloudKey,
   computeSha256Hex,
   createWebdavDownloadBackoff,
   decodeUriSafe,
+  extractExtension,
+  getBaseSyncUrl,
+  getCloudBaseUrl,
   globalProgressTracker,
   isDropboxUnauthorizedError,
   markAttachmentUnrecoverable,
@@ -23,7 +28,7 @@ import { getSecureConfigValue } from './secure-config';
 import { logInfo, logWarn, sanitizeLogMessage } from './app-log';
 import { isLikelyFilePath } from './sync-service-utils';
 
-export const ATTACHMENTS_DIR_NAME = 'attachments';
+export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension, getBaseSyncUrl, getCloudBaseUrl };
 export const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
 export const StorageAccessFramework = FileSystem.StorageAccessFramework;
 export const WEBDAV_ATTACHMENT_RETRY_OPTIONS = { maxAttempts: 5, baseDelayMs: 2000, maxDelayMs: 60_000 };
@@ -160,14 +165,6 @@ export const base64ToBytes = (base64: string): Uint8Array => {
   return bytes;
 };
 
-export const extractExtension = (value?: string): string => {
-  if (!value) return '';
-  const stripped = value.split('?')[0].split('#')[0];
-  const leaf = stripped.split(/[\\/]/).pop() || '';
-  const match = leaf.match(/\.[A-Za-z0-9]{1,8}$/);
-  return match ? match[0].toLowerCase() : '';
-};
-
 const stripUriQueryAndFragment = (value: string): string => (
   value.split('?')[0]?.split('#')[0] ?? value
 );
@@ -246,28 +243,6 @@ export const validateAttachmentHash = async (attachment: Attachment, bytes: Uint
   if (computed.toLowerCase() !== expected.toLowerCase()) {
     throw new Error('Integrity validation failed');
   }
-};
-
-export const buildCloudKey = (attachment: Attachment): string => {
-  const ext = extractExtension(attachment.title) || extractExtension(attachment.uri);
-  return `${ATTACHMENTS_DIR_NAME}/${attachment.id}${ext}`;
-};
-
-export const getBaseSyncUrl = (fullUrl: string): string => {
-  const trimmed = fullUrl.replace(/\/+$/, '');
-  if (trimmed.toLowerCase().endsWith('.json')) {
-    const lastSlash = trimmed.lastIndexOf('/');
-    return lastSlash >= 0 ? trimmed.slice(0, lastSlash) : trimmed;
-  }
-  return trimmed;
-};
-
-export const getCloudBaseUrl = (fullUrl: string): string => {
-  const trimmed = fullUrl.replace(/\/+$/, '');
-  if (trimmed.toLowerCase().endsWith('/data')) {
-    return trimmed.slice(0, -'/data'.length);
-  }
-  return trimmed;
 };
 
 export type WebDavConfig = { url: string; username: string; password: string; allowInsecureHttp?: boolean };

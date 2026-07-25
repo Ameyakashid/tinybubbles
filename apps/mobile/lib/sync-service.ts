@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { AppData, MergeStats, createSyncOrchestrator, runSharedSyncCycle, SyncRemoteWriteConflict, useTaskStore, webdavGetJson, webdavHeadFile, webdavPutJson, cloudGetJson, cloudHeadJson, cloudPutJson, flushPendingSave, performSyncCycle, withRetry, isRetryableError, isRetryableWebdavReadError, isWebdavInvalidJsonError, normalizeWebdavUrl, normalizeCloudUrl, normalizeRemoteWriteResult, buildFastSyncScope, hasPendingSyncSideEffects, injectExternalCalendars as injectExternalCalendarsForSync, persistExternalCalendars as persistExternalCalendarsForSync, getInMemoryAppDataSnapshot, createAbortableFetch, normalizeCloudProvider as normalizeCoreCloudProvider, isDropboxUnauthorizedError, parseFastSyncState, serializeFastSyncState, summarizeTaskLifecycleCounts, decodeUriSafe, SYNC_FILE_NAME, CLOUD_PROVIDER_DROPBOX, CLOUD_PROVIDER_SELF_HOSTED, type Attachment, type CloudProvider, type FastSyncState, type RemoteJsonWriteResult, type SyncBackendIO, type SyncRunDiagnosticEvent, type SyncRunNotifier, type SyncRunPlatformHooks, type SyncRunStorage } from '@mindwtr/core';
+import { AppData, MergeStats, createSyncOrchestrator, runSharedSyncCycle, useTaskStore, webdavGetJson, webdavHeadFile, webdavPutJson, cloudGetJson, cloudHeadJson, cloudPutJson, flushPendingSave, performSyncCycle, withRetry, isRetryableError, isRetryableWebdavReadError, isWebdavInvalidJsonError, normalizeWebdavUrl, normalizeCloudUrl, createSyncBackendIO, buildFastSyncScope, hasPendingSyncSideEffects, injectExternalCalendars as injectExternalCalendarsForSync, persistExternalCalendars as persistExternalCalendarsForSync, getInMemoryAppDataSnapshot, createAbortableFetch, normalizeCloudProvider as normalizeCoreCloudProvider, isDropboxUnauthorizedError, parseFastSyncState, serializeFastSyncState, summarizeTaskLifecycleCounts, decodeUriSafe, SYNC_FILE_NAME, CLOUD_PROVIDER_DROPBOX, CLOUD_PROVIDER_SELF_HOSTED, type Attachment, type CloudProvider, type FastSyncState, type SyncBackendContext, type SyncBackendIO, type SyncRunDiagnosticEvent, type SyncRunNotifier, type SyncRunPlatformHooks, type SyncRunStorage, type SyncTransport } from '@mindwtr/core';
 import { mobileStorage } from './storage-adapter';
 import { logInfo, logSyncError, logWarn, sanitizeLogMessage } from './app-log';
 import { readSyncFile, resolveSyncFileUri, writeSyncFile } from './storage-file';
@@ -11,7 +11,6 @@ import { runMobileAttachmentCleanup } from './sync-attachment-cleanup';
 import { getExternalCalendars, saveExternalCalendars } from './external-calendar';
 import { forceRefreshDropboxAccessToken, getValidDropboxAccessToken, isDropboxConnected } from './dropbox-auth';
 import {
-  DropboxConflictError,
   DropboxFileNotFoundError,
   deleteDropboxFile,
   downloadDropboxAppData,
@@ -670,6 +669,22 @@ class MobileSyncRun {
   // Transient failures here must retry before the offline heuristic sees them: the first
   // request after app resume can die on a stale socket, and Dropbox resets connections
   // under multi-device write contention — both look like "offline" to the error patterns.
+  private dropboxTransientRetryOptions() {
+    return {
+      ...DROPBOX_RETRY_OPTIONS,
+      shouldRetry: (error: unknown) => !this.networkWentOffline
+        && !this.requestAbortController.signal.aborted
+        && isRetryableError(error),
+      onRetry: (error: unknown, attempt: number) => logSyncWarning(`Dropbox request failed (attempt ${attempt}); retrying`, error),
+    };
+  }
+
+  /** Still used by attachment cleanup (`runAttachmentCleanup`, out of this
+   *  task's scope), which resolves its own token and needs the 401-refresh
+   *  fallback inline. The sync-cycle backend IO below uses the split
+   *  `resolveDropboxToken` + `runDropboxTransientRetry` shape instead, so the
+   *  shared `SyncBackendIO` port (`createSyncBackendIO`) can own the
+   *  401-retry-once policy once for both platforms. */
   private async runDropboxOperation<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
     return withRetry(async () => {
       let accessToken = await getValidDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort);
@@ -680,13 +695,17 @@ class MobileSyncRun {
         accessToken = await forceRefreshDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort);
         return operation(accessToken);
       }
-    }, {
-      ...DROPBOX_RETRY_OPTIONS,
-      shouldRetry: (error) => !this.networkWentOffline
-        && !this.requestAbortController.signal.aborted
-        && isRetryableError(error),
-      onRetry: (error, attempt) => logSyncWarning(`Dropbox request failed (attempt ${attempt}); retrying`, error),
-    });
+    }, this.dropboxTransientRetryOptions());
+  }
+
+  /** One Dropbox transport call's transient-retry wrap (network/5xx). The
+   *  401-triggered token-refresh-and-retry-once policy lives in
+   *  `createSyncBackendIO` (packages/core/src/sync-backend-io.ts) and calls
+   *  `resolveDropboxToken`/`dropboxDownload`/`dropboxUpload`/`dropboxMetadata`
+   *  directly — `isRetryableError` already excludes 401s, so this wrap never
+   *  competes with that policy. */
+  private runDropboxTransientRetry<T>(operation: () => Promise<T>): Promise<T> {
+    return withRetry(operation, this.dropboxTransientRetryOptions());
   }
 
   private async persistDropboxRev(rev: string | null): Promise<void> {
@@ -1001,201 +1020,194 @@ class MobileSyncRun {
     };
   }
 
-  /** Backend transport adapter for the core machine. Policy shared across
-   *  backends (sanitize/compare/skip, corrupted-WebDAV repair, pending-upload
-   *  assertion, server-merge follow-up) lives in core — this is IO only. */
-  private createBackendIO(): SyncBackendIO {
+  /** Ladder-visible config for `createSyncBackendIO` (ADR 0014's shared
+   *  `SyncBackendIO` implementation, `packages/core/src/sync-backend-io.ts`).
+   *  `dropboxRev` starts from the persisted last-known rev (`this.dropboxLastRev`,
+   *  restored from `DROPBOX_LAST_REV_KEY` in `resolveCloudBackendConfig`) —
+   *  mobile, unlike desktop, caches this across cycles. */
+  private createBackendContext(): SyncBackendContext {
     return {
-      getSyncUrl: () => this.syncUrl,
-      getCachedRemoteFingerprint: () => (
-        this.backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_DROPBOX && this.dropboxLastRev
-          ? `dropbox:v1:rev=${this.dropboxLastRev}`
-          : null
-      ),
-      readRemote: async () => {
-        const backend = this.backend;
-        const webdavConfig = this.webdavConfig;
-        if (backend === 'webdav' && webdavConfig?.url) {
-          this.ensureWebdavSyncNotRateLimited();
-          try {
-            return await withRetry(
-              () =>
-                webdavGetJson<AppData>(webdavConfig.url, {
-                  ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
-                  username: webdavConfig.username,
-                  password: webdavConfig.password,
-                  timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-                  fetcher: this.fetchWithAbort,
-                  allowWeakFingerprint: webdavConfig.allowWeakFingerprint,
-                }),
-              WEBDAV_READ_RETRY_OPTIONS
-            );
-          } catch (error) {
-            // The core machine maps invalid-JSON reads to the repair-write path;
-            // only genuine transport failures count toward the rate limiter.
-            if (!isWebdavInvalidJsonError(error)) {
-              this.handleWebdavRateLimit(error);
-            }
-            throw error;
-          }
-        }
-        const cloudConfig = this.cloudConfig;
-        if (backend === 'cloud' && cloudConfig?.url) {
-          return cloudGetJson<AppData>(cloudConfig.url, {
-            ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
-            token: cloudConfig.token,
-            timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-            fetcher: this.fetchWithAbort,
-          });
-        }
-        if (backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_DROPBOX) {
-          const { data, rev } = await this.runDropboxOperation((accessToken) =>
-            downloadDropboxAppData(accessToken, this.fetchWithAbort)
+      backend: this.backend,
+      cloudProvider: this.cloudProvider,
+      webdav: this.webdavConfig ? { url: this.webdavConfig.url } : null,
+      cloud: this.cloudConfig ? { url: this.cloudConfig.url } : null,
+      filePath: this.fileSyncPath ?? '',
+      dropboxAppKey: this.dropboxClientId,
+      dropboxRev: this.dropboxLastRev,
+    };
+  }
+
+  /** Mobile's transport truths for one sync cycle: WebDAV rate-limit
+   *  wrapping (`ensureWebdavSyncNotRateLimited`/`handleWebdavRateLimit`) and
+   *  `AbortSignal` plumbing through every remote call. Retry wrapping
+   *  (`WEBDAV_READ_RETRY_OPTIONS`/`WEBDAV_RETRY_OPTIONS`/
+   *  `runDropboxTransientRetry`) is mobile's own policy and stays here —
+   *  `createSyncBackendIO` calls these methods without adding or removing
+   *  retries of its own. */
+  private createBackendTransport(): SyncTransport {
+    return {
+      webdavGet: async () => {
+        const webdavConfig = this.webdavConfig!;
+        this.ensureWebdavSyncNotRateLimited();
+        try {
+          return await withRetry(
+            () =>
+              webdavGetJson<AppData>(webdavConfig.url, {
+                ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
+                username: webdavConfig.username,
+                password: webdavConfig.password,
+                timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+                fetcher: this.fetchWithAbort,
+                allowWeakFingerprint: webdavConfig.allowWeakFingerprint,
+              }),
+            WEBDAV_READ_RETRY_OPTIONS
           );
-          await this.persistDropboxRev(rev);
-          return data;
+        } catch (error) {
+          // The core machine maps invalid-JSON reads to the repair-write path;
+          // only genuine transport failures count toward the rate limiter.
+          if (!isWebdavInvalidJsonError(error)) {
+            this.handleWebdavRateLimit(error);
+          }
+          throw error;
         }
-        if (backend === 'cloudkit') {
-          return readRemoteCloudKit({ signal: this.requestAbortController.signal });
+      },
+      webdavPut: async (sanitized) => {
+        const webdavConfig = this.webdavConfig;
+        if (!webdavConfig?.url) throw new Error('WebDAV URL not configured');
+        this.ensureWebdavSyncNotRateLimited();
+        try {
+          return await withRetry(
+            () =>
+              webdavPutJson(webdavConfig.url, sanitized, {
+                ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
+                username: webdavConfig.username,
+                password: webdavConfig.password,
+                timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+                fetcher: this.fetchWithAbort,
+              }),
+            WEBDAV_RETRY_OPTIONS
+          );
+        } catch (error) {
+          this.handleWebdavRateLimit(error);
+          throw error;
         }
+      },
+      webdavHead: async () => {
+        const webdavConfig = this.webdavConfig!;
+        this.ensureWebdavSyncNotRateLimited();
+        try {
+          const metadata = await withRetry(
+            () =>
+              webdavHeadFile(webdavConfig.url, {
+                ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
+                username: webdavConfig.username,
+                password: webdavConfig.password,
+                timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+                fetcher: this.fetchWithAbort,
+              }),
+            WEBDAV_READ_RETRY_OPTIONS
+          );
+          return metadata;
+        } catch (error) {
+          this.handleWebdavRateLimit(error);
+          throw error;
+        }
+      },
+      cloudGet: async () => {
+        const cloudConfig = this.cloudConfig!;
+        return cloudGetJson<AppData>(cloudConfig.url, {
+          ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
+          token: cloudConfig.token,
+          timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+          fetcher: this.fetchWithAbort,
+        });
+      },
+      cloudPut: async (sanitized) => {
+        const cloudConfig = this.cloudConfig;
+        if (!cloudConfig?.url) throw new Error('Self-hosted URL not configured');
+        return cloudPutJson(cloudConfig.url, sanitized, {
+          ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
+          token: cloudConfig.token,
+          timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+          fetcher: this.fetchWithAbort,
+        });
+      },
+      cloudHead: async () => {
+        const cloudConfig = this.cloudConfig!;
+        return cloudHeadJson(cloudConfig.url, {
+          ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
+          token: cloudConfig.token,
+          timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
+          fetcher: this.fetchWithAbort,
+        });
+      },
+      fileRead: async () => {
         const fileSyncPath = this.fileSyncPath;
-        if (!fileSyncPath) {
-          throw new Error('No sync folder configured');
-        }
+        if (!fileSyncPath) throw new Error('No sync folder configured');
         return readSyncFile(fileSyncPath, { bookmark: this.fileSyncBookmark });
       },
-      writeRemote: async (sanitized) => {
-        const backend = this.backend;
-        if (backend === 'webdav') {
-          const webdavConfig = this.webdavConfig;
-          if (!webdavConfig?.url) throw new Error('WebDAV URL not configured');
-          this.ensureWebdavSyncNotRateLimited();
-          let result: RemoteJsonWriteResult;
-          try {
-            result = await withRetry(
-              () =>
-                webdavPutJson(webdavConfig.url, sanitized, {
-                  ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
-                  username: webdavConfig.username,
-                  password: webdavConfig.password,
-                  timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-                  fetcher: this.fetchWithAbort,
-                }),
-              WEBDAV_RETRY_OPTIONS
-            );
-          } catch (error) {
-            this.handleWebdavRateLimit(error);
-            throw error;
-          }
-          return normalizeRemoteWriteResult('webdav', result);
-        }
-        if (backend === 'cloud') {
-          if (this.cloudProvider === CLOUD_PROVIDER_DROPBOX) {
-            try {
-              const result = await this.runDropboxOperation((accessToken) =>
-                uploadDropboxAppData(accessToken, sanitized, this.dropboxLastRev, this.fetchWithAbort)
-              );
-              await this.persistDropboxRev(result.rev);
-              return;
-            } catch (error) {
-              if (error instanceof DropboxConflictError) {
-                // Another device wrote between readRemote and writeRemote; retry next cycle.
-                throw new SyncRemoteWriteConflict();
-              }
-              throw error;
-            }
-          }
-          const cloudConfig = this.cloudConfig;
-          if (!cloudConfig?.url) throw new Error('Self-hosted URL not configured');
-          const result = await cloudPutJson(cloudConfig.url, sanitized, {
-            ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
-            token: cloudConfig.token,
-            timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-            fetcher: this.fetchWithAbort,
-          });
-          return normalizeRemoteWriteResult('cloud', result);
-        }
-        if (backend === 'cloudkit') {
-          await writeRemoteCloudKit(sanitized, { signal: this.requestAbortController.signal });
-          return;
-        }
+      fileWrite: async (sanitized) => {
         const fileSyncPath = this.fileSyncPath;
         if (!fileSyncPath) throw new Error('No sync folder configured');
         await writeSyncFile(fileSyncPath, sanitized, { bookmark: this.fileSyncBookmark });
       },
-      readRemoteFingerprint: async () => {
-        const backend = this.backend;
-        const webdavConfig = this.webdavConfig;
-        if (backend === 'webdav' && webdavConfig?.url) {
-          this.ensureWebdavSyncNotRateLimited();
-          try {
-            const metadata = await withRetry(
-              () =>
-                webdavHeadFile(webdavConfig.url, {
-                  ...getMobileWebDavRequestOptions(webdavConfig.allowInsecureHttp),
-                  username: webdavConfig.username,
-                  password: webdavConfig.password,
-                  timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-                  fetcher: this.fetchWithAbort,
-                }),
-              WEBDAV_READ_RETRY_OPTIONS
-            );
-            if (!metadata?.exists) return null;
-            return metadata.fingerprint;
-          } catch (error) {
-            this.handleWebdavRateLimit(error);
-            throw error;
-          }
-        }
-        const cloudConfig = this.cloudConfig;
-        if (backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_SELF_HOSTED && cloudConfig?.url) {
-          const metadata = await cloudHeadJson(cloudConfig.url, {
-            ...getMobileCloudRequestOptions(cloudConfig.allowInsecureHttp),
-            token: cloudConfig.token,
-            timeoutMs: DEFAULT_SYNC_TIMEOUT_MS,
-            fetcher: this.fetchWithAbort,
-          });
-          if (!metadata?.exists) return null;
-          return metadata.fingerprint;
-        }
-        if (backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_DROPBOX) {
-          const metadata = await this.runDropboxOperation((accessToken) =>
-            getDropboxAppDataMetadata(accessToken, this.fetchWithAbort)
-          );
-          this.dropboxLastRev = metadata.rev;
-          return metadata.rev ? `dropbox:v1:rev=${metadata.rev}` : null;
-        }
-        return null;
+      cloudKitRead: async () => readRemoteCloudKit({ signal: this.requestAbortController.signal }),
+      cloudKitWrite: async (sanitized) => {
+        await writeRemoteCloudKit(sanitized, { signal: this.requestAbortController.signal });
       },
-      syncAttachments: async (data, helpers) => {
-        const backend = this.backend;
-        const webdavConfig = this.webdavConfig;
-        const cloudConfig = this.cloudConfig;
-        const fileSyncPath = this.fileSyncPath;
-        if (backend === 'webdav' && webdavConfig?.url) {
-          const baseSyncUrl = getBaseSyncUrl(webdavConfig.url);
-          return syncWebdavAttachments(data, webdavConfig, baseSyncUrl, this.requestAbortController.signal);
-        }
-        if (backend === 'cloudkit') {
-          return syncCloudKitAttachments(data, this.requestAbortController.signal);
-        }
-        if (backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_SELF_HOSTED && cloudConfig?.url) {
-          const baseSyncUrl = getCloudBaseUrl(cloudConfig.url);
-          return syncCloudAttachments(data, cloudConfig, baseSyncUrl, {
-            assertCurrent: () => helpers.ensureLocalSnapshotFresh(),
-            signal: this.requestAbortController.signal,
-          });
-        }
-        if (backend === 'cloud' && this.cloudProvider === CLOUD_PROVIDER_DROPBOX) {
-          return syncDropboxAttachments(data, this.dropboxClientId, this.fetchWithAbort, {
-            signal: this.requestAbortController.signal,
-          });
-        }
-        if (backend === 'file' && fileSyncPath) {
-          return syncFileAttachments(data, fileSyncPath, this.requestAbortController.signal);
-        }
-        return null;
+      resolveDropboxToken: (forceRefresh) => this.runDropboxTransientRetry(() => (
+        forceRefresh
+          ? forceRefreshDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort)
+          : getValidDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort)
+      )),
+      dropboxDownload: async (token) => {
+        const result = await this.runDropboxTransientRetry(() => downloadDropboxAppData(token, this.fetchWithAbort));
+        await this.persistDropboxRev(result.rev);
+        return result;
       },
+      dropboxUpload: async (token, sanitized, expectedRev) => {
+        const result = await this.runDropboxTransientRetry(
+          () => uploadDropboxAppData(token, sanitized, expectedRev, this.fetchWithAbort)
+        );
+        await this.persistDropboxRev(result.rev);
+        return result;
+      },
+      dropboxMetadata: (token) => this.runDropboxTransientRetry(() => getDropboxAppDataMetadata(token, this.fetchWithAbort)),
+      syncWebdavAttachments: async (data) => {
+        const webdavConfig = this.webdavConfig!;
+        const baseSyncUrl = getBaseSyncUrl(webdavConfig.url);
+        return syncWebdavAttachments(data, webdavConfig, baseSyncUrl, this.requestAbortController.signal);
+      },
+      syncCloudKitAttachments: async (data) => syncCloudKitAttachments(data, this.requestAbortController.signal),
+      syncCloudAttachments: async (data, helpers) => {
+        const cloudConfig = this.cloudConfig!;
+        const baseSyncUrl = getCloudBaseUrl(cloudConfig.url);
+        return syncCloudAttachments(data, cloudConfig, baseSyncUrl, {
+          assertCurrent: () => helpers.ensureLocalSnapshotFresh(),
+          signal: this.requestAbortController.signal,
+        });
+      },
+      syncDropboxAttachments: async (data) => syncDropboxAttachments(data, this.dropboxClientId, this.fetchWithAbort, {
+        signal: this.requestAbortController.signal,
+      }),
+      syncFileAttachments: async (data) => syncFileAttachments(data, this.fileSyncPath!, this.requestAbortController.signal),
+    };
+  }
+
+  /** Backend transport adapter for the core machine (ADR 0014). The ladder
+   *  (which backend, url normalization, the Dropbox rev fingerprint format,
+   *  the conflict mapping, and the auth-retry-once policy) lives in
+   *  `createSyncBackendIO`; this only supplies mobile's transport truths. */
+  private createBackendIO(): SyncBackendIO {
+    const ctx = this.createBackendContext();
+    const io = createSyncBackendIO(ctx, this.createBackendTransport());
+    return {
+      ...io,
+      // `this.syncUrl` is set during `resolveWebdavBackendConfig`/
+      // `resolveCloudBackendConfig` (setup, before this IO exists) and by the
+      // ladder itself thereafter via `ctx.syncUrl` — `getSyncUrl` must reflect
+      // whichever is freshest, so prefer the ladder's value once it has one.
+      getSyncUrl: () => ctx.syncUrl ?? this.syncUrl,
     };
   }
 

@@ -1,0 +1,253 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createSyncBackendIO, type SyncBackendContext, type SyncTransport } from './sync-backend-io';
+import { DropboxConflictError, DropboxUnauthorizedError } from './dropbox';
+import { SyncRemoteWriteConflict } from './sync-run-ports';
+import type { AppData } from './types';
+
+const APP_DATA: AppData = {
+    tasks: [], projects: [], sections: [], areas: [], people: [], settings: {},
+};
+
+const makeTransport = (overrides: Partial<SyncTransport> = {}): SyncTransport => ({
+    webdavGet: vi.fn().mockResolvedValue(APP_DATA),
+    webdavPut: vi.fn().mockResolvedValue({ fingerprint: 'webdav-fp' }),
+    webdavHead: vi.fn().mockResolvedValue({ exists: true, fingerprint: 'webdav-head-fp' }),
+    cloudGet: vi.fn().mockResolvedValue(APP_DATA),
+    cloudPut: vi.fn().mockResolvedValue({ fingerprint: 'cloud-fp' }),
+    cloudHead: vi.fn().mockResolvedValue({ exists: true, fingerprint: 'cloud-head-fp' }),
+    fileRead: vi.fn().mockResolvedValue(APP_DATA),
+    fileWrite: vi.fn().mockResolvedValue(undefined),
+    cloudKitRead: vi.fn().mockResolvedValue(APP_DATA),
+    cloudKitWrite: vi.fn().mockResolvedValue(undefined),
+    resolveDropboxToken: vi.fn().mockResolvedValue('token'),
+    dropboxDownload: vi.fn().mockResolvedValue({ data: APP_DATA, rev: 'rev-1' }),
+    dropboxUpload: vi.fn().mockResolvedValue({ rev: 'rev-2' }),
+    dropboxMetadata: vi.fn().mockResolvedValue({ rev: 'rev-3' }),
+    syncWebdavAttachments: vi.fn().mockResolvedValue(null),
+    syncCloudAttachments: vi.fn().mockResolvedValue(null),
+    syncDropboxAttachments: vi.fn().mockResolvedValue(null),
+    syncFileAttachments: vi.fn().mockResolvedValue(null),
+    syncCloudKitAttachments: vi.fn().mockResolvedValue(null),
+    ...overrides,
+});
+
+const helpers = { ensureLocalSnapshotFresh: () => {} };
+
+describe('createSyncBackendIO', () => {
+    describe('cloudkit', () => {
+        const ctx: SyncBackendContext = { backend: 'cloudkit', cloudProvider: 'selfhosted', dropboxRev: null };
+
+        it('reads, writes, and syncs attachments through the cloudkit transport', async () => {
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.readRemote()).resolves.toBe(APP_DATA);
+            expect(transport.cloudKitRead).toHaveBeenCalledTimes(1);
+
+            await io.writeRemote(APP_DATA);
+            expect(transport.cloudKitWrite).toHaveBeenCalledWith(APP_DATA);
+
+            await expect(io.readRemoteFingerprint!()).resolves.toBeNull();
+
+            await io.syncAttachments!(APP_DATA, helpers);
+            expect(transport.syncCloudKitAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
+        });
+    });
+
+    describe('webdav', () => {
+        it('throws when unconfigured and never touches the transport', async () => {
+            const ctx: SyncBackendContext = { backend: 'webdav', cloudProvider: 'selfhosted', webdav: null, dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.readRemote()).rejects.toThrow('WebDAV URL not configured');
+            expect(transport.webdavGet).not.toHaveBeenCalled();
+        });
+
+        it('normalizes the url into syncUrl before reading, writing, and heading', async () => {
+            const ctx: SyncBackendContext = {
+                backend: 'webdav', cloudProvider: 'selfhosted',
+                webdav: { url: 'https://dav.example.com/mindwtr/data.json/' }, dropboxRev: null,
+            };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+
+            await io.readRemote();
+            expect(ctx.syncUrl).toBe('https://dav.example.com/mindwtr/data.json');
+            expect(transport.webdavGet).toHaveBeenCalledTimes(1);
+
+            const outcome = await io.writeRemote(APP_DATA);
+            expect(transport.webdavPut).toHaveBeenCalledWith(APP_DATA);
+            expect(outcome).toEqual({ fingerprint: 'webdav-fp', serverMergedRemoteData: false });
+
+            await expect(io.readRemoteFingerprint!()).resolves.toBe('webdav-head-fp');
+
+            await io.syncAttachments!(APP_DATA, helpers);
+            expect(transport.syncWebdavAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
+        });
+
+        it('skips attachment sync when webdav is unconfigured', async () => {
+            const ctx: SyncBackendContext = { backend: 'webdav', cloudProvider: 'selfhosted', webdav: null, dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.syncAttachments!(APP_DATA, helpers)).resolves.toBeNull();
+            expect(transport.syncWebdavAttachments).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('cloud + selfhosted', () => {
+        it('throws when unconfigured', async () => {
+            const ctx: SyncBackendContext = { backend: 'cloud', cloudProvider: 'selfhosted', cloud: null, dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.readRemote()).rejects.toThrow('Self-hosted URL not configured');
+            expect(transport.cloudGet).not.toHaveBeenCalled();
+        });
+
+        it('normalizes the url and reads/writes/heads through the cloud transport', async () => {
+            const ctx: SyncBackendContext = {
+                backend: 'cloud', cloudProvider: 'selfhosted',
+                cloud: { url: 'https://cloud.example.com/v1/data/' }, dropboxRev: null,
+            };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+
+            await io.readRemote();
+            expect(ctx.syncUrl).toBe('https://cloud.example.com/v1/data');
+
+            await io.writeRemote(APP_DATA);
+            expect(transport.cloudPut).toHaveBeenCalledWith(APP_DATA);
+
+            await expect(io.readRemoteFingerprint!()).resolves.toBe('cloud-head-fp');
+
+            await io.syncAttachments!(APP_DATA, helpers);
+            expect(transport.syncCloudAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
+        });
+    });
+
+    describe('cloud + dropbox', () => {
+        const baseCtx = (): SyncBackendContext => ({
+            backend: 'cloud', cloudProvider: 'dropbox', dropboxAppKey: 'app-key', dropboxRev: null,
+        });
+
+        it('throws when no app key is configured', async () => {
+            const ctx: SyncBackendContext = { backend: 'cloud', cloudProvider: 'dropbox', dropboxAppKey: '', dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.readRemote()).rejects.toThrow('Dropbox app key is not configured');
+        });
+
+        it('reads, caches the rev, writes, and refreshes the fingerprint using the dropbox:v1:rev= format', async () => {
+            const ctx = baseCtx();
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+
+            await io.readRemote();
+            expect(ctx.dropboxRev).toBe('rev-1');
+            expect(io.getCachedRemoteFingerprint!()).toBe('dropbox:v1:rev=rev-1');
+
+            await io.writeRemote(APP_DATA);
+            expect(transport.dropboxUpload).toHaveBeenCalledWith('token', APP_DATA, 'rev-1');
+            expect(ctx.dropboxRev).toBe('rev-2');
+
+            const fp = await io.readRemoteFingerprint!();
+            expect(fp).toBe('dropbox:v1:rev=rev-3');
+            expect(ctx.dropboxRev).toBe('rev-3');
+
+            await io.syncAttachments!(APP_DATA, helpers);
+            expect(transport.syncDropboxAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
+        });
+
+        it('has no cached fingerprint when no rev is known yet', () => {
+            const ctx = baseCtx();
+            const io = createSyncBackendIO(ctx, makeTransport());
+            expect(io.getCachedRemoteFingerprint!()).toBeNull();
+        });
+
+        it('maps a DropboxConflictError from writeRemote into SyncRemoteWriteConflict', async () => {
+            const ctx = baseCtx();
+            const transport = makeTransport({
+                dropboxUpload: vi.fn().mockRejectedValue(new DropboxConflictError()),
+            });
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.writeRemote(APP_DATA)).rejects.toBeInstanceOf(SyncRemoteWriteConflict);
+        });
+
+        it('retries exactly once on an unauthorized token, then succeeds', async () => {
+            const ctx = baseCtx();
+            const resolveDropboxToken = vi.fn()
+                .mockResolvedValueOnce('stale-token')
+                .mockResolvedValueOnce('fresh-token');
+            const dropboxDownload = vi.fn()
+                .mockRejectedValueOnce(new DropboxUnauthorizedError())
+                .mockResolvedValueOnce({ data: APP_DATA, rev: 'rev-1' });
+            const transport = makeTransport({ resolveDropboxToken, dropboxDownload });
+            const io = createSyncBackendIO(ctx, transport);
+
+            await expect(io.readRemote()).resolves.toBe(APP_DATA);
+            expect(resolveDropboxToken).toHaveBeenNthCalledWith(1, false);
+            expect(resolveDropboxToken).toHaveBeenNthCalledWith(2, true);
+            expect(dropboxDownload).toHaveBeenCalledTimes(2);
+        });
+
+        it('gives up after exactly one retry when the token stays unauthorized', async () => {
+            const ctx = baseCtx();
+            const resolveDropboxToken = vi.fn().mockResolvedValue('token');
+            const dropboxDownload = vi.fn().mockRejectedValue(new DropboxUnauthorizedError());
+            const transport = makeTransport({ resolveDropboxToken, dropboxDownload });
+            const io = createSyncBackendIO(ctx, transport);
+
+            await expect(io.readRemote()).rejects.toBeInstanceOf(DropboxUnauthorizedError);
+            expect(resolveDropboxToken).toHaveBeenCalledTimes(2);
+            expect(dropboxDownload).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not retry a non-auth error', async () => {
+            const ctx = baseCtx();
+            const resolveDropboxToken = vi.fn().mockResolvedValue('token');
+            const dropboxDownload = vi.fn().mockRejectedValue(new Error('HTTP 500'));
+            const transport = makeTransport({ resolveDropboxToken, dropboxDownload });
+            const io = createSyncBackendIO(ctx, transport);
+
+            await expect(io.readRemote()).rejects.toThrow('HTTP 500');
+            expect(resolveDropboxToken).toHaveBeenCalledTimes(1);
+            expect(dropboxDownload).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('file', () => {
+        it('reads, writes, and syncs attachments through the file transport', async () => {
+            const ctx: SyncBackendContext = { backend: 'file', cloudProvider: 'selfhosted', filePath: '/tmp/sync', dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+
+            await expect(io.readRemote()).resolves.toBe(APP_DATA);
+            expect(transport.fileRead).toHaveBeenCalledTimes(1);
+
+            await io.writeRemote(APP_DATA);
+            expect(transport.fileWrite).toHaveBeenCalledWith(APP_DATA);
+
+            await expect(io.readRemoteFingerprint!()).resolves.toBeNull();
+
+            await io.syncAttachments!(APP_DATA, helpers);
+            expect(transport.syncFileAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
+        });
+
+        it('skips attachment sync when no file path is configured', async () => {
+            const ctx: SyncBackendContext = { backend: 'file', cloudProvider: 'selfhosted', filePath: '', dropboxRev: null };
+            const transport = makeTransport();
+            const io = createSyncBackendIO(ctx, transport);
+            await expect(io.syncAttachments!(APP_DATA, helpers)).resolves.toBeNull();
+            expect(transport.syncFileAttachments).not.toHaveBeenCalled();
+        });
+    });
+
+    it('reports the last request url via getSyncUrl', async () => {
+        const ctx: SyncBackendContext = {
+            backend: 'webdav', cloudProvider: 'selfhosted',
+            webdav: { url: 'https://dav.example.com/data.json' }, dropboxRev: null,
+        };
+        const io = createSyncBackendIO(ctx, makeTransport());
+        expect(io.getSyncUrl!()).toBeUndefined();
+        await io.readRemote();
+        expect(io.getSyncUrl!()).toBe('https://dav.example.com/data.json');
+    });
+});

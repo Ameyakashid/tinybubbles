@@ -439,44 +439,42 @@ describe('SyncService testability hooks', () => {
         getMonotonicNowSpy.mockRestore();
     });
 
-    it('bounds Dropbox authorization retries to one forced refresh', async () => {
-        const resolveAccessToken = vi.fn(async (forceRefresh = false) => forceRefresh ? 'token-2' : 'token-1');
-        const operation = vi.fn(async () => {
-            throw new DropboxUnauthorizedError('Dropbox upload failed: HTTP 401');
-        });
-
-        await expect((SyncService as any).runDropboxWithRetry(resolveAccessToken, operation))
-            .rejects
-            .toBeInstanceOf(DropboxUnauthorizedError);
-
-        expect(resolveAccessToken).toHaveBeenNthCalledWith(1, false);
-        expect(resolveAccessToken).toHaveBeenNthCalledWith(2, true);
-        expect(resolveAccessToken).toHaveBeenCalledTimes(2);
-        expect(operation).toHaveBeenNthCalledWith(1, 'token-1');
-        expect(operation).toHaveBeenNthCalledWith(2, 'token-2');
-        expect(operation).toHaveBeenCalledTimes(2);
-    });
-
+    // The 401-triggered token-refresh-and-retry-once policy moved to
+    // `createSyncBackendIO` (packages/core/src/sync-backend-io.test.ts,
+    // "retries exactly once on an unauthorized token" / "gives up after
+    // exactly one retry") as part of ADR 0014's completion — it is shared
+    // with mobile now instead of hand-copied here. What remains desktop's own
+    // policy is the transient-retry wrap around one Dropbox transport call.
     it('retries a transient Dropbox request failure before giving up', async () => {
-        const resolveAccessToken = vi.fn(async () => 'token-1');
         const operation = vi.fn()
             .mockRejectedValueOnce(new TypeError('Network request failed'))
             .mockResolvedValue('ok');
 
-        await expect((SyncService as any).runDropboxWithRetry(resolveAccessToken, operation)).resolves.toBe('ok');
+        await expect((SyncService as any).runDropboxTransientRetry(operation)).resolves.toBe('ok');
 
         expect(operation).toHaveBeenCalledTimes(2);
     });
 
     it('does not retry non-transient Dropbox failures', async () => {
-        const resolveAccessToken = vi.fn(async () => 'token-1');
         const operation = vi.fn(async () => {
             throw new Error('Dropbox download failed: HTTP 409');
         });
 
-        await expect((SyncService as any).runDropboxWithRetry(resolveAccessToken, operation))
+        await expect((SyncService as any).runDropboxTransientRetry(operation))
             .rejects
             .toThrow('HTTP 409');
+
+        expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry an unauthorized Dropbox failure (the auth-retry policy lives in createSyncBackendIO)', async () => {
+        const operation = vi.fn(async () => {
+            throw new DropboxUnauthorizedError('Dropbox upload failed: HTTP 401');
+        });
+
+        await expect((SyncService as any).runDropboxTransientRetry(operation))
+            .rejects
+            .toBeInstanceOf(DropboxUnauthorizedError);
 
         expect(operation).toHaveBeenCalledTimes(1);
     });

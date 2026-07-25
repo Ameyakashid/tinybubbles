@@ -364,6 +364,15 @@ export type {
 } from './sync-run-ports';
 
 export {
+    buildDropboxRevFingerprint,
+    createSyncBackendIO,
+} from './sync-backend-io';
+export type {
+    SyncBackendContext,
+    SyncTransport,
+} from './sync-backend-io';
+
+export {
     buildFastSyncScope,
     parseFastSyncState,
     serializeFastSyncState,
@@ -1014,6 +1023,14 @@ export {
 export type {
     AttachmentTransferLifecycleOptions,
 } from './attachment-transfer';
+
+export {
+    ATTACHMENTS_DIR_NAME,
+    buildCloudKey,
+    extractExtension,
+    getBaseSyncUrl,
+    getCloudBaseUrl,
+} from './attachment-paths';
 
 export {
     applyAttachmentCleanupResult,

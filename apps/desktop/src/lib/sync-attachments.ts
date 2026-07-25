@@ -6,6 +6,8 @@ import { createCooperativeYield, stripFileScheme } from './sync-service-utils';
 
 export {
     collectAttachmentsById,
+    getBaseSyncUrl,
+    getCloudBaseUrl,
     normalizePendingRemoteDeletes,
     reportProgress,
     validateAttachmentHash,
@@ -24,20 +26,3 @@ export async function syncBasicRemoteAttachments(options: BasicRemoteAttachmentS
         resolveLocalPath: stripFileScheme,
     });
 }
-
-export const getBaseSyncUrl = (fullUrl: string): string => {
-    const trimmed = fullUrl.replace(/\/+$/, '');
-    if (trimmed.toLowerCase().endsWith('.json')) {
-        const lastSlash = trimmed.lastIndexOf('/');
-        return lastSlash >= 0 ? trimmed.slice(0, lastSlash) : trimmed;
-    }
-    return trimmed;
-};
-
-export const getCloudBaseUrl = (fullUrl: string): string => {
-    const trimmed = fullUrl.replace(/\/+$/, '');
-    if (trimmed.toLowerCase().endsWith('/data')) {
-        return trimmed.slice(0, -'/data'.length);
-    }
-    return trimmed;
-};

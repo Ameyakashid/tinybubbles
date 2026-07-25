@@ -16,7 +16,7 @@ import {
     normalizeAppData,
     normalizeWebdavUrl,
     normalizeCloudUrl,
-    normalizeRemoteWriteResult,
+    createSyncBackendIO,
     runSharedSyncCycle,
     sanitizeAppDataForRemote,
     computeStableValueFingerprint,
@@ -41,14 +41,15 @@ import {
     isSupportedLanguage,
     LEGACY_SYNC_FILE_NAME,
     SYNC_FILE_NAME,
-    SyncRemoteWriteConflict,
     type CloudJsonWriteResult,
     type CloudProvider,
     type RemoteJsonWriteResult,
+    type SyncBackendContext,
     type SyncBackendIO,
     type SyncPayloadTraceEvent,
     type SyncRunCycleSetup,
     type SyncRunResult,
+    type SyncTransport,
 } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
 import { getTauriHttpFetch } from './tauri-http';
@@ -99,7 +100,6 @@ import {
 import type { SyncBackend } from './sync-service-utils';
 import {
     downloadDropboxAppData,
-    DropboxConflictError,
     DropboxUnauthorizedError,
     getDropboxAppDataMetadata,
     testDropboxAccess,
@@ -151,7 +151,6 @@ export type ExternalSyncChange = {
     lastSyncAt?: string;
 };
 
-const DROPBOX_AUTH_RETRY_LIMIT = 1;
 const DROPBOX_TRANSIENT_RETRY_OPTIONS = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 8000, shouldRetry: isRetryableError };
 const WEBDAV_READ_RETRY_OPTIONS = {
     maxAttempts: 5,
@@ -559,7 +558,6 @@ type SyncRunOptions = {
  *  the desktop backend adapters need. */
 type DesktopSyncCycleContext = {
     backend: SyncBackend;
-    syncUrl?: string;
     networkWentOffline: boolean;
     removeNetworkListener: (() => void) | null;
     requestAbortController: AbortController;
@@ -567,7 +565,6 @@ type DesktopSyncCycleContext = {
     cloudProvider: CloudProvider;
     cloudConfig: CloudConfig | null;
     dropboxAppKey: string;
-    dropboxDataRev: string | null;
     cachedDropboxAccessToken: string | null;
     syncPath: string;
     fileBaseDir: string;
@@ -575,7 +572,6 @@ type DesktopSyncCycleContext = {
 
 const createDesktopSyncCycleContext = (): DesktopSyncCycleContext => ({
     backend: 'off',
-    syncUrl: undefined,
     networkWentOffline: false,
     removeNetworkListener: null,
     requestAbortController: new AbortController(),
@@ -583,7 +579,6 @@ const createDesktopSyncCycleContext = (): DesktopSyncCycleContext => ({
     cloudProvider: 'selfhosted',
     cloudConfig: null,
     dropboxAppKey: '',
-    dropboxDataRev: null,
     cachedDropboxAccessToken: null,
     syncPath: '',
     fileBaseDir: '',
@@ -1067,26 +1062,14 @@ export class SyncService {
         SyncService.ignoreFileEventsUntil = SyncService.getMonotonicNow() + 2000;
     }
 
-    private static async runDropboxWithRetry<T>(
-        resolveAccessToken: (forceRefresh?: boolean) => Promise<string>,
-        operation: (token: string) => Promise<T>
-    ): Promise<T> {
-        let forceRefresh = false;
-        let unauthorizedRetries = 0;
-        return withRetry(async () => {
-            while (true) {
-                try {
-                    const token = await resolveAccessToken(forceRefresh);
-                    return await operation(token);
-                } catch (error) {
-                    if (!(error instanceof DropboxUnauthorizedError) || unauthorizedRetries >= DROPBOX_AUTH_RETRY_LIMIT) {
-                        throw error;
-                    }
-                    unauthorizedRetries += 1;
-                    forceRefresh = true;
-                }
-            }
-        }, DROPBOX_TRANSIENT_RETRY_OPTIONS);
+    /** Desktop's own transient-retry policy for one Dropbox transport call
+     *  (network/5xx failures, per `DROPBOX_TRANSIENT_RETRY_OPTIONS`). The
+     *  401-triggered token-refresh-and-retry-once policy is shared and lives
+     *  in `createSyncBackendIO` (`packages/core/src/sync-backend-io.ts`);
+     *  `isRetryableError` already excludes 401s, so this wrap never competes
+     *  with that policy — it only covers the same operation's transient failures. */
+    private static async runDropboxTransientRetry<T>(operation: () => Promise<T>): Promise<T> {
+        return withRetry(operation, DROPBOX_TRANSIENT_RETRY_OPTIONS);
     }
 
     private static async persistSuccessfulSyncStatus(
@@ -1186,250 +1169,198 @@ export class SyncService {
         };
     }
 
-    /** Backend transport adapter for the core machine. Policy shared across
-     *  backends (sanitize/compare/skip, corrupted-WebDAV repair, pending-upload
-     *  assertion, server-merge follow-up) lives in core — this is IO only. */
-    private static createBackendIO(context: DesktopSyncCycleContext): SyncBackendIO {
-        const runDropbox = <T>(operation: (token: string) => Promise<T>): Promise<T> =>
-            SyncService.runDropboxWithRetry(
-                (forceRefresh) => resolveDropboxAccessTokenForContext(context, forceRefresh),
-                operation
-            );
-
+    /** Ladder-visible config for `createSyncBackendIO` (ADR 0014's shared
+     *  `SyncBackendIO` implementation, `packages/core/src/sync-backend-io.ts`).
+     *  A separate, minimal object from `DesktopSyncCycleContext` — the ladder
+     *  only needs enough to pick a branch and normalize a url; the transport
+     *  closures below keep reading the rich `context` for everything else. */
+    private static createBackendContext(context: DesktopSyncCycleContext): SyncBackendContext {
         return {
-            getSyncUrl: () => context.syncUrl,
-            getCachedRemoteFingerprint: () => (
-                context.backend === 'cloud' && context.cloudProvider === 'dropbox' && context.dropboxDataRev
-                    ? `dropbox:v1:rev=${context.dropboxDataRev}`
-                    : null
-            ),
-            readRemote: async () => {
-                if (context.backend === 'cloudkit') {
-                    return syncServiceDependencies.readRemoteCloudKit();
-                }
-                if (context.backend === 'webdav') {
-                    if (!context.webdavConfig?.url) {
-                        throw new Error('WebDAV URL not configured');
+            backend: context.backend,
+            cloudProvider: context.cloudProvider,
+            webdav: context.webdavConfig?.url ? { url: context.webdavConfig.url } : null,
+            cloud: context.cloudConfig?.url ? { url: context.cloudConfig.url } : null,
+            filePath: context.fileBaseDir,
+            dropboxAppKey: context.dropboxAppKey,
+            dropboxRev: null,
+        };
+    }
+
+    /** Backend transport adapter for the core machine (ADR 0014). The ladder
+     *  (which backend, url normalization, the Dropbox rev fingerprint format,
+     *  the conflict mapping, and the auth-retry-once policy) lives in
+     *  `createSyncBackendIO`; this only supplies desktop's transport truths. */
+    private static createBackendIO(context: DesktopSyncCycleContext): SyncBackendIO {
+        const ctx = SyncService.createBackendContext(context);
+
+        const transport: SyncTransport = {
+            webdavGet: async () => {
+                // Error context must carry the file URL the request targets,
+                // not the configured base folder — a folder-only url field
+                // made #898 (and #758) logs unreadable for pinpointing the
+                // failing request.
+                const normalizedUrl = ctx.syncUrl!;
+                // A "missing" remote on a folder that other devices populate
+                // means the app is reading the wrong URL or the server hid
+                // the file; make it visible in shared logs (#898).
+                const logMissingRemote = (data: AppData | null | undefined): AppData | null => {
+                    if (data == null) {
+                        logSyncInfo('WebDAV remote read returned no data', { url: normalizedUrl });
+                        return null;
                     }
-                    // Error context must carry the file URL the request targets,
-                    // not the configured base folder — a folder-only url field
-                    // made #898 (and #758) logs unreadable for pinpointing the
-                    // failing request.
-                    const normalizedUrl = normalizeWebdavUrl(context.webdavConfig.url);
-                    context.syncUrl = normalizedUrl;
-                    // A "missing" remote on a folder that other devices populate
-                    // means the app is reading the wrong URL or the server hid
-                    // the file; make it visible in shared logs (#898).
-                    const logMissingRemote = (data: AppData | null | undefined): AppData | null => {
-                        if (data == null) {
-                            logSyncInfo('WebDAV remote read returned no data', { url: normalizedUrl });
-                            return null;
-                        }
-                        return data;
-                    };
-                    if (isTauriRuntimeEnv()) {
-                        return logMissingRemote(await withRetry(
-                            () => tauriInvoke<AppData>('webdav_get_json'),
-                            WEBDAV_READ_RETRY_OPTIONS,
-                        ));
-                    }
-                    const webdavConfig = context.webdavConfig;
-                    const fetcher = await createFetchWithAbortForContext(context);
+                    return data;
+                };
+                if (isTauriRuntimeEnv()) {
                     return logMissingRemote(await withRetry(
-                        () => webdavGetJson<AppData>(normalizedUrl, {
-                            allowInsecureHttp: webdavConfig.allowInsecureHttp,
-                            username: webdavConfig.username,
-                            password: webdavConfig.password || '',
-                            fetcher,
-                        }),
+                        () => tauriInvoke<AppData>('webdav_get_json'),
                         WEBDAV_READ_RETRY_OPTIONS,
                     ));
                 }
-                if (context.backend === 'cloud') {
-                    if (context.cloudProvider === 'selfhosted') {
-                        if (!context.cloudConfig?.url) {
-                            throw new Error('Self-hosted URL not configured');
-                        }
-                        const normalizedUrl = normalizeCloudUrl(context.cloudConfig.url);
-                        context.syncUrl = normalizedUrl;
-                        if (isTauriRuntimeEnv()) {
-                            return tauriInvoke<AppData | null>('cloud_get_json');
-                        }
-                        const fetcher = await createFetchWithAbortForContext(context);
-                        return cloudGetJson<AppData>(normalizedUrl, {
-                            allowInsecureHttp: context.cloudConfig.allowInsecureHttp,
-                            token: context.cloudConfig.token,
-                            fetcher,
-                        });
-                    }
-                    if (!context.dropboxAppKey) {
-                        throw new Error('Dropbox app key is not configured');
-                    }
-                    context.syncUrl = 'dropbox:///Apps/Mindwtr/data.json';
-                    const remote = await SyncService.readDropboxRemoteData(context, runDropbox);
-                    context.dropboxDataRev = remote.rev;
-                    return remote.data;
+                const webdavConfig = context.webdavConfig!;
+                const fetcher = await createFetchWithAbortForContext(context);
+                return logMissingRemote(await withRetry(
+                    () => webdavGetJson<AppData>(normalizedUrl, {
+                        allowInsecureHttp: webdavConfig.allowInsecureHttp,
+                        username: webdavConfig.username,
+                        password: webdavConfig.password || '',
+                        fetcher,
+                    }),
+                    WEBDAV_READ_RETRY_OPTIONS,
+                ));
+            },
+            webdavPut: async (sanitized) => {
+                if (isTauriRuntimeEnv()) {
+                    return tauriInvoke<RemoteJsonWriteResult | boolean>('webdav_put_json', { data: sanitized });
                 }
+                const config = await SyncService.getWebDavConfig();
+                const normalizedUrl = normalizeWebdavUrl(config.url);
+                ctx.syncUrl = normalizedUrl;
+                const fetcher = await createFetchWithAbortForContext(context);
+                return webdavPutJson(normalizedUrl, sanitized, {
+                    allowInsecureHttp: config.allowInsecureHttp,
+                    username: config.username,
+                    password: config.password || '',
+                    fetcher,
+                });
+            },
+            webdavHead: async () => {
+                const webdavConfig = context.webdavConfig!;
+                const password = await resolveWebdavPassword(webdavConfig);
+                const fetcher = await createFetchWithAbortForContext(context);
+                return webdavHeadFile(ctx.syncUrl!, {
+                    allowInsecureHttp: webdavConfig.allowInsecureHttp,
+                    allowWeakFingerprint: webdavConfig.allowWeakFingerprint,
+                    username: webdavConfig.username,
+                    password,
+                    fetcher,
+                });
+            },
+            cloudGet: async () => {
+                if (isTauriRuntimeEnv()) {
+                    return tauriInvoke<AppData | null>('cloud_get_json');
+                }
+                const fetcher = await createFetchWithAbortForContext(context);
+                return cloudGetJson<AppData>(ctx.syncUrl!, {
+                    allowInsecureHttp: context.cloudConfig!.allowInsecureHttp,
+                    token: context.cloudConfig!.token,
+                    fetcher,
+                });
+            },
+            cloudPut: async (sanitized) => {
+                const config = context.cloudConfig ?? await SyncService.getCloudConfig();
+                const normalizedUrl = normalizeCloudUrl(config.url);
+                ctx.syncUrl = normalizedUrl;
+                if (isTauriRuntimeEnv()) {
+                    return tauriInvoke<CloudJsonWriteResult | boolean>('cloud_put_json', { data: sanitized });
+                }
+                const fetcher = await createFetchWithAbortForContext(context);
+                return cloudPutJson(normalizedUrl, sanitized, {
+                    allowInsecureHttp: config.allowInsecureHttp,
+                    token: config.token,
+                    fetcher,
+                });
+            },
+            cloudHead: async () => {
+                const fetcher = await createFetchWithAbortForContext(context);
+                return cloudHeadJson(ctx.syncUrl!, {
+                    allowInsecureHttp: context.cloudConfig!.allowInsecureHttp,
+                    token: context.cloudConfig!.token,
+                    fetcher,
+                });
+            },
+            fileRead: async () => {
                 if (!isTauriRuntimeEnv()) {
                     throw new Error('File sync is not available in the web app.');
                 }
                 return tauriInvoke<AppData>('read_sync_file');
             },
-            writeRemote: async (sanitized) => {
-                if (context.backend === 'cloudkit') {
-                    await syncServiceDependencies.writeRemoteCloudKit(sanitized);
-                    return;
-                }
-                if (context.backend === 'webdav') {
-                    if (context.webdavConfig?.url) {
-                        context.syncUrl = normalizeWebdavUrl(context.webdavConfig.url);
-                    }
-                    if (isTauriRuntimeEnv()) {
-                        const result = await tauriInvoke<RemoteJsonWriteResult | boolean>('webdav_put_json', { data: sanitized });
-                        return normalizeRemoteWriteResult('webdav', result);
-                    }
-                    const config = await SyncService.getWebDavConfig();
-                    const { url, username, password } = config;
-                    const normalizedUrl = normalizeWebdavUrl(url);
-                    context.syncUrl = normalizedUrl;
-                    const fetcher = await createFetchWithAbortForContext(context);
-                    const result = await webdavPutJson(normalizedUrl, sanitized, {
-                        allowInsecureHttp: config.allowInsecureHttp,
-                        username,
-                        password: password || '',
-                        fetcher,
-                    });
-                    return normalizeRemoteWriteResult('webdav', result);
-                }
-                if (context.backend === 'cloud') {
-                    if (context.cloudProvider === 'selfhosted') {
-                        const config = context.cloudConfig ?? await SyncService.getCloudConfig();
-                        const { url, token } = config;
-                        const normalizedUrl = normalizeCloudUrl(url);
-                        context.syncUrl = normalizedUrl;
-                        if (isTauriRuntimeEnv()) {
-                            const result = await tauriInvoke<CloudJsonWriteResult | boolean>('cloud_put_json', { data: sanitized });
-                            return normalizeRemoteWriteResult('cloud', result);
-                        }
-                        const fetcher = await createFetchWithAbortForContext(context);
-                        const result = await cloudPutJson(normalizedUrl, sanitized, {
-                            allowInsecureHttp: config.allowInsecureHttp,
-                            token,
-                            fetcher,
-                        });
-                        return normalizeRemoteWriteResult('cloud', result);
-                    }
-                    if (!context.dropboxAppKey) {
-                        throw new Error('Dropbox app key is not configured');
-                    }
-                    const fetcher = await createFetchWithAbortForContext(context);
-                    try {
-                        const uploaded = await runDropbox((token) =>
-                            uploadDropboxAppData(token, sanitized, context.dropboxDataRev, fetcher)
-                        );
-                        context.dropboxDataRev = uploaded.rev;
-                        return;
-                    } catch (error) {
-                        if (error instanceof DropboxConflictError) {
-                            throw new SyncRemoteWriteConflict();
-                        }
-                        throw error;
-                    }
-                }
+            fileWrite: async (sanitized) => {
                 await SyncService.markSyncWrite(sanitized);
                 await tauriInvoke('write_sync_file', { data: sanitized });
             },
-            readRemoteFingerprint: async () => {
-                if (context.backend === 'webdav') {
-                    if (!context.webdavConfig?.url) return null;
-                    const normalizedUrl = normalizeWebdavUrl(context.webdavConfig.url);
-                    context.syncUrl = normalizedUrl;
-                    const password = await resolveWebdavPassword(context.webdavConfig);
-                    const fetcher = await createFetchWithAbortForContext(context);
-                    const metadata = await webdavHeadFile(normalizedUrl, {
-                        allowInsecureHttp: context.webdavConfig.allowInsecureHttp,
-                        allowWeakFingerprint: context.webdavConfig.allowWeakFingerprint,
-                        username: context.webdavConfig.username,
-                        password,
-                        fetcher,
-                    });
-                    if (!metadata.exists) return null;
-                    return metadata.fingerprint;
-                }
-                if (context.backend === 'cloud' && context.cloudProvider === 'selfhosted') {
-                    if (!context.cloudConfig?.url) return null;
-                    const normalizedUrl = normalizeCloudUrl(context.cloudConfig.url);
-                    context.syncUrl = normalizedUrl;
-                    const fetcher = await createFetchWithAbortForContext(context);
-                    const metadata = await cloudHeadJson(normalizedUrl, {
-                        allowInsecureHttp: context.cloudConfig.allowInsecureHttp,
-                        token: context.cloudConfig.token,
-                        fetcher,
-                    });
-                    if (!metadata.exists) return null;
-                    return metadata.fingerprint;
-                }
-                if (context.backend === 'cloud' && context.cloudProvider === 'dropbox') {
-                    const fetcher = await createFetchWithAbortForContext(context);
-                    const metadata = await runDropbox((token) =>
-                        getDropboxAppDataMetadata(token, fetcher)
-                    );
-                    context.dropboxDataRev = metadata.rev;
-                    return metadata.rev ? `dropbox:v1:rev=${metadata.rev}` : null;
-                }
-                return null;
+            cloudKitRead: async () => syncServiceDependencies.readRemoteCloudKit(),
+            cloudKitWrite: async (sanitized) => {
+                await syncServiceDependencies.writeRemoteCloudKit(sanitized);
             },
-            syncAttachments: async (data) => {
-                if (context.backend === 'webdav' && context.webdavConfig?.url) {
-                    const baseUrl = getBaseSyncUrl(context.webdavConfig.url);
-                    return syncAttachments(data, context.webdavConfig, baseUrl, attachmentBackendDeps);
-                }
-                if (context.backend === 'cloudkit') {
-                    return syncCloudKitAttachments(data, attachmentBackendDeps);
-                }
-                if (context.backend === 'file' && context.fileBaseDir) {
-                    return syncFileAttachments(data, context.fileBaseDir, attachmentBackendDeps);
-                }
-                if (context.backend === 'cloud' && context.cloudProvider === 'selfhosted' && context.cloudConfig?.url) {
-                    const baseUrl = getCloudBaseUrl(context.cloudConfig.url);
-                    return syncCloudAttachments(data, context.cloudConfig, baseUrl, attachmentBackendDeps);
-                }
-                if (context.backend === 'cloud' && context.cloudProvider === 'dropbox') {
-                    return syncDropboxAttachments(
-                        data,
-                        (forceRefresh) => resolveDropboxAccessTokenForContext(context, forceRefresh),
-                        attachmentBackendDeps
-                    );
-                }
-                return null;
+            resolveDropboxToken: (forceRefresh) => SyncService.runDropboxTransientRetry(
+                () => resolveDropboxAccessTokenForContext(context, forceRefresh)
+            ),
+            dropboxDownload: (token) => SyncService.downloadDropboxWithFallback(context, token),
+            dropboxUpload: async (token, sanitized, expectedRev) => {
+                const fetcher = await createFetchWithAbortForContext(context);
+                return SyncService.runDropboxTransientRetry(
+                    () => uploadDropboxAppData(token, sanitized, expectedRev, fetcher)
+                );
             },
+            dropboxMetadata: async (token) => {
+                const fetcher = await createFetchWithAbortForContext(context);
+                return SyncService.runDropboxTransientRetry(() => getDropboxAppDataMetadata(token, fetcher));
+            },
+            syncWebdavAttachments: async (data) => {
+                const baseUrl = getBaseSyncUrl(context.webdavConfig!.url);
+                return syncAttachments(data, context.webdavConfig!, baseUrl, attachmentBackendDeps);
+            },
+            syncCloudKitAttachments: async (data) => syncCloudKitAttachments(data, attachmentBackendDeps),
+            syncFileAttachments: async (data) => syncFileAttachments(data, context.fileBaseDir, attachmentBackendDeps),
+            syncCloudAttachments: async (data) => {
+                const baseUrl = getCloudBaseUrl(context.cloudConfig!.url);
+                return syncCloudAttachments(data, context.cloudConfig!, baseUrl, attachmentBackendDeps);
+            },
+            syncDropboxAttachments: async (data) => syncDropboxAttachments(
+                data,
+                (forceRefresh) => resolveDropboxAccessTokenForContext(context, forceRefresh),
+                attachmentBackendDeps
+            ),
         };
+
+        return createSyncBackendIO(ctx, transport);
     }
 
-    private static async readDropboxRemoteData(
+    /** Dropbox remote read: try the native (Tauri) fetcher first, fall back to
+     *  the browser fetcher when it comes back empty. Desktop-only truth — the
+     *  Tauri http client and the browser fetch client can see different
+     *  network paths (e.g. proxy configuration), so a native miss is worth a
+     *  second try before treating the remote as empty. */
+    private static async downloadDropboxWithFallback(
         context: DesktopSyncCycleContext,
-        runDropbox: <T>(operation: (token: string) => Promise<T>) => Promise<T>
+        token: string
     ): Promise<{ data: AppData | null; rev: string | null }> {
         const nativeFetch = await getTauriFetch();
         const browserFetcher = createAbortableFetch(fetch, { baseSignal: context.requestAbortController.signal });
 
         if (!nativeFetch) {
-            return runDropbox((token) => downloadDropboxAppData(token, browserFetcher));
+            return SyncService.runDropboxTransientRetry(() => downloadDropboxAppData(token, browserFetcher));
         }
 
         const nativeFetcher = createAbortableFetch(nativeFetch, { baseSignal: context.requestAbortController.signal });
-        const nativeRemote = await runDropbox((token) =>
-            downloadDropboxAppData(token, nativeFetcher)
-        );
+        const nativeRemote = await SyncService.runDropboxTransientRetry(() => downloadDropboxAppData(token, nativeFetcher));
         if (nativeRemote.data !== null) {
             return nativeRemote;
         }
 
         logSyncInfo('Retrying Dropbox remote read with browser fetch fallback');
         try {
-            const browserRemote = await runDropbox((token) =>
-                downloadDropboxAppData(token, browserFetcher)
-            );
+            const browserRemote = await SyncService.runDropboxTransientRetry(() => downloadDropboxAppData(token, browserFetcher));
             if (browserRemote.data !== null) {
                 logSyncInfo('Recovered Dropbox remote read via browser fetch fallback');
                 return browserRemote;

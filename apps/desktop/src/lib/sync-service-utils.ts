@@ -1,15 +1,17 @@
 import {
+    ATTACHMENTS_DIR_NAME,
+    buildCloudKey,
+    extractExtension,
     getFileSyncDir,
     isSyncFilePath,
     normalizePath,
     normalizeSyncBackend,
     sleep,
     toStableJson,
-    type Attachment,
     type SyncBackend,
 } from '@mindwtr/core';
 
-export const ATTACHMENTS_DIR_NAME = 'attachments';
+export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension };
 
 const importNodeCrypto = async (): Promise<typeof import('node:crypto')> => {
     const specifier = 'node:crypto';
@@ -87,14 +89,6 @@ export const stripFileScheme = (uri: string): string => {
     }
 };
 
-export const extractExtension = (value?: string): string => {
-    if (!value) return '';
-    const stripped = value.split('?')[0].split('#')[0];
-    const leaf = stripped.split(/[\\/]/).pop() || '';
-    const match = leaf.match(/\.[A-Za-z0-9]{1,8}$/);
-    return match ? match[0].toLowerCase() : '';
-};
-
 const buildTempPath = (relativePath: string): string => {
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     return `${relativePath}.tmp-${suffix}`;
@@ -148,11 +142,6 @@ export const writeFileSafelyAbsolute = async (
             // Ignore cleanup errors for temp file.
         }
     }
-};
-
-export const buildCloudKey = (attachment: Attachment): string => {
-    const ext = extractExtension(attachment.title) || extractExtension(attachment.uri);
-    return `${ATTACHMENTS_DIR_NAME}/${attachment.id}${ext}`;
 };
 
 export const resolveFileBackendPath = async (
