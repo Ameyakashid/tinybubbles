@@ -2,7 +2,7 @@ import { buildSaveSnapshot, ensureDeviceId, getNextDataChangeAt, nextRevision, s
 import { logWarn } from '../logger';
 import { generateUUID as uuidv4 } from '../uuid';
 import type { ProjectActionContext, Section, SectionActions } from './shared';
-import { actionFail, actionOk } from './shared';
+import { actionFail, actionOk, mutateEntities } from './shared';
 
 export const createSectionActions = ({
     set,
@@ -57,51 +57,23 @@ export const createSectionActions = ({
     },
 
     updateSection: async (id: string, updates: Partial<Section>) => {
-        const changeAt = Date.now();
-        const now = new Date().toISOString();
-        let snapshot = null;
-        let missingSection = false;
         let invalidTitle = false;
-        set((state) => {
-            const allSections = state._allSections;
-            const section = allSections.find((item) => item.id === id);
-            if (!section) {
-                missingSection = true;
-                return state;
-            }
-            const deviceState = ensureDeviceId(state.settings);
-            const nextTitle = updates.title !== undefined ? updates.title.trim() : section.title;
-            if (!nextTitle) {
-                invalidTitle = true;
-                return state;
-            }
-            const { projectId: _ignored, ...restUpdates } = updates;
-            const newAllSections = allSections.map((item) =>
-                item.id === id
-                    ? {
-                        ...item,
-                        ...restUpdates,
-                        title: nextTitle,
-                        updatedAt: now,
-                        rev: nextRevision(item.rev),
-                        revBy: deviceState.deviceId,
-                    }
-                    : item
-            );
-            const newVisibleSections = newAllSections.filter((item) => !item.deletedAt);
-            snapshot = buildSaveSnapshot(state, {
-                sections: newAllSections,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                sections: newVisibleSections,
-                _allSections: newAllSections,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt, changeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        const result = await mutateEntities({ set, debouncedSave }, {
+            collection: 'sections',
+            select: (state) => state._allSections.filter((section) => section.id === id),
+            buildUpdates: (section) => {
+                const nextTitle = updates.title !== undefined ? updates.title.trim() : section.title;
+                if (!nextTitle) {
+                    invalidTitle = true;
+                    return null;
+                }
+                const { projectId: _ignored, ...restUpdates } = updates;
+                return { ...restUpdates, title: nextTitle };
+            },
+            missingMessage: 'Section not found',
         });
-        if (missingSection) {
-            const message = 'Section not found';
+        if (!result.success) {
+            const message = result.error ?? 'Section not found';
             logWarn('updateSection skipped: section not found', {
                 scope: 'store',
                 category: 'validation',
@@ -115,10 +87,7 @@ export const createSectionActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
-        return actionOk();
+        return result;
     },
 
     deleteSection: async (id: string) => {

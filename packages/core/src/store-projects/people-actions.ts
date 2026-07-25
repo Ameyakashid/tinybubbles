@@ -11,7 +11,7 @@ import { clearDerivedCache } from '../store-settings';
 import { getPersonNameKey, normalizePersonName, normalizePersonNote, normalizePersonReferenceLink } from '../people';
 import { generateUUID as uuidv4 } from '../uuid';
 import type { PeopleActions, Person, ProjectActionContext } from './shared';
-import { actionFail, actionOk } from './shared';
+import { actionFail, actionOk, mutateEntities } from './shared';
 
 export const createPeopleActions = ({
     set,
@@ -87,54 +87,30 @@ export const createPeopleActions = ({
     },
 
     updatePerson: async (id: string, updates: Partial<Person>) => {
-        let snapshot = null;
-        let missingPerson = false;
         let invalidName = false;
-        set((state) => {
-            const person = state._allPeople.find((item) => item.id === id);
-            if (!person) {
-                missingPerson = true;
-                return state;
-            }
-            const deviceState = ensureDeviceId(state.settings);
-            const nextName = updates.name !== undefined ? normalizePersonName(updates.name) : person.name;
-            if (!nextName) {
-                invalidName = true;
-                return state;
-            }
-            const hasNoteUpdate = Object.prototype.hasOwnProperty.call(updates, 'note');
-            const hasReferenceLinkUpdate = Object.prototype.hasOwnProperty.call(updates, 'referenceLink');
-            const now = new Date().toISOString();
-            const normalizedUpdates: Partial<Person> = {
-                ...updates,
-                name: nextName,
-                note: hasNoteUpdate ? normalizePersonNote(updates.note) : person.note,
-                referenceLink: hasReferenceLinkUpdate ? normalizePersonReferenceLink(updates.referenceLink) : person.referenceLink,
-            };
-            const nextAllPeople = state._allPeople.map((item) => (
-                item.id === id
-                    ? {
-                        ...item,
-                        ...normalizedUpdates,
-                        updatedAt: now,
-                        rev: nextRevision(item.rev),
-                        revBy: deviceState.deviceId,
-                    }
-                    : item
-            ));
-            snapshot = buildSaveSnapshot(state, {
-                people: nextAllPeople,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                people: selectVisiblePeople(nextAllPeople),
-                _allPeople: nextAllPeople,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        const result = await mutateEntities({ set, debouncedSave }, {
+            collection: 'people',
+            select: (state) => state._allPeople.filter((person) => person.id === id),
+            buildUpdates: (person) => {
+                const nextName = updates.name !== undefined ? normalizePersonName(updates.name) : person.name;
+                if (!nextName) {
+                    invalidName = true;
+                    return null;
+                }
+                const hasNoteUpdate = Object.prototype.hasOwnProperty.call(updates, 'note');
+                const hasReferenceLinkUpdate = Object.prototype.hasOwnProperty.call(updates, 'referenceLink');
+                const normalizedUpdates: Partial<Person> = {
+                    ...updates,
+                    name: nextName,
+                    note: hasNoteUpdate ? normalizePersonNote(updates.note) : person.note,
+                    referenceLink: hasReferenceLinkUpdate ? normalizePersonReferenceLink(updates.referenceLink) : person.referenceLink,
+                };
+                return normalizedUpdates;
+            },
+            missingMessage: 'Person not found',
         });
-        if (missingPerson) {
-            const message = 'Person not found';
+        if (!result.success) {
+            const message = result.error ?? 'Person not found';
             logWarn('updatePerson skipped: person not found', {
                 scope: 'store',
                 category: 'validation',
@@ -148,10 +124,7 @@ export const createPeopleActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
-        return actionOk();
+        return result;
     },
 
     renamePerson: async (id: string, name: string, options?: { updateTasks?: boolean }) => {
@@ -253,100 +226,42 @@ export const createPeopleActions = ({
     },
 
     deletePerson: async (id: string) => {
-        const now = new Date().toISOString();
-        const changeAt = Date.now();
-        let snapshot = null;
-        let missingPerson = false;
-        set((state) => {
-            const person = state._allPeople.find((item) => item.id === id);
-            if (!person || person.deletedAt) {
-                missingPerson = true;
-                return state;
-            }
-            const deviceState = ensureDeviceId(state.settings);
-            const nextAllPeople = state._allPeople.map((item) => (
-                item.id === id
-                    ? {
-                        ...item,
-                        deletedAt: now,
-                        updatedAt: now,
-                        rev: nextRevision(item.rev),
-                        revBy: deviceState.deviceId,
-                    }
-                    : item
-            ));
-            snapshot = buildSaveSnapshot(state, {
-                people: nextAllPeople,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                people: selectVisiblePeople(nextAllPeople),
-                _allPeople: nextAllPeople,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt, changeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        const result = await mutateEntities({ set, debouncedSave }, {
+            collection: 'people',
+            select: (state) => state._allPeople.filter((person) => person.id === id && !person.deletedAt),
+            buildUpdates: (_person, { now }) => ({ deletedAt: now }),
+            missingMessage: 'Person not found',
         });
-        if (missingPerson) {
-            const message = 'Person not found';
+        if (!result.success) {
+            const message = result.error ?? 'Person not found';
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
-        return actionOk();
+        return result;
     },
 
     restorePerson: async (id: string) => {
-        const now = new Date().toISOString();
-        const changeAt = Date.now();
-        let snapshot = null;
-        let missingPerson = false;
         let duplicateActivePerson = false;
-        set((state) => {
-            const person = state._allPeople.find((item) => item.id === id);
-            if (!person) {
-                missingPerson = true;
-                return state;
-            }
-            if (!person.deletedAt) {
-                return state;
-            }
-            const restoredNameKey = getPersonNameKey(person.name);
-            const existingActive = state._allPeople.find((item) => (
-                item.id !== id
-                && !item.deletedAt
-                && getPersonNameKey(item.name) === restoredNameKey
-            ));
-            if (existingActive) {
-                duplicateActivePerson = true;
-                return state;
-            }
-            const deviceState = ensureDeviceId(state.settings);
-            const nextAllPeople = state._allPeople.map((item) => (
-                item.id === id
-                    ? {
-                        ...item,
-                        deletedAt: undefined,
-                        updatedAt: now,
-                        rev: nextRevision(item.rev),
-                        revBy: deviceState.deviceId,
-                    }
-                    : item
-            ));
-            snapshot = buildSaveSnapshot(state, {
-                people: nextAllPeople,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                people: selectVisiblePeople(nextAllPeople),
-                _allPeople: nextAllPeople,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt, changeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        const result = await mutateEntities({ set, debouncedSave }, {
+            collection: 'people',
+            select: (state) => state._allPeople.filter((person) => person.id === id),
+            buildUpdates: (person, { state }) => {
+                if (!person.deletedAt) return null;
+                const restoredNameKey = getPersonNameKey(person.name);
+                if (state._allPeople.some((item) => (
+                    item.id !== id
+                    && !item.deletedAt
+                    && getPersonNameKey(item.name) === restoredNameKey
+                ))) {
+                    duplicateActivePerson = true;
+                    return null;
+                }
+                return { deletedAt: undefined };
+            },
+            missingMessage: 'Person not found',
         });
-        if (missingPerson) {
-            const message = 'Person not found';
+        if (!result.success) {
+            const message = result.error ?? 'Person not found';
             set({ error: message });
             return actionFail(message);
         }
@@ -355,9 +270,6 @@ export const createPeopleActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
-        return actionOk();
+        return result;
     },
 });

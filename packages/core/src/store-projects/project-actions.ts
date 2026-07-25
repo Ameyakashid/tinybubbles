@@ -18,7 +18,7 @@ import { findSelectableProjectByTitleAndArea } from '../project-utils';
 import type { Project, ProjectCoreActions, ProjectActionContext, Task, TaskStatus } from './shared';
 import type { TaskStore } from '../store-types';
 import type { PendingRemoteAttachmentDelete } from '../types';
-import { actionFail, actionOk } from './shared';
+import { actionFail, actionOk, mutateEntities } from './shared';
 
 const duplicateProjectAttachmentCopy = (attachment: NonNullable<Project['attachments']>[number], now: string) => ({
     ...attachment,
@@ -813,48 +813,14 @@ export const createProjectCoreActions = ({
     },
 
     toggleProjectFocus: async (id: string) => {
-        const changeAt = Date.now();
-        const now = new Date().toISOString();
-        let snapshot = null;
-        set((state) => {
-            const allProjects = state._allProjects;
-            const project = allProjects.find(p => p.id === id);
-            if (!project) return state;
-            if (project.status !== 'active' && !project.isFocused) return state;
-            const deviceState = ensureDeviceId(state.settings);
-
-            const focusedCount = get().getDerivedState().focusedProjectCount;
-            const isCurrentlyFocused = project.isFocused;
-
-            if (!isCurrentlyFocused && focusedCount >= 5) {
-                return state;
-            }
-
-            const newAllProjects = allProjects.map(p =>
-                p.id === id
-                    ? {
-                        ...p,
-                        isFocused: !p.isFocused,
-                        updatedAt: now,
-                        rev: nextRevision(p.rev),
-                        revBy: deviceState.deviceId,
-                    }
-                    : p
-            );
-            const newVisibleProjects = newAllProjects.filter(p => !p.deletedAt);
-            snapshot = buildSaveSnapshot(state, {
-                projects: newAllProjects,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                projects: newVisibleProjects,
-                _allProjects: newAllProjects,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt, changeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        await mutateEntities({ set, debouncedSave }, {
+            collection: 'projects',
+            select: (state) => state._allProjects.filter((project) => project.id === id),
+            buildUpdates: (project) => {
+                if (project.status !== 'active' && !project.isFocused) return null;
+                if (!project.isFocused && get().getDerivedState().focusedProjectCount >= 5) return null;
+                return { isFocused: !project.isFocused };
+            },
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 });

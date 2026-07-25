@@ -3,7 +3,7 @@ import { logWarn } from '../logger';
 import { clearDerivedCache } from '../store-settings';
 import { generateUUID as uuidv4 } from '../uuid';
 import type { Area, AreaActions, ProjectActionContext } from './shared';
-import { actionFail, actionOk } from './shared';
+import { actionFail, actionOk, mutateEntities } from './shared';
 
 export const createAreaActions = ({
     set,
@@ -100,6 +100,7 @@ export const createAreaActions = ({
     },
 
     updateArea: async (id: string, updates: Partial<Area>) => {
+        const changeAt = Date.now();
         let snapshot = null;
         let missingArea = false;
         let invalidName = false;
@@ -178,12 +179,11 @@ export const createAreaActions = ({
                         _allProjects: newAllProjects,
                         tasks: newVisibleTasks,
                         _allTasks: newAllTasks,
-                        lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt),
+                        lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt, changeAt),
                         ...(deviceState.updated ? { settings: deviceState.settings } : {}),
                     };
                 }
             }
-            const changeAt = Date.now();
             const now = new Date().toISOString();
             const nextOrder = Number.isFinite(updates.order) ? (updates.order as number) : area.order;
             const nextName = updates.name !== undefined ? updates.name.trim() : area.name;
@@ -459,52 +459,33 @@ export const createAreaActions = ({
 
     reorderAreas: async (orderedIds: string[]) => {
         if (orderedIds.length === 0) return;
-        let snapshot = null;
-        set((state) => {
-            const allAreas = state._allAreas;
-            const activeAreas = allAreas.filter((area) => !area.deletedAt);
-            const deletedAreas = allAreas.filter((area) => area.deletedAt);
-            const areaById = new Map(activeAreas.map(area => [area.id, area]));
-            const seen = new Set<string>();
-            const now = new Date().toISOString();
-            const deviceState = ensureDeviceId(state.settings);
-
-            const reordered: Area[] = [];
-            orderedIds.forEach((id, index) => {
-                const area = areaById.get(id);
-                if (!area) return;
-                seen.add(id);
-                reordered.push({ ...area, order: index, updatedAt: now });
-            });
-
-            const remaining = activeAreas
-                .filter(area => !seen.has(area.id))
-                .sort((a, b) => a.order - b.order)
-                .map((area, idx) => ({
-                    ...area,
-                    order: reordered.length + idx,
-                    updatedAt: now,
-                }));
-
-            const newVisibleAreas = [...reordered, ...remaining].map((area) => ({
-                ...area,
-                rev: nextRevision(area.rev),
-                revBy: deviceState.deviceId,
-            }));
-            const newAllAreas = [...newVisibleAreas, ...deletedAreas];
-            snapshot = buildSaveSnapshot(state, {
-                areas: newAllAreas,
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            });
-            return {
-                areas: newVisibleAreas,
-                _allAreas: newAllAreas,
-                lastDataChangeAt: getNextDataChangeAt(state.lastDataChangeAt),
-                ...(deviceState.updated ? { settings: deviceState.settings } : {}),
-            };
+        const orderById = new Map<string, number>();
+        await mutateEntities({ set, debouncedSave }, {
+            collection: 'areas',
+            select: (state) => {
+                const activeAreas = state._allAreas.filter((area) => !area.deletedAt);
+                const areaById = new Map(activeAreas.map((area) => [area.id, area]));
+                const seen = new Set<string>();
+                const reordered: Area[] = [];
+                orderedIds.forEach((id, index) => {
+                    const area = areaById.get(id);
+                    if (!area) return;
+                    seen.add(id);
+                    orderById.set(id, index);
+                    reordered.push(area);
+                });
+                const remaining = activeAreas
+                    .filter((area) => !seen.has(area.id))
+                    .sort((a, b) => a.order - b.order);
+                remaining.forEach((area, index) => {
+                    orderById.set(area.id, reordered.length + index);
+                });
+                return [...reordered, ...remaining];
+            },
+            buildUpdates: (area, { now }) => ({
+                order: orderById.get(area.id) ?? area.order,
+                updatedAt: now,
+            }),
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 });

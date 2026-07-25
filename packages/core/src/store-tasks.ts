@@ -213,7 +213,7 @@ const applyVisibleTaskChanges = (
     return changed ? nextVisibleTasks : visibleTasks;
 };
 
-type MutateTasksOptions = {
+export type MutateTasksOptions = {
     selectTasks: (state: TaskStore) => Task[];
     buildUpdates: (task: Task, context: { now: string; state: TaskStore }) => Partial<Task>;
     buildSettings?: (state: TaskStore, selectedTasks: readonly Task[], context: { now: string; settings: TaskStore['settings'] }) => TaskStore['settings'] | undefined;
@@ -222,7 +222,7 @@ type MutateTasksOptions = {
     ensureDeviceIdWhenEmpty?: boolean;
 };
 
-const mutateTasks = async (
+export const mutateTasks = async (
     { set, debouncedSave }: Pick<TaskActionContext, 'set' | 'debouncedSave'>,
     options: MutateTasksOptions
 ): Promise<StoreActionResult> => {
