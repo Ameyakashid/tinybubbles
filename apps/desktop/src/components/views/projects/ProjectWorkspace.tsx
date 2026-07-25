@@ -33,6 +33,7 @@ import { useUiStore } from '../../../store/ui-store';
 import { BulkSelectionToolbar } from '../list/BulkSelectionToolbar';
 import { SortBySelect } from '../list/list-toolbar';
 import { sortDoneTasksForListView } from '../list/done-sort';
+import { useTaskListScope } from '../list/task-list-scope';
 import { ListBulkActions } from '../list/ListBulkActions';
 import { TaskBulkOrganizeModal } from '../list/TaskBulkOrganizeModal';
 import { normalizeAttachmentInput } from '../../../lib/attachment-utils';
@@ -832,6 +833,26 @@ export function ProjectWorkspace({
 
         return sortProjectTasks(references);
     }, [allTasks, normalizedSearchQuery, selectedProject, sortProjectTasks]);
+
+    // Reference tasks render as their own section below the task list, so the
+    // keyboard walks them last rather than skipping them.
+    const keyboardVisibleTasks = useMemo(
+        () => [...visibleProjectTaskList, ...projectReferenceTasks],
+        [projectReferenceTasks, visibleProjectTaskList],
+    );
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => keyboardVisibleTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+        // Keyboard select reveals the checkboxes: without selection mode the
+        // toggled rows would have nothing to show for it.
+        toggleSelect: (task) => {
+            setSelectionMode(true);
+            toggleMultiSelect(task.id);
+        },
+    });
 
     useEffect(() => {
         if (!highlightTaskId) return;

@@ -35,6 +35,7 @@ import {
     useVirtualList,
 } from './list/useVirtualList';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { useTaskListScope } from './list/task-list-scope';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import {
     CONTEXTS_VIEW_STATE_STORAGE_KEY,
@@ -212,6 +213,11 @@ export function ContextsView() {
         [areas, groupBy, projectMap, sortedTasks, t],
     );
     const isGrouping = groupBy !== 'none';
+    // Grouping reorders the rows, so the keyboard walks the grouped order.
+    const keyboardVisibleTasks = useMemo(
+        () => (isGrouping ? groupedTasks.flatMap((group) => group.tasks) : sortedTasks),
+        [groupedTasks, isGrouping, sortedTasks],
+    );
     const filteredTaskIds = sortedTasks.map((task) => task.id);
     const selectedVisibleCount = filteredTaskIds.filter((id) => multiSelectedIds.has(id)).length;
     const allVisibleTasksSelected = filteredTaskIds.length > 0 && selectedVisibleCount === filteredTaskIds.length;
@@ -268,6 +274,20 @@ export function ContextsView() {
             return result.selectedIds;
         });
     };
+
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => keyboardVisibleTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+        // Keyboard select reveals the checkboxes: without selection mode the
+        // toggled rows would have nothing to show for it.
+        toggleSelect: (task) => {
+            setSelectionMode(true);
+            toggleMultiSelect(task.id);
+        },
+    });
 
     const selectAllVisibleTasks = () => {
         multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;

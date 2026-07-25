@@ -30,6 +30,7 @@ import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
+import { useTaskListScope } from './list/task-list-scope';
 
 const BOARD_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:board:v1';
 
@@ -49,6 +50,8 @@ function sanitizeBoardViewState(value: unknown, fallback: BoardPersistedViewStat
         filtersOpen: typeof parsed.filtersOpen === 'boolean' ? parsed.filtersOpen : fallback.filtersOpen,
     };
 }
+
+const COLUMN_STATUSES: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
 
 const getColumns = (t: (key: string) => string): { id: TaskStatus; label: string }[] => [
     { id: 'inbox', label: t('list.inbox') || 'Inbox' },
@@ -362,6 +365,20 @@ export function BoardView() {
         () => new Set<string>(getColumns(t).map((column) => column.id)),
         [t]
     );
+
+    // Keyboard order matches the reading order of the board: column by column,
+    // card by card.
+    const visibleTasks = React.useMemo(
+        () => COLUMN_STATUSES.flatMap((status) => getColumnTasks(status)),
+        [getColumnTasks],
+    );
+    const [selectedTaskIndex, setSelectedTaskIndex] = React.useState(0);
+    useTaskListScope({
+        getTasks: () => visibleTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+    });
     // Lock onto the column the drag is over, then snap to the closest card *within* that
     // column (by the dragged item's rect, not the raw pointer). Without this, releasing in
     // the gap between cards falls through to the column droppable and lands at the bottom,

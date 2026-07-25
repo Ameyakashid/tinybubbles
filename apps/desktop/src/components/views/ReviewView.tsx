@@ -5,6 +5,7 @@ import { ReviewFiltersBar } from './review/ReviewFiltersBar';
 import { ReviewBulkActions } from './review/ReviewBulkActions';
 import { ReviewTaskList } from './review/ReviewTaskList';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { useTaskListScope } from './list/task-list-scope';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
@@ -221,6 +222,20 @@ export function ReviewView() {
             return result.selectedIds;
         });
     }, [filteredTaskIds, selectionMode]);
+
+    // Grouping reorders the rows, so the keyboard walks the grouped order.
+    const keyboardVisibleTasks = useMemo(
+        () => (isGrouping ? groupedTasks.flatMap((group) => group.tasks) : filteredTasks),
+        [filteredTasks, groupedTasks, isGrouping],
+    );
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => keyboardVisibleTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+        toggleSelect: (task) => toggleMultiSelect(task.id),
+    });
 
     const selectAllVisibleTasks = useCallback(() => {
         setSelectionMode(true);

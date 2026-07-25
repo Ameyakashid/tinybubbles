@@ -53,6 +53,7 @@ import { useTaskItemEditState } from './Task/useTaskItemEditState';
 import { useTaskItemProjectContext } from './Task/useTaskItemProjectContext';
 import { useTaskItemFieldLayout } from './Task/useTaskItemFieldLayout';
 import { useTaskItemSubmit } from './Task/useTaskItemSubmit';
+import { formatTaskMarkedDoneMessage } from './views/list/task-list-scope';
 import { dispatchNavigateEvent } from '../lib/navigation-events';
 import { usePomodoroStore } from '../store/pomodoro-store';
 import { dispatchContextsTokenSelection } from '../lib/contexts-view-state';
@@ -942,7 +943,7 @@ export const TaskItem = memo(function TaskItem({
         });
         if (undoNotificationsEnabled) {
             showToast(
-                `${task.title} marked Done`,
+                formatTaskMarkedDoneMessage(t, task.title),
                 'info',
                 5000,
                 {
@@ -956,6 +957,7 @@ export const TaskItem = memo(function TaskItem({
         closeProjectNextActionPrompt,
         openProjectNextActionPromptIfNeeded,
         showToast,
+        t,
         task.id,
         task.title,
         undoLabel,

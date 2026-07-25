@@ -21,6 +21,7 @@ import {
     useVirtualList,
 } from './list/useVirtualList';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { useTaskListScope } from './list/task-list-scope';
 
 interface SearchViewProps {
     savedSearchId: string;
@@ -173,6 +174,20 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
             return result.selectedIds;
         });
     }, [filteredTaskIds]);
+
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => filteredTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+        // Keyboard select reveals the checkboxes: without selection mode the
+        // toggled rows would have nothing to show for it.
+        toggleSelect: (task) => {
+            setSelectionMode(true);
+            toggleMultiSelect(task.id);
+        },
+    });
 
     const selectAllVisibleTasks = useCallback(() => {
         multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;

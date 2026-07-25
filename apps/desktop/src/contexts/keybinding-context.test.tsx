@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTaskStore } from '@mindwtr/core';
+import type { Task } from '@mindwtr/core';
 import { LanguageProvider } from './language-context';
+import { useTaskListScope } from '../components/views/list/task-list-scope';
 import { KeybindingProvider } from './keybinding-context';
 import { useKeybindings } from './keybinding-context';
 import { useUiStore } from '../store/ui-store';
@@ -52,111 +54,56 @@ const DummyList = ({ focusAddInput, openSelected, setStatusSelected }: { focusAd
     );
 };
 
-const setVisibleRect = (element: HTMLElement | null) => {
-    if (!element) return;
-    element.getBoundingClientRect = () =>
-        ({
-            x: 0,
-            y: 0,
-            top: 0,
-            left: 0,
-            bottom: 32,
-            right: 320,
-            width: 320,
-            height: 32,
-            toJSON: () => ({}),
-        }) as DOMRect;
-};
+const scopedTask = (id: string): Task => ({
+    id,
+    title: `Task ${id}`,
+    status: 'next',
+    tags: [],
+    contexts: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+} as Task);
 
-const FallbackTaskList = ({
-    onEditTask1,
-    onEditTask2,
+// Stands in for any view that registers the shared scope over its own ordered
+// visible-task array (Focus, Board, Projects, Search, Contexts, Review).
+const ScopedTaskList = ({
+    tasks,
+    onEdit,
+    toggleSelect,
 }: {
-    onEditTask1: () => void;
-    onEditTask2: () => void;
+    tasks: Task[];
+    onEdit?: (taskId: string) => void;
+    toggleSelect?: (task: Task) => void;
 }) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => tasks,
+        getSelectedIndex: () => selectedIndex,
+        setSelectedIndex,
+        t: (key: string) => key,
+        toggleSelect,
+    });
+
     return (
         <div data-main-content tabIndex={-1}>
             <input
                 type="text"
                 data-view-filter-input
-                ref={setVisibleRect}
                 placeholder="Search..."
                 defaultValue=""
             />
-            <div data-task-id="1" ref={setVisibleRect}>
-                <button type="button" aria-expanded={false}>
-                    Task 1
-                </button>
-                <button type="button" data-task-edit-trigger onClick={onEditTask1}>
-                    Edit 1
-                </button>
-            </div>
-            <div data-task-id="2" ref={setVisibleRect}>
-                <button type="button" aria-expanded={false}>
-                    Task 2
-                </button>
-                <button type="button" data-task-edit-trigger onClick={onEditTask2}>
-                    Edit 2
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const FallbackSelectableTaskList = ({ onToggleTask }: { onToggleTask: (taskId: string) => void }) => {
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-    return (
-        <div data-main-content tabIndex={-1}>
-            <button type="button" data-task-selection-toggle onClick={() => setSelectionMode(true)}>
-                Select
-            </button>
-            {['1', '2'].map((taskId) => (
-                <div key={taskId} data-task-id={taskId} ref={setVisibleRect}>
-                    <button type="button" data-task-view-toggle>Task {taskId}</button>
-                    <button type="button" data-other-task-control>Other task control {taskId}</button>
-                    {selectionMode && (
-                        <input
-                            type="checkbox"
-                            data-task-selection-checkbox
-                            aria-label={`Select Task ${taskId}`}
-                            checked={selectedIds.has(taskId)}
-                            onChange={() => {
-                                setSelectedIds((values) => {
-                                    const next = new Set(values);
-                                    if (next.has(taskId)) next.delete(taskId);
-                                    else next.add(taskId);
-                                    return next;
-                                });
-                                onToggleTask(taskId);
-                            }}
-                        />
-                    )}
+            {tasks.map((task) => (
+                <div key={task.id} data-task-id={task.id}>
+                    <button type="button" aria-label="Done">Done circle</button>
+                    <button type="button" data-task-view-toggle aria-expanded={false}>
+                        {task.title}
+                    </button>
+                    <button type="button" data-other-task-control>Other task control {task.id}</button>
+                    <button type="button" data-task-edit-trigger onClick={() => onEdit?.(task.id)}>
+                        Edit {task.id}
+                    </button>
                 </div>
             ))}
-        </div>
-    );
-};
-
-const FallbackTaskListWithoutEditTrigger = ({
-    onOpenTask1,
-    onOpenTask2,
-}: {
-    onOpenTask1: () => void;
-    onOpenTask2: () => void;
-}) => {
-    return (
-        <div data-main-content tabIndex={-1}>
-            <div data-task-id="1" data-task-edit-trigger ref={setVisibleRect} onClick={onOpenTask1}>
-                Task 1
-            </div>
-            <div data-task-id="2" ref={setVisibleRect}>
-                <button type="button" onClick={onOpenTask2}>
-                    Open Task 2
-                </button>
-            </div>
         </div>
     );
 };
@@ -210,23 +157,6 @@ const ListWithFocusSelected = () => {
         </div>
     );
 };
-
-// A view without a registered scope (like the Focus/Agenda view), where
-// selection falls back to querying visible task cards (#890).
-const FallbackFocusList = () => (
-    <div data-main-content tabIndex={-1}>
-        <div data-task-id="1" ref={setVisibleRect}>
-            <button type="button" data-task-view-toggle aria-expanded={false}>
-                Task 1
-            </button>
-        </div>
-        <div data-task-id="2" ref={setVisibleRect}>
-            <button type="button" data-task-view-toggle aria-expanded={false}>
-                Task 2
-            </button>
-        </div>
-    </div>
-);
 
 describe('KeybindingProvider (vim)', () => {
     beforeEach(() => {
@@ -798,18 +728,11 @@ describe('KeybindingProvider (vim)', () => {
         expect(openSelected).not.toHaveBeenCalled();
     });
 
-    it('focuses the title toggle, not the done button, when fallback navigation activates a row', () => {
+    it('focuses the title toggle, not the done button, when navigation reveals a row', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <div data-main-content tabIndex={-1}>
-                        <div data-task-id="1" ref={setVisibleRect}>
-                            <button type="button" aria-label="Done">Done circle</button>
-                            <button type="button" data-task-view-toggle aria-expanded={false}>
-                                Task 1
-                            </button>
-                        </div>
-                    </div>
+                    <ScopedTaskList tasks={[scopedTask('1')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -819,26 +742,25 @@ describe('KeybindingProvider (vim)', () => {
         expect(document.activeElement).toBe(document.querySelector('[data-task-view-toggle]'));
     });
 
-    it('falls back to visible task cards in views without registered scope', () => {
-        const onEditTask1 = vi.fn();
-        const onEditTask2 = vi.fn();
+    it('navigates and edits through a view-registered task scope', () => {
+        const onEdit = vi.fn();
 
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackTaskList onEditTask1={onEditTask1} onEditTask2={onEditTask2} />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} onEdit={onEdit} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
 
         fireEvent.keyDown(window, { key: 'j' });
         fireEvent.keyDown(window, { key: 'e' });
-        expect(onEditTask2).toHaveBeenCalledTimes(1);
+        expect(onEdit).toHaveBeenLastCalledWith('2');
 
         fireEvent.keyDown(window, { key: 'g' });
         fireEvent.keyDown(window, { key: 'g' });
         fireEvent.keyDown(window, { key: 'e' });
-        expect(onEditTask1).toHaveBeenCalledTimes(1);
+        expect(onEdit).toHaveBeenLastCalledWith('1');
     });
 
     it('ArrowRight focuses the selected task title, not the list container (#890)', () => {
@@ -857,11 +779,11 @@ describe('KeybindingProvider (vim)', () => {
         expect(document.activeElement).not.toBe(document.querySelector('[data-main-content]'));
     });
 
-    it('Focus view: ArrowRight selects the first task and the next ArrowDown moves exactly one row (#890)', () => {
+    it('registered view: ArrowRight selects the first task and the next ArrowDown moves exactly one row (#890)', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="agenda" onNavigate={vi.fn()}>
-                    <FallbackFocusList />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -878,39 +800,13 @@ describe('KeybindingProvider (vim)', () => {
         expect(document.activeElement).toBe(toggles[1]);
     });
 
-    it('falls back to clickable task row when explicit edit trigger is absent', () => {
-        const onOpenTask1 = vi.fn();
-        const onOpenTask2 = vi.fn();
-
-        render(
-            <LanguageProvider>
-                <KeybindingProvider currentView="calendar" onNavigate={vi.fn()}>
-                    <FallbackTaskListWithoutEditTrigger onOpenTask1={onOpenTask1} onOpenTask2={onOpenTask2} />
-                </KeybindingProvider>
-            </LanguageProvider>
-        );
-
-        fireEvent.keyDown(window, { key: 'j' });
-        fireEvent.keyDown(window, { key: 'e' });
-        expect(onOpenTask2).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows an undo toast when fallback keyboard delete soft-deletes a task', async () => {
+    it('shows an undo toast when keyboard delete soft-deletes the selected task', async () => {
         const deleteTask = vi.fn(async () => ({ success: true }));
         const restoreTask = vi.fn(async () => ({ success: true }));
         const showToast = vi.fn();
         useUiStore.setState({ showToast });
         useTaskStore.setState((state) => ({
             ...state,
-            _allTasks: [{
-                id: '1',
-                title: 'Task 1',
-                status: 'next',
-                tags: [],
-                contexts: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-            }],
             settings: {
                 ...state.settings,
                 keybindingStyle: 'vim',
@@ -923,7 +819,7 @@ describe('KeybindingProvider (vim)', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackTaskList onEditTask1={vi.fn()} onEditTask2={vi.fn()} />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -953,15 +849,6 @@ describe('KeybindingProvider (vim)', () => {
         useUiStore.setState({ showToast });
         useTaskStore.setState((state) => ({
             ...state,
-            _allTasks: [{
-                id: '1',
-                title: 'Task 1',
-                status: 'next',
-                tags: [],
-                contexts: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-            }],
             settings: {
                 ...state.settings,
                 keybindingStyle: 'vim',
@@ -974,7 +861,7 @@ describe('KeybindingProvider (vim)', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackTaskList onEditTask1={vi.fn()} onEditTask2={vi.fn()} />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -1121,21 +1008,12 @@ describe('KeybindingProvider (vim)', () => {
         window.removeEventListener('mindwtr:quick-add', quickAddListener);
     });
 
-    it('moves the fallback-selected task with the status chord and offers undo', async () => {
+    it('moves the selected task with the status chord and offers undo', async () => {
         const moveTask = vi.fn(async () => ({ success: true }));
         const showToast = vi.fn();
         useUiStore.setState({ showToast });
         useTaskStore.setState((state) => ({
             ...state,
-            tasks: [{
-                id: '1',
-                title: 'Task 1',
-                status: 'next',
-                tags: [],
-                contexts: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-            }],
             settings: {
                 ...state.settings,
                 keybindingStyle: 'vim',
@@ -1147,7 +1025,7 @@ describe('KeybindingProvider (vim)', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackTaskList onEditTask1={vi.fn()} onEditTask2={vi.fn()} />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -1321,12 +1199,15 @@ describe('KeybindingProvider (standard)', () => {
         expect(openSelected).not.toHaveBeenCalled();
     });
 
-    it('uses x to enter an existing fallback Select mode and select the focused task', async () => {
-        const onToggleTask = vi.fn();
+    it('uses x to multi-select the task the focus sits in', async () => {
+        const toggleSelect = vi.fn();
         const { container } = render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackSelectableTaskList onToggleTask={onToggleTask} />
+                    <ScopedTaskList
+                        tasks={[scopedTask('1'), scopedTask('2')]}
+                        toggleSelect={toggleSelect}
+                    />
                 </KeybindingProvider>
             </LanguageProvider>
         );
@@ -1334,14 +1215,14 @@ describe('KeybindingProvider (standard)', () => {
         const firstControl = container.querySelector('[data-task-id="1"] [data-other-task-control]') as HTMLButtonElement;
         firstControl.focus();
         fireEvent.keyDown(firstControl, { key: 'x' });
-        await waitFor(() => expect(onToggleTask).toHaveBeenCalledWith('1'));
+        await waitFor(() => expect(toggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: '1' })));
 
         const secondControl = container.querySelector('[data-task-id="2"] [data-other-task-control]') as HTMLButtonElement;
         secondControl.focus();
         fireEvent.keyDown(secondControl, { key: 'x' });
 
-        await waitFor(() => expect(onToggleTask).toHaveBeenLastCalledWith('2'));
-        expect(container.querySelectorAll('[data-task-selection-checkbox]:checked')).toHaveLength(2);
+        await waitFor(() => expect(toggleSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: '2' })));
+        expect(toggleSelect).toHaveBeenCalledTimes(2);
     });
 
     it('navigates views with g chords in standard style', () => {
@@ -1367,15 +1248,6 @@ describe('KeybindingProvider (standard)', () => {
         useUiStore.setState({ showToast: vi.fn() });
         useTaskStore.setState((state) => ({
             ...state,
-            _allTasks: [{
-                id: '1',
-                title: 'Task 1',
-                status: 'next',
-                tags: [],
-                contexts: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-            }],
             settings: {
                 ...state.settings,
                 keybindingStyle: 'standard',
@@ -1388,7 +1260,7 @@ describe('KeybindingProvider (standard)', () => {
         render(
             <LanguageProvider>
                 <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
-                    <FallbackTaskList onEditTask1={vi.fn()} onEditTask2={vi.fn()} />
+                    <ScopedTaskList tasks={[scopedTask('1'), scopedTask('2')]} />
                 </KeybindingProvider>
             </LanguageProvider>
         );

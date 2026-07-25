@@ -1,16 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { shallow, translateWithFallback, useTaskStore } from '@mindwtr/core';
+import { shallow, useTaskStore } from '@mindwtr/core';
 import { useLanguage } from './language-context';
 import { KeybindingHelpModal } from '../components/KeybindingHelpModal';
 import { isFlatpakRuntime, isTauriRuntime } from '../lib/runtime';
 import { reportError } from '../lib/report-error';
 import { nextDensityMode } from '../lib/density';
-import { registerUndoableAction, takeUndoableAction } from '../lib/undo-registry';
-import { undoTaskCompletion } from '../lib/undo-task-completion';
+import { takeUndoableAction } from '../lib/undo-registry';
 import { logWarn } from '../lib/app-log';
 import { useUiStore } from '../store/ui-store';
 import { saveStoredFullscreen } from '../lib/window-state';
-import { requestTaskRowAction, type TaskRowAction } from '../lib/task-row-actions';
 import {
     type GlobalQuickAddShortcutSetting,
     matchesGlobalQuickAddShortcut,
@@ -223,20 +221,6 @@ export function KeybindingProvider({
         }),
         [isMac, isWindows, settings.globalQuickAddShortcut]
     );
-    const undoLabel = useMemo(() => {
-        const value = t('common.undo');
-        return value && value !== 'common.undo' ? value : 'Undo';
-    }, [t]);
-    const formatTaskMarkedDoneMessage = useCallback((title: string) => {
-        return translateWithFallback(t, 'task.markedDone', '{title} marked Done')
-            .replace('{title}', title);
-    }, [t]);
-    const formatTaskMovedMessage = useCallback((title: string, status: TaskStatus) => {
-        const statusLabel = translateWithFallback(t, `status.${status}`, status);
-        return translateWithFallback(t, 'task.movedToStatus', '{{title}} moved to {{status}}')
-            .replace('{{title}}', title)
-            .replace('{{status}}', statusLabel);
-    }, [t]);
     const sortedAreas = useMemo(
         () => [...areas].sort((a, b) => a.order - b.order),
         [areas],
@@ -286,7 +270,6 @@ export function KeybindingProvider({
 
     const scopeRef = useRef<TaskListScope | null>(null);
     const pendingRef = useRef<{ key: string | null; timestamp: number }>({ key: null, timestamp: 0 });
-    const fallbackSelectedTaskIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (isTest) return;
@@ -312,325 +295,36 @@ export function KeybindingProvider({
         scopeRef.current = scope;
     }, []);
 
-    const getFallbackTaskElements = useCallback((): HTMLElement[] => {
+    // Every task list decision — which task is selected, what a key does to it —
+    // belongs to a registered TaskListScope built from the view's own ordered
+    // task array (see `views/list/task-list-scope.ts`). A view that cannot
+    // supply one (the calendar grid) registers nothing and keeps a single
+    // last-resort affordance: entering the list focuses the first task row so
+    // Tab/Enter still reach it (#890).
+    const focusFirstTaskRow = useCallback((): boolean => {
         const root = document.querySelector<HTMLElement>('[data-main-content]') ?? document.body;
-        const items = Array.from(root.querySelectorAll<HTMLElement>('[data-task-id]'));
-        const seen = new Set<string>();
-        return items.filter((item) => {
-            const taskId = item.dataset.taskId;
-            if (!taskId || seen.has(taskId)) return false;
-            const rect = item.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return false;
-            const style = window.getComputedStyle(item);
-            if (style.display === 'none' || style.visibility === 'hidden') return false;
-            seen.add(taskId);
-            return true;
-        });
-    }, []);
-
-    const activateFallbackTaskElement = useCallback((taskElement: HTMLElement | null) => {
-        if (!taskElement) return;
-        const taskId = taskElement.dataset.taskId;
-        if (taskId) {
-            fallbackSelectedTaskIdRef.current = taskId;
-        }
-        if (typeof taskElement.scrollIntoView === 'function') {
-            taskElement.scrollIntoView({ block: 'nearest' });
-        }
-        taskElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const row = root.querySelector<HTMLElement>('[data-task-id]');
+        if (!row) return false;
+        row.scrollIntoView?.({ block: 'nearest' });
         // A comma selector returns the first match in document order, which is
-        // the done/next button — Enter would then complete the task (#847).
-        // Prefer the title toggle so Enter opens the task instead.
-        const focusTarget = taskElement.querySelector<HTMLElement>('[data-task-view-toggle]')
-            ?? taskElement.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])');
-        focusTarget?.focus();
+        // the done button — Enter would then complete the task (#847). Prefer
+        // the title toggle so Enter opens the task instead.
+        const focusTarget = row.querySelector<HTMLElement>('[data-task-view-toggle]')
+            ?? row.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])');
+        if (!focusTarget) return false;
+        focusTarget.focus();
+        return true;
     }, []);
-
-    const resolveFallbackSelectionIndex = useCallback((elements: HTMLElement[]): number => {
-        if (elements.length === 0) return -1;
-        const activeTaskElement = document.activeElement instanceof HTMLElement
-            ? document.activeElement.closest('[data-task-id]')
-            : null;
-        if (activeTaskElement instanceof HTMLElement) {
-            const activeIndex = elements.findIndex((item) => item === activeTaskElement);
-            if (activeIndex >= 0) return activeIndex;
-        }
-        const selectedTaskId = fallbackSelectedTaskIdRef.current;
-        if (selectedTaskId) {
-            const selectedIndex = elements.findIndex((item) => item.dataset.taskId === selectedTaskId);
-            if (selectedIndex >= 0) return selectedIndex;
-        }
-        return 0;
-    }, []);
-
-    const pickFallbackTaskElement = useCallback((): HTMLElement | null => {
-        const elements = getFallbackTaskElements();
-        if (elements.length === 0) return null;
-        const selectedIndex = resolveFallbackSelectionIndex(elements);
-        const safeIndex = selectedIndex >= 0 ? selectedIndex : 0;
-        const element = elements[safeIndex] ?? null;
-        activateFallbackTaskElement(element);
-        return element;
-    }, [activateFallbackTaskElement, getFallbackTaskElements, resolveFallbackSelectionIndex]);
-
-    const fallbackSelectNext = useCallback(() => {
-        const elements = getFallbackTaskElements();
-        if (elements.length === 0) return;
-        const selectedIndex = resolveFallbackSelectionIndex(elements);
-        const nextIndex = selectedIndex < 0
-            ? 0
-            : Math.min(selectedIndex + 1, elements.length - 1);
-        activateFallbackTaskElement(elements[nextIndex] ?? null);
-    }, [activateFallbackTaskElement, getFallbackTaskElements, resolveFallbackSelectionIndex]);
-
-    const fallbackSelectPrev = useCallback(() => {
-        const elements = getFallbackTaskElements();
-        if (elements.length === 0) return;
-        const selectedIndex = resolveFallbackSelectionIndex(elements);
-        const prevIndex = selectedIndex < 0
-            ? elements.length - 1
-            : Math.max(selectedIndex - 1, 0);
-        activateFallbackTaskElement(elements[prevIndex] ?? null);
-    }, [activateFallbackTaskElement, getFallbackTaskElements, resolveFallbackSelectionIndex]);
-
-    const fallbackSelectFirst = useCallback(() => {
-        const elements = getFallbackTaskElements();
-        activateFallbackTaskElement(elements[0] ?? null);
-    }, [activateFallbackTaskElement, getFallbackTaskElements]);
-
-    const fallbackSelectLast = useCallback(() => {
-        const elements = getFallbackTaskElements();
-        activateFallbackTaskElement(elements.length > 0 ? elements[elements.length - 1] : null);
-    }, [activateFallbackTaskElement, getFallbackTaskElements]);
-
-    const fallbackEditSelected = useCallback(() => {
-        const selectedElement = pickFallbackTaskElement();
-        if (!selectedElement) return;
-        const editTrigger = selectedElement.matches('[data-task-edit-trigger]')
-            ? selectedElement
-            : selectedElement.querySelector<HTMLElement>('[data-task-edit-trigger]');
-        if (!editTrigger) {
-            const openTrigger = selectedElement.querySelector<HTMLElement>('button, [role="button"], [tabindex]:not([tabindex="-1"])');
-            if (openTrigger) {
-                openTrigger.focus();
-                openTrigger.click();
-                return;
-            }
-            selectedElement.click();
-            return;
-        }
-        editTrigger.focus();
-        editTrigger.click();
-    }, [pickFallbackTaskElement]);
-
-    const fallbackOpenSelected = useCallback(() => {
-        const selectedElement = pickFallbackTaskElement();
-        if (!selectedElement) return;
-        const toggle = selectedElement.querySelector<HTMLElement>('[data-task-view-toggle]');
-        toggle?.click();
-    }, [pickFallbackTaskElement]);
-
-    const fallbackOpenQuickActionsSelected = useCallback(() => {
-        const selectedElement = pickFallbackTaskElement();
-        if (!selectedElement) return;
-        const trigger = selectedElement.querySelector<HTMLElement>('[data-task-quick-actions-trigger]');
-        if (!trigger) return;
-        trigger.focus();
-        trigger.click();
-    }, [pickFallbackTaskElement]);
-
-    const fallbackToggleSelectSelected = useCallback(() => {
-        const selectedTaskId = pickFallbackTaskElement()?.dataset.taskId;
-        if (!selectedTaskId) return;
-        const clickCheckbox = () => {
-            const selectedElement = getFallbackTaskElements()
-                .find((element) => element.dataset.taskId === selectedTaskId);
-            const checkbox = selectedElement?.querySelector<HTMLInputElement>('[data-task-selection-checkbox]');
-            if (!checkbox) return false;
-            checkbox.click();
-            return true;
-        };
-        if (clickCheckbox()) return;
-        const selectionToggle = document.querySelector<HTMLElement>('[data-task-selection-toggle]');
-        if (!selectionToggle) return;
-        selectionToggle.click();
-        window.requestAnimationFrame(() => clickCheckbox());
-    }, [getFallbackTaskElements, pickFallbackTaskElement]);
-
-    const fallbackRequestTaskRowAction = useCallback((action: TaskRowAction) => {
-        requestTaskRowAction(pickFallbackTaskElement(), action);
-    }, [pickFallbackTaskElement]);
-
-    const fallbackToggleFocusSelected = useCallback(() => {
-        fallbackRequestTaskRowAction('toggle-focus');
-    }, [fallbackRequestTaskRowAction]);
-
-    const fallbackRenameSelected = useCallback(() => {
-        fallbackRequestTaskRowAction('rename-title');
-    }, [fallbackRequestTaskRowAction]);
-
-    const fallbackToggleDoneSelected = useCallback(() => {
-        const selectedElement = pickFallbackTaskElement();
-        const selectedTaskId = selectedElement?.dataset.taskId;
-        if (!selectedTaskId) return;
-        const state = useTaskStore.getState();
-        const task = state.tasks.find((item) => item.id === selectedTaskId);
-        if (!task) return;
-        const nextStatus = task.status === 'done' ? 'inbox' : 'done';
-        const previousStatus = task.status;
-        const wasFocusedToday = task.isFocusedToday === true;
-        void state.moveTask(task.id, nextStatus)
-            .then((result) => {
-                if (!result.success) {
-                    throw new Error(result.error || 'Failed to change task status');
-                }
-                if (nextStatus !== 'done' || previousStatus === 'done') return;
-                const undo = registerUndoableAction(() => {
-                    void undoTaskCompletion(task.id, previousStatus, wasFocusedToday)
-                        .catch((error) => reportError('Failed to undo task completion', error));
-                });
-                if (settings.undoNotificationsEnabled === false) return;
-                showToast(
-                    formatTaskMarkedDoneMessage(task.title),
-                    'info',
-                    5000,
-                    {
-                        label: undoLabel,
-                        onClick: undo,
-                    }
-                );
-            })
-            .catch((error) => reportError('Failed to change task status', error));
-    }, [formatTaskMarkedDoneMessage, pickFallbackTaskElement, settings.undoNotificationsEnabled, showToast, undoLabel]);
-
-    const fallbackSetStatusSelected = useCallback((status: TaskStatus) => {
-        const selectedElement = pickFallbackTaskElement();
-        const selectedTaskId = selectedElement?.dataset.taskId;
-        if (!selectedTaskId) return;
-        const state = useTaskStore.getState();
-        const task = state.tasks.find((item) => item.id === selectedTaskId);
-        if (!task || task.status === status) return;
-        const previousStatus = task.status;
-        const wasFocusedToday = task.isFocusedToday === true;
-        void state.moveTask(task.id, status)
-            .then((result) => {
-                if (!result.success) {
-                    throw new Error(result.error || 'Failed to change task status');
-                }
-                const undo = registerUndoableAction(() => {
-                    // Completion has side effects (Today star, completedAt), so
-                    // undoing into/out of done goes through the shared core rule.
-                    if (status === 'done') {
-                        void undoTaskCompletion(task.id, previousStatus, wasFocusedToday)
-                            .catch((error) => reportError('Failed to undo task status change', error));
-                        return;
-                    }
-                    void useTaskStore.getState().moveTask(task.id, previousStatus)
-                        .catch((error) => reportError('Failed to undo task status change', error));
-                });
-                if (settings.undoNotificationsEnabled === false) return;
-                showToast(
-                    status === 'done'
-                        ? formatTaskMarkedDoneMessage(task.title)
-                        : formatTaskMovedMessage(task.title, status),
-                    'info',
-                    5000,
-                    {
-                        label: undoLabel,
-                        onClick: undo,
-                    }
-                );
-            })
-            .catch((error) => reportError('Failed to change task status', error));
-    }, [formatTaskMarkedDoneMessage, formatTaskMovedMessage, pickFallbackTaskElement, settings.undoNotificationsEnabled, showToast, undoLabel]);
-
-    const fallbackDeleteSelected = useCallback(() => {
-        const selectedElement = pickFallbackTaskElement();
-        const selectedTaskId = selectedElement?.dataset.taskId;
-        if (!selectedTaskId) return;
-        const state = useTaskStore.getState();
-        void state.deleteTask(selectedTaskId)
-            .then((result) => {
-                if (!result.success) {
-                    throw new Error(result.error || 'Failed to delete task');
-                }
-                const undo = registerUndoableAction(() => {
-                    void state.restoreTask(selectedTaskId);
-                });
-                if (settings.undoNotificationsEnabled === false) return;
-                const deletedMessageRaw = t('list.taskDeleted');
-                const deletedMessage = deletedMessageRaw && deletedMessageRaw !== 'list.taskDeleted'
-                    ? deletedMessageRaw
-                    : 'Task deleted';
-                showToast(
-                    deletedMessage,
-                    'info',
-                    5000,
-                    {
-                        label: undoLabel,
-                        onClick: undo,
-                    }
-                );
-            })
-            .catch((error) => reportError('Failed to delete task', error));
-        if (fallbackSelectedTaskIdRef.current === selectedTaskId) {
-            fallbackSelectedTaskIdRef.current = null;
-        }
-    }, [pickFallbackTaskElement, settings.undoNotificationsEnabled, showToast, t, undoLabel]);
-
-    const fallbackTaskListScope = useMemo<TaskListScope>(() => ({
-        kind: 'taskList',
-        selectNext: fallbackSelectNext,
-        selectPrev: fallbackSelectPrev,
-        selectFirst: fallbackSelectFirst,
-        selectLast: fallbackSelectLast,
-        editSelected: fallbackEditSelected,
-        openSelected: fallbackOpenSelected,
-        openQuickActions: fallbackOpenQuickActionsSelected,
-        toggleDoneSelected: fallbackToggleDoneSelected,
-        toggleSelectSelected: fallbackToggleSelectSelected,
-        toggleFocusSelected: fallbackToggleFocusSelected,
-        renameSelected: fallbackRenameSelected,
-        deleteSelected: fallbackDeleteSelected,
-        setStatusSelected: fallbackSetStatusSelected,
-        // Entering the list from the sidebar activates the current selection
-        // (previously selected task, else the first) and focuses its title —
-        // the same path j/k navigation uses — so the row renders selected and
-        // the next Arrow moves exactly one row (#890).
-        focusSelected: () => pickFallbackTaskElement() !== null,
-    }), [
-        fallbackDeleteSelected,
-        fallbackEditSelected,
-        fallbackOpenQuickActionsSelected,
-        fallbackOpenSelected,
-        fallbackRenameSelected,
-        fallbackSelectFirst,
-        fallbackSelectLast,
-        fallbackSelectNext,
-        fallbackSelectPrev,
-        fallbackSetStatusSelected,
-        fallbackToggleDoneSelected,
-        fallbackToggleFocusSelected,
-        fallbackToggleSelectSelected,
-        pickFallbackTaskElement,
-    ]);
-
-    const getActiveScope = useCallback((): TaskListScope => {
-        return scopeRef.current ?? fallbackTaskListScope;
-    }, [fallbackTaskListScope]);
 
     // Entering the list from the sidebar (ArrowRight / `l`) should focus the
     // selected task, not the scroll container — focusing the container painted
     // its focus ring around the whole list and left no task visibly selected
     // (#890). Fall back to the container only when there is no task to select.
     const focusActiveSelection = useCallback((): boolean => {
-        if (getActiveScope().focusSelected?.()) return true;
+        if (scopeRef.current?.focusSelected?.()) return true;
+        if (focusFirstTaskRow()) return true;
         return focusMainContent();
-    }, [getActiveScope]);
-
-    useEffect(() => {
-        fallbackSelectedTaskIdRef.current = null;
-    }, [currentView]);
+    }, [focusFirstTaskRow]);
 
     const openHelp = useCallback(() => setIsHelpOpen(true), []);
     const toggleFullscreen = useCallback(async () => {
@@ -696,7 +390,7 @@ export function KeybindingProvider({
             if (isEditableTarget(e.target)) return;
             if (hasModalDialogOpen()) return;
 
-            const scope = getActiveScope();
+            const scope = scopeRef.current;
             const now = Date.now();
             if (pendingRef.current.key && now - pendingRef.current.timestamp > 700) {
                 pendingRef.current.key = null;
@@ -805,7 +499,7 @@ export function KeybindingProvider({
             if (isEditableTarget(e.target)) return;
             if (hasModalDialogOpen()) return;
 
-            const scope = getActiveScope();
+            const scope = scopeRef.current;
             const now = Date.now();
             if (pendingRef.current.key && now - pendingRef.current.timestamp > 700) {
                 pendingRef.current.key = null;
@@ -929,7 +623,7 @@ export function KeybindingProvider({
             if (editingTaskIdRef.current) return;
             if (isEditableTarget(e.target)) return;
             if (hasModalDialogOpen()) return;
-            const scope = getActiveScope();
+            const scope = scopeRef.current;
 
             if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key === 'Enter') {
                 if (hasInteractiveFocus()) return;
@@ -1049,7 +743,7 @@ export function KeybindingProvider({
                     e.preventDefault();
                     const status = STATUS_CHORD_MAP[e.key];
                     if (status) {
-                        getActiveScope().setStatusSelected?.(status);
+                        scopeRef.current?.setStatusSelected?.(status);
                     }
                     pendingRef.current.key = null;
                     return;
@@ -1081,9 +775,8 @@ export function KeybindingProvider({
                     }
                 }
                 if (e.key === 'Insert') {
-                    const scope = getActiveScope();
                     e.preventDefault();
-                    if (!scope.focusAddInput?.()) {
+                    if (!scopeRef.current?.focusAddInput?.()) {
                         triggerQuickAdd();
                     }
                     return;
@@ -1094,7 +787,7 @@ export function KeybindingProvider({
                         return;
                     }
                     e.preventDefault();
-                    getActiveScope().selectNext();
+                    scopeRef.current?.selectNext();
                     return;
                 }
                 if (e.key === 'ArrowUp') {
@@ -1103,7 +796,7 @@ export function KeybindingProvider({
                         return;
                     }
                     e.preventDefault();
-                    getActiveScope().selectPrev();
+                    scopeRef.current?.selectPrev();
                     return;
                 }
                 if (style !== 'emacs' && e.key === 'ArrowLeft') {
@@ -1174,7 +867,6 @@ export function KeybindingProvider({
         toggleListDetails,
         toggleDensity,
         currentView,
-        getActiveScope,
         focusActiveSelection,
         applyAreaFilterShortcut,
     ]);
@@ -1238,6 +930,12 @@ export function KeybindingProvider({
             )}
         </KeybindingContext.Provider>
     );
+}
+
+// Views register their task list opportunistically: one rendered outside the
+// provider (unit tests, embedded previews) simply has no keyboard scope.
+export function useOptionalKeybindings(): KeybindingContextType | null {
+    return useContext(KeybindingContext) ?? null;
 }
 
 export function useKeybindings(): KeybindingContextType {

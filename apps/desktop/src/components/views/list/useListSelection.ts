@@ -19,8 +19,8 @@ import type {
 
 import { reportError } from '../../../lib/report-error';
 import { registerUndoableAction } from '../../../lib/undo-registry';
-import { undoTaskCompletion } from '../../../lib/undo-task-completion';
-import { requestTaskRowAction, type TaskRowAction } from '../../../lib/task-row-actions';
+import type { TaskListScope } from '../../../contexts/keybinding-context';
+import { useRegisteredTaskListScope } from './task-list-scope';
 import type { NextGroupBy } from './next-grouping';
 
 type ShowToast = (
@@ -30,25 +30,6 @@ type ShowToast = (
     action?: { label: string; onClick: () => void }
 ) => void;
 
-type TaskListScope = {
-    kind: 'taskList';
-    selectNext: () => void;
-    selectPrev: () => void;
-    selectFirst: () => void;
-    selectLast: () => void;
-    editSelected: () => void;
-    openSelected: () => void;
-    openQuickActions: () => void;
-    toggleDoneSelected: () => void;
-    toggleSelectSelected: () => void;
-    toggleFocusSelected: () => void;
-    renameSelected: () => void;
-    deleteSelected: () => void;
-    setStatusSelected: (status: TaskStatus) => void;
-    focusAddInput: () => boolean;
-    focusSelected: () => boolean;
-};
-
 type UseListSelectionOptions = {
     activeNextGroupBy: NextGroupBy;
     addInputRef: RefObject<HTMLInputElement | null>;
@@ -57,11 +38,9 @@ type UseListSelectionOptions = {
     batchUpdateTasks: (
         updates: Array<{ id: string; updates: Partial<Task> }>
     ) => Promise<unknown> | unknown;
-    deleteTask: (taskId: string) => Promise<unknown> | unknown;
     filteredTasks: Task[];
     highlightTaskId: string | null;
     isProcessing: boolean;
-    moveTask: (taskId: string, status: TaskStatus) => Promise<unknown> | unknown;
     prioritiesEnabled: boolean;
     registerTaskListScope: (scope: TaskListScope | null) => void;
     restoreTask: (taskId: string) => Promise<StoreActionResult>;
@@ -139,11 +118,9 @@ export function useListSelection({
     batchDeleteTasks,
     batchMoveTasks,
     batchUpdateTasks,
-    deleteTask,
     filteredTasks,
     highlightTaskId,
     isProcessing,
-    moveTask,
     prioritiesEnabled,
     registerTaskListScope,
     restoreTask,
@@ -357,51 +334,13 @@ export function useListSelection({
         return () => window.clearTimeout(timer);
     }, [filteredTasks, highlightTaskId, scrollToVirtualIndex, setHighlightTask, shouldVirtualize]);
 
-    const selectNext = useCallback(() => {
-        if (filteredTasks.length === 0) return;
+    // Keyboard navigation only requests the follow-up: the layout effects above
+    // own the virtualization-aware scroll and the #860 rule that focus follows
+    // the selection only when it already sits on a task title.
+    const revealSelected = useCallback(() => {
         requestSelectionScroll();
         pendingSelectionFocusRef.current = true;
-        setSelectedIndex((index) => Math.min(index + 1, filteredTasks.length - 1));
-    }, [filteredTasks.length, requestSelectionScroll]);
-
-    const selectPrev = useCallback(() => {
-        requestSelectionScroll();
-        pendingSelectionFocusRef.current = true;
-        setSelectedIndex((index) => Math.max(index - 1, 0));
     }, [requestSelectionScroll]);
-
-    const selectFirst = useCallback(() => {
-        requestSelectionScroll();
-        pendingSelectionFocusRef.current = true;
-        setSelectedIndex(0);
-    }, [requestSelectionScroll]);
-
-    const selectLast = useCallback(() => {
-        if (filteredTasks.length > 0) {
-            requestSelectionScroll();
-            pendingSelectionFocusRef.current = true;
-            setSelectedIndex(filteredTasks.length - 1);
-        }
-    }, [filteredTasks.length, requestSelectionScroll]);
-
-    const editSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        const editTrigger = document.querySelector(
-            `[data-task-id="${task.id}"] [data-task-edit-trigger]`,
-        ) as HTMLElement | null;
-        editTrigger?.focus();
-        editTrigger?.click();
-    }, [filteredTasks, selectedIndex]);
-
-    const openSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        const toggle = document.querySelector(
-            `[data-task-id="${task.id}"] [data-task-view-toggle]`,
-        ) as HTMLElement | null;
-        toggle?.click();
-    }, [filteredTasks, selectedIndex]);
 
     // Entering the list from the sidebar (ArrowRight / `l`) must land DOM focus
     // on the selected task's title so its highlight shows and the container
@@ -423,104 +362,10 @@ export function useListSelection({
         return true;
     }, [filteredTasks, requestSelectionScroll, selectedIndex]);
 
-    const toggleDoneSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        const nextStatus: TaskStatus = task.status === 'done' ? 'inbox' : 'done';
-        const wasFocusedToday = task.isFocusedToday === true;
-        void Promise.resolve(moveTask(task.id, nextStatus))
-            .then(() => {
-                if (nextStatus !== 'done') return;
-                const undo = registerUndoableAction(() => {
-                    void undoTaskCompletion(task.id, task.status, wasFocusedToday)
-                        .catch((error) => reportError('Failed to undo task completion', error));
-                });
-                if (!undoNotificationsEnabled) return;
-                showToast(
-                    `${task.title} marked Done`,
-                    'info',
-                    5000,
-                    {
-                        label: t('common.undo') || 'Undo',
-                        onClick: undo,
-                    },
-                );
-            })
-            .catch((error) => reportError('Failed to update task status', error));
-    }, [filteredTasks, moveTask, selectedIndex, showToast, t, undoNotificationsEnabled]);
-
-    // Status chord (#860): `s` then a letter moves the selected task straight
-    // to that status through the shared moveTask path (recurrence/completion
-    // metadata applied by updateTask).
-    const setStatusSelected = useCallback((status: TaskStatus) => {
-        const task = filteredTasks[selectedIndex];
-        if (!task || task.status === status) return;
-        const previousStatus = task.status;
-        const wasFocusedToday = task.isFocusedToday === true;
-        void Promise.resolve(moveTask(task.id, status))
-            .then(() => {
-                const undo = registerUndoableAction(() => {
-                    // Completion has side effects (Today star, completedAt), so
-                    // undoing a move to done goes through the shared core rule.
-                    if (status === 'done') {
-                        void undoTaskCompletion(task.id, previousStatus, wasFocusedToday)
-                            .catch((error) => reportError('Failed to undo task status change', error));
-                        return;
-                    }
-                    void Promise.resolve(moveTask(task.id, previousStatus))
-                        .catch((error) => reportError('Failed to undo task status change', error));
-                });
-                if (!undoNotificationsEnabled) return;
-                const message = status === 'done'
-                    ? translateWithFallback('task.markedDone', '{title} marked Done').replace('{title}', task.title)
-                    : translateWithFallback('task.movedToStatus', '{{title}} moved to {{status}}')
-                        .replace('{{title}}', task.title)
-                        .replace('{{status}}', translateWithFallback(`status.${status}`, status));
-                showToast(
-                    message,
-                    'info',
-                    5000,
-                    {
-                        label: t('common.undo') || 'Undo',
-                        onClick: undo,
-                    },
-                );
-            })
-            .catch((error) => reportError('Failed to update task status', error));
-    }, [filteredTasks, moveTask, selectedIndex, showToast, t, translateWithFallback, undoNotificationsEnabled]);
-
-    const runSingleDelete = useCallback(async (task: Task) => {
-        await Promise.resolve(deleteTask(task.id));
-        const undo = registerUndoableAction(() => {
-            void restoreTask(task.id);
-        });
-        if (!undoNotificationsEnabled) return;
-        showToast(
-            t('list.taskDeleted') || 'Task deleted',
-            'info',
-            5000,
-            {
-                label: t('common.undo') || 'Undo',
-                onClick: undo,
-            },
-        );
-    }, [deleteTask, restoreTask, showToast, t, undoNotificationsEnabled]);
-
-    const deleteSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        void runSingleDelete(task).catch((error) => {
-            reportError('Failed to delete task', error);
-            showToast(translateWithFallback('bulk.deleteFailed', 'Failed to delete task'), 'error');
-        });
-    }, [filteredTasks, runSingleDelete, selectedIndex, showToast, translateWithFallback]);
-
     // Keyboard multi-select: entering selection mode on first select and
     // leaving it when the selection empties keeps the mode invisible unless
     // it is actually in use.
-    const toggleSelectSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
+    const toggleSelectTask = useCallback((task: Task) => {
         const result = updateRangeSelection({
             anchorId: multiSelectAnchorIdRef.current,
             selectedIds: multiSelectedIds,
@@ -530,84 +375,19 @@ export function useListSelection({
         multiSelectAnchorIdRef.current = result.anchorId;
         setMultiSelectedIds(result.selectedIds);
         setSelectionMode(result.selectedIds.size > 0);
-    }, [filteredTaskIds, filteredTasks, multiSelectedIds, selectedIndex]);
+    }, [filteredTaskIds, multiSelectedIds]);
 
-    const openQuickActionsSelected = useCallback(() => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        const taskElement = Array.from(document.querySelectorAll<HTMLElement>('[data-task-id]'))
-            .find((element) => element.dataset.taskId === task.id);
-        const trigger = taskElement?.querySelector<HTMLElement>('[data-task-quick-actions-trigger]');
-        if (!trigger) return;
-        trigger.focus();
-        trigger.click();
-    }, [filteredTasks, selectedIndex]);
-
-    const requestSelectedTaskRowAction = useCallback((action: TaskRowAction) => {
-        const task = filteredTasks[selectedIndex];
-        if (!task) return;
-        const taskElement = Array.from(document.querySelectorAll<HTMLElement>('[data-task-id]'))
-            .find((element) => element.dataset.taskId === task.id) ?? null;
-        requestTaskRowAction(taskElement, action);
-    }, [filteredTasks, selectedIndex]);
-
-    const toggleFocusSelected = useCallback(() => {
-        requestSelectedTaskRowAction('toggle-focus');
-    }, [requestSelectedTaskRowAction]);
-
-    const renameSelected = useCallback(() => {
-        requestSelectedTaskRowAction('rename-title');
-    }, [requestSelectedTaskRowAction]);
-
-    useEffect(() => {
-        if (isProcessing) {
-            registerTaskListScope(null);
-            return;
-        }
-
-        registerTaskListScope({
-            kind: 'taskList',
-            selectNext,
-            selectPrev,
-            selectFirst,
-            selectLast,
-            editSelected,
-            openSelected,
-            openQuickActions: openQuickActionsSelected,
-            toggleDoneSelected,
-            toggleSelectSelected,
-            toggleFocusSelected,
-            renameSelected,
-            deleteSelected,
-            setStatusSelected,
-            focusAddInput: () => {
-                if (!addInputRef.current) return false;
-                addInputRef.current.focus();
-                return true;
-            },
-            focusSelected,
-        });
-
-        return () => registerTaskListScope(null);
-    }, [
+    useRegisteredTaskListScope(registerTaskListScope, {
         addInputRef,
-        deleteSelected,
-        editSelected,
+        enabled: !isProcessing,
         focusSelected,
-        isProcessing,
-        openQuickActionsSelected,
-        openSelected,
-        renameSelected,
-        registerTaskListScope,
-        selectFirst,
-        selectLast,
-        selectNext,
-        selectPrev,
-        setStatusSelected,
-        toggleDoneSelected,
-        toggleFocusSelected,
-        toggleSelectSelected,
-    ]);
+        getSelectedIndex: () => selectedIndex,
+        getTasks: () => filteredTasks,
+        revealSelected,
+        setSelectedIndex,
+        t,
+        toggleSelect: toggleSelectTask,
+    });
 
     const toggleMultiSelect = useCallback((taskId: string, options: RangeSelectionOptions = {}) => {
         setMultiSelectedIds((previous) => {

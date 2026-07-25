@@ -30,6 +30,7 @@ import { AgendaHeader } from './agenda/AgendaHeader';
 import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaSections';
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { useTaskListScope } from './list/task-list-scope';
 import { groupTasks, type NextGroupBy } from './list/next-grouping';
 import { PromptModal } from '../PromptModal';
 import { ConfirmModal } from '../ConfirmModal';
@@ -866,6 +867,41 @@ export function AgendaView() {
             remainingCount: Math.max(candidates.length - top3.length, 0),
         };
     }, [sections]);
+
+    // The keyboard scope walks exactly what is on screen, in render order:
+    // collapsed sections and collapsed groups contribute no rows.
+    const visibleTasks = useMemo(() => {
+        if (top3Only) return [...focusedTasks, ...top3Tasks];
+        const visible = [...focusedTasks];
+        if (expandedSections.schedule) visible.push(...sections.schedule);
+        if (expandedSections.nextActions) {
+            if (effectiveNextGroupBy === 'none') {
+                visible.push(...sections.nextActions);
+            } else {
+                nextActionGroups.forEach((group) => {
+                    if (!collapsedNextActionGroupIds.has(group.id)) visible.push(...group.tasks);
+                });
+            }
+        }
+        if (expandedSections.reviewDue) visible.push(...sections.reviewDue);
+        return visible;
+    }, [
+        collapsedNextActionGroupIds,
+        effectiveNextGroupBy,
+        expandedSections,
+        focusedTasks,
+        nextActionGroups,
+        sections,
+        top3Only,
+        top3Tasks,
+    ]);
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        getTasks: () => visibleTasks,
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+    });
 
     const handleToggleFocus = useCallback((taskId: string) => {
         const task = tasksById.get(taskId);
