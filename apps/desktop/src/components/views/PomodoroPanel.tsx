@@ -26,6 +26,13 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
     const notificationsEnabled = useTaskStore((state) => state.settings.notificationsEnabled !== false);
     const customDurations = useTaskStore((state) => state.settings.gtd?.pomodoro?.customDurations);
     const linkTaskEnabled = useTaskStore((state) => state.settings.gtd?.pomodoro?.linkTask === true);
+    // The tasks prop is the Focus list, which is what the picker below offers. It
+    // must not decide whether a link survives: resolving against it cleared the
+    // link the instant the task was not in Focus, so a timer started from Review
+    // or the calendar dropped its task immediately and the row's Play button
+    // looked dead. Link resolution uses every live task instead; state.tasks
+    // already excludes tombstones, so a deleted task still clears the link (#867).
+    const liveTasks = useTaskStore((state) => state.tasks);
     const autoStartBreaks = useTaskStore((state) => state.settings.gtd?.pomodoro?.autoStartBreaks === true);
     const autoStartFocus = useTaskStore((state) => state.settings.gtd?.pomodoro?.autoStartFocus === true);
     const { t } = useLanguage();
@@ -53,9 +60,9 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
             return;
         }
         if (!snapshot.selectedTaskId) return;
-        if (snapshot.selectedTaskId && tasks.some((task) => task.id === snapshot.selectedTaskId)) return;
+        if (snapshot.selectedTaskId && liveTasks.some((task) => task.id === snapshot.selectedTaskId)) return;
         commitSnapshot((prev) => ({ ...prev, selectedTaskId: undefined }));
-    }, [commitSnapshot, linkTaskEnabled, snapshot.selectedTaskId, tasks]);
+    }, [commitSnapshot, linkTaskEnabled, snapshot.selectedTaskId, liveTasks]);
 
     useEffect(() => {
         if (!snapshot.timerState.isRunning) return;
@@ -71,8 +78,18 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
     const lastEvent = snapshot.lastEvent;
 
     const selectedTask = useMemo(
-        () => (linkTaskEnabled && selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) : undefined),
-        [linkTaskEnabled, selectedTaskId, tasks]
+        () => (linkTaskEnabled && selectedTaskId ? liveTasks.find((task) => task.id === selectedTaskId) : undefined),
+        [linkTaskEnabled, selectedTaskId, liveTasks]
+    );
+    // The picker offers Focus tasks, but a task linked from Review or the calendar
+    // will not be among them. Include it so the trigger can name what is linked and
+    // the dropdown can unlink it, instead of reading "Timer only" while a timer runs
+    // against a task the panel refuses to show (#867).
+    const pickerTasks = useMemo(
+        () => (selectedTask && !tasks.some((task) => task.id === selectedTask.id)
+            ? [selectedTask, ...tasks]
+            : tasks),
+        [selectedTask, tasks]
     );
     const presetOptions = useMemo(() => getPomodoroPresetOptions(customDurations), [customDurations]);
 
@@ -279,7 +296,7 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
             {linkTaskEnabled && (
                 <div className="flex items-stretch gap-2">
                     <PomodoroTaskPicker
-                        tasks={tasks}
+                        tasks={pickerTasks}
                         selectedTaskId={selectedTaskId}
                         onSelect={(nextId) => {
                             commitSnapshot((prev) => ({ ...prev, selectedTaskId: nextId }));

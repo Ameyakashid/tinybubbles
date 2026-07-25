@@ -110,4 +110,50 @@ describe('PomodoroPanel desktop persistence', () => {
         stored = JSON.parse(window.localStorage.getItem(DESKTOP_POMODORO_SESSION_STORAGE_KEY) ?? '{}');
         expect(stored.selectedTaskId ?? null).toBeNull();
     });
+
+    const storeSession = (selectedTaskId: string) => window.localStorage.setItem(
+        DESKTOP_POMODORO_SESSION_STORAGE_KEY,
+        JSON.stringify({
+            durations: { focusMinutes: 25, breakMinutes: 5 },
+            timerState: { phase: 'focus', remainingSeconds: 1500, isRunning: false, completedFocusSessions: 0 },
+            selectedTaskId,
+            updatedAtMs: Date.now(),
+            sessionHistory: { totalCompletedFocusSessions: 0, completedFocusSessionsByTaskId: {} },
+        })
+    );
+
+    // A timer started from Review or the calendar links a task that is not in the
+    // Focus list this panel is handed. Resolving the link against that list dropped
+    // it the moment the panel rendered, which is what made the row's Play button
+    // look dead outside Focus (#867).
+    it('keeps a linked task that is not in the panel list', () => {
+        const offFocusTask: Task = { ...task, id: 'task-3', title: 'Deferred chore' };
+        useTaskStore.setState({ tasks: [task, offFocusTask], _allTasks: [task, offFocusTask] } as never);
+        storeSession('task-3');
+
+        render(
+            <LanguageProvider>
+                <PomodoroPanel tasks={[task]} />
+            </LanguageProvider>
+        );
+
+        expect(screen.getByLabelText('Timer task').textContent).toContain('Deferred chore');
+        const stored = JSON.parse(window.localStorage.getItem(DESKTOP_POMODORO_SESSION_STORAGE_KEY) ?? '{}');
+        expect(stored.selectedTaskId).toBe('task-3');
+    });
+
+    // The boundary: a task that is genuinely gone must still release the timer, so
+    // widening the lookup above does not just disable the guard.
+    it('still clears the link when the linked task no longer exists', () => {
+        useTaskStore.setState({ tasks: [task], _allTasks: [task] } as never);
+        storeSession('deleted-task');
+
+        render(
+            <LanguageProvider>
+                <PomodoroPanel tasks={[task]} />
+            </LanguageProvider>
+        );
+
+        expect(screen.getByLabelText('Timer task').textContent).toContain('Timer only');
+    });
 });
