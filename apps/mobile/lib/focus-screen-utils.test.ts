@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    formatFocusTimeEstimateLabel,
-    getFocusTokenOptions,
-    NO_PROJECT_FILTER_ID,
-    splitFocusedTasks,
-    taskMatchesFocusFilters,
-} from './focus-screen-utils';
+import { getFocusTokenOptions, splitFocusedTasks } from './focus-screen-utils';
 
 describe('splitFocusedTasks', () => {
     it('separates focused tasks while preserving relative order inside each group', () => {
@@ -52,95 +46,3 @@ describe('getFocusTokenOptions', () => {
     });
 });
 
-describe('taskMatchesFocusFilters', () => {
-    it('matches direct and hierarchical token filters', () => {
-        const task = { contexts: ['@work/deep', '@home'], tags: ['#ops'], projectId: 'p1' };
-
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: ['@work'],
-            projects: [],
-            locations: [],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(true);
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: ['#ops'],
-            projects: [],
-            locations: [],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(true);
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: ['@errands'],
-            projects: [],
-            locations: [],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(false);
-    });
-
-    it('matches project, no-project, priority, energy and time filters', () => {
-        const task = {
-            contexts: ['@work'],
-            tags: ['#ops'],
-            projectId: 'project-1',
-            priority: 'high',
-            energyLevel: 'medium',
-            timeEstimate: '30min',
-        };
-
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: [],
-            projects: ['project-1'],
-            locations: [],
-            priorities: ['high'],
-            energyLevels: ['medium'],
-            timeEstimates: ['30min'],
-        })).toBe(true);
-
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: [],
-            projects: [NO_PROJECT_FILTER_ID],
-            locations: [],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(false);
-    });
-
-    it('matches location filters case-insensitively', () => {
-        const task = {
-            contexts: [],
-            tags: [],
-            projectId: 'project-1',
-            location: 'Main Office',
-        };
-
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: [],
-            projects: [],
-            locations: ['office'],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(true);
-        expect(taskMatchesFocusFilters(task as any, {
-            tokens: [],
-            projects: [],
-            locations: ['home'],
-            priorities: [],
-            energyLevels: [],
-            timeEstimates: [],
-        })).toBe(false);
-    });
-});
-
-describe('formatFocusTimeEstimateLabel', () => {
-    it('formats estimate chips compactly', () => {
-        expect(formatFocusTimeEstimateLabel('5min')).toBe('5m');
-        expect(formatFocusTimeEstimateLabel('4hr+')).toBe('4h+');
-    });
-});

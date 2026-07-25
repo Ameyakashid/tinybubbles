@@ -1,4 +1,4 @@
-import { formatTimeEstimateLabel as formatCoreTimeEstimateLabel, timeEstimateToFilterBucket, type Task, type TimeEstimate } from '@mindwtr/core';
+import { formatTimeEstimateLabel as formatCoreTimeEstimateLabel, type TimeEstimate } from '@mindwtr/core';
 
 export const MOBILE_TIME_ESTIMATE_OPTIONS: TimeEstimate[] = [
     '5min',
@@ -14,11 +14,7 @@ export const MOBILE_TIME_ESTIMATE_OPTIONS: TimeEstimate[] = [
 
 export const formatTimeEstimateChipLabel = formatCoreTimeEstimateLabel;
 
-export const matchesSelectedTimeEstimates = (
-    task: Pick<Task, 'timeEstimate'>,
-    selectedTimeEstimates: TimeEstimate[]
-): boolean => {
-    if (selectedTimeEstimates.length === 0) return true;
-    const bucket = timeEstimateToFilterBucket(task.timeEstimate);
-    return Boolean(bucket && selectedTimeEstimates.includes(bucket));
-};
+/** Time-estimate filter chips: the user's configured presets, or the defaults. */
+export const resolveTimeEstimateFilterOptions = (
+    presets: TimeEstimate[] | undefined
+): TimeEstimate[] => (presets?.length ? presets : MOBILE_TIME_ESTIMATE_OPTIONS);

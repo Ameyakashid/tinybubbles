@@ -32,19 +32,14 @@ import {
   buildAdvancedFilterCriteriaChips,
   buildFocusTaskGroups,
   getProjectDeadlineBoostLabel,
-  countActiveFilterCriteria,
-  criteriaFromSelections,
   removeAdvancedFilterCriteriaChip,
-  selectionsFromCriteria,
   sortFocusNextActions,
   shouldShowTaskForStart,
   getFocusSequentialFirstTaskIds,
   generateUUID,
   getProjectDeadlineBoosts,
-  hasActiveFilterCriteria,
   markSavedFilterDeleted,
   normalizeFocusTaskLimit,
-  SAVED_FILTER_NO_PROJECT_ID,
   sortTasksBySavedPreference,
   sortTasksByFocusOrder,
   translateWithFallback,
@@ -61,12 +56,7 @@ import {
   type Project,
   type Task,
   type TaskStatus,
-  type TaskPriority,
-  type TaskEnergyLevel,
-  type TimeEstimate,
   type FocusGroupBy,
-  type FilterCriteria,
-  type MultiValueFilterMatchMode,
   type SavedFilter,
   type SortField,
   type ProjectDeadlineBoost,
@@ -84,10 +74,13 @@ import { TaskEditModal } from '@/components/task-edit-modal';
 import type { TaskEditTab } from '@/components/task-edit/use-task-edit-state';
 import { PomodoroPanel } from '@/components/pomodoro-panel';
 import {
-  formatFocusTimeEstimateLabel,
   getFocusTokenOptions,
+  NO_PROJECT_FILTER_ID,
   splitFocusedTasks,
 } from '@/lib/focus-screen-utils';
+import { FilterChip, TaskFilterSheet } from '@/components/task-filter-sheet';
+import { resolveTimeEstimateFilterOptions } from '@/components/time-estimate-filter-utils';
+import { useTaskFilterSelections } from '@/hooks/use-task-filter-selections';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
@@ -102,12 +95,8 @@ import {
   FOCUS_LIST_HEADER_LAYOUT_KEY,
 } from '@/components/focus/focus-list-layout';
 
-const PRIORITY_OPTIONS: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
-const ENERGY_LEVEL_OPTIONS: TaskEnergyLevel[] = ['low', 'medium', 'high'];
-const DEFAULT_TIME_ESTIMATE_PRESETS: TimeEstimate[] = ['5min', '10min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
 const FOCUS_GROUP_BY_OPTIONS: FocusGroupBy[] = ['none', 'context', 'project', 'area', 'energy', 'priority', 'person', 'tag'];
 const FOCUS_SORT_OPTIONS: SortField[] = ['default', 'due', 'start', 'priority', 'created', 'created-desc'];
-const NO_PROJECT_FILTER_ID = SAVED_FILTER_NO_PROJECT_ID;
 const DEFAULT_FOCUS_SORT_BY: SortField = 'default';
 
 function resolveTaskRouteTab(value?: string | string[]): TaskEditTab {
@@ -189,11 +178,6 @@ const getUnknownErrorMessage = (error: unknown): string | undefined => {
   return undefined;
 };
 
-function filterSelectionStable<T>(current: T[], predicate: (item: T) => boolean): T[] {
-  const next = current.filter(predicate);
-  return next.length === current.length && next.every((item, index) => item === current[index]) ? current : next;
-}
-
 function normalizeFocusGroupBy(value: unknown): FocusGroupBy {
   return FOCUS_GROUP_BY_OPTIONS.includes(value as FocusGroupBy) ? value as FocusGroupBy : 'none';
 }
@@ -267,16 +251,6 @@ export default function FocusScreen() {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [deferPickerTask, setDeferPickerTask] = useState<Task | null>(null);
   const [deferPickerDate, setDeferPickerDate] = useState<Date>(() => getStartDateOffset(1));
-  const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
-  const [excludedTokens, setExcludedTokens] = useState<string[]>([]);
-  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-  const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>([]);
-  const [selectedEnergyLevels, setSelectedEnergyLevels] = useState<TaskEnergyLevel[]>([]);
-  const [selectedTimeEstimates, setSelectedTimeEstimates] = useState<TimeEstimate[]>([]);
-  const [locationFilter, setLocationFilter] = useState('');
-  const [contextMatchMode, setContextMatchMode] = useState<MultiValueFilterMatchMode>('all');
-  const [tagMatchMode, setTagMatchMode] = useState<MultiValueFilterMatchMode>('all');
-  const [activeSavedFilterId, setActiveSavedFilterId] = useState<string | null>(null);
   const [focusSortBy, setFocusSortBy] = useState<SortField>(DEFAULT_FOCUS_SORT_BY);
   const [focusReorderMode, setFocusReorderMode] = useState(false);
   const [focusReorderDraft, setFocusReorderDraft] = useState<Task[]>([]);
@@ -344,73 +318,70 @@ export default function FocusScreen() {
       })
   ), [activeProjectIds, visibleProjects]);
   const showNoProjectOption = useMemo(() => activeTasks.some((task) => !task.projectId), [activeTasks]);
-  const effectiveTimeEstimatePresets = useMemo<TimeEstimate[]>(() => {
-    const saved = settings?.gtd?.timeEstimatePresets;
-    return saved?.length ? saved : DEFAULT_TIME_ESTIMATE_PRESETS;
-  }, [settings?.gtd?.timeEstimatePresets]);
+  const effectiveTimeEstimatePresets = useMemo(
+    () => resolveTimeEstimateFilterOptions(settings?.gtd?.timeEstimatePresets),
+    [settings?.gtd?.timeEstimatePresets],
+  );
   const savedFocusFilters = useMemo(
     () => (settings?.savedFilters ?? []).filter((filter) => filter.view === 'focus' && !filter.deletedAt),
     [settings?.savedFilters],
   );
-  const activeSavedFilter = useMemo(
-    () => savedFocusFilters.find((filter) => filter.id === activeSavedFilterId) ?? null,
-    [activeSavedFilterId, savedFocusFilters],
+  const resolveText = useCallback((key: string, fallback: string) => {
+    return translateWithFallback(t, key, fallback);
+  }, [t]);
+  const projectFilterOptions = useMemo(() => ([
+    ...(showNoProjectOption
+      ? [{ id: NO_PROJECT_FILTER_ID, title: resolveText('taskEdit.noProjectOption', 'No project') }]
+      : []),
+    ...projectOptions.map((project) => ({ id: project.id, title: project.title })),
+  ]), [projectOptions, resolveText, showNoProjectOption]);
+  const projectFilterOptionIds = useMemo(
+    () => projectFilterOptions.map((option) => option.id),
+    [projectFilterOptions],
   );
+  const getProjectFilterLabel = useCallback((projectId: string) => (
+    projectId === NO_PROJECT_FILTER_ID
+      ? resolveText('taskEdit.noProjectOption', 'No project')
+      : projectById.get(projectId)?.title
+  ), [projectById, resolveText]);
+  const resetFocusSortBy = useCallback(() => setFocusSortBy(DEFAULT_FOCUS_SORT_BY), []);
+  const selections = useTaskFilterSelections({
+    view: 'focus',
+    t,
+    visibility: metadataFilterVisibility,
+    savedFilters: savedFocusFilters,
+    retainTokens: tokenOptions,
+    retainProjects: projectFilterOptionIds,
+    getProjectLabel: getProjectFilterLabel,
+    onClear: resetFocusSortBy,
+  });
+  const {
+    activeSavedFilter,
+    applySaved: applySavedSelections,
+    clear: clearFilters,
+    unbindSaved: unbindSavedFilter,
+  } = selections;
   const effectiveFocusSortBy = activeSavedFilter?.sortBy ?? focusSortBy;
   const effectiveFocusGroupBy = normalizeFocusGroupBy(activeSavedFilter?.groupBy ?? focusGroupBy);
-  const currentFilterCriteria = useMemo(() => criteriaFromSelections({
-    tokens: selectedTokens,
-    excludedTokens,
-    projects: selectedProjects,
-    locations: showLocationFilter && locationFilter.trim() ? [locationFilter.trim()] : [],
-    priorities: showPriorityFilters ? selectedPriorities : [],
-    energyLevels: showEnergyLevelFilters ? selectedEnergyLevels : [],
-    contextMatchMode,
-    tagMatchMode,
-    timeEstimates: showTimeEstimateFilters ? selectedTimeEstimates : [],
-  }), [
-    contextMatchMode,
-    tagMatchMode,
-    locationFilter,
-    showEnergyLevelFilters,
-    showPriorityFilters,
-    selectedEnergyLevels,
-    selectedPriorities,
-    selectedProjects,
-    selectedTimeEstimates,
-    selectedTokens,
-    excludedTokens,
-    showLocationFilter,
-    showTimeEstimateFilters,
-  ]);
-  const rawEffectiveFilterCriteria = activeSavedFilter?.criteria ?? currentFilterCriteria;
-  const effectiveContextMatchMode = rawEffectiveFilterCriteria.contextMatchMode ?? 'all';
-  const effectiveTagMatchMode = rawEffectiveFilterCriteria.tagMatchMode ?? 'all';
-  const effectiveFilterCriteria = useMemo<FilterCriteria>(() => ({
-    ...rawEffectiveFilterCriteria,
-    ...(showPriorityFilters ? {} : { priority: undefined }),
-    ...(showEnergyLevelFilters ? {} : { energy: undefined }),
-    ...(showLocationFilter ? {} : { locations: undefined }),
-    ...(showTimeEstimateFilters ? {} : { timeEstimates: undefined, timeEstimateRange: undefined }),
-  }), [rawEffectiveFilterCriteria, showEnergyLevelFilters, showLocationFilter, showPriorityFilters, showTimeEstimateFilters]);
-  const hasCurrentFilterCriteria = hasActiveFilterCriteria(currentFilterCriteria);
-  const hasFilters = hasActiveFilterCriteria(effectiveFilterCriteria);
-  const canSaveFocusPerspective = activeSavedFilterId === null
+  const hasFilters = selections.hasActive;
+  // "All" in the saved-filter row: nothing selected, nothing saved applied,
+  // and the default sort.
+  const isDefaultPerspective = !hasFilters
+    && !selections.activeSavedFilterId
+    && focusSortBy === DEFAULT_FOCUS_SORT_BY;
+  const canSaveFocusPerspective = selections.activeSavedFilterId === null
     && (
-      hasCurrentFilterCriteria
+      selections.hasCurrentCriteria
       || focusSortBy !== DEFAULT_FOCUS_SORT_BY
       || effectiveFocusGroupBy !== 'none'
     );
   const filteredActiveTasks = useMemo(() => (
-    applyFilter(activeTasks, effectiveFilterCriteria, { projects, tokenMatchMode: 'all' })
+    applyFilter(activeTasks, selections.criteria, { projects, tokenMatchMode: 'all' })
   ), [
     activeTasks,
-    effectiveFilterCriteria,
+    selections.criteria,
     projects,
   ]);
-  const resolveText = useCallback((key: string, fallback: string) => {
-    return translateWithFallback(t, key, fallback);
-  }, [t]);
   const getFocusGroupByLabel = useCallback((groupBy: FocusGroupBy) => {
     switch (groupBy) {
       case 'context':
@@ -438,19 +409,19 @@ export default function FocusScreen() {
   }, [resolveText]);
   const updateFocusSortBy = useCallback((nextSortBy: SortField) => {
     if (nextSortBy === effectiveFocusSortBy && !activeSavedFilter) return;
-    setActiveSavedFilterId(null);
+    unbindSavedFilter();
     setFocusSortBy(nextSortBy);
-  }, [activeSavedFilter, effectiveFocusSortBy]);
+  }, [activeSavedFilter, effectiveFocusSortBy, unbindSavedFilter]);
   const updateFocusGroupBy = useCallback((nextGroupBy: FocusGroupBy) => {
     if (nextGroupBy === effectiveFocusGroupBy && !activeSavedFilter) return;
-    setActiveSavedFilterId(null);
+    unbindSavedFilter();
     void updateSettings({
       gtd: {
         ...(settings?.gtd ?? {}),
         focusGroupBy: nextGroupBy,
       },
     }).catch(() => undefined);
-  }, [activeSavedFilter, effectiveFocusGroupBy, settings?.gtd, updateSettings]);
+  }, [activeSavedFilter, effectiveFocusGroupBy, settings?.gtd, unbindSavedFilter, updateSettings]);
   const showTaskUpdateError = useCallback((message?: string) => {
     showToast({
       title: resolveText('common.error', 'Error'),
@@ -613,90 +584,11 @@ export default function FocusScreen() {
       if (task) deferTaskUntil(task, nextDate);
     }
   }, [deferPickerTask, deferTaskUntil]);
-  useEffect(() => {
-    if (activeSavedFilterId && !activeSavedFilter) {
-      setActiveSavedFilterId(null);
-    }
-  }, [activeSavedFilter, activeSavedFilterId]);
-  const toggleToken = useCallback((token: string) => {
-    setActiveSavedFilterId(null);
-    // Tri-state cycle: neutral → included → excluded → neutral. A token lives
-    // on only one side, so each transition clears the other.
-    const isIncluded = selectedTokens.includes(token);
-    const isExcluded = excludedTokens.includes(token);
-    if (isIncluded) {
-      setSelectedTokens((current) => current.filter((item) => item !== token));
-      setExcludedTokens((current) => (current.includes(token) ? current : [...current, token]));
-    } else if (isExcluded) {
-      setExcludedTokens((current) => current.filter((item) => item !== token));
-    } else {
-      setSelectedTokens((current) => [...current, token]);
-    }
-  }, [selectedTokens, excludedTokens]);
-  const toggleProject = useCallback((projectId: string) => {
-    setActiveSavedFilterId(null);
-    setSelectedProjects((current) => (
-      current.includes(projectId) ? current.filter((item) => item !== projectId) : [...current, projectId]
-    ));
-  }, []);
-  const togglePriority = useCallback((priority: TaskPriority) => {
-    setActiveSavedFilterId(null);
-    setSelectedPriorities((current) => (
-      current.includes(priority) ? current.filter((item) => item !== priority) : [...current, priority]
-    ));
-  }, []);
-  const toggleEnergyLevel = useCallback((energyLevel: TaskEnergyLevel) => {
-    setActiveSavedFilterId(null);
-    setSelectedEnergyLevels((current) => (
-      current.includes(energyLevel) ? current.filter((item) => item !== energyLevel) : [...current, energyLevel]
-    ));
-  }, []);
-  const toggleTimeEstimate = useCallback((estimate: TimeEstimate) => {
-    setActiveSavedFilterId(null);
-    setSelectedTimeEstimates((current) => (
-      current.includes(estimate) ? current.filter((item) => item !== estimate) : [...current, estimate]
-    ));
-  }, []);
-  const updateContextMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-    setActiveSavedFilterId(null);
-    setContextMatchMode(mode);
-  }, []);
-  const updateTagMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-    setActiveSavedFilterId(null);
-    setTagMatchMode(mode);
-  }, []);
-  const updateLocationFilter = useCallback((value: string) => {
-    setActiveSavedFilterId(null);
-    setLocationFilter(value);
-  }, []);
-  const clearFilters = useCallback(() => {
-    setActiveSavedFilterId(null);
-    setFocusSortBy(DEFAULT_FOCUS_SORT_BY);
-    setSelectedTokens([]);
-    setExcludedTokens([]);
-    setSelectedProjects([]);
-    setLocationFilter('');
-    setSelectedPriorities([]);
-    setSelectedEnergyLevels([]);
-    setSelectedTimeEstimates([]);
-    setContextMatchMode('all');
-    setTagMatchMode('all');
-  }, []);
   const applySavedFocusFilter = useCallback((filter: SavedFilter) => {
-    const selections = selectionsFromCriteria(filter.criteria);
-    setSelectedTokens(selections.tokens);
-    setExcludedTokens(selections.excludedTokens);
-    setSelectedProjects(selections.projects);
-    setLocationFilter(selections.locations[0] ?? '');
-    setSelectedPriorities(selections.priorities);
-    setSelectedEnergyLevels(selections.energyLevels);
-    setSelectedTimeEstimates(selections.timeEstimates);
-    setContextMatchMode(selections.contextMatchMode);
-    setTagMatchMode(selections.tagMatchMode);
+    applySavedSelections(filter);
     setFocusSortBy(filter.sortBy ?? DEFAULT_FOCUS_SORT_BY);
-    setActiveSavedFilterId(filter.id);
     setFiltersVisible(false);
-  }, []);
+  }, [applySavedSelections]);
   const saveCurrentFilter = useCallback(() => {
     const trimmedName = saveFilterName.trim();
     if (!trimmedName || !canSaveFocusPerspective) return;
@@ -705,7 +597,7 @@ export default function FocusScreen() {
       id: generateUUID(),
       name: trimmedName,
       view: 'focus',
-      criteria: currentFilterCriteria,
+      criteria: selections.currentCriteria,
       ...(focusSortBy !== DEFAULT_FOCUS_SORT_BY ? { sortBy: focusSortBy } : {}),
       ...(effectiveFocusGroupBy !== 'none' ? { groupBy: effectiveFocusGroupBy } : {}),
       createdAt: nowIso,
@@ -714,19 +606,18 @@ export default function FocusScreen() {
     updateSettings({
       savedFilters: [...(settings?.savedFilters ?? []), nextFilter],
     }).then(() => {
-      setActiveSavedFilterId(nextFilter.id);
+      // Binds the new filter as the active one; its criteria are the ones just
+      // saved, so re-applying them is a no-op beyond marking it selected.
+      applySavedFocusFilter(nextFilter);
       setSaveFilterDialogVisible(false);
-      setFiltersVisible(false);
     }).catch(() => undefined);
-  }, [canSaveFocusPerspective, currentFilterCriteria, effectiveFocusGroupBy, focusSortBy, saveFilterName, settings?.savedFilters, updateSettings]);
+  }, [applySavedFocusFilter, canSaveFocusPerspective, effectiveFocusGroupBy, focusSortBy, saveFilterName, selections.currentCriteria, settings?.savedFilters, updateSettings]);
+  // A deleted saved filter drops out of savedFocusFilters, and the selections
+  // hook clears its own binding from there.
   const deleteSavedFilter = useCallback((filter: SavedFilter) => {
     const nextFilters = markSavedFilterDeleted(settings?.savedFilters, filter.id);
-    updateSettings({ savedFilters: nextFilters }).then(() => {
-      if (activeSavedFilterId === filter.id) {
-        setActiveSavedFilterId(null);
-      }
-    }).catch(() => undefined);
-  }, [activeSavedFilterId, settings?.savedFilters, updateSettings]);
+    updateSettings({ savedFilters: nextFilters }).catch(() => undefined);
+  }, [settings?.savedFilters, updateSettings]);
   const confirmDeleteSavedFilter = useCallback((filter: SavedFilter) => {
     Alert.alert(
       resolveText('savedFilters.deleteTitle', 'Delete saved filter?'),
@@ -826,41 +717,6 @@ export default function FocusScreen() {
       }
     };
   }, [highlightTaskId, setHighlightTask]);
-
-  useEffect(() => {
-    setSelectedTokens((current) => filterSelectionStable(current, (token) => tokenOptions.includes(token)));
-  }, [tokenOptions]);
-
-  useEffect(() => {
-    const validProjectIds = new Set(projectOptions.map((project) => project.id));
-    setSelectedProjects((current) => filterSelectionStable(current, (projectId) => (
-      projectId === NO_PROJECT_FILTER_ID ? showNoProjectOption : validProjectIds.has(projectId)
-    )));
-  }, [projectOptions, showNoProjectOption]);
-
-  useEffect(() => {
-    if (showPriorityFilters) return;
-    if (selectedPriorities.length === 0) return;
-    setSelectedPriorities([]);
-  }, [selectedPriorities.length, showPriorityFilters]);
-
-  useEffect(() => {
-    if (showEnergyLevelFilters) return;
-    if (selectedEnergyLevels.length === 0) return;
-    setSelectedEnergyLevels([]);
-  }, [selectedEnergyLevels.length, showEnergyLevelFilters]);
-
-  useEffect(() => {
-    if (showLocationFilter) return;
-    if (locationFilter.trim().length === 0) return;
-    setLocationFilter('');
-  }, [locationFilter, showLocationFilter]);
-
-  useEffect(() => {
-    if (showTimeEstimateFilters) return;
-    if (selectedTimeEstimates.length === 0) return;
-    setSelectedTimeEstimates([]);
-  }, [selectedTimeEstimates.length, showTimeEstimateFilters]);
 
   const sequentialProjectIds = useMemo(() => {
     return new Set(visibleProjects.filter((project) => project.isSequential).map((project) => project.id));
@@ -1207,7 +1063,7 @@ export default function FocusScreen() {
     () => sections.find((section) => section.totalCount > 0)?.type ?? null,
     [sections]
   );
-  // Measured-height getItemLayout, mirroring task-list.tsx: without it the
+  // Measured-height getItemLayout: without it the
   // SectionList estimates unmounted regions from a running average, and the
   // mixed row heights (group headers vs task rows) make Android's scroll
   // corrections oscillate at the bottom of the list (#826).
@@ -1259,10 +1115,12 @@ export default function FocusScreen() {
     };
   }, [focusItemLayouts]);
   const hasTasks = focusedTasks.length > 0 || schedule.length > 0 || nextActions.length > 0 || reviewDue.length > 0 || reviewDueProjects.length > 0;
-  const activeFilterCount = countActiveFilterCriteria(effectiveFilterCriteria);
+  const activeFilterCount = selections.activeCount;
+  // Criteria an applied saved filter carries that no picker can express; they
+  // are removed from the saved filter itself rather than from the selections.
   const advancedFilterChips = useMemo<FocusFilterChip[]>(() => {
     if (!activeSavedFilter) return [];
-    return buildAdvancedFilterCriteriaChips(effectiveFilterCriteria, {
+    return buildAdvancedFilterCriteriaChips(selections.criteria, {
       getAreaLabel: (areaId) => areaById.get(areaId)?.name,
       resolveText,
     }).map((chip) => ({
@@ -1271,112 +1129,22 @@ export default function FocusScreen() {
       onPress: () => confirmRemoveAdvancedSavedFilterCriterion(chip.id, chip.label),
       variant: 'advanced',
     }));
-  }, [activeSavedFilter, areaById, confirmRemoveAdvancedSavedFilterCriterion, effectiveFilterCriteria, resolveText]);
-  const activeFilterChips = useMemo(() => {
-    const chips: FocusFilterChip[] = [];
-    selectedTokens.forEach((token) => {
-      chips.push({
-        id: `token:${token}`,
-        label: token,
-        onPress: () => toggleToken(token),
-      });
-    });
-    excludedTokens.forEach((token) => {
-      chips.push({
-        id: `excluded-token:${token}`,
-        label: token,
-        onPress: () => toggleToken(token),
-        variant: 'excluded',
-      });
-    });
-    selectedProjects.forEach((projectId) => {
-      if (projectId === NO_PROJECT_FILTER_ID) {
-        chips.push({
-          id: `project:${projectId}`,
-          label: resolveText('taskEdit.noProjectOption', 'No project'),
-          onPress: () => toggleProject(projectId),
-        });
-        return;
-      }
-      const project = projectById.get(projectId);
-      if (!project) return;
-      chips.push({
-        id: `project:${project.id}`,
-        label: project.title,
-        onPress: () => toggleProject(project.id),
-      });
-    });
-    (showPriorityFilters ? selectedPriorities : []).forEach((priority) => {
-      chips.push({
-        id: `priority:${priority}`,
-        label: t(`priority.${priority}`),
-        onPress: () => togglePriority(priority),
-      });
-    });
-    (showEnergyLevelFilters ? selectedEnergyLevels : []).forEach((energyLevel) => {
-      chips.push({
-        id: `energy:${energyLevel}`,
-        label: t(`energyLevel.${energyLevel}`),
-        onPress: () => toggleEnergyLevel(energyLevel),
-      });
-    });
-    (showTimeEstimateFilters ? selectedTimeEstimates : []).forEach((estimate) => {
-      chips.push({
-        id: `time:${estimate}`,
-        label: formatFocusTimeEstimateLabel(estimate),
-        onPress: () => toggleTimeEstimate(estimate),
-      });
-    });
-    const normalizedLocationFilter = locationFilter.trim();
-    if (showLocationFilter && normalizedLocationFilter && !activeSavedFilter) {
-      chips.push({
-        id: `location:${normalizedLocationFilter}`,
-        label: `${resolveText('taskEdit.locationLabel', 'Location')}: ${normalizedLocationFilter}`,
-        onPress: () => updateLocationFilter(''),
-      });
-    }
-    chips.push(...advancedFilterChips);
-    return chips;
-  }, [
-    activeSavedFilter,
-    advancedFilterChips,
-    locationFilter,
-    projectById,
-    resolveText,
-    showEnergyLevelFilters,
-    showLocationFilter,
-    showPriorityFilters,
-    showTimeEstimateFilters,
-    selectedEnergyLevels,
-    selectedPriorities,
-    selectedProjects,
-    selectedTimeEstimates,
-    selectedTokens,
-    excludedTokens,
-    t,
-    toggleEnergyLevel,
-    togglePriority,
-    toggleProject,
-    toggleTimeEstimate,
-    toggleToken,
-    updateLocationFilter,
-  ]);
+  }, [activeSavedFilter, areaById, confirmRemoveAdvancedSavedFilterCriterion, selections.criteria, resolveText]);
+  const activeFilterChips = useMemo<FocusFilterChip[]>(() => ([
+    ...selections.chips.map((chip) => ({
+      id: chip.id,
+      label: chip.label,
+      onPress: chip.onPress,
+      variant: chip.excluded ? 'excluded' as const : undefined,
+    })),
+    ...advancedFilterChips,
+  ]), [advancedFilterChips, selections.chips]);
   const openSaveFilterDialog = useCallback(() => {
     const defaultName = activeFilterChips.slice(0, 3).map((chip) => chip.label).join(' + ')
       || resolveText('savedFilters.defaultName', 'Focus filter');
     setSaveFilterName(defaultName);
     setSaveFilterDialogVisible(true);
   }, [activeFilterChips, resolveText]);
-  const selectedContextCount = useMemo(
-    () => selectedTokens.filter((token) => token.trim().startsWith('@')).length,
-    [selectedTokens],
-  );
-  const showContextMatchMode = selectedContextCount > 1;
-  const selectedTagCount = useMemo(
-    () => selectedTokens.filter((token) => token.trim().startsWith('#')).length,
-    [selectedTokens],
-  );
-  const showTagMatchMode = selectedTagCount > 1;
   const emptyTitle = hasFilters ? resolveText('filters.noMatch', 'No tasks match these filters.') : t('agenda.allClear');
   const emptySubtitle = hasFilters
     ? resolveText('filters.label', 'Filters')
@@ -1412,66 +1180,24 @@ export default function FocusScreen() {
       return next;
     });
   }, []);
-  const renderFilterChip = useCallback((label: string, selected: boolean, onPress?: () => void, key = label, variant?: FocusFilterChip['variant']) => {
-    const isAdvanced = variant === 'advanced';
-    const isExcluded = variant === 'excluded';
-    const chipStyle = [
-      styles.filterChip,
-      isAdvanced ? styles.filterChipAdvanced : null,
-      {
-        backgroundColor: isAdvanced || isExcluded ? tc.filterBg : selected ? tc.tint : tc.filterBg,
-        borderColor: isAdvanced ? tc.tint : isExcluded ? tc.danger : selected ? tc.tint : tc.border,
-      },
-    ];
-    const textColor = isAdvanced ? tc.tint : isExcluded ? tc.danger : selected ? tc.onTint : tc.text;
-    const chipText = (
-      <CompactText
-        // Excluded relies on the strikethrough so the state survives E-ink/mono themes.
-        style={[styles.filterChipText, { color: textColor }, isExcluded ? { textDecorationLine: 'line-through' as const } : null]}
-        numberOfLines={2}
-      >
-        {label}
-      </CompactText>
-    );
-
-    if (!onPress) {
-      return (
-        <View key={key} style={chipStyle}>
-          {chipText}
-        </View>
-      );
-    }
-
-    if (isAdvanced) {
-      return (
-        <View key={key} style={chipStyle}>
-          {chipText}
-          <TouchableOpacity
-            accessibilityLabel={`${resolveText('common.delete', 'Delete')} ${label}`}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onPress}
-            style={styles.filterChipAction}
-          >
-            <X size={16} color={textColor} />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    return (
-      <TouchableOpacity
-        key={key}
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        accessibilityLabel={isExcluded ? `${label} (${resolveText('filters.excluded', 'Excluded')})` : undefined}
-        onPress={onPress}
-        style={chipStyle}
-      >
-        {chipText}
-      </TouchableOpacity>
-    );
-  }, [resolveText, tc.border, tc.danger, tc.filterBg, tc.onTint, tc.text, tc.tint]);
+  const renderFilterChip = useCallback((
+    label: string,
+    selected: boolean,
+    onPress?: () => void,
+    key = label,
+    variant?: FocusFilterChip['variant'],
+  ) => (
+    <FilterChip
+      key={key}
+      label={label}
+      selected={selected}
+      themeColors={tc}
+      onPress={onPress}
+      variant={variant}
+      removeLabel={`${resolveText('common.delete', 'Delete')} ${label}`}
+      excludedLabel={resolveText('filters.excluded', 'Excluded')}
+    />
+  ), [resolveText, tc]);
 
   const renderItem = ({ item, section }: { item: FocusListItem; section: FocusSection }) => {
     // Margin-free measuring wrapper: its height includes the row's own
@@ -1810,22 +1536,22 @@ export default function FocusScreen() {
               >
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityState={{ selected: !hasFilters && !activeSavedFilterId && focusSortBy === DEFAULT_FOCUS_SORT_BY }}
+                  accessibilityState={{ selected: isDefaultPerspective }}
                   onPress={clearFilters}
                   style={[
                     styles.savedFilterChip,
                     {
-                      borderColor: !hasFilters && !activeSavedFilterId && focusSortBy === DEFAULT_FOCUS_SORT_BY ? tc.tint : tc.border,
-                      backgroundColor: !hasFilters && !activeSavedFilterId && focusSortBy === DEFAULT_FOCUS_SORT_BY ? tc.tint : tc.filterBg,
+                      borderColor: isDefaultPerspective ? tc.tint : tc.border,
+                      backgroundColor: isDefaultPerspective ? tc.tint : tc.filterBg,
                     },
                   ]}
                 >
-                  <Text style={[styles.savedFilterChipText, { color: !hasFilters && !activeSavedFilterId && focusSortBy === DEFAULT_FOCUS_SORT_BY ? tc.onTint : tc.text }]}>
+                  <Text style={[styles.savedFilterChipText, { color: isDefaultPerspective ? tc.onTint : tc.text }]}>
                     {resolveText('common.all', 'All')}
                   </Text>
                 </TouchableOpacity>
                 {savedFocusFilters.map((filter) => {
-                  const selected = activeSavedFilterId === filter.id;
+                  const selected = selections.activeSavedFilterId === filter.id;
                   return (
                     <View key={filter.id} style={styles.savedFilterChipGroup}>
                       <TouchableOpacity
@@ -1961,19 +1687,75 @@ export default function FocusScreen() {
       />
       )}
       <PullSyncIndicator state={pullSync.indicatorState} />
-      <Modal
-        animationType="fade"
-        transparent
+      <TaskFilterSheet
         visible={filtersVisible}
-        onRequestClose={() => {
+        onClose={() => {
           if (saveFilterDialogVisible) {
             setSaveFilterDialogVisible(false);
             return;
           }
           setFiltersVisible(false);
         }}
-      >
-        {saveFilterDialogVisible ? (
+        selections={selections}
+        options={{
+          tokens: tokenOptions,
+          projects: projectFilterOptions,
+          timeEstimates: effectiveTimeEstimatePresets,
+          visibility: metadataFilterVisibility,
+        }}
+        themeColors={tc}
+        t={t}
+        headerActions={canSaveFocusPerspective ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={openSaveFilterDialog}
+            style={styles.sheetSaveButton}
+          >
+            <BookmarkPlus size={16} color={tc.tint} />
+            <Text style={[styles.sheetTextButtonText, { color: tc.tint }]}>
+              {resolveText('savedFilters.save', 'Save')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        topContent={(
+          <>
+            <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
+              {resolveText('sort.label', 'Sort')}
+            </Text>
+            <View style={styles.sheetChipRow}>
+              {FOCUS_SORT_OPTIONS.map((sortBy) => renderFilterChip(
+                getFocusSortByLabel(sortBy),
+                effectiveFocusSortBy === sortBy,
+                () => updateFocusSortBy(sortBy),
+                `sort:${sortBy}`,
+              ))}
+            </View>
+
+            <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
+              {resolveText('focus.groupBy', 'Group by')}
+            </Text>
+            <View style={styles.sheetChipRow}>
+              {FOCUS_GROUP_BY_OPTIONS.map((groupBy) => renderFilterChip(
+                getFocusGroupByLabel(groupBy),
+                effectiveFocusGroupBy === groupBy,
+                () => updateFocusGroupBy(groupBy),
+                `group:${groupBy}`,
+              ))}
+            </View>
+
+            {activeFilterChips.length > 0 ? (
+              <>
+                <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
+                  {resolveText('filters.active', 'Active filters')}
+                </Text>
+                <View style={styles.sheetChipRow}>
+                  {activeFilterChips.map((chip) => renderFilterChip(chip.label, true, chip.onPress, chip.id, chip.variant))}
+                </View>
+              </>
+            ) : null}
+          </>
+        )}
+        overlay={saveFilterDialogVisible ? (
           <View style={saveFilterKeyboardInset > 0
             ? [styles.dialogRoot, { paddingBottom: saveFilterKeyboardInset }]
             : styles.dialogRoot}
@@ -2025,249 +1807,8 @@ export default function FocusScreen() {
               </View>
             </View>
           </View>
-        ) : (
-        <View style={styles.sheetRoot}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={resolveText('common.close', 'Close')}
-            onPress={() => setFiltersVisible(false)}
-            style={styles.sheetBackdrop}
-          />
-          <View style={[styles.sheet, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: tc.text }]}>
-                {resolveText('filters.label', 'Filters')}
-              </Text>
-              <View style={styles.sheetHeaderActions}>
-                {canSaveFocusPerspective ? (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    onPress={openSaveFilterDialog}
-                    style={styles.sheetSaveButton}
-                  >
-                    <BookmarkPlus size={16} color={tc.tint} />
-                    <Text style={[styles.sheetTextButtonText, { color: tc.tint }]}>
-                      {resolveText('savedFilters.save', 'Save')}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-                {hasFilters ? (
-                  <TouchableOpacity accessibilityRole="button" onPress={clearFilters} style={styles.sheetTextButton}>
-                    <Text style={[styles.sheetTextButtonText, { color: tc.tint }]}>
-                      {resolveText('filters.clear', 'Clear')}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel={resolveText('common.close', 'Close')}
-                  onPress={() => setFiltersVisible(false)}
-                  style={styles.sheetIconButton}
-                >
-                  <X size={18} color={tc.secondaryText} />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <ScrollView
-              style={styles.sheetScroll}
-              contentContainerStyle={styles.sheetContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                {resolveText('sort.label', 'Sort')}
-              </Text>
-              <View style={styles.sheetChipRow}>
-                {FOCUS_SORT_OPTIONS.map((sortBy) => renderFilterChip(
-                  getFocusSortByLabel(sortBy),
-                  effectiveFocusSortBy === sortBy,
-                  () => updateFocusSortBy(sortBy),
-                  `sort:${sortBy}`,
-                ))}
-              </View>
-
-              <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                {resolveText('focus.groupBy', 'Group by')}
-              </Text>
-              <View style={styles.sheetChipRow}>
-                {FOCUS_GROUP_BY_OPTIONS.map((groupBy) => renderFilterChip(
-                  getFocusGroupByLabel(groupBy),
-                  effectiveFocusGroupBy === groupBy,
-                  () => updateFocusGroupBy(groupBy),
-                  `group:${groupBy}`,
-                ))}
-              </View>
-
-              {activeFilterChips.length > 0 ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('filters.active', 'Active filters')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {activeFilterChips.map((chip) => renderFilterChip(chip.label, true, chip.onPress, chip.id, chip.variant))}
-                  </View>
-                </>
-              ) : null}
-              {tokenOptions.length > 0 ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('filters.contexts', 'Contexts & tags')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {tokenOptions.map((token) => renderFilterChip(
-                      token,
-                      selectedTokens.includes(token),
-                      () => toggleToken(token),
-                      token,
-                      excludedTokens.includes(token) ? 'excluded' : undefined,
-                    ))}
-                  </View>
-                  {showContextMatchMode ? (
-                    <View style={styles.matchModeRow}>
-                      <Text style={[styles.matchModeLabel, { color: tc.secondaryText }]}>
-                        {resolveText('filters.contextMatchMode', 'Context match')}
-                      </Text>
-                      <View style={[styles.matchModeControl, { borderColor: tc.border, backgroundColor: tc.filterBg }]}>
-                        {(['any', 'all'] as const).map((mode) => (
-                          <TouchableOpacity
-                            key={mode}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: effectiveContextMatchMode === mode }}
-                            onPress={() => updateContextMatchMode(mode)}
-                            style={[
-                              styles.matchModeButton,
-                              { backgroundColor: effectiveContextMatchMode === mode ? tc.tint : 'transparent' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.matchModeButtonText,
-                                { color: effectiveContextMatchMode === mode ? tc.onTint : tc.secondaryText },
-                              ]}
-                            >
-                              {mode === 'any' ? resolveText('filters.matchAny', 'Any') : resolveText('common.all', 'All')}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  ) : null}
-                  {showTagMatchMode ? (
-                    <View style={styles.matchModeRow}>
-                      <Text style={[styles.matchModeLabel, { color: tc.secondaryText }]}>
-                        {resolveText('filters.tagMatchMode', 'Tag match')}
-                      </Text>
-                      <View style={[styles.matchModeControl, { borderColor: tc.border, backgroundColor: tc.filterBg }]}>
-                        {(['any', 'all'] as const).map((mode) => (
-                          <TouchableOpacity
-                            key={mode}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: effectiveTagMatchMode === mode }}
-                            onPress={() => updateTagMatchMode(mode)}
-                            style={[
-                              styles.matchModeButton,
-                              { backgroundColor: effectiveTagMatchMode === mode ? tc.tint : 'transparent' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.matchModeButtonText,
-                                { color: effectiveTagMatchMode === mode ? tc.onTint : tc.secondaryText },
-                              ]}
-                            >
-                              {mode === 'any' ? resolveText('filters.matchAny', 'Any') : resolveText('common.all', 'All')}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-
-              {(showNoProjectOption || projectOptions.length > 0) ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('filters.projects', 'Projects')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {showNoProjectOption ? renderFilterChip(
-                      resolveText('taskEdit.noProjectOption', 'No project'),
-                      selectedProjects.includes(NO_PROJECT_FILTER_ID),
-                      () => toggleProject(NO_PROJECT_FILTER_ID),
-                    ) : null}
-                    {projectOptions.map((project) => (
-                      renderFilterChip(project.title, selectedProjects.includes(project.id), () => toggleProject(project.id))
-                    ))}
-                  </View>
-                </>
-              ) : null}
-
-              {showLocationFilter ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('taskEdit.locationLabel', 'Location')}
-                  </Text>
-                  <TextInput
-                    value={locationFilter}
-                    onChangeText={updateLocationFilter}
-                    placeholder={resolveText('taskEdit.locationPlaceholder', 'e.g. Office')}
-                    placeholderTextColor={tc.secondaryText}
-                    accessibilityLabel={resolveText('taskEdit.locationLabel', 'Location')}
-                    style={[styles.sheetInput, { borderColor: tc.border, color: tc.text, backgroundColor: tc.bg }]}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                  />
-                </>
-              ) : null}
-
-              {showPriorityFilters ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('filters.priority', 'Priority')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {PRIORITY_OPTIONS.map((priority) => (
-                      renderFilterChip(t(`priority.${priority}`), selectedPriorities.includes(priority), () => togglePriority(priority))
-                    ))}
-                  </View>
-                </>
-              ) : null}
-
-              {showEnergyLevelFilters ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('taskEdit.energyLevel', 'Energy level')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {ENERGY_LEVEL_OPTIONS.map((energyLevel) => (
-                      renderFilterChip(t(`energyLevel.${energyLevel}`), selectedEnergyLevels.includes(energyLevel), () => toggleEnergyLevel(energyLevel))
-                    ))}
-                  </View>
-                </>
-              ) : null}
-
-              {showTimeEstimateFilters && effectiveTimeEstimatePresets.length > 0 ? (
-                <>
-                  <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
-                    {resolveText('filters.timeEstimate', 'Time estimate')}
-                  </Text>
-                  <View style={styles.sheetChipRow}>
-                    {effectiveTimeEstimatePresets.map((estimate) => (
-                      renderFilterChip(
-                        formatFocusTimeEstimateLabel(estimate),
-                        selectedTimeEstimates.includes(estimate),
-                        () => toggleTimeEstimate(estimate),
-                      )
-                    ))}
-                  </View>
-                </>
-              ) : null}
-            </ScrollView>
-          </View>
-        </View>
-        )}
-      </Modal>
+        ) : undefined}
+      />
       {deferPickerTask && Platform.OS === 'ios' ? (
         <Modal
           animationType="fade"
@@ -2452,37 +1993,6 @@ const styles = StyleSheet.create({
   filterBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-  },
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 22,
-    flexBasis: 104,
-    flexGrow: 1,
-    flexShrink: 1,
-    maxWidth: '100%',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  filterChipAdvanced: {
-    borderStyle: 'dashed',
-  },
-  filterChipAction: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    flexShrink: 1,
-    minWidth: 0,
-    textAlign: 'center',
   },
   clearFiltersButton: {
     justifyContent: 'center',
@@ -2797,20 +2307,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  sheetIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetScroll: {
-    maxHeight: '100%',
-  },
-  sheetContent: {
-    gap: 14,
-    paddingBottom: 12,
-  },
   sheetSectionLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -2821,44 +2317,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  matchModeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-  },
-  matchModeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  matchModeControl: {
-    minHeight: 36,
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 2,
-  },
-  matchModeButton: {
-    minWidth: 52,
-    minHeight: 30,
-    flexGrow: 1,
-    flexShrink: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    paddingHorizontal: 10,
-  },
-  matchModeButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  sheetInput: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 15,
   },
   dialogRoot: {
     flex: 1,

@@ -9,9 +9,6 @@ import {
   useTaskStore,
   Task,
   TaskStatus,
-  TaskEnergyLevel,
-  TaskPriority,
-  TimeEstimate,
   sortTasksBy,
   splitCompletedTasks,
   sortDoneTasksForListView,
@@ -36,7 +33,6 @@ import {
   isSelectableProjectForTaskAssignment,
   isTaskInActiveProject,
   getTaskMetadataFilterVisibility,
-  type MultiValueFilterMatchMode,
 } from '@mindwtr/core';
 
 import { TaskEditModal } from './task-edit-modal';
@@ -76,9 +72,6 @@ import {
   type TaskListActiveFilterChip,
 } from './task-list/TaskListHeader';
 import {
-  TaskListFiltersSheet,
-} from './task-list/TaskListFiltersSheet';
-import {
   TaskListQuickAdd,
 } from './task-list/TaskListQuickAdd';
 import {
@@ -98,13 +91,12 @@ import {
   type ProjectTaskReorderGroup,
   sortProjectTasksByOrder,
 } from './task-list-utils';
-import { buildTaskListVirtualizedItemKey } from './task-list/task-list-layout';
+import { TaskFilterSheet } from './task-filter-sheet';
+import { resolveTimeEstimateFilterOptions } from './time-estimate-filter-utils';
 import {
-  buildMobileTaskListFilters,
-  countActiveMobileTaskFilters,
-  taskMatchesMobileTaskFilters,
-  type MobileTaskListFilters,
-} from './task-list/task-list-filter-utils';
+  taskMatchesFilterSelections,
+  useTaskFilterSelections,
+} from '@/hooks/use-task-filter-selections';
 import { useTaskListSelection } from './use-task-list-selection';
 
 const REMOVE_CLIPPED_SUBVIEWS_MIN_ITEMS = 15;
@@ -122,8 +114,6 @@ const STATIC_LIST_ROW_ESTIMATE = 88;
 const STATIC_LIST_OVERSCAN = 8;
 const SLOW_TASK_LIST_DERIVE_MS = 250;
 const SLOW_TASK_LIST_COMMIT_MS = 500;
-const PRIORITY_OPTIONS: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
-const ENERGY_LEVEL_OPTIONS: TaskEnergyLevel[] = ['low', 'medium', 'high'];
 
 type StaticListVirtualizationWindow = {
   scrollOffsetY: number;
@@ -297,15 +287,6 @@ function TaskListComponent({
   const [bulkOrganizeVisible, setBulkOrganizeVisible] = useState(false);
   const [internalProjectReorderMode, setInternalProjectReorderMode] = useState(false);
   const [completedTasksCollapsed, setCompletedTasksCollapsed] = useState(true);
-  const [taskSearchQuery, setTaskSearchQuery] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
-  const [excludedTokens, setExcludedTokens] = useState<string[]>([]);
-  const [contextMatchMode, setContextMatchMode] = useState<MultiValueFilterMatchMode>('all');
-  const [tagMatchMode, setTagMatchMode] = useState<MultiValueFilterMatchMode>('all');
-  const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>([]);
-  const [selectedEnergyLevels, setSelectedEnergyLevels] = useState<TaskEnergyLevel[]>([]);
-  const [selectedTimeEstimates, setSelectedTimeEstimates] = useState<TimeEstimate[]>([]);
   const [inputSelection, setInputSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [typeaheadOpen, setTypeaheadOpen] = useState(false);
   const [typeaheadIndex, setTypeaheadIndex] = useState(0);
@@ -544,56 +525,6 @@ function TaskListComponent({
     }
   }, [exitSelectionMode, projectReorderMode, selectionMode]);
 
-  const toggleTimeEstimate = useCallback((estimate: TimeEstimate) => {
-    setSelectedTimeEstimates((prev) => (
-      prev.includes(estimate)
-        ? prev.filter((value) => value !== estimate)
-        : [...prev, estimate]
-    ));
-  }, []);
-  const toggleTokenFilter = useCallback((token: string) => {
-    // Tri-state cycle: neutral → included → excluded → neutral. A token lives
-    // on only one side, so each transition clears the other.
-    const isIncluded = selectedTokens.includes(token);
-    const isExcluded = excludedTokens.includes(token);
-    if (isIncluded) {
-      setSelectedTokens((prev) => prev.filter((value) => value !== token));
-      setExcludedTokens((prev) => (prev.includes(token) ? prev : [...prev, token]));
-    } else if (isExcluded) {
-      setExcludedTokens((prev) => prev.filter((value) => value !== token));
-    } else {
-      setSelectedTokens((prev) => [...prev, token]);
-    }
-  }, [selectedTokens, excludedTokens]);
-  const togglePriorityFilter = useCallback((priority: TaskPriority) => {
-    setSelectedPriorities((prev) => (
-      prev.includes(priority)
-        ? prev.filter((value) => value !== priority)
-        : [...prev, priority]
-    ));
-  }, []);
-  const toggleEnergyLevelFilter = useCallback((energyLevel: TaskEnergyLevel) => {
-    setSelectedEnergyLevels((prev) => (
-      prev.includes(energyLevel)
-        ? prev.filter((value) => value !== energyLevel)
-        : [...prev, energyLevel]
-    ));
-  }, []);
-  const clearTaskFilters = useCallback(() => {
-    setTaskSearchQuery('');
-    setLocationFilter('');
-    setSelectedTokens([]);
-    setExcludedTokens([]);
-    setContextMatchMode('all');
-    setTagMatchMode('all');
-    setSelectedPriorities([]);
-    setSelectedEnergyLevels([]);
-    setSelectedTimeEstimates([]);
-  }, []);
-  const clearAllFilters = useCallback(() => {
-    clearTaskFilters();
-  }, [clearTaskFilters]);
-
   const taskListDeriveStartedAt = Date.now();
   const filterableTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -607,169 +538,37 @@ function TaskListComponent({
       return matchesStatus && matchesProject;
     });
   }, [areaById, includeDone, projectById, projectId, resolvedAreaFilter, statusFilter, tasks]);
-  const tokenFilterOptions = useMemo(() => {
-    if (!filtersVisible) return Array.from(new Set([...selectedTokens, ...excludedTokens]));
-    return getUsedTaskTokens(filterableTasks, (task) => [...(task.contexts ?? []), ...(task.tags ?? [])]);
-  }, [filterableTasks, filtersVisible, selectedTokens, excludedTokens]);
   const metadataFilterVisibility = useMemo(() => getTaskMetadataFilterVisibility(filterableTasks, {
     prioritiesEnabled,
     timeEstimatesEnabled: timeEstimateFiltersEnabled,
   }), [filterableTasks, prioritiesEnabled, timeEstimateFiltersEnabled]);
-  const showPriorityFilters = metadataFilterVisibility.priority;
-  const showEnergyLevelFilters = metadataFilterVisibility.energyLevel;
-  const showTimeEstimateFilters = metadataFilterVisibility.timeEstimate;
-  const showLocationFilter = metadataFilterVisibility.location;
-  useEffect(() => {
-    if (!showTimeEstimateFilters && selectedTimeEstimates.length > 0) {
-      setSelectedTimeEstimates([]);
-    }
-  }, [selectedTimeEstimates.length, showTimeEstimateFilters]);
-
-  useEffect(() => {
-    if (!showPriorityFilters && selectedPriorities.length > 0) {
-      setSelectedPriorities([]);
-    }
-  }, [selectedPriorities.length, showPriorityFilters]);
-
-  useEffect(() => {
-    if (!showEnergyLevelFilters && selectedEnergyLevels.length > 0) {
-      setSelectedEnergyLevels([]);
-    }
-  }, [selectedEnergyLevels.length, showEnergyLevelFilters]);
-
-  useEffect(() => {
-    if (!showLocationFilter && locationFilter.trim().length > 0) {
-      setLocationFilter('');
-    }
-  }, [locationFilter, showLocationFilter]);
-
-  const taskListFilters = useMemo<MobileTaskListFilters>(() => buildMobileTaskListFilters({
-    energyLevels: showEnergyLevelFilters ? selectedEnergyLevels : [],
-    locationQuery: showLocationFilter ? locationFilter : '',
-    priorities: showPriorityFilters ? selectedPriorities : [],
-    searchQuery: taskSearchQuery,
-    timeEstimates: showTimeEstimateFilters ? selectedTimeEstimates : [],
-    tokens: selectedTokens,
-    excludedTokens,
-    contextMatchMode,
-    tagMatchMode,
-  }), [
-    contextMatchMode,
-    tagMatchMode,
-    locationFilter,
-    showEnergyLevelFilters,
-    showLocationFilter,
-    showPriorityFilters,
-    selectedEnergyLevels,
-    selectedPriorities,
-    selectedTimeEstimates,
-    selectedTokens,
-    excludedTokens,
-    showTimeEstimateFilters,
-    taskSearchQuery,
-  ]);
-  const activeTaskFilterCount = countActiveMobileTaskFilters(taskListFilters);
-  const hasActiveTaskFilters = activeTaskFilterCount > 0;
+  const selections = useTaskFilterSelections({
+    view: 'list',
+    t,
+    visibility: metadataFilterVisibility,
+  });
+  const timeEstimateFilterOptions = useMemo(
+    () => resolveTimeEstimateFilterOptions(settings?.gtd?.timeEstimatePresets),
+    [settings?.gtd?.timeEstimatePresets],
+  );
+  // Scanning every visible task for its tokens only pays off once the sheet is
+  // open; until then the selected ones are all the chips anyone can see.
+  const tokenFilterOptions = useMemo(() => {
+    if (!filtersVisible) return Array.from(new Set([...selections.tokens, ...selections.excludedTokens]));
+    return getUsedTaskTokens(filterableTasks, (task) => [...(task.contexts ?? []), ...(task.tags ?? [])]);
+  }, [filterableTasks, filtersVisible, selections.tokens, selections.excludedTokens]);
+  const activeTaskFilterCount = selections.activeCount;
+  const hasActiveTaskFilters = selections.hasActive;
   const totalFilterActiveCount = activeTaskFilterCount;
   const hasAnyActiveFilters = hasActiveTaskFilters;
   useEffect(() => {
     onFilterStateChange?.({ activeCount: totalFilterActiveCount, hasActive: hasAnyActiveFilters });
   }, [hasAnyActiveFilters, onFilterStateChange, totalFilterActiveCount]);
-  const activeFilterChips = useMemo<TaskListActiveFilterChip[]>(() => {
-    const chips: TaskListActiveFilterChip[] = [];
-    const normalizedSearch = taskSearchQuery.trim();
-    if (normalizedSearch) {
-      chips.push({
-        id: 'search',
-        label: `${t('common.search')}: ${normalizedSearch}`,
-        onPress: () => setTaskSearchQuery(''),
-      });
-    }
-    selectedTokens.forEach((token) => {
-      chips.push({
-        id: `token:${token}`,
-        label: token,
-        onPress: () => toggleTokenFilter(token),
-      });
-    });
-    excludedTokens.forEach((token) => {
-      chips.push({
-        id: `excluded-token:${token}`,
-        label: token,
-        excluded: true,
-        onPress: () => toggleTokenFilter(token),
-      });
-    });
-    if (showPriorityFilters) {
-      selectedPriorities.forEach((priority) => {
-        chips.push({
-          id: `priority:${priority}`,
-          label: t(`priority.${priority}`),
-          onPress: () => togglePriorityFilter(priority),
-        });
-      });
-    }
-    if (showEnergyLevelFilters) {
-      selectedEnergyLevels.forEach((energyLevel) => {
-        chips.push({
-          id: `energy:${energyLevel}`,
-          label: t(`energyLevel.${energyLevel}`),
-          onPress: () => toggleEnergyLevelFilter(energyLevel),
-        });
-      });
-    }
-    if (showTimeEstimateFilters) {
-      selectedTimeEstimates.forEach((estimate) => {
-        chips.push({
-          id: `time:${estimate}`,
-          label: estimate.replace('min', 'm').replace('hr+', 'h+').replace('hr', 'h'),
-          onPress: () => toggleTimeEstimate(estimate),
-        });
-      });
-    }
-    const normalizedLocation = locationFilter.trim();
-    if (showLocationFilter && normalizedLocation) {
-      chips.push({
-        id: 'location',
-        label: `${tFallback(t, 'taskEdit.locationLabel', 'Location')}: ${normalizedLocation}`,
-        onPress: () => setLocationFilter(''),
-      });
-    }
-    return chips;
-  }, [
-    locationFilter,
-    showEnergyLevelFilters,
-    showLocationFilter,
-    showPriorityFilters,
-    selectedEnergyLevels,
-    selectedPriorities,
-    selectedTimeEstimates,
-    selectedTokens,
-    excludedTokens,
-    showTimeEstimateFilters,
-    t,
-    taskSearchQuery,
-    toggleEnergyLevelFilter,
-    togglePriorityFilter,
-    toggleTimeEstimate,
-    toggleTokenFilter,
-  ]);
-  const selectedContextCount = useMemo(
-    () => selectedTokens.filter((token) => token.trim().startsWith('@')).length,
-    [selectedTokens],
+  const activeFilterChips = useMemo<TaskListActiveFilterChip[]>(
+    () => selections.chips,
+    [selections.chips],
   );
-  const showContextMatchMode = selectedContextCount > 1;
-  const updateContextMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-    setContextMatchMode(mode);
-  }, []);
-  const selectedTagCount = useMemo(
-    () => selectedTokens.filter((token) => token.trim().startsWith('#')).length,
-    [selectedTokens],
-  );
-  const showTagMatchMode = selectedTagCount > 1;
-  const updateTagMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-    setTagMatchMode(mode);
-  }, []);
+  const clearAllFilters = selections.clear;
   const filteredEmptyMessage = hasActiveTaskFilters
     ? tFallback(t, 'filters.noMatch', 'No tasks match these filters.')
     : emptyMessage;
@@ -779,12 +578,12 @@ function TaskListComponent({
   const filteredEmptyActionLabel = hasActiveTaskFilters
     ? tFallback(t, 'filters.clear', 'Clear')
     : emptyActionLabel;
-  const filteredEmptyAction = hasActiveTaskFilters ? clearTaskFilters : onEmptyAction;
+  const filteredEmptyAction = hasActiveTaskFilters ? clearAllFilters : onEmptyAction;
 
   // Memoize filtered and sorted tasks for performance
   const filteredTasks = useMemo(() => {
-    return filterableTasks.filter((task) => taskMatchesMobileTaskFilters(task, taskListFilters));
-  }, [filterableTasks, taskListFilters]);
+    return filterableTasks.filter((task) => taskMatchesFilterSelections(task, selections));
+  }, [filterableTasks, selections.criteria, selections.searchQuery]);
 
   const orderedTasks = useMemo(() => {
     if (projectId && enableProjectReorder && sortBy === 'default') {
@@ -1022,9 +821,8 @@ function TaskListComponent({
   const getListItemKey = useCallback((item: ListItem) => (
     item.type === 'section' ? `section-${item.id}` : (item.groupId ? `${item.groupId}:${item.task.id}` : item.task.id)
   ), []);
-  const getVirtualizedListItemKey = useCallback((item: ListItem, index: number) => (
-    buildTaskListVirtualizedItemKey(getListItemKey(item), index)
-  ), [getListItemKey]);
+  // The row key never folds in the list index: a moved row must keep its
+  // identity so its mounted state moves with it.
   // No getItemLayout here on purpose: rows have variable heights, and frames
   // built from estimates shift every offset when a real measurement lands,
   // visibly nudging the list as a scroll settles (#831). Native measurement
@@ -1930,50 +1728,17 @@ function TaskListComponent({
 
       {primaryActionRow}
 
-      <TaskListFiltersSheet
-        energyLevelOptions={ENERGY_LEVEL_OPTIONS}
-        hasFilters={hasAnyActiveFilters}
-        locationQuery={locationFilter}
-        onChangeLocationQuery={setLocationFilter}
-        onChangeSearchQuery={setTaskSearchQuery}
-        onClearFilters={clearAllFilters}
-        onClose={() => setFiltersVisible(false)}
-        showPriorityFilters={showPriorityFilters}
-        priorityOptions={PRIORITY_OPTIONS}
-        searchQuery={taskSearchQuery}
-        selectedEnergyLevels={selectedEnergyLevels}
-        selectedPriorities={selectedPriorities}
-        selectedTimeEstimates={selectedTimeEstimates}
-        selectedTokens={selectedTokens}
-        excludedTokens={excludedTokens}
-        excludedStateLabel={tFallback(t, 'filters.excluded', 'Excluded')}
-        contextMatchMode={contextMatchMode}
-        contextMatchModeLabels={{
-          title: tFallback(t, 'filters.contextMatchMode', 'Context match'),
-          any: tFallback(t, 'filters.matchAny', 'Any'),
-          all: tFallback(t, 'common.all', 'All'),
-        }}
-        onChangeContextMatchMode={updateContextMatchMode}
-        showContextMatchMode={showContextMatchMode}
-        tagMatchMode={tagMatchMode}
-        tagMatchModeLabels={{
-          title: tFallback(t, 'filters.tagMatchMode', 'Tag match'),
-          any: tFallback(t, 'filters.matchAny', 'Any'),
-          all: tFallback(t, 'common.all', 'All'),
-        }}
-        onChangeTagMatchMode={updateTagMatchMode}
-        showTagMatchMode={showTagMatchMode}
-        showEnergyLevelFilters={showEnergyLevelFilters}
-        showLocationFilter={showLocationFilter}
-        showTimeEstimateFilters={showTimeEstimateFilters}
-        t={t}
-        themeColors={themeColorsMemo}
-        toggleEnergyLevel={toggleEnergyLevelFilter}
-        togglePriority={togglePriorityFilter}
-        toggleTimeEstimate={toggleTimeEstimate}
-        toggleToken={toggleTokenFilter}
-        tokenOptions={tokenFilterOptions}
+      <TaskFilterSheet
         visible={filtersVisible}
+        onClose={() => setFiltersVisible(false)}
+        selections={selections}
+        options={{
+          tokens: tokenFilterOptions,
+          timeEstimates: timeEstimateFilterOptions,
+          visibility: metadataFilterVisibility,
+        }}
+        themeColors={themeColorsMemo}
+        t={t}
       />
 
       {shouldRenderInlineBulkBar && bulkBarProps ? (
@@ -2141,7 +1906,7 @@ function TaskListComponent({
           ref={setListRef}
           data={listItems}
           renderItem={renderListItem}
-          keyExtractor={getVirtualizedListItemKey}
+          keyExtractor={getListItemKey}
           ListHeaderComponent={listHeaderComponent ?? undefined}
           viewabilityConfig={listViewabilityConfig}
           onViewableItemsChanged={handleListViewableItemsChanged}

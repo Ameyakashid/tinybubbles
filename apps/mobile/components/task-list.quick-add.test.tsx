@@ -133,6 +133,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: () => null,
   GripVertical: () => null,
   MoveVertical: () => null,
+  X: () => null,
 }));
 
 vi.mock('react-native-draggable-flatlist', () => ({
@@ -158,6 +159,8 @@ vi.mock('@mindwtr/core', async () => {
     executeCaptureTransaction: actual.executeCaptureTransaction,
     countActiveFilterCriteria: actual.countActiveFilterCriteria,
     criteriaFromSelections: actual.criteriaFromSelections,
+    formatTimeEstimateLabel: actual.formatTimeEstimateLabel,
+    selectionsFromCriteria: actual.selectionsFromCriteria,
     getDefaultTaskAreaMode: (settings: any) => {
       const mode = settings?.gtd?.defaultAreaMode;
       if (mode === 'none' || mode === 'fixed' || mode === 'active') return mode;
@@ -345,8 +348,8 @@ const resetTaskListSelectionState = () => {
   };
 };
 
-vi.mock('./task-list/TaskListFiltersSheet', () => ({
-  TaskListFiltersSheet: () => null,
+vi.mock('./task-filter-sheet', () => ({
+  TaskFilterSheet: () => null,
 }));
 
 vi.mock('./task-list/TaskListHeader', () => ({
