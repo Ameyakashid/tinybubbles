@@ -10,12 +10,9 @@ import {
     subWeeks,
 } from 'date-fns';
 import {
-    DEFAULT_CALENDAR_DAY_START_HOUR,
-    DEFAULT_PROJECT_COLOR,
     addCalendarMinutes,
     addCalendarMonths as addCalendarSystemMonths,
     buildCalendarEventTaskDraft,
-    buildCalendarQuickAddTaskDraft,
     endOfCalendarMonth,
     expandCalendarRecurringTasks,
     formatCalendarDurationLabel,
@@ -24,14 +21,12 @@ import {
     getCalendarPlanningCandidates,
     getExternalCalendarColorForId,
     getCalendarYear,
-    getQuickAddProjectInitialProps,
     getWeekStartsOnIndex,
     isSameCalendarMonth,
     isSlotFreeForDay as isCalendarSlotFreeForDay,
     isTaskInActiveProject,
     isProjectedRecurringTask,
     hasTimeComponent,
-    minutesToTimeEstimate,
     normalizeCalendarDurationMinutes,
     resolveCalendarSystemSetting,
     safeParseDate,
@@ -47,6 +42,28 @@ import {
     type Task,
     useTaskStore,
 } from '@mindwtr/core';
+import {
+    applyComposerCreatedProject,
+    openComposerAt,
+    openComposerForDate,
+    prepareComposerSave,
+    selectComposerTask,
+    setComposerDuration,
+    setComposerEndTime,
+    setComposerMode,
+    setComposerQuery,
+    setComposerStart,
+    setComposerTitle,
+    type CalendarComposerDeps,
+    type CalendarComposerError,
+    type CalendarComposerMode,
+    type CalendarComposerState,
+} from '@mindwtr/core/calendar-composer';
+import {
+    buildCalendarDayItems,
+    buildTimedCalendarLayouts,
+    type CalendarDayItem,
+} from '@mindwtr/core/calendar-day-items';
 
 import { checkBudget } from '../../../config/performanceBudgets';
 import { useLanguage } from '../../../contexts/language-context';
@@ -64,23 +81,14 @@ export const DESKTOP_GRID_SNAP_MINUTES = 15;
 
 const HIDDEN_EXTERNAL_CALENDAR_IDS_STORAGE_KEY = 'mindwtr.calendar.hiddenExternalCalendars';
 
-export type CalendarCellItem =
-    | { id: string; kind: 'scheduled'; task: Task; start: Date | null; title: string }
-    | { id: string; kind: 'deadline'; task: Task; start: Date | null; title: string }
-    | { id: string; kind: 'event'; event: ExternalCalendarEvent; start: Date | null; title: string };
+export type CalendarCellItem = CalendarDayItem;
 
 export type CalendarViewMode = 'day' | 'week' | 'month' | 'schedule';
-export type CalendarTaskComposerMode = 'new' | 'existing';
-export type CalendarTaskComposerState = {
-    durationMinutes: number;
-    endTimeValue: string;
-    error: string | null;
-    mode: CalendarTaskComposerMode;
-    query: string;
-    selectedTaskId: string | null;
+export type CalendarTaskComposerMode = CalendarComposerMode;
+/** Shared composer state plus the desktop date/time inputs the user types into. */
+export type CalendarTaskComposerState = CalendarComposerState & {
     startDateValue: string;
     startTimeValue: string;
-    title: string;
 };
 
 export type CalendarTimedItem =
@@ -653,177 +661,154 @@ export function useDesktopCalendarController() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [selectedDate, taskComposer]);
 
+    const composerDeps: CalendarComposerDeps = {
+        findFreeSlot: findFreeSlotForDay,
+        timeEstimateToMinutes,
+    };
+
+    const withComposerInputs = (state: CalendarComposerState): CalendarTaskComposerState => ({
+        ...state,
+        startDateValue: state.startAt ? formatDateInputValue(state.startAt) : '',
+        startTimeValue: state.startAt ? formatTimeInputValue(state.startAt) : '',
+    });
+
+    const applyToComposer = (update: (state: CalendarTaskComposerState) => CalendarComposerState) => {
+        setTaskComposer((prev) => prev ? { ...prev, ...update(prev) } : prev);
+    };
+
+    const composerErrorText = (error: CalendarComposerError): string => {
+        switch (error.code) {
+            case 'invalid_range':
+                return resolveText('calendar.invalidTimeRange', 'Choose a valid start and end time.');
+            case 'title_required':
+                return resolveText('calendar.taskTitleRequired', 'Enter a task title.');
+            case 'task_required':
+                return resolveText('calendar.taskRequired', 'Choose a task.');
+            case 'overlap':
+                return t('calendar.overlapWarning');
+            case 'invalid_date_command':
+                return `${t('quickAdd.invalidDateCommand')}: ${error.detail ?? ''}`;
+            case 'start_after_due':
+                return resolveText('task.dateIssue.startAfterDue', 'Starts after due date');
+            default:
+                return error.detail ?? resolveText('calendar.saveFailed', 'Could not save the task.');
+        }
+    };
+
+    const taskComposerError = taskComposer?.error ? composerErrorText(taskComposer.error) : null;
+
+    const failTaskComposer = (error: CalendarComposerError) => {
+        setTaskComposer((prev) => prev ? { ...prev, error } : prev);
+    };
+
     const openTaskComposerAt = (
         start: Date,
         options?: { durationMinutes?: number; mode?: CalendarTaskComposerMode; taskId?: string },
     ) => {
-        const selectedTask = options?.taskId ? tasks.find((task) => task.id === options.taskId) : null;
-        const durationMinutes = normalizeDurationMinutes(
-            options?.durationMinutes ?? (selectedTask ? timeEstimateToMinutes(selectedTask.timeEstimate) : 30)
-        );
-        setTaskComposer({
-            durationMinutes,
-            endTimeValue: formatTimeInputValue(addMinutesToDate(start, durationMinutes)),
-            error: null,
-            mode: options?.mode ?? 'new',
-            query: selectedTask?.title ?? '',
-            selectedTaskId: selectedTask?.id ?? null,
-            startDateValue: formatDateInputValue(start),
-            startTimeValue: formatTimeInputValue(start),
-            title: '',
-        });
+        const selectedTask = options?.taskId ? tasks.find((task) => task.id === options.taskId) ?? null : null;
+        setTaskComposer(withComposerInputs(openComposerAt(start, {
+            durationMinutes: options?.durationMinutes,
+            mode: options?.mode,
+            task: selectedTask,
+        }, composerDeps)));
     };
 
     const openTaskComposerForDate = (
         date: Date,
         options?: { mode?: CalendarTaskComposerMode; taskId?: string },
     ) => {
-        const selectedTask = options?.taskId ? tasks.find((task) => task.id === options.taskId) : null;
-        const durationMinutes = normalizeDurationMinutes(selectedTask ? timeEstimateToMinutes(selectedTask.timeEstimate) : 30);
-        const slot = findFreeSlotForDay(date, durationMinutes, selectedTask?.id);
-        const fallback = new Date(date);
-        fallback.setHours(DEFAULT_CALENDAR_DAY_START_HOUR, 0, 0, 0);
-        openTaskComposerAt(slot ?? fallback, {
-            durationMinutes,
+        const selectedTask = options?.taskId ? tasks.find((task) => task.id === options.taskId) ?? null : null;
+        setTaskComposer(withComposerInputs(openComposerForDate(date, {
             mode: options?.mode,
-            taskId: selectedTask?.id,
-        });
+            task: selectedTask,
+        }, composerDeps)));
     };
 
     const updateTaskComposerStart = (updates: Partial<Pick<CalendarTaskComposerState, 'startDateValue' | 'startTimeValue'>>) => {
         setTaskComposer((prev) => {
             if (!prev) return prev;
-            const next = { ...prev, ...updates, error: null };
-            const start = combineDateAndTime(next.startDateValue, next.startTimeValue);
-            if (!start) return next;
+            const inputs = { ...prev, ...updates };
             return {
-                ...next,
-                endTimeValue: formatTimeInputValue(addMinutesToDate(start, next.durationMinutes)),
+                ...prev,
+                ...setComposerStart(prev, combineDateAndTime(inputs.startDateValue, inputs.startTimeValue)),
+                // Last: the raw values the user just typed always win over the resolved start.
+                ...updates,
             };
         });
     };
 
     const updateTaskComposerDuration = (durationMinutes: number) => {
-        setTaskComposer((prev) => {
-            if (!prev) return prev;
-            const normalized = normalizeDurationMinutes(durationMinutes);
-            const start = combineDateAndTime(prev.startDateValue, prev.startTimeValue);
-            return {
-                ...prev,
-                durationMinutes: normalized,
-                endTimeValue: start ? formatTimeInputValue(addMinutesToDate(start, normalized)) : prev.endTimeValue,
-                error: null,
-            };
-        });
+        applyToComposer((prev) => setComposerDuration(prev, durationMinutes));
     };
 
     const updateTaskComposerEndTime = (endTimeValue: string) => {
-        setTaskComposer((prev) => {
-            if (!prev) return prev;
-            const start = combineDateAndTime(prev.startDateValue, prev.startTimeValue);
-            const end = combineDateAndTime(prev.startDateValue, endTimeValue);
-            if (!start || !end || end <= start) {
-                return { ...prev, endTimeValue, error: null };
-            }
-            const normalized = normalizeDurationMinutes((end.getTime() - start.getTime()) / 60_000);
-            return {
-                ...prev,
-                durationMinutes: normalized,
-                endTimeValue: formatTimeInputValue(addMinutesToDate(start, normalized)),
-                error: null,
-            };
-        });
+        applyToComposer((prev) => setComposerEndTime(prev, endTimeValue));
     };
 
     const setTaskComposerMode = (mode: CalendarTaskComposerMode) => {
-        setTaskComposer((prev) => prev ? { ...prev, mode, error: null } : prev);
+        applyToComposer((prev) => setComposerMode(prev, mode));
+    };
+
+    const setTaskComposerTitle = (title: string) => {
+        applyToComposer((prev) => setComposerTitle(prev, title));
+    };
+
+    const setTaskComposerQuery = (query: string) => {
+        applyToComposer((prev) => setComposerQuery(prev, query));
+    };
+
+    const selectTaskComposerTask = (task: Task) => {
+        applyToComposer((prev) => selectComposerTask(prev, task, composerDeps));
     };
 
     const saveTaskComposer = async () => {
         if (!taskComposer) return;
-        const start = combineDateAndTime(taskComposer.startDateValue, taskComposer.startTimeValue);
-        const end = combineDateAndTime(taskComposer.startDateValue, taskComposer.endTimeValue);
-        if (!start || !end || end <= start) {
-            setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.invalidTimeRange', 'Choose a valid start and end time.') } : prev);
+        const intent = prepareComposerSave(taskComposer, {
+            areas,
+            isSlotFree: (start, durationMinutes, excludeTaskId) => (
+                isSlotFreeForDay(start, start, durationMinutes, excludeTaskId)
+            ),
+            projects,
+        });
+        if (intent.kind === 'error') {
+            failTaskComposer(intent.error);
             return;
         }
 
-        const durationMinutes = normalizeDurationMinutes(taskComposer.durationMinutes);
-        const selectedTaskId = taskComposer.mode === 'existing' ? taskComposer.selectedTaskId : null;
-        if (taskComposer.mode === 'new' && !taskComposer.title.trim()) {
-            setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.taskTitleRequired', 'Enter a task title.') } : prev);
-            return;
-        }
-        if (taskComposer.mode === 'existing' && !selectedTaskId) {
-            setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.taskRequired', 'Choose a task.') } : prev);
-            return;
-        }
-        if (!isSlotFreeForDay(start, start, durationMinutes, selectedTaskId ?? undefined)) {
-            setTaskComposer((prev) => prev ? { ...prev, error: t('calendar.overlapWarning') } : prev);
-            return;
-        }
-
-        const updates = {
-            startTime: start.toISOString(),
-            timeEstimate: minutesToTimeEstimate(durationMinutes),
-        };
-
+        const start = taskComposer.startAt;
         try {
-            if (selectedTaskId) {
-                await updateTask(selectedTaskId, updates);
+            if (intent.kind === 'update') {
+                await updateTask(intent.taskId, intent.updates);
             } else {
-                const draft = buildCalendarQuickAddTaskDraft(taskComposer.title, {
-                    areas,
-                    durationMinutes,
-                    now: new Date(),
-                    projects,
-                    start,
-                });
-                if (draft.invalidDateCommands.length > 0) {
-                    setTaskComposer((prev) => prev ? {
-                        ...prev,
-                        error: `${t('quickAdd.invalidDateCommand')}: ${draft.invalidDateCommands.join(', ')}`,
-                    } : prev);
-                    return;
-                }
-                if (draft.dateCoherenceIssues.some((issue) => issue.code === 'start_after_due')) {
-                    setTaskComposer((prev) => prev ? {
-                        ...prev,
-                        error: resolveText('task.dateIssue.startAfterDue', 'Starts after due date'),
-                    } : prev);
-                    return;
-                }
-                if (!draft.title) {
-                    setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.taskTitleRequired', 'Enter a task title.') } : prev);
-                    return;
-                }
-                if (!draft.props.projectId && draft.projectTitle) {
+                let draft = intent.draft;
+                if (intent.projectToCreate) {
                     const created = await addProject(
-                        draft.projectTitle,
-                        DEFAULT_PROJECT_COLOR,
-                        getQuickAddProjectInitialProps(draft.props),
+                        intent.projectToCreate.name,
+                        intent.projectToCreate.color,
+                        intent.projectToCreate.initialProps,
                     );
                     if (!created) {
-                        setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.saveFailed', 'Could not save the task.') } : prev);
+                        failTaskComposer({ code: 'save_failed' });
                         return;
                     }
-                    draft.props.projectId = created.id;
-                    draft.props.areaId = undefined;
+                    draft = applyComposerCreatedProject(draft, created.id);
                 }
                 const result = await addTask(draft.title, draft.props);
                 if (!result.success) {
-                    setTaskComposer((prev) => prev ? { ...prev, error: result.error ?? resolveText('calendar.saveFailed', 'Could not save the task.') } : prev);
+                    failTaskComposer({ code: 'save_failed', detail: result.error ?? undefined });
                     return;
                 }
             }
             setTaskComposer(null);
             setScheduleQuery('');
             setScheduleError(null);
-            setSelectedDate(start);
-            setCurrentMonth(start);
+            if (start) {
+                setSelectedDate(start);
+                setCurrentMonth(start);
+            }
         } catch (error) {
             reportError('Failed to save calendar task', error);
-            setTaskComposer((prev) => prev ? { ...prev, error: resolveText('calendar.saveFailed', 'Could not save the task.') } : prev);
+            failTaskComposer({ code: 'save_failed' });
         }
     };
 
@@ -1072,39 +1057,11 @@ export function useDesktopCalendarController() {
         if (aTime !== bTime) return aTime - bTime;
         return a.task.title.localeCompare(b.task.title);
     });
-    const getCalendarItemsForDate = (date: Date): CalendarCellItem[] => {
-        const scheduled = getScheduledForDay(date);
-        const scheduledIds = new Set(scheduled.map((task) => task.id));
-        const deadlineOnly = getDeadlinesForDay(date).filter((task) => !scheduledIds.has(task.id));
-        return [
-            ...scheduled.map((task) => ({
-                id: `scheduled-${task.id}`,
-                kind: 'scheduled' as const,
-                task,
-                start: task.startTime ? safeParseDate(task.startTime) : null,
-                title: task.title,
-            })),
-            ...deadlineOnly.map((task) => ({
-                id: `deadline-${task.id}`,
-                kind: 'deadline' as const,
-                task,
-                start: task.dueDate ? safeParseDueDate(task.dueDate) : null,
-                title: task.title,
-            })),
-            ...getExternalEventsForDay(date).map((event) => ({
-                id: `event-${event.id}`,
-                kind: 'event' as const,
-                event,
-                start: safeParseDate(event.start),
-                title: event.title,
-            })),
-        ].sort((a, b) => {
-            const aTime = a.start?.getTime() ?? Number.MAX_SAFE_INTEGER;
-            const bTime = b.start?.getTime() ?? Number.MAX_SAFE_INTEGER;
-            if (aTime !== bTime) return aTime - bTime;
-            return a.title.localeCompare(b.title);
-        });
-    };
+    const getCalendarItemsForDate = (date: Date): CalendarCellItem[] => buildCalendarDayItems({
+        deadlines: getDeadlinesForDay(date),
+        events: getExternalEventsForDay(date),
+        scheduled: getScheduledForDay(date),
+    });
     const getAllDayItemsForDay = (date: Date) => {
         const scheduled = getScheduledForDay(date);
         const scheduledIds = new Set(scheduled.map((task) => task.id));
@@ -1169,22 +1126,20 @@ export function useDesktopCalendarController() {
         });
     };
     const layoutTimedItems = (date: Date) => {
-        const columnEnds: number[] = [];
-        const positioned = getTimedItemsForDay(date).map((item) => {
-            const startMs = item.start.getTime();
-            const column = columnEnds.findIndex((endMs) => endMs <= startMs);
-            const columnIndex = column >= 0 ? column : columnEnds.length;
-            columnEnds[columnIndex] = item.end.getTime();
-            return { ...item, columnIndex };
-        });
-        const columnCount = Math.max(1, columnEnds.length);
-        return positioned.map((item) => ({
+        const items = getTimedItemsForDay(date);
+        const dayStart = new Date(date);
+        dayStart.setHours(DESKTOP_DAY_START_HOUR, 0, 0, 0);
+        const dayStartMs = dayStart.getTime();
+        const layouts = buildTimedCalendarLayouts(items.map((item) => ({
+            id: item.id,
+            startMinutes: (item.start.getTime() - dayStartMs) / 60_000,
+            endMinutes: (item.end.getTime() - dayStartMs) / 60_000,
+        })));
+        return items.map((item) => ({
             ...item,
-            columnCount,
+            ...(layouts.get(item.id) ?? { columnCount: 1, columnIndex: 0, leftPercent: 0, widthPercent: 100 }),
             height: Math.max(24, item.durationMinutes / 60 * DESKTOP_HOUR_HEIGHT),
-            leftPercent: item.columnIndex * (100 / columnCount),
             top: Math.max(0, ((item.start.getHours() - DESKTOP_DAY_START_HOUR) * 60 + item.start.getMinutes()) / 60 * DESKTOP_HOUR_HEIGHT),
-            widthPercent: 100 / columnCount,
         }));
     };
 
@@ -1297,6 +1252,7 @@ export function useDesktopCalendarController() {
         projects,
         quickAddSuggestionTokens,
         saveTaskComposer,
+        selectTaskComposerTask,
         scheduleCandidates,
         scheduleDays,
         scheduleError,
@@ -1319,9 +1275,12 @@ export function useDesktopCalendarController() {
         setSelectedDate,
         setTaskComposer,
         setTaskComposerMode,
+        setTaskComposerQuery,
+        setTaskComposerTitle,
         setViewFilterQuery,
         taskComposer,
         taskComposerCandidates,
+        taskComposerError,
         timeEstimateToMinutes,
         timelineDays,
         t,

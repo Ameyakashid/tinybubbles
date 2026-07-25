@@ -381,6 +381,26 @@ describe('CalendarView', () => {
         expect(storeMocks.taskStoreState.addTask).not.toHaveBeenCalled();
     });
 
+    it('keeps a retyped composer date and schedules the task on that day', async () => {
+        renderCalendar();
+        await flushCalendarEffects();
+        await openNewTaskComposerForDay('4');
+
+        fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Draft launch note' } });
+        fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-04-09' } });
+
+        expect(screen.getByLabelText('Date')).toHaveValue('2026-04-09');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+            await Promise.resolve();
+        });
+
+        expect(storeMocks.taskStoreState.addTask).toHaveBeenCalledWith('Draft launch note', expect.objectContaining({
+            startTime: new Date(2026, 3, 9, 8, 0).toISOString(),
+        }));
+    });
+
     it('rejects composer submissions that overlap visible external events', async () => {
         vi.mocked(fetchExternalCalendarEvents).mockResolvedValue({
             calendars: [{ id: 'work', name: 'Work', url: 'https://calendar.example/work', enabled: true }],

@@ -22,22 +22,22 @@ type CalendarOpenTaskModalController = Pick<
 
 type CalendarTaskComposerModalController = Pick<
     DesktopCalendarController,
-    | 'addMinutesToDate'
     | 'combineDateAndTime'
     | 'formatDurationLabel'
-    | 'formatTimeInputValue'
-    | 'normalizeDurationMinutes'
     | 'areas'
     | 'projects'
     | 'quickAddSuggestionTokens'
     | 'resolveText'
     | 'saveTaskComposer'
+    | 'selectTaskComposerTask'
     | 'selectedComposerTask'
     | 'setTaskComposer'
     | 'setTaskComposerMode'
+    | 'setTaskComposerQuery'
+    | 'setTaskComposerTitle'
     | 'taskComposer'
     | 'taskComposerCandidates'
-    | 'timeEstimateToMinutes'
+    | 'taskComposerError'
     | 't'
     | 'updateTaskComposerDuration'
     | 'updateTaskComposerEndTime'
@@ -96,22 +96,22 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
 
 export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerModalProps) {
     const {
-        addMinutesToDate,
         combineDateAndTime,
         formatDurationLabel,
-        formatTimeInputValue,
-        normalizeDurationMinutes,
         areas,
         projects,
         quickAddSuggestionTokens,
         resolveText,
         saveTaskComposer,
+        selectTaskComposerTask,
         selectedComposerTask,
         setTaskComposer,
         setTaskComposerMode,
+        setTaskComposerQuery,
+        setTaskComposerTitle,
         taskComposer,
         taskComposerCandidates,
-        timeEstimateToMinutes,
+        taskComposerError,
         t,
         updateTaskComposerDuration,
         updateTaskComposerEndTime,
@@ -187,7 +187,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                 id="calendar-task-composer-title"
                                 autoFocus
                                 value={taskComposer.title}
-                                onChange={(value) => setTaskComposer((prev) => prev ? { ...prev, title: value, error: null } : prev)}
+                                onChange={setTaskComposerTitle}
                                 projects={projects}
                                 contexts={quickAddSuggestionTokens}
                                 areas={areas}
@@ -208,7 +208,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                         autoFocus
                                         type="text"
                                         value={taskComposer.query}
-                                        onChange={(event) => setTaskComposer((prev) => prev ? { ...prev, query: event.target.value, selectedTaskId: null, error: null } : prev)}
+                                        onChange={(event) => setTaskComposerQuery(event.target.value)}
                                         className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary/30"
                                         placeholder={t('calendar.schedulePlaceholder')}
                                     />
@@ -221,21 +221,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                         <button
                                             key={task.id}
                                             type="button"
-                                            onClick={() => {
-                                                const durationMinutes = normalizeDurationMinutes(timeEstimateToMinutes(task.timeEstimate));
-                                                setTaskComposer((prev) => {
-                                                    if (!prev) return prev;
-                                                    const start = combineDateAndTime(prev.startDateValue, prev.startTimeValue);
-                                                    return {
-                                                        ...prev,
-                                                        durationMinutes,
-                                                        endTimeValue: start ? formatTimeInputValue(addMinutesToDate(start, durationMinutes)) : prev.endTimeValue,
-                                                        error: null,
-                                                        query: task.title,
-                                                        selectedTaskId: task.id,
-                                                    };
-                                                });
-                                            }}
+                                            onClick={() => selectTaskComposerTask(task)}
                                             className={cn(
                                                 "flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm",
                                                 selected ? "bg-primary/10 text-primary" : "hover:bg-muted"
@@ -306,9 +292,9 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                         </label>
                     </div>
 
-                    {taskComposer.error && (
+                    {taskComposerError && (
                         <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                            {taskComposer.error}
+                            {taskComposerError}
                         </div>
                     )}
                 </div>

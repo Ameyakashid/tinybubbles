@@ -22,6 +22,11 @@ import {
     type Task,
 } from '@mindwtr/core';
 
+import {
+    CALENDAR_PUSH_SYNC_CONCURRENCY,
+    createCalendarPushScheduler,
+} from '@mindwtr/core/calendar-push-scheduler';
+
 import { logInfo, logWarn } from './app-log';
 import { isTauriRuntime } from './runtime';
 import {
@@ -41,8 +46,6 @@ import {
 const DESKTOP_CALENDAR_PUSH_ENABLED_KEY = 'mindwtr:desktop-calendar-push:enabled';
 const DESKTOP_CALENDAR_PUSH_TARGET_ID_KEY = 'mindwtr:desktop-calendar-push:target-calendar-id';
 const DESKTOP_CALENDAR_PUSH_MANAGED_ID_KEY = 'mindwtr:desktop-calendar-push:managed-calendar-id';
-const SYNC_DEBOUNCE_MS = 2500;
-const CALENDAR_SYNC_CONCURRENCY = 4;
 const ACCOUNT_TARGET_TITLE_PREFIX = 'Mindwtr: ';
 const PROJECTED_RECURRENCE_EVENT_DATE_FORMAT = 'PP';
 
@@ -369,18 +372,14 @@ function createCalendarPushRunPorts(target: CalendarPushTarget): CalendarPushRun
     };
 }
 
-// Serialize all calendar writes so a full sync (fired on mount) and the
-// debounced partial sync (or two rapid manual refreshes) cannot race on the
-// check-then-create path and create duplicate events (#743).
-let calendarSyncQueue: Promise<void> = Promise.resolve();
-function enqueueCalendarSync(run: () => Promise<void>): Promise<void> {
-    const next = calendarSyncQueue.catch(() => undefined).then(run);
-    calendarSyncQueue = next.catch(() => undefined);
-    return next;
-}
+// Serializes every calendar write and coalesces store changes; the runs below
+// stay unqueued so the scheduler owns ordering (#743).
+const calendarPushScheduler = createCalendarPushScheduler({
+    runFull: () => runFullDesktopCalendarPushSyncUnsafe(),
+    runPartial: (taskIds) => runPartialDesktopCalendarPushSyncUnsafe(taskIds),
+});
 
-export const runFullDesktopCalendarPushSync = (): Promise<void> =>
-    enqueueCalendarSync(runFullDesktopCalendarPushSyncUnsafe);
+export const runFullDesktopCalendarPushSync = (): Promise<void> => calendarPushScheduler.runFull();
 
 const runFullDesktopCalendarPushSyncUnsafe = async (): Promise<void> => {
     if (!isTauriRuntime()) return;
@@ -397,7 +396,7 @@ const runFullDesktopCalendarPushSyncUnsafe = async (): Promise<void> => {
         tasks: _allTasks as Task[],
         target,
         ports: createCalendarPushRunPorts(target),
-        concurrency: CALENDAR_SYNC_CONCURRENCY,
+        concurrency: CALENDAR_PUSH_SYNC_CONCURRENCY,
     });
     void logInfo('Full system calendar push sync complete', {
         scope: 'calendar-push',
@@ -409,22 +408,9 @@ const runFullDesktopCalendarPushSyncUnsafe = async (): Promise<void> => {
     });
 };
 
-let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const pendingSyncTaskIds = new Set<string>();
-
 export const scheduleDesktopCalendarPushSyncDebounced = (taskIds: string[]): void => {
-    taskIds.forEach((id) => pendingSyncTaskIds.add(id));
-    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(() => {
-        syncDebounceTimer = null;
-        const idsToSync = Array.from(pendingSyncTaskIds);
-        pendingSyncTaskIds.clear();
-        void runPartialDesktopCalendarPushSync(idsToSync);
-    }, SYNC_DEBOUNCE_MS);
+    calendarPushScheduler.scheduleDebounced(taskIds);
 };
-
-const runPartialDesktopCalendarPushSync = (taskIds: string[]): Promise<void> =>
-    enqueueCalendarSync(() => runPartialDesktopCalendarPushSyncUnsafe(taskIds));
 
 const runPartialDesktopCalendarPushSyncUnsafe = async (taskIds: string[]): Promise<void> => {
     if (!isTauriRuntime()) return;
@@ -442,7 +428,7 @@ const runPartialDesktopCalendarPushSyncUnsafe = async (taskIds: string[]): Promi
         tasksById: _tasksById as Map<string, Task>,
         target,
         ports: createCalendarPushRunPorts(target),
-        concurrency: CALENDAR_SYNC_CONCURRENCY,
+        concurrency: CALENDAR_PUSH_SYNC_CONCURRENCY,
     });
 };
 
@@ -495,31 +481,19 @@ export const startDesktopCalendarPushSync = (): (() => void) => {
         }
     );
 
-    return () => {
-        unsubscribeStore?.();
-        unsubscribeStore = null;
-        if (syncDebounceTimer) {
-            clearTimeout(syncDebounceTimer);
-            syncDebounceTimer = null;
-        }
-        pendingSyncTaskIds.clear();
-    };
+    return stopDesktopCalendarPushSync;
 };
 
 export const stopDesktopCalendarPushSync = (): void => {
     unsubscribeStore?.();
     unsubscribeStore = null;
-    if (syncDebounceTimer) {
-        clearTimeout(syncDebounceTimer);
-        syncDebounceTimer = null;
-    }
-    pendingSyncTaskIds.clear();
+    calendarPushScheduler.cancelPending();
 };
 
 export const __desktopCalendarPushSyncTestUtils = {
     resetForTests() {
         stopDesktopCalendarPushSync();
-        calendarSyncQueue = Promise.resolve();
+        calendarPushScheduler.reset();
         dependencies = { ...defaultDependencies };
     },
     setDependenciesForTests(overrides: Partial<DesktopCalendarPushDependencies>) {

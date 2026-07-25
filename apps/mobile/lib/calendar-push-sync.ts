@@ -23,6 +23,10 @@ import {
     type CalendarPushRunPorts,
     type Task,
 } from '@mindwtr/core';
+import {
+    CALENDAR_PUSH_SYNC_CONCURRENCY,
+    createCalendarPushScheduler,
+} from '@mindwtr/core/calendar-push-scheduler';
 
 import { logInfo, logWarn, logError } from './app-log';
 import {
@@ -40,8 +44,6 @@ const CALENDAR_ID_KEY = 'mindwtr:calendar-push-sync:calendar-id';
 const CALENDAR_TARGET_ID_KEY = 'mindwtr:calendar-push-sync:target-calendar-id';
 const CALENDAR_COLOR_KEY = 'mindwtr:calendar-push-sync:color';
 const PLATFORM = Platform.OS;
-const SYNC_DEBOUNCE_MS = 2500;
-const CALENDAR_SYNC_CONCURRENCY = 4;
 const MANAGED_CALENDAR_TITLE = 'Mindwtr';
 const MANAGED_CALENDAR_NAME = 'mindwtr';
 const DEFAULT_MANAGED_CALENDAR_COLOR = '#3B82F6';
@@ -690,17 +692,16 @@ async function canUseCalendarSyncStorage(): Promise<boolean> {
 
 // MARK: - Full sync
 
-// Serialize all calendar writes so a full sync and the debounced partial sync
-// (or two rapid manual refreshes) cannot race on the check-then-create path and
-// create duplicate events (#743).
-let calendarSyncQueue: Promise<void> = Promise.resolve();
-function enqueueCalendarSync(run: () => Promise<void>): Promise<void> {
-    const next = calendarSyncQueue.catch(() => undefined).then(run);
-    calendarSyncQueue = next.catch(() => undefined);
-    return next;
-}
+// Serializes every calendar write and coalesces store changes; the runs below
+// stay unqueued so the scheduler owns ordering (#743).
+const calendarPushScheduler = createCalendarPushScheduler({
+    runFull: () => runFullCalendarSyncUnsafe(),
+    runPartial: (taskIds) => runPartialCalendarSyncUnsafe(taskIds),
+});
 
-export const runFullCalendarSync = (): Promise<void> => enqueueCalendarSync(runFullCalendarSyncUnsafe);
+const enqueueCalendarSync = calendarPushScheduler.enqueue;
+
+export const runFullCalendarSync = (): Promise<void> => calendarPushScheduler.runFull();
 
 const runFullCalendarSyncUnsafe = async (): Promise<void> => {
     const enabled = await getCalendarPushEnabled();
@@ -715,7 +716,7 @@ const runFullCalendarSyncUnsafe = async (): Promise<void> => {
         tasks: _allTasks as Task[],
         target,
         ports: createCalendarPushRunPorts(target),
-        concurrency: CALENDAR_SYNC_CONCURRENCY,
+        concurrency: CALENDAR_PUSH_SYNC_CONCURRENCY,
     });
     void logInfo('Full calendar sync complete', {
         scope: 'calendar-push',
@@ -729,22 +730,9 @@ const runFullCalendarSyncUnsafe = async (): Promise<void> => {
 
 // MARK: - Debounced partial sync
 
-let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSyncTaskIds = new Set<string>();
-
 export const scheduleSyncDebounced = (taskIds: string[]): void => {
-    taskIds.forEach((id) => pendingSyncTaskIds.add(id));
-    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(() => {
-        syncDebounceTimer = null;
-        const idsToSync = Array.from(pendingSyncTaskIds);
-        pendingSyncTaskIds.clear();
-        void runPartialCalendarSync(idsToSync);
-    }, SYNC_DEBOUNCE_MS);
+    calendarPushScheduler.scheduleDebounced(taskIds);
 };
-
-const runPartialCalendarSync = (taskIds: string[]): Promise<void> =>
-    enqueueCalendarSync(() => runPartialCalendarSyncUnsafe(taskIds));
 
 const runPartialCalendarSyncUnsafe = async (taskIds: string[]): Promise<void> => {
     const enabled = await getCalendarPushEnabled();
@@ -760,7 +748,7 @@ const runPartialCalendarSyncUnsafe = async (taskIds: string[]): Promise<void> =>
         tasksById: _tasksById as Map<string, Task>,
         target,
         ports: createCalendarPushRunPorts(target),
-        concurrency: CALENDAR_SYNC_CONCURRENCY,
+        concurrency: CALENDAR_PUSH_SYNC_CONCURRENCY,
     });
 };
 
@@ -822,23 +810,11 @@ export const startCalendarPushSync = (): (() => void) => {
         }
     );
 
-    return () => {
-        unsubscribeStore?.();
-        unsubscribeStore = null;
-        if (syncDebounceTimer) {
-            clearTimeout(syncDebounceTimer);
-            syncDebounceTimer = null;
-        }
-        pendingSyncTaskIds.clear();
-    };
+    return stopCalendarPushSync;
 };
 
 export const stopCalendarPushSync = (): void => {
     unsubscribeStore?.();
     unsubscribeStore = null;
-    if (syncDebounceTimer) {
-        clearTimeout(syncDebounceTimer);
-        syncDebounceTimer = null;
-    }
-    pendingSyncTaskIds.clear();
+    calendarPushScheduler.cancelPending();
 };

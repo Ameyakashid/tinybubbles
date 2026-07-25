@@ -24,11 +24,13 @@ import { TaskEditModal } from '@/components/task-edit-modal';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { useAndroidKeyboardInset } from '@/lib/use-android-keyboard-inset';
-import { styles } from './calendar/calendar-view.styles';
 import {
   buildTimedCalendarLayouts,
   type CalendarTimedLayout,
   type CalendarTimedLayoutInput,
+} from '@mindwtr/core/calendar-day-items';
+import { styles } from './calendar/calendar-view.styles';
+import {
   isAllDayScheduledTask,
   isTimedScheduledTask,
 } from './calendar/calendar-task-items';
@@ -309,6 +311,7 @@ export function CalendarView() {
     calendarDays,
     calendarComposer,
     calendarComposerCandidates,
+    calendarComposerError,
     calendarComposerSelectedTask,
     calendarSystem,
     calendarWeekVisibleDays,
@@ -869,9 +872,9 @@ export function CalendarView() {
               })}
             </View>
 
-            {calendarComposer.error && (
+            {calendarComposerError && (
               <Text style={[styles.composerError, { color: tc.danger }]}>
-                {calendarComposer.error}
+                {calendarComposerError}
               </Text>
             )}
 
