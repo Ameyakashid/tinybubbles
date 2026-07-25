@@ -366,7 +366,7 @@ export function AgendaView() {
             }));
     }, [activeTasks, areaById, projects]);
     const showNoProjectOption = activeTasks.some((task) => !task.projectId);
-    const formatEstimate = formatTimeEstimateLabel;
+    const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
     const savedFocusFilters = (settings?.savedFilters ?? []).filter((filter) => filter.view === 'focus' && !filter.deletedAt);
     const activeSavedFilter = savedFocusFilters.find((filter) => filter.id === activeSavedFilterId) ?? null;
     const effectiveFocusSortBy = activeSavedFilter?.sortBy ?? focusSortBy;

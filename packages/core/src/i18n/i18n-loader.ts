@@ -1,4 +1,5 @@
 import type { Language } from './i18n-types';
+import { LOCALES } from './i18n-locales';
 import { en } from './locales/en';
 
 const englishTranslations = en;
@@ -37,130 +38,6 @@ const ensureEnglishLoaded = async (): Promise<Record<string, string>> => {
     return englishTranslations;
 };
 
-const loadOverrides = async (lang: Language): Promise<Record<string, string> | undefined> => {
-    if (lang === 'es') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/es') as typeof import('./locales/es'),
-            () => import('./locales/es')
-        );
-        return mod.esOverrides;
-    }
-    if (lang === 'hi') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/hi') as typeof import('./locales/hi'),
-            () => import('./locales/hi')
-        );
-        return mod.hiOverrides;
-    }
-    if (lang === 'ar') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/ar') as typeof import('./locales/ar'),
-            () => import('./locales/ar')
-        );
-        return mod.arOverrides;
-    }
-    if (lang === 'de') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/de') as typeof import('./locales/de'),
-            () => import('./locales/de')
-        );
-        return mod.deOverrides;
-    }
-    if (lang === 'ru') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/ru') as typeof import('./locales/ru'),
-            () => import('./locales/ru')
-        );
-        return mod.ruOverrides;
-    }
-    if (lang === 'ja') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/ja') as typeof import('./locales/ja'),
-            () => import('./locales/ja')
-        );
-        return mod.jaOverrides;
-    }
-    if (lang === 'fr') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/fr') as typeof import('./locales/fr'),
-            () => import('./locales/fr')
-        );
-        return mod.frOverrides;
-    }
-    if (lang === 'pt') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/pt') as typeof import('./locales/pt'),
-            () => import('./locales/pt')
-        );
-        return mod.ptOverrides;
-    }
-    if (lang === 'pl') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/pl') as typeof import('./locales/pl'),
-            () => import('./locales/pl')
-        );
-        return mod.plOverrides;
-    }
-    if (lang === 'cs') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/cs') as typeof import('./locales/cs'),
-            () => import('./locales/cs')
-        );
-        return mod.csOverrides;
-    }
-    if (lang === 'ko') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/ko') as typeof import('./locales/ko'),
-            () => import('./locales/ko')
-        );
-        return mod.koOverrides;
-    }
-    if (lang === 'it') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/it') as typeof import('./locales/it'),
-            () => import('./locales/it')
-        );
-        return mod.itOverrides;
-    }
-    if (lang === 'tr') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/tr') as typeof import('./locales/tr'),
-            () => import('./locales/tr')
-        );
-        return mod.trOverrides;
-    }
-    if (lang === 'nl') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/nl') as typeof import('./locales/nl'),
-            () => import('./locales/nl')
-        );
-        return mod.nlOverrides;
-    }
-    if (lang === 'vi') {
-        const mod = await loadWithFallback(
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            () => require('./locales/vi') as typeof import('./locales/vi'),
-            () => import('./locales/vi')
-        );
-        return mod.viOverrides;
-    }
-    return undefined;
-};
-
 async function ensureLoaded(lang: Language): Promise<void> {
     if (translationsCache.has(lang)) return;
     const inFlight = loadPromises.get(lang);
@@ -174,32 +51,23 @@ async function ensureLoaded(lang: Language): Promise<void> {
             await ensureEnglishLoaded();
             return;
         }
-        if (lang === 'zh') {
-            const mod = await loadWithFallback(
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                () => require('./locales/zh-Hans') as typeof import('./locales/zh-Hans'),
-                () => import('./locales/zh-Hans')
-            );
-            translationsCache.set('zh', mod.zhHans);
-            return;
-        }
-        if (lang === 'zh-Hant') {
-            const mod = await loadWithFallback(
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
-                () => require('./locales/zh-Hant') as typeof import('./locales/zh-Hant'),
-                () => import('./locales/zh-Hant')
-            );
-            translationsCache.set('zh-Hant', mod.zhHant);
+
+        const descriptor = LOCALES[lang];
+        // Each entry's loaders are typed as its own concrete module shape (so the real
+        // export name/shape is checked once, at its declaration site in i18n-locales.ts);
+        // widen to the common shape here, where the lookup is keyed dynamically by `lang`.
+        const loadSync = descriptor.loadSync as () => Record<string, unknown>;
+        const loadAsync = descriptor.loadAsync as () => Promise<Record<string, unknown>>;
+        const mod = await loadWithFallback(loadSync, loadAsync) as Record<string, Record<string, string>>;
+        const loaded = mod[descriptor.export];
+
+        if (descriptor.mode === 'full') {
+            translationsCache.set(lang, loaded);
             return;
         }
 
         const base = await ensureEnglishLoaded();
-        const overrides = await loadOverrides(lang);
-        if (overrides) {
-            translationsCache.set(lang, buildTranslations(base, overrides));
-            return;
-        }
-        translationsCache.set(lang, base);
+        translationsCache.set(lang, buildTranslations(base, loaded));
     })();
 
     loadPromises.set(lang, promise);

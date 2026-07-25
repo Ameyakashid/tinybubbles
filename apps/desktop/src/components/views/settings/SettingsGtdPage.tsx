@@ -1,6 +1,7 @@
 import type { AppSettings, Area, DefaultProjectFlowMode, FeatureSettings, GtdSettings, TaskEditorFieldId, TaskEditorPresentation, TaskEditorSectionId, TimeEstimate } from '@mindwtr/core';
 import {
     FOCUS_TASK_LIMIT_OPTIONS,
+    formatTimeEstimateLabel,
     normalizeClockTimeInput,
     normalizeFocusTaskLimit,
     getDefaultTaskAreaMode,
@@ -141,20 +142,6 @@ const DEFAULT_AREA_ACTIVE_SELECT_VALUE = '__active-area__';
 // two platforms round-trip each other's gtd.timeEstimatePresets values.
 const DEFAULT_TIME_ESTIMATE_PRESETS: TimeEstimate[] = ['5min', '10min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
 const TIME_ESTIMATE_OPTIONS: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
-
-const formatTimeEstimateLabel = (value: TimeEstimate): string => {
-    switch (value) {
-        case '5min': return '5m';
-        case '10min': return '10m';
-        case '15min': return '15m';
-        case '30min': return '30m';
-        case '1hr': return '1h';
-        case '2hr': return '2h';
-        case '3hr': return '3h';
-        case '4hr': return '4h';
-        default: return '4h+';
-    }
-};
 
 type PomodoroSettings = NonNullable<GtdSettings['pomodoro']>;
 type InboxProcessingSettings = NonNullable<GtdSettings['inboxProcessing']>;
@@ -834,6 +821,14 @@ export function SettingsGtdPage({
                                                 : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                                         )}
                                     >
+                                        {/* This page's `t` prop is a pre-resolved Labels struct, not a
+                                            (key: string) => string function (unlike InboxProcessingWizard/
+                                            InboxProcessingQuickPanel's `t`), so there's no key-lookup function
+                                            to pass here — the core default (English, matching this page's
+                                            existing copy) is used instead. That still fixes the real bug: the
+                                            deleted local copy of this function collapsed any custom estimate
+                                            straight to '4h+', losing precision; the shared implementation keeps
+                                            the exact hours/minutes split. */}
                                         {formatTimeEstimateLabel(value)}
                                     </button>
                                 );

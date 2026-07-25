@@ -537,9 +537,6 @@ export {
     SUPPORTED_LANGUAGES,
 } from './i18n/i18n-constants';
 
-export { LOCALES } from './i18n/i18n-locales';
-export type { Locale, LocaleDescriptor, LocaleMode } from './i18n/i18n-locales';
-
 export {
     buildRRuleString,
     createNextRecurringTask,
@@ -1390,3 +1387,4 @@ export * from './calendar-composer';
 export * from './calendar-day-items';
 export * from './calendar-push-scheduler';
 export * from './date-draft';
+export * from './i18n/i18n-locales';

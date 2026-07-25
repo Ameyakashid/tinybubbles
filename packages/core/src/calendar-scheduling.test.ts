@@ -63,6 +63,17 @@ const area = (overrides: Partial<Area>): Area => ({
     ...overrides,
 });
 
+// Deliberately diverges from the real English strings ('min'/'hr' instead of 'm'/'h') so a
+// test asserting against this stub can only pass if formatTimeEstimateLabel/
+// formatCalendarDurationLabel actually call the provided `t`, not the built-in English default.
+const STUB_UNIT_TRANSLATIONS: Record<string, string> = {
+    'units.minutesShort': '{{minutes}}min',
+    'units.hoursShort': '{{hours}}hr',
+    'units.hoursMinutesShort': '{{hours}}hr{{minutes}}min',
+    'units.hoursPlusShort': '{{hours}}hr+',
+};
+const stubT = (key: string): string => STUB_UNIT_TRANSLATIONS[key] ?? key;
+
 describe('calendar scheduling helpers', () => {
     it('maps Mindwtr time estimates to calendar minutes', () => {
         expect(timeEstimateToMinutes('5min')).toBe(5);
@@ -89,7 +100,16 @@ describe('calendar scheduling helpers', () => {
     });
 
     it('formats and parses custom time estimates', () => {
+        // Default (no options) reproduces this module's own English strings — every call
+        // site that predates the {t, locale} seam must see zero behavior change.
         expect(formatTimeEstimateLabel(createCustomTimeEstimate(150))).toBe('2h 30m');
+        expect(formatTimeEstimateLabel(createCustomTimeEstimate(150), { t: stubT })).toBe('2hr30min');
+        // custom:90 regression (#Part-C): every call site that re-rolled this function
+        // instead of using the core one collapsed an unrecognized custom estimate straight
+        // to a '4h+'-shaped fallback. The one true implementation must keep splitting
+        // hours/minutes for any custom minutes value, not just the ones with a preset.
+        expect(formatTimeEstimateLabel(createCustomTimeEstimate(90))).toBe('1h 30m');
+        expect(formatTimeEstimateLabel(createCustomTimeEstimate(90), { t: stubT })).toBe('1hr30min');
         expect(parseTimeEstimateInput('150')).toBe(150);
         expect(parseTimeEstimateInput('150m')).toBe(150);
         expect(parseTimeEstimateInput('2h30')).toBe(150);
@@ -124,6 +144,10 @@ describe('calendar scheduling helpers', () => {
         expect(formatCalendarDurationLabel(30)).toBe('30m');
         expect(formatCalendarDurationLabel(90)).toBe('1.5h');
         expect(formatCalendarDurationLabel(120)).toBe('2h');
+        expect(formatCalendarDurationLabel(30, { t: stubT })).toBe('30min');
+        expect(formatCalendarDurationLabel(120, { t: stubT })).toBe('2hr');
+        // locale controls only the fractional-hours decimal separator, independent of `t`.
+        expect(formatCalendarDurationLabel(90, { locale: 'de-DE' })).toBe('1,5h');
     });
 
     it('builds a quick-add draft while keeping the selected calendar slot authoritative', () => {

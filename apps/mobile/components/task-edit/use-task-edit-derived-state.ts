@@ -121,7 +121,7 @@ export function useTaskEditDerivedState({
         return hasNth || hasLast || isCustomDay ? 'custom' : 'date';
     }, [monthlyAnchorDate, recurrenceRRuleValue, recurrenceRuleValue]);
 
-    const formatTimeEstimateLabel = useCallback((value: TimeEstimate) => formatCoreTimeEstimateLabel(value), []);
+    const formatTimeEstimateLabel = useCallback((value: TimeEstimate) => formatCoreTimeEstimateLabel(value, { t }), [t]);
 
     const currentEstimate = draft ? draft.timeEstimate : task?.timeEstimate;
     const timeEstimateOptions: { value: TimeEstimate | ''; label: string }[] = useMemo(

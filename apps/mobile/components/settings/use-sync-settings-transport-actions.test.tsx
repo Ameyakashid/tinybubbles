@@ -68,6 +68,10 @@ vi.mock('@mindwtr/core', () => ({
     cloudGetJson: mocked.cloudGetJson,
     isConnectionAllowed: mocked.isConnectionAllowed,
     isValidCloudSyncToken: mocked.isValidCloudSyncToken,
+    // ./settings.constants imports isValidHttpUrl (a value, not type-only) from this module
+    // and builds LANGUAGES from LOCALES at module load time; this test doesn't exercise
+    // language selection, so an empty table is enough to satisfy that load.
+    LOCALES: {},
     normalizeCloudUrl: mocked.normalizeCloudUrl,
     normalizeWebdavUrl: mocked.normalizeWebdavUrl,
     SYNC_LOCAL_INSECURE_URL_OPTIONS: { allowLocalHostnames: true, allowPrivateIpRanges: true },

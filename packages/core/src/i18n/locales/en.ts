@@ -340,6 +340,12 @@ export const en: Record<string, string> = {
         'task.aria.dueTime': 'Due time',
         'task.aria.location': 'Location',
 
+        // Compact unit labels (time-estimate chips, calendar duration labels)
+        'units.minutesShort': '{{minutes}}m',
+        'units.hoursShort': '{{hours}}h',
+        'units.hoursMinutesShort': '{{hours}}h {{minutes}}m',
+        'units.hoursPlusShort': '{{hours}}h+',
+
         // Recurrence Labels
         'recurrence.none': 'None',
         'recurrence.daily': 'Daily',

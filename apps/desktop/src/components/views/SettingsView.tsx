@@ -30,6 +30,7 @@ import {
   summarizeMergeStats,
   translateText,
   translateWithFallback,
+  LOCALES,
   submitFeedbackSubmission,
   useTaskStore,
   type AppData,
@@ -181,25 +182,13 @@ const SettingsAboutPage = lazy(
   ),
 );
 
-const LANGUAGES: { id: Language; label: string; native: string }[] = [
-  { id: "en", label: "English", native: "English" },
-  { id: "vi", label: "Vietnamese", native: "Tiếng Việt" },
-  { id: "zh", label: "Chinese (Simplified)", native: "中文（简体）" },
-  { id: "zh-Hant", label: "Chinese (Traditional)", native: "中文（繁體）" },
-  { id: "es", label: "Spanish", native: "Español" },
-  { id: "hi", label: "Hindi", native: "हिन्दी" },
-  { id: "ar", label: "Arabic", native: "العربية" },
-  { id: "de", label: "German", native: "Deutsch" },
-  { id: "ru", label: "Russian", native: "Русский" },
-  { id: "ja", label: "Japanese", native: "日本語" },
-  { id: "fr", label: "French", native: "Français" },
-  { id: "pt", label: "Portuguese", native: "Português" },
-  { id: "pl", label: "Polish", native: "Polski" },
-  { id: "cs", label: "Czech", native: "Čeština" },
-  { id: "ko", label: "Korean", native: "한국어" },
-  { id: "it", label: "Italian", native: "Italiano" },
-  { id: "tr", label: "Turkish", native: "Türkçe" },
-  { id: "nl", label: "Dutch", native: "Nederlands" },
+// 'en' plus every locale in the LOCALES table (@mindwtr/core, from i18n/i18n-locales.ts) —
+// see that module's header comment for why English isn't a table entry. `label` used to carry the
+// English display name here too, but nothing reads it (SettingsMainPage's LanguageOption
+// only has `native`), so it isn't reintroduced.
+const LANGUAGES: { id: Language; native: string }[] = [
+  { id: "en", native: "English" },
+  ...Object.entries(LOCALES).map(([id, descriptor]) => ({ id: id as Language, native: descriptor.native })),
 ];
 
 const maskCalendarUrl = (url: string): string => {

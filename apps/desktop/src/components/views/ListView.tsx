@@ -756,7 +756,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const showQuickAdd = isInbox;
     const priorityOptions: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
     const timeEstimateOptions: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
-    const formatEstimate = formatTimeEstimateLabel;
+    const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
     const filterSummary = [
         ...(normalizedSearchQuery ? [`${t('common.search')}: ${searchQuery.trim()}`] : []),
         ...selectedTokens,

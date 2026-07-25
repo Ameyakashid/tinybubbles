@@ -18,129 +18,72 @@ import { viOverrides } from './locales/vi';
 import { zhHans } from './locales/zh-Hans';
 import { zhHant } from './locales/zh-Hant';
 import { allowedEnglishMirrorKeysByLocale, hasTranslatableEnglishText, isAllowedEnglishMirrorKey } from './locale-quality';
+import { LOCALES, type Locale } from './i18n-locales';
 
-const fullParityLocales: Record<string, Record<string, string>> = {
-    zh: zhHans,
-    'zh-Hant': zhHant,
+// The one hand-kept binding left in this file: LOCALES (i18n-locales.ts) describes each
+// locale's mode/coverageFloor/nonLatin, but the concrete translation object still has to come
+// from a real static import — there's no way to turn a string key into an imported binding
+// without one. Every other roster this file used to hand-keep (fullParityLocales,
+// overrideLocales, nonLatinOverrideLocales, overrideLocaleCoverageFloors, shippedLocales) was
+// an independent list of the same locale set and is now derived from LOCALES below.
+const translationsByLocale: Record<Locale, Record<string, string>> = {
+    zh: zhHans, 'zh-Hant': zhHant,
+    ar: arOverrides, cs: csOverrides, de: deOverrides, es: esOverrides, fr: frOverrides,
+    hi: hiOverrides, it: itOverrides, ja: jaOverrides, ko: koOverrides, nl: nlOverrides,
+    pl: plOverrides, pt: ptOverrides, ru: ruOverrides, tr: trOverrides, vi: viOverrides,
 };
 
-const overrideLocales: Record<string, Record<string, string>> = {
-    ar: arOverrides,
-    cs: csOverrides,
-    de: deOverrides,
-    es: esOverrides,
-    fr: frOverrides,
-    hi: hiOverrides,
-    it: itOverrides,
-    ja: jaOverrides,
-    ko: koOverrides,
-    nl: nlOverrides,
-    pl: plOverrides,
-    pt: ptOverrides,
-    ru: ruOverrides,
-    tr: trOverrides,
-    vi: viOverrides,
-};
-
-const nonLatinOverrideLocales: Record<string, Record<string, string>> = {
-    ar: arOverrides,
-    hi: hiOverrides,
-    ja: jaOverrides,
-    ko: koOverrides,
-    ru: ruOverrides,
-};
-
-// Floors ratchet against silent regression: they are measured values, never aspirations.
-// The 2026-07-24 settings-i18n migration moved 162 desktop-only settings strings into
-// en.ts, growing englishKeyCount 1957 -> 2119. Every partial locale's numerator was
-// unchanged, so each percentage fell by ~3-5 points with no translation lost. cs and vi
-// were deliberately near-full-parity locales and were backfilled instead of relaxed, so
-// their 99 floors stand. The partial locales below are re-pinned to the new measurement.
-const overrideLocaleCoverageFloors: Record<string, number> = {
-    ar: 66,
-    cs: 99,
-    de: 67,
-    es: 62,
-    fr: 70,
-    hi: 65,
-    it: 72,
-    ja: 65,
-    ko: 64,
-    nl: 22,
-    pl: 66,
-    pt: 67,
-    ru: 65,
-    tr: 67,
-    vi: 99,
-};
-
-const shippedLocales: Record<string, Record<string, string>> = {
-    ...fullParityLocales,
-    ...overrideLocales,
-};
+const locales = Object.entries(LOCALES) as Array<[Locale, (typeof LOCALES)[Locale]]>;
+const fullParityLocales = locales.filter(([, descriptor]) => descriptor.mode === 'full');
+const overrideLocales = locales.filter(([, descriptor]) => descriptor.mode === 'overrides');
+const nonLatinOverrideLocales = overrideLocales.filter(([, descriptor]) => descriptor.nonLatin);
 
 describe('locale parity', () => {
-    it('keeps full-translation locales in key parity with English', () => {
+    it.each(fullParityLocales)('keeps %s in full key parity with English', (lang) => {
         const englishKeys = Object.keys(en);
-
-        for (const [language, translations] of Object.entries(fullParityLocales)) {
-            const missing = englishKeys.filter((key) => !translations[key]);
-            expect(missing, `Missing translations in ${language}`).toEqual([]);
-        }
+        const missing = englishKeys.filter((key) => !translationsByLocale[lang][key]);
+        expect(missing).toEqual([]);
     });
 
-    it('keeps partial override locale coverage from silently regressing', () => {
+    it.each(overrideLocales)('keeps %s override coverage from silently regressing', (lang, descriptor) => {
         const englishKeyCount = Object.keys(en).length;
-
-        for (const [language, translations] of Object.entries(overrideLocales)) {
-            const floor = overrideLocaleCoverageFloors[language];
-            const coverage = (Object.keys(translations).length / englishKeyCount) * 100;
-            expect(coverage, `${language} override coverage`).toBeGreaterThanOrEqual(floor);
-        }
+        const coverage = (Object.keys(translationsByLocale[lang]).length / englishKeyCount) * 100;
+        expect(coverage).toBeGreaterThanOrEqual(descriptor.coverageFloor);
     });
 
-    it('keeps promoted task action labels translated in every shipped locale', () => {
+    it.each(locales)('keeps promoted task action labels translated in %s', (lang) => {
         const taskActionKeys = [
             'task.createProjectFromTask',
             'task.duplicateFailed',
             'task.promoteToProjectFailed',
         ];
-
-        for (const [language, translations] of Object.entries(shippedLocales)) {
-            const missing = taskActionKeys.filter((key) => !translations[key]);
-            expect(missing, `Missing promoted task action translations in ${language}`).toEqual([]);
-        }
+        const missing = taskActionKeys.filter((key) => !translationsByLocale[lang][key]);
+        expect(missing).toEqual([]);
     });
 
-    it('keeps desktop search scope hint translated in every shipped locale', () => {
-        for (const [language, translations] of Object.entries(shippedLocales)) {
-            expect(translations['search.scopeHint'], `Missing desktop search scope hint in ${language}`).toBeTruthy();
-        }
+    it.each(locales)('keeps desktop search scope hint translated in %s', (lang) => {
+        expect(translationsByLocale[lang]['search.scopeHint']).toBeTruthy();
     });
 
-    it('keeps shipped locales limited to known English keys', () => {
+    it.each(locales)('keeps %s limited to known English keys', (lang) => {
         const englishKeys = new Set(Object.keys(en));
-
-        for (const [language, translations] of Object.entries(shippedLocales)) {
-            const unknown = Object.keys(translations).filter((key) => !englishKeys.has(key));
-            expect(unknown, `Unknown translation keys in ${language}`).toEqual([]);
-        }
+        const unknown = Object.keys(translationsByLocale[lang]).filter((key) => !englishKeys.has(key));
+        expect(unknown).toEqual([]);
     });
 
-    it('does not hide untranslated copy behind verbatim English placeholders', () => {
-        for (const [language, translations] of Object.entries(shippedLocales)) {
-            const placeholders = Object.keys(translations).filter((key) => (
-                translations[key] === en[key]
-                && hasTranslatableEnglishText(en[key])
-                && !isAllowedEnglishMirrorKey(language, key)
-            ));
-            expect(placeholders, `Verbatim English placeholders in ${language}`).toEqual([]);
-        }
+    it.each(locales)('does not hide untranslated copy behind verbatim English placeholders in %s', (lang) => {
+        const translations = translationsByLocale[lang];
+        const placeholders = Object.keys(translations).filter((key) => (
+            translations[key] === en[key]
+            && hasTranslatableEnglishText(en[key])
+            && !isAllowedEnglishMirrorKey(lang, key)
+        ));
+        expect(placeholders).toEqual([]);
     });
 
     it('keeps mirrored-English allow-lists limited to reviewed matching keys', () => {
         for (const [language, allowedKeys] of Object.entries(allowedEnglishMirrorKeysByLocale)) {
-            const translations = shippedLocales[language];
+            const translations = translationsByLocale[language as Locale];
             expect(translations, `Known locale for mirrored-English allow-list ${language}`).toBeDefined();
 
             const staleKeys = allowedKeys.filter((key) => (
@@ -160,12 +103,9 @@ describe('locale parity', () => {
         expect(generatedKeys).toEqual([]);
     });
 
-    it('does not ship mixed English fragments in non-Latin partial locales', () => {
-        for (const [language, translations] of Object.entries(nonLatinOverrideLocales)) {
-            const mixedEnglish = Object.keys(translations).filter((key) => (
-                hasTranslatableEnglishText(translations[key])
-            ));
-            expect(mixedEnglish, `Mixed English fragments in ${language}`).toEqual([]);
-        }
+    it.each(nonLatinOverrideLocales)('does not ship mixed English fragments in %s', (lang) => {
+        const translations = translationsByLocale[lang];
+        const mixedEnglish = Object.keys(translations).filter((key) => hasTranslatableEnglishText(translations[key]));
+        expect(mixedEnglish).toEqual([]);
     });
 });

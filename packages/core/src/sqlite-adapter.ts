@@ -19,6 +19,8 @@ import { sleep } from './async-utils';
 import { TASK_SQLITE_COLUMNS, TASK_SQLITE_MIGRATION_COLUMNS } from './task-sync-schema';
 import { PROJECT_SQLITE_COLUMNS, PROJECT_SQLITE_MIGRATION_COLUMNS } from './project-sync-schema';
 import { SECTION_SQLITE_COLUMNS, SECTION_SQLITE_MIGRATION_COLUMNS } from './section-sync-schema';
+import { AREA_SQLITE_COLUMNS, AREA_SQLITE_MIGRATION_COLUMNS } from './area-sync-schema';
+import { PERSON_SQLITE_COLUMNS, PERSON_SQLITE_MIGRATION_COLUMNS } from './person-sync-schema';
 
 export interface SqliteClient {
     run(sql: string, params?: unknown[]): Promise<void>;
@@ -211,6 +213,9 @@ export { TASK_SQLITE_COLUMNS, TASK_SQLITE_MIGRATION_COLUMNS };
 // Same generation story as tasks (see the comment above), for projects and sections.
 export { PROJECT_SQLITE_COLUMNS, PROJECT_SQLITE_MIGRATION_COLUMNS };
 export { SECTION_SQLITE_COLUMNS, SECTION_SQLITE_MIGRATION_COLUMNS };
+// Same generation story, for areas and people (area-sync-schema.ts / person-sync-schema.ts).
+export { AREA_SQLITE_COLUMNS, AREA_SQLITE_MIGRATION_COLUMNS };
+export { PERSON_SQLITE_COLUMNS, PERSON_SQLITE_MIGRATION_COLUMNS };
 
 const TASK_UPSERT_COLUMNS = TASK_SQLITE_COLUMNS;
 
@@ -234,6 +239,20 @@ export const SECTION_UPSERT_UPDATE_CLAUSE = `${SECTION_SQLITE_COLUMNS
     .map((column) => `${column}=excluded.${column}`)
     .join(',\n')}
 WHERE sections.rev IS NULL OR sections.rev <= excluded.rev`;
+
+const AREA_UPSERT_COLUMNS = AREA_SQLITE_COLUMNS;
+export const AREA_UPSERT_UPDATE_CLAUSE = `${AREA_SQLITE_COLUMNS
+    .filter((column) => column !== 'id')
+    .map((column) => `${column}=excluded.${column}`)
+    .join(',\n')}
+WHERE areas.rev IS NULL OR areas.rev <= excluded.rev`;
+
+const PERSON_UPSERT_COLUMNS = PERSON_SQLITE_COLUMNS;
+export const PERSON_UPSERT_UPDATE_CLAUSE = `${PERSON_SQLITE_COLUMNS
+    .filter((column) => column !== 'id')
+    .map((column) => `${column}=excluded.${column}`)
+    .join(',\n')}
+WHERE people.rev IS NULL OR people.rev <= excluded.rev`;
 
 export const taskToSqliteRow = (task: Task): unknown[] => {
     const taskOrder = Number.isFinite(task.order) ? task.order : task.orderNum;
@@ -786,12 +805,6 @@ export class SqliteAdapter {
         for (const sql of taskIndexes) {
             await this.client.run(sql);
         }
-        await this.client.run(
-            'CREATE INDEX IF NOT EXISTS idx_sections_project_deletedAt ON sections(projectId, deletedAt)'
-        );
-        await this.client.run(
-            'CREATE INDEX IF NOT EXISTS idx_sections_updatedAt_rev ON sections(updatedAt, rev)'
-        );
     }
 
     private async ensureProjectColumns() {
@@ -827,28 +840,25 @@ export class SqliteAdapter {
             }
         }
         await this.client.run(
-            'CREATE INDEX IF NOT EXISTS idx_areas_updatedAt_rev ON areas(updatedAt, rev)'
+            'CREATE INDEX IF NOT EXISTS idx_sections_project_deletedAt ON sections(projectId, deletedAt)'
+        );
+        await this.client.run(
+            'CREATE INDEX IF NOT EXISTS idx_sections_updatedAt_rev ON sections(updatedAt, rev)'
         );
     }
 
     private async ensureAreaColumns() {
         const columns = await this.client.all<{ name?: string }>('PRAGMA table_info(areas)');
         const names = new Set(columns.map((col) => col.name));
-        const definitions: Array<{ name: string; sql: string }> = [
-            { name: 'color', sql: 'ALTER TABLE areas ADD COLUMN color TEXT' },
-            { name: 'icon', sql: 'ALTER TABLE areas ADD COLUMN icon TEXT' },
-            { name: 'orderNum', sql: 'ALTER TABLE areas ADD COLUMN orderNum INTEGER' },
-            { name: 'rev', sql: 'ALTER TABLE areas ADD COLUMN rev INTEGER' },
-            { name: 'revBy', sql: 'ALTER TABLE areas ADD COLUMN revBy TEXT' },
-            { name: 'createdAt', sql: 'ALTER TABLE areas ADD COLUMN createdAt TEXT' },
-            { name: 'updatedAt', sql: 'ALTER TABLE areas ADD COLUMN updatedAt TEXT' },
-            { name: 'deletedAt', sql: 'ALTER TABLE areas ADD COLUMN deletedAt TEXT' },
-        ];
+        const definitions = AREA_SQLITE_MIGRATION_COLUMNS;
         for (const definition of definitions) {
             if (!names.has(definition.name)) {
                 await this.client.run(definition.sql);
             }
         }
+        await this.client.run(
+            'CREATE INDEX IF NOT EXISTS idx_areas_updatedAt_rev ON areas(updatedAt, rev)'
+        );
     }
 
     private async ensurePeopleTable() {
@@ -867,15 +877,7 @@ export class SqliteAdapter {
         `);
         const columns = await this.client.all<{ name?: string }>('PRAGMA table_info(people)');
         const names = new Set(columns.map((col) => col.name));
-        const definitions: Array<{ name: string; sql: string }> = [
-            { name: 'note', sql: 'ALTER TABLE people ADD COLUMN note TEXT' },
-            { name: 'referenceLink', sql: 'ALTER TABLE people ADD COLUMN referenceLink TEXT' },
-            { name: 'rev', sql: 'ALTER TABLE people ADD COLUMN rev INTEGER' },
-            { name: 'revBy', sql: 'ALTER TABLE people ADD COLUMN revBy TEXT' },
-            { name: 'createdAt', sql: 'ALTER TABLE people ADD COLUMN createdAt TEXT' },
-            { name: 'updatedAt', sql: 'ALTER TABLE people ADD COLUMN updatedAt TEXT' },
-            { name: 'deletedAt', sql: 'ALTER TABLE people ADD COLUMN deletedAt TEXT' },
-        ];
+        const definitions = PERSON_SQLITE_MIGRATION_COLUMNS;
         for (const definition of definitions) {
             if (!names.has(definition.name)) {
                 await this.client.run(definition.sql);
@@ -1501,18 +1503,7 @@ export class SqliteAdapter {
             saveStep = 'areas';
             await upsertBatch(
                 'areas',
-                [
-                    'id',
-                    'name',
-                    'color',
-                    'icon',
-                    'orderNum',
-                    'rev',
-                    'revBy',
-                    'createdAt',
-                    'updatedAt',
-                    'deletedAt',
-                ],
+                [...AREA_UPSERT_COLUMNS],
                 data.areas.map((area) => {
                     const createdAt = area.createdAt ?? area.updatedAt ?? nowIso;
                     const updatedAt = area.updatedAt ?? area.createdAt ?? nowIso;
@@ -1529,19 +1520,13 @@ export class SqliteAdapter {
                         area.deletedAt ?? null,
                     ];
                 }),
-                `name=excluded.name,
-                 color=excluded.color,
-                 icon=excluded.icon,
-                 orderNum=excluded.orderNum,
-                 rev=excluded.rev,
-                 revBy=excluded.revBy,
-                 createdAt=excluded.createdAt,
-                 updatedAt=excluded.updatedAt,
-                 deletedAt=excluded.deletedAt
-                 WHERE areas.rev IS NULL OR areas.rev <= excluded.rev`,
+                AREA_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,
-                { rev: 5, updatedAt: 8 },
+                {
+                    rev: AREA_UPSERT_COLUMNS.indexOf('rev'),
+                    updatedAt: AREA_UPSERT_COLUMNS.indexOf('updatedAt'),
+                },
             );
 
             saveStep = 'projects';
@@ -1585,17 +1570,7 @@ export class SqliteAdapter {
             saveStep = 'people';
             await upsertBatch(
                 'people',
-                [
-                    'id',
-                    'name',
-                    'note',
-                    'referenceLink',
-                    'rev',
-                    'revBy',
-                    'createdAt',
-                    'updatedAt',
-                    'deletedAt',
-                ],
+                [...PERSON_UPSERT_COLUMNS],
                 people.map((person) => {
                     const createdAt = person.createdAt ?? person.updatedAt ?? nowIso;
                     const updatedAt = person.updatedAt ?? person.createdAt ?? nowIso;
@@ -1611,18 +1586,13 @@ export class SqliteAdapter {
                         person.deletedAt ?? null,
                     ];
                 }),
-                `name=excluded.name,
-                 note=excluded.note,
-                 referenceLink=excluded.referenceLink,
-                 rev=excluded.rev,
-                 revBy=excluded.revBy,
-                 createdAt=excluded.createdAt,
-                 updatedAt=excluded.updatedAt,
-                 deletedAt=excluded.deletedAt
-                 WHERE people.rev IS NULL OR people.rev <= excluded.rev`,
+                PERSON_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,
-                { rev: 4, updatedAt: 7 },
+                {
+                    rev: PERSON_UPSERT_COLUMNS.indexOf('rev'),
+                    updatedAt: PERSON_UPSERT_COLUMNS.indexOf('updatedAt'),
+                },
             );
 
             saveStep = 'sections';

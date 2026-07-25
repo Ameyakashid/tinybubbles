@@ -25,6 +25,7 @@ import { logSettingsError } from '@/lib/settings-utils';
 import { useToast } from '@/contexts/toast-context';
 import {
     FOCUS_TASK_LIMIT_OPTIONS,
+    formatTimeEstimateLabel,
     normalizeClockTimeInput,
     normalizeFocusTaskLimit,
     getDefaultTaskAreaMode,
@@ -281,18 +282,6 @@ export function GtdSettingsScreen({
                 },
             },
         }).catch(logSettingsError);
-    };
-
-    const formatTimeEstimateLabel = (value: TimeEstimate) => {
-        if (value === '5min') return '5m';
-        if (value === '10min') return '10m';
-        if (value === '15min') return '15m';
-        if (value === '30min') return '30m';
-        if (value === '1hr') return '1h';
-        if (value === '2hr') return '2h';
-        if (value === '3hr') return '3h';
-        if (value === '4hr') return '4h';
-        return '4h+';
     };
 
     const featurePomodoroLabelRaw = t('settings.featurePomodoro');
@@ -1030,7 +1019,7 @@ export function GtdSettingsScreen({
                                         style={[styles.settingLabel, { color: tc.text }]}
                                         numberOfLines={2}
                                     >
-                                        {formatTimeEstimateLabel(value)}
+                                        {formatTimeEstimateLabel(value, { t })}
                                     </CompactText>
                                     {selected && <Text style={{ color: '#3B82F6', fontSize: 20 }}>✓</Text>}
                                 </TouchableOpacity>

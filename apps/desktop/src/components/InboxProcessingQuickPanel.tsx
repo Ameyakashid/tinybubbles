@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { ArrowRight, BookOpen, CheckCircle, ClipboardList, Clock, Trash2, User, X } from 'lucide-react';
-import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
+import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
 import {
@@ -99,17 +99,6 @@ export type {
 
 const PRIORITY_OPTIONS: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
 const ENERGY_LEVEL_OPTIONS: Array<NonNullable<Task['energyLevel']>> = ['low', 'medium', 'high'];
-const formatTimeEstimateLabel = (value: TimeEstimate): string => {
-    if (value === '5min') return '5m';
-    if (value === '10min') return '10m';
-    if (value === '15min') return '15m';
-    if (value === '30min') return '30m';
-    if (value === '1hr') return '1h';
-    if (value === '2hr') return '2h';
-    if (value === '3hr') return '3h';
-    if (value === '4hr') return '4h';
-    return '4h+';
-};
 
 const shouldCommitQuickProcessingFromEnter = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
@@ -809,7 +798,7 @@ export function InboxProcessingQuickPanel({
                                             <option value="">{t('common.none')}</option>
                                             {timeEstimateOptions.map((estimate) => (
                                                 <option key={estimate} value={estimate}>
-                                                    {formatTimeEstimateLabel(estimate)}
+                                                    {formatTimeEstimateLabel(estimate, { t })}
                                                 </option>
                                             ))}
                                         </select>

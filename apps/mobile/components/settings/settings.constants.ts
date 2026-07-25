@@ -1,4 +1,5 @@
 import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@mindwtr/core/whisper-models';
+import { LOCALES } from '@mindwtr/core';
 
 import type { Language } from '@/contexts/language-context';
 
@@ -129,25 +130,11 @@ export function settingsMenuMatchesQuery(searchText: string, query: string): boo
     return searchText.includes(trimmed);
 }
 
+// 'en' plus every locale in the LOCALES table (@mindwtr/core, from i18n/i18n-locales.ts) —
+// see that module's header comment for why English isn't a table entry.
 export const LANGUAGES: { id: Language; native: string }[] = [
     { id: 'en', native: 'English' },
-    { id: 'vi', native: 'Tiếng Việt' },
-    { id: 'zh', native: '中文（简体）' },
-    { id: 'zh-Hant', native: '中文（繁體）' },
-    { id: 'es', native: 'Español' },
-    { id: 'hi', native: 'हिन्दी' },
-    { id: 'ar', native: 'العربية' },
-    { id: 'de', native: 'Deutsch' },
-    { id: 'ru', native: 'Русский' },
-    { id: 'ja', native: '日本語' },
-    { id: 'fr', native: 'Français' },
-    { id: 'pt', native: 'Português' },
-    { id: 'pl', native: 'Polski' },
-    { id: 'cs', native: 'Čeština' },
-    { id: 'ko', native: '한국어' },
-    { id: 'it', native: 'Italiano' },
-    { id: 'tr', native: 'Türkçe' },
-    { id: 'nl', native: 'Nederlands' },
+    ...Object.entries(LOCALES).map(([id, descriptor]) => ({ id: id as Language, native: descriptor.native })),
 ];
 
 export { WHISPER_MODEL_BASE_URL };

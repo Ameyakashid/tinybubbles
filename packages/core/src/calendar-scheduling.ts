@@ -1,9 +1,26 @@
 import { hasTimeComponent, safeFormatDate, safeParseDate } from './date';
+import { formatI18nTemplate } from './i18n';
+import { en as ENGLISH_TRANSLATIONS } from './i18n/locales/en';
 import type { ExternalCalendarEvent } from './ics';
 import { parseQuickAdd } from './quick-add';
 import { isSelectableProjectForTaskAssignment } from './project-utils';
 import { getTaskDateCoherenceIssues, type TaskDateCoherenceIssue } from './task-date-coherence';
 import type { Area, CustomTimeEstimate, Project, Task, TimeEstimate, TimeEstimatePreset } from './types';
+
+/** Shared translate-function shape for the localization seam below — same shape as
+ *  recurrence.ts's `formatRecurrenceLabel`. */
+type TranslateFn = (key: string) => string;
+
+type CalendarLabelOptions = {
+    /** Defaults to English (this module's existing hardcoded strings) when omitted, so
+     *  every call site that predates this seam keeps its exact current output. */
+    t?: TranslateFn;
+    /** BCP-47 tag (e.g. 'en-US', 'vi-VN'); only affects the decimal separator in a
+     *  fractional-hours duration label. Defaults to the runtime's locale. */
+    locale?: string;
+};
+
+const defaultTranslate: TranslateFn = (key) => ENGLISH_TRANSLATIONS[key] ?? key;
 
 export const DEFAULT_CALENDAR_DAY_START_HOUR = 8;
 export const DEFAULT_CALENDAR_DAY_END_HOUR = 23;
@@ -137,24 +154,27 @@ export function timeEstimateToFilterBucket(estimate: TimeEstimate | undefined): 
     return minutesToTimeEstimateBucket(timeEstimateToMinutes(estimate));
 }
 
-export function formatTimeEstimateLabel(estimate: TimeEstimate): string {
+export function formatTimeEstimateLabel(estimate: TimeEstimate, options?: CalendarLabelOptions): string {
+    const t = options?.t ?? defaultTranslate;
     switch (estimate) {
-        case '5min': return '5m';
-        case '10min': return '10m';
-        case '15min': return '15m';
-        case '30min': return '30m';
-        case '1hr': return '1h';
-        case '2hr': return '2h';
-        case '3hr': return '3h';
-        case '4hr': return '4h';
-        case '4hr+': return '4h+';
+        case '5min': return formatI18nTemplate(t('units.minutesShort'), { minutes: 5 });
+        case '10min': return formatI18nTemplate(t('units.minutesShort'), { minutes: 10 });
+        case '15min': return formatI18nTemplate(t('units.minutesShort'), { minutes: 15 });
+        case '30min': return formatI18nTemplate(t('units.minutesShort'), { minutes: 30 });
+        case '1hr': return formatI18nTemplate(t('units.hoursShort'), { hours: 1 });
+        case '2hr': return formatI18nTemplate(t('units.hoursShort'), { hours: 2 });
+        case '3hr': return formatI18nTemplate(t('units.hoursShort'), { hours: 3 });
+        case '4hr': return formatI18nTemplate(t('units.hoursShort'), { hours: 4 });
+        case '4hr+': return formatI18nTemplate(t('units.hoursPlusShort'), { hours: 4 });
         default: {
+            // custom:NN — every duplicate re-roll of this function (#Part C) collapsed this
+            // branch to the same '4hr+' case as above, losing the exact hours/minutes split.
             const minutes = timeEstimateToMinutes(estimate);
             const hours = Math.floor(minutes / 60);
             const remainder = minutes % 60;
-            if (hours <= 0) return `${minutes}m`;
-            if (remainder === 0) return `${hours}h`;
-            return `${hours}h ${remainder}m`;
+            if (hours <= 0) return formatI18nTemplate(t('units.minutesShort'), { minutes });
+            if (remainder === 0) return formatI18nTemplate(t('units.hoursShort'), { hours });
+            return formatI18nTemplate(t('units.hoursMinutesShort'), { hours, minutes: remainder });
         }
     }
 }
@@ -297,7 +317,15 @@ export function formatCalendarTimeInputValue(date: Date): string {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-export function parseCalendarTimeOnDate(date: Date, value: string): Date | null {
+export function parseCalendarTimeOnDate(
+    date: Date,
+    value: string,
+    // Accepted for API symmetry with formatTimeEstimateLabel/formatCalendarDurationLabel
+    // above (a real caller needs this once a UI feeds it non-English am/pm text); not yet
+    // consumed — every current caller feeds ASCII HH:MM / English am-pm text regardless of
+    // locale, so there's nothing to route through timeFormat/locale here today.
+    _options?: { timeFormat?: string; locale?: string },
+): Date | null {
     const trimmed = value.trim();
     const twelveHourMatch = /^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?$/i.exec(trimmed);
     if (twelveHourMatch) {
@@ -325,10 +353,16 @@ export function parseCalendarTimeOnDate(date: Date, value: string): Date | null 
     return next;
 }
 
-export function formatCalendarDurationLabel(minutes: number): string {
-    if (minutes < 60) return `${minutes}m`;
+export function formatCalendarDurationLabel(minutes: number, options?: CalendarLabelOptions): string {
+    const t = options?.t ?? defaultTranslate;
+    if (minutes < 60) return formatI18nTemplate(t('units.minutesShort'), { minutes });
     const hours = minutes / 60;
-    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+    const hoursValue = Number.isInteger(hours)
+        ? String(hours)
+        // toFixed(1) always uses '.'; Intl.NumberFormat gives the locale's own decimal
+        // separator (e.g. ',' for de/fr/pl/pt/tr/vi/cs/it) for the same one-decimal rounding.
+        : new Intl.NumberFormat(options?.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(hours);
+    return formatI18nTemplate(t('units.hoursShort'), { hours: hoursValue });
 }
 
 const ceilToMinutes = (date: Date, stepMinutes: number): Date => {

@@ -307,9 +307,12 @@ export interface PendingRemoteAttachmentDelete {
 }
 
 import type { MergeStats, SyncHistoryEntry } from './sync';
+import type { Language } from './i18n/i18n-types';
 
 export type AppTheme = 'light' | 'dark' | 'system' | 'eink' | 'nord' | 'sepia' | 'material3-light' | 'material3-dark' | 'oled';
-export type AppLanguage = 'en' | 'vi' | 'zh' | 'zh-Hant' | 'es' | 'hi' | 'ar' | 'de' | 'ru' | 'ja' | 'fr' | 'pt' | 'pl' | 'ko' | 'cs' | 'it' | 'tr' | 'nl' | 'system';
+// Every supported UI language (see LOCALES in i18n/i18n-locales.ts) plus 'system', which
+// tracks the device locale instead of pinning one.
+export type AppLanguage = Language | 'system';
 export type MobileQuickAccessView = 'review' | 'projects' | 'calendar' | 'contexts';
 export type DefaultTaskAreaMode = 'none' | 'fixed' | 'active';
 

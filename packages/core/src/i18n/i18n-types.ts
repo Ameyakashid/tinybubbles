@@ -1,1 +1,5 @@
-export type Language = 'en' | 'vi' | 'zh' | 'zh-Hant' | 'es' | 'hi' | 'ar' | 'de' | 'ru' | 'ja' | 'fr' | 'pt' | 'pl' | 'ko' | 'cs' | 'it' | 'tr' | 'nl';
+import type { Locale } from './i18n-locales';
+
+// 'en' plus every locale in the LOCALES table (i18n-locales.ts) — see that file's header
+// comment for why English is bundled directly rather than being a table entry.
+export type Language = 'en' | Locale;
