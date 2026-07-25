@@ -697,6 +697,37 @@ describe('mobile storage adapter', () => {
     }
   }, 10_000);
 
+  // Headless RN instances (background sync, context automation) are destroyed the
+  // moment their task promise settles. A throttled backup or widget render still
+  // pending at that point resolves on a dead Hermes runtime and takes the process
+  // down with a native SIGSEGV, so quiescing must land the work immediately rather
+  // than leave it behind a multi-minute timer.
+  it('quiesces throttled backup and widget work without waiting out the window', async () => {
+    try {
+      const { saveTask } = await setupForegroundWidgetStorage();
+      const { quiesceMobileStorage } = await import('./storage-adapter');
+
+      const first = makeWidgetTask('widget-first');
+      await saveTask(first, makeWidgetSnapshot(first));
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(updateMobileWidgetFromDataMock).toHaveBeenCalledTimes(1);
+
+      const second = makeWidgetTask('widget-second');
+      await saveTask(second, makeWidgetSnapshot(second));
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(updateMobileWidgetFromDataMock).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      await quiesceMobileStorage();
+
+      expect(updateMobileWidgetFromDataMock).toHaveBeenCalledTimes(2);
+      expect(updateMobileWidgetFromDataMock).toHaveBeenLastCalledWith(makeWidgetSnapshot(second));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 10_000);
+
   it('flushes the pending JSON backup when the app moves to background (#766)', async () => {
     const currentTask: Task = {
       id: 'task-background',

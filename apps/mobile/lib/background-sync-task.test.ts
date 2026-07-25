@@ -38,10 +38,15 @@ const syncServiceMock = vi.hoisted(() => ({
   performMobileSync: vi.fn(),
 }));
 
+const storageAdapterMock = vi.hoisted(() => ({
+  quiesceMobileStorage: vi.fn(),
+}));
+
 vi.mock('expo-background-task', () => backgroundTaskMock);
 vi.mock('expo-task-manager', () => taskManagerMock);
 vi.mock('@mindwtr/core', () => coreMock);
 vi.mock('./sync-service', () => syncServiceMock);
+vi.mock('./storage-adapter', () => storageAdapterMock);
 vi.mock('./sync-service-utils', () => ({
   isRemoteSyncBackend: (backend: string) => backend === 'webdav' || backend === 'cloud',
 }));
@@ -66,7 +71,16 @@ describe('mobile background sync task', () => {
     coreMock.flushPendingSave.mockResolvedValue(undefined);
     syncServiceMock.getMobileSyncConfigurationStatus.mockResolvedValue({ backend: 'off', configured: false });
     syncServiceMock.performMobileSync.mockResolvedValue({ success: true });
+    storageAdapterMock.quiesceMobileStorage.mockResolvedValue(undefined);
   });
+
+  const createDeferred = <T>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((resolveFn) => {
+      resolve = resolveFn;
+    });
+    return { promise, resolve };
+  };
 
   it('registers the task for configured remote sync backends', async () => {
     syncServiceMock.getMobileSyncConfigurationStatus.mockResolvedValue({ backend: 'webdav', configured: true });
@@ -153,5 +167,53 @@ describe('mobile background sync task', () => {
     const result = await taskManagerMock.state.executor?.();
 
     expect(result).toBe(backgroundTaskMock.BackgroundTaskResult.Failed);
+  });
+
+  // The task body runs in a headless RN instance that is destroyed as soon as this
+  // promise settles. Deferred op-sqlite work left in flight resolves into a freed
+  // Hermes heap and kills the process, so quiescing must happen on every exit path.
+  it('quiesces deferred storage work on both the success and failure paths', async () => {
+    syncServiceMock.getMobileSyncConfigurationStatus.mockResolvedValue({ backend: 'webdav', configured: true });
+
+    await loadModule();
+    await taskManagerMock.state.executor?.();
+    expect(storageAdapterMock.quiesceMobileStorage).toHaveBeenCalledTimes(1);
+
+    syncServiceMock.performMobileSync.mockRejectedValue(new Error('network died'));
+    const result = await taskManagerMock.state.executor?.();
+
+    expect(result).toBe(backgroundTaskMock.BackgroundTaskResult.Failed);
+    expect(storageAdapterMock.quiesceMobileStorage).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces overlapping invocations into one run without latching', async () => {
+    syncServiceMock.getMobileSyncConfigurationStatus.mockResolvedValue({ backend: 'webdav', configured: true });
+    const syncStarted = createDeferred<void>();
+    const syncFinished = createDeferred<{ success: boolean }>();
+    syncServiceMock.performMobileSync.mockImplementationOnce(() => {
+      syncStarted.resolve();
+      return syncFinished.promise;
+    });
+
+    await loadModule();
+    const executor = taskManagerMock.state.executor;
+    if (!executor) throw new Error('Expected the background sync task to be defined');
+
+    // expo-background-task delivered three queued events in the same millisecond.
+    const overlapping = Promise.all([executor(), executor(), executor()]);
+    await syncStarted.promise;
+    expect(syncServiceMock.performMobileSync).toHaveBeenCalledTimes(1);
+
+    syncFinished.resolve({ success: true });
+    expect(await overlapping).toEqual([
+      backgroundTaskMock.BackgroundTaskResult.Success,
+      backgroundTaskMock.BackgroundTaskResult.Success,
+      backgroundTaskMock.BackgroundTaskResult.Success,
+    ]);
+
+    // The guard coalesces concurrent events; it must not block the next window.
+    syncServiceMock.performMobileSync.mockResolvedValue({ success: true });
+    await executor();
+    expect(syncServiceMock.performMobileSync).toHaveBeenCalledTimes(2);
   });
 });

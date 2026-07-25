@@ -887,9 +887,10 @@ const createStorage = (): StorageAdapter => {
                 if (jsonValue != null) {
                     try {
                         const data = parseStoredAppDataJson(jsonValue);
-                        updateMobileWidgetFromData(data).catch((error) => {
-                            logStorageWarn('[Widgets] Failed to update mobile widget from backup', error);
-                        });
+                        // Scheduled rather than detached so quiesceMobileStorage can
+                        // land it: a bare .catch() chain keeps running after a headless
+                        // task returns, which is exactly when the runtime goes away.
+                        scheduleWidgetRefresh(data, 'mobile.storage.get_data.json_fallback');
                         return data;
                     } catch (parseError) {
                         logStorageError('Failed to parse stored data - may be corrupted', parseError);
@@ -1157,6 +1158,25 @@ const createStorage = (): StorageAdapter => {
 };
 
 export const mobileStorage = createStorage();
+
+// Headless RN instances (background sync, context automation) are destroyed as soon
+// as their task promise settles, and op-sqlite resolves async results back onto the
+// JS runtime. A write still in flight at that moment writes into a freed Hermes heap
+// and takes the process down with a native SIGSEGV — the crash was reproducible as
+// libhermes <- libop-sqlite <- Task::execute on an mqt_js thread.
+//
+// Every headless entry point must call this before it returns. Order matters: a
+// SQLite write re-arms the JSON/widget timers when it completes, so the write queue
+// has to drain first or the flushes below leave freshly-armed work behind.
+export const quiesceMobileStorage = async (): Promise<void> => {
+    try {
+        await waitForQueuedSqliteWrites();
+        await flushPendingStartupJsonBackup();
+        await flushPendingWidgetRefresh();
+    } catch (error) {
+        logStorageWarn('[Storage] Failed to quiesce storage before teardown', error);
+    }
+};
 
 export const __mobileStorageTestUtils = {
     createOpSqliteClientForTests: createOpSqliteClient,

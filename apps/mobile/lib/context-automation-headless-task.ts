@@ -57,7 +57,7 @@ export async function runContextAutomationHeadlessTask(data: ContextAutomationHe
       handleContextAutomationPayload,
       wasContextAutomationRecentlyHandled,
     },
-    { mobileStorage },
+    { mobileStorage, quiesceMobileStorage },
   ] = await Promise.all([
     import('@mindwtr/core'),
     import('./context-automation-handler'),
@@ -67,8 +67,14 @@ export async function runContextAutomationHeadlessTask(data: ContextAutomationHe
   if (wasContextAutomationRecentlyHandled(payload)) return;
 
   setStorageAdapter(mobileStorage);
-  await useTaskStore.getState().fetchData({ silent: true });
-  await handleContextAutomationPayload(payload, defaultContextAutomationText);
+  try {
+    await useTaskStore.getState().fetchData({ silent: true });
+    await handleContextAutomationPayload(payload, defaultContextAutomationText);
+  } finally {
+    // Headless task: the RN instance (and its Hermes runtime) is torn down as soon
+    // as this resolves, so nothing may still be resolving inside op-sqlite.
+    await quiesceMobileStorage();
+  }
 }
 
 AppRegistry.registerHeadlessTask(CONTEXT_AUTOMATION_HEADLESS_TASK_NAME, () => runContextAutomationHeadlessTask);

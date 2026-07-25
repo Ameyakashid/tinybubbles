@@ -4,6 +4,7 @@ import { flushPendingSave } from '@mindwtr/core';
 
 import type { SyncBackend } from './sync-service-utils';
 import { logInfo, logWarn } from './app-log';
+import { quiesceMobileStorage } from './storage-adapter';
 import { getMobileSyncConfigurationStatus, performMobileSync } from './sync-service';
 
 export const MOBILE_BACKGROUND_SYNC_TASK_NAME = 'mindwtr-background-sync';
@@ -56,30 +57,49 @@ const isTaskManagerAvailable = async (): Promise<boolean> => {
   }
 };
 
+const runMobileBackgroundSync = async (): Promise<BackgroundTask.BackgroundTaskResult> => {
+  try {
+    const { backend, configured } = await getMobileSyncConfigurationStatus();
+    if (!configured || !supportsMobileScheduledBackgroundSync(backend)) {
+      return BackgroundTask.BackgroundTaskResult.Success;
+    }
+
+    await flushPendingSave().catch((error) => {
+      logBackgroundSyncWarning('Mobile background sync save flush failed', error);
+    });
+    const result = await performMobileSync();
+    if (result.success) {
+      return BackgroundTask.BackgroundTaskResult.Success;
+    }
+
+    logBackgroundSyncWarning('Mobile background sync failed', result.error);
+    return BackgroundTask.BackgroundTaskResult.Failed;
+  } catch (error) {
+    logBackgroundSyncWarning('Mobile background sync crashed', error);
+    return BackgroundTask.BackgroundTaskResult.Failed;
+  } finally {
+    // This runs in a headless RN instance that is destroyed the moment the task
+    // promise settles; deferred storage work must land before that, not after.
+    await quiesceMobileStorage();
+  }
+};
+
+// expo-background-task delivers every queued event it has accumulated, so several
+// invocations can land at once (three arrived in the same millisecond on device) and
+// performMobileSync has no re-entrancy guard of its own. Overlapping runs raced each
+// other's snapshots and widened the teardown window above, so they share one run.
+let inFlightBackgroundSync: Promise<BackgroundTask.BackgroundTaskResult> | null = null;
+
 const defineMobileBackgroundSyncTask = () => {
   if (TaskManager.isTaskDefined(MOBILE_BACKGROUND_SYNC_TASK_NAME)) return;
 
   TaskManager.defineTask(MOBILE_BACKGROUND_SYNC_TASK_NAME, async () => {
-    try {
-      const { backend, configured } = await getMobileSyncConfigurationStatus();
-      if (!configured || !supportsMobileScheduledBackgroundSync(backend)) {
-        return BackgroundTask.BackgroundTaskResult.Success;
-      }
-
-      await flushPendingSave().catch((error) => {
-        logBackgroundSyncWarning('Mobile background sync save flush failed', error);
+    if (!inFlightBackgroundSync) {
+      inFlightBackgroundSync = runMobileBackgroundSync().finally(() => {
+        inFlightBackgroundSync = null;
       });
-      const result = await performMobileSync();
-      if (result.success) {
-        return BackgroundTask.BackgroundTaskResult.Success;
-      }
-
-      logBackgroundSyncWarning('Mobile background sync failed', result.error);
-      return BackgroundTask.BackgroundTaskResult.Failed;
-    } catch (error) {
-      logBackgroundSyncWarning('Mobile background sync crashed', error);
-      return BackgroundTask.BackgroundTaskResult.Failed;
     }
+    return inFlightBackgroundSync;
   });
 };
 
