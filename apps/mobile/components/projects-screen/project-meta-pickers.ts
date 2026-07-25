@@ -19,7 +19,6 @@ type OpenProjectAreaPickerArgs = {
     selectedProject: Project | null;
     setSelectedProject: (project: Project | null) => void;
     setShowAreaPicker: (visible: boolean) => void;
-    setShowStatusMenu: (visible: boolean) => void;
     showToast: (toast: ToastOptions) => void;
     sortAreasByColor: () => void;
     sortAreasByName: () => void;
@@ -33,7 +32,6 @@ type OpenProjectTagPickerArgs = {
     projectTagOptions: string[];
     selectedProject: Project | null;
     setSelectedProject: (project: Project | null) => void;
-    setShowStatusMenu: (visible: boolean) => void;
     setShowTagPicker: (visible: boolean) => void;
     setTagDraft: (value: string) => void;
     t: TranslateFn;
@@ -51,7 +49,6 @@ export const openProjectAreaPicker = ({
     selectedProject,
     setSelectedProject,
     setShowAreaPicker,
-    setShowStatusMenu,
     showToast,
     sortAreasByColor,
     sortAreasByName,
@@ -61,7 +58,6 @@ export const openProjectAreaPicker = ({
     updateProject,
 }: OpenProjectAreaPickerArgs) => {
     Keyboard.dismiss();
-    setShowStatusMenu(false);
 
     if (Platform.OS !== 'ios' || !selectedProject) {
         setShowAreaPicker(true);
@@ -316,7 +312,6 @@ export const openProjectTagPicker = ({
     projectTagOptions,
     selectedProject,
     setSelectedProject,
-    setShowStatusMenu,
     setShowTagPicker,
     setTagDraft,
     t,
@@ -324,7 +319,6 @@ export const openProjectTagPicker = ({
     updateProject,
 }: OpenProjectTagPickerArgs) => {
     Keyboard.dismiss();
-    setShowStatusMenu(false);
 
     if (Platform.OS !== 'ios' || !selectedProject) {
         setTagDraft('');

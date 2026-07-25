@@ -23,9 +23,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
     type Attachment,
     getAttachmentDisplayTitle,
-    type MarkdownSelection,
-    type MarkdownToolbarActionId,
-    type MarkdownToolbarResult,
     type Project,
     type ProjectSequenceTaskCue,
     type Section,
@@ -33,11 +30,14 @@ import {
     type TaskSortBy,
     getSequentialProjectTaskCues,
     safeParseDate,
+    shallow,
     tFallback,
+    useTaskStore,
 } from '@mindwtr/core';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import type { ThemeColors } from '@/hooks/use-theme-colors';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
+import { useLanguage } from '../../contexts/language-context';
 import { KeyboardAccessoryHost } from '../../components/keyboard-accessory-host';
 import { ToastViewport } from '../../contexts/toast-context';
 import { ExpandedMarkdownEditor } from '../../components/expanded-markdown-editor';
@@ -49,74 +49,32 @@ import { TaskListBulkBar, type TaskListBulkBarProps } from '../task-list/TaskLis
 import { TaskListSortModal } from '../task-list/TaskListSortModal';
 import { AttachmentProgressIndicator } from '../../components/AttachmentProgressIndicator';
 import { projectsScreenStyles as styles } from './projects-screen.styles';
+import { buildProjectStatusPalette, formatProjectDate } from './projects-screen.utils';
+import type { useProjectAttachments } from './use-project-attachments';
+import type { useProjectNotesEditor } from './use-project-notes-editor';
 import { getAndroidKeyboardFrame } from '../../lib/android-keyboard-frame';
 
 const PROJECT_TASK_SORT_OPTIONS: TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
 
+type ProjectDetailPresentationStyle = 'pageSheet' | 'fullScreen';
+
 type ProjectDetailModalProps = {
-    addProjectFileAttachment: () => void | Promise<void>;
-    addSection: (projectId: string, title: string) => Promise<Section | null> | Section | null;
-    closeProjectDetail: () => void;
-    commitSelectedProjectNotes: () => void;
-    formatProjectDate: (value: string | undefined, fallback: string) => string;
-    handleArchiveSelectedProject: () => void;
-    handleSelectedProjectNotesApplyAction: (actionId: MarkdownToolbarActionId, selection: MarkdownSelection) => MarkdownToolbarResult;
-    handleSelectedProjectNotesApplyAutocomplete: (next: { selection: MarkdownSelection; value: string }) => void;
-    handleSelectedProjectNotesChange: (text: string) => void;
-    handleSelectedProjectNotesSelectionChange: (selection: MarkdownSelection) => void;
-    handleSelectedProjectNotesUndo: () => MarkdownSelection | undefined;
-    handleSetProjectStatus: (status: Project['status']) => void;
-    isSelectedProjectNotesFocused: boolean;
-    modalHeaderStyle: Record<string, unknown>[];
-    notesExpanded: boolean;
-    notesFullscreen: boolean;
-    onCloseNotesFullscreen: () => void;
+    areaName: string;
+    attachments: ReturnType<typeof useProjectAttachments>;
+    notes: ReturnType<typeof useProjectNotesEditor>;
+    onClose: () => void;
     onDuplicateProject: (projectId: string) => void;
     onOpenAreaPicker: () => void;
+    onOpenQuickAdd: (project: Project) => void;
     onOpenTagPicker: () => void;
-    onRemoveProjectAttachment: (id: string) => void;
-    deleteSection: (id: string) => Promise<unknown> | unknown;
-    reorderSections: (projectId: string, orderedIds: string[]) => Promise<unknown> | unknown;
-    onSetLinkInput: (value: string) => void;
-    onSetLinkModalVisible: (visible: boolean) => void;
-    onSetNotesExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetSelectedProjectNotesFocused: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetSelectedProject: React.Dispatch<React.SetStateAction<Project | null>>;
-    onSetShowDueDatePicker: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetShowNotesFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetShowNotesPreview: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetShowProjectMeta: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetShowReviewPicker: React.Dispatch<React.SetStateAction<boolean>>;
-    onSetShowStatusMenu: React.Dispatch<React.SetStateAction<boolean>>;
-    onToggleShowCompletedTasks: () => void;
-    onProjectTaskSortByChange: (sortBy: TaskSortBy) => void;
-    onDownloadAttachment: (attachment: Attachment) => void | Promise<void>;
-    onOpenAttachment: (attachment: Attachment) => void | Promise<void>;
-    onOpenProjectQuickAdd: (project: Project) => void;
-    overlayVisible: boolean;
-    presentationStyle: 'pageSheet' | 'fullScreen';
-    projectTaskSortBy: TaskSortBy;
-    selectedProjectAreaName: string;
-    selectedProject: Project | null;
-    selectedProjectSections?: Section[];
-    selectedProjectTasks?: Task[];
-    selectedProjectNotes: string;
-    selectedProjectNotesDirection: 'ltr' | 'rtl';
-    selectedProjectNotesInputRef: React.RefObject<TextInput | null>;
-    selectedProjectNotesSelection: MarkdownSelection;
-    selectedProjectNotesTextDirectionStyle: Record<string, unknown>;
-    selectedProjectNotesUndoDepth: number;
-    showDueDatePicker: boolean;
-    showNotesPreview: boolean;
-    showProjectMeta: boolean;
-    showReviewPicker: boolean;
-    showStatusMenu: boolean;
-    showCompletedTasks: boolean;
-    statusPalette: Record<Project['status'], { bg: string; border: string; text: string }>;
-    t: (key: string) => string;
-    tc: ThemeColors;
-    updateProject: (id: string, updates: Partial<Project>) => void;
-    updateSection: (id: string, updates: Partial<Section>) => Promise<unknown> | unknown;
+    // The open project lives in the screen's state (it persists edits on close),
+    // so in-modal edits report back instead of owning it.
+    onProjectChange: (project: Project) => void;
+    onTaskSortByChange: (sortBy: TaskSortBy) => void;
+    project: Project | null;
+    sections?: Section[];
+    taskSortBy: TaskSortBy;
+    tasks?: Task[];
 };
 
 function ProjectSectionManagerModal({
@@ -531,71 +489,82 @@ function ProjectOptionRow({
 }
 
 export function ProjectDetailModal({
-    addProjectFileAttachment,
-    addSection,
-    closeProjectDetail,
-    commitSelectedProjectNotes,
-    formatProjectDate,
-    handleArchiveSelectedProject,
-    handleSelectedProjectNotesApplyAction,
-    handleSelectedProjectNotesApplyAutocomplete,
-    handleSelectedProjectNotesChange,
-    handleSelectedProjectNotesSelectionChange,
-    handleSelectedProjectNotesUndo,
-    handleSetProjectStatus,
-    isSelectedProjectNotesFocused,
-    modalHeaderStyle,
-    notesExpanded,
-    notesFullscreen,
-    onCloseNotesFullscreen,
+    areaName,
+    attachments,
+    notes,
+    onClose,
     onDuplicateProject,
-    onDownloadAttachment,
     onOpenAreaPicker,
-    onOpenAttachment,
-    onOpenProjectQuickAdd,
+    onOpenQuickAdd,
     onOpenTagPicker,
-    onRemoveProjectAttachment,
-    deleteSection,
-    reorderSections,
-    onSetLinkInput,
-    onSetLinkModalVisible,
-    onSetNotesExpanded,
-    onSetSelectedProject,
-    onSetSelectedProjectNotesFocused,
-    onSetShowDueDatePicker,
-    onSetShowNotesFullscreen,
-    onSetShowNotesPreview,
-    onSetShowProjectMeta,
-    onSetShowReviewPicker,
-    onSetShowStatusMenu,
-    onToggleShowCompletedTasks,
-    onProjectTaskSortByChange,
-    overlayVisible,
-    presentationStyle,
-    projectTaskSortBy,
-    selectedProjectAreaName,
-    selectedProject,
-    selectedProjectSections = [],
-    selectedProjectTasks,
-    selectedProjectNotes,
-    selectedProjectNotesDirection,
-    selectedProjectNotesInputRef,
-    selectedProjectNotesSelection,
-    selectedProjectNotesTextDirectionStyle,
-    selectedProjectNotesUndoDepth,
-    showDueDatePicker,
-    showNotesPreview,
-    showProjectMeta,
-    showReviewPicker,
-    showStatusMenu,
-    showCompletedTasks,
-    statusPalette,
-    t,
-    tc,
-    updateProject,
-    updateSection,
+    onProjectChange,
+    onTaskSortByChange,
+    project: selectedProject,
+    sections: selectedProjectSections = [],
+    taskSortBy: projectTaskSortBy,
+    tasks: selectedProjectTasks,
 }: ProjectDetailModalProps) {
+    const { t } = useLanguage();
+    const tc = useThemeColors();
+    const insets = useSafeAreaInsets();
     const filledButton = useFilledButtonColors();
+    const {
+        addSection,
+        deleteSection,
+        reorderSections,
+        updateProject,
+        updateSection,
+    } = useTaskStore((state) => ({
+        addSection: state.addSection,
+        deleteSection: state.deleteSection,
+        reorderSections: state.reorderSections,
+        updateProject: state.updateProject,
+        updateSection: state.updateSection,
+    }), shallow);
+    const {
+        commitSelectedProjectNotes,
+        handleSelectedProjectNotesApplyAction,
+        handleSelectedProjectNotesApplyAutocomplete,
+        handleSelectedProjectNotesChange,
+        handleSelectedProjectNotesSelectionChange,
+        handleSelectedProjectNotesUndo,
+        isSelectedProjectNotesFocused,
+        notesExpanded,
+        notesFullscreen,
+        selectedProjectNotes,
+        selectedProjectNotesDirection,
+        selectedProjectNotesInputRef,
+        selectedProjectNotesSelection,
+        selectedProjectNotesTextDirectionStyle,
+        selectedProjectNotesUndoDepth,
+        setIsSelectedProjectNotesFocused,
+        setNotesExpanded,
+        setNotesFullscreen,
+        setShowNotesPreview,
+        showNotesPreview,
+    } = notes;
+    const {
+        addProjectFileAttachment,
+        downloadAttachment,
+        openAttachment,
+        removeProjectAttachment,
+        setLinkInput,
+        setLinkModalVisible,
+    } = attachments;
+    const overlayVisible = selectedProject !== null;
+    const presentationStyle: ProjectDetailPresentationStyle = Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen';
+    const statusPalette = buildProjectStatusPalette(tc);
+    const modalHeaderStyle = [styles.modalHeader, {
+        borderBottomColor: tc.border,
+        backgroundColor: tc.cardBg,
+        paddingTop: Platform.OS === 'ios' ? Math.max(insets.top, 10) : 10,
+        paddingBottom: 8,
+    }];
+    const [showProjectMeta, setShowProjectMeta] = React.useState(false);
+    const [showStatusMenu, setShowStatusMenu] = React.useState(false);
+    const [showDueDatePicker, setShowDueDatePicker] = React.useState(false);
+    const [showReviewPicker, setShowReviewPicker] = React.useState(false);
+    const [showCompletedTasks, setShowCompletedTasks] = React.useState(false);
     const [projectTaskReorderMode, setProjectTaskReorderMode] = React.useState(false);
     const [projectTaskFilterOpenSignal, setProjectTaskFilterOpenSignal] = React.useState(0);
     const [projectTaskFilterActiveCount, setProjectTaskFilterActiveCount] = React.useState(0);
@@ -672,8 +641,8 @@ export function ProjectDetailModal({
     );
     const openProjectQuickAdd = React.useCallback(() => {
         if (!selectedProject || !taskListOptions.allowAdd) return;
-        onOpenProjectQuickAdd(selectedProject);
-    }, [onOpenProjectQuickAdd, selectedProject, taskListOptions.allowAdd]);
+        onOpenQuickAdd(selectedProject);
+    }, [onOpenQuickAdd, selectedProject, taskListOptions.allowAdd]);
     const openProjectTaskFilters = React.useCallback(() => {
         setProjectTaskFilterOpenSignal((value) => value + 1);
     }, []);
@@ -700,8 +669,8 @@ export function ProjectDetailModal({
     }, []);
     const handleProjectTaskSortSelect = React.useCallback((option: TaskSortBy) => {
         setProjectSortModalVisible(false);
-        onProjectTaskSortByChange(option);
-    }, [onProjectTaskSortByChange]);
+        onTaskSortByChange(option);
+    }, [onTaskSortByChange]);
     const toggleProjectTaskReorderMode = React.useCallback(() => {
         setProjectTaskReorderMode((value) => !value);
     }, []);
@@ -730,7 +699,7 @@ export function ProjectDetailModal({
     const projectDetailsSummary = [
         projectStatusLabel,
         projectTypeValueLabel,
-        selectedProjectAreaName && selectedProjectAreaName !== noAreaLabel ? selectedProjectAreaName : '',
+        areaName && areaName !== noAreaLabel ? areaName : '',
         selectedProjectSections.length > 0 ? `${selectedProjectSections.length} ${projectSectionsLabel}` : '',
     ].filter(Boolean).join(' · ');
     const sortIsActive = projectTaskSortBy !== 'default';
@@ -815,7 +784,30 @@ export function ProjectDetailModal({
     const setSelectedProjectSequentialScope = (sequentialScope: Project['sequentialScope']) => {
         if (!selectedProject) return;
         updateProject(selectedProject.id, { sequentialScope });
-        onSetSelectedProject({ ...selectedProject, sequentialScope });
+        onProjectChange({ ...selectedProject, sequentialScope });
+    };
+    const handleSetProjectStatus = (status: Project['status']) => {
+        if (!selectedProject) return;
+        updateProject(selectedProject.id, { status });
+        onProjectChange({ ...selectedProject, status });
+        setShowStatusMenu(false);
+    };
+    // Archive without a native confirm: the action is fully reversible (the same
+    // button slot becomes Reactivate, task statuses are restored), and Alert.alert
+    // can present behind the pageSheet detail modal on iOS, leaving the button
+    // apparently dead.
+    const handleArchiveSelectedProject = () => {
+        if (!selectedProject) return;
+        updateProject(selectedProject.id, { status: 'archived' });
+        onProjectChange({ ...selectedProject, status: 'archived' });
+    };
+    const openAreaPicker = () => {
+        setShowStatusMenu(false);
+        onOpenAreaPicker();
+    };
+    const openTagPicker = () => {
+        setShowStatusMenu(false);
+        onOpenTagPicker();
     };
 
     const restoreProjectDetailScrollOffset = React.useCallback((offsetY: number) => {
@@ -870,11 +862,17 @@ export function ProjectDetailModal({
         resetProjectDetailScroll();
     }, [resetProjectDetailScroll, selectedProject?.id]);
 
+    // Opening the modal, closing it, or swapping the open project all start from
+    // a collapsed details panel with every menu and picker shut.
     React.useEffect(() => {
         setProjectTaskReorderMode(false);
         setSectionManagerVisible(false);
         setProjectViewOptionsVisible(false);
         setProjectActionsVisible(false);
+        setShowProjectMeta(false);
+        setShowStatusMenu(false);
+        setShowDueDatePicker(false);
+        setShowReviewPicker(false);
     }, [overlayVisible, selectedProject?.id]);
 
     const scrollProjectInputIntoView = React.useCallback((targetInput?: number | string) => {
@@ -971,7 +969,7 @@ export function ProjectDetailModal({
         <>
                                 <TouchableOpacity
                                     style={[styles.detailsToggle, { backgroundColor: tc.cardBg, borderColor: tc.border }]}
-                                    onPress={() => onSetShowProjectMeta((prev) => !prev)}
+                                    onPress={() => setShowProjectMeta((prev) => !prev)}
                                     accessibilityRole="button"
                                     accessibilityState={{ expanded: showProjectMeta }}
                                     testID="project-details-toggle"
@@ -1003,7 +1001,7 @@ export function ProjectDetailModal({
                                             <View style={styles.reviewLabelRow}>
                                                 <Text style={[styles.reviewLabel, { color: tc.text }]}>{t('projects.statusLabel')}</Text>
                                                 <TouchableOpacity
-                                                    onPress={() => onSetShowStatusMenu((prev) => !prev)}
+                                                    onPress={() => setShowStatusMenu((prev) => !prev)}
                                                     style={[
                                                         styles.statusPicker,
                                                         {
@@ -1029,6 +1027,7 @@ export function ProjectDetailModal({
                                                                 key={status}
                                                                 onPress={() => handleSetProjectStatus(status)}
                                                                 style={[styles.statusMenuItem, isActive && { backgroundColor: tc.filterBg }]}
+                                                                testID={`project-status-menu-item-${status}`}
                                                             >
                                                                 <View style={[styles.statusDot, { backgroundColor: palette?.border ?? tc.border }]} />
                                                                 <Text style={[styles.statusMenuText, { color: palette?.text ?? tc.text }]}>
@@ -1051,7 +1050,7 @@ export function ProjectDetailModal({
                                                         accessibilityRole="button"
                                                         onPress={() => {
                                                             updateProject(selectedProject.id, { isSequential: !selectedProject.isSequential });
-                                                            onSetSelectedProject({ ...selectedProject, isSequential: !selectedProject.isSequential });
+                                                            onProjectChange({ ...selectedProject, isSequential: !selectedProject.isSequential });
                                                         }}
                                                         style={[
                                                             styles.sequentialToggle,
@@ -1182,10 +1181,11 @@ export function ProjectDetailModal({
                                                 <Text style={[styles.reviewLabel, { color: tc.text }]}>{t('projects.areaLabel')}</Text>
                                                 <TouchableOpacity
                                                     style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
-                                                    onPress={onOpenAreaPicker}
+                                                    onPress={openAreaPicker}
+                                                    testID="project-area-picker"
                                                 >
                                                     <Text style={[styles.projectMetadataValueText, { color: tc.text }]} numberOfLines={1}>
-                                                        {selectedProjectAreaName}
+                                                        {areaName}
                                                     </Text>
                                                 </TouchableOpacity>
                                             </View>
@@ -1193,7 +1193,7 @@ export function ProjectDetailModal({
                                                 <Text style={[styles.reviewLabel, { color: tc.text }]}>{t('taskEdit.tagsLabel')}</Text>
                                                 <TouchableOpacity
                                                     style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
-                                                    onPress={onOpenTagPicker}
+                                                    onPress={openTagPicker}
                                                 >
                                                     <Text style={[styles.projectMetadataValueText, { color: tc.text }]} numberOfLines={1}>
                                                         {selectedProject.tagIds?.length ? selectedProject.tagIds.join(', ') : t('common.none')}
@@ -1207,8 +1207,8 @@ export function ProjectDetailModal({
                                                 <TouchableOpacity
                                                     style={[styles.notesHeader, { flex: 1 }]}
                                                     onPress={() => {
-                                                        onSetNotesExpanded(!notesExpanded);
-                                                        if (notesExpanded) onSetShowNotesPreview(false);
+                                                        setNotesExpanded(!notesExpanded);
+                                                        if (notesExpanded) setShowNotesPreview(false);
                                                     }}
                                                 >
                                                     <Text style={[styles.notesTitle, { color: tc.text }]}>
@@ -1218,7 +1218,7 @@ export function ProjectDetailModal({
                                                 {notesExpanded && (
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                                         <TouchableOpacity
-                                                            onPress={() => onSetShowNotesPreview((value) => !value)}
+                                                            onPress={() => setShowNotesPreview((value) => !value)}
                                                             style={[styles.smallButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
                                                         >
                                                             <Text style={[styles.smallButtonText, { color: tc.tint }]}>
@@ -1226,7 +1226,7 @@ export function ProjectDetailModal({
                                                             </Text>
                                                         </TouchableOpacity>
                                                         <TouchableOpacity
-                                                            onPress={() => onSetShowNotesFullscreen(true)}
+                                                            onPress={() => setNotesFullscreen(true)}
                                                             accessibilityRole="button"
                                                             accessibilityLabel={t('markdown.expand')}
                                                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1274,9 +1274,9 @@ export function ProjectDetailModal({
                                                             placeholder={t('projects.notesPlaceholder')}
                                                             placeholderTextColor={tc.secondaryText}
                                                             value={selectedProjectNotes}
-                                                            onFocus={() => onSetSelectedProjectNotesFocused(true)}
+                                                            onFocus={() => setIsSelectedProjectNotesFocused(true)}
                                                             onBlur={() => {
-                                                                onSetSelectedProjectNotesFocused(false);
+                                                                setIsSelectedProjectNotesFocused(false);
                                                                 commitSelectedProjectNotes();
                                                             }}
                                                             onChangeText={handleSelectedProjectNotesChange}
@@ -1303,8 +1303,8 @@ export function ProjectDetailModal({
                                                     </TouchableOpacity>
                                                     <TouchableOpacity
                                                         onPress={() => {
-                                                            onSetLinkModalVisible(true);
-                                                            onSetLinkInput('');
+                                                            setLinkModalVisible(true);
+                                                            setLinkInput('');
                                                         }}
                                                         style={[styles.smallButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
                                                     >
@@ -1325,7 +1325,7 @@ export function ProjectDetailModal({
                                                                 <View key={attachment.id} style={[styles.attachmentRow, { borderBottomColor: tc.border }]}>
                                                                     <TouchableOpacity
                                                                         style={styles.attachmentTitleWrap}
-                                                                        onPress={() => onOpenAttachment(attachment)}
+                                                                        onPress={() => openAttachment(attachment)}
                                                                         disabled={isDownloading}
                                                                     >
                                                                         <Text style={[styles.attachmentTitle, { color: tc.tint }]} numberOfLines={1}>
@@ -1338,7 +1338,7 @@ export function ProjectDetailModal({
                                                                             {t('common.loading')}
                                                                         </Text>
                                                                     ) : canDownload ? (
-                                                                        <TouchableOpacity onPress={() => onDownloadAttachment(attachment)}>
+                                                                        <TouchableOpacity onPress={() => downloadAttachment(attachment)}>
                                                                             <Text style={[styles.attachmentDownload, { color: tc.tint }]}>
                                                                                 {t('attachments.download')}
                                                                             </Text>
@@ -1348,7 +1348,7 @@ export function ProjectDetailModal({
                                                                             {t('attachments.missing')}
                                                                         </Text>
                                                                     ) : null}
-                                                                    <TouchableOpacity onPress={() => onRemoveProjectAttachment(attachment.id)}>
+                                                                    <TouchableOpacity onPress={() => removeProjectAttachment(attachment.id)}>
                                                                         <Text style={[styles.attachmentRemove, { color: tc.secondaryText }]}>
                                                                             {t('attachments.remove')}
                                                                         </Text>
@@ -1366,7 +1366,8 @@ export function ProjectDetailModal({
                                                 <View style={styles.projectMetadataControls}>
                                                     <TouchableOpacity
                                                         style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
-                                                        onPress={() => onSetShowDueDatePicker(true)}
+                                                        onPress={() => setShowDueDatePicker(true)}
+                                                        testID="project-due-date-picker"
                                                     >
                                                         <Text style={[styles.projectMetadataValueText, { color: tc.text }]} numberOfLines={1}>
                                                             {formatProjectDate(selectedProject.dueDate, t('common.notSet'))}
@@ -1379,7 +1380,7 @@ export function ProjectDetailModal({
                                                             style={styles.projectMetadataClearButton}
                                                             onPress={() => {
                                                                 updateProject(selectedProject.id, { dueDate: undefined });
-                                                                onSetSelectedProject({ ...selectedProject, dueDate: undefined });
+                                                                onProjectChange({ ...selectedProject, dueDate: undefined });
                                                             }}
                                                         >
                                                             <Ionicons name="close-circle-outline" size={19} color={tc.secondaryText} />
@@ -1393,11 +1394,11 @@ export function ProjectDetailModal({
                                                     mode="date"
                                                     display="default"
                                                     onChange={(_, date) => {
-                                                        onSetShowDueDatePicker(false);
+                                                        setShowDueDatePicker(false);
                                                         if (date) {
                                                             const iso = date.toISOString().slice(0, 10);
                                                             updateProject(selectedProject.id, { dueDate: iso });
-                                                            onSetSelectedProject({ ...selectedProject, dueDate: iso });
+                                                            onProjectChange({ ...selectedProject, dueDate: iso });
                                                         }
                                                     }}
                                                 />
@@ -1407,7 +1408,8 @@ export function ProjectDetailModal({
                                                 <View style={styles.projectMetadataControls}>
                                                     <TouchableOpacity
                                                         style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
-                                                        onPress={() => onSetShowReviewPicker(true)}
+                                                        onPress={() => setShowReviewPicker(true)}
+                                                        testID="project-review-date-picker"
                                                     >
                                                         <Text style={[styles.projectMetadataValueText, { color: tc.text }]} numberOfLines={1}>
                                                             {formatProjectDate(selectedProject.reviewAt, t('common.notSet'))}
@@ -1420,7 +1422,7 @@ export function ProjectDetailModal({
                                                             style={styles.projectMetadataClearButton}
                                                             onPress={() => {
                                                                 updateProject(selectedProject.id, { reviewAt: undefined });
-                                                                onSetSelectedProject({ ...selectedProject, reviewAt: undefined });
+                                                                onProjectChange({ ...selectedProject, reviewAt: undefined });
                                                             }}
                                                         >
                                                             <Ionicons name="close-circle-outline" size={19} color={tc.secondaryText} />
@@ -1434,11 +1436,11 @@ export function ProjectDetailModal({
                                                     mode="date"
                                                     display="default"
                                                     onChange={(_, date) => {
-                                                        onSetShowReviewPicker(false);
+                                                        setShowReviewPicker(false);
                                                         if (date) {
                                                             const iso = date.toISOString();
                                                             updateProject(selectedProject.id, { reviewAt: iso });
-                                                            onSetSelectedProject({ ...selectedProject, reviewAt: iso });
+                                                            onProjectChange({ ...selectedProject, reviewAt: iso });
                                                         }
                                                     }}
                                                 />
@@ -1456,7 +1458,7 @@ export function ProjectDetailModal({
             presentationStyle={presentationStyle}
             transparent={false}
             allowSwipeDismissal
-            onRequestClose={closeProjectDetail}
+            onRequestClose={onClose}
         >
             {/* Android Modal content needs its own gesture root; the screen root does not cover Modal.
                 https://docs.swmansion.com/react-native-gesture-handler/docs/fundamentals/installation/#android */}
@@ -1467,7 +1469,7 @@ export function ProjectDetailModal({
                             <>
                                 <View style={modalHeaderStyle}>
                                     <TouchableOpacity
-                                        onPress={closeProjectDetail}
+                                        onPress={onClose}
                                         style={styles.backButton}
                                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                         accessibilityRole="button"
@@ -1478,18 +1480,18 @@ export function ProjectDetailModal({
                                     <TextInput
                                         style={[styles.modalTitle, { color: tc.text, marginLeft: 8, flex: 1 }]}
                                         value={selectedProject.title}
-                                        onChangeText={(text) => onSetSelectedProject({ ...selectedProject, title: text })}
+                                        onChangeText={(text) => onProjectChange({ ...selectedProject, title: text })}
                                         onSubmitEditing={() => {
                                             const title = selectedProject.title.trim();
                                             if (!title) return;
                                             updateProject(selectedProject.id, { title });
-                                            onSetSelectedProject({ ...selectedProject, title });
+                                            onProjectChange({ ...selectedProject, title });
                                         }}
                                         onEndEditing={() => {
                                             const title = selectedProject.title.trim();
                                             if (!title) return;
                                             updateProject(selectedProject.id, { title });
-                                            onSetSelectedProject({ ...selectedProject, title });
+                                            onProjectChange({ ...selectedProject, title });
                                         }}
                                         returnKeyType="done"
                                     />
@@ -1578,7 +1580,7 @@ export function ProjectDetailModal({
                                             label={showCompletedLabel}
                                             onPress={() => {
                                                 setProjectViewOptionsVisible(false);
-                                                onToggleShowCompletedTasks();
+                                                setShowCompletedTasks((value) => !value);
                                             }}
                                             selected={showCompletedTasks}
                                             testID="project-view-completed-option"
@@ -1649,7 +1651,7 @@ export function ProjectDetailModal({
                                 />
                                 <ExpandedMarkdownEditor
                                     isOpen={notesFullscreen}
-                                    onClose={onCloseNotesFullscreen}
+                                    onClose={() => setNotesFullscreen(false)}
                                     value={selectedProjectNotes}
                                     onChange={handleSelectedProjectNotesChange}
                                     onCommit={commitSelectedProjectNotes}
@@ -1675,7 +1677,7 @@ export function ProjectDetailModal({
     );
 }
 
-export function getProjectDetailModalSafeAreaEdges(presentationStyle: ProjectDetailModalProps['presentationStyle']) {
+export function getProjectDetailModalSafeAreaEdges(presentationStyle: ProjectDetailPresentationStyle) {
     return presentationStyle === 'fullScreen'
         ? ['top', 'left', 'right', 'bottom'] as const
         : ['left', 'right', 'bottom'] as const;

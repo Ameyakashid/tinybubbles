@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Section, Task } from '@mindwtr/core';
 
 const mockScrollTo = vi.hoisted(() => vi.fn());
@@ -9,12 +9,103 @@ const mockScrollToOffset = vi.hoisted(() => vi.fn());
 const mockFindNodeHandle = vi.hoisted(() => vi.fn(() => 9001));
 const mockMeasureInWindow = vi.hoisted(() => vi.fn());
 
+const themeColors = vi.hoisted(() => ({
+    bg: '#0f172a',
+    cardBg: '#111827',
+    taskItemBg: '#1f2937',
+    text: '#f8fafc',
+    secondaryText: '#94a3b8',
+    icon: '#94a3b8',
+    border: '#334155',
+    tint: '#60a5fa',
+    onTint: '#0f172a',
+    tabIconDefault: '#94a3b8',
+    tabIconSelected: '#60a5fa',
+    inputBg: '#1e293b',
+    danger: '#ef4444',
+    success: '#10b981',
+    warning: '#f59e0b',
+    filterBg: '#1e293b',
+}));
+
+const translate = vi.hoisted(() => (key: string) => ({
+    'attachments.addFile': 'Add file',
+    'attachments.addLink': 'Add link',
+    'attachments.title': 'Attachments',
+    'common.back': 'Back',
+    'common.clear': 'Clear',
+    'common.delete': 'Delete',
+    'common.edit': 'Edit',
+    'common.hideCompleted': 'Hide completed',
+    'common.loading': 'Loading',
+    'common.none': 'None',
+    'common.notSet': 'Not set',
+    'common.save': 'Save',
+    'common.showCompleted': 'Show completed',
+    'nav.addTask': 'Add task',
+    'markdown.edit': 'Edit',
+    'markdown.expand': 'Expand',
+    'markdown.preview': 'Preview',
+    'project.notes': 'Project notes',
+    'projects.archive': 'Archive',
+    'projects.areaLabel': 'Area',
+    'projects.addSection': 'Add Section',
+    'projects.deleteSectionConfirm': 'Are you sure you want to delete this section?',
+    'projects.duplicate': 'Duplicate',
+    'projects.moveDown': 'Move down',
+    'projects.moveUp': 'Move up',
+    'projects.notesPlaceholder': 'Notes',
+    'projects.noArea': 'No Area',
+    'projects.reactivate': 'Reactivate',
+    'projects.reorderTasks': 'Order',
+    'projects.reviewAt': 'Review',
+    'projects.sectionPlaceholder': 'Section title',
+    'projects.sectionsLabel': 'Sections',
+    'projects.sequentialAcrossSections': 'Across sections',
+    'projects.sequentialScope': 'Sequential Scope',
+    'projects.sequentialWithinSections': 'Within sections',
+    'projects.statusLabel': 'Status',
+    'sort.default': 'Default',
+    'sort.due': 'Due date',
+    'sort.label': 'Sort',
+    'settings.manage': 'Manage',
+    'status.active': 'Active',
+    'status.someday': 'Someday',
+    'status.waiting': 'Waiting',
+    'taskEdit.details': 'Details',
+    'taskEdit.dueDateLabel': 'Due Date',
+    'taskEdit.tagsLabel': 'Tags',
+}[key] ?? key));
+
 vi.mock('@/hooks/use-theme-colors', () => ({
-  useThemeColors: () => ({ tint: '#3b82f6', onTint: '#ffffff' }),
+  useThemeColors: () => themeColors,
 }));
 vi.mock('@/hooks/use-theme-tokens', () => ({
   useThemeTokens: () => ({ isMaterial: false, roles: null, shape: { large: 16 } }),
 }));
+vi.mock('../../contexts/language-context', () => ({
+  useLanguage: () => ({ t: translate, language: 'en', setLanguage: () => {}, isReady: true }),
+}));
+
+// The modal reads its section/project writers straight off the store. The real
+// zustand hook cannot run here (mobile vitest resolves a second React copy), so
+// the store is a plain selector over spies.
+const storeActions = vi.hoisted(() => ({
+    addSection: vi.fn(),
+    deleteSection: vi.fn(),
+    reorderSections: vi.fn(),
+    updateProject: vi.fn(),
+    updateSection: vi.fn(),
+}));
+
+vi.mock('@mindwtr/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+    const useTaskStore = Object.assign(
+        (selector?: (state: typeof storeActions) => unknown) => (selector ? selector(storeActions) : storeActions),
+        { getState: () => storeActions, subscribe: () => () => {} },
+    );
+    return { ...actual, useTaskStore };
+});
 
 vi.mock('react-native', async (importOriginal) => {
     const actual = await importOriginal<typeof import('react-native')>();
@@ -54,6 +145,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('react-native-safe-area-context', () => ({
     SafeAreaView: ({ children }: any) => children,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
 vi.mock('react-native-gesture-handler', () => ({
@@ -108,6 +200,7 @@ vi.mock('../../components/AttachmentProgressIndicator', () => ({
     AttachmentProgressIndicator: () => null,
 }));
 
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { ProjectDetailModal, getProjectDetailModalSafeAreaEdges, getProjectDetailTaskListOptions } from './ProjectDetailModal';
 
 const project = (status: Project['status']): Project => ({
@@ -130,25 +223,6 @@ const section = (id: string, title: string): Section => ({
     updatedAt: '2026-05-12T00:00:00.000Z',
 });
 
-const themeColors = {
-    bg: '#0f172a',
-    cardBg: '#111827',
-    taskItemBg: '#1f2937',
-    text: '#f8fafc',
-    secondaryText: '#94a3b8',
-    icon: '#94a3b8',
-    border: '#334155',
-    tint: '#60a5fa',
-    onTint: '#0f172a',
-    tabIconDefault: '#94a3b8',
-    tabIconSelected: '#60a5fa',
-    inputBg: '#1e293b',
-    danger: '#ef4444',
-    success: '#10b981',
-    warning: '#f59e0b',
-    filterBg: '#1e293b',
-};
-
 const originalPlatformOs = Platform.OS;
 
 const setPlatform = (os: typeof Platform.OS) => {
@@ -168,122 +242,82 @@ const findContainingModal = (node: any) => {
     return current;
 };
 
-const createProjectDetailModalProps = (overrides: Partial<React.ComponentProps<typeof ProjectDetailModal>> = {}) => ({
-    addProjectFileAttachment: vi.fn(),
-    addSection: vi.fn(),
-    closeProjectDetail: vi.fn(),
+type ProjectDetailModalProps = React.ComponentProps<typeof ProjectDetailModal>;
+
+const createNotesEditor = (
+    overrides: Partial<ProjectDetailModalProps['notes']> = {},
+): ProjectDetailModalProps['notes'] => ({
     commitSelectedProjectNotes: vi.fn(),
-    formatProjectDate: (value: string | undefined, fallback: string) => value || fallback,
-    handleArchiveSelectedProject: vi.fn(),
     handleSelectedProjectNotesApplyAction: vi.fn(() => ({ value: '', selection: { start: 0, end: 0 } })),
     handleSelectedProjectNotesApplyAutocomplete: vi.fn(),
     handleSelectedProjectNotesChange: vi.fn(),
     handleSelectedProjectNotesSelectionChange: vi.fn(),
     handleSelectedProjectNotesUndo: vi.fn(),
-    handleSetProjectStatus: vi.fn(),
     isSelectedProjectNotesFocused: false,
-    modalHeaderStyle: [{}],
     notesExpanded: true,
     notesFullscreen: false,
-    onCloseNotesFullscreen: vi.fn(),
-    onDuplicateProject: vi.fn(),
-    onDownloadAttachment: vi.fn(),
-    onOpenAreaPicker: vi.fn(),
-    onOpenAttachment: vi.fn(),
-    onOpenProjectQuickAdd: vi.fn(),
-    onOpenTagPicker: vi.fn(),
-    onRemoveProjectAttachment: vi.fn(),
-    deleteSection: vi.fn(),
-    reorderSections: vi.fn(),
-    onSetLinkInput: vi.fn(),
-    onSetLinkModalVisible: vi.fn(),
-    onSetNotesExpanded: vi.fn(),
-    onSetSelectedProject: vi.fn(),
-    onSetSelectedProjectNotesFocused: vi.fn(),
-    onSetShowDueDatePicker: vi.fn(),
-    onSetShowNotesFullscreen: vi.fn(),
-    onSetShowNotesPreview: vi.fn(),
-    onSetShowProjectMeta: vi.fn(),
-    onSetShowReviewPicker: vi.fn(),
-    onSetShowStatusMenu: vi.fn(),
-    onProjectTaskSortByChange: vi.fn(),
-    onToggleShowCompletedTasks: vi.fn(),
-    overlayVisible: true,
-    presentationStyle: 'fullScreen' as const,
-    projectTaskSortBy: 'default' as const,
-    selectedProject: { ...project('active'), supportNotes: 'Draft' },
-    selectedProjectAreaName: 'No Area',
-    selectedProjectSections: [],
+    resetProjectNotesUi: vi.fn(),
     selectedProjectNotes: 'Draft',
-    selectedProjectNotesDirection: 'ltr' as const,
+    selectedProjectNotesDirection: 'ltr',
     selectedProjectNotesInputRef: { current: null },
     selectedProjectNotesSelection: { start: 5, end: 5 },
-    selectedProjectNotesTextDirectionStyle: {},
+    selectedProjectNotesTextDirectionStyle: { writingDirection: 'ltr', textAlign: 'left' } as const,
     selectedProjectNotesUndoDepth: 0,
-    showCompletedTasks: false,
-    showDueDatePicker: false,
+    setIsSelectedProjectNotesFocused: vi.fn(),
+    setNotesExpanded: vi.fn(),
+    setNotesFullscreen: vi.fn(),
+    setShowNotesPreview: vi.fn(),
     showNotesPreview: false,
-    showProjectMeta: true,
-    showReviewPicker: false,
-    showStatusMenu: false,
-    statusPalette: {
-        active: { bg: '#1d4ed822', border: '#1d4ed8', text: '#1d4ed8' },
-        waiting: { bg: '#f59e0b22', border: '#f59e0b', text: '#f59e0b' },
-        someday: { bg: '#a855f722', border: '#a855f7', text: '#a855f7' },
-        archived: { bg: '#334155', border: '#334155', text: '#94a3b8' },
-    },
-    t: (key: string) => ({
-        'attachments.addFile': 'Add file',
-        'attachments.addLink': 'Add link',
-        'attachments.title': 'Attachments',
-        'common.back': 'Back',
-        'common.clear': 'Clear',
-        'common.delete': 'Delete',
-        'common.edit': 'Edit',
-        'common.hideCompleted': 'Hide completed',
-        'common.loading': 'Loading',
-        'common.none': 'None',
-        'common.notSet': 'Not set',
-        'common.save': 'Save',
-        'common.showCompleted': 'Show completed',
-        'nav.addTask': 'Add task',
-        'markdown.edit': 'Edit',
-        'markdown.expand': 'Expand',
-        'markdown.preview': 'Preview',
-        'project.notes': 'Project notes',
-        'projects.archive': 'Archive',
-        'projects.areaLabel': 'Area',
-        'projects.addSection': 'Add Section',
-        'projects.deleteSectionConfirm': 'Are you sure you want to delete this section?',
-        'projects.duplicate': 'Duplicate',
-        'projects.moveDown': 'Move down',
-        'projects.moveUp': 'Move up',
-        'projects.notesPlaceholder': 'Notes',
-        'projects.noArea': 'No Area',
-        'projects.reactivate': 'Reactivate',
-        'projects.reorderTasks': 'Order',
-        'projects.reviewAt': 'Review',
-        'projects.sectionPlaceholder': 'Section title',
-        'projects.sectionsLabel': 'Sections',
-        'projects.sequentialAcrossSections': 'Across sections',
-        'projects.sequentialScope': 'Sequential Scope',
-        'projects.sequentialWithinSections': 'Within sections',
-        'projects.statusLabel': 'Status',
-        'sort.default': 'Default',
-        'sort.due': 'Due date',
-        'sort.label': 'Sort',
-        'settings.manage': 'Manage',
-        'status.active': 'Active',
-        'status.someday': 'Someday',
-        'status.waiting': 'Waiting',
-        'taskEdit.details': 'Details',
-        'taskEdit.dueDateLabel': 'Due Date',
-        'taskEdit.tagsLabel': 'Tags',
-    }[key] ?? key),
-    tc: themeColors,
-    updateProject: vi.fn(),
-    updateSection: vi.fn(),
     ...overrides,
+});
+
+const createAttachments = (
+    overrides: Partial<ProjectDetailModalProps['attachments']> = {},
+): ProjectDetailModalProps['attachments'] => ({
+    addProjectFileAttachment: vi.fn(),
+    confirmAddProjectLink: vi.fn(),
+    downloadAttachment: vi.fn(),
+    imagePreviewAttachment: null,
+    linkInput: '',
+    linkModalVisible: false,
+    openAttachment: vi.fn(),
+    removeProjectAttachment: vi.fn(),
+    resetProjectAttachmentUi: vi.fn(),
+    setImagePreviewAttachment: vi.fn(),
+    setLinkInput: vi.fn(),
+    setLinkModalVisible: vi.fn(),
+    ...overrides,
+});
+
+const createProjectDetailModalProps = (
+    overrides: Partial<ProjectDetailModalProps> = {},
+): ProjectDetailModalProps => ({
+    areaName: 'No Area',
+    attachments: createAttachments(),
+    notes: createNotesEditor(),
+    onClose: vi.fn(),
+    onDuplicateProject: vi.fn(),
+    onOpenAreaPicker: vi.fn(),
+    onOpenQuickAdd: vi.fn(),
+    onOpenTagPicker: vi.fn(),
+    onProjectChange: vi.fn(),
+    onTaskSortByChange: vi.fn(),
+    project: { ...project('active'), supportNotes: 'Draft' },
+    sections: [],
+    taskSortBy: 'default',
+    ...overrides,
+});
+
+// The section, status, area, tag and date controls live behind the collapsed
+// details toggle, so anything reaching them has to expand it first.
+const expandProjectDetails = (tree: ReturnType<typeof create>) => {
+    act(() => {
+        tree.root.findByProps({ testID: 'project-details-toggle' }).props.onPress();
+    });
+};
+
+beforeEach(() => {
+    for (const action of Object.values(storeActions)) action.mockReset();
 });
 
 afterEach(() => {
@@ -315,15 +349,14 @@ describe('ProjectDetailModal progressive disclosure', () => {
 
         act(() => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                selectedProject: { ...project('someday'), isSequential: false, supportNotes: '' },
-                selectedProjectAreaName: 'Personal',
-                selectedProjectSections: [
+                areaName: 'Personal',
+                notes: createNotesEditor({ selectedProjectNotes: '' }),
+                project: { ...project('someday'), isSequential: false, supportNotes: '' },
+                sections: [
                     section('section-1', 'Accommodation'),
                     section('section-2', 'Itinerary'),
                     section('section-3', 'Flights'),
                 ],
-                selectedProjectNotes: '',
-                showProjectMeta: false,
             })} />);
         });
 
@@ -332,16 +365,34 @@ describe('ProjectDetailModal progressive disclosure', () => {
         expect(tree.root.findAllByProps({ testID: 'project-status-picker' })).toHaveLength(0);
         expect(tree.root.findAllByProps({ testID: 'project-actions-section' })).toHaveLength(0);
     });
+
+    it('reveals the project metadata controls once details are expanded', () => {
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps()} />);
+        });
+
+        expect(tree.root.findAllByProps({ testID: 'project-status-picker' })).toHaveLength(0);
+
+        expandProjectDetails(tree);
+
+        expect(tree.root.findByProps({ testID: 'project-status-picker' })).toBeTruthy();
+        expect(tree.root.findByProps({ testID: 'project-sections-button' })).toBeTruthy();
+        expect(tree.root.findAllByProps({ testID: 'project-details-summary' })).toHaveLength(0);
+    });
 });
 
 describe('ProjectDetailModal notes editing', () => {
     it('commits project notes when the inline notes editor blurs', () => {
-        const commitSelectedProjectNotes = vi.fn();
+        const notes = createNotesEditor();
         let tree!: ReturnType<typeof create>;
 
         act(() => {
-            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ commitSelectedProjectNotes })} />);
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ notes })} />);
         });
+
+        expandProjectDetails(tree);
 
         const notesInput = tree.root.findAllByType(TextInput).find((input) => (
             input.props.placeholder === 'Notes'
@@ -353,18 +404,37 @@ describe('ProjectDetailModal notes editing', () => {
             notesInput?.props.onBlur();
         });
 
-        expect(commitSelectedProjectNotes).toHaveBeenCalledTimes(1);
+        expect(notes.commitSelectedProjectNotes).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the fullscreen notes editor from the notes header', () => {
+        const notes = createNotesEditor();
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ notes })} />);
+        });
+
+        expandProjectDetails(tree);
+
+        act(() => {
+            tree.root.findByProps({ accessibilityLabel: 'Expand' }).props.onPress();
+        });
+
+        expect(notes.setNotesFullscreen).toHaveBeenCalledWith(true);
     });
 });
 
 describe('ProjectDetailModal section management', () => {
     it('creates a section from project details', async () => {
-        const addSection = vi.fn().mockResolvedValue(section('section-created', 'Grammar'));
+        storeActions.addSection.mockResolvedValue(section('section-created', 'Grammar'));
         let tree!: ReturnType<typeof create>;
 
         await act(async () => {
-            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ addSection })} />);
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps()} />);
         });
+
+        expandProjectDetails(tree);
 
         await act(async () => {
             tree.root.findByProps({ testID: 'project-sections-button' }).props.onPress();
@@ -379,19 +449,20 @@ describe('ProjectDetailModal section management', () => {
             await tree.root.findByProps({ testID: 'project-section-save-button' }).props.onPress();
         });
 
-        expect(addSection).toHaveBeenCalledWith('project-1', 'Grammar');
+        expect(storeActions.addSection).toHaveBeenCalledWith('project-1', 'Grammar');
     });
 
     it('renames an existing section from project details', async () => {
-        const updateSection = vi.fn().mockResolvedValue({ ok: true });
+        storeActions.updateSection.mockResolvedValue({ ok: true });
         let tree!: ReturnType<typeof create>;
 
         await act(async () => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                selectedProjectSections: [section('section-1', 'Planning')],
-                updateSection,
+                sections: [section('section-1', 'Planning')],
             })} />);
         });
+
+        expandProjectDetails(tree);
 
         await act(async () => {
             tree.root.findByProps({ testID: 'project-sections-button' }).props.onPress();
@@ -406,11 +477,10 @@ describe('ProjectDetailModal section management', () => {
             await tree.root.findByProps({ testID: 'project-section-save-button' }).props.onPress();
         });
 
-        expect(updateSection).toHaveBeenCalledWith('section-1', { title: 'Speaking' });
+        expect(storeActions.updateSection).toHaveBeenCalledWith('section-1', { title: 'Speaking' });
     });
 
     it('confirms before deleting a section from project details', async () => {
-        const deleteSection = vi.fn();
         vi.spyOn(Alert, 'alert').mockImplementation(((_title, _message, buttons) => {
             buttons?.[1]?.onPress?.();
         }) as typeof Alert.alert);
@@ -418,10 +488,11 @@ describe('ProjectDetailModal section management', () => {
 
         await act(async () => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                deleteSection,
-                selectedProjectSections: [section('section-1', 'Planning')],
+                sections: [section('section-1', 'Planning')],
             })} />);
         });
+
+        expandProjectDetails(tree);
 
         await act(async () => {
             tree.root.findByProps({ testID: 'project-sections-button' }).props.onPress();
@@ -435,22 +506,23 @@ describe('ProjectDetailModal section management', () => {
             'Are you sure you want to delete this section?',
             expect.any(Array),
         );
-        expect(deleteSection).toHaveBeenCalledWith('section-1');
+        expect(storeActions.deleteSection).toHaveBeenCalledWith('section-1');
     });
 
     it('reorders sections from project details', async () => {
-        const reorderSections = vi.fn().mockResolvedValue(undefined);
+        storeActions.reorderSections.mockResolvedValue(undefined);
         let tree!: ReturnType<typeof create>;
 
         await act(async () => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                reorderSections,
-                selectedProjectSections: [
+                sections: [
                     { ...section('section-1', 'Planning'), order: 0 },
                     { ...section('section-2', 'Speaking'), order: 1 },
                 ],
             })} />);
         });
+
+        expandProjectDetails(tree);
 
         await act(async () => {
             tree.root.findByProps({ testID: 'project-sections-button' }).props.onPress();
@@ -459,17 +531,98 @@ describe('ProjectDetailModal section management', () => {
             tree.root.findByProps({ testID: 'project-section-move-down-section-1' }).props.onPress();
         });
 
-        expect(reorderSections).toHaveBeenCalledWith('project-1', ['section-2', 'section-1']);
+        expect(storeActions.reorderSections).toHaveBeenCalledWith('project-1', ['section-2', 'section-1']);
+    });
+});
+
+describe('ProjectDetailModal metadata pickers', () => {
+    it('opens the status menu and writes the picked status', () => {
+        const onProjectChange = vi.fn();
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onProjectChange })} />);
+        });
+
+        expandProjectDetails(tree);
+
+        expect(tree.root.findAllByProps({ testID: 'project-status-menu-item-waiting' })).toHaveLength(0);
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-status-picker' }).props.onPress();
+        });
+
+        expect(tree.root.findByProps({ testID: 'project-status-menu-item-waiting' })).toBeTruthy();
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-status-menu-item-waiting' }).props.onPress();
+        });
+
+        expect(storeActions.updateProject).toHaveBeenCalledWith('project-1', { status: 'waiting' });
+        expect(onProjectChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'waiting' }));
+        expect(tree.root.findAllByProps({ testID: 'project-status-menu-item-waiting' })).toHaveLength(0);
+    });
+
+    it('closes the status menu before handing off to the area picker', () => {
+        const onOpenAreaPicker = vi.fn();
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onOpenAreaPicker })} />);
+        });
+
+        expandProjectDetails(tree);
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-status-picker' }).props.onPress();
+        });
+        act(() => {
+            tree.root.findByProps({ testID: 'project-area-picker' }).props.onPress();
+        });
+
+        expect(onOpenAreaPicker).toHaveBeenCalledTimes(1);
+        expect(tree.root.findAllByProps({ testID: 'project-status-menu-item-waiting' })).toHaveLength(0);
+    });
+
+    it('shows the due-date and review pickers on demand and writes the picked date', () => {
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps()} />);
+        });
+
+        expandProjectDetails(tree);
+
+        expect(tree.root.findAllByType(DateTimePicker)).toHaveLength(0);
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-due-date-picker' }).props.onPress();
+        });
+
+        expect(tree.root.findAllByType(DateTimePicker)).toHaveLength(1);
+
+        act(() => {
+            tree.root.findByType(DateTimePicker).props.onChange({}, new Date('2026-08-01T00:00:00.000Z'));
+        });
+
+        expect(storeActions.updateProject).toHaveBeenCalledWith('project-1', { dueDate: '2026-08-01' });
+        expect(tree.root.findAllByType(DateTimePicker)).toHaveLength(0);
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-review-date-picker' }).props.onPress();
+        });
+
+        expect(tree.root.findAllByType(DateTimePicker)).toHaveLength(1);
     });
 });
 
 describe('ProjectDetailModal task sorting', () => {
     it('opens global quick add for project task creation instead of inline add', () => {
-        const onOpenProjectQuickAdd = vi.fn();
+        const onOpenQuickAdd = vi.fn();
         let tree!: ReturnType<typeof create>;
 
         act(() => {
-            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onOpenProjectQuickAdd })} />);
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onOpenQuickAdd })} />);
         });
 
         expect(taskListPropsSpy).toHaveBeenCalled();
@@ -479,14 +632,14 @@ describe('ProjectDetailModal task sorting', () => {
             tree.root.findByProps({ testID: 'project-add-task-button' }).props.onPress();
         });
 
-        expect(onOpenProjectQuickAdd).toHaveBeenCalledWith(expect.objectContaining({
+        expect(onOpenQuickAdd).toHaveBeenCalledWith(expect.objectContaining({
             id: 'project-1',
             title: 'Launch',
         }));
     });
 
     it('passes the project-local sort to TaskList and handles sort changes', () => {
-        const onProjectTaskSortByChange = vi.fn();
+        const onTaskSortByChange = vi.fn();
         const selectedProjectTasks = [
             {
                 id: 'project-task-1',
@@ -501,9 +654,9 @@ describe('ProjectDetailModal task sorting', () => {
 
         act(() => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                onProjectTaskSortByChange,
-                projectTaskSortBy: 'default',
-                selectedProjectTasks,
+                onTaskSortByChange,
+                taskSortBy: 'default',
+                tasks: selectedProjectTasks,
             })} />);
         });
 
@@ -522,21 +675,19 @@ describe('ProjectDetailModal task sorting', () => {
             tree.root.findByProps({ testID: 'sort-option-due' }).props.onPress();
         });
 
-        expect(onProjectTaskSortByChange).toHaveBeenCalledWith('due');
+        expect(onTaskSortByChange).toHaveBeenCalledWith('due');
     });
 
     it('keeps project task controls outside the scrolling task list', () => {
-        const onOpenProjectQuickAdd = vi.fn();
-        const onProjectTaskSortByChange = vi.fn();
-        const onToggleShowCompletedTasks = vi.fn();
+        const onOpenQuickAdd = vi.fn();
+        const onTaskSortByChange = vi.fn();
         let tree!: ReturnType<typeof create>;
 
         act(() => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                onOpenProjectQuickAdd,
-                onProjectTaskSortByChange,
-                onToggleShowCompletedTasks,
-                selectedProjectSections: [
+                onOpenQuickAdd,
+                onTaskSortByChange,
+                sections: [
                     section('section-1', 'Research'),
                     section('section-2', 'Design'),
                 ],
@@ -577,9 +728,9 @@ describe('ProjectDetailModal task sorting', () => {
             tree.root.findByProps({ testID: 'project-view-reorder-option' }).props.onPress();
         });
 
-        expect(onOpenProjectQuickAdd).toHaveBeenCalledWith(expect.objectContaining({ id: 'project-1' }));
-        expect(onProjectTaskSortByChange).toHaveBeenCalledWith('due');
-        expect(onToggleShowCompletedTasks).toHaveBeenCalledTimes(1);
+        expect(onOpenQuickAdd).toHaveBeenCalledWith(expect.objectContaining({ id: 'project-1' }));
+        expect(onTaskSortByChange).toHaveBeenCalledWith('due');
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].includeDone).toBe(true);
         expect(tree.root.findByProps({ testID: 'project-task-view-options-button' }).props.accessibilityState).toEqual({
             expanded: false,
             selected: true,
@@ -603,21 +754,24 @@ describe('ProjectDetailModal task sorting', () => {
         expect(hiddenToggle.findByProps({ name: 'eye-off-outline' }).props.name).toBe('eye-off-outline');
 
         act(() => {
-            tree.update(<ProjectDetailModal {...createProjectDetailModalProps({ showCompletedTasks: true })} />);
+            hiddenToggle.props.onPress();
+        });
+        act(() => {
+            tree.root.findByProps({ testID: 'project-task-view-options-button' }).props.onPress();
         });
 
         const visibleToggle = findOptionButton(tree.root, 'project-view-completed-option');
         expect(visibleToggle.props.accessibilityState).toEqual({ selected: true });
         expect(visibleToggle.findByProps({ name: 'eye-outline' }).props.name).toBe('eye-outline');
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].includeDone).toBe(true);
     });
 
     it('pins project bulk selection actions above the scrolling task list', () => {
         const onOpenOrganize = vi.fn();
-        const props = createProjectDetailModalProps();
         let tree!: ReturnType<typeof create>;
 
         act(() => {
-            tree = create(<ProjectDetailModal {...props} />);
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps()} />);
         });
 
         const taskListProps = taskListPropsSpy.mock.calls.at(-1)?.[0];
@@ -638,7 +792,7 @@ describe('ProjectDetailModal task sorting', () => {
                 onToggleRangeSelectMode: vi.fn(),
                 rangeSelectMode: false,
                 selectedCount: 3,
-                t: props.t,
+                t: translate,
                 themeColors,
             });
         });
@@ -687,8 +841,8 @@ describe('ProjectDetailModal project task scrolling', () => {
 
         act(() => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                selectedProject,
-                selectedProjectTasks,
+                project: selectedProject,
+                tasks: selectedProjectTasks,
             })} />);
         });
 
@@ -702,9 +856,8 @@ describe('ProjectDetailModal project task scrolling', () => {
 
         act(() => {
             tree.update(<ProjectDetailModal {...createProjectDetailModalProps({
-                overlayVisible: false,
-                selectedProject: null,
-                selectedProjectTasks: [],
+                project: null,
+                tasks: [],
             })} />);
         });
 
@@ -713,8 +866,8 @@ describe('ProjectDetailModal project task scrolling', () => {
 
         act(() => {
             tree.update(<ProjectDetailModal {...createProjectDetailModalProps({
-                selectedProject,
-                selectedProjectTasks,
+                project: selectedProject,
+                tasks: selectedProjectTasks,
             })} />);
         });
 
@@ -774,7 +927,7 @@ describe('ProjectDetailModal project task scrolling', () => {
                 onToggleRangeSelectMode: vi.fn(),
                 rangeSelectMode: false,
                 selectedCount: 1,
-                t: createProjectDetailModalProps().t,
+                t: translate,
                 themeColors,
             });
         });
@@ -895,14 +1048,12 @@ describe('ProjectDetailModal lifecycle actions', () => {
     });
 
     it('archives from the Archive action with a single tap and no native confirm', () => {
-        const handleArchiveSelectedProject = vi.fn();
+        const onProjectChange = vi.fn();
         const alertSpy = vi.spyOn(Alert, 'alert');
         let tree!: ReturnType<typeof create>;
 
         act(() => {
-            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                handleArchiveSelectedProject,
-            })} />);
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onProjectChange })} />);
         });
 
         act(() => {
@@ -912,8 +1063,31 @@ describe('ProjectDetailModal lifecycle actions', () => {
             tree.root.findByProps({ testID: 'project-archive-button' }).props.onPress();
         });
 
-        expect(handleArchiveSelectedProject).toHaveBeenCalledTimes(1);
+        expect(storeActions.updateProject).toHaveBeenCalledWith('project-1', { status: 'archived' });
+        expect(onProjectChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'archived' }));
         expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('reactivates an archived project with a plain active status write', () => {
+        const onProjectChange = vi.fn();
+        let tree!: ReturnType<typeof create>;
+
+        act(() => {
+            tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
+                onProjectChange,
+                project: { ...project('archived'), supportNotes: 'Draft' },
+            })} />);
+        });
+
+        act(() => {
+            tree.root.findByProps({ testID: 'project-actions-menu-button' }).props.onPress();
+        });
+        act(() => {
+            tree.root.findByProps({ testID: 'project-reactivate-button' }).props.onPress();
+        });
+
+        expect(storeActions.updateProject).toHaveBeenCalledWith('project-1', { status: 'active' });
+        expect(onProjectChange).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
     });
 
     it('shows the archive explanation only inside the on-demand actions menu', () => {
@@ -944,7 +1118,7 @@ describe('ProjectDetailModal lifecycle actions', () => {
 
         act(() => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({
-                selectedProject: { ...project('archived'), supportNotes: 'Draft' },
+                project: { ...project('archived'), supportNotes: 'Draft' },
             })} />);
         });
 

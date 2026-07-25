@@ -224,13 +224,13 @@ vi.mock('@/components/projects-screen/use-project-attachments', () => ({
 vi.mock('@/components/projects-screen/ProjectAreaModals', () => ({ ProjectAreaModals: () => null }));
 vi.mock('@/components/projects-screen/ProjectDetailModal', () => ({
   ProjectDetailModal: (props: {
-    projectTaskSortBy?: string;
-    onProjectTaskSortByChange?: (next: string) => void;
-    overlayVisible?: boolean;
+    taskSortBy?: string;
+    onTaskSortByChange?: (next: string) => void;
+    project?: unknown;
   }) => {
-    modalCapture.projectTaskSortBy = props.projectTaskSortBy;
-    modalCapture.onProjectTaskSortByChange = props.onProjectTaskSortByChange;
-    modalCapture.overlayVisible = Boolean(props.overlayVisible);
+    modalCapture.projectTaskSortBy = props.taskSortBy;
+    modalCapture.onProjectTaskSortByChange = props.onTaskSortByChange;
+    modalCapture.overlayVisible = Boolean(props.project);
     return null;
   },
 }));
