@@ -200,6 +200,8 @@ pub(crate) fn read_config_toml(path: &Path) -> AppConfigToml {
             config.local_api_token = parse_toml_string_value(value);
         } else if key == "disable_hardware_acceleration" {
             config.disable_hardware_acceleration = parse_toml_string_value(value);
+        } else if key == "start_in_tray" {
+            config.start_in_tray = parse_toml_string_value(value);
         }
     }
     config
@@ -368,6 +370,12 @@ fn write_config_toml_with_header(
             serialize_toml_string_value(disable_hardware_acceleration)
         ));
     }
+    if let Some(start_in_tray) = &config.start_in_tray {
+        lines.push(format!(
+            "start_in_tray = {}",
+            serialize_toml_string_value(start_in_tray)
+        ));
+    }
     let content = format!("{}\n", lines.join("\n"));
     fs::write(path, content).map_err(|e| e.to_string())
 }
@@ -444,6 +452,9 @@ fn merge_config(base: &mut AppConfigToml, overrides: AppConfigToml) {
     }
     if overrides.disable_hardware_acceleration.is_some() {
         base.disable_hardware_acceleration = overrides.disable_hardware_acceleration;
+    }
+    if overrides.start_in_tray.is_some() {
+        base.start_in_tray = overrides.start_in_tray;
     }
 }
 
@@ -529,6 +540,7 @@ fn config_has_values(config: &AppConfigToml) -> bool {
         || config.local_api_port.is_some()
         || config.local_api_token.is_some()
         || config.disable_hardware_acceleration.is_some()
+        || config.start_in_tray.is_some()
 }
 
 pub(crate) fn write_config_files(

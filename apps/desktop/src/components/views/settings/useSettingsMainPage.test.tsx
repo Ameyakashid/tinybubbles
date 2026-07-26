@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsMainPage } from './useSettingsMainPage';
 
 const getLaunchAtStartupEnabled = vi.fn();
+const isWindowsStoreInstall = vi.fn();
+const getStartInTrayEnabled = vi.fn();
 const tauriCoreMock = vi.hoisted(() => ({
     invoke: vi.fn().mockResolvedValue('dark'),
 }));
@@ -31,6 +33,9 @@ vi.mock('@tauri-apps/api/window', () => ({
 vi.mock('../../../lib/launch-at-startup', () => ({
     getLaunchAtStartupEnabled: () => getLaunchAtStartupEnabled(),
     setLaunchAtStartupEnabled: vi.fn(),
+    isWindowsStoreInstall: () => isWindowsStoreInstall(),
+    getStartInTrayEnabled: () => getStartInTrayEnabled(),
+    setStartInTrayEnabled: vi.fn(),
 }));
 
 type HarnessProps = {
@@ -63,7 +68,9 @@ function Harness({ isFlatpak, isTauri, settings = { window: { launchAtStartup: t
                 launchAtStartupEnabled: page.launchAtStartupEnabled,
                 showCloseBehavior: page.showCloseBehavior,
                 showLaunchAtStartup: page.showLaunchAtStartup,
+                showStartInTray: page.showStartInTray,
                 showTrayToggle: page.showTrayToggle,
+                startInTrayEnabled: page.startInTrayEnabled,
             })}
         </output>
     );
@@ -75,6 +82,8 @@ describe('useSettingsMainPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         getLaunchAtStartupEnabled.mockResolvedValue(true);
+        isWindowsStoreInstall.mockResolvedValue(false);
+        getStartInTrayEnabled.mockResolvedValue(false);
         tauriCoreMock.invoke.mockResolvedValue('dark');
         tauriAppMock.setTheme.mockResolvedValue(undefined);
         tauriWindowMock.setTheme.mockResolvedValue(undefined);
@@ -90,9 +99,38 @@ describe('useSettingsMainPage', () => {
             launchAtStartupEnabled: true,
             showCloseBehavior: true,
             showLaunchAtStartup: true,
+            showStartInTray: true,
             showTrayToggle: true,
         });
         expect(getLaunchAtStartupEnabled).not.toHaveBeenCalled();
+    });
+
+    it('shows start in tray only once launch at startup is on and it is not a Windows Store install', async () => {
+        render(<Harness isFlatpak={false} isTauri settings={{ window: { launchAtStartup: false } }} />);
+
+        await waitFor(() => {
+            expect(readState()).toMatchObject({ showStartInTray: false });
+        });
+    });
+
+    it('hides start in tray on a Windows Store install even with launch at startup on', async () => {
+        isWindowsStoreInstall.mockResolvedValue(true);
+
+        render(<Harness isFlatpak={false} isTauri settings={{ window: { launchAtStartup: true } }} />);
+
+        await waitFor(() => {
+            expect(readState()).toMatchObject({ showStartInTray: false });
+        });
+    });
+
+    it('loads the persisted start-in-tray preference from config.toml', async () => {
+        getStartInTrayEnabled.mockResolvedValue(true);
+
+        render(<Harness isFlatpak={false} isTauri settings={{ window: { launchAtStartup: true } }} />);
+
+        await waitFor(() => {
+            expect(readState()).toMatchObject({ startInTrayEnabled: true });
+        });
     });
 
     it('keeps lifecycle controls hidden outside the Tauri runtime', () => {

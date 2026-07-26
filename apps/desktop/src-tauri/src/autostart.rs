@@ -44,11 +44,39 @@ pub(crate) async fn set_launch_at_startup_enabled(
 
     let autostart = app.autolaunch();
     if enabled {
+        // Disable first: the plugin only writes the (now --startup-flag-
+        // carrying, see run()) command line on enable, so an entry that
+        // predates the flag and already reads as "enabled" would otherwise
+        // never get rewritten (#928).
+        let _ = autostart.disable();
         autostart.enable().map_err(autostart_error)?;
     } else {
         autostart.disable().map_err(autostart_error)?;
     }
     autostart.is_enabled().map_err(autostart_error)
+}
+
+/// Re-register the plain autostart-plugin entry so it picks up the
+/// --startup flag, but only if autostart is already on: this is called when
+/// the user turns on the "start in tray" preference, and toggling that must
+/// never silently turn on Launch at startup as a side effect (#928).
+/// Windows Store autostart is declared in the AppxManifest (no arguments
+/// possible) and Flatpak autostart is its own portal request, not this
+/// plugin — neither goes through here.
+pub(crate) fn refresh_plain_autostart_entry_if_enabled(app: &tauri::AppHandle) {
+    #[cfg(target_os = "linux")]
+    if is_flatpak() {
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    if is_windows_store_install() {
+        return;
+    }
+    let autostart = app.autolaunch();
+    if matches!(autostart.is_enabled(), Ok(true)) {
+        let _ = autostart.disable();
+        let _ = autostart.enable();
+    }
 }
 
 #[cfg(target_os = "linux")]

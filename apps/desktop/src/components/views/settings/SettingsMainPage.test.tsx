@@ -74,6 +74,54 @@ describe('SettingsMainPage', () => {
         expect(onLaunchAtStartupChange).not.toHaveBeenCalled();
     });
 
+    it('shows the start-in-tray checkbox only when launch at startup is on', () => {
+        const hidden = render(
+            <SettingsMainPage
+                {...baseProps}
+                showLaunchAtStartup
+                launchAtStartupEnabled={false}
+                showStartInTray={false}
+            />,
+        );
+        expect(hidden.queryByText('Start in the system tray')).toBeNull();
+        hidden.unmount();
+
+        const onStartInTrayChange = vi.fn();
+        const { getByRole, getByText } = render(
+            <SettingsMainPage
+                {...baseProps}
+                showLaunchAtStartup
+                launchAtStartupEnabled
+                showStartInTray
+                startInTrayEnabled={false}
+                onStartInTrayChange={onStartInTrayChange}
+            />,
+        );
+
+        expect(getByText('Start in the system tray')).toBeInTheDocument();
+        fireEvent.click(getByRole('switch', { name: 'Start in the system tray' }));
+        expect(onStartInTrayChange).toHaveBeenCalledWith(true);
+    });
+
+    it('disables the start-in-tray checkbox and explains why when the tray icon is off', () => {
+        const onStartInTrayChange = vi.fn();
+        const { getByRole, getByText } = render(
+            <SettingsMainPage
+                {...baseProps}
+                showLaunchAtStartup
+                launchAtStartupEnabled
+                showStartInTray
+                startInTrayEnabled
+                trayVisible={false}
+                onStartInTrayChange={onStartInTrayChange}
+            />,
+        );
+
+        expect(getByText('Requires the system tray icon above to be enabled.')).toBeInTheDocument();
+        fireEvent.click(getByRole('switch', { name: 'Start in the system tray' }));
+        expect(onStartInTrayChange).not.toHaveBeenCalled();
+    });
+
     it('shows the Flatpak quick add command and disables app-owned shortcut selection', () => {
         const { getByRole, getByText } = render(
             <SettingsMainPage

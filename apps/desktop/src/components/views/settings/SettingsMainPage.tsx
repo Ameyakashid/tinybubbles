@@ -83,6 +83,9 @@ type Labels = {
     launchAtStartupDesc: string;
     showTray: string;
     showTrayDesc: string;
+    startInTray: string;
+    startInTrayDesc: string;
+    startInTrayRequiresTrayDesc: string;
 };
 
 type LanguageOption = { id: Language; native: string };
@@ -130,6 +133,10 @@ export type SettingsMainPageProps = {
     showTrayToggle?: boolean;
     trayVisible?: boolean;
     onTrayVisibleChange?: (visible: boolean) => void;
+    showStartInTray?: boolean;
+    startInTrayEnabled?: boolean;
+    startInTrayLoading?: boolean;
+    onStartInTrayChange?: (enabled: boolean) => void;
 };
 
 const selectCls =
@@ -227,6 +234,10 @@ export function SettingsMainPage({
     showTrayToggle = false,
     trayVisible = true,
     onTrayVisibleChange,
+    showStartInTray = false,
+    startInTrayEnabled = false,
+    startInTrayLoading = false,
+    onStartInTrayChange,
 }: SettingsMainPageProps) {
     const hasWindowSection = showWindowDecorations || showCloseBehavior || showLaunchAtStartup || showTrayToggle;
     const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
@@ -506,6 +517,19 @@ export function SettingsMainPage({
                                     enabled={launchAtStartupEnabled}
                                     label={t.launchAtStartup}
                                     onChange={() => onLaunchAtStartupChange?.(!launchAtStartupEnabled)}
+                                />
+                            </SettingsRow>
+                        )}
+                        {showStartInTray && (
+                            <SettingsRow
+                                title={t.startInTray}
+                                description={trayVisible ? t.startInTrayDesc : t.startInTrayRequiresTrayDesc}
+                            >
+                                <Toggle
+                                    disabled={startInTrayLoading || !trayVisible}
+                                    enabled={startInTrayEnabled}
+                                    label={t.startInTray}
+                                    onChange={() => onStartInTrayChange?.(!startInTrayEnabled)}
                                 />
                             </SettingsRow>
                         )}

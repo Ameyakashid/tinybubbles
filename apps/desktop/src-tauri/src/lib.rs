@@ -171,6 +171,10 @@ const DROPBOX_OAUTH_TIMEOUT_SECS: u64 = 180;
 const DROPBOX_TOKEN_REFRESH_SKEW_MS: i64 = 60_000;
 const DROPBOX_DEFAULT_TOKEN_LIFETIME_SECS: i64 = 4 * 60 * 60;
 const QUICK_ADD_CLI_FLAG: &str = "--quick-add";
+// Written into the autostart entry's own command line (see the autostart
+// plugin builder in `run()`) so a launch caused by that entry can be told
+// apart from a manual double-click (#928).
+const STARTUP_LAUNCH_CLI_FLAG: &str = "--startup";
 #[cfg(target_os = "linux")]
 const FLATPAK_INSTANCE_REQUEST_SHOW: &str = "show\n";
 #[cfg(target_os = "linux")]
@@ -528,6 +532,7 @@ struct AppConfigToml {
     local_api_port: Option<String>,
     local_api_token: Option<String>,
     disable_hardware_acceleration: Option<String>,
+    start_in_tray: Option<String>,
 }
 
 fn default_obsidian_scan_folders() -> Vec<String> {
@@ -809,6 +814,15 @@ where
         .any(|arg| arg.as_ref().eq_ignore_ascii_case(QUICK_ADD_CLI_FLAG))
 }
 
+fn launch_requests_startup<I, S>(args: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .any(|arg| arg.as_ref().eq_ignore_ascii_case(STARTUP_LAUNCH_CLI_FLAG))
+}
+
 #[cfg(any(target_os = "windows", test))]
 fn with_windows_webview2_arguments(
     existing: Option<&str>,
@@ -872,6 +886,30 @@ fn bool_setting_enabled(value: Option<&str>) -> bool {
 
 fn hardware_acceleration_disabled(config: &AppConfigToml) -> bool {
     bool_setting_enabled(config.disable_hardware_acceleration.as_deref())
+}
+
+fn start_in_tray_enabled(config: &AppConfigToml) -> bool {
+    bool_setting_enabled(config.start_in_tray.as_deref())
+}
+
+/// The main window starts hidden only when all three hold: the process was
+/// launched by the autostart entry, the user opted into it, and a tray icon
+/// actually exists to bring the window back with (#928). A manual launch, or
+/// a launch with no tray to recover through, always shows the window.
+fn should_start_hidden(
+    launched_via_startup: bool,
+    start_in_tray_preference: bool,
+    tray_icon_available: bool,
+) -> bool {
+    launched_via_startup && start_in_tray_preference && tray_icon_available
+}
+
+// Shared by the pre-window-build availability check and the real tray
+// construction below, so both agree on whether a tray icon exists (#928).
+fn resolve_tray_icon(handle: &tauri::AppHandle) -> Option<Image<'_>> {
+    Image::from_bytes(include_bytes!("../icons/tray.png"))
+        .ok()
+        .or_else(|| handle.default_window_icon().cloned())
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -1000,6 +1038,29 @@ fn set_desktop_rendering_config(
     let secrets_path = get_secrets_path(&app);
     write_config_files(&config_path, &secrets_path, &config)?;
     Ok(desktop_rendering_config_from(&config))
+}
+
+#[tauri::command]
+fn get_start_in_tray_enabled(app: tauri::AppHandle) -> bool {
+    start_in_tray_enabled(&read_config(&app))
+}
+
+#[tauri::command]
+fn set_start_in_tray_enabled(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    let mut config = read_config(&app);
+    config.start_in_tray = Some(if enabled { "true" } else { "false" }.to_string());
+    let config_path = get_config_path(&app);
+    let secrets_path = get_secrets_path(&app);
+    write_config_files(&config_path, &secrets_path, &config)?;
+    if enabled {
+        // Existing autostart entries predate the --startup flag and
+        // is_enabled() can't report what arguments a stored entry carries, so
+        // refresh it now — but only if autostart is already on, since
+        // toggling this preference must never turn autostart on as a side
+        // effect (#928).
+        autostart::refresh_plain_autostart_entry_if_enabled(&app);
+    }
+    Ok(start_in_tray_enabled(&config))
 }
 
 #[cfg(target_os = "linux")]
@@ -1259,6 +1320,7 @@ pub fn run() {
 
     let launch_args = env::args().collect::<Vec<_>>();
     let initial_launch_requests_quick_add = launch_requests_quick_add(launch_args.iter());
+    let initial_launch_requests_startup = launch_requests_startup(launch_args.iter());
     #[cfg(target_os = "linux")]
     let flatpak_instance_listener = prepare_flatpak_instance_listener(&launch_args);
 
@@ -1283,6 +1345,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .app_name("Mindwtr")
+                .args([STARTUP_LAUNCH_CLI_FLAG])
                 .build(),
         )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
@@ -1383,6 +1446,17 @@ pub fn run() {
         .setup(move |app| {
             ensure_data_file(&app.handle()).ok();
 
+            let config = read_config(&app.handle());
+            // Resolved before the window is built: whether a tray icon can
+            // even be created decides whether it's safe to build the window
+            // hidden (#928) — see should_start_hidden below.
+            let tray_icon_available = resolve_tray_icon(&app.handle()).is_some();
+            let start_hidden = should_start_hidden(
+                initial_launch_requests_startup,
+                start_in_tray_enabled(&config),
+                tray_icon_available,
+            );
+
             // The main window is declared create:false so portable mode can pin
             // the webview's browsing profile inside the portable dir (#855).
             {
@@ -1400,6 +1474,15 @@ pub fn run() {
                     let _ = std::fs::create_dir_all(&webview_dir);
                     main_window_builder = main_window_builder.data_directory(webview_dir);
                 }
+                if start_hidden {
+                    // Launched by the autostart entry with "start in tray" on
+                    // and a tray icon to recover through — skip the flash of
+                    // a window that would just immediately hide. A manual
+                    // launch (no --startup flag) always builds visible; if
+                    // tray construction fails further down despite the icon
+                    // being available, that branch forces the window back.
+                    main_window_builder = main_window_builder.visible(false);
+                }
                 main_window_builder.build()?;
             }
 
@@ -1411,8 +1494,6 @@ pub fn run() {
             }
 
             {
-                let config = read_config(&app.handle());
-
                 #[cfg(target_os = "macos")]
                 if let Some(ref bookmark) = config.sync_path_bookmark {
                     if let Some(resolved) = resolve_sync_path_bookmark(bookmark) {
@@ -1490,9 +1571,7 @@ pub fn run() {
                 let tray_menu =
                     Menu::with_items(handle, &[&quick_add_item, &show_item, &quit_item])?;
 
-                let tray_icon = Image::from_bytes(include_bytes!("../icons/tray.png"))
-                    .ok()
-                    .or_else(|| handle.default_window_icon().cloned());
+                let tray_icon = resolve_tray_icon(handle);
 
                 if let Some(tray_icon) = tray_icon {
                     let mut tray_builder = TrayIconBuilder::with_id("main")
@@ -1556,6 +1635,15 @@ pub fn run() {
 
             if let Err(error) = tray_init_result {
                 log::warn!("Failed to initialize tray support: {error}");
+                if start_hidden {
+                    // The icon decoded fine but tray construction itself
+                    // errored (menu items, tray builder) — never leave a
+                    // hidden window with no tray to recover it through (#928,
+                    // the failure mode #913 was about).
+                    if let Some(window) = handle.get_webview_window("main") {
+                        let _ = window.show();
+                    }
+                }
             }
 
             let shortcut_state = app.state::<GlobalQuickAddShortcutState>();
@@ -1712,6 +1800,8 @@ pub fn run() {
             email_capture_commit,
             get_desktop_rendering_config,
             set_desktop_rendering_config,
+            get_start_in_tray_enabled,
+            set_start_in_tray_enabled,
             quit_app
         ])
         .run(tauri::generate_context!())
@@ -1789,6 +1879,48 @@ mod tests {
         assert!(!secrets_path.exists());
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn start_in_tray_setting_round_trips_in_public_config() {
+        let dir = unique_test_dir("start-in-tray");
+        fs::create_dir_all(&dir).expect("should create temp config dir");
+
+        let config_path = dir.join("config.toml");
+        let secrets_path = dir.join("secrets.toml");
+        let config = AppConfigToml {
+            start_in_tray: Some("true".to_string()),
+            ..AppConfigToml::default()
+        };
+
+        write_config_files(&config_path, &secrets_path, &config)
+            .expect("should write config files");
+
+        let public_config = read_config_toml(&config_path);
+        assert_eq!(public_config.start_in_tray.as_deref(), Some("true"));
+        assert!(start_in_tray_enabled(&public_config));
+        assert!(!secrets_path.exists());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn launch_requests_startup_matches_flag() {
+        assert!(launch_requests_startup(["mindwtr", "--startup"]));
+        assert!(launch_requests_startup(["mindwtr", "--STARTUP"]));
+        assert!(!launch_requests_startup(["mindwtr"]));
+        assert!(!launch_requests_startup(["mindwtr", "--quick-add"]));
+        // Mixed with other flags, order doesn't matter.
+        assert!(launch_requests_startup(["mindwtr", "--foo", "--startup"]));
+    }
+
+    #[test]
+    fn should_start_hidden_requires_all_three_conditions() {
+        assert!(should_start_hidden(true, true, true));
+        assert!(!should_start_hidden(false, true, true));
+        assert!(!should_start_hidden(true, false, true));
+        assert!(!should_start_hidden(true, true, false));
+        assert!(!should_start_hidden(false, false, false));
     }
 
     #[test]

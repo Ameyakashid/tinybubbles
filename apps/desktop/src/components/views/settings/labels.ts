@@ -120,6 +120,9 @@ export const SETTINGS_LABEL_KEYS = [
     'launchAtStartupDesc',
     'showTray',
     'showTrayDesc',
+    'startInTray',
+    'startInTrayDesc',
+    'startInTrayRequiresTrayDesc',
     'automation',
     'rendering',
     'softwareRendering',
@@ -645,7 +648,7 @@ export const SETTINGS_PAGE_LABEL_KEYS: Record<string, ReadonlyArray<keyof Settin
         'general', 'appearance', 'density', 'textSize', 'showTaskAge', 'language',
         'weekStart', 'dateFormat', 'calendarSystem', 'timeFormat', 'keybindings',
         'windowDecorations', 'closeBehavior', 'showTray', 'launchAtStartup',
-        'undoNotifications',
+        'startInTray', 'undoNotifications',
     ],
     gtd: [
         'gtd', 'features', 'featurePomodoro', 'autoArchive', 'defaultScheduleTime',
