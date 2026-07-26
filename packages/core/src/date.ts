@@ -553,6 +553,52 @@ export function getCalendarDayOfMonth(
         : date.getDate();
 }
 
+const shortWeekdayLabelsCache = new Map<string, string[]>();
+// A Sunday, local-time construction so the day-of-week cycle below is
+// timezone-safe (matches how existing weekday-header call sites already
+// build their reference date).
+const WEEKDAY_LABEL_ANCHOR_SUNDAY = new Date(2023, 0, 1);
+
+function formatWeekdayLabels(locale: string | undefined, width: 'short' | 'narrow'): string[] {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: width });
+    return Array.from({ length: 7 }, (_, day) => {
+        const date = new Date(WEEKDAY_LABEL_ANCHOR_SUNDAY);
+        date.setDate(date.getDate() + day);
+        return formatter.format(date);
+    });
+}
+
+/**
+ * Locale-appropriate weekday labels for a fixed-width 7-column header
+ * (calendar mini-picker, week view). Index 0 is Sunday, so a caller with a
+ * `Date` can index by `date.getDay()`, and a caller rendering its own
+ * week-start rotation can index by `(weekStartIndex + i) % 7`.
+ *
+ * `Intl.DateTimeFormat`'s "short" weekday form is not translated by us — it's
+ * whatever CLDR calls abbreviated for that locale, and for some locales
+ * (pt-PT, ar, pl, vi, hi) that is too wide for a 7-column grid, or even the
+ * full word (#929). Strip trailing periods, and if a label is still over
+ * three characters, truncate every label to three graphemes — unless that
+ * truncation makes two labels collide (ar, vi), in which case fall back to
+ * `weekday: 'narrow'` for the whole set instead.
+ */
+export function getShortWeekdayLabels(locale?: string): string[] {
+    const cacheKey = locale ?? '';
+    const cached = shortWeekdayLabelsCache.get(cacheKey);
+    if (cached) return cached;
+
+    const short = formatWeekdayLabels(locale, 'short').map((label) => label.replace(/\.+$/, ''));
+    let labels = short;
+    if (short.some((label) => [...label].length > 3)) {
+        const truncated = short.map((label) => [...label].slice(0, 3).join(''));
+        const distinct = new Set(truncated).size === truncated.length;
+        labels = distinct ? truncated : formatWeekdayLabels(locale, 'narrow');
+    }
+
+    shortWeekdayLabelsCache.set(cacheKey, labels);
+    return labels;
+}
+
 /**
  * Safely parses a date string to a Date object.
  * Returns null if invalid.

@@ -15,6 +15,7 @@ import {
     getProjectedRecurringTaskCalendarDate,
     getQuickDate,
     getRecurrenceCompletedOccurrencesValue,
+    getShortWeekdayLabels,
     getTaskDateCoherenceIssues,
     hasTimeComponent,
     isJalaliCalendarLocale,
@@ -158,13 +159,8 @@ function getCalendarGridDays(monthDate: Date, weekStartIndex: number, calendarSy
 }
 
 function getWeekdayLabels(locale: string, weekStartIndex: number): string[] {
-    const formatter = new Intl.DateTimeFormat(getCalendarLocale(locale), { weekday: 'short' });
-    const sunday = new Date(2026, 0, 4);
-    return Array.from({ length: 7 }, (_, index) => {
-        const dayIndex = (weekStartIndex + index) % 7;
-        const date = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + dayIndex);
-        return formatter.format(date);
-    });
+    const labels = getShortWeekdayLabels(getCalendarLocale(locale));
+    return Array.from({ length: 7 }, (_, index) => labels[(weekStartIndex + index) % 7]);
 }
 
 function getDateInputOrder(dateFormatSetting: string | null | undefined, locale: string): DateInputOrder {

@@ -19,6 +19,7 @@ import {
   formatI18nTemplate,
   getCalendarPlanningCandidates,
   getCalendarMonthIndex,
+  getShortWeekdayLabels,
   normalizeDateFormatSetting,
   resolveCalendarSystemSetting,
   resolveDateLocaleTag,
@@ -305,10 +306,8 @@ export function useCalendarViewController() {
     year: 'numeric',
     month: 'long',
   });
-  const dayNames = Array.from({ length: 7 }, (_, i) => {
-    const base = new Date(2021, 7, 1 + ((i + weekStartIndex) % 7));
-    return base.toLocaleDateString(locale, { weekday: 'short' });
-  });
+  const shortWeekdayLabels = getShortWeekdayLabels(locale);
+  const dayNames = Array.from({ length: 7 }, (_, i) => shortWeekdayLabels[(i + weekStartIndex) % 7]);
   const weekStartDate = useMemo(() => (
     getWeekStart(selectedDate ?? currentMonthDate, weekStartIndex)
   ), [currentMonthDate, selectedDate, weekStartIndex]);

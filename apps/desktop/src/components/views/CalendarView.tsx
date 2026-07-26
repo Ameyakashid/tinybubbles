@@ -4,6 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-re
 import {
     getCalendarDayOfMonth,
     getCalendarMonthIndex,
+    getShortWeekdayLabels,
     getTaskCalendarOccurrenceDate,
     hasTimeComponent,
     isProjectedRecurringTask,
@@ -585,7 +586,7 @@ export function CalendarView() {
                                     )}
                                 >
                                     <div className="text-xs font-medium text-muted-foreground">
-                                        {day.toLocaleDateString(locale, { weekday: 'short' })}
+                                        {getShortWeekdayLabels(locale)[day.getDay()]}
                                     </div>
                                     <div className={cn("mt-0.5 inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-sm font-semibold", isToday(day) && "bg-primary text-primary-foreground")}>
                                         {getCalendarDayOfMonth(day, calendarSystem)}

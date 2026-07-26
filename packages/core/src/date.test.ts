@@ -11,6 +11,7 @@ import {
     normalizeDateFormatSetting,
     normalizeTimeFormatSetting,
     getSystemWeekStart,
+    getShortWeekdayLabels,
     normalizeWeekStartPreference,
     normalizeWeekStartSetting,
     parseCalendarInputDate,
@@ -186,5 +187,39 @@ describe('date utils', () => {
         expect(isQuickDatePresetSelected('tomorrow', new Date(2026, 4, 13, 21, 45), now)).toBe(true);
         expect(isQuickDatePresetSelected('tomorrow', new Date(2026, 4, 14), now)).toBe(false);
         expect(isQuickDatePresetSelected('no_date', null, now)).toBe(false);
+    });
+});
+
+describe('getShortWeekdayLabels (#929)', () => {
+    // Guard the environment first: if this fails, the test runner's ICU
+    // lacks locale data and every expectation below would silently degrade
+    // rather than genuinely pass.
+    it('is byte-identical to today for English', () => {
+        expect(getShortWeekdayLabels('en-US')).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    });
+
+    it('returns Sunday at index 0', () => {
+        const labels = getShortWeekdayLabels('en-US');
+        const sunday = new Date(2023, 0, 1); // Jan 1, 2023 was a Sunday
+        expect(sunday.getDay()).toBe(0);
+        expect(labels[sunday.getDay()]).toBe('Sun');
+    });
+
+    it.each([
+        ['pt-PT', ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']], // full words truncate to three
+        ['pt-BR', ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']], // already short, just loses the period
+        ['fr-FR', ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']], // trailing periods stripped
+        ['pl', ['nie', 'pon', 'wt', 'śr', 'czw', 'pt', 'sob']],
+        ['hi', ['रवि', 'सोम', 'मंग', 'बुध', 'गुर', 'शुक', 'शनि']],
+    ])('truncates %s to three graphemes without collisions', (locale, expected) => {
+        expect(getShortWeekdayLabels(locale)).toEqual(expected);
+    });
+
+    it('falls back to narrow for Vietnamese, where truncation collides', () => {
+        expect(getShortWeekdayLabels('vi')).toEqual(['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']);
+    });
+
+    it('falls back to narrow for Arabic, where truncation collides', () => {
+        expect(getShortWeekdayLabels('ar')).toEqual(['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س']);
     });
 });
