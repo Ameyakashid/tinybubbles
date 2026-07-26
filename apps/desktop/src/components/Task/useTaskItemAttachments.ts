@@ -40,9 +40,14 @@ const deleteOrphanedAttachmentFiles = async (orphaned: Attachment[]): Promise<vo
     if (fileOrphans.length === 0) return;
     try {
         const managedDir = normalizeAttachmentPathForUrl(await getManagedPath(ATTACHMENTS_DIR_NAME));
+        const managedDirPrefix = `${managedDir}/`;
         const { remove } = await import('@tauri-apps/plugin-fs');
         for (const attachment of fileOrphans) {
-            if (!normalizeAttachmentPathForUrl(attachment.uri).startsWith(managedDir)) continue;
+            // A bare `startsWith(managedDir)` would also match a sibling
+            // directory that merely shares the prefix (e.g. `attachments-old/`)
+            // — require the path separator so only files actually inside the
+            // managed dir are "provably ours" to delete.
+            if (!normalizeAttachmentPathForUrl(attachment.uri).startsWith(managedDirPrefix)) continue;
             try {
                 await remove(attachment.uri);
             } catch (error) {

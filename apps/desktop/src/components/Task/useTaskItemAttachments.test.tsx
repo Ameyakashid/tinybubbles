@@ -225,6 +225,35 @@ describe('useTaskItemAttachments resetAttachmentState orphan cleanup', () => {
         expect(result.current.editAttachments).toEqual(taskWithAttachment.attachments);
     });
 
+    it('never removes an orphaned file in a sibling directory that merely shares the managed dir prefix', async () => {
+        // e.g. `/data/mindwtr/attachments-old/x.pdf` — `startsWith('/data/mindwtr/attachments')`
+        // would wrongly match this without a path-separator boundary.
+        const siblingAttachment = {
+            id: 'sibling-1',
+            kind: 'file' as const,
+            title: 'x.pdf',
+            uri: '/data/mindwtr/attachments-old/x.pdf',
+            size: 10,
+            localStatus: 'available' as const,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
+        act(() => {
+            // Simulate the sibling-dir attachment having entered edit state
+            // this session (e.g. imported/synced data), so cancelling treats
+            // it as orphaned relative to the saved (empty) task.attachments.
+            result.current.setEditAttachments([siblingAttachment]);
+        });
+
+        await act(async () => {
+            result.current.resetAttachmentState(task.attachments);
+            await Promise.resolve();
+        });
+
+        expect(removeMock).not.toHaveBeenCalled();
+    });
+
     it('never removes a link attachment added in the session', async () => {
         const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
 
