@@ -62,9 +62,11 @@ type NavSection = {
     items: NavItem[];
 };
 
-// Browsers keep firing dragover while a drag is live, so a gap this long means
-// the drag ended by a route that gave us no event (see the listeners below).
-const TASK_DRAG_IDLE_MS = 400;
+// Safety net only: drop and dragend clear the highlight immediately in every
+// ordinary case, so this just catches a drag that ended without either (a source
+// unmounted mid-drag). Kept well above the ~350ms browsers idle between dragover
+// events on a stationary pointer, so the cue never flickers off mid-drag.
+const TASK_DRAG_IDLE_MS = 1_000;
 
 // Sidebar entries a dragged task can be dropped on to reclassify it. Only lists
 // that ARE a status qualify: Focus is a flag rather than a status, Projects and
@@ -413,13 +415,18 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
             if (!hasCalendarTaskDragData(event.dataTransfer)) return;
             keepAlive();
         };
-        document.addEventListener('dragstart', handleDragStart, true);
+        // dragstart listens on the BUBBLE phase on purpose: the task row populates
+        // the transfer in its own dragstart handler, so a capture listener runs
+        // first and sees an empty dataTransfer — the drag then goes unrecognised
+        // and no target ever lights up. Only the endings need capture, to beat the
+        // calendar grid's stopPropagation.
+        document.addEventListener('dragstart', handleDragStart);
         document.addEventListener('dragover', handleDragOver, true);
         document.addEventListener('dragend', endDrag, true);
         document.addEventListener('drop', endDrag, true);
         return () => {
             if (idleTimer !== null) window.clearTimeout(idleTimer);
-            document.removeEventListener('dragstart', handleDragStart, true);
+            document.removeEventListener('dragstart', handleDragStart);
             document.removeEventListener('dragover', handleDragOver, true);
             document.removeEventListener('dragend', endDrag, true);
             document.removeEventListener('drop', endDrag, true);
@@ -791,8 +798,13 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                             isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5",
                                             // Last so they win the merge: the drop target has to read as
                                             // available even on the active item's own tinted background.
-                                            isDropTarget && taskDragActive && "ring-1 ring-primary/50 bg-primary/5 text-primary",
-                                            isDropTarget && dragOverNavId === item.id && "ring-2 ring-primary bg-primary/15 text-primary"
+                                            // Every destination reads as available at a glance, and the one
+                                            // under the pointer is unmistakably the one that will take the
+                                            // drop. A dashed edge is the conventional "drop zone" cue and
+                                            // distinguishes an available target from the solid ring the
+                                            // focused item already uses.
+                                            isDropTarget && taskDragActive && "outline-dashed outline-2 -outline-offset-2 outline-primary/50 bg-primary/10 text-primary",
+                                            isDropTarget && dragOverNavId === item.id && "outline outline-2 -outline-offset-2 outline-primary bg-primary/25 text-primary"
                                         )}
                                         aria-current={isActiveItem ? 'page' : undefined}
                                         title={itemLabel}

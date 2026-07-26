@@ -23,6 +23,24 @@ const dispatchDrag = (type: string, withTaskData: boolean) => act(() => {
     document.dispatchEvent(event);
 });
 
+// A real drag starts on a task row deep in the tree, and that row fills the
+// transfer in its OWN dragstart handler. Dispatching straight at document would
+// hide an ordering bug — a capture-phase listener runs before the row and sees an
+// empty transfer, so the drag goes unrecognised and nothing lights up. Both the
+// source element and that timing are reproduced here.
+const dispatchDragStartFromRow = (withTaskData: boolean) => act(() => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    const types: string[] = [];
+    source.addEventListener('dragstart', () => {
+        if (withTaskData) types.push(CALENDAR_TASK_DRAG_MIME);
+    });
+    const event = new Event('dragstart', { bubbles: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types, getData: () => '' } });
+    source.dispatchEvent(event);
+    source.remove();
+});
+
 const createMergeStats = (conflictIds: string[] = []): MergeStats => {
     const emptyStats = {
         localTotal: 0,
@@ -501,20 +519,27 @@ describe('Layout sync security warning', () => {
     // This nav item is the only place a task dragged out of a list can be dropped,
     // and it gave no sign of that while a drag was in flight, so the capability was
     // undiscoverable (#867).
-    it('highlights the calendar nav item while a task drag is in flight', () => {
-        const { getByRole } = renderLayout();
+    it('lights up every drop target while a task drag is in flight', () => {
+        const { container, getByRole } = renderLayout();
         const calendarItem = getByRole('button', { name: 'Calendar' });
-        expect(calendarItem.className).not.toContain('ring-1');
+        const somedayItem = container.querySelector('[data-view="someday"]')!;
+        const projectsItem = container.querySelector('[data-view="projects"]')!;
+        expect(calendarItem.className).not.toContain('outline-dashed');
 
-        dispatchDrag('dragstart', true);
-        expect(calendarItem.className).toContain('ring-1');
+        dispatchDragStartFromRow(true);
+
+        // Every destination, not just whichever one the pointer happens to be over.
+        expect(calendarItem.className).toContain('outline-dashed');
+        expect(somedayItem.className).toContain('outline-dashed');
+        // Projects is not a destination and must stay quiet.
+        expect(projectsItem.className).not.toContain('outline-dashed');
 
         dispatchDrag('dragend', true);
-        expect(calendarItem.className).not.toContain('ring-1');
+        expect(calendarItem.className).not.toContain('outline-dashed');
 
-        // An unrelated drag (text, a file) must not advertise the calendar.
-        dispatchDrag('dragstart', false);
-        expect(calendarItem.className).not.toContain('ring-1');
+        // An unrelated drag (text, a file) must not advertise anything.
+        dispatchDragStartFromRow(false);
+        expect(calendarItem.className).not.toContain('outline-dashed');
     });
 
     it('reclassifies a task dropped on a status list, with undo', async () => {
@@ -580,15 +605,15 @@ describe('Layout sync security warning', () => {
         const { getByRole } = renderLayout();
         const calendarItem = getByRole('button', { name: 'Calendar' });
 
-        dispatchDrag('dragstart', true);
-        expect(calendarItem.className).toContain('ring-1');
+        dispatchDragStartFromRow(true);
+        expect(calendarItem.className).toContain('outline-dashed');
 
         vi.useFakeTimers();
         try {
             // Nothing else arrives — no drop, no dragend, no further dragover.
             dispatchDrag('dragover', true);
-            act(() => { vi.advanceTimersByTime(1_000); });
-            expect(calendarItem.className).not.toContain('ring-1');
+            act(() => { vi.advanceTimersByTime(5_000); });
+            expect(calendarItem.className).not.toContain('outline-dashed');
         } finally {
             vi.useRealTimers();
         }
