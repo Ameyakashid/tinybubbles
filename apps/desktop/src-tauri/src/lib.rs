@@ -532,6 +532,7 @@ struct AppConfigToml {
     local_api_port: Option<String>,
     local_api_token: Option<String>,
     disable_hardware_acceleration: Option<String>,
+    autostart_startup_flag_migrated: Option<String>,
 }
 
 fn default_obsidian_scan_folders() -> Vec<String> {
@@ -1415,6 +1416,10 @@ pub fn run() {
             ensure_data_file(&app.handle()).ok();
 
             let config = read_config(&app.handle());
+            // One-time fixup for autostart entries that predate the --startup
+            // flag, so should_start_hidden below can actually trigger for
+            // installs that already had Launch at startup on (#928).
+            autostart::migrate_autostart_entry_if_pending(&app.handle());
             // Resolved before the window is built: whether a tray icon can
             // even be created decides whether it's safe to build the window
             // hidden (#928) — see should_start_hidden below.
@@ -1752,6 +1757,7 @@ pub fn run() {
             get_system_theme_preference,
             set_global_quick_add_shortcut,
             hide_quick_add_window,
+            is_windows_store_install,
             get_install_source,
             get_launch_at_startup_enabled,
             set_launch_at_startup_enabled,

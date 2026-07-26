@@ -2,6 +2,9 @@
 use crate::install::is_flatpak;
 #[cfg(target_os = "windows")]
 use crate::install::is_windows_store_install;
+use crate::bool_setting_enabled;
+use crate::config::{read_config, write_config_files};
+use crate::storage::{get_config_path, get_secrets_path};
 use tauri_plugin_autostart::ManagerExt;
 
 /// Task id declared as <uap5:StartupTask> in the Microsoft Store AppxManifest
@@ -54,6 +57,49 @@ pub(crate) async fn set_launch_at_startup_enabled(
         autostart.disable().map_err(autostart_error)?;
     }
     autostart.is_enabled().map_err(autostart_error)
+}
+
+/// True exactly once for an entry that predates the --startup flag and is
+/// still on: never migrated yet, and the user already asked for autostart.
+/// An entry the user has off must never be turned on by this check (#928).
+fn should_refresh_autostart_entry(already_migrated: bool, autostart_enabled: bool) -> bool {
+    !already_migrated && autostart_enabled
+}
+
+/// One-time migration, run at boot: `tauri_plugin_autostart` only writes the
+/// `--startup` command line on `enable()`, so an entry created before that
+/// flag existed and left on would otherwise never pick it up, and the
+/// tray-start behavior derived from it would never trigger for that install
+/// (#928). Guarded by a config.toml marker so a normal boot does not repeat
+/// the disable()/enable() round trip every launch; the marker is only set
+/// after `enable()` reports success; a failure leaves it unset so the next
+/// boot retries rather than the migration being silently recorded as done
+/// despite leaving the user with no autostart entry at all.
+pub(crate) fn migrate_autostart_entry_if_pending(app: &tauri::AppHandle) {
+    #[cfg(target_os = "linux")]
+    if is_flatpak() {
+        return;
+    }
+    #[cfg(target_os = "windows")]
+    if is_windows_store_install() {
+        return;
+    }
+    let mut config = read_config(app);
+    let already_migrated = bool_setting_enabled(config.autostart_startup_flag_migrated.as_deref());
+    let autostart = app.autolaunch();
+    let autostart_enabled = matches!(autostart.is_enabled(), Ok(true));
+    if !should_refresh_autostart_entry(already_migrated, autostart_enabled) {
+        return;
+    }
+    // Mirrors set_launch_at_startup_enabled: disable's result is ignored so a
+    // quirky OS-level failure there does not block the enable() that actually
+    // rewrites the command line.
+    let _ = autostart.disable();
+    if autostart.enable().is_err() {
+        return;
+    }
+    config.autostart_startup_flag_migrated = Some("true".to_string());
+    let _ = write_config_files(&get_config_path(app), &get_secrets_path(app), &config);
 }
 
 #[cfg(target_os = "linux")]
@@ -131,4 +177,17 @@ async fn set_store_launch_at_startup_enabled(enabled: bool) -> Result<bool, Stri
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refreshes_only_a_not_yet_migrated_entry_that_is_already_enabled() {
+        assert!(should_refresh_autostart_entry(false, true));
+        assert!(!should_refresh_autostart_entry(true, true));
+        assert!(!should_refresh_autostart_entry(false, false));
+        assert!(!should_refresh_autostart_entry(true, false));
+    }
 }
