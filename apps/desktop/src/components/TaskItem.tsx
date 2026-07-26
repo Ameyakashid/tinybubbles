@@ -1322,6 +1322,7 @@ export const TaskItem = memo(function TaskItem({
             onDeleteTask={task.status === 'inbox' ? handleDeleteTask : undefined}
             onCancel={handleEditorCancel}
             onSubmit={handleSubmit}
+            onFilesDropped={(files) => void addDroppedFileAttachments(files)}
         />
     );
 
@@ -1424,7 +1425,6 @@ export const TaskItem = memo(function TaskItem({
                         isModalEditor={isModalEditor}
                         modalEditorRef={modalEditorRef}
                         onCancel={handleEditorCancel}
-                        onFilesDropped={(files) => void addDroppedFileAttachments(files)}
                         renderDisplay={() => (
                             <TaskItemDisplay
                                 task={task}

@@ -51,6 +51,16 @@ const translations: Record<string, string> = {
 
 const t = (key: string) => translations[key] ?? key;
 
+// jsdom has no scrollIntoView; the reveal effect calls it after expanding
+// the section holding Attachments.
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+});
+
+const createDataTransfer = (types: string[], files: File[] = []) =>
+    ({ types, files }) as unknown as DataTransfer;
+
 const baseProps: Parameters<typeof TaskItemEditor>[0] = {
     t,
     draft: createTaskDraft(baseTask),
@@ -240,5 +250,54 @@ describe('TaskItemEditor', () => {
         const { queryByRole } = render(<TaskItemEditor {...baseProps} />);
 
         expect(queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    });
+});
+
+describe('TaskItemEditor file drop', () => {
+    it('ignores a task drag (non-Files dataTransfer types) so calendar/sidebar dragging still works', () => {
+        const onFilesDropped = vi.fn();
+        const { container } = render(<TaskItemEditor {...baseProps} onFilesDropped={onFilesDropped} />);
+        const form = container.querySelector('form')!;
+
+        const dataTransfer = createDataTransfer(['application/x-mindwtr-task']);
+        fireEvent.dragOver(form, { dataTransfer });
+        fireEvent.drop(form, { dataTransfer });
+
+        expect(onFilesDropped).not.toHaveBeenCalled();
+    });
+
+    it('attaches OS files dropped anywhere on the editor', () => {
+        const onFilesDropped = vi.fn();
+        const file = new File(['hi'], 'a.txt');
+        const { container } = render(<TaskItemEditor {...baseProps} onFilesDropped={onFilesDropped} />);
+        const form = container.querySelector('form')!;
+
+        const dataTransfer = createDataTransfer(['Files'], [file]);
+        fireEvent.dragOver(form, { dataTransfer });
+        fireEvent.drop(form, { dataTransfer });
+
+        expect(onFilesDropped).toHaveBeenCalledWith([file]);
+    });
+
+    it('opens the section holding Attachments on drop, wherever the user assigned it', () => {
+        const onFilesDropped = vi.fn();
+        const file = new File(['hi'], 'a.txt');
+        const { container, getByRole, getByText } = render(
+            <TaskItemEditor
+                {...baseProps}
+                organizationFields={['attachments']}
+                onFilesDropped={onFilesDropped}
+            />
+        );
+        const form = container.querySelector('form')!;
+        expect(getByRole('button', { name: /Organization/i })).toHaveAttribute('aria-expanded', 'false');
+
+        const dataTransfer = createDataTransfer(['Files'], [file]);
+        fireEvent.dragOver(form, { dataTransfer });
+        fireEvent.drop(form, { dataTransfer });
+
+        expect(onFilesDropped).toHaveBeenCalledWith([file]);
+        expect(getByRole('button', { name: /Organization/i })).toHaveAttribute('aria-expanded', 'true');
+        expect(getByText('field:attachments')).toBeInTheDocument();
     });
 });

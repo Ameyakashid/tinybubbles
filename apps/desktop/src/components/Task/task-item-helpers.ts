@@ -95,6 +95,21 @@ const isTaskEditorSectionId = (value: unknown): value is TaskEditorSectionId =>
 export const isTaskEditorSectionableField = (fieldId: TaskEditorFieldId): boolean =>
     TASK_EDITOR_SECTIONABLE_FIELDS.includes(fieldId);
 
+// Attachments can be reassigned (Settings -> GTD -> Task Editor Layout) to any
+// of the three collapsible sections. A dropped file needs to know which one
+// to expand; null means attachments aren't in a collapsible section (basic,
+// or hidden), so there's nothing to expand.
+export function findAttachmentsSection(
+    schedulingFields: TaskEditorFieldId[],
+    organizationFields: TaskEditorFieldId[],
+    detailsFields: TaskEditorFieldId[],
+): Extract<TaskEditorSectionId, 'scheduling' | 'organization' | 'details'> | null {
+    if (schedulingFields.includes('attachments')) return 'scheduling';
+    if (organizationFields.includes('attachments')) return 'organization';
+    if (detailsFields.includes('attachments')) return 'details';
+    return null;
+}
+
 export const getTaskEditorSectionAssignments = (
     taskEditor: TaskEditorSettings | undefined
 ): Record<TaskEditorFieldId, TaskEditorSectionId> => {

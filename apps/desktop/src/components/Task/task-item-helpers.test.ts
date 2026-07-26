@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRecurrenceRRuleValue, normalizeDateInputValue, toDateTimeLocalValue } from './task-item-helpers';
+import { findAttachmentsSection, getRecurrenceRRuleValue, normalizeDateInputValue, toDateTimeLocalValue } from './task-item-helpers';
 
 describe('normalizeDateInputValue', () => {
     const referenceNow = new Date('2026-02-24T12:00:00.000Z');
@@ -20,6 +20,18 @@ describe('normalizeDateInputValue', () => {
 
     it('returns non-date input unchanged', () => {
         expect(normalizeDateInputValue('not-a-date', referenceNow)).toBe('not-a-date');
+    });
+});
+
+describe('findAttachmentsSection', () => {
+    it('finds attachments wherever the user reassigned the field', () => {
+        expect(findAttachmentsSection(['attachments'], [], [])).toBe('scheduling');
+        expect(findAttachmentsSection([], ['attachments'], [])).toBe('organization');
+        expect(findAttachmentsSection([], [], ['attachments'])).toBe('details');
+    });
+
+    it('returns null when attachments is in the basic section or hidden', () => {
+        expect(findAttachmentsSection([], [], [])).toBeNull();
     });
 });
 

@@ -7,6 +7,7 @@ const openMock = vi.fn();
 const invokeMock = vi.fn();
 const mkdirMock = vi.fn();
 const writeFileMock = vi.fn();
+const removeMock = vi.fn();
 
 vi.mock('@tauri-apps/api/path', () => ({
     dataDir: vi.fn(async () => '/data'),
@@ -23,6 +24,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     readTextFile: vi.fn(),
     mkdir: (...args: unknown[]) => mkdirMock(...args),
     writeFile: (...args: unknown[]) => writeFileMock(...args),
+    remove: (...args: unknown[]) => removeMock(...args),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -169,5 +171,77 @@ describe('useTaskItemAttachments addDroppedFileAttachments', () => {
         expect(writeFileMock).not.toHaveBeenCalled();
         expect(result.current.editAttachments).toHaveLength(0);
         expect(result.current.attachmentError).toBe('attachments.fileTooLarge');
+    });
+});
+
+describe('useTaskItemAttachments resetAttachmentState orphan cleanup', () => {
+    beforeEach(() => {
+        openMock.mockReset();
+        invokeMock.mockReset();
+        mkdirMock.mockClear();
+        writeFileMock.mockClear();
+        removeMock.mockClear();
+        invokeMock.mockRejectedValue(new Error('get_managed_data_dir not supported'));
+    });
+
+    it('deletes the copied file when cancelling after an import', async () => {
+        const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+        const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
+        await act(async () => {
+            await result.current.addDroppedFileAttachments([file]);
+        });
+        expect(result.current.editAttachments).toHaveLength(1);
+        const addedUri = result.current.editAttachments[0].uri;
+
+        await act(async () => {
+            result.current.resetAttachmentState(task.attachments);
+            await Promise.resolve();
+        });
+
+        expect(removeMock).toHaveBeenCalledWith(addedUri);
+        expect(result.current.editAttachments).toEqual(task.attachments || []);
+    });
+
+    it('does not remove a file that was already on the task', async () => {
+        const existingAttachment = {
+            id: 'existing-1',
+            kind: 'file' as const,
+            title: 'existing.txt',
+            uri: '/data/mindwtr/attachments/existing-1.txt',
+            size: 10,
+            localStatus: 'available' as const,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        const taskWithAttachment = { ...task, attachments: [existingAttachment] };
+        const { result } = renderHook(() => useTaskItemAttachments({ task: taskWithAttachment, t }));
+
+        await act(async () => {
+            result.current.resetAttachmentState(taskWithAttachment.attachments);
+            await Promise.resolve();
+        });
+
+        expect(removeMock).not.toHaveBeenCalled();
+        expect(result.current.editAttachments).toEqual(taskWithAttachment.attachments);
+    });
+
+    it('never removes a link attachment added in the session', async () => {
+        const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
+
+        act(() => {
+            result.current.addLinkAttachment();
+        });
+        act(() => {
+            result.current.handleAddLinkAttachment('https://example.com');
+        });
+        expect(result.current.editAttachments).toHaveLength(1);
+        expect(result.current.editAttachments[0]).toMatchObject({ kind: 'link' });
+
+        await act(async () => {
+            result.current.resetAttachmentState(task.attachments);
+            await Promise.resolve();
+        });
+
+        expect(removeMock).not.toHaveBeenCalled();
     });
 });

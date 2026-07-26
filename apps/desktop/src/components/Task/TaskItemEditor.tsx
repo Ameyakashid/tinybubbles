@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight, HelpCircle, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import {
     filterProjectsBySelectedArea,
@@ -20,6 +20,7 @@ import { SectionSelector } from '../ui/SectionSelector';
 import { TaskInput, type TaskInputAcceptedSuggestion } from './TaskInput';
 import { cn } from '../../lib/utils';
 import { QUICK_ADD_FIELD_TOKENS, QuickAddTokenBadge, taskEditorLabelClassName } from './task-editor-label';
+import { findAttachmentsSection } from './task-item-helpers';
 import { FocusStarIcon } from '../FocusStarIcon';
 
 interface TaskItemEditorProps {
@@ -81,6 +82,7 @@ interface TaskItemEditorProps {
     onDeleteTask?: () => void;
     onCancel: () => void;
     onSubmit: (e: FormEvent) => void;
+    onFilesDropped?: (files: File[]) => void;
 }
 
 function appendCommaToken(value: string, token: string): string {
@@ -153,6 +155,7 @@ export function TaskItemEditor({
     onDeleteTask,
     onCancel,
     onSubmit,
+    onFilesDropped,
 }: TaskItemEditorProps) {
     // Draft values and setField bindings, under the names the form below was
     // written against.
@@ -194,6 +197,55 @@ export function TaskItemEditor({
     const [detailsOpen, setDetailsOpen] = useState(sectionOpenDefaults.details);
     const [aiMenuOpen, setAiMenuOpen] = useState(false);
     const aiMenuRef = useRef<HTMLDivElement>(null);
+
+    // Attachments can live in any of the three collapsible sections (user
+    // configurable layout); a dropped file needs to expand whichever one
+    // holds it and scroll it into view so the drop isn't invisible feedback.
+    const attachmentsSection = findAttachmentsSection(schedulingFields, organizationFields, detailsFields);
+    const attachmentsFieldRef = useRef<HTMLDivElement | null>(null);
+    const [isFileDragOver, setIsFileDragOver] = useState(false);
+    const [revealAttachmentsToken, setRevealAttachmentsToken] = useState(0);
+
+    const isFileDrag = (event: DragEvent) => Boolean(event.dataTransfer?.types.includes('Files'));
+
+    const handleFormDragOver = (event: DragEvent<HTMLFormElement>) => {
+        if (!onFilesDropped || !isFileDrag(event)) return;
+        event.preventDefault();
+        setIsFileDragOver(true);
+    };
+
+    // dragleave also fires when the pointer crosses into a child element, which
+    // would flicker the ring off for the whole drag if not guarded.
+    const handleFormDragLeave = (event: DragEvent<HTMLFormElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+        setIsFileDragOver(false);
+    };
+
+    const handleFormDrop = (event: DragEvent<HTMLFormElement>) => {
+        if (!onFilesDropped || !isFileDrag(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setIsFileDragOver(false);
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length === 0) return;
+        onFilesDropped(files);
+        if (attachmentsSection === 'scheduling') setSchedulingOpen(true);
+        else if (attachmentsSection === 'organization') setOrganizationOpen(true);
+        else if (attachmentsSection === 'details') setDetailsOpen(true);
+        if (attachmentsSection) setRevealAttachmentsToken((prev) => prev + 1);
+    };
+
+    // Expanding a section and scrolling to it in the same tick scrolls to a
+    // node that isn't laid out yet; wait a frame after the open-state update
+    // has painted before scrolling.
+    useEffect(() => {
+        if (revealAttachmentsToken === 0) return;
+        const raf = requestAnimationFrame(() => {
+            attachmentsFieldRef.current?.scrollIntoView({ block: 'nearest' });
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [revealAttachmentsToken]);
     const handleTitleSuggestionAccept = async (suggestion: TaskInputAcceptedSuggestion) => {
         resetCopilotDraft();
         if (await onAcceptTitleSuggestion?.(suggestion)) {
@@ -271,7 +323,10 @@ export function TaskItemEditor({
             }}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="flex flex-col gap-3 max-h-[80vh]"
+            onDragOver={handleFormDragOver}
+            onDragLeave={handleFormDragLeave}
+            onDrop={handleFormDrop}
+            className={cn("flex flex-col gap-3 max-h-[80vh]", isFileDragOver && "ring-2 ring-primary/50")}
         >
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 pl-1 -ml-1 pt-1 -mt-1 pb-1 -mb-1 space-y-3">
                 <div className="flex items-start gap-3 pt-0.5">
@@ -582,7 +637,7 @@ export function TaskItemEditor({
                         {schedulingOpen && (
                             <div className="mt-3 space-y-3">
                                 {schedulingFields.map((fieldId) => (
-                                    <div key={fieldId}>{renderField(fieldId)}</div>
+                                    <div key={fieldId} ref={fieldId === 'attachments' ? attachmentsFieldRef : undefined}>{renderField(fieldId)}</div>
                                 ))}
                             </div>
                         )}
@@ -609,7 +664,7 @@ export function TaskItemEditor({
                         {organizationOpen && (
                             <div className="mt-3 space-y-3">
                                 {organizationFields.map((fieldId) => (
-                                    <div key={fieldId}>{renderField(fieldId)}</div>
+                                    <div key={fieldId} ref={fieldId === 'attachments' ? attachmentsFieldRef : undefined}>{renderField(fieldId)}</div>
                                 ))}
                             </div>
                         )}
@@ -636,7 +691,7 @@ export function TaskItemEditor({
                         {detailsOpen && (
                             <div className="mt-3 space-y-3">
                                 {detailsFields.map((fieldId) => (
-                                    <div key={fieldId}>{renderField(fieldId)}</div>
+                                    <div key={fieldId} ref={fieldId === 'attachments' ? attachmentsFieldRef : undefined}>{renderField(fieldId)}</div>
                                 ))}
                             </div>
                         )}

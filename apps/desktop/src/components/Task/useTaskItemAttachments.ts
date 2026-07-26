@@ -8,7 +8,8 @@ import { normalizeAttachmentInput } from '../../lib/attachment-utils';
 import { openAttachmentTarget } from '../../lib/open-attachment-target';
 import { isTauriRuntime } from '../../lib/runtime';
 import { logWarn } from '../../lib/app-log';
-import { getManagedDataDir } from '../../lib/managed-paths';
+import { getManagedDataDir, getManagedPath } from '../../lib/managed-paths';
+import { ATTACHMENTS_DIR_NAME } from '../../lib/sync-service-utils';
 import { processAudioCapture, resolveSpeechCapture } from '../../lib/speech-to-text';
 import {
     isAudioAttachment,
@@ -24,8 +25,48 @@ type UseTaskItemAttachmentsProps = {
     t: (key: string) => string;
 };
 
+// addFileAttachment/addDroppedFileAttachments copy bytes into the managed
+// attachments dir immediately, but the attachment *record* only lives in
+// editor-local state until Save — cancelling (or reopening the editor)
+// discards records added since the last save and orphans their files.
+// Delete only what's provably ours: a `kind: 'file'` attachment whose uri
+// sits inside the managed attachments dir. Never touch `kind: 'link'`
+// (points at the user's own file) or a uri outside that dir (legacy
+// path-referencing attachments). Best-effort — failures are logged, never
+// thrown, so they can't block the reset.
+const deleteOrphanedAttachmentFiles = async (orphaned: Attachment[]): Promise<void> => {
+    if (!isTauriRuntime()) return;
+    const fileOrphans = orphaned.filter((a) => a.kind === 'file');
+    if (fileOrphans.length === 0) return;
+    try {
+        const managedDir = normalizeAttachmentPathForUrl(await getManagedPath(ATTACHMENTS_DIR_NAME));
+        const { remove } = await import('@tauri-apps/plugin-fs');
+        for (const attachment of fileOrphans) {
+            if (!normalizeAttachmentPathForUrl(attachment.uri).startsWith(managedDir)) continue;
+            try {
+                await remove(attachment.uri);
+            } catch (error) {
+                void logWarn('Failed to delete orphaned attachment file', {
+                    scope: 'attachment',
+                    extra: { error: error instanceof Error ? error.message : String(error) },
+                });
+            }
+        }
+    } catch (error) {
+        void logWarn('Failed to resolve managed attachments dir for cleanup', {
+            scope: 'attachment',
+            extra: { error: error instanceof Error ? error.message : String(error) },
+        });
+    }
+};
+
 export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps) {
     const [editAttachments, setEditAttachments] = useState<Attachment[]>(task.attachments || []);
+    // Mirrors editAttachments for resetAttachmentState (a useCallback) to read
+    // the latest value without depending on it — StrictMode double-invokes a
+    // setEditAttachments updater, which would run the orphan-file delete twice.
+    const editAttachmentsRef = useRef(editAttachments);
+    editAttachmentsRef.current = editAttachments;
     const [attachmentError, setAttachmentError] = useState<string | null>(null);
     const [audioAttachment, setAudioAttachment] = useState<Attachment | null>(null);
     const [audioSource, setAudioSource] = useState<string | null>(null);
@@ -465,7 +506,11 @@ export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps)
     }, []);
 
     const resetAttachmentState = useCallback((attachments: Attachment[] | undefined) => {
-        setEditAttachments(attachments || []);
+        const nextList = attachments || [];
+        const nextIds = new Set(nextList.map((a) => a.id));
+        const orphaned = editAttachmentsRef.current.filter((a) => !nextIds.has(a.id));
+        if (orphaned.length > 0) void deleteOrphanedAttachmentFiles(orphaned);
+        setEditAttachments(nextList);
         setAttachmentError(null);
         closeLinkPrompt();
         closeAudio();
