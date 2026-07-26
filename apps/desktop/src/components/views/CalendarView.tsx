@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { isSameDay, isToday } from 'date-fns';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
 import {
@@ -9,11 +9,16 @@ import {
     isProjectedRecurringTask,
     isSameCalendarMonth,
     safeFormatDate,
+    tFallback,
+    useTaskStore,
     type Task,
 } from '@mindwtr/core';
 
 import { ErrorBoundary } from '../ErrorBoundary';
 import { cn } from '../../lib/utils';
+import { reportError } from '../../lib/report-error';
+import { registerUndoableAction } from '../../lib/undo-registry';
+import { useUiStore } from '../../store/ui-store';
 import {
     getCalendarTaskDragItemKind,
     getCalendarTaskDragTaskId,
@@ -25,6 +30,7 @@ import { collectCalendarKeyboardTasks } from './calendar/calendar-keyboard-tasks
 import { CalendarOpenTaskModal, CalendarTaskComposerModal } from './calendar/CalendarModals';
 import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
 import { CalendarSelectedDayPanel } from './calendar/CalendarSelectedDayPanel';
+import { TaskQuickActionMenuHost } from '../Task/useTaskQuickActionMenuProps';
 import {
     DESKTOP_DAY_END_HOUR,
     DESKTOP_DAY_START_HOUR,
@@ -97,6 +103,7 @@ export function CalendarView() {
         timelineDays,
         t,
         toggleExternalCalendar,
+        updateTask,
         updateTaskDateFromDrop,
         updateTaskStartTimeFromDrop,
         viewFilterQuery,
@@ -158,6 +165,60 @@ export function CalendarView() {
         event.stopPropagation();
         void updateTaskStartTimeFromDrop(taskId, start);
     }, [updateTaskStartTimeFromDrop]);
+    // Right-clicking a scheduled block or a due-date chip opens the same
+    // TaskQuickActionMenu the row list uses (via the shared hook), plus a
+    // calendar-only "Remove from calendar" entry. Native HTML5 drag only ever
+    // engages the primary mouse button, so a right-click context menu and an
+    // in-progress drag cannot occur on the same gesture.
+    const [taskQuickActionMenu, setTaskQuickActionMenu] = useState<{
+        task: Task;
+        x: number;
+        y: number;
+        kind: 'scheduled' | 'deadline';
+    } | null>(null);
+    const handleCalendarTaskContextMenu = useCallback((
+        event: ReactMouseEvent<HTMLElement>,
+        task: Task,
+        kind: 'scheduled' | 'deadline',
+    ) => {
+        if (isProjectedRecurringTask(task)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setTaskQuickActionMenu({ task, x: event.clientX, y: event.clientY, kind });
+    }, []);
+    const closeTaskQuickActionMenu = useCallback(() => setTaskQuickActionMenu(null), []);
+    const handleRemoveTaskFromCalendar = useCallback((task: Task, kind: 'scheduled' | 'deadline') => {
+        // Clearing startTime alone does nothing visible: applyTaskUpdates
+        // recomputes it from dueDate whenever relativeStartOffset is set, so
+        // both fields are cleared (and both restored on undo).
+        const previousValues = kind === 'scheduled'
+            ? { startTime: task.startTime, relativeStartOffset: task.relativeStartOffset }
+            : { dueDate: task.dueDate, relativeStartOffset: task.relativeStartOffset };
+        const clearedUpdates = kind === 'scheduled'
+            ? { startTime: undefined, relativeStartOffset: undefined }
+            : { dueDate: undefined };
+        void updateTask(task.id, clearedUpdates)
+            .then((result) => {
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to remove task from calendar');
+                }
+                const undo = registerUndoableAction(() => {
+                    void updateTask(task.id, previousValues)
+                        .catch((error) => reportError('Failed to undo remove from calendar', error));
+                });
+                if (useTaskStore.getState().settings?.undoNotificationsEnabled === false) return;
+                // Reuses the existing "Remove from calendar" string for the toast
+                // too — the locale-parity gate (zh/zh-Hant full parity, pt floor)
+                // does not allow adding an English-only key here.
+                useUiStore.getState().showToast(
+                    tFallback(t, 'calendar.unschedule', 'Remove from calendar'),
+                    'info',
+                    5000,
+                    { label: tFallback(t, 'common.undo', 'Undo'), onClick: undo },
+                );
+            })
+            .catch((error) => reportError('Failed to remove task from calendar', error));
+    }, [t, updateTask]);
     const timelineScrollKey = viewMode === 'day' || viewMode === 'week'
         ? `${viewMode}:${timelineDays.map(dayKey).join('|')}`
         : '';
@@ -475,6 +536,10 @@ export function CalendarView() {
                                                     if (projected) return;
                                                     openTaskFromCalendar(task);
                                                 }}
+                                                onContextMenu={(event) => {
+                                                    if (projected) return;
+                                                    handleCalendarTaskContextMenu(event, task, item.kind);
+                                                }}
                                             >
                                                 {content}
                                             </button>
@@ -574,6 +639,10 @@ export function CalendarView() {
                                                     onDragStart={(event) => handleCalendarTaskDragStart(event, item.task, item.kind)}
                                                     onClick={() => {
                                                         if (!projected) openTaskFromCalendar(item.task);
+                                                    }}
+                                                    onContextMenu={(event) => {
+                                                        if (projected) return;
+                                                        handleCalendarTaskContextMenu(event, item.task, item.kind);
                                                     }}
                                                     className={cn(
                                                         "block w-full truncate rounded border-l-[3px] px-2 py-1 text-left text-xs hover:bg-muted",
@@ -697,6 +766,10 @@ export function CalendarView() {
                                                             if (projected) return;
                                                             openTaskFromCalendar(item.task);
                                                         }}
+                                                        onContextMenu={(event) => {
+                                                            if (projected) return;
+                                                            handleCalendarTaskContextMenu(event, item.task, 'scheduled');
+                                                        }}
                                                     >
                                                         <div className="truncate font-semibold">{item.title}</div>
                                                         <div className="truncate opacity-90">
@@ -785,6 +858,10 @@ export function CalendarView() {
                                                         onClick={() => {
                                                             if (!projected) openTaskFromCalendar(item.task);
                                                         }}
+                                                        onContextMenu={(event) => {
+                                                            if (projected) return;
+                                                            handleCalendarTaskContextMenu(event, item.task, item.kind);
+                                                        }}
                                                         className={cn(
                                                             "flex w-full items-center gap-3 rounded px-3 py-2 text-left text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                             projected
@@ -820,6 +897,21 @@ export function CalendarView() {
         </div>
             <CalendarOpenTaskModal controller={controller} />
             <CalendarTaskComposerModal controller={controller} />
+            {taskQuickActionMenu && (
+                <TaskQuickActionMenuHost
+                    task={taskQuickActionMenu.task}
+                    x={taskQuickActionMenu.x}
+                    y={taskQuickActionMenu.y}
+                    onClose={closeTaskQuickActionMenu}
+                    overrides={{
+                        extraActions: [{
+                            id: 'remove-from-calendar',
+                            label: tFallback(t, 'calendar.unschedule', 'Remove from calendar'),
+                            onSelect: () => handleRemoveTaskFromCalendar(taskQuickActionMenu.task, taskQuickActionMenu.kind),
+                        }],
+                    }}
+                />
+            )}
         </div>
         </ErrorBoundary>
     );

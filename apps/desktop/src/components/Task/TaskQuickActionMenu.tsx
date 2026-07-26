@@ -36,7 +36,7 @@ const MENU_WIDTH_PX = 224;
 
 type QuickPanelId = 'startTime' | 'dueDate' | 'reviewAt' | 'area' | 'contexts' | null;
 
-interface TaskQuickActionMenuProps {
+export interface TaskQuickActionMenuProps {
     task: Task;
     x: number;
     y: number;
@@ -62,11 +62,52 @@ interface TaskQuickActionMenuProps {
     onStatusChange: (status: TaskStatus) => void;
     onCreateArea: (name: string) => Promise<string | null>;
     onUpdateTask: (updates: Partial<Task>) => Promise<StoreActionResult>;
+    /** Extra entries rendered above Delete. Generic by design — the menu does not interpret them. */
+    extraActions?: Array<{
+        id: string;
+        label: string;
+        onSelect: () => void;
+    }>;
 }
 
 const clamp = (value: number, min: number, max: number) => {
     if (max <= min) return min;
     return Math.min(Math.max(value, min), max);
+};
+
+// The mousedown that dismisses the menu (an "outside" click) must not also
+// activate whatever control is underneath it — closing unmounts the menu
+// synchronously, so a listener scoped to its own effect would already be
+// gone by the time the matching `click` event arrives. Registered directly
+// on window, independent of any component's lifecycle, so it survives.
+const suppressDismissClick = () => {
+    const cleanup = () => {
+        window.removeEventListener('click', swallow, true);
+        window.removeEventListener('mouseup', endGesture, true);
+        window.removeEventListener('dragstart', cleanup, true);
+    };
+    function swallow(event: MouseEvent) {
+        event.preventDefault();
+        event.stopPropagation();
+        cleanup();
+    }
+    // The swallower must last exactly one gesture: long enough to eat that
+    // gesture's click, and no longer. Both bounds have bitten:
+    // - A timer started at mousedown fires while the button is still held, since
+    //   `click` only arrives after `mouseup` — the swallower is gone before the
+    //   click it exists for.
+    // - Removing it only on the click leaks when no click ever comes, and the
+    //   stale listener then eats an unrelated later one.
+    // mouseup is the end of the press, and the click that belongs to it is
+    // dispatched immediately afterwards in the same task, so cleaning up in a
+    // task scheduled from mouseup always runs after the click was swallowed.
+    function endGesture() {
+        window.setTimeout(cleanup, 0);
+    }
+    window.addEventListener('click', swallow, { capture: true, once: true });
+    window.addEventListener('mouseup', endGesture, { capture: true, once: true });
+    // A press that becomes a drag produces neither mouseup nor click.
+    window.addEventListener('dragstart', cleanup, { capture: true, once: true });
 };
 
 const parseTokenInput = (value: string) => Array.from(new Set(
@@ -102,6 +143,7 @@ export function TaskQuickActionMenu({
     onStatusChange,
     onCreateArea,
     onUpdateTask,
+    extraActions = [],
 }: TaskQuickActionMenuProps) {
     const menuRef = useRef<HTMLDivElement | null>(null);
     const panelRef = useRef<HTMLDivElement | null>(null);
@@ -196,6 +238,9 @@ export function TaskQuickActionMenu({
         const handlePointer = (event: Event) => {
             const target = event.target as Node | null;
             if (isInsideMenuSurface(target)) return;
+            // Only mousedown has a click that could follow it in the same
+            // gesture — contextmenu (a right-click elsewhere) never fires one.
+            if (event.type === 'mousedown') suppressDismissClick();
             onClose();
         };
         const handleScrollOrResize = (event: Event) => {
@@ -536,6 +581,7 @@ export function TaskQuickActionMenu({
     };
 
     const renderMenuAction = ({
+        key,
         ref,
         icon,
         label,
@@ -545,8 +591,9 @@ export function TaskQuickActionMenu({
         disabled = false,
         title,
     }: {
+        key?: string;
         ref?: RefObject<HTMLButtonElement | null>;
-        icon: ReactNode;
+        icon?: ReactNode;
         label: string;
         active?: boolean;
         onClick: () => void;
@@ -555,6 +602,7 @@ export function TaskQuickActionMenu({
         title?: string;
     }) => (
         <button
+            key={key}
             ref={ref}
             type="button"
             role="menuitem"
@@ -575,7 +623,10 @@ export function TaskQuickActionMenu({
                         : 'text-foreground hover:bg-muted',
             )}
         >
-            <span className={disabled ? 'text-muted-foreground/50' : 'text-muted-foreground'}>{icon}</span>
+            <span className={cn(
+                'flex h-4 w-4 shrink-0 items-center justify-center',
+                disabled ? 'text-muted-foreground/50' : 'text-muted-foreground',
+            )}>{icon}</span>
             <span className="flex-1 truncate">{label}</span>
             {showChevron ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : null}
         </button>
@@ -695,6 +746,14 @@ export function TaskQuickActionMenu({
                         onClose();
                     },
                 })}
+                {extraActions.map((action) => renderMenuAction({
+                    key: action.id,
+                    label: action.label,
+                    onClick: () => {
+                        action.onSelect();
+                        onClose();
+                    },
+                }))}
                 {renderMenuAction({
                     icon: <Trash2 className="h-4 w-4" />,
                     label: deleteLabel,

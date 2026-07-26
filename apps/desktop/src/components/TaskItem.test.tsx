@@ -1034,7 +1034,12 @@ describe('TaskItem', () => {
         expect(getByText('Delete')).toBeInTheDocument();
 
         act(() => {
+            // A real press always ends: the menu now swallows the click that
+            // dismisses it (so the control underneath is not activated), and it
+            // releases that swallower when the gesture completes. A lone
+            // mouseDown is not a gesture a browser can produce.
             fireEvent.mouseDown(document.body);
+            fireEvent.mouseUp(document.body);
         });
         await waitFor(() => {
             expect(queryByRole('menuitem', { name: /duplicate/i })).toBeNull();

@@ -40,7 +40,7 @@ import { releaseTaskEditSession, tryClaimTaskEditSession } from './Task/task-edi
 import { TaskItemOverlays } from './Task/TaskItemOverlays';
 import { ProjectNextActionPrompt } from './Task/ProjectNextActionPrompt';
 import { PromptModal } from './PromptModal';
-import { TaskQuickActionMenu } from './Task/TaskQuickActionMenu';
+import { deleteTaskWithUndo, TaskQuickActionMenuHost } from './Task/useTaskQuickActionMenuProps';
 import {
     getRecurrenceRuleValue,
     getRecurrenceStrategyValue,
@@ -138,7 +138,6 @@ export const TaskItem = memo(function TaskItem({
     const lastFocusedBeforeModalRef = useRef<HTMLElement | null>(null);
     const {
         updateTask,
-        deleteTask,
         addTask,
         moveTask,
         projects,
@@ -152,7 +151,6 @@ export const TaskItem = memo(function TaskItem({
         duplicateTask,
         promoteTaskToProject,
         resetTaskChecklist,
-        restoreTask,
         highlightTaskId,
         setHighlightTask,
         addProject,
@@ -910,7 +908,7 @@ export const TaskItem = memo(function TaskItem({
     // Deleting is a recoverable move to Trash, so it happens immediately with an
     // undo toast instead of a confirmation prompt. Permanent purge (in Trash)
     // keeps its confirmation.
-    const handleDeleteTask = useCallback(() => {
+    const closeQuickEditSession = useCallback(() => {
         // Deleting unmounts this row, so close the edit session here or the
         // stale editingTaskId keeps global keyboard shortcuts suppressed.
         if (isEditing) {
@@ -920,21 +918,10 @@ export const TaskItem = memo(function TaskItem({
         if (editingTaskId === task.id) {
             setEditingTaskId(null);
         }
-        void deleteTask(task.id);
-        const undo = registerUndoableAction(() => {
-            void restoreTask(task.id);
-        });
-        if (!undoNotificationsEnabled) return;
-        showToast(
-            tFallback(t, 'task.aria.delete', 'Task deleted'),
-            'info',
-            5000,
-            {
-                label: undoLabel,
-                onClick: undo,
-            }
-        );
-    }, [deleteTask, editingTaskId, isEditing, resetEditState, restoreTask, setEditingTaskId, showToast, t, task.id, undoLabel, undoNotificationsEnabled]);
+    }, [editingTaskId, isEditing, resetEditState, setEditingTaskId, task.id]);
+    const handleDeleteTask = useCallback(() => {
+        deleteTaskWithUndo(task.id, { t, onBeforeDelete: closeQuickEditSession });
+    }, [closeQuickEditSession, t, task.id]);
     const handleTaskCompleted = useCallback((previousStatus: TaskStatus, wasFocusedToday: boolean) => {
         const undo = registerUndoableAction(() => {
             closeProjectNextActionPrompt();
@@ -1475,26 +1462,19 @@ export const TaskItem = memo(function TaskItem({
                 </div>
             </div>
             {quickActionMenu && (
-                <TaskQuickActionMenu
+                <TaskQuickActionMenuHost
                     task={task}
                     x={quickActionMenu.x}
                     y={quickActionMenu.y}
-                    t={t}
-                    dateFormatSetting={settings?.dateFormat}
-                    nativeDateInputLocale={nativeDateInputLocale}
-                    contextOptions={popularContextOptions}
-                    contextSuggestions={allContexts}
-                    areas={areas}
-                    readOnly={effectiveReadOnly}
-                    focusAction={quickActionFocus}
                     onClose={handleCloseQuickActionMenu}
-                    onRename={() => setRenameRequestToken((token) => token + 1)}
-                    onDuplicate={handleDuplicateTask}
-                    onPromoteToProject={handlePromoteTaskToProject}
-                    onDelete={handleDeleteTask}
-                    onStatusChange={handleStatusChange}
-                    onCreateArea={handleCreateArea}
-                    onUpdateTask={(updates) => updateTask(task.id, updates)}
+                    overrides={{
+                        readOnly: effectiveReadOnly,
+                        onRename: () => setRenameRequestToken((token) => token + 1),
+                        onPromoteToProject: handlePromoteTaskToProject,
+                        focusAction: quickActionFocus,
+                        onBeforeDelete: closeQuickEditSession,
+                        onStatusChange: handleStatusChange,
+                    }}
                 />
             )}
             {projectNextActionPrompt && (

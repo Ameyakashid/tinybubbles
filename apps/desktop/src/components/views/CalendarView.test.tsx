@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Area, Project, Task } from '@mindwtr/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
+import { useUiStore } from '../../store/ui-store';
 import { CalendarView } from './CalendarView';
 import { combineDateAndTime } from './calendar/useDesktopCalendarController';
 import { fetchExternalCalendarEvents } from '../../lib/external-calendar-events';
@@ -10,10 +11,12 @@ import { setCalendarTaskDragData } from '../../lib/calendar-task-drag';
 
 const storeMocks = vi.hoisted(() => {
     const taskStoreState = {
+        addArea: vi.fn(async () => null),
         addProject: vi.fn(async () => null),
         addTask: vi.fn(async () => ({ success: true, id: 'task-new' })),
         areas: [] as Area[],
-        deleteTask: vi.fn(async () => {}),
+        deleteTask: vi.fn(async () => ({ success: true })),
+        duplicateTask: vi.fn(async () => ({ success: true, id: 'task-dup' })),
         getDerivedState: () => ({
             allContexts: Array.from(new Set(taskStoreState.tasks.flatMap((task) => task.contexts ?? []))).sort(),
             allTags: Array.from(new Set(taskStoreState.tasks.flatMap((task) => task.tags ?? []))).sort(),
@@ -21,8 +24,13 @@ const storeMocks = vi.hoisted(() => {
             sequentialProjectIds: new Set(taskStoreState.projects.filter((project) => project.isSequential).map((project) => project.id)),
             sequentialWithinSectionProjectIds: new Set(taskStoreState.projects.filter((project) => project.isSequential && project.sequentialScope === 'section').map((project) => project.id)),
         }),
+        moveTask: vi.fn(async () => ({ success: true })),
+        people: [] as Array<{ id: string; name: string }>,
         projects: [] as Project[],
+        promoteTaskToProject: vi.fn(async () => ({ success: true, id: 'project-new' })),
+        restoreTask: vi.fn(async () => ({ success: true })),
         setError: vi.fn(),
+        setHighlightTask: vi.fn(),
         settings: {
             diagnostics: {
                 loggingEnabled: false,
@@ -30,7 +38,11 @@ const storeMocks = vi.hoisted(() => {
             weekStart: 'sunday',
         },
         tasks: [] as Task[],
-        updateTask: vi.fn(async () => {}),
+        // Real updateTask always resolves a StoreActionResult; the quick-action
+        // menu's "Remove from calendar" reads `.success` off it.
+        updateTask: vi.fn<(id: string, updates: Partial<Task>) => Promise<{ success: boolean }>>(
+            async () => ({ success: true })
+        ),
     };
 
     return { taskStoreState };
@@ -809,6 +821,142 @@ describe('CalendarView', () => {
 
         expect(storeMocks.taskStoreState.updateTask).toHaveBeenCalledWith('calendar-timed-drag-task', {
             startTime: new Date(2026, 3, 5, 11, 15).toISOString(),
+        });
+    });
+
+    describe('quick-action menu on calendar blocks and chips', () => {
+        let showToast: ReturnType<typeof vi.fn>;
+
+        beforeEach(() => {
+            showToast = vi.fn();
+            useUiStore.setState({ showToast });
+        });
+
+        it('right-clicking a scheduled block opens the quick menu without opening the task editor or starting a drag', async () => {
+            storeMocks.taskStoreState.tasks = [
+                makeTask({
+                    id: 'scheduled-task',
+                    title: 'Scheduled task',
+                    startTime: '2026-04-04T09:00:00',
+                }),
+            ];
+
+            renderCalendar();
+            await flushCalendarEffects();
+
+            const taskButton = screen.getByRole('button', { name: /Scheduled task/i });
+            await act(async () => {
+                fireEvent.contextMenu(taskButton);
+                await Promise.resolve();
+            });
+
+            expect(screen.getByRole('menu')).toBeInTheDocument();
+            expect(screen.getByRole('menuitem', { name: 'Remove from calendar' })).toBeInTheDocument();
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(storeMocks.taskStoreState.updateTask).not.toHaveBeenCalled();
+        });
+
+        it('clears startTime and relativeStartOffset for a scheduled block, and undo restores both exactly', async () => {
+            storeMocks.taskStoreState.tasks = [
+                makeTask({
+                    id: 'scheduled-task',
+                    title: 'Scheduled task',
+                    startTime: '2026-04-04T09:00:00',
+                    relativeStartOffset: { amount: -1, unit: 'day' },
+                }),
+            ];
+
+            renderCalendar();
+            await flushCalendarEffects();
+
+            const taskButton = screen.getByRole('button', { name: /Scheduled task/i });
+            await act(async () => {
+                fireEvent.contextMenu(taskButton);
+                await Promise.resolve();
+            });
+
+            await act(async () => {
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Remove from calendar' }));
+                await Promise.resolve();
+            });
+
+            // toHaveBeenCalledWith treats an explicit `key: undefined` the same
+            // as an absent key, which would hide a dropped clear — assert the
+            // key is actually present on the update object, not just its value.
+            const removeCall = storeMocks.taskStoreState.updateTask.mock.calls.find(([id]) => id === 'scheduled-task');
+            expect(removeCall).toBeTruthy();
+            const removeUpdates = removeCall?.[1] as Record<string, unknown>;
+            expect(Object.keys(removeUpdates).sort()).toEqual(['relativeStartOffset', 'startTime']);
+            expect(removeUpdates.startTime).toBeUndefined();
+            expect(removeUpdates.relativeStartOffset).toBeUndefined();
+
+            expect(showToast).toHaveBeenCalledWith(
+                'Remove from calendar',
+                'info',
+                5000,
+                expect.objectContaining({ label: 'Undo' })
+            );
+            showToast.mock.calls[0][3].onClick();
+
+            expect(storeMocks.taskStoreState.updateTask).toHaveBeenCalledWith('scheduled-task', {
+                startTime: '2026-04-04T09:00:00',
+                relativeStartOffset: { amount: -1, unit: 'day' },
+            });
+        });
+
+        it('clears only dueDate for a due-date chip, leaving startTime untouched, and undo restores it exactly', async () => {
+            storeMocks.taskStoreState.tasks = [
+                makeTask({
+                    id: 'mixed-task',
+                    title: 'Mixed task',
+                    dueDate: '2026-04-06',
+                    startTime: '2026-04-04T09:00:00',
+                }),
+            ];
+
+            renderCalendar();
+            await flushCalendarEffects();
+
+            // The task renders twice (a scheduled block on Apr 4 and a deadline
+            // chip on its due day) — pick the one that is NOT on the known
+            // scheduled day, since date-only values like dueDate parse as UTC
+            // midnight and can land a calendar day earlier or later depending
+            // on the test machine's timezone.
+            const chips = screen.getAllByRole('button', { name: /Mixed task/i });
+            const dueChip = chips.find((chip) => (
+                chip.closest('[data-calendar-drop-date]')?.getAttribute('data-calendar-drop-date') !== '2026-04-04'
+            ));
+            expect(dueChip).toBeTruthy();
+
+            await act(async () => {
+                fireEvent.contextMenu(dueChip as HTMLElement);
+                await Promise.resolve();
+            });
+            await act(async () => {
+                fireEvent.click(screen.getByRole('menuitem', { name: 'Remove from calendar' }));
+                await Promise.resolve();
+            });
+
+            // toHaveBeenCalledWith elides explicit `key: undefined` properties on
+            // both sides, so an accidental extra `startTime: undefined` in the
+            // update would slip past a plain equality check — assert the key set
+            // directly instead.
+            const removeCall = storeMocks.taskStoreState.updateTask.mock.calls.find(([id]) => id === 'mixed-task');
+            expect(removeCall).toBeTruthy();
+            const removeUpdates = removeCall?.[1] as Record<string, unknown>;
+            expect(Object.keys(removeUpdates)).toEqual(['dueDate']);
+            expect(removeUpdates.dueDate).toBeUndefined();
+
+            showToast.mock.calls[0][3].onClick();
+
+            const undoCall = storeMocks.taskStoreState.updateTask.mock.calls
+                .slice(1)
+                .find(([id]) => id === 'mixed-task');
+            expect(undoCall).toBeTruthy();
+            const undoUpdates = undoCall?.[1] as Record<string, unknown>;
+            expect(Object.keys(undoUpdates).sort()).toEqual(['dueDate', 'relativeStartOffset']);
+            expect(undoUpdates.dueDate).toBe('2026-04-06');
+            expect(undoUpdates.relativeStartOffset).toBeUndefined();
         });
     });
 });

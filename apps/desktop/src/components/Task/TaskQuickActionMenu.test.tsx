@@ -144,6 +144,28 @@ describe('TaskQuickActionMenu', () => {
         expect(props.onClose).toHaveBeenCalledTimes(1);
     });
 
+    it('closes on an outside click but does not also activate the control underneath it', () => {
+        const outsideClick = vi.fn();
+        const outsideButton = document.createElement('button');
+        outsideButton.textContent = 'Add task to calendar';
+        outsideButton.addEventListener('click', outsideClick);
+        document.body.appendChild(outsideButton);
+
+        try {
+            const props = renderMenu();
+
+            // A real dismissing gesture fires mousedown, then (on the same
+            // target) click — both are part of the same user click.
+            fireEvent.mouseDown(outsideButton);
+            fireEvent.click(outsideButton);
+
+            expect(props.onClose).toHaveBeenCalledTimes(1);
+            expect(outsideClick).not.toHaveBeenCalled();
+        } finally {
+            document.body.removeChild(outsideButton);
+        }
+    });
+
     it('ignores the initial layout scroll after opening but closes on later scrolls', () => {
         vi.useFakeTimers();
         try {
@@ -515,6 +537,57 @@ describe('TaskQuickActionMenu', () => {
 
         expect(onToggle).toHaveBeenCalledTimes(1);
         expect(props.onClose).toHaveBeenCalledTimes(1);
+    });
+
+    // Dismissing the menu must not also activate whatever sits underneath. On the
+    // calendar that fall-through opened the "add task to calendar" composer as a
+    // side effect of closing the menu (#867). Timing is the whole point of this
+    // test: `click` only arrives after `mouseup`, a separate user action, so the
+    // task queue is allowed to drain in between exactly as a real press does. A
+    // version that dispatched mousedown and click back-to-back passed against an
+    // implementation that was broken in the browser.
+    const withControlUnderneath = async (
+        run: (outside: HTMLButtonElement) => Promise<void>,
+    ): Promise<ReturnType<typeof vi.fn>> => {
+        const underneath = vi.fn();
+        const outside = document.createElement('button');
+        outside.addEventListener('click', underneath);
+        document.body.appendChild(outside);
+        try {
+            await run(outside);
+        } finally {
+            outside.remove();
+        }
+        return underneath;
+    };
+
+    it('swallows the click that dismisses it so the control underneath is not activated', async () => {
+        const underneath = await withControlUnderneath(async (outside) => {
+            const props = renderClosableMenu();
+
+            fireEvent.mouseDown(outside);
+            expect(props.onClose).toHaveBeenCalled();
+
+            await new Promise((resolve) => { setTimeout(resolve, 0); });
+            fireEvent.click(outside);
+        });
+
+        expect(underneath).not.toHaveBeenCalled();
+    });
+
+    it('stops swallowing once the press turns into a drag, so a later click still lands', async () => {
+        const underneath = await withControlUnderneath(async (outside) => {
+            renderClosableMenu();
+
+            fireEvent.mouseDown(outside);
+            // No click ever follows a press that became a drag.
+            fireEvent.dragStart(outside);
+
+            await new Promise((resolve) => { setTimeout(resolve, 0); });
+            fireEvent.click(outside);
+        });
+
+        expect(underneath).toHaveBeenCalledTimes(1);
     });
 
     it('shows disabled focus actions with a reason', () => {

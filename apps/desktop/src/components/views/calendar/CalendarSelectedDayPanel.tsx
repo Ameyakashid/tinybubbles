@@ -313,7 +313,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                                     <button
                                                         type="button"
                                                         className="h-8 rounded-md bg-muted px-2 text-xs text-muted-foreground hover:text-foreground"
-                                                        onClick={() => updateTask(task.id, { startTime: undefined })
+                                                        onClick={() => updateTask(task.id, { startTime: undefined, relativeStartOffset: undefined })
                                                             .catch((error) => reportError('Failed to clear scheduled time', error))}
                                                         title={t('calendar.unschedule')}
                                                     >
