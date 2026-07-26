@@ -94,6 +94,19 @@ describe('App', () => {
         expect(getByRole('heading', { name: 'Focus' })).toBeInTheDocument();
     });
 
+    it('writes the resolved initial view back into the URL on a fresh load with no ?view= param (#931 follow-up)', async () => {
+        window.history.replaceState(null, '', '/');
+        expect(window.location.search).toBe('');
+
+        renderWithProviders(<App />);
+
+        // Copying the address bar right after load must link to what's on
+        // screen, not just after the first navigation.
+        await waitFor(() => {
+            expect(window.location.search).toBe('?view=agenda');
+        });
+    });
+
     it('opens the manual onboarding flow and seeds data from Start fresh', async () => {
         const { getByRole, queryByRole } = renderWithProviders(<App />);
 

@@ -243,6 +243,13 @@ function App() {
     const [viewFromUrl] = useState(() => readViewFromUrl());
     const [currentView, setCurrentView] = useState(viewFromUrl ?? restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
     const [activeView, setActiveView] = useState(viewFromUrl ?? restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
+    // handleViewChange keeps ?view= in sync on every later navigation, but a
+    // fresh load that resolves the view from localStorage (no ?view= yet)
+    // never calls it — write the resolved initial view back once so copying
+    // the URL right after load still links to what's on screen (#931 follow-up).
+    useEffect(() => {
+        writeViewToUrl(currentView);
+    }, []);
     const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPage | undefined>();
     const [settingsOnboardingHintPage, setSettingsOnboardingHintPage] = useState<
         SettingsOnboardingHintPage | undefined
