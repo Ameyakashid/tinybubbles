@@ -26,6 +26,9 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { shallow, useTaskStore, safeFormatDate, tFallback } from '@mindwtr/core';
+import type { StoreActionResult, TaskStatus } from '@mindwtr/core';
+import { registerUndoableAction } from '../lib/undo-registry';
+import { formatTaskMovedMessage } from './views/list/task-list-scope';
 import { useLanguage } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 import { useObsidianStore } from '../store/obsidian-store';
@@ -34,7 +37,7 @@ import { ToastHost } from './ToastHost';
 import { AREA_FILTER_ALL, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
-import { hasCalendarTaskDragData } from '../lib/calendar-task-drag';
+import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -61,6 +64,19 @@ type NavSection = {
 // Browsers keep firing dragover while a drag is live, so a gap this long means
 // the drag ended by a route that gave us no event (see the listeners below).
 const TASK_DRAG_IDLE_MS = 400;
+
+// Sidebar entries a dragged task can be dropped on to reclassify it. Only lists
+// that ARE a status qualify: Focus is a flag rather than a status, Projects and
+// the views below it are not destinations, and Trash is deliberately absent so a
+// stray drag can never delete a task.
+const NAV_DROP_STATUSES: Record<string, TaskStatus> = {
+    inbox: 'inbox',
+    someday: 'someday',
+    waiting: 'waiting',
+    reference: 'reference',
+    done: 'done',
+    archived: 'archived',
+};
 const SECTION_COLLAPSE_STORAGE_KEY = 'mindwtr:sidebar:collapsedSections';
 const DEFAULT_COLLAPSED_SECTION_KEYS: string[] = [];
 
@@ -363,7 +379,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     // The drag starts on a task row anywhere in the app, so the flag comes from a
     // document listener rather than being threaded through every list view.
     const [taskDragActive, setTaskDragActive] = useState(false);
-    const [calendarDragOver, setCalendarDragOver] = useState(false);
+    const [dragOverNavId, setDragOverNavId] = useState<string | null>(null);
 
     useEffect(() => {
         // Neither end-of-drag signal is trustworthy on the path this highlight
@@ -381,7 +397,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 idleTimer = null;
             }
             setTaskDragActive(false);
-            setCalendarDragOver(false);
+            setDragOverNavId(null);
         };
         const keepAlive = () => {
             if (idleTimer !== null) window.clearTimeout(idleTimer);
@@ -409,37 +425,71 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         };
     }, []);
 
-    const handleCalendarNavDragEnter = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    const handleNavDragEnter = useCallback((event: DragEvent<HTMLButtonElement>, navId: string) => {
         if (!hasCalendarTaskDragData(event.dataTransfer)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
-        setCalendarDragOver(true);
+        setDragOverNavId(navId);
+        // Spring-loading is calendar-only: dropping on a status list finishes the
+        // job where you are, so yanking the view out from under the pointer would
+        // just lose your place in the list you were working through.
+        if (navId !== 'calendar') return;
         if (currentView === 'calendar' || calendarDragNavTimeoutRef.current !== null) return;
         calendarDragNavTimeoutRef.current = window.setTimeout(() => {
             onViewChange('calendar');
             calendarDragNavTimeoutRef.current = null;
         }, 350);
     }, [currentView, onViewChange]);
-    const handleCalendarNavDragOver = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    const handleNavDragOver = useCallback((event: DragEvent<HTMLButtonElement>) => {
         if (!hasCalendarTaskDragData(event.dataTransfer)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
     }, []);
-    const handleCalendarNavDragLeave = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    const handleNavDragLeave = useCallback((event: DragEvent<HTMLButtonElement>) => {
         const relatedTarget = event.relatedTarget;
         if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) return;
-        setCalendarDragOver(false);
+        setDragOverNavId(null);
         clearCalendarDragNavTimeout();
     }, [clearCalendarDragNavTimeout]);
-    const handleCalendarNavDrop = useCallback((event: DragEvent<HTMLButtonElement>) => {
+    const handleNavDrop = useCallback((event: DragEvent<HTMLButtonElement>, navId: string) => {
         if (!hasCalendarTaskDragData(event.dataTransfer)) return;
         event.preventDefault();
-        setCalendarDragOver(false);
+        setDragOverNavId(null);
         clearCalendarDragNavTimeout();
-        if (currentView !== 'calendar') {
-            onViewChange('calendar');
+
+        if (navId === 'calendar') {
+            if (currentView !== 'calendar') onViewChange('calendar');
+            return;
         }
-    }, [clearCalendarDragNavTimeout, currentView, onViewChange]);
+
+        const nextStatus = NAV_DROP_STATUSES[navId];
+        const taskId = getCalendarTaskDragTaskId(event.dataTransfer);
+        if (!nextStatus || !taskId) return;
+        const task = useTaskStore.getState()._tasksById.get(taskId);
+        if (!task || task.status === nextStatus) return;
+
+        const previousStatus = task.status;
+        const title = task.title;
+        void Promise.resolve(useTaskStore.getState().moveTask(taskId, nextStatus))
+            .then((result) => {
+                const outcome = result as StoreActionResult | undefined;
+                if (outcome && outcome.success === false) {
+                    throw new Error(outcome.error || 'Failed to change task status');
+                }
+                if (useTaskStore.getState().settings?.undoNotificationsEnabled === false) return;
+                const undo = registerUndoableAction(() => {
+                    void Promise.resolve(useTaskStore.getState().moveTask(taskId, previousStatus))
+                        .catch((error) => reportError('Failed to undo task status change', error));
+                });
+                useUiStore.getState().showToast(
+                    formatTaskMovedMessage(t, title, nextStatus),
+                    'info',
+                    5000,
+                    { label: tFallback(t, 'common.undo', 'Undo'), onClick: undo },
+                );
+            })
+            .catch((error) => reportError('Failed to change task status', error));
+    }, [clearCalendarDragNavTimeout, currentView, onViewChange, t]);
 
     const triggerSearch = () => {
         window.dispatchEvent(new CustomEvent('mindwtr:open-search'));
@@ -700,6 +750,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                 {section.items.map((item) => {
                                     const itemLabel = item.labelKey ? tFallback(t, item.labelKey, item.fallbackLabel ?? item.id) : (item.fallbackLabel ?? item.id);
                                     const isActiveItem = currentView === item.id;
+                                    const isDropTarget = item.id === 'calendar' || NAV_DROP_STATUSES[item.id] !== undefined;
                                     const tone = item.tone ?? 'normal';
                                     const inactiveItemClass = tone === 'primary'
                                         ? 'text-foreground hover:bg-accent/80 hover:text-foreground'
@@ -722,10 +773,10 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                     <button
                                         key={item.id}
                                         onClick={() => onViewChange(item.id)}
-                                        onDragEnter={item.id === 'calendar' ? handleCalendarNavDragEnter : undefined}
-                                        onDragOver={item.id === 'calendar' ? handleCalendarNavDragOver : undefined}
-                                        onDragLeave={item.id === 'calendar' ? handleCalendarNavDragLeave : undefined}
-                                        onDrop={item.id === 'calendar' ? handleCalendarNavDrop : undefined}
+                                        onDragEnter={isDropTarget ? (event) => handleNavDragEnter(event, item.id) : undefined}
+                                        onDragOver={isDropTarget ? handleNavDragOver : undefined}
+                                        onDragLeave={isDropTarget ? handleNavDragLeave : undefined}
+                                        onDrop={isDropTarget ? (event) => handleNavDrop(event, item.id) : undefined}
                                         data-sidebar-item
                                         data-view={item.id}
                                         className={cn(
@@ -735,8 +786,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                             isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5",
                                             // Last so they win the merge: the drop target has to read as
                                             // available even on the active item's own tinted background.
-                                            item.id === 'calendar' && taskDragActive && "ring-1 ring-primary/50 bg-primary/5 text-primary",
-                                            item.id === 'calendar' && calendarDragOver && "ring-2 ring-primary bg-primary/15 text-primary"
+                                            isDropTarget && taskDragActive && "ring-1 ring-primary/50 bg-primary/5 text-primary",
+                                            isDropTarget && dragOverNavId === item.id && "ring-2 ring-primary bg-primary/15 text-primary"
                                         )}
                                         aria-current={isActiveItem ? 'page' : undefined}
                                         title={itemLabel}

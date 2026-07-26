@@ -517,6 +517,59 @@ describe('Layout sync security warning', () => {
         expect(calendarItem.className).not.toContain('ring-1');
     });
 
+    it('reclassifies a task dropped on a status list, with undo', async () => {
+        const moveTask = vi.fn().mockResolvedValue({ success: true });
+        const task = { id: 'task-1', title: 'Buy milk', status: 'inbox' };
+        useTaskStore.setState({
+            tasks: [task],
+            _allTasks: [task],
+            _tasksById: new Map([[task.id, task]]),
+            moveTask,
+            settings: {},
+        } as never);
+
+        const { container } = renderLayout();
+        const dataTransfer = {
+            types: [CALENDAR_TASK_DRAG_MIME],
+            getData: (type: string) => (type === CALENDAR_TASK_DRAG_MIME ? 'task-1' : ''),
+            dropEffect: 'none',
+        };
+
+        fireEvent.drop(container.querySelector('[data-view="waiting"]')!, { dataTransfer });
+
+        await waitFor(() => expect(moveTask).toHaveBeenCalledWith('task-1', 'waiting'));
+        await waitFor(() => {
+            const toast = useUiStore.getState().toasts.at(-1);
+            expect(toast?.action?.label).toBe('Undo');
+        });
+
+        // Undo puts it back where it came from.
+        useUiStore.getState().toasts.at(-1)!.action!.onClick();
+        expect(moveTask).toHaveBeenLastCalledWith('task-1', 'inbox');
+    });
+
+    // Trash is deliberately not a drop target: a stray drag must never be able to
+    // delete a task, unlike the reversible status moves above.
+    it('ignores a task dropped on Trash', () => {
+        const moveTask = vi.fn().mockResolvedValue({ success: true });
+        useTaskStore.setState({
+            _tasksById: new Map([['task-1', { id: 'task-1', title: 'Buy milk', status: 'inbox' }]]),
+            moveTask,
+            settings: {},
+        } as never);
+
+        const { container } = renderLayout();
+        fireEvent.drop(container.querySelector('[data-view="trash"]')!, {
+            dataTransfer: {
+                types: [CALENDAR_TASK_DRAG_MIME],
+                getData: () => 'task-1',
+                dropEffect: 'none',
+            },
+        });
+
+        expect(moveTask).not.toHaveBeenCalled();
+    });
+
     // The drag this highlight exists for routinely ends without giving us either
     // signal: the calendar grid's own drop handler stops propagation, and the
     // spring-loaded jump to the calendar unmounts the list the drag started in, so
