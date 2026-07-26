@@ -27,6 +27,7 @@ Object.defineProperty(window, 'electronAPI', {
 describe('App', () => {
     beforeEach(() => {
         window.localStorage.clear();
+        window.history.replaceState(null, '', '/');
         useTaskStore.setState((state) => ({
             ...state,
             tasks: [],
@@ -60,6 +61,37 @@ describe('App', () => {
     it('renders Sidebar navigation', () => {
         const { getByRole } = renderWithProviders(<App />);
         expect(getByRole('button', { name: 'Projects' })).toBeInTheDocument();
+    });
+
+    it('prefers the view in the URL over the restored last view (#931)', async () => {
+        window.localStorage.setItem('mindwtr-last-view', JSON.stringify({ view: 'projects', at: Date.now() }));
+        window.history.replaceState(null, '', '?view=settings');
+
+        const { getByRole } = renderWithProviders(<App />);
+
+        // Settings is lazy-loaded; the default findBy timeout is too tight
+        // under a loaded test run.
+        await waitFor(() => {
+            expect(getByRole('heading', { name: 'General' })).toBeInTheDocument();
+        }, { timeout: 5000 });
+    });
+
+    it('opens Settings from the URL even though it is excluded from the restore snapshot (#931)', async () => {
+        window.history.replaceState(null, '', '?view=settings');
+
+        const { getByRole } = renderWithProviders(<App />);
+
+        await waitFor(() => {
+            expect(getByRole('heading', { name: 'General' })).toBeInTheDocument();
+        }, { timeout: 5000 });
+    });
+
+    it('falls back past an unknown URL view instead of rendering blank (#931)', () => {
+        window.history.replaceState(null, '', '?view=not-a-real-view');
+
+        const { getByRole } = renderWithProviders(<App />);
+
+        expect(getByRole('heading', { name: 'Focus' })).toBeInTheDocument();
     });
 
     it('opens the manual onboarding flow and seeds data from Start fresh', async () => {

@@ -5,8 +5,10 @@ import { shouldRestoreLastView } from '@mindwtr/core';
 const LAST_VIEW_STORAGE_KEY = 'mindwtr-last-view';
 
 // Settings is a transient destination and Obsidian depends on device config;
-// both fall back to the default view instead of restoring.
-const RESTORABLE_VIEWS = new Set([
+// both fall back to the default view instead of restoring. Exported so
+// view-url-params.ts can build its own, larger allow-list on top of it —
+// the URL is a separate, explicit signal that settings/obsidian may use.
+export const RESTORABLE_VIEWS = new Set([
     'inbox',
     'agenda',
     'next',

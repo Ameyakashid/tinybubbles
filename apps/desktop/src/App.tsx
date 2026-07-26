@@ -58,6 +58,7 @@ import { getInstallSourceOrFallback, isFlatpakRuntime, isTauriRuntime } from './
 import { reportError as reportAppError } from './lib/report-error';
 import { syncNativeProxyUrl } from './lib/tauri-http';
 import { persistLastView, readRestorableLastView } from './lib/session-restore';
+import { readViewFromUrl, writeViewToUrl } from './lib/view-url-params';
 import { logError, logInfo } from './lib/app-log';
 import { createDesktopAutoSyncController } from './lib/auto-sync-controller';
 import {
@@ -236,8 +237,12 @@ function App() {
         if (import.meta.env.MODE === 'test' || import.meta.env.VITEST || process.env.NODE_ENV === 'test') return null;
         return readRestorableLastView();
     });
-    const [currentView, setCurrentView] = useState(restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
-    const [activeView, setActiveView] = useState(restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
+    // The URL is explicit user intent (a link, or a refresh mid-Settings) and
+    // wins over the localStorage snapshot, which in turn wins over the
+    // default (#931).
+    const [viewFromUrl] = useState(() => readViewFromUrl());
+    const [currentView, setCurrentView] = useState(viewFromUrl ?? restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
+    const [activeView, setActiveView] = useState(viewFromUrl ?? restoredLastView?.view ?? DEFAULT_DESKTOP_VIEW);
     const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPage | undefined>();
     const [settingsOnboardingHintPage, setSettingsOnboardingHintPage] = useState<
         SettingsOnboardingHintPage | undefined
@@ -1173,6 +1178,7 @@ function App() {
             setSettingsOnboardingHintPage(undefined);
         }
         persistLastView(nextView, useUiStore.getState().projectView.selectedProjectId);
+        writeViewToUrl(nextView);
         setCurrentView(nextView);
         if (nextView === 'settings') {
             beginSettingsOpenTrace('handleViewChange');
