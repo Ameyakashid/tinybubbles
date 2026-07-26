@@ -538,13 +538,14 @@ describe('Layout sync security warning', () => {
         fireEvent.drop(container.querySelector('[data-view="waiting"]')!, { dataTransfer });
 
         await waitFor(() => expect(moveTask).toHaveBeenCalledWith('task-1', 'waiting'));
-        await waitFor(() => {
-            const toast = useUiStore.getState().toasts.at(-1);
-            expect(toast?.action?.label).toBe('Undo');
-        });
+        const latestToast = () => {
+            const toasts = useUiStore.getState().toasts;
+            return toasts[toasts.length - 1];
+        };
+        await waitFor(() => expect(latestToast()?.action?.label).toBe('Undo'));
 
         // Undo puts it back where it came from.
-        useUiStore.getState().toasts.at(-1)!.action!.onClick();
+        latestToast()!.action!.onClick();
         expect(moveTask).toHaveBeenLastCalledWith('task-1', 'inbox');
     });
 
