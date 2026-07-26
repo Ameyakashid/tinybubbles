@@ -58,6 +58,9 @@ type NavSection = {
     items: NavItem[];
 };
 
+// Browsers keep firing dragover while a drag is live, so a gap this long means
+// the drag ended by a route that gave us no event (see the listeners below).
+const TASK_DRAG_IDLE_MS = 400;
 const SECTION_COLLAPSE_STORAGE_KEY = 'mindwtr:sidebar:collapsedSections';
 const DEFAULT_COLLAPSED_SECTION_KEYS: string[] = [];
 
@@ -363,20 +366,46 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const [calendarDragOver, setCalendarDragOver] = useState(false);
 
     useEffect(() => {
-        const handleDragStart = (event: globalThis.DragEvent) => {
-            if (hasCalendarTaskDragData(event.dataTransfer)) setTaskDragActive(true);
-        };
-        const handleDragFinished = () => {
+        // Neither end-of-drag signal is trustworthy on the path this highlight
+        // exists for. Dropping on the calendar grid stops propagation, so a
+        // bubbling `drop` listener never sees it; and the spring-loaded jump to
+        // the calendar unmounts the list the drag started in, so `dragend` fires
+        // on a detached node that no longer reaches the document. Left relying on
+        // those two, the highlight stayed lit for the rest of the session. Hence
+        // capture-phase listeners (which beat stopPropagation) plus a heartbeat:
+        // once `dragover` goes quiet the drag is over however it ended.
+        let idleTimer: number | null = null;
+        const endDrag = () => {
+            if (idleTimer !== null) {
+                window.clearTimeout(idleTimer);
+                idleTimer = null;
+            }
             setTaskDragActive(false);
             setCalendarDragOver(false);
         };
-        document.addEventListener('dragstart', handleDragStart);
-        document.addEventListener('dragend', handleDragFinished);
-        document.addEventListener('drop', handleDragFinished);
+        const keepAlive = () => {
+            if (idleTimer !== null) window.clearTimeout(idleTimer);
+            idleTimer = window.setTimeout(endDrag, TASK_DRAG_IDLE_MS);
+        };
+        const handleDragStart = (event: globalThis.DragEvent) => {
+            if (!hasCalendarTaskDragData(event.dataTransfer)) return;
+            setTaskDragActive(true);
+            keepAlive();
+        };
+        const handleDragOver = (event: globalThis.DragEvent) => {
+            if (!hasCalendarTaskDragData(event.dataTransfer)) return;
+            keepAlive();
+        };
+        document.addEventListener('dragstart', handleDragStart, true);
+        document.addEventListener('dragover', handleDragOver, true);
+        document.addEventListener('dragend', endDrag, true);
+        document.addEventListener('drop', endDrag, true);
         return () => {
-            document.removeEventListener('dragstart', handleDragStart);
-            document.removeEventListener('dragend', handleDragFinished);
-            document.removeEventListener('drop', handleDragFinished);
+            if (idleTimer !== null) window.clearTimeout(idleTimer);
+            document.removeEventListener('dragstart', handleDragStart, true);
+            document.removeEventListener('dragover', handleDragOver, true);
+            document.removeEventListener('dragend', endDrag, true);
+            document.removeEventListener('drop', endDrag, true);
         };
     }, []);
 

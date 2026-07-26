@@ -15,6 +15,14 @@ const initialUiState = useUiStore.getState();
 const initialObsidianState = useObsidianStore.getState();
 const onNavigate = vi.fn();
 
+const dispatchDrag = (type: string, withTaskData: boolean) => act(() => {
+    const event = new Event(type, { bubbles: true });
+    Object.defineProperty(event, 'dataTransfer', {
+        value: { types: withTaskData ? [CALENDAR_TASK_DRAG_MIME] : ['text/plain'], getData: () => '' },
+    });
+    document.dispatchEvent(event);
+});
+
 const createMergeStats = (conflictIds: string[] = []): MergeStats => {
     const emptyStats = {
         localTotal: 0,
@@ -498,14 +506,6 @@ describe('Layout sync security warning', () => {
         const calendarItem = getByRole('button', { name: 'Calendar' });
         expect(calendarItem.className).not.toContain('ring-1');
 
-        const dispatchDrag = (type: string, withTaskData: boolean) => act(() => {
-            const event = new Event(type, { bubbles: true });
-            Object.defineProperty(event, 'dataTransfer', {
-                value: { types: withTaskData ? [CALENDAR_TASK_DRAG_MIME] : ['text/plain'], getData: () => '' },
-            });
-            document.dispatchEvent(event);
-        });
-
         dispatchDrag('dragstart', true);
         expect(calendarItem.className).toContain('ring-1');
 
@@ -515,5 +515,28 @@ describe('Layout sync security warning', () => {
         // An unrelated drag (text, a file) must not advertise the calendar.
         dispatchDrag('dragstart', false);
         expect(calendarItem.className).not.toContain('ring-1');
+    });
+
+    // The drag this highlight exists for routinely ends without giving us either
+    // signal: the calendar grid's own drop handler stops propagation, and the
+    // spring-loaded jump to the calendar unmounts the list the drag started in, so
+    // dragend fires on a detached node. Relying on those alone left the nav item
+    // lit for the rest of the session (#867).
+    it('clears the calendar highlight when a drag ends with no drop or dragend', () => {
+        const { getByRole } = renderLayout();
+        const calendarItem = getByRole('button', { name: 'Calendar' });
+
+        dispatchDrag('dragstart', true);
+        expect(calendarItem.className).toContain('ring-1');
+
+        vi.useFakeTimers();
+        try {
+            // Nothing else arrives — no drop, no dragend, no further dragover.
+            dispatchDrag('dragover', true);
+            act(() => { vi.advanceTimersByTime(1_000); });
+            expect(calendarItem.className).not.toContain('ring-1');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
