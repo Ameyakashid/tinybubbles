@@ -827,6 +827,8 @@ export const plOverrides: Record<string, string> = {
         'settings.speechProvider': 'Dostawca mowy',
         'settings.speechProviderOffline': 'Na urządzeniu (Whisper)',
         'settings.speechModel': 'Model mowy',
+        'settings.speechBaseUrl': 'Adres URL serwera transkrypcji',
+        'settings.speechBaseUrlHint': 'Pozostaw puste dla oficjalnego OpenAI. Ustaw dla samodzielnie hostowanego serwera transkrypcji zgodnego z OpenAI. Klucz API jest opcjonalny.',
         'settings.speechOfflineModel': 'Model offline',
         'settings.speechOfflineModelDesc': 'Pobierz raz, aby dokonać pełnej transkrypcji w trybie offline.',
         'settings.speechOfflineReady': 'Model pobrany',

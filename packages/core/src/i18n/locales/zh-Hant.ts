@@ -990,6 +990,8 @@ export const zhHant: Record<string, string> = {
         'settings.speechProvider': '語音服務商',
         'settings.speechProviderOffline': '本地（Whisper）',
         'settings.speechModel': '語音模型',
+        'settings.speechBaseUrl': '轉錄伺服器 URL',
+        'settings.speechBaseUrlHint': '官方 OpenAI 請留空。若使用自架的 OpenAI 相容轉錄伺服器，請在這裡填寫；API 密鑰可選填。',
         'settings.speechOfflineModel': '離線模型',
         'settings.speechOfflineModelDesc': '下載一次即可離線轉錄。',
         'settings.speechOfflineReady': '模型已下載',

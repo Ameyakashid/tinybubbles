@@ -990,6 +990,8 @@ export const zhHans: Record<string, string> = {
         'settings.speechProvider': '语音服务商',
         'settings.speechProviderOffline': '本地（Whisper）',
         'settings.speechModel': '语音模型',
+        'settings.speechBaseUrl': '转录服务器 URL',
+        'settings.speechBaseUrlHint': '官方 OpenAI 请留空。若使用自托管的 OpenAI 兼容转录服务器，请在这里填写；API 密钥可选填。',
         'settings.speechOfflineModel': '离线模型',
         'settings.speechOfflineModelDesc': '下载一次即可离线转录。',
         'settings.speechOfflineReady': '模型已下载',

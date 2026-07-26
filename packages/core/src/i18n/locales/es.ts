@@ -782,6 +782,8 @@ export const esOverrides: Record<string, string> = {
         'settings.aiBaseUrl': 'Custom base URL',
         'settings.aiBaseUrlHint': 'Opcional. For local OpenAI-compatible servers (e.g., http://localhost:11434/v1).',
         'settings.aiBaseUrlPlaceholder': 'http://localhost:11434/v1',
+        'settings.speechBaseUrl': 'URL del servidor de transcripción',
+        'settings.speechBaseUrlHint': 'Déjalo en blanco para OpenAI oficial. Configúralo para un servidor de transcripción autoalojado compatible con OpenAI. La clave de API es opcional.',
         'settings.aiApiKey': 'Clave API',
         'settings.aiApiKeyHint': 'Se guarda localmente en este dispositivo. Nunca se sincroniza.',
         'settings.aiApiKeyPlaceholder': 'Pega tu clave API',

@@ -244,6 +244,8 @@ export const SETTINGS_LABEL_KEYS = [
     'speechProviderOffline',
     'speechProviderParakeet',
     'speechModel',
+    'speechBaseUrl',
+    'speechBaseUrlHint',
     'speechOfflineModel',
     'speechOfflineModelDesc',
     'speechParakeetModelDesc',

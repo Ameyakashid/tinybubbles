@@ -830,6 +830,8 @@ export const hiOverrides: Record<string, string> = {
         'settings.speechProvider': 'भाषण प्रदाता',
         'settings.speechProviderOffline': 'ऑन-डिवाइस (व्हिस्पर)',
         'settings.speechModel': 'भाषण मॉडल',
+        'settings.speechBaseUrl': 'ट्रांसक्रिप्शन सर्वर यूआरएल',
+        'settings.speechBaseUrlHint': 'आधिकारिक OpenAI के लिए खाली छोड़ें। स्व-होस्ट किए गए OpenAI-संगत ट्रांसक्रिप्शन सर्वर के लिए इसे सेट करें। API कुंजी वैकल्पिक है।',
         'settings.speechOfflineModel': 'ऑफ़लाइन मॉडल',
         'settings.speechOfflineModelDesc': 'पूरी तरह ऑफ़लाइन ट्रांसक्राइब करने के लिए एक बार डाउनलोड करें।',
         'settings.speechOfflineReady': 'मॉडल डाउनलोड किया गया',

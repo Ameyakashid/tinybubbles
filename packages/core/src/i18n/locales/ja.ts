@@ -830,6 +830,8 @@ export const jaOverrides: Record<string, string> = {
         'settings.speechProvider': '音声プロバイダー',
         'settings.speechProviderOffline': 'オンデバイス (ささやき)',
         'settings.speechModel': '音声モデル',
+        'settings.speechBaseUrl': '文字起こしサーバーのURL',
+        'settings.speechBaseUrlHint': '公式のOpenAIを使う場合は空欄のままにしてください。自己ホスト型のOpenAI互換文字起こしサーバーを使う場合はここに設定します。APIキーは任意です。',
         'settings.speechOfflineModel': 'オフラインモデル',
         'settings.speechOfflineModelDesc': '一度ダウンロードすると、完全にオフラインで文字起こしできます。',
         'settings.speechOfflineReady': 'ダウンロードされたモデル',

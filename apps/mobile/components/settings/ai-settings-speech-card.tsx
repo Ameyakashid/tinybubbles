@@ -286,7 +286,8 @@ export function AiSettingsSpeechCard({
                                 <>
                                     <View style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}>
                                         <View style={styles.settingInfo}>
-                                            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.aiBaseUrl')}</Text>
+                                            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.speechBaseUrl')}</Text>
+                                            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.speechBaseUrlHint')}</Text>
                                         </View>
                                     </View>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>

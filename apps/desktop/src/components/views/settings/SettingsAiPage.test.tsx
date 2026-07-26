@@ -52,6 +52,8 @@ const t = {
     speechProviderOffline: 'On-device (Whisper)',
     speechProviderParakeet: 'Parakeet v3 experimental',
     speechModel: 'Speech model',
+    speechBaseUrl: 'Transcription server URL',
+    speechBaseUrlHint: "Leave blank for official OpenAI. Set this for a self-hosted OpenAI-compatible transcription server. API key is optional.",
     speechOfflineModel: 'Offline model',
     speechOfflineModelDesc: 'Download once to transcribe fully offline.',
     speechParakeetModelDesc: 'Download once to install the Parakeet ASR model for local transcription. Model weights are not bundled with Mindwtr.',
@@ -281,13 +283,34 @@ describe('SettingsAiPage', () => {
         fireEvent.change(modelInput, { target: { value: 'large-v3-custom' } });
         expect(onUpdateSpeechSettings).toHaveBeenCalledWith({ model: 'large-v3-custom' });
 
-        const baseUrlInput = getByLabelText('Custom OpenAI-compatible base URL');
+        const baseUrlInput = getByLabelText('Transcription server URL');
         expect(baseUrlInput).toHaveValue('http://localhost:8000/v1');
         fireEvent.change(baseUrlInput, { target: { value: 'http://localhost:9000/v1' } });
         expect(onUpdateSpeechSettings).toHaveBeenCalledWith({ baseUrl: 'http://localhost:9000/v1' });
 
         // No LLM-server hint (Ollama/LM Studio/GLM) — it's wrong for ASR.
         expect(queryByText(/Ollama/)).not.toBeInTheDocument();
+    });
+
+    it('labels the chat and speech base URL fields distinctly when both are visible', () => {
+        const { getByLabelText, getByRole } = render(
+            <SettingsAiPage
+                {...baseProps}
+                aiBaseUrl="http://localhost:11434/v1"
+                speechProvider="openai"
+                speechModel="gpt-4o-transcribe"
+                speechModelOptions={['gpt-4o-transcribe']}
+                speechBaseUrl="http://localhost:8000/v1"
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: /Enable AI assistant/i }));
+        fireEvent.click(getByRole('button', { name: /Speech to text/i }));
+
+        // Distinct aria-labels mean each field resolves uniquely — this
+        // throws if the two fields still share a label (#930 follow-up).
+        expect(getByLabelText('Custom OpenAI-compatible base URL')).toHaveValue('http://localhost:11434/v1');
+        expect(getByLabelText('Transcription server URL')).toHaveValue('http://localhost:8000/v1');
     });
 
     it('keeps the speech model a fixed select for non-OpenAI providers', () => {

@@ -56,6 +56,8 @@ type Labels = {
     speechProviderOffline: string;
     speechProviderParakeet: string;
     speechModel: string;
+    speechBaseUrl: string;
+    speechBaseUrlHint: string;
     speechOfflineModel: string;
     speechOfflineModelDesc: string;
     speechParakeetModelDesc: string;
@@ -560,8 +562,7 @@ export function SettingsAiPage({
                                         onChange={(e) => onUpdateSpeechSettings({ model: e.target.value })}
                                         list="speech-model-options"
                                         className="min-w-[200px] text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                                    >
-                                    </input>
+                                    />
                                     <datalist id="speech-model-options">
                                         {speechModelOptions.map((option) => (
                                             <option key={option} value={option} />
@@ -585,10 +586,10 @@ export function SettingsAiPage({
 
                         {speechProvider === 'openai' && (
                             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                                <div className="text-sm font-medium">{t.aiBaseUrl}</div>
+                                <div className="text-sm font-medium">{t.speechBaseUrl}</div>
                                 <input
                                     type="text"
-                                    aria-label={t.aiBaseUrl}
+                                    aria-label={t.speechBaseUrl}
                                     value={speechBaseUrl}
                                     onChange={(e) => onUpdateSpeechSettings({ baseUrl: e.target.value })}
                                     // Not the chat field's Ollama URL — that serves LLMs, not
@@ -599,6 +600,7 @@ export function SettingsAiPage({
                                     autoCorrect="off"
                                     spellCheck={false}
                                 />
+                                <div className="text-xs text-muted-foreground">{t.speechBaseUrlHint}</div>
                             </div>
                         )}
 

@@ -1078,6 +1078,8 @@ export const en: Record<string, string> = {
         'settings.speechProvider': 'Speech provider',
         'settings.speechProviderOffline': 'On-device (Whisper)',
         'settings.speechModel': 'Speech model',
+        'settings.speechBaseUrl': 'Transcription server URL',
+        'settings.speechBaseUrlHint': 'Leave blank for official OpenAI. Set this for a self-hosted OpenAI-compatible transcription server. API key is optional.',
         'settings.speechOfflineModel': 'Offline model',
         'settings.speechOfflineModelDesc': 'Download once to transcribe fully offline.',
         'settings.speechOfflineReady': 'Model downloaded',

@@ -830,6 +830,8 @@ export const ruOverrides: Record<string, string> = {
         'settings.speechProvider': 'Речевой провайдер',
         'settings.speechProviderOffline': 'На устройстве (шепотом)',
         'settings.speechModel': 'Речевая модель',
+        'settings.speechBaseUrl': 'URL-адрес сервера транскрипции',
+        'settings.speechBaseUrlHint': 'Оставьте пустым для официального OpenAI. Укажите для самостоятельно размещённого сервера транскрипции, совместимого с OpenAI. Ключ API необязателен.',
         'settings.speechOfflineModel': 'Офлайн-модель',
         'settings.speechOfflineModelDesc': 'Загрузите один раз, чтобы расшифровать полностью в автономном режиме.',
         'settings.speechOfflineReady': 'Модель скачана',

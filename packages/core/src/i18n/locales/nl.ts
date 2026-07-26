@@ -477,6 +477,8 @@ export const nlOverrides: Record<string, string> = {
         'review.summaryWaitingStale': '{{count}} wachtend(e) item(s) al meer dan twee weken ongewijzigd',
         'settings.aiBaseUrlHint': 'Leave blank for official OpenAI. Set this for local or third-party OpenAI-compatible APIs such as Ollama, LM Studio, GLM, or vLLM.',
         'settings.aiBaseUrlPlaceholder': 'http://localhost:11434/v1',
+        'settings.speechBaseUrl': 'URL van transcriptieserver',
+        'settings.speechBaseUrlHint': 'Laat leeg voor officiële OpenAI. Stel dit in voor een zelf gehoste OpenAI-compatibele transcriptieserver. API-sleutel is optioneel.',
         'settings.aiProviderGemini': 'Gemini',
         'settings.aiProviderOpenAI': 'OpenAI',
         'settings.gtd': 'GTD',

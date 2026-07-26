@@ -841,6 +841,8 @@ export const trOverrides: Record<string, string> = {
         'settings.speechProvider': 'Konuşma sağlayıcı',
         'settings.speechProviderOffline': 'Cihazda (Fısıltı)',
         'settings.speechModel': 'Konuşma modeli',
+        'settings.speechBaseUrl': 'Transkripsiyon sunucusu URL\'si',
+        'settings.speechBaseUrlHint': 'Resmi OpenAI için boş bırakın. Kendi barındırdığınız OpenAI uyumlu bir transkripsiyon sunucusu için bunu ayarlayın. API anahtarı isteğe bağlıdır.',
         'settings.speechOfflineModel': 'Çevrimdışı model',
         'settings.speechOfflineModelDesc': 'Tamamen çevrimdışı olarak metne dönüştürmek için bir kez indirin.',
         'settings.speechOfflineReady': 'İndirilen model',

@@ -1031,6 +1031,8 @@ export const csOverrides: Record<string, string> = {
         'settings.speechProvider': 'Poskytovatel řeči',
         'settings.speechProviderOffline': 'V zařízení (Whisper)',
         'settings.speechModel': 'Model řeči',
+        'settings.speechBaseUrl': 'URL přepisovacího serveru',
+        'settings.speechBaseUrlHint': 'Pro oficiální OpenAI nechte prázdné. Nastavte pro vlastní hostovaný OpenAI-kompatibilní přepisovací server. API klíč je volitelný.',
         'settings.speechOfflineModelDesc': 'Stáhněte jednou a přepisujte zcela offline.',
         'settings.speechOfflineReady': 'Model stažen',
         'settings.speechOfflineNotDownloaded': 'Model nestažen',

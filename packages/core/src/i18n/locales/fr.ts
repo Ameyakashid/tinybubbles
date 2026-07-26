@@ -1049,6 +1049,8 @@ export const frOverrides: Record<string, string> = {
         'settings.speechProvider': 'Fournisseur de transcription',
         'settings.speechProviderOffline': 'Sur l’appareil (Whisper)',
         'settings.speechModel': 'Modèle de transcription',
+        'settings.speechBaseUrl': 'URL du serveur de transcription',
+        'settings.speechBaseUrlHint': "Laissez vide pour l'API officielle OpenAI. À renseigner pour un serveur de transcription auto-hébergé compatible OpenAI. La clé API est facultative.",
         'settings.speechOfflineModel': 'Modèle hors ligne',
         'settings.speechOfflineModelDesc': 'Téléchargez une fois pour transcrire entièrement hors ligne.',
         'settings.speechOfflineReady': 'Modèle téléchargé',

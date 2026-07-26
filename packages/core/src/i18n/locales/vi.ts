@@ -1064,6 +1064,8 @@ export const viOverrides: Record<string, string> = {
         'settings.speechProvider': 'Nhà cung cấp giọng nói',
         'settings.speechProviderOffline': 'Trên thiết bị (Whisper)',
         'settings.speechModel': 'Mô hình giọng nói',
+        'settings.speechBaseUrl': 'URL máy chủ phiên âm',
+        'settings.speechBaseUrlHint': 'Để trống cho OpenAI chính thức. Đặt cho máy chủ phiên âm tương thích OpenAI tự lưu trữ. Khóa API là tùy chọn.',
         'settings.speechOfflineModel': 'Mô hình ngoại tuyến',
         'settings.speechOfflineModelDesc': 'Tải xuống một lần để phiên âm hoàn toàn ngoại tuyến.',
         'settings.speechOfflineReady': 'Mô hình đã tải xuống',

@@ -818,6 +818,8 @@ export const koOverrides: Record<string, string> = {
         'settings.speechProvider': '음성 제공자',
         'settings.speechProviderOffline': '온디바이스(속삭임)',
         'settings.speechModel': '음성 모델',
+        'settings.speechBaseUrl': '음성 인식 서버 URL',
+        'settings.speechBaseUrlHint': '공식 OpenAI를 사용하려면 비워두세요. 자체 호스팅한 OpenAI 호환 음성 인식 서버를 사용하려면 설정하세요. API 키는 선택 사항입니다.',
         'settings.speechOfflineModel': '오프라인 모델',
         'settings.speechOfflineModelDesc': '한 번 다운로드하면 완전히 오프라인으로 스크립트를 작성할 수 있습니다.',
         'settings.speechOfflineReady': '모델이 다운로드됨',

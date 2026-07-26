@@ -874,6 +874,8 @@ export const ptOverrides: Record<string, string> = {
         'settings.speechProvider': 'Provedor de fala',
         'settings.speechProviderOffline': 'No dispositivo (sussurro)',
         'settings.speechModel': 'Modelo de fala',
+        'settings.speechBaseUrl': 'URL do servidor de transcrição',
+        'settings.speechBaseUrlHint': 'Deixe em branco para o OpenAI oficial. Defina para um servidor de transcrição autogerido compatível com OpenAI. A chave de API é opcional.',
         'settings.speechOfflineModel': 'Modelo off-line',
         'settings.speechOfflineModelDesc': 'Baixe uma vez para transcrever totalmente offline.',
         'settings.speechOfflineReady': 'Modelo baixado',

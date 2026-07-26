@@ -877,6 +877,8 @@ export const arOverrides: Record<string, string> = {
         'settings.speechProvider': 'مزود الكلام',
         'settings.speechProviderOffline': 'على الجهاز (الهمس)',
         'settings.speechModel': 'نموذج الكلام',
+        'settings.speechBaseUrl': 'عنوان URL لخادم النسخ الصوتي',
+        'settings.speechBaseUrlHint': 'اتركه فارغًا لاستخدام OpenAI الرسمي. عيّن هذا لخادم نسخ صوتي ذاتي الاستضافة متوافق مع OpenAI. مفتاح API اختياري.',
         'settings.speechOfflineModel': 'نموذج غير متصل',
         'settings.speechOfflineModelDesc': 'قم بالتنزيل مرة واحدة للنسخ الكامل دون الاتصال بالإنترنت.',
         'settings.speechOfflineReady': 'تم تنزيل النموذج',

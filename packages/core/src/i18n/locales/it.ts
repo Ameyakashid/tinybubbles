@@ -942,6 +942,8 @@ export const itOverrides: Record<string, string> = {
         'settings.speechProvider': 'Provider vocale',
         'settings.speechProviderOffline': 'Sul dispositivo (Whisper)',
         'settings.speechModel': 'Modello vocale',
+        'settings.speechBaseUrl': 'URL del server di trascrizione',
+        'settings.speechBaseUrlHint': 'Lascia vuoto per OpenAI ufficiale. Imposta questo per un server di trascrizione auto-ospitato compatibile con OpenAI. La chiave API è facoltativa.',
         'settings.speechOfflineModel': 'Modello offline',
         'settings.speechOfflineModelDesc': 'Scaricalo una volta per trascrivere completamente offline.',
         'settings.speechOfflineReady': 'Modello scaricato',

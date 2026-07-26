@@ -870,6 +870,8 @@ export const deOverrides: Record<string, string> = {
         'settings.speechProvider': 'Spracherkennungs-Provider',
         'settings.speechProviderOffline': 'Auf dem Gerät (Whisper)',
         'settings.speechModel': 'Sprachmodell',
+        'settings.speechBaseUrl': 'Transkriptionsserver-URL',
+        'settings.speechBaseUrlHint': 'Für offizielles OpenAI leer lassen. Für einen selbst gehosteten OpenAI-kompatiblen Transkriptionsserver festlegen. API-Schlüssel optional.',
         'settings.speechOfflineModel': 'Offline Modell',
         'settings.speechOfflineModelDesc': 'Einmal herunterlanden, um dann völlig offline zu transkribieren.',
         'settings.speechOfflineReady': 'Modell heruntergeladen',
