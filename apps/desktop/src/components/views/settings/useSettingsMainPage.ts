@@ -17,10 +17,7 @@ import type { Language } from '../../../contexts/language-context';
 import type { GlobalQuickAddShortcutSetting } from '../../../lib/global-quick-add-shortcut';
 import {
     getLaunchAtStartupEnabled,
-    getStartInTrayEnabled,
-    isWindowsStoreInstall,
     setLaunchAtStartupEnabled as setSystemLaunchAtStartupEnabled,
-    setStartInTrayEnabled as setSystemStartInTrayEnabled,
 } from '../../../lib/launch-at-startup';
 import { reportError } from '../../../lib/report-error';
 import {
@@ -79,11 +76,6 @@ export function useSettingsMainPage({
         windowSettings?.launchAtStartup === true,
     );
     const [launchAtStartupLoading, setLaunchAtStartupLoading] = useState(false);
-    // Rust needs this before the webview exists, so unlike launchAtStartup
-    // above it lives only in config.toml, never in synced settings (#928).
-    const [startInTrayEnabled, setStartInTrayEnabledState] = useState(false);
-    const [startInTrayLoading, setStartInTrayLoading] = useState(false);
-    const [isWindowsStoreInstallState, setIsWindowsStoreInstallState] = useState(false);
 
     const densityMode = (
         appearanceSettings?.density === 'condensed'
@@ -164,32 +156,6 @@ export function useSettingsMainPage({
         if (!isTauri || !isFlatpak) return;
         setLaunchAtStartupEnabledState(settings?.window?.launchAtStartup === true);
     }, [isFlatpak, isTauri, settings?.window?.launchAtStartup]);
-
-    useEffect(() => {
-        if (!isTauri) return;
-        let cancelled = false;
-        void isWindowsStoreInstall()
-            .then((isStoreInstall) => {
-                if (!cancelled) setIsWindowsStoreInstallState(isStoreInstall);
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-        };
-    }, [isTauri]);
-
-    useEffect(() => {
-        if (!isTauri) return;
-        let cancelled = false;
-        getStartInTrayEnabled()
-            .then((enabled) => {
-                if (!cancelled) setStartInTrayEnabledState(enabled);
-            })
-            .catch((error) => reportError('Failed to read start in tray setting', error));
-        return () => {
-            cancelled = true;
-        };
-    }, [isTauri]);
 
     const onThemeChange = useCallback((mode: DesktopThemeMode) => {
         localStorage.setItem(THEME_STORAGE_KEY, mode);
@@ -300,15 +266,6 @@ export function useSettingsMainPage({
     }, [settings?.window, showSaved, updateSettings]);
 
     const onTrayVisibleChange = useCallback((visible: boolean) => {
-        // Hiding the tray icon while "start in tray" is on would leave the next
-        // startup launch with a hidden window and nothing to bring it back
-        // through — reachable again only by relaunching. Clear the preference
-        // with it rather than storing a combination that strands the app (#928).
-        if (!visible && startInTrayEnabled) {
-            setSystemStartInTrayEnabled(false)
-                .then(setStartInTrayEnabledState)
-                .catch((error) => reportError('Failed to clear start in tray setting', error));
-        }
         updateSettings({
             window: {
                 ...(settings?.window ?? {}),
@@ -320,7 +277,7 @@ export function useSettingsMainPage({
             .catch((error) =>
                 reportError('Failed to update tray visibility setting', error),
             );
-    }, [settings?.window, showSaved, startInTrayEnabled, updateSettings]);
+    }, [settings?.window, showSaved, updateSettings]);
 
     const onLaunchAtStartupChange = useCallback((enabled: boolean) => {
         if (!isTauri) return;
@@ -345,23 +302,6 @@ export function useSettingsMainPage({
             })
             .finally(() => setLaunchAtStartupLoading(false));
     }, [isTauri, settings?.window, showSaved, updateSettings]);
-
-    const onStartInTrayChange = useCallback((enabled: boolean) => {
-        if (!isTauri) return;
-        setStartInTrayLoading(true);
-        setSystemStartInTrayEnabled(enabled)
-            .then((actualEnabled) => {
-                setStartInTrayEnabledState(actualEnabled);
-                showSaved();
-            })
-            .catch((error) => {
-                reportError('Failed to update start in tray setting', error);
-                void getStartInTrayEnabled()
-                    .then(setStartInTrayEnabledState)
-                    .catch(() => undefined);
-            })
-            .finally(() => setStartInTrayLoading(false));
-    }, [isTauri, showSaved]);
 
     const onKeybindingStyleChange = useCallback((style: 'vim' | 'emacs' | 'standard') => {
         setKeybindingStyle(style);
@@ -402,7 +342,6 @@ export function useSettingsMainPage({
         onLaunchAtStartupChange,
         onOpenHelp: openHelp,
         onShowTaskAgeChange,
-        onStartInTrayChange,
         onTextSizeChange,
         onThemeChange,
         onTimeFormatChange,
@@ -413,12 +352,9 @@ export function useSettingsMainPage({
         showCloseBehavior: isTauri,
         showCalendarSystem,
         showLaunchAtStartup: isTauri,
-        showStartInTray: isTauri && launchAtStartupEnabled && !isWindowsStoreInstallState,
         showTaskAge,
         showTrayToggle: isTauri,
         showWindowDecorations: isLinux,
-        startInTrayEnabled,
-        startInTrayLoading,
         textSizeMode,
         themeMode,
         timeFormat,
