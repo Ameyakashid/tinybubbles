@@ -23,6 +23,19 @@ if (typeof window.cancelAnimationFrame !== 'function') {
     });
 }
 
+// jsdom's File/Blob polyfill has no arrayBuffer() (real webviews do); back it
+// with the FileReader jsdom does implement so file-drop tests can read bytes.
+if (typeof File.prototype.arrayBuffer !== 'function') {
+    File.prototype.arrayBuffer = function (this: File) {
+        return new Promise<ArrayBuffer>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as ArrayBuffer);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsArrayBuffer(this);
+        });
+    };
+}
+
 const localStorageMock = (function () {
     let store: Record<string, string> = {};
     return {

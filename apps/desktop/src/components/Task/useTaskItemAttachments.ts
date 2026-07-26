@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Attachment, DEFAULT_PROJECT_COLOR, buildTaskUpdatesFromSpeechResult, findSelectableProjectByTitleAndArea, generateUUID, normalizeLinkAttachmentInput, translateWithFallback, useTaskStore, type Task } from '@mindwtr/core';
 import { dataDir } from '@tauri-apps/api/path';
 import { BaseDirectory, readFile, readTextFile } from '@tauri-apps/plugin-fs';
-import { importPickedFileAttachment } from '../../lib/attachment-import';
+import { importDroppedFileAttachment, importPickedFileAttachment } from '../../lib/attachment-import';
 import { normalizeAttachmentPathForUrl, resolveAttachmentOpenTarget } from '../../lib/attachment-paths';
 import { normalizeAttachmentInput } from '../../lib/attachment-utils';
 import { openAttachmentTarget } from '../../lib/open-attachment-target';
@@ -370,6 +370,26 @@ export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps)
         setEditAttachments((prev) => [...prev, result.attachment]);
     }, [t]);
 
+    // Attachments stay in editor-local state until the task is saved, same
+    // as addFileAttachment above; removing a chip before saving is the undo.
+    const addDroppedFileAttachments = useCallback(async (files: File[]) => {
+        if (!isTauriRuntime()) {
+            setAttachmentError(t('attachments.fileNotSupported'));
+            return;
+        }
+        setAttachmentError(null);
+        let firstErrorKey: string | null = null;
+        for (const file of files) {
+            const result = await importDroppedFileAttachment(file);
+            if ('errorKey' in result) {
+                firstErrorKey ??= result.errorKey;
+                continue;
+            }
+            setEditAttachments((prev) => [...prev, result.attachment]);
+        }
+        if (firstErrorKey) setAttachmentError(t(firstErrorKey));
+    }, [t]);
+
     const addLinkAttachment = useCallback(() => {
         setAttachmentError(null);
         setEditingLinkAttachmentId(null);
@@ -465,6 +485,7 @@ export function useTaskItemAttachments({ task, t }: UseTaskItemAttachmentsProps)
         linkPromptVariant,
         closeLinkPrompt,
         addFileAttachment,
+        addDroppedFileAttachments,
         addLinkAttachment,
         addObsidianNoteAttachment,
         editLinkAttachment,

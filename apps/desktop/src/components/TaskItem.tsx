@@ -209,6 +209,7 @@ export const TaskItem = memo(function TaskItem({
         linkPromptVariant,
         closeLinkPrompt,
         addFileAttachment,
+        addDroppedFileAttachments,
         addLinkAttachment,
         addObsidianNoteAttachment,
         editLinkAttachment,
@@ -1423,6 +1424,7 @@ export const TaskItem = memo(function TaskItem({
                         isModalEditor={isModalEditor}
                         modalEditorRef={modalEditorRef}
                         onCancel={handleEditorCancel}
+                        onFilesDropped={(files) => void addDroppedFileAttachments(files)}
                         renderDisplay={() => (
                             <TaskItemDisplay
                                 task={task}

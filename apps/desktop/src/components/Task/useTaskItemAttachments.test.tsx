@@ -5,9 +5,12 @@ import { useTaskItemAttachments } from './useTaskItemAttachments';
 
 const openMock = vi.fn();
 const invokeMock = vi.fn();
+const mkdirMock = vi.fn();
+const writeFileMock = vi.fn();
 
 vi.mock('@tauri-apps/api/path', () => ({
     dataDir: vi.fn(async () => '/data'),
+    join: vi.fn(async (...parts: string[]) => parts.join('/')),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,6 +21,8 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     BaseDirectory: { Data: 1 },
     readFile: vi.fn(),
     readTextFile: vi.fn(),
+    mkdir: (...args: unknown[]) => mkdirMock(...args),
+    writeFile: (...args: unknown[]) => writeFileMock(...args),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -28,8 +33,9 @@ vi.mock('../../lib/runtime', () => ({
     isTauriRuntime: () => true,
 }));
 
+const logWarnMock = vi.fn();
 vi.mock('../../lib/app-log', () => ({
-    logWarn: vi.fn(async () => undefined),
+    logWarn: (...args: unknown[]) => logWarnMock(...args),
 }));
 
 vi.mock('../../lib/ai-config', () => ({
@@ -60,6 +66,8 @@ describe('useTaskItemAttachments addFileAttachment', () => {
     beforeEach(() => {
         openMock.mockReset();
         invokeMock.mockReset();
+        mkdirMock.mockClear();
+        writeFileMock.mockClear();
     });
 
     it('copies the picked file into app storage and attaches the managed copy', async () => {
@@ -109,6 +117,56 @@ describe('useTaskItemAttachments addFileAttachment', () => {
             await result.current.addFileAttachment();
         });
 
+        expect(result.current.editAttachments).toHaveLength(0);
+        expect(result.current.attachmentError).toBe('attachments.fileTooLarge');
+    });
+});
+
+describe('useTaskItemAttachments addDroppedFileAttachments', () => {
+    beforeEach(() => {
+        openMock.mockReset();
+        invokeMock.mockReset();
+        mkdirMock.mockClear();
+        writeFileMock.mockClear();
+        // No Rust "get_managed_data_dir" command in this test environment;
+        // getManagedDataDir() falls back to dataDir() + "mindwtr".
+        invokeMock.mockRejectedValue(new Error('get_managed_data_dir not supported'));
+    });
+
+    it('writes a dropped file into the managed attachments dir and appends an attachment', async () => {
+        const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+
+        const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
+        await act(async () => {
+            await result.current.addDroppedFileAttachments([file]);
+        });
+
+        expect(mkdirMock).toHaveBeenCalledWith('/data/mindwtr/attachments', { recursive: true });
+        expect(writeFileMock).toHaveBeenCalledWith(
+            expect.stringMatching(/^\/data\/mindwtr\/attachments\/.+\.txt$/),
+            expect.any(Uint8Array),
+        );
+        expect(result.current.attachmentError).toBeNull();
+        expect(result.current.editAttachments).toHaveLength(1);
+        expect(result.current.editAttachments[0]).toMatchObject({
+            kind: 'file',
+            title: 'notes.txt',
+            size: file.size,
+            localStatus: 'available',
+            mimeType: 'text/plain',
+        });
+    });
+
+    it('rejects an oversized dropped file before reading its bytes', async () => {
+        const hugeFile = new File(['x'], 'huge.bin');
+        Object.defineProperty(hugeFile, 'size', { value: 50 * 1024 * 1024 + 1 });
+
+        const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
+        await act(async () => {
+            await result.current.addDroppedFileAttachments([hugeFile]);
+        });
+
+        expect(writeFileMock).not.toHaveBeenCalled();
         expect(result.current.editAttachments).toHaveLength(0);
         expect(result.current.attachmentError).toBe('attachments.fileTooLarge');
     });

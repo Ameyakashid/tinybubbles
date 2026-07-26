@@ -1,6 +1,7 @@
 import { type Attachment, DEFAULT_MAX_FILE_SIZE_BYTES, generateUUID } from '@mindwtr/core';
 import { logWarn } from './app-log';
-import { extractExtension } from './sync-service-utils';
+import { getManagedPath } from './managed-paths';
+import { ATTACHMENTS_DIR_NAME, extractExtension } from './sync-service-utils';
 
 export type ImportPickedFileResult =
     | { attachment: Attachment }
@@ -55,5 +56,45 @@ export async function importPickedFileAttachment(selectedPath: string): Promise<
                 ? 'attachments.fileTooLarge'
                 : 'attachments.fileNotReadable',
         };
+    }
+}
+
+// A dropped file arrives as bytes with no OS path, so it can't go through
+// the Rust copier (import_attachment_file). Write it into the same
+// managed attachments dir directly from the webview instead.
+export async function importDroppedFileAttachment(file: File): Promise<ImportPickedFileResult> {
+    if (file.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
+        return { errorKey: 'attachments.fileTooLarge' };
+    }
+    const id = generateUUID();
+    try {
+        const { mkdir, writeFile } = await import('@tauri-apps/plugin-fs');
+        const { join } = await import('@tauri-apps/api/path');
+        const dir = await getManagedPath(ATTACHMENTS_DIR_NAME);
+        await mkdir(dir, { recursive: true });
+        const targetPath = await join(dir, `${id}${extractExtension(file.name)}`);
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await writeFile(targetPath, bytes);
+        const now = new Date().toISOString();
+        return {
+            attachment: {
+                id,
+                kind: 'file',
+                title: file.name,
+                uri: targetPath,
+                size: file.size,
+                localStatus: 'available',
+                createdAt: now,
+                updatedAt: now,
+                mimeType: file.type || undefined,
+            },
+        };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        void logWarn('Failed to import dropped file attachment', {
+            scope: 'attachment',
+            extra: { error: message },
+        });
+        return { errorKey: 'attachments.fileNotReadable' };
     }
 }

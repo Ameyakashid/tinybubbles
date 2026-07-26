@@ -209,7 +209,25 @@ async function restoreWebviewZoomState() {
     }
 }
 
+// Tauri's native drag-drop handler is off (tauri.conf.json dragDropEnabled:
+// false) so HTML5 drag-and-drop works for task rows; that also means the
+// webview's plain browser default runs for OS file drops anywhere else,
+// navigating away to the dropped file. Block navigation here, but only
+// preventDefault (never stopPropagation) so the editor's own file-drop
+// handler, which runs first since React attaches below document, still
+// gets the event.
+function installFileDropNavigationGuard() {
+    const isFileDrag = (event: DragEvent) => Boolean(event.dataTransfer?.types.includes('Files'));
+    document.addEventListener('dragover', (event) => {
+        if (isFileDrag(event)) event.preventDefault();
+    });
+    document.addEventListener('drop', (event) => {
+        if (isFileDrag(event)) event.preventDefault();
+    });
+}
+
 async function bootstrap() {
+    installFileDropNavigationGuard();
     await initStorage();
     setupGlobalErrorLogging();
     if (!isQuickAddWindow) {
