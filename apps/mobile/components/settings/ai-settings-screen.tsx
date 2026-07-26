@@ -86,6 +86,7 @@ export function AISettingsScreen() {
                 ? 'gemini-2.5-flash'
                 : DEFAULT_WHISPER_MODEL
     );
+    const speechBaseUrl = speechSettings.baseUrl ?? '';
     const speechLanguage = speechSettings.language ?? 'auto';
     const speechMode = speechSettings.mode ?? 'smart_parse';
     const speechFieldStrategy = speechSettings.fieldStrategy ?? 'smart';
@@ -504,13 +505,16 @@ export function AISettingsScreen() {
                         onDownloadWhisperModel={() => void handleDownloadWhisperModel()}
                         onOpenModelPicker={() => setModelPicker('speech')}
                         onSpeechApiKeyChange={handleSpeechApiKeyChange}
+                        onSpeechBaseUrlChange={(value) => updateSpeechSettings({ baseUrl: value })}
                         onSpeechEnabledChange={(value) => updateSpeechSettings({ enabled: value })}
                         onSpeechFieldStrategyChange={(value) => updateSpeechSettings({ fieldStrategy: value })}
                         onSpeechLanguageChange={handleSpeechLanguageChange}
                         onSpeechModeChange={(value) => updateSpeechSettings({ mode: value })}
+                        onSpeechModelChange={(value) => updateSpeechSettings({ model: value })}
                         onSpeechProviderChange={handleSpeechProviderChange}
                         onToggleOpen={() => setSpeechOpen((prev) => !prev)}
                         speechApiKey={speechApiKey}
+                        speechBaseUrl={speechBaseUrl}
                         speechEnabled={speechEnabled}
                         speechFieldStrategy={speechFieldStrategy}
                         speechLanguage={speechLanguage}

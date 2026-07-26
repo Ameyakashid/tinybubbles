@@ -427,7 +427,10 @@ export function useTaskEditAttachments({
             const resolvedModelPath = provider === 'whisper'
                 ? (whisperResolved?.exists ? whisperResolved.path : modelPath)
                 : undefined;
-            const speechReady = provider === 'whisper' ? whisperModelReady || Boolean(modelPath?.trim()) : Boolean(apiKey);
+            const speechReady = provider === 'whisper'
+                ? whisperModelReady || Boolean(modelPath?.trim())
+                // A self-hosted OpenAI-compatible server (#930) substitutes for a key.
+                : Boolean(apiKey) || (provider === 'openai' && Boolean(speechRuntime.baseUrl?.trim()));
             if (!speechReady) {
                 throw new Error(resolveText('attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
             }
@@ -438,6 +441,7 @@ export function useTaskEditAttachments({
             const result = await processAudioCapture(normalizeAudioUri(currentAttachment.uri), {
                 provider,
                 apiKey,
+                baseUrl: speechRuntime.baseUrl,
                 model,
                 modelPath: resolvedModelPath,
                 isFossBuild: speechRuntime.isFossBuild,

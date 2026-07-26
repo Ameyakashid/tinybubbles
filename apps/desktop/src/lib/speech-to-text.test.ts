@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { processAudioCapture, resolveSpeechCapture } from './speech-to-text';
 
@@ -168,5 +168,108 @@ describe('resolveSpeechCapture', () => {
         expect(recordGate.ready).toBe(transcribeGate.ready);
         expect(recordGate.reason).toBe(transcribeGate.reason);
         expect(recordGate.config).toEqual(transcribeGate.config);
+    });
+
+    // #930: a self-hosted OpenAI-compatible transcription server usually has
+    // no key, so a configured base URL substitutes for one — openai only.
+    it('is ready with a custom OpenAI base URL and no key', async () => {
+        const result = await resolveSpeechCapture({
+            speechToText: { enabled: true, provider: 'openai', baseUrl: 'http://localhost:8000/v1' },
+        });
+
+        expect(result.ready).toBe(true);
+        expect(result.reason).toBeUndefined();
+        expect(result.config.apiKey).toBe('');
+        expect(result.config.baseUrl).toBe('http://localhost:8000/v1');
+    });
+
+    it('still reports no-key for openai without a base URL or a key', async () => {
+        const result = await resolveSpeechCapture({
+            speechToText: { enabled: true, provider: 'openai' },
+        });
+
+        expect(result.ready).toBe(false);
+        expect(result.reason).toBe('no-key');
+    });
+
+    it('does not extend the base-URL escape hatch to gemini', async () => {
+        const result = await resolveSpeechCapture({
+            speechToText: { enabled: true, provider: 'gemini', baseUrl: 'http://localhost:8000/v1' },
+        });
+
+        expect(result.ready).toBe(false);
+        expect(result.reason).toBe('no-key');
+        expect(result.config.baseUrl).toBeUndefined();
+    });
+});
+
+describe('processAudioCapture openai transcription against a custom base URL', () => {
+    const fetchMock = vi.fn();
+
+    beforeEach(() => {
+        fetchMock.mockReset();
+        fetchMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({ text: 'hello from whisperx' }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    const audio = { bytes: new Uint8Array([1, 2, 3]), mimeType: 'audio/wav', name: 'capture.wav' };
+
+    it('derives the transcribe endpoint from a base URL, stripping a trailing slash', async () => {
+        await processAudioCapture(audio, {
+            provider: 'openai',
+            model: 'large-v3',
+            baseUrl: 'http://localhost:8000/v1/',
+            mode: 'transcribe_only',
+        });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:8000/v1/audio/transcriptions',
+            expect.anything()
+        );
+    });
+
+    it('uses the official OpenAI URL when no base URL is configured', async () => {
+        await processAudioCapture(audio, {
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            apiKey: 'secret-key',
+            mode: 'transcribe_only',
+        });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'https://api.openai.com/v1/audio/transcriptions',
+            expect.anything()
+        );
+    });
+
+    it('sends no Authorization header when there is no key', async () => {
+        await processAudioCapture(audio, {
+            provider: 'openai',
+            model: 'large-v3',
+            baseUrl: 'http://localhost:8000/v1',
+            mode: 'transcribe_only',
+        });
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers).not.toHaveProperty('Authorization');
+    });
+
+    it('sends an Authorization header when a key is present', async () => {
+        await processAudioCapture(audio, {
+            provider: 'openai',
+            model: 'gpt-4o-transcribe',
+            apiKey: 'secret-key',
+            mode: 'transcribe_only',
+        });
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers.Authorization).toBe('Bearer secret-key');
     });
 });

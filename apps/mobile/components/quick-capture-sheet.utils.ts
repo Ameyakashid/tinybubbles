@@ -114,16 +114,21 @@ export const isQuickCaptureSpeechReady = ({
     speechEnabled,
     provider,
     apiKey,
+    baseUrl,
     whisperModelReady,
     whisperModelPath,
 }: {
     speechEnabled: boolean;
     provider: string;
     apiKey?: string;
+    // Only meaningful for provider 'openai': a self-hosted OpenAI-compatible
+    // server (#930) substitutes for a key.
+    baseUrl?: string;
     whisperModelReady: boolean;
     whisperModelPath?: string;
 }) => {
     if (!speechEnabled) return false;
     if (provider === 'whisper') return whisperModelReady || Boolean(whisperModelPath?.trim());
+    if (provider === 'openai' && Boolean(baseUrl?.trim())) return true;
     return Boolean(apiKey);
 };

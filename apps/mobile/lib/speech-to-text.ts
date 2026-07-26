@@ -56,6 +56,8 @@ export type SpeechToTextConfig = Omit<SpeechToTaskCaptureConfig, 'provider'> & {
   parseModel?: string;
   modelPath?: string;
   isFossBuild?: boolean;
+  // Only meaningful for provider 'openai' — see resolveOpenAITranscribeEndpoint.
+  baseUrl?: string;
 };
 
 export type WhisperRealtimeHandle = {
@@ -71,9 +73,20 @@ type FetchOptions = {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const OPENAI_TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const OPENAI_TRANSCRIBE_PATH = '/audio/transcriptions';
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// The user pastes a root ending in /v1 (the convention the chat base-URL
+// field already teaches) — never guess at /v1 if they left it off, that is
+// their server's shape, not ours to invent.
+const resolveOpenAITranscribeEndpoint = (baseUrl?: string): string => {
+  const trimmed = String(baseUrl || '').trim();
+  if (!trimmed) return OPENAI_TRANSCRIBE_URL;
+  const normalized = trimmed.replace(/\/+$/, '');
+  return `${normalized}${OPENAI_TRANSCRIBE_PATH}`;
+};
 const WHISPER_ANDROID_MAX_THREADS = 1;
 const WHISPER_ANDROID_N_PROCESSORS = 1;
 const LOCAL_WHISPER_SAMPLE_RATE = 16000;
@@ -242,6 +255,8 @@ export type ResolvedSpeechToTextRuntimeSettings = {
   enabled: boolean;
   model: string;
   modelPath?: string;
+  // Only set for provider 'openai' — see resolveOpenAITranscribeEndpoint.
+  baseUrl?: string;
   language?: string;
   mode: AudioCaptureMode;
   fieldStrategy: AudioFieldStrategy;
@@ -260,6 +275,7 @@ export const resolveSpeechToTextRuntimeSettings = (
     enabled: speech?.enabled === true && normalized.enabledProvider,
     model,
     modelPath: normalized.provider === 'whisper' ? speech?.offlineModelPath : undefined,
+    baseUrl: normalized.provider === 'openai' ? (speech?.baseUrl?.trim() || undefined) : undefined,
     language: speech?.language,
     mode: speech?.mode ?? 'smart_parse',
     fieldStrategy: speech?.fieldStrategy ?? 'smart',
@@ -451,7 +467,9 @@ const buildOpenAIMultipartPayload = async (
 };
 
 const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) => {
-  if (!config.apiKey) {
+  // Official OpenAI keeps requiring a key; a self-hosted server usually has
+  // none, so only block when there is neither.
+  if (!config.apiKey && !config.baseUrl?.trim()) {
     throw new Error('OpenAI API key missing');
   }
   const language = normalizeSpeechLanguage(config.language);
@@ -486,11 +504,13 @@ const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) =>
       form.append('response_format', 'json');
 
       const result = await fetchJson(
-        OPENAI_TRANSCRIBE_URL,
+        resolveOpenAITranscribeEndpoint(config.baseUrl),
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${config.apiKey}`,
+            // An empty "Bearer " header makes some self-hosted servers 401
+            // instead of ignoring auth — only send it when we have one.
+            ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
           },
           body: form,
         },

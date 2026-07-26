@@ -120,6 +120,30 @@ describe('quick-capture utils', () => {
         })).toBe(false);
     });
 
+    it('treats a custom OpenAI base URL as ready without a key, but not for gemini (#930)', () => {
+        expect(isQuickCaptureSpeechReady({
+            speechEnabled: true,
+            provider: 'openai',
+            apiKey: '',
+            baseUrl: 'http://localhost:8000/v1',
+            whisperModelReady: false,
+        })).toBe(true);
+        expect(isQuickCaptureSpeechReady({
+            speechEnabled: true,
+            provider: 'openai',
+            apiKey: '',
+            baseUrl: '',
+            whisperModelReady: false,
+        })).toBe(false);
+        expect(isQuickCaptureSpeechReady({
+            speechEnabled: true,
+            provider: 'gemini',
+            apiKey: '',
+            baseUrl: 'http://localhost:8000/v1',
+            whisperModelReady: false,
+        })).toBe(false);
+    });
+
     it('uses the latest store speech settings over a stale capture snapshot', () => {
         const staleSettings = {
             ai: {

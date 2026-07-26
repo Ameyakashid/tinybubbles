@@ -24,6 +24,8 @@ export type SpeechToTextConfig = SpeechToTaskCaptureConfig & {
     model: string;
     parseModel?: string;
     modelPath?: string;
+    // Only meaningful for provider 'openai' — see resolveOpenAITranscribeEndpoint.
+    baseUrl?: string;
 };
 
 export type SpeechCaptureReadyReason = 'disabled' | 'no-key' | 'no-model';
@@ -52,10 +54,14 @@ export async function resolveSpeechCapture(settings: AiSettings | undefined): Pr
     );
     const apiSpeechProvider = provider === 'openai' || provider === 'gemini' ? provider : null;
     const modelPath = apiSpeechProvider ? undefined : speech?.offlineModelPath;
+    // A self-hosted OpenAI-compatible server (#930) usually has no key; Gemini
+    // has no such escape hatch and keeps requiring one.
+    const baseUrl = provider === 'openai' ? (speech?.baseUrl?.trim() || undefined) : undefined;
     const baseConfig = {
         provider,
         model,
         modelPath,
+        baseUrl,
         language: speech?.language,
         mode: speech?.mode ?? 'smart_parse',
         fieldStrategy: speech?.fieldStrategy ?? 'smart',
@@ -68,7 +74,7 @@ export async function resolveSpeechCapture(settings: AiSettings | undefined): Pr
     }
     const apiKey = apiSpeechProvider ? await loadAIKey(apiSpeechProvider).catch(() => '') : '';
     const config: SpeechToTextConfig = { ...baseConfig, apiKey };
-    if (apiSpeechProvider ? !apiKey : !modelPath) {
+    if (apiSpeechProvider ? (!apiKey && !baseUrl) : !modelPath) {
         return { ready: false, reason: apiSpeechProvider ? 'no-key' : 'no-model', config };
     }
     return { ready: true, config };
@@ -88,9 +94,20 @@ type FetchOptions = {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const OPENAI_TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const OPENAI_TRANSCRIBE_PATH = '/audio/transcriptions';
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// The user pastes a root ending in /v1 (the convention the chat base-URL
+// field already teaches) — never guess at /v1 if they left it off, that is
+// their server's shape, not ours to invent.
+const resolveOpenAITranscribeEndpoint = (baseUrl?: string): string => {
+    const trimmed = String(baseUrl || '').trim();
+    if (!trimmed) return OPENAI_TRANSCRIBE_URL;
+    const normalized = trimmed.replace(/\/+$/, '');
+    return `${normalized}${OPENAI_TRANSCRIBE_PATH}`;
+};
 
 const bytesToBase64 = (bytes: Uint8Array) => {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -163,7 +180,9 @@ const fetchJson = async (url: string, init: RequestInit, options?: FetchOptions)
 };
 
 const transcribeOpenAI = async (audio: AudioInput, config: SpeechToTextConfig) => {
-    if (!config.apiKey) {
+    // Official OpenAI keeps requiring a key; a self-hosted server usually has
+    // none, so only block when there is neither.
+    if (!config.apiKey && !config.baseUrl?.trim()) {
         throw new Error('OpenAI API key missing');
     }
     const bytes = new Uint8Array(audio.bytes);
@@ -180,11 +199,13 @@ const transcribeOpenAI = async (audio: AudioInput, config: SpeechToTextConfig) =
     form.append('response_format', 'json');
 
     const result = await fetchJson(
-        OPENAI_TRANSCRIBE_URL,
+        resolveOpenAITranscribeEndpoint(config.baseUrl),
         {
             method: 'POST',
             headers: {
-                Authorization: `Bearer ${config.apiKey}`,
+                // An empty "Bearer " header makes some self-hosted servers
+                // 401 instead of ignoring auth — only send it when we have one.
+                ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
             },
             body: form,
         },

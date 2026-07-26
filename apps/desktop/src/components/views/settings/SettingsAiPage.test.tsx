@@ -101,6 +101,7 @@ const baseProps: Parameters<typeof SettingsAiPage>[0] = {
     speechProvider: 'gemini',
     speechModel: 'gemini-2.5-flash',
     speechModelOptions: ['gemini-2.5-flash'],
+    speechBaseUrl: '',
     speechLanguage: '',
     speechMode: 'smart_parse',
     speechFieldStrategy: 'smart',
@@ -258,5 +259,50 @@ describe('SettingsAiPage', () => {
         fireEvent.click(getByRole('button', { name: /Speech to text/i }));
 
         expect(getByText(/Estimated download size: 74\.1 MB/)).toBeInTheDocument();
+    });
+
+    it('lets a self-hosted OpenAI-compatible speech server be configured with a free-text model and a base URL', () => {
+        const onUpdateSpeechSettings = vi.fn();
+        const { getByLabelText, getByRole, queryByText } = render(
+            <SettingsAiPage
+                {...baseProps}
+                speechProvider="openai"
+                speechModel="large-v3"
+                speechModelOptions={['gpt-4o-mini-transcribe', 'gpt-4o-transcribe']}
+                speechBaseUrl="http://localhost:8000/v1"
+                onUpdateSpeechSettings={onUpdateSpeechSettings}
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: /Speech to text/i }));
+
+        const modelInput = getByLabelText('Speech model');
+        expect(modelInput).toHaveValue('large-v3');
+        fireEvent.change(modelInput, { target: { value: 'large-v3-custom' } });
+        expect(onUpdateSpeechSettings).toHaveBeenCalledWith({ model: 'large-v3-custom' });
+
+        const baseUrlInput = getByLabelText('Custom OpenAI-compatible base URL');
+        expect(baseUrlInput).toHaveValue('http://localhost:8000/v1');
+        fireEvent.change(baseUrlInput, { target: { value: 'http://localhost:9000/v1' } });
+        expect(onUpdateSpeechSettings).toHaveBeenCalledWith({ baseUrl: 'http://localhost:9000/v1' });
+
+        // No LLM-server hint (Ollama/LM Studio/GLM) — it's wrong for ASR.
+        expect(queryByText(/Ollama/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the speech model a fixed select for non-OpenAI providers', () => {
+        const { getByDisplayValue, getByRole, queryByLabelText } = render(
+            <SettingsAiPage
+                {...baseProps}
+                speechProvider="gemini"
+                speechModel="gemini-2.5-flash"
+                speechModelOptions={['gemini-2.5-flash']}
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: /Speech to text/i }));
+
+        expect(getByDisplayValue('gemini-2.5-flash').tagName).toBe('SELECT');
+        expect(queryByLabelText('Custom OpenAI-compatible base URL')).not.toBeInTheDocument();
     });
 });

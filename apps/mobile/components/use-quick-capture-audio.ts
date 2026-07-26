@@ -280,6 +280,7 @@ export function useQuickCaptureAudio({
       speechEnabled: guardRuntime.enabled,
       provider: guardRuntime.provider,
       apiKey: guardApiKey,
+      baseUrl: guardRuntime.baseUrl,
       whisperModelReady: guardRuntime.provider === 'whisper' ? Boolean(guardWhisper?.exists) : false,
       whisperModelPath: guardRuntime.modelPath,
     });
@@ -446,6 +447,7 @@ export function useQuickCaptureAudio({
           speechEnabled: speechRuntime.enabled,
           provider,
           apiKey,
+          baseUrl: speechRuntime.baseUrl,
           whisperModelReady,
           whisperModelPath: modelPath,
         });
@@ -523,6 +525,7 @@ export function useQuickCaptureAudio({
           const speechConfig = {
             provider,
             apiKey,
+            baseUrl: speechRuntime.baseUrl,
             model,
             modelPath: resolvedModelPath,
             isFossBuild: speechRuntime.isFossBuild,
@@ -665,6 +668,7 @@ export function useQuickCaptureAudio({
         speechEnabled: speechRuntime.enabled,
         provider,
         apiKey,
+        baseUrl: speechRuntime.baseUrl,
         whisperModelReady,
         whisperModelPath: modelPath,
       });
@@ -727,6 +731,7 @@ export function useQuickCaptureAudio({
         const speechConfig = {
           provider,
           apiKey,
+          baseUrl: speechRuntime.baseUrl,
           model,
           modelPath: resolvedModelPath,
           isFossBuild: speechRuntime.isFossBuild,

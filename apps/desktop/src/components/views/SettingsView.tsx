@@ -380,6 +380,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     speechProvider,
     speechModel,
     speechModelOptions,
+    speechBaseUrl,
     speechLanguage,
     speechMode,
     speechFieldStrategy,
@@ -1192,6 +1193,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
           speechProvider={speechProvider}
           speechModel={speechModel}
           speechModelOptions={speechModelOptions}
+          speechBaseUrl={speechBaseUrl}
           speechLanguage={speechLanguage}
           speechMode={speechMode}
           speechFieldStrategy={speechFieldStrategy}

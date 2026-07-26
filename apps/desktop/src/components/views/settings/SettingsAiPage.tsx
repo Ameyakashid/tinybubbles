@@ -131,6 +131,7 @@ type SettingsAiPageProps = {
     speechProvider: SpeechProvider;
     speechModel: string;
     speechModelOptions: string[];
+    speechBaseUrl: string;
     speechLanguage: string;
     speechMode: 'smart_parse' | 'transcribe_only';
     speechFieldStrategy: 'smart' | 'title_only' | 'description_only';
@@ -172,6 +173,7 @@ export function SettingsAiPage({
     speechProvider,
     speechModel,
     speechModelOptions,
+    speechBaseUrl,
     speechLanguage,
     speechMode,
     speechFieldStrategy,
@@ -549,18 +551,56 @@ export function SettingsAiPage({
 
                         <div className="flex items-center justify-between gap-4">
                             <div className="text-sm font-medium">{t.speechModel}</div>
-                            <select
-                                value={speechModel}
-                                onChange={(e) => onUpdateSpeechSettings({ model: e.target.value })}
-                                className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
-                            >
-                                {speechModelOptions.map((option) => (
-                                    <option key={option} value={option}>
-                                        {option}
-                                    </option>
-                                ))}
-                            </select>
+                            {speechProvider === 'openai' ? (
+                                <>
+                                    <input
+                                        type="text"
+                                        aria-label={t.speechModel}
+                                        value={speechModel}
+                                        onChange={(e) => onUpdateSpeechSettings({ model: e.target.value })}
+                                        list="speech-model-options"
+                                        className="min-w-[200px] text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    >
+                                    </input>
+                                    <datalist id="speech-model-options">
+                                        {speechModelOptions.map((option) => (
+                                            <option key={option} value={option} />
+                                        ))}
+                                    </datalist>
+                                </>
+                            ) : (
+                                <select
+                                    value={speechModel}
+                                    onChange={(e) => onUpdateSpeechSettings({ model: e.target.value })}
+                                    className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                >
+                                    {speechModelOptions.map((option) => (
+                                        <option key={option} value={option}>
+                                            {option}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
+
+                        {speechProvider === 'openai' && (
+                            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                                <div className="text-sm font-medium">{t.aiBaseUrl}</div>
+                                <input
+                                    type="text"
+                                    aria-label={t.aiBaseUrl}
+                                    value={speechBaseUrl}
+                                    onChange={(e) => onUpdateSpeechSettings({ baseUrl: e.target.value })}
+                                    // Not the chat field's Ollama URL — that serves LLMs, not
+                                    // transcription. 8000 is where the common ASR servers land.
+                                    placeholder="http://localhost:8000/v1"
+                                    className="w-full text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                    autoCapitalize="off"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                />
+                            </div>
+                        )}
 
                         {speechProvider === 'whisper' ? (
                             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">

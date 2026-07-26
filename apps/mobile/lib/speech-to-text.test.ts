@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fileSystemMock = vi.hoisted(() => ({
   bytes: vi.fn(),
@@ -547,5 +547,88 @@ describe('speech-to-text', () => {
       })
     ).rejects.toThrow('Local Whisper can only transcribe 16 kHz mono PCM WAV audio.');
     expect(whisperMock.initWhisper).not.toHaveBeenCalled();
+  });
+});
+
+// #930: point OpenAI-shaped speech-to-text at a self-hosted server.
+describe('processAudioCapture openai transcription against a custom base URL', () => {
+  beforeEach(() => {
+    constantsMock.default.expoConfig.extra.isFossBuild = false;
+    fileSystemMock.bytes.mockReset();
+    fileSystemMock.bytes.mockResolvedValue(makePcmWav());
+  });
+
+  const stubFetch = () => {
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => ({
+      ok: true,
+      json: async () => ({ text: 'hello from whisperx' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('derives the transcribe endpoint from a base URL, stripping a trailing slash', async () => {
+    const fetchMock = stubFetch();
+
+    const result = await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'large-v3',
+      baseUrl: 'http://localhost:8000/v1/',
+      mode: 'transcribe_only',
+    });
+
+    expect(result).toEqual({ transcript: 'hello from whisperx' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/audio/transcriptions',
+      expect.anything()
+    );
+  });
+
+  it('uses the official OpenAI URL when no base URL is configured', async () => {
+    const fetchMock = stubFetch();
+
+    await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'gpt-4o-transcribe',
+      apiKey: 'secret-key',
+      mode: 'transcribe_only',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/audio/transcriptions',
+      expect.anything()
+    );
+  });
+
+  it('sends no Authorization header when there is no key', async () => {
+    const fetchMock = stubFetch();
+
+    await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'large-v3',
+      baseUrl: 'http://localhost:8000/v1',
+      mode: 'transcribe_only',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('sends an Authorization header when a key is present', async () => {
+    const fetchMock = stubFetch();
+
+    await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'gpt-4o-transcribe',
+      apiKey: 'secret-key',
+      mode: 'transcribe_only',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(init.headers.Authorization).toBe('Bearer secret-key');
   });
 });

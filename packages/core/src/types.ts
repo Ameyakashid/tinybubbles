@@ -437,6 +437,9 @@ export interface SpeechToTextSettings {
     enabled?: boolean;
     provider?: 'openai' | 'gemini' | 'whisper' | 'parakeet';
     model?: string;
+    // Only meaningful for provider 'openai': points transcription at a
+    // self-hosted OpenAI-compatible server instead of api.openai.com (#930).
+    baseUrl?: string;
     language?: string;
     mode?: 'smart_parse' | 'transcribe_only';
     fieldStrategy?: 'smart' | 'title_only' | 'description_only';

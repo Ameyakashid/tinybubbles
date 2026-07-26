@@ -19,13 +19,16 @@ type AiSettingsSpeechCardProps = {
     onDownloadWhisperModel: () => void;
     onOpenModelPicker: () => void;
     onSpeechApiKeyChange: (value: string) => void;
+    onSpeechBaseUrlChange: (value: string) => void;
     onSpeechEnabledChange: (value: boolean) => void;
     onSpeechFieldStrategyChange: (value: 'smart' | 'title_only' | 'description_only') => void;
     onSpeechLanguageChange: (value: string) => void;
     onSpeechModeChange: (value: 'smart_parse' | 'transcribe_only') => void;
+    onSpeechModelChange: (value: string) => void;
     onSpeechProviderChange: (provider: SpeechProvider) => void;
     onToggleOpen: () => void;
     speechApiKey: string;
+    speechBaseUrl: string;
     speechEnabled: boolean;
     speechFieldStrategy: 'smart' | 'title_only' | 'description_only';
     speechLanguage: string;
@@ -49,13 +52,16 @@ export function AiSettingsSpeechCard({
     onDownloadWhisperModel,
     onOpenModelPicker,
     onSpeechApiKeyChange,
+    onSpeechBaseUrlChange,
     onSpeechEnabledChange,
     onSpeechFieldStrategyChange,
     onSpeechLanguageChange,
     onSpeechModeChange,
+    onSpeechModelChange,
     onSpeechProviderChange,
     onToggleOpen,
     speechApiKey,
+    speechBaseUrl,
     speechEnabled,
     speechFieldStrategy,
     speechLanguage,
@@ -161,18 +167,41 @@ export function AiSettingsSpeechCard({
                         </View>
                     </View>
                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-                        <TouchableOpacity
-                            style={[styles.dropdownButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
-                            onPress={onOpenModelPicker}
-                        >
-                            <CompactText
-                                style={[styles.dropdownValue, { color: tc.text }]}
-                                numberOfLines={2}
+                        {speechProvider === 'openai' ? (
+                            <View style={styles.modelInputRow}>
+                                <TextInput
+                                    value={speechModel}
+                                    onChangeText={onSpeechModelChange}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    style={[styles.modelTextInput, { borderColor: tc.border, color: tc.text }]}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.modelSuggestButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
+                                    onPress={onOpenModelPicker}
+                                >
+                                    <CompactText
+                                        style={[styles.modelSuggestButtonText, { color: tc.secondaryText }]}
+                                        numberOfLines={2}
+                                    >
+                                        {tr('settings.aiMobile.suggestions')}
+                                    </CompactText>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.dropdownButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
+                                onPress={onOpenModelPicker}
                             >
-                                {speechModel}
-                            </CompactText>
-                            <Text style={[styles.dropdownChevron, { color: tc.secondaryText }]}>▾</Text>
-                        </TouchableOpacity>
+                                <CompactText
+                                    style={[styles.dropdownValue, { color: tc.text }]}
+                                    numberOfLines={2}
+                                >
+                                    {speechModel}
+                                </CompactText>
+                                <Text style={[styles.dropdownChevron, { color: tc.secondaryText }]}>▾</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {speechProvider === 'whisper' ? (
@@ -253,6 +282,28 @@ export function AiSettingsSpeechCard({
                                     style={[styles.textInput, { borderColor: tc.border, color: tc.text }]}
                                 />
                             </View>
+                            {speechProvider === 'openai' && (
+                                <>
+                                    <View style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}>
+                                        <View style={styles.settingInfo}>
+                                            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.aiBaseUrl')}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                                        <TextInput
+                                            value={speechBaseUrl}
+                                            onChangeText={onSpeechBaseUrlChange}
+                                            // Not the chat field's Ollama URL — that serves LLMs,
+                                            // not transcription.
+                                            placeholder="http://localhost:8000/v1"
+                                            placeholderTextColor={tc.secondaryText}
+                                            autoCapitalize="none"
+                                            autoCorrect={false}
+                                            style={[styles.textInput, { borderColor: tc.border, color: tc.text }]}
+                                        />
+                                    </View>
+                                </>
+                            )}
                         </>
                     )}
 

@@ -83,6 +83,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
                     ? DEFAULT_PARAKEET_MODEL
                     : DEFAULT_WHISPER_MODEL
     );
+    const speechBaseUrl = speechSettings.baseUrl ?? '';
     const speechLanguage = speechSettings.language ?? '';
     const speechMode = (speechSettings.mode ?? 'smart_parse') as AudioCaptureMode;
     const speechFieldStrategy = (speechSettings.fieldStrategy ?? 'smart') as AudioFieldStrategy;
@@ -468,6 +469,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         speechProvider,
         speechModel,
         speechModelOptions,
+        speechBaseUrl,
         speechLanguage,
         speechMode,
         speechFieldStrategy,
