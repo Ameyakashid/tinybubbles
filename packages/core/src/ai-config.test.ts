@@ -4,6 +4,7 @@ import {
     buildCopilotConfig,
     formatOpenAIExtraBodyParams,
     parseOpenAIExtraBodyParamsInput,
+    resolveOpenAITranscribeEndpoint,
 } from './ai-config';
 import type { AiSettings, AppSettings } from './types';
 
@@ -135,5 +136,22 @@ describe('ai-config endpoint mapping', () => {
             thinking: { type: 'disabled' },
         })).toBe('{\n  "thinking": {\n    "type": "disabled"\n  }\n}');
         expect(formatOpenAIExtraBodyParams({})).toBe('');
+    });
+});
+
+describe('resolveOpenAITranscribeEndpoint', () => {
+    it('defaults to the official OpenAI transcription endpoint when no base URL is set', () => {
+        expect(resolveOpenAITranscribeEndpoint(undefined)).toBe('https://api.openai.com/v1/audio/transcriptions');
+        expect(resolveOpenAITranscribeEndpoint('')).toBe('https://api.openai.com/v1/audio/transcriptions');
+    });
+
+    it('appends the transcription path to a self-hosted base URL', () => {
+        expect(resolveOpenAITranscribeEndpoint('http://localhost:8000/v1'))
+            .toBe('http://localhost:8000/v1/audio/transcriptions');
+    });
+
+    it('does not double-append when the base URL already ends in the transcription path', () => {
+        expect(resolveOpenAITranscribeEndpoint('http://localhost:8000/v1/audio/transcriptions/'))
+            .toBe('http://localhost:8000/v1/audio/transcriptions');
     });
 });

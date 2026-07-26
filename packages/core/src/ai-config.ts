@@ -4,6 +4,8 @@ import { COPILOT_REASONING_EFFORT, DEFAULT_ANTHROPIC_THINKING_BUDGET, DEFAULT_GE
 
 const AI_KEY_PREFIX = 'mindwtr-ai-key';
 const OPENAI_CHAT_COMPLETIONS_PATH = '/chat/completions';
+const OPENAI_TRANSCRIBE_PATH = '/audio/transcriptions';
+const OPENAI_TRANSCRIBE_URL = `https://api.openai.com/v1${OPENAI_TRANSCRIBE_PATH}`;
 
 export function getAIKeyStorageKey(provider: AIProviderId): string {
     return `${AI_KEY_PREFIX}:${provider}`;
@@ -57,6 +59,20 @@ const resolveOpenAIEndpoint = (baseUrl?: string): string | undefined => {
         return normalized;
     }
     return `${normalized}${OPENAI_CHAT_COMPLETIONS_PATH}`;
+};
+
+// The user pastes a root ending in /v1 (the convention the chat base-URL
+// field already teaches) — never guess at /v1 if they left it off, that is
+// their server's shape, not ours to invent.
+export const resolveOpenAITranscribeEndpoint = (baseUrl?: string): string => {
+    const trimmed = String(baseUrl || '').trim();
+    if (!trimmed) return OPENAI_TRANSCRIBE_URL;
+    const normalized = trimmed.replace(/\/+$/, '');
+    const lower = normalized.toLowerCase();
+    if (lower.endsWith(OPENAI_TRANSCRIBE_PATH)) {
+        return normalized;
+    }
+    return `${normalized}${OPENAI_TRANSCRIBE_PATH}`;
 };
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => (

@@ -13,6 +13,7 @@ import {
   OPENAI_DEFAULT_MODEL,
   parseSpeechToTaskResult,
   resolveGeminiModel,
+  resolveOpenAITranscribeEndpoint,
   runSpeechToTaskCapture,
 } from '@mindwtr/core';
 import { logInfo, logWarn } from './app-log';
@@ -72,21 +73,9 @@ type FetchOptions = {
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const OPENAI_TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions';
-const OPENAI_TRANSCRIBE_PATH = '/audio/transcriptions';
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-
-// The user pastes a root ending in /v1 (the convention the chat base-URL
-// field already teaches) — never guess at /v1 if they left it off, that is
-// their server's shape, not ours to invent.
-const resolveOpenAITranscribeEndpoint = (baseUrl?: string): string => {
-  const trimmed = String(baseUrl || '').trim();
-  if (!trimmed) return OPENAI_TRANSCRIBE_URL;
-  const normalized = trimmed.replace(/\/+$/, '');
-  return `${normalized}${OPENAI_TRANSCRIBE_PATH}`;
-};
 const WHISPER_ANDROID_MAX_THREADS = 1;
 const WHISPER_ANDROID_N_PROCESSORS = 1;
 const LOCAL_WHISPER_SAMPLE_RATE = 16000;
