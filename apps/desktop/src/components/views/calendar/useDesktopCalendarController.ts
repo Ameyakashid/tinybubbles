@@ -65,6 +65,11 @@ import {
     type CalendarDayItem,
 } from '@mindwtr/core/calendar-day-items';
 
+import {
+    CALENDAR_DATE_PARAM,
+    CALENDAR_MONTH_PARAM,
+    CALENDAR_VIEW_PARAM,
+} from '../../../lib/calendar-view-params';
 import { checkBudget } from '../../../config/performanceBudgets';
 import { useLanguage } from '../../../contexts/language-context';
 import { usePerformanceMonitor } from '../../../hooks/usePerformanceMonitor';
@@ -162,10 +167,10 @@ const getInitialCalendarState = (fallback: Date): { currentMonth: Date; selected
         return { currentMonth: fallback, selectedDate: null, viewMode: 'month' };
     }
     const params = new URLSearchParams(window.location.search);
-    const viewMode = parseCalendarViewMode(params.get('calendarView'));
-    const selectedDate = parseCalendarDateParam(params.get('calendarDate'))
+    const viewMode = parseCalendarViewMode(params.get(CALENDAR_VIEW_PARAM));
+    const selectedDate = parseCalendarDateParam(params.get(CALENDAR_DATE_PARAM))
         ?? (needsCalendarSelectedDate(viewMode) ? new Date(fallback) : null);
-    const monthDate = parseCalendarDateParam(`${params.get('calendarMonth') ?? ''}-01`);
+    const monthDate = parseCalendarDateParam(`${params.get(CALENDAR_MONTH_PARAM) ?? ''}-01`);
     return {
         currentMonth: selectedDate ?? monthDate ?? fallback,
         selectedDate,
@@ -302,13 +307,13 @@ export function useDesktopCalendarController() {
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const url = new URL(window.location.href);
-        url.searchParams.set('calendarMonth', format(currentMonth, 'yyyy-MM'));
+        url.searchParams.set(CALENDAR_MONTH_PARAM, format(currentMonth, 'yyyy-MM'));
         if (selectedDate) {
-            url.searchParams.set('calendarDate', dayKey(selectedDate));
+            url.searchParams.set(CALENDAR_DATE_PARAM, dayKey(selectedDate));
         } else {
-            url.searchParams.delete('calendarDate');
+            url.searchParams.delete(CALENDAR_DATE_PARAM);
         }
-        url.searchParams.set('calendarView', viewMode);
+        url.searchParams.set(CALENDAR_VIEW_PARAM, viewMode);
         window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     }, [currentMonth, selectedDate, viewMode]);
 

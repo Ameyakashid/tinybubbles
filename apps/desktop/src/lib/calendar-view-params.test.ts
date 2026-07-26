@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest';
+
+import { stageCalendarDropLanding } from './calendar-view-params';
+
+const setUrl = (search: string) => window.history.replaceState({}, '', `/${search}`);
+const params = () => new URLSearchParams(window.location.search);
+
+// Saturday 25 July 2026, well away from the January the tests start from.
+const NOW = new Date(2026, 6, 25);
+
+describe('stageCalendarDropLanding', () => {
+    // Schedule renders no drop targets at all, so a task dragged in while it was
+    // showing could not be dropped anywhere (#867).
+    it('rescues schedule mode to week', () => {
+        setUrl('?calendarView=schedule&calendarDate=2026-01-05&calendarMonth=2026-01');
+
+        stageCalendarDropLanding(NOW);
+
+        expect(params().get('calendarView')).toBe('week');
+        expect(params().get('calendarDate')).toBe('2026-07-25');
+        expect(params().get('calendarMonth')).toBe('2026-07');
+    });
+
+    it.each(['day', 'week'])('keeps %s mode but lands on today', (mode) => {
+        setUrl(`?calendarView=${mode}&calendarDate=2026-01-05&calendarMonth=2026-01`);
+
+        stageCalendarDropLanding(NOW);
+
+        expect(params().get('calendarView')).toBe(mode);
+        expect(params().get('calendarDate')).toBe('2026-07-25');
+        expect(params().get('calendarMonth')).toBe('2026-07');
+    });
+
+    // Month carries no selected date of its own; setting one would pop the
+    // selected-day panel open as a side effect of dropping.
+    it('keeps month mode on the current month without selecting a day', () => {
+        setUrl('?calendarView=month&calendarDate=2026-01-05&calendarMonth=2026-01');
+
+        stageCalendarDropLanding(NOW);
+
+        expect(params().get('calendarView')).toBe('month');
+        expect(params().get('calendarMonth')).toBe('2026-07');
+        expect(params().get('calendarDate')).toBeNull();
+    });
+
+    it('leaves a calendar that was never opened on its default month', () => {
+        setUrl('?');
+
+        stageCalendarDropLanding(NOW);
+
+        expect(params().get('calendarView')).toBeNull();
+        expect(params().get('calendarMonth')).toBe('2026-07');
+        expect(params().get('calendarDate')).toBeNull();
+    });
+});

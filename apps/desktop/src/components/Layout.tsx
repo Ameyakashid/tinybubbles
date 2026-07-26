@@ -38,6 +38,7 @@ import { AREA_FILTER_ALL, resolveAreaFilter, taskMatchesAreaFilter } from '@mind
 import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
+import { stageCalendarDropLanding } from '../lib/calendar-view-params';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -436,6 +437,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         if (navId !== 'calendar') return;
         if (currentView === 'calendar' || calendarDragNavTimeoutRef.current !== null) return;
         calendarDragNavTimeoutRef.current = window.setTimeout(() => {
+            stageCalendarDropLanding();
             onViewChange('calendar');
             calendarDragNavTimeoutRef.current = null;
         }, 350);
@@ -458,7 +460,10 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         clearCalendarDragNavTimeout();
 
         if (navId === 'calendar') {
-            if (currentView !== 'calendar') onViewChange('calendar');
+            if (currentView !== 'calendar') {
+                stageCalendarDropLanding();
+                onViewChange('calendar');
+            }
             return;
         }
 
