@@ -64,12 +64,18 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
 
     return (
         <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+        {/* Every other modal in the app either centres itself or pairs items-start
+            with a deliberate pt-[Nvh]; this one had neither, so the task editor sat
+            flush against the top of the window covering the page heading while the
+            space below it went unused. my-auto centres it when there is room and
+            collapses to zero when the editor is taller than the viewport, so a long
+            task never has its top cut off — which plain items-center would do. */}
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true">
             <div
-                className="absolute inset-0"
+                className="fixed inset-0"
                 onClick={() => setOpenTaskId(null)}
             />
-            <div className="relative w-full max-w-3xl bg-background border border-border rounded-xl shadow-xl p-4">
+            <div className="relative my-auto w-full max-w-3xl bg-background border border-border rounded-xl shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold">{t('taskEdit.editTask') || 'Task'}</h3>
                     <button
