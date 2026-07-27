@@ -132,7 +132,16 @@ function isFsErrorWithCode(error: unknown, code: string): boolean {
         && (error as { code?: unknown }).code === code;
 }
 
-function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string): boolean {
+/**
+ * Walks each path segment from `rootRealPath` down to `targetDir`, rejecting any
+ * symlink escape along the way. With `create: true` (the default; used by attachment
+ * writes) missing segments are created as plain directories. With `create: false`
+ * (used by read-only attachment access — see `resolveAttachmentPath`) a missing
+ * segment stops the walk and returns `true` without creating anything: nothing exists
+ * below that point, so there is no symlink to escape through, and the caller treats
+ * the unresolved remainder as "not found" rather than "invalid".
+ */
+function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string, create = true): boolean {
     if (!isPathWithinRoot(targetDir, rootRealPath)) return false;
     const rel = relative(rootRealPath, targetDir);
     if (!rel || rel === '.') return true;
@@ -146,6 +155,7 @@ function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string): boo
             if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
         } catch (error) {
             if (!isFsErrorWithCode(error, 'ENOENT')) return false;
+            if (!create) return true;
             try {
                 mkdirSync(currentPath, { mode: 0o700 });
             } catch (mkdirError) {
@@ -186,19 +196,34 @@ export function normalizeAttachmentRelativePath(rawPath: string): string | null 
     return segments.join('/');
 }
 
+/**
+ * `create` must be `true` only for PUT. GET and DELETE resolve with `create: false`
+ * so an unknown token can never plant `<dataDir>/<key>/attachments` on disk merely by
+ * reading or deleting — that side effect used to double as an undocumented namespace
+ * creation, permanently exempting the token from `ensureNamespaceWriteAllowed` and
+ * consuming a slot in `maxAnyTokenNamespaces` without ever writing data.
+ */
 export function resolveAttachmentPath(
     dataDir: string,
     key: string,
-    rawPath: string
+    rawPath: string,
+    options: { create: boolean }
 ): { rootRealPath: string; filePath: string } | null {
     const relativePath = normalizeAttachmentRelativePath(rawPath);
     if (!relativePath) return null;
     const dataRoot = resolve(dataDir);
-    mkdirSync(dataRoot, { recursive: true });
+    if (options.create) {
+        mkdirSync(dataRoot, { recursive: true });
+    } else if (!existsSync(dataRoot)) {
+        return null;
+    }
     const dataRootRealPath = realpathSync(dataRoot);
     const rootDir = resolve(join(dataRootRealPath, key, 'attachments'));
-    if (!ensureDirectoryWithinRoot(dataRootRealPath, rootDir)) return null;
-    const rootRealPath = realpathSync(rootDir);
+    if (!ensureDirectoryWithinRoot(dataRootRealPath, rootDir, options.create)) return null;
+    // rootDir may not exist yet when options.create is false (nothing was ever
+    // uploaded for this key) — that's the whole point, so fall back to the
+    // unresolved path rather than realpathSync-ing a directory that isn't there.
+    const rootRealPath = existsSync(rootDir) ? realpathSync(rootDir) : rootDir;
     if (!isPathWithinRoot(rootRealPath, dataRootRealPath)) return null;
     const filePath = resolve(join(rootRealPath, relativePath));
     if (!isPathWithinRoot(filePath, rootRealPath)) return null;

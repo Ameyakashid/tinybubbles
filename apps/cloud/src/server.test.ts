@@ -746,10 +746,32 @@ describe('cloud server utils', () => {
         mkdirSync(outside, { recursive: true });
         symlinkSync(outside, join(dataDirForTest, key), 'dir');
 
-        const resolvedPath = resolveAttachmentPath(dataDirForTest, key, 'folder/file.bin');
+        const resolvedPath = resolveAttachmentPath(dataDirForTest, key, 'folder/file.bin', { create: true });
 
         expect(resolvedPath).toBeNull();
         expect(existsSync(join(outside, 'attachments'))).toBe(false);
+
+        rmSync(sandbox, { recursive: true, force: true });
+    });
+
+    // Regression for the read-triggered namespace-cap bypass: resolveAttachmentPath
+    // used to mkdir `<dataDir>/<key>/attachments` unconditionally, so a plain GET (or
+    // DELETE) from a token that had never written anything permanently planted its
+    // namespace directory — which both exempted it from ensureNamespaceWriteAllowed
+    // and consumed a maxAnyTokenNamespaces slot, without ever storing data.
+    test('resolves a read-only attachment path without creating the namespace directory', () => {
+        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-readonly-resolve-'));
+        const dataDirForTest = join(sandbox, 'data');
+        mkdirSync(dataDirForTest, { recursive: true });
+        const key = 'namespace-key-readonly';
+
+        const resolvedForGet = resolveAttachmentPath(dataDirForTest, key, 'folder/file.bin', { create: false });
+        expect(resolvedForGet).not.toBeNull();
+        expect(existsSync(join(dataDirForTest, key))).toBe(false);
+
+        const resolvedForDelete = resolveAttachmentPath(dataDirForTest, key, 'folder/file.bin', { create: false });
+        expect(resolvedForDelete).not.toBeNull();
+        expect(existsSync(join(dataDirForTest, key))).toBe(false);
 
         rmSync(sandbox, { recursive: true, force: true });
     });
@@ -1151,6 +1173,44 @@ describe('cloud server namespace mode', () => {
                     throw new Error(`${route.name}: expected 403 "Token namespace creation is disabled", got ${response.status} ${JSON.stringify(payload)}`);
                 }
             }
+        } finally {
+            server.stop();
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    // Integration-level regression for the same bug: before the fix, a single GET
+    // (or DELETE) from a stranger token who had never written data would silently
+    // consume the any-token namespace cap by planting an attachments directory as a
+    // side effect of path resolution, starving a legitimate first writer.
+    test('GET/DELETE on an attachment path never consumes the any-token namespace cap', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-cap-bypass-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: tempDataDir,
+            allowedAuthTokens: null,
+            maxAnyTokenNamespaces: 1,
+        });
+        const url = `http://127.0.0.1:${server.port}`;
+        try {
+            const strangerToken = 'attachment-cap-bypass-stranger-token-0001';
+            const strangerHeaders = { Authorization: `Bearer ${strangerToken}` };
+            await fetch(`${url}/v1/attachments/probe.bin`, { headers: strangerHeaders });
+            await fetch(`${url}/v1/attachments/probe.bin`, { method: 'DELETE', headers: strangerHeaders });
+
+            // Neither read consumed the (single) namespace slot, so a different
+            // token's first real write must still succeed.
+            const writerToken = 'attachment-cap-bypass-writer-token-0001';
+            const putResponse = await fetch(`${url}/v1/data`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${writerToken}`,
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({ tasks: [], projects: [], sections: [], areas: [], settings: {} }),
+            });
+            expect(putResponse.status).toBe(200);
         } finally {
             server.stop();
             rmSync(tempDataDir, { recursive: true, force: true });
