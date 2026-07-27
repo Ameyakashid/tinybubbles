@@ -277,6 +277,7 @@ class SharedSyncRunMachine {
 
     private async persistLocalDataWithTracking(data: AppData): Promise<void> {
         await this.storage.persistLocal(data);
+        this.ensureLocalSnapshotFresh(data);
         if (this.storage.applyDataToStore) {
             this.storage.applyDataToStore(data);
             const currentChangeAt = this.store.getLastDataChangeAt();
@@ -291,6 +292,7 @@ class SharedSyncRunMachine {
 
     private async persistPreSyncedDataAfterAbort(): Promise<void> {
         if (!this.state.preSyncedLocalData || this.state.wroteLocal) return;
+        this.state.localSnapshotChangeAt = this.store.getLastDataChangeAt();
         const inMemorySnapshot = this.store.getInMemorySnapshot();
         const reconciledData = mergeAppData(this.state.preSyncedLocalData, inMemorySnapshot);
         await this.persistLocalDataWithTracking(reconciledData);

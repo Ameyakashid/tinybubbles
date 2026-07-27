@@ -461,6 +461,50 @@ describe('runSharedSyncCycle', () => {
         );
     });
 
+    it('requeues before applying or uploading data when a local edit lands during persistence', async () => {
+        const local = createData([createTask('t-local', 'Before sync')]);
+        let raceMidPersist: () => void = () => {
+            throw new Error('Harness mutation was not initialized');
+        };
+        const applyDataToStore = vi.fn((data: AppData) => {
+            harness.inMemory = cloneAppData(data);
+        });
+        const { harness, hooks, io, run } = createHarness({
+            local,
+            remote: createData([createTask('t-remote', 'Remote task')]),
+            hooks: {
+                onStaleSnapshot: vi.fn(),
+            },
+            storage: {
+                persistLocal: vi.fn(async (data: AppData) => {
+                    harness.persisted = cloneAppData(data);
+                    raceMidPersist();
+                }),
+                applyDataToStore,
+            },
+        });
+        let raced = false;
+        raceMidPersist = () => {
+            if (raced) return;
+            raced = true;
+            harness.inMemory.tasks[0] = {
+                ...harness.inMemory.tasks[0],
+                title: 'Edited while saving',
+                updatedAt: '2026-07-13T10:00:01.000Z',
+            };
+            harness.lastDataChangeAt += 1;
+        };
+
+        const result = await run();
+
+        expect(result).toMatchObject({ success: true, skipped: 'requeued' });
+        expect(harness.inMemory.tasks[0]?.title).toBe('Edited while saving');
+        expect(applyDataToStore).not.toHaveBeenCalled();
+        expect(io.writeRemote).not.toHaveBeenCalled();
+        expect(hooks.requestFollowUp).toHaveBeenCalled();
+        expect(hooks.onStaleSnapshot).toHaveBeenCalled();
+    });
+
     it('accepts a covered snapshot instead of aborting when the platform hook approves it', async () => {
         const { harness, hooks, io, run } = createHarness({
             remote: createData([createTask('t-remote', 'Remote task')]),
