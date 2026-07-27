@@ -940,6 +940,7 @@ function TaskEditModalInner({
                             onMomentumScrollEnd={handleMomentumScrollEnd}
                         >
                             <TaskEditFormTab
+                                accessibilityHidden={editTab !== 'task'}
                                 t={t}
                                 tc={tc}
                                 styles={styles}
@@ -979,7 +980,12 @@ function TaskEditModalInner({
                                 formResetKey={`${task.id}:${visible ? 'open' : 'closed'}`}
                                 suspendKeyboardHandling={isMarkdownOverlayOpen}
                             />
-                            <View style={[styles.tabPage, { width: containerWidth || '100%' }]}>
+                            <View
+                                accessibilityElementsHidden={editTab !== 'view'}
+                                importantForAccessibility={editTab !== 'view' ? 'no-hide-descendants' : 'auto'}
+                                style={[styles.tabPage, { width: containerWidth || '100%' }]}
+                                testID="task-edit-preview-page"
+                            >
                                 <TaskEditViewTab
                                     t={t}
                                     tc={tc}

@@ -169,6 +169,57 @@ describe('TaskEditModal', () => {
     }).not.toThrow();
   });
 
+  it('announces the selected tab and hides the inactive pager page from accessibility', async () => {
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(
+        <TaskEditModal
+          visible
+          task={{
+            id: 't1',
+            title: 'Test task',
+            status: 'inbox',
+            tags: [],
+            contexts: [],
+            createdAt: '2025-01-01T00:00:00.000Z',
+            updatedAt: '2025-01-01T00:00:00.000Z',
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(tree.root.findAll((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'tablist')).toHaveLength(1);
+    const tabs = tree.root.findAll((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'tab');
+    expect(tabs.map((tab) => tab.props.accessibilityState)).toEqual([
+      { selected: false },
+      { selected: true },
+    ]);
+    expect(tree.root.findByType('TaskEditFormTab' as any).props.accessibilityHidden).toBe(true);
+    expect(tree.root.findByProps({ testID: 'task-edit-preview-page' }).props).toMatchObject({
+      accessibilityElementsHidden: false,
+      importantForAccessibility: 'auto',
+    });
+
+    await act(async () => {
+      tabs[0]?.props.onPress();
+      await Promise.resolve();
+    });
+
+    const updatedTabs = tree.root.findAll((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'tab');
+    expect(updatedTabs.map((tab) => tab.props.accessibilityState)).toEqual([
+      { selected: true },
+      { selected: false },
+    ]);
+    expect(tree.root.findByType('TaskEditFormTab' as any).props.accessibilityHidden).toBe(false);
+    expect(tree.root.findByProps({ testID: 'task-edit-preview-page' }).props).toMatchObject({
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+    });
+  });
+
   it('saves status and completion time together after a long-press in the preview', async () => {
     const completedAt = '2026-07-14T18:30:00.000Z';
     const onSave = vi.fn();

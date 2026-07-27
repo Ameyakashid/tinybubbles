@@ -18,7 +18,10 @@ export function TaskEditTabs({ editTab, onTabPress, scrollX, containerWidth }: T
 
   return (
     <View style={[styles.modeTabs, { borderBottomColor: tc.border, backgroundColor: tc.cardBg }]}>
-      <View style={[styles.modeTabsTrack, { backgroundColor: tc.filterBg, borderColor: tc.border }]}>
+      <View
+        accessibilityRole="tablist"
+        style={[styles.modeTabsTrack, { backgroundColor: tc.filterBg, borderColor: tc.border }]}
+      >
         {canAnimateIndicator && (
           <Animated.View
             pointerEvents="none"
@@ -41,6 +44,8 @@ export function TaskEditTabs({ editTab, onTabPress, scrollX, containerWidth }: T
           />
         )}
         <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: editTab === 'task' }}
           style={styles.modeTab}
           onPress={() => onTabPress('task')}
           activeOpacity={0.85}
@@ -50,6 +55,8 @@ export function TaskEditTabs({ editTab, onTabPress, scrollX, containerWidth }: T
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: editTab === 'view' }}
           style={styles.modeTab}
           onPress={() => onTabPress('view')}
           activeOpacity={0.85}

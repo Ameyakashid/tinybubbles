@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput } from 'react-native';
+import { Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTaskDraft } from '@mindwtr/core/task-draft';
@@ -147,6 +147,18 @@ describe('TaskEditFormTab keyboard handling', () => {
     mockScrollTo.mockReset();
     mockFindNodeHandle.mockClear();
     mockMeasureInWindow.mockReset();
+  });
+
+  it('hides the inactive form and all descendants from accessibility', () => {
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<TaskEditFormTab {...baseProps} accessibilityHidden />);
+    });
+
+    expect(tree.root.findAllByType(View)[0]?.props).toMatchObject({
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+    });
   });
 
   it('does not render collapsible sections that have no fields', () => {

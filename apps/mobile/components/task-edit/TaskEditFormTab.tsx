@@ -63,6 +63,7 @@ type TaskEditFormTabProps = {
     registerScrollToEnd?: (handler: ((targetInput?: number | string) => void) | null) => void;
     formResetKey?: string;
     suspendKeyboardHandling?: boolean;
+    accessibilityHidden?: boolean;
 };
 
 const TASK_FORM_BASE_BOTTOM_PADDING = 32;
@@ -108,6 +109,7 @@ function TaskEditFormTabComponent({
     registerScrollToEnd,
     formResetKey,
     suspendKeyboardHandling = false,
+    accessibilityHidden = false,
 }: TaskEditFormTabProps) {
     const [titleFocused, setTitleFocused] = React.useState(false);
     const formScrollRef = React.useRef<ScrollView | null>(null);
@@ -332,7 +334,11 @@ function TaskEditFormTabComponent({
     const detailsFilledCount = countFilledFields(detailsFields);
 
     return (
-        <View style={[styles.tabPage, { width: containerWidth || '100%' }]}>
+        <View
+            accessibilityElementsHidden={accessibilityHidden}
+            importantForAccessibility={accessibilityHidden ? 'no-hide-descendants' : 'auto'}
+            style={[styles.tabPage, { width: containerWidth || '100%' }]}
+        >
             <KeyboardAvoidingView
                 behavior={suspendKeyboardHandling ? undefined : (Platform.OS === 'android' ? 'height' : undefined)}
                 style={{ flex: 1 }}
