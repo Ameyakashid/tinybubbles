@@ -18,6 +18,8 @@ import {
 } from '../packages/core/src/task-sync-schema';
 import { PROJECT_SYNC_FIELD_SCHEMA } from '../packages/core/src/project-sync-schema';
 import { SECTION_SYNC_FIELD_SCHEMA } from '../packages/core/src/section-sync-schema';
+import { AREA_SYNC_FIELD_SCHEMA } from '../packages/core/src/area-sync-schema';
+import { PERSON_SYNC_FIELD_SCHEMA } from '../packages/core/src/person-sync-schema';
 import {
     normalizeTaskForContentComparison,
     TASK_CONTENT_COMPARISON_EXCLUDED_KEYS,
@@ -31,7 +33,7 @@ import cloudKitProductionSchema from '../packages/core/src/cloudkit-production-s
 // release-rc.yml) turns a non-empty pendingProduction list into a failure.
 const RELEASE_GATE = process.argv.includes('--release-gate');
 
-type Entity = 'task' | 'project' | 'section';
+type Entity = 'task' | 'project' | 'section' | 'area' | 'person';
 type Surface = 'cloud' | 'sqlite';
 
 const expectedTaskCloudFields = TASK_SYNC_FIELD_SCHEMA
@@ -65,6 +67,14 @@ const EXPECTED: Record<Entity, Record<Surface, string[]>> = {
     section: {
         cloud: expectedCloudFields(SECTION_SYNC_FIELD_SCHEMA),
         sqlite: expectedSqliteFields(SECTION_SYNC_FIELD_SCHEMA),
+    },
+    area: {
+        cloud: expectedCloudFields(AREA_SYNC_FIELD_SCHEMA),
+        sqlite: expectedSqliteFields(AREA_SYNC_FIELD_SCHEMA),
+    },
+    person: {
+        cloud: expectedCloudFields(PERSON_SYNC_FIELD_SCHEMA),
+        sqlite: expectedSqliteFields(PERSON_SYNC_FIELD_SCHEMA),
     },
 };
 
@@ -151,7 +161,7 @@ const parseTaskInterfaceFields = (source: string): ParsedTaskField[] => {
         }));
 };
 
-type NativeTaskFieldSpec = {
+type NativeCloudFieldSpec = {
     jsKey: string;
     storageKey: string;
     kind: string;
@@ -175,9 +185,10 @@ const OBJC_KIND_MAP: Record<string, string> = {
     StringArray: 'string-array',
 };
 
-const parseSwiftTaskFieldSpecs = (source: string): NativeTaskFieldSpec[] => {
-    const match = source.match(/private static let taskFieldSpecs: \[FieldSpec\] = \[([\s\S]*?)\n {4}\]/);
-    if (!match) throw new Error('Could not find Swift taskFieldSpecs.');
+const parseSwiftFieldSpecs = (source: string, entity: Entity): NativeCloudFieldSpec[] => {
+    const name = `${entity}FieldSpecs`;
+    const match = source.match(new RegExp(`private static let ${name}: \\[FieldSpec\\] = \\[([\\s\\S]*?)\\n {4}\\]`));
+    if (!match) throw new Error(`Could not find Swift ${name}.`);
     const specs = Array.from(
         match[1].matchAll(/FieldSpec\(jsKey: "([^"]+)", ckKey: "([^"]+)", kind: \.([A-Za-z]+)\)/g),
         (entry) => ({
@@ -186,14 +197,21 @@ const parseSwiftTaskFieldSpecs = (source: string): NativeTaskFieldSpec[] => {
             kind: SWIFT_KIND_MAP[entry[3]] ?? entry[3],
         }),
     );
-    unique(specs.map((spec) => spec.jsKey), 'Swift taskFieldSpecs');
-    unique(specs.map((spec) => spec.storageKey), 'Swift taskFieldSpecs storage keys');
+    unique(specs.map((spec) => spec.jsKey), `Swift ${name}`);
+    unique(specs.map((spec) => spec.storageKey), `Swift ${name} storage keys`);
     return specs;
 };
 
-const parseObjcTaskFieldSpecs = (source: string): NativeTaskFieldSpec[] => {
-    const match = source.match(/static const MWFieldSpec kTaskFields\[\] = \{([\s\S]*?)\n\};/);
-    if (!match) throw new Error('Could not find ObjC kTaskFields.');
+const parseSwiftRecordType = (source: string, entity: Entity): string => {
+    const match = source.match(new RegExp(`static let ${entity}Type = "([^"]+)"`));
+    if (!match) throw new Error(`Could not find Swift ${entity}Type.`);
+    return match[1];
+};
+
+const parseObjcFieldSpecs = (source: string, entity: Entity): NativeCloudFieldSpec[] => {
+    const name = `k${entity[0].toUpperCase()}${entity.slice(1)}Fields`;
+    const match = source.match(new RegExp(`static const MWFieldSpec ${name}\\[\\] = \\{([\\s\\S]*?)\\n\\};`));
+    if (!match) throw new Error(`Could not find ObjC ${name}.`);
     const specs = Array.from(
         match[1].matchAll(/\{"([^"]+)",\s*"([^"]+)",\s*MWFieldKind([A-Za-z]+)\}/g),
         (entry) => ({
@@ -202,23 +220,9 @@ const parseObjcTaskFieldSpecs = (source: string): NativeTaskFieldSpec[] => {
             kind: OBJC_KIND_MAP[entry[3]] ?? entry[3],
         }),
     );
-    unique(specs.map((spec) => spec.jsKey), 'ObjC kTaskFields');
-    unique(specs.map((spec) => spec.storageKey), 'ObjC kTaskFields storage keys');
+    unique(specs.map((spec) => spec.jsKey), `ObjC ${name}`);
+    unique(specs.map((spec) => spec.storageKey), `ObjC ${name} storage keys`);
     return specs;
-};
-
-const parseSwiftFields = (source: string, entity: Entity): string[] => {
-    const name = `${entity}FieldSpecs`;
-    const match = source.match(new RegExp(`private static let ${name}: \\[FieldSpec\\] = \\[([\\s\\S]*?)\\n    \\]`));
-    if (!match) throw new Error(`Could not find Swift ${name}.`);
-    return unique(Array.from(match[1].matchAll(/jsKey: "([^"]+)"/g), (entry) => entry[1]), `Swift ${name}`);
-};
-
-const parseObjcFields = (source: string, entity: Entity): string[] => {
-    const name = `k${entity[0].toUpperCase()}${entity.slice(1)}Fields`;
-    const match = source.match(new RegExp(`static const MWFieldSpec ${name}\\[\\] = \\{([\\s\\S]*?)\\n\\};`));
-    if (!match) throw new Error(`Could not find ObjC ${name}.`);
-    return unique(Array.from(match[1].matchAll(/\{"([^"]+)"/g), (entry) => entry[1]), `ObjC ${name}`);
 };
 
 const assertSuperset = (label: string, actual: Iterable<string>, required: string[]): string[] => {
@@ -237,6 +241,25 @@ const compareSet = (label: string, actual: string[], expected: string[]): string
     if (missing.length > 0) lines.push(`  missing: ${missing.join(', ')}`);
     if (extra.length > 0) lines.push(`  extra: ${extra.join(', ')}`);
     return lines;
+};
+
+const compareNativeFieldMappings = (
+    label: string,
+    actual: NativeCloudFieldSpec[],
+    expected: NativeCloudFieldSpec[],
+): string[] => {
+    const expectedByName = new Map(expected.map((field) => [field.jsKey, field]));
+    const mismatches = actual
+        .filter((field) => {
+            const expectedField = expectedByName.get(field.jsKey);
+            return expectedField
+                && (field.storageKey !== expectedField.storageKey || field.kind !== expectedField.kind);
+        })
+        .map((field) => {
+            const expectedField = expectedByName.get(field.jsKey)!;
+            return `${field.jsKey} expected ${expectedField.storageKey}/${expectedField.kind}, got ${field.storageKey}/${field.kind}`;
+        });
+    return mismatches.length > 0 ? [`${label}:`, `  ${mismatches.join('; ')}`] : [];
 };
 
 const requireSourcePattern = (label: string, source: string, pattern: RegExp): string[] => (
@@ -267,7 +290,7 @@ const compareTaskInterface = (source: string): string[] => {
 
 const compareNativeTaskFieldSpecs = (
     label: string,
-    actual: NativeTaskFieldSpec[],
+    actual: NativeCloudFieldSpec[],
 ): string[] => {
     const expected = TASK_SYNC_FIELD_SCHEMA.flatMap((field) => (
         field.cloudKit
@@ -345,7 +368,7 @@ const fixtureValuesEqual = (actual: unknown, expected: unknown): boolean => (
 
 const compareNativeTaskFixtureRoundTrip = (
     label: string,
-    specs: NativeTaskFieldSpec[],
+    specs: NativeCloudFieldSpec[],
 ): string[] => {
     const fixture = TASK_SYNC_SCHEMA_FIXTURE as unknown as Record<string, unknown>;
     const failures: string[] = [];
@@ -448,35 +471,59 @@ const runNativeTaskMapperFixtureChecks = (): string[] => {
     return failures;
 };
 
-// Falsifiable guard for the CloudKit Production-container deploy step (see
-// cloudkit-production-schema.json and the task-sync-schema.ts header comment).
-const checkCloudKitProductionSchema = (): string[] => {
+// Falsifiable guard for the CloudKit Production-container deploy step.
+type CloudKitProductionRecord = {
+    deployed: string[];
+    pendingProduction: string[];
+};
+
+const checkCloudKitProductionSchema = (
+    nativeFieldSpecs: Record<Entity, NativeCloudFieldSpec[]>,
+    recordTypes: Record<Entity, string>,
+): string[] => {
     const failures: string[] = [];
-    const mappedKeys = TASK_SYNC_FIELD_SCHEMA
-        .filter((field) => field.cloudKit !== null)
-        .map((field) => field.cloudKit!.key);
-    const mappedKeySet = new Set(mappedKeys);
-    const { deployed, pendingProduction } = cloudKitProductionSchema;
-    const deployedSet = new Set(deployed);
-    const pendingSet = new Set(pendingProduction);
-
-    const listedInBoth = deployed.filter((key) => pendingSet.has(key));
-    if (listedInBoth.length > 0) {
-        failures.push(`cloudkit-production-schema.json: keys listed in both deployed and pendingProduction: ${listedInBoth.join(', ')}`);
+    const records = cloudKitProductionSchema.records as Record<string, CloudKitProductionRecord>;
+    const expectedRecordTypes = new Set(Object.values(recordTypes));
+    const staleRecordTypes = Object.keys(records).filter((recordType) => !expectedRecordTypes.has(recordType));
+    if (staleRecordTypes.length > 0) {
+        failures.push(`cloudkit-production-schema.json: stale record types: ${staleRecordTypes.join(', ')}`);
     }
 
-    const stale = [...deployed, ...pendingProduction].filter((key) => !mappedKeySet.has(key));
-    if (stale.length > 0) {
-        failures.push(`cloudkit-production-schema.json: keys no longer mapped in TASK_SYNC_FIELD_SCHEMA (stale): ${stale.join(', ')}`);
+    const pendingFields: string[] = [];
+    for (const entity of Object.keys(recordTypes) as Entity[]) {
+        const recordType = recordTypes[entity];
+        const record = records[recordType];
+        if (!record) {
+            failures.push(`cloudkit-production-schema.json: missing record type ${recordType}`);
+            continue;
+        }
+
+        const mappedKeys = nativeFieldSpecs[entity].map((field) => field.storageKey);
+        const mappedKeySet = new Set(mappedKeys);
+        const deployedSet = new Set(record.deployed);
+        const pendingSet = new Set(record.pendingProduction);
+        const qualified = (keys: string[]) => keys.map((key) => `${recordType}.${key}`).join(', ');
+
+        const listedInBoth = record.deployed.filter((key) => pendingSet.has(key));
+        if (listedInBoth.length > 0) {
+            failures.push(`cloudkit-production-schema.json: keys listed in both deployed and pendingProduction: ${qualified(listedInBoth)}`);
+        }
+
+        const stale = [...record.deployed, ...record.pendingProduction].filter((key) => !mappedKeySet.has(key));
+        if (stale.length > 0) {
+            failures.push(`cloudkit-production-schema.json: keys no longer mapped in native CloudKit schemas (stale): ${qualified(stale)}`);
+        }
+
+        const unlisted = mappedKeys.filter((key) => !deployedSet.has(key) && !pendingSet.has(key));
+        if (unlisted.length > 0) {
+            failures.push(`cloudkit-production-schema.json: CloudKit-mapped fields missing from both lists: ${qualified(unlisted)}`);
+        }
+
+        pendingFields.push(...record.pendingProduction.map((key) => `${recordType}.${key}`));
     }
 
-    const unlisted = mappedKeys.filter((key) => !deployedSet.has(key) && !pendingSet.has(key));
-    if (unlisted.length > 0) {
-        failures.push(`cloudkit-production-schema.json: CloudKit-mapped task fields missing from both lists (add to deployed or pendingProduction): ${unlisted.join(', ')}`);
-    }
-
-    if (pendingProduction.length > 0) {
-        const message = `CloudKit fields pending Production deployment: ${pendingProduction.join(', ')}. `
+    if (pendingFields.length > 0) {
+        const message = `CloudKit fields pending Production deployment: ${pendingFields.join(', ')}. `
             + 'Deploy them in the CloudKit Dashboard (Production container), then move them to '
             + '"deployed" in packages/core/src/cloudkit-production-schema.json.';
         if (RELEASE_GATE) {
@@ -498,8 +545,18 @@ const desktopRustStorage = read(PATHS.desktopRustStorage);
 const swiftMapper = read(PATHS.swiftMapper);
 const objcMapper = read(PATHS.objcMapper);
 const mcpQueries = read(PATHS.mcpQueries);
-const swiftTaskFieldSpecs = parseSwiftTaskFieldSpecs(swiftMapper);
-const objcTaskFieldSpecs = parseObjcTaskFieldSpecs(objcMapper);
+const ENTITIES: Entity[] = ['task', 'project', 'section', 'area', 'person'];
+const swiftFieldSpecs = Object.fromEntries(
+    ENTITIES.map((entity) => [entity, parseSwiftFieldSpecs(swiftMapper, entity)]),
+) as Record<Entity, NativeCloudFieldSpec[]>;
+const cloudKitRecordTypes = Object.fromEntries(
+    ENTITIES.map((entity) => [entity, parseSwiftRecordType(swiftMapper, entity)]),
+) as Record<Entity, string>;
+const objcFieldSpecs = Object.fromEntries(
+    ENTITIES.map((entity) => [entity, parseObjcFieldSpecs(objcMapper, entity)]),
+) as Record<Entity, NativeCloudFieldSpec[]>;
+const swiftTaskFieldSpecs = swiftFieldSpecs.task;
+const objcTaskFieldSpecs = objcFieldSpecs.task;
 
 failures.push(...compareTaskInterface(coreTypes));
 
@@ -567,7 +624,7 @@ failures.push(...compareNativeTaskFieldSpecs(
 failures.push(...compareNativeTaskFixtureRoundTrip('iOS CloudKit task mapper', swiftTaskFieldSpecs));
 failures.push(...compareNativeTaskFixtureRoundTrip('macOS CloudKit task mapper', objcTaskFieldSpecs));
 failures.push(...runNativeTaskMapperFixtureChecks());
-failures.push(...checkCloudKitProductionSchema());
+failures.push(...checkCloudKitProductionSchema(swiftFieldSpecs, cloudKitRecordTypes));
 
 // MCP read tools promise core Task/Project entities. Keep their SELECT lists schema-derived.
 // There used to be a third check here (assertSuperset over a regex-parsed MCP mapProjectRow)
@@ -589,16 +646,29 @@ failures.push(...requireSourcePattern(
     /const BASE_PROJECT_COLUMNS = \[\.\.\.PROJECT_SQLITE_COLUMNS\];/,
 ));
 
-for (const entity of ['task', 'project', 'section'] as const) {
-    const table = `${entity}s`;
-    const expectedSqlite = EXPECTED[entity].sqlite;
-    const expectedCloud = EXPECTED[entity].cloud;
+for (const entity of ENTITIES) {
+    const table = entity === 'person' ? 'people' : `${entity}s`;
+    // Older databases can still carry these Area columns from the short-lived
+    // project-archive format. Native storage preserves them on round trips even
+    // though they are no longer part of the Area model.
+    const legacySqlite = entity === 'area'
+        ? ['deletedAtBeforeProjectArchive', 'projectArchivedAt']
+        : [];
+    const expectedSqlite = [...EXPECTED[entity].sqlite, ...legacySqlite];
 
     failures.push(...compareSet(`core SQLite schema ${table}`, parseCreateTableColumns(coreSqliteSchema, table), expectedSqlite));
     failures.push(...compareSet(`desktop Rust schema ${table}`, parseCreateTableColumns(desktopRustSchema, table), expectedSqlite));
     failures.push(...compareSet(`desktop Rust storage INSERT ${table}`, parseRustInsertColumns(desktopRustStorage, table), expectedSqlite));
-    failures.push(...compareSet(`iOS CloudKit ${entity} fields`, parseSwiftFields(swiftMapper, entity), expectedCloud));
-    failures.push(...compareSet(`macOS CloudKit ${entity} fields`, parseObjcFields(objcMapper, entity), expectedCloud));
+}
+
+for (const entity of ENTITIES) {
+    const expectedCloud = EXPECTED[entity].cloud;
+    const swiftSpecs = swiftFieldSpecs[entity];
+    const objcSpecs = objcFieldSpecs[entity];
+
+    failures.push(...compareSet(`iOS CloudKit ${entity} fields`, swiftSpecs.map((field) => field.jsKey), expectedCloud));
+    failures.push(...compareSet(`macOS CloudKit ${entity} fields`, objcSpecs.map((field) => field.jsKey), expectedCloud));
+    failures.push(...compareNativeFieldMappings(`native CloudKit ${entity} storage mapping`, objcSpecs, swiftSpecs));
 }
 
 if (failures.length > 0) {

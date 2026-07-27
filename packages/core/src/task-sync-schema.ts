@@ -1,7 +1,8 @@
 // Adding or changing a `cloudKit` mapping below (a non-null TaskCloudKitFieldSpec)
 // also requires a decision in packages/core/src/cloudkit-production-schema.json:
-// list the field's cloudKit.key under `pendingProduction` until the CloudKit
-// Dashboard's Production container actually has it, then move it to `deployed`.
+// list the field's cloudKit.key under `records.MindwtrTask.pendingProduction`
+// until the CloudKit Dashboard's Production container actually has it, then move
+// it to that record's `deployed` list.
 // scripts/check-synced-field-parity.ts fails if a mapped key is missing from both
 // lists (or in both, or stale), and `--release-gate` (wired into the stable release
 // workflow only) additionally fails while anything is still pending. RCs may ship

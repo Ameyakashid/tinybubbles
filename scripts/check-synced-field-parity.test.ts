@@ -13,6 +13,8 @@ const SCRIPT_PATH = join(REPO_ROOT, 'scripts/check-synced-field-parity.ts');
 const BUN_BIN = Bun.which('bun') || process.execPath;
 
 const originalSchema = readFileSync(SCHEMA_PATH, 'utf8');
+type ProductionRecord = { deployed: string[]; pendingProduction: string[] };
+type ProductionSchema = { records: Record<string, ProductionRecord> };
 
 // Safety net: restore the real, checked-in schema file even if a test throws
 // before its own try/finally runs.
@@ -33,6 +35,15 @@ const runCheckWithSchema = (schema: unknown, args: string[] = []) => {
     }
 };
 
+const parseSchema = (): ProductionSchema => JSON.parse(originalSchema);
+
+const markAllDeployed = (schema: ProductionSchema) => {
+    for (const record of Object.values(schema.records)) {
+        record.deployed = [...record.deployed, ...record.pendingProduction];
+        record.pendingProduction = [];
+    }
+};
+
 describe('CloudKit production schema gate', () => {
     test('passes on the current repo state without --release-gate', () => {
         const result = runCheck();
@@ -40,41 +51,59 @@ describe('CloudKit production schema gate', () => {
     });
 
     test('fails when a CloudKit-mapped field is listed in neither deployed nor pendingProduction', () => {
-        const schema = JSON.parse(originalSchema);
-        schema.deployed = schema.deployed.filter((key: string) => key !== 'title');
+        const schema = parseSchema();
+        schema.records.MindwtrTask.deployed = schema.records.MindwtrTask.deployed.filter((key) => key !== 'title');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('missing from both lists');
-        expect(result.stdout + result.stderr).toContain('title');
+        expect(result.stdout + result.stderr).toContain('MindwtrTask.title');
     });
 
     test('fails when a key is listed in both deployed and pendingProduction', () => {
-        const schema = JSON.parse(originalSchema);
-        schema.pendingProduction = [...schema.pendingProduction, 'title'];
+        const schema = parseSchema();
+        schema.records.MindwtrTask.pendingProduction.push('title');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('listed in both deployed and pendingProduction');
     });
 
-    test('fails when a listed key no longer exists in the task CloudKit schema', () => {
-        const schema = JSON.parse(originalSchema);
-        schema.deployed = [...schema.deployed, 'notARealCloudKitKey'];
+    test('fails when a listed key no longer exists in its CloudKit record schema', () => {
+        const schema = parseSchema();
+        schema.records.MindwtrPerson.deployed.push('notARealCloudKitKey');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('stale');
-        expect(result.stdout + result.stderr).toContain('notARealCloudKitKey');
+        expect(result.stdout + result.stderr).toContain('MindwtrPerson.notARealCloudKitKey');
+    });
+
+    test('requires every synced CloudKit record type to be classified', () => {
+        const schema = parseSchema();
+        delete schema.records.MindwtrArea;
+        const result = runCheckWithSchema(schema);
+        expect(result.status).toBe(1);
+        expect(result.stdout + result.stderr).toContain('missing record type MindwtrArea');
+    });
+
+    test('keeps unverified project taskSortBy pending Production deployment', () => {
+        const schema = parseSchema();
+        expect(schema.records.MindwtrProject.deployed).not.toContain('taskSortBy');
+        expect(schema.records.MindwtrProject.pendingProduction).toContain('taskSortBy');
     });
 
     test('--release-gate fails while pendingProduction is non-empty', () => {
-        const result = runCheckWithSchema(JSON.parse(originalSchema), ['--release-gate']);
+        const schema = parseSchema();
+        markAllDeployed(schema);
+        schema.records.MindwtrTask.deployed = schema.records.MindwtrTask.deployed.filter((key) => key !== 'title');
+        schema.records.MindwtrTask.pendingProduction.push('title');
+        const result = runCheckWithSchema(schema, ['--release-gate']);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('pending Production deployment');
+        expect(result.stdout + result.stderr).toContain('MindwtrTask.title');
     });
 
     test('--release-gate passes once pendingProduction is empty', () => {
-        const schema = JSON.parse(originalSchema);
-        schema.deployed = [...schema.deployed, ...schema.pendingProduction];
-        schema.pendingProduction = [];
+        const schema = parseSchema();
+        markAllDeployed(schema);
         const result = runCheckWithSchema(schema, ['--release-gate']);
         expect(result.status).toBe(0);
     });
