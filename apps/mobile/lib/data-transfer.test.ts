@@ -108,7 +108,7 @@ vi.mock('./app-log', () => ({
   logInfo: logMocks.logInfo,
 }));
 
-import { importTodoistData } from './data-transfer';
+import { createMobileRecoverySnapshot, importTodoistData } from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
   name: 'Todoist',
@@ -182,5 +182,29 @@ describe('mobile data transfer', () => {
       tasks: [expect.objectContaining({ title: 'Imported task' })],
     }));
     expect(storeStateRef.current.fetchData).toHaveBeenCalledWith({ silent: true });
+  });
+
+  it('creates a recovery snapshot of the current persisted data without rewriting it', async () => {
+    await expect(createMobileRecoverySnapshot()).resolves.toMatch(SNAPSHOT_FILE_NAME_PATTERN);
+
+    expect(coreMocks.flushPendingSave).toHaveBeenCalledOnce();
+    expect(storageMocks.getData).toHaveBeenCalledOnce();
+    expect(fileSystemMocks.fileWrites).toHaveLength(1);
+    expect(storageMocks.saveData).not.toHaveBeenCalled();
+    expect(storeStateRef.current.fetchData).not.toHaveBeenCalled();
+  });
+
+  it('does not write a recovery snapshot from a stale local read', async () => {
+    storageMocks.getData.mockImplementation(async () => {
+      storeStateRef.current = {
+        ...storeStateRef.current,
+        lastDataChangeAt: 2,
+      };
+      return emptyData;
+    });
+
+    await expect(createMobileRecoverySnapshot()).rejects.toThrow('Local data changed');
+
+    expect(fileSystemMocks.fileWrites).toHaveLength(0);
   });
 });

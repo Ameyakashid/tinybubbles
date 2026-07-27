@@ -9,6 +9,7 @@ const {
   mockGetRemindersPermissionsAsync,
   mockRequestRemindersPermissionsAsync,
   mockPlatform,
+  mockCreateRecoverySnapshot,
 } = vi.hoisted(() => ({
   mockGetItem: vi.fn(async () => null as string | null),
   mockSetItem: vi.fn(async () => undefined),
@@ -18,6 +19,7 @@ const {
   mockGetRemindersPermissionsAsync: vi.fn(async () => ({ status: 'granted' })),
   mockRequestRemindersPermissionsAsync: vi.fn(async () => ({ status: 'granted' })),
   mockPlatform: { OS: 'ios' },
+  mockCreateRecoverySnapshot: vi.fn(async () => 'snapshot.json'),
 }));
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -60,6 +62,7 @@ describe('apple-reminders-import', () => {
     mockDeleteReminderAsync.mockResolvedValue(undefined);
     mockGetRemindersPermissionsAsync.mockResolvedValue({ status: 'granted' });
     mockRequestRemindersPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockCreateRecoverySnapshot.mockResolvedValue('snapshot.json');
   });
 
   it('loads reminder lists from iOS reminder calendars', async () => {
@@ -86,6 +89,7 @@ describe('apple-reminders-import', () => {
 
     await expect(importAppleRemindersIntoInbox({
       addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
       listId: 'list-1',
       listTitle: 'Inbox',
     })).resolves.toEqual({
@@ -102,6 +106,8 @@ describe('apple-reminders-import', () => {
       status: 'inbox',
       description: '2%',
     });
+    expect(mockCreateRecoverySnapshot).toHaveBeenCalledOnce();
+    expect(mockCreateRecoverySnapshot.mock.invocationCallOrder[0]).toBeLessThan(addTask.mock.invocationCallOrder[0]);
     expect(mockSetItem).toHaveBeenCalledWith(
       APPLE_REMINDERS_IMPORT_SETTINGS_KEY,
       JSON.stringify({
@@ -124,6 +130,7 @@ describe('apple-reminders-import', () => {
 
     await expect(importAppleRemindersIntoInbox({
       addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
       listId: 'list-1',
       deleteImportedReminders: true,
     })).resolves.toEqual({
@@ -138,6 +145,8 @@ describe('apple-reminders-import', () => {
 
     expect(mockDeleteReminderAsync).toHaveBeenCalledTimes(1);
     expect(mockDeleteReminderAsync).toHaveBeenCalledWith('rem-1');
+    expect(mockCreateRecoverySnapshot.mock.invocationCallOrder[0]).toBeLessThan(addTask.mock.invocationCallOrder[0]);
+    expect(addTask.mock.invocationCallOrder[0]).toBeLessThan(mockDeleteReminderAsync.mock.invocationCallOrder[0]);
     expect(mockSetItem).toHaveBeenCalledWith(
       APPLE_REMINDERS_IMPORT_SETTINGS_KEY,
       JSON.stringify({
@@ -157,6 +166,7 @@ describe('apple-reminders-import', () => {
 
     await expect(importAppleRemindersIntoInbox({
       addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
       listId: 'list-1',
       deleteImportedReminders: true,
     })).resolves.toMatchObject({
@@ -191,6 +201,7 @@ describe('apple-reminders-import', () => {
 
     await expect(importAppleRemindersIntoInbox({
       addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
       listId: 'list-1',
     })).resolves.toMatchObject({
       importedCount: 1,
@@ -208,6 +219,41 @@ describe('apple-reminders-import', () => {
         deleteImportedReminders: false,
       }),
     );
+  });
+
+  it('does not create a recovery snapshot when there is nothing to import', async () => {
+    const addTask = vi.fn(async () => ({ success: true, id: 'task-id' }));
+    mockGetRemindersAsync.mockResolvedValue([
+      { id: 'rem-1', title: 'Done item', completed: true },
+      { id: 'rem-2', title: '   ', completed: false },
+    ] as any);
+
+    await importAppleRemindersIntoInbox({
+      addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
+      listId: 'list-1',
+    });
+
+    expect(mockCreateRecoverySnapshot).not.toHaveBeenCalled();
+    expect(addTask).not.toHaveBeenCalled();
+  });
+
+  it('does not import or delete reminders when the recovery snapshot fails', async () => {
+    const addTask = vi.fn(async () => ({ success: true, id: 'task-id' }));
+    mockCreateRecoverySnapshot.mockRejectedValue(new Error('snapshot failed'));
+    mockGetRemindersAsync.mockResolvedValue([
+      { id: 'rem-1', title: 'Imported task', completed: false },
+    ] as any);
+
+    await expect(importAppleRemindersIntoInbox({
+      addTask,
+      createRecoverySnapshot: mockCreateRecoverySnapshot,
+      deleteImportedReminders: true,
+      listId: 'list-1',
+    })).rejects.toThrow('snapshot failed');
+
+    expect(addTask).not.toHaveBeenCalled();
+    expect(mockDeleteReminderAsync).not.toHaveBeenCalled();
   });
 
   it('keeps malformed stored settings from breaking import state', async () => {

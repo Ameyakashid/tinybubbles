@@ -33,6 +33,11 @@ const logMocks = vi.hoisted(() => ({
     logInfo: vi.fn(),
 }));
 
+const runtimeRef = vi.hoisted(() => ({ isTauri: false }));
+const syncServiceMocks = vi.hoisted(() => ({
+    createDataSnapshot: vi.fn(),
+}));
+
 vi.mock('@mindwtr/core', async () => {
     const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
     return {
@@ -45,7 +50,7 @@ vi.mock('@mindwtr/core', async () => {
 });
 
 vi.mock('./runtime', () => ({
-    isTauriRuntime: () => false,
+    isTauriRuntime: () => runtimeRef.isTauri,
 }));
 
 vi.mock('./storage-adapter-web', () => ({
@@ -64,7 +69,7 @@ vi.mock('./storage-adapter', () => ({
 
 vi.mock('./sync-service', () => ({
     SyncService: {
-        createDataSnapshot: vi.fn(),
+        createDataSnapshot: syncServiceMocks.createDataSnapshot,
     },
 }));
 
@@ -73,7 +78,7 @@ vi.mock('./app-log', () => ({
     logInfo: logMocks.logInfo,
 }));
 
-import { importDesktopTodoistData } from './data-transfer';
+import { createDesktopRecoverySnapshot, importDesktopTodoistData } from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
     name: 'Todoist',
@@ -98,6 +103,8 @@ describe('desktop data transfer', () => {
         coreMocks.useTaskStoreGetState.mockImplementation(() => storeStateRef.current);
         storageMocks.getData.mockResolvedValue(emptyData);
         storageMocks.saveData.mockResolvedValue(undefined);
+        runtimeRef.isTauri = false;
+        syncServiceMocks.createDataSnapshot.mockResolvedValue('data.snapshot.json');
     });
 
     it('aborts Todoist import when local data changes before the full snapshot write', async () => {
@@ -141,5 +148,23 @@ describe('desktop data transfer', () => {
             tasks: [expect.objectContaining({ title: 'Imported task' })],
         }));
         expect(storeStateRef.current.fetchData).toHaveBeenCalledWith({ silent: true });
+    });
+
+    it('creates a native recovery snapshot after pending saves finish', async () => {
+        runtimeRef.isTauri = true;
+
+        await expect(createDesktopRecoverySnapshot()).resolves.toBe('data.snapshot.json');
+
+        expect(coreMocks.flushPendingSave).toHaveBeenCalledOnce();
+        expect(syncServiceMocks.createDataSnapshot).toHaveBeenCalledOnce();
+        expect(coreMocks.flushPendingSave.mock.invocationCallOrder[0])
+            .toBeLessThan(syncServiceMocks.createDataSnapshot.mock.invocationCallOrder[0]);
+    });
+
+    it('blocks a native import when the recovery snapshot cannot be created', async () => {
+        runtimeRef.isTauri = true;
+        syncServiceMocks.createDataSnapshot.mockResolvedValue(null);
+
+        await expect(createDesktopRecoverySnapshot()).rejects.toThrow('Could not create a recovery snapshot');
     });
 });

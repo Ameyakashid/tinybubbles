@@ -24,6 +24,9 @@ const pathMocks = vi.hoisted(() => ({
     dataDir: vi.fn(async () => '/data'),
     join: vi.fn(async (...parts: string[]) => parts.join('/')),
 }));
+const dataTransferMocks = vi.hoisted(() => ({
+    createDesktopRecoverySnapshot: vi.fn(async () => 'data.snapshot.json'),
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: tauriMocks.invoke,
@@ -51,6 +54,10 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 vi.mock('@tauri-apps/api/path', () => ({
     dataDir: pathMocks.dataDir,
     join: pathMocks.join,
+}));
+
+vi.mock('../lib/data-transfer', () => ({
+    createDesktopRecoverySnapshot: dataTransferMocks.createDesktopRecoverySnapshot,
 }));
 
 const initialTaskState = useTaskStore.getState();
@@ -732,6 +739,9 @@ describe('QuickAddModal', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create tasks' }));
 
         await waitFor(() => expect(addTask).toHaveBeenCalledTimes(2));
+        expect(dataTransferMocks.createDesktopRecoverySnapshot).toHaveBeenCalledOnce();
+        expect(dataTransferMocks.createDesktopRecoverySnapshot.mock.invocationCallOrder[0])
+            .toBeLessThan(addTask.mock.invocationCallOrder[0]);
         expect(addTask).toHaveBeenNthCalledWith(1, 'First imported task', expect.objectContaining({ status: 'inbox' }));
         expect(addTask).toHaveBeenNthCalledWith(2, 'Second imported task', expect.objectContaining({ status: 'inbox' }));
     });

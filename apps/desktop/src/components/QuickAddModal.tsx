@@ -39,6 +39,7 @@ import { cn } from '../lib/utils';
 import { isFlatpakRuntime, isTauriRuntime } from '../lib/runtime';
 import { reportError } from '../lib/report-error';
 import { logWarn } from '../lib/app-log';
+import { createDesktopRecoverySnapshot } from '../lib/data-transfer';
 import { encodeWav, resampleAudio } from '../lib/audio-utils';
 import { appendAudioChunkWithLimit, getMaxAudioSamples, MAX_AUDIO_RECORDING_SECONDS } from '../lib/audio-capture-buffer';
 import { getPreferredDesktopAudioCaptureBackend } from '../lib/audio-capture-backend';
@@ -1009,6 +1010,13 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
 
     const confirmBulkQuickAdd = async () => {
         if (!bulkQuickAddLines || bulkQuickAddLines.length === 0 || isPastingImage) return;
+        try {
+            await createDesktopRecoverySnapshot();
+        } catch (error) {
+            reportError('Failed to create a recovery snapshot before bulk quick add', error);
+            setBulkQuickAddError(tFallback(t, 'quickAdd.bulkCreateError', 'Could not create all tasks.'));
+            return;
+        }
         let currentProjects = projects;
         let currentAreas = areas;
         if (standaloneWindow) {

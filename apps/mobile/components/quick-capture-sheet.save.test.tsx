@@ -21,6 +21,7 @@ const {
   selectStore,
   documentPickerGetDocumentAsync,
   fileSystemReadAsStringAsync,
+  createMobileRecoverySnapshot,
 } = vi.hoisted(() => {
   const addTask = vi.fn();
   const addTasks = vi.fn();
@@ -42,6 +43,7 @@ const {
     .filter(Boolean));
   const documentPickerGetDocumentAsync = vi.fn();
   const fileSystemReadAsStringAsync = vi.fn();
+  const createMobileRecoverySnapshot = vi.fn();
   const storeState = {
     addTask,
     addTasks,
@@ -71,6 +73,7 @@ const {
     selectStore,
     documentPickerGetDocumentAsync,
     fileSystemReadAsStringAsync,
+    createMobileRecoverySnapshot,
   };
 });
 
@@ -147,6 +150,10 @@ vi.mock('expo-document-picker', () => ({
 
 vi.mock('expo-file-system', () => ({
   readAsStringAsync: fileSystemReadAsStringAsync,
+}));
+
+vi.mock('../lib/data-transfer', () => ({
+  createMobileRecoverySnapshot,
 }));
 
 vi.mock('react-native', async () => {
@@ -256,6 +263,7 @@ describe('QuickCaptureSheet save handling', () => {
 
   beforeEach(() => {
     addTask.mockReset();
+    addTasks.mockReset();
     addProject.mockReset();
     updateSettings.mockReset();
     showToast.mockReset();
@@ -270,6 +278,8 @@ describe('QuickCaptureSheet save handling', () => {
     getUsedTaskTokens.mockReturnValue([]);
     documentPickerGetDocumentAsync.mockReset();
     fileSystemReadAsStringAsync.mockReset();
+    createMobileRecoverySnapshot.mockReset();
+    createMobileRecoverySnapshot.mockResolvedValue('data.snapshot.json');
     parseQuickAdd.mockReset();
     parseQuickAdd.mockImplementation((input: string) => ({
       title: input,
@@ -641,6 +651,9 @@ describe('QuickCaptureSheet save handling', () => {
 
     expect(addTask).not.toHaveBeenCalled();
     expect(addTasks).toHaveBeenCalledTimes(1);
+    expect(createMobileRecoverySnapshot).toHaveBeenCalledOnce();
+    expect(createMobileRecoverySnapshot.mock.invocationCallOrder[0])
+      .toBeLessThan(addTasks.mock.invocationCallOrder[0]);
     expect(addTasks).toHaveBeenCalledWith([
       { title: 'Email Bob', initialProps: expect.objectContaining({ status: 'inbox' }) },
       { title: 'Call Alice', initialProps: expect.objectContaining({ status: 'next' }) },
@@ -699,6 +712,9 @@ describe('QuickCaptureSheet save handling', () => {
 
     expect(addTask).not.toHaveBeenCalled();
     expect(addTasks).toHaveBeenCalledTimes(1);
+    expect(createMobileRecoverySnapshot).toHaveBeenCalledOnce();
+    expect(createMobileRecoverySnapshot.mock.invocationCallOrder[0])
+      .toBeLessThan(addTasks.mock.invocationCallOrder[0]);
     expect(addTasks).toHaveBeenCalledWith([
       { title: 'First imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },
       { title: 'Second imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },

@@ -12,6 +12,7 @@ import {
   requestAppleRemindersPermission,
   saveAppleRemindersImportSettings,
 } from '@/lib/apple-reminders-import';
+import { createMobileRecoverySnapshot } from '@/lib/data-transfer';
 
 import { styles } from './settings.styles';
 
@@ -150,6 +151,7 @@ export function AppleRemindersImportSection({
     try {
       const result = await importAppleRemindersIntoInbox({
         addTask,
+        createRecoverySnapshot: createMobileRecoverySnapshot,
         listId: selectedListId,
         listTitle: selectedListTitle,
         deleteImportedReminders,

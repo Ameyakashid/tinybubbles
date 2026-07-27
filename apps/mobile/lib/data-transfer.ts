@@ -255,6 +255,20 @@ const mobileBoundaries: DataTransferBoundaries = {
 
 const mobileLog = { logInfo, logError };
 
+export const createMobileRecoverySnapshot = async (): Promise<string> => {
+    await flushPendingSave();
+    const localSnapshotChangeAt = getLocalChangeAt();
+    const currentData = await mobileStorage.getData();
+    if (getLocalChangeAt() !== localSnapshotChangeAt) {
+        throw new Error('Local data changed while creating the recovery snapshot. Try again.');
+    }
+    const snapshotName = await saveCurrentDataSnapshot(currentData);
+    if (getLocalChangeAt() !== localSnapshotChangeAt) {
+        throw new Error('Local data changed while creating the recovery snapshot. Try again.');
+    }
+    return snapshotName;
+};
+
 const runMobileDataTransferWithoutSnapshot = async (
     operation: string,
     data: AppData

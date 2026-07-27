@@ -143,11 +143,13 @@ export async function getAppleReminderLists(): Promise<AppleReminderList[]> {
 
 export async function importAppleRemindersIntoInbox({
   addTask,
+  createRecoverySnapshot,
   listId,
   listTitle,
   deleteImportedReminders,
 }: {
   addTask: AddInboxTask;
+  createRecoverySnapshot: () => Promise<unknown>;
   listId: string;
   listTitle?: string;
   deleteImportedReminders?: boolean;
@@ -179,6 +181,7 @@ export async function importAppleRemindersIntoInbox({
     skippedEmptyTitleCount: 0,
     failedCount: 0,
   };
+  let recoverySnapshotCreated = false;
 
   for (const reminder of reminders) {
     if (reminder.completed === true) {
@@ -199,6 +202,10 @@ export async function importAppleRemindersIntoInbox({
     }
 
     const description = normalizeString(reminder.notes);
+    if (!recoverySnapshotCreated) {
+      await createRecoverySnapshot();
+      recoverySnapshotCreated = true;
+    }
     const taskResult = await addTask(title, {
       status: 'inbox',
       ...(description ? { description } : {}),

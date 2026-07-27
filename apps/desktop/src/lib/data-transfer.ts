@@ -187,6 +187,20 @@ const desktopBoundaries: DataTransferBoundaries = {
     },
 };
 
+export const createDesktopRecoverySnapshot = async (): Promise<string | null> => {
+    await flushPendingSave();
+    const localSnapshotChangeAt = getLocalChangeAt();
+    const nativeRuntime = isTauriRuntime();
+    const snapshotName = nativeRuntime ? await SyncService.createDataSnapshot() : null;
+    if (nativeRuntime && !snapshotName) {
+        throw new Error('Could not create a recovery snapshot. Try again.');
+    }
+    if (getLocalChangeAt() !== localSnapshotChangeAt) {
+        throw new Error('Local data changed while creating the recovery snapshot. Try again.');
+    }
+    return snapshotName;
+};
+
 export const exportDesktopBackup = async (data: AppData): Promise<void> => {
     addBreadcrumb('transfer:export');
     void logInfo('Backup export started', {

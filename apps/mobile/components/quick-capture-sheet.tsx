@@ -49,6 +49,7 @@ import { useToast } from '@/contexts/toast-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidKeyboardInset, useKeyboardInset } from '../lib/use-android-keyboard-inset';
 import { logError, logWarn } from '../lib/app-log';
+import { createMobileRecoverySnapshot } from '../lib/data-transfer';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 import {
   buildCaptureExtra,
@@ -599,6 +600,18 @@ export function QuickCaptureSheet({
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     try {
+      try {
+        await createMobileRecoverySnapshot();
+      } catch (error) {
+        logCaptureError('Failed to create a recovery snapshot before bulk capture', error);
+        showToast({
+          title: t('common.notice'),
+          message: tFallback(t, 'quickAdd.bulkCreateError', 'Could not create all tasks.'),
+          tone: 'warning',
+          durationMs: 4200,
+        });
+        return;
+      }
       const taskInputs: Array<{ title: string; initialProps: Partial<Task> }> = [];
       let currentProjects = projects;
       for (const line of lines) {
