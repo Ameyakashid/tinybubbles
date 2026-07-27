@@ -8,6 +8,7 @@ import type { Recurrence, RecurrenceByDay, RecurrenceRule, RecurrenceStrategy, R
 export const RECURRENCE_RULES: RecurrenceRule[] = ['daily', 'weekly', 'monthly', 'yearly'];
 export const RECURRENCE_INTERVAL_MAX = 999;
 
+const RRULE_SERIES_ID_KEY = 'X-MINDWTR-SERIES-ID';
 const WEEKDAY_ORDER: RecurrenceWeekday[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
 export function isRecurrenceRule(value: string | undefined | null): value is RecurrenceRule {
@@ -42,6 +43,29 @@ type FormatRecurrenceLabelOptions = {
     recurrence: Task['recurrence'];
     t: (key: string) => string;
     formatDate?: (value: string) => string;
+};
+
+const getSeriesIdFromRRule = (rrule: string | undefined): string | undefined => {
+    if (!rrule) return undefined;
+    const token = rrule.split(';').find((part) => (
+        part.slice(0, part.indexOf('=')).trim().toUpperCase() === RRULE_SERIES_ID_KEY
+    ));
+    if (!token) return undefined;
+    const raw = token.slice(token.indexOf('=') + 1).trim();
+    if (!raw) return undefined;
+    try {
+        return decodeURIComponent(raw).trim() || undefined;
+    } catch {
+        return raw;
+    }
+};
+
+const withSeriesIdInRRule = (rrule: string, seriesId: string): string => {
+    const parts = rrule.split(';').filter((part) => (
+        part.slice(0, part.indexOf('=')).trim().toUpperCase() !== RRULE_SERIES_ID_KEY
+    ));
+    parts.push(`${RRULE_SERIES_ID_KEY}=${encodeURIComponent(seriesId)}`);
+    return parts.join(';');
 };
 
 export type ProjectedRecurringTask = Task & {
@@ -206,9 +230,10 @@ export function normalizeRecurrenceForLoad(value: unknown): Recurrence | undefin
     const rule = isRecurrenceRule(recurrence.rule) ? recurrence.rule : parsed.rule;
     if (!rule) return undefined;
 
-    const seriesId = typeof recurrence.seriesId === 'string' && recurrence.seriesId.trim().length > 0
+    const explicitSeriesId = typeof recurrence.seriesId === 'string' && recurrence.seriesId.trim().length > 0
         ? recurrence.seriesId.trim()
         : undefined;
+    const seriesId = explicitSeriesId ?? getSeriesIdFromRRule(rrule);
     const strategy = recurrence.strategy === 'fluid' || recurrence.strategy === 'strict'
         ? recurrence.strategy
         : undefined;
@@ -237,6 +262,17 @@ export function normalizeRecurrenceForLoad(value: unknown): Recurrence | undefin
     const startAnchorDay = normalizeAnchorDay(recurrence.startAnchorDay);
     const dueAnchorDay = normalizeAnchorDay(recurrence.dueAnchorDay);
     const reviewAnchorDay = normalizeAnchorDay(recurrence.reviewAnchorDay);
+    const compatibleRRule = seriesId
+        ? withSeriesIdInRRule(
+            rrule ?? buildRRuleString(rule, byDay, parsed.interval, {
+                byMonthDay,
+                weekStart,
+                count,
+                until,
+            }),
+            seriesId,
+        )
+        : rrule;
 
     return {
         rule,
@@ -252,7 +288,7 @@ export function normalizeRecurrenceForLoad(value: unknown): Recurrence | undefin
         ...(startAnchorDay ? { startAnchorDay } : {}),
         ...(dueAnchorDay ? { dueAnchorDay } : {}),
         ...(reviewAnchorDay ? { reviewAnchorDay } : {}),
-        ...(rrule ? { rrule } : {}),
+        ...(compatibleRRule ? { rrule: compatibleRRule } : {}),
     };
 }
 

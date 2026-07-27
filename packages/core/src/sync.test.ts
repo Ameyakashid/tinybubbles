@@ -35,6 +35,130 @@ describe('Sync Logic', () => {
             expect(second.stats.projects.conflicts).toBe(0);
         });
 
+        it('repairs recurrence series identity once across an rc.5-shaped peer', () => {
+            const updatedAt = '2026-07-19T12:00:00.000Z';
+            const currentTask = {
+                ...createMockTask('recurring-task', updatedAt),
+                recurrence: { rule: 'daily', seriesId: 'series-a' },
+                rev: 5,
+                revBy: 'current-client',
+            } satisfies Task;
+            const rc5Task = {
+                ...createMockTask('recurring-task', updatedAt),
+                recurrence: { rule: 'daily' },
+                rev: 5,
+                revBy: 'rc5-client',
+            } satisfies Task;
+
+            const forward = mergeAppData(mockAppData([currentTask]), mockAppData([rc5Task]));
+            const reverse = mergeAppData(mockAppData([rc5Task]), mockAppData([currentTask]));
+            expect(forward.tasks[0]).toEqual(reverse.tasks[0]);
+            expect(forward.tasks[0]).toMatchObject({
+                rev: 6,
+                revBy: SYNC_REPAIR_REV_BY,
+                recurrence: {
+                    rule: 'daily',
+                    seriesId: 'series-a',
+                    rrule: 'FREQ=DAILY;X-MINDWTR-SERIES-ID=series-a',
+                },
+            });
+
+            const recurrence = forward.tasks[0].recurrence;
+            if (!recurrence || typeof recurrence === 'string') throw new Error('Expected normalized recurrence');
+            const { seriesId: _seriesId, ...rc5Recurrence } = recurrence;
+            const rc5RoundTrip = {
+                ...forward.tasks[0],
+                recurrence: rc5Recurrence,
+            };
+            const second = mergeAppDataWithStats(forward, mockAppData([rc5RoundTrip]));
+
+            expect(second.data).toEqual(forward);
+            expect(second.stats.tasks.conflicts).toBe(0);
+        });
+
+        it('preserves series identity when a newer rc.5 client edits the recurrence rule', () => {
+            const currentTask = {
+                ...createMockTask('recurring-task', '2026-07-19T12:00:00.000Z'),
+                recurrence: { rule: 'daily', seriesId: 'series-a' },
+                rev: 5,
+                revBy: 'current-client',
+            } satisfies Task;
+            const rc5EditedTask = {
+                ...createMockTask('recurring-task', '2026-07-19T12:01:00.000Z'),
+                recurrence: { rule: 'weekly', rrule: 'FREQ=WEEKLY' },
+                rev: 6,
+                revBy: 'rc5-client',
+            } satisfies Task;
+
+            const forward = mergeAppData(mockAppData([currentTask]), mockAppData([rc5EditedTask]));
+            const reverse = mergeAppData(mockAppData([rc5EditedTask]), mockAppData([currentTask]));
+            expect(forward.tasks[0]).toEqual(reverse.tasks[0]);
+            expect(forward.tasks[0]).toMatchObject({
+                rev: 7,
+                revBy: SYNC_REPAIR_REV_BY,
+                recurrence: {
+                    rule: 'weekly',
+                    seriesId: 'series-a',
+                    rrule: 'FREQ=WEEKLY;X-MINDWTR-SERIES-ID=series-a',
+                },
+            });
+
+            const recurrence = forward.tasks[0].recurrence;
+            if (!recurrence || typeof recurrence === 'string') throw new Error('Expected normalized recurrence');
+            const { seriesId: _seriesId, ...rc5Recurrence } = recurrence;
+            const rc5RoundTrip = {
+                ...forward.tasks[0],
+                recurrence: rc5Recurrence,
+            };
+            const second = mergeAppDataWithStats(forward, mockAppData([rc5RoundTrip]));
+
+            expect(second.data).toEqual(forward);
+            expect(second.stats.tasks.conflicts).toBe(0);
+        });
+
+        it('does not graft series identity onto an equal-revision divergent recurrence', () => {
+            const updatedAt = '2026-07-19T12:00:00.000Z';
+            const currentTask = {
+                ...createMockTask('recurring-task', updatedAt),
+                recurrence: { rule: 'daily', seriesId: 'series-a' },
+                rev: 5,
+                revBy: 'current-client',
+            } satisfies Task;
+            const concurrentRc5Task = {
+                ...createMockTask('recurring-task', updatedAt),
+                recurrence: { rule: 'weekly', rrule: 'FREQ=WEEKLY' },
+                rev: 5,
+                revBy: 'rc5-client',
+            } satisfies Task;
+
+            const forward = mergeAppData(mockAppData([currentTask]), mockAppData([concurrentRc5Task]));
+            const reverse = mergeAppData(mockAppData([concurrentRc5Task]), mockAppData([currentTask]));
+
+            expect(forward.tasks[0]).toEqual(reverse.tasks[0]);
+            expect(forward.tasks[0]).toMatchObject({
+                recurrence: {
+                    rule: 'weekly',
+                    rrule: 'FREQ=WEEKLY',
+                },
+            });
+            expect(typeof forward.tasks[0]?.recurrence === 'object'
+                ? forward.tasks[0].recurrence.seriesId
+                : undefined).toBeUndefined();
+
+            const unrelatedRc5Task = {
+                ...concurrentRc5Task,
+                updatedAt: '2026-07-19T12:02:00.000Z',
+                rev: 7,
+            };
+            const unrelated = mergeAppData(
+                mockAppData([currentTask]),
+                mockAppData([unrelatedRc5Task]),
+            );
+            expect(typeof unrelated.tasks[0]?.recurrence === 'object'
+                ? unrelated.tasks[0].recurrence.seriesId
+                : undefined).toBeUndefined();
+        });
+
         it('should merge attachments across devices', () => {
             const localAttachment: Attachment = {
                 id: 'att-local',

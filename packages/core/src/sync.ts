@@ -43,6 +43,7 @@ import {
 } from './sync-signatures';
 import { purgeExpiredTombstones } from './sync-tombstones';
 import { nextRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
+import { normalizeRecurrenceForLoad, parseRRuleString } from './recurrence';
 import { summarizeMergeStats } from './sync-log-utils';
 import { executeSyncCycle } from './sync-cycle';
 
@@ -242,6 +243,47 @@ type MergeableEntity = {
 
 type MergeAppDataOptions = {
     nowIso?: string;
+};
+
+const getRecurrenceSeriesShape = (value: Task['recurrence']): string | null => {
+    const normalized = normalizeRecurrenceForLoad(value);
+    if (!normalized) return null;
+    const { seriesId: _seriesId, rrule, ...shape } = normalized;
+    return JSON.stringify({
+        ...shape,
+        interval: rrule ? parseRRuleString(rrule).interval : undefined,
+    });
+};
+
+const repairTaskRecurrenceSeriesIdentity = (
+    localTask: Task,
+    incomingTask: Task,
+    winner: Task,
+): Task => {
+    const localRecurrence = normalizeRecurrenceForLoad(localTask.recurrence);
+    const incomingRecurrence = normalizeRecurrenceForLoad(incomingTask.recurrence);
+    const localSeriesId = localRecurrence?.seriesId;
+    const incomingSeriesId = incomingRecurrence?.seriesId;
+    if (Boolean(localSeriesId) === Boolean(incomingSeriesId)) return winner;
+    const sameSeriesShape = getRecurrenceSeriesShape(localRecurrence) === getRecurrenceSeriesShape(incomingRecurrence);
+    if (!sameSeriesShape) {
+        const identifiedTask = localSeriesId ? localTask : incomingTask;
+        const legacyTask = localSeriesId ? incomingTask : localTask;
+        // Only the immediately following revision proves this was an edit of the known series.
+        // Equal or skipped revisions may be concurrent work or a cleared-and-recreated series.
+        if ((legacyTask.rev ?? 0) !== (identifiedTask.rev ?? 0) + 1) return winner;
+        if (normalizeRecurrenceForLoad(winner.recurrence)?.seriesId) return winner;
+    }
+
+    const seriesId = localSeriesId ?? incomingSeriesId;
+    const winnerRecurrence = normalizeRecurrenceForLoad(winner.recurrence);
+    if (!seriesId || !winnerRecurrence) return winner;
+    return {
+        ...winner,
+        recurrence: normalizeRecurrenceForLoad({ ...winnerRecurrence, seriesId }),
+        rev: nextRevision(Math.max(localTask.rev ?? 0, incomingTask.rev ?? 0)),
+        revBy: SYNC_REPAIR_REV_BY,
+    };
 };
 
 function mergeEntitiesWithStats<T extends MergeableEntity>(
@@ -852,7 +894,11 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         incomingNormalized.tasks,
         (localTask: Task, incomingTask: Task, winner: Task) => {
             const attachments = mergeAttachments(localTask.attachments, incomingTask.attachments);
-            return { ...winner, attachments };
+            return repairTaskRecurrenceSeriesIdentity(
+                localTask,
+                incomingTask,
+                { ...winner, attachments },
+            );
         },
         normalizeTaskForContentComparison,
         'task',
