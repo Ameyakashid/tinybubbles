@@ -68,7 +68,7 @@ describe('PromptModal numericField', () => {
         expect(onConfirm.mock.calls[0]).toHaveLength(1);
     });
 
-    it('renders the numeric field, seeds it from defaultValue, strips non-digits, and normalizes on confirm', () => {
+    it('renders the numeric field, seeds it from defaultValue, and normalizes on confirm', () => {
         const onConfirm = vi.fn();
         render(
             <PromptModal
@@ -82,11 +82,80 @@ describe('PromptModal numericField', () => {
         const numericInput = screen.getByLabelText('Time Spent') as HTMLInputElement;
         expect(numericInput.value).toBe('30');
 
-        fireEvent.change(numericInput, { target: { value: 'ab45cd' } });
+        fireEvent.change(numericInput, { target: { value: '45' } });
         expect(numericInput.value).toBe('45');
 
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
         expect(onConfirm).toHaveBeenCalledWith('Task title', 45);
+    });
+
+    // The number input refuses letters itself, so the draft is left alone and
+    // confirm does the coercion — a digit-strip here would read "2.5" as 25.
+    it('rounds a fractional entry on confirm instead of concatenating its digits', () => {
+        const onConfirm = vi.fn();
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                onConfirm={onConfirm}
+                numericField={{ label: 'Time Spent', defaultValue: '30' }}
+            />
+        );
+
+        fireEvent.change(screen.getByLabelText('Time Spent'), { target: { value: '2.5' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onConfirm).toHaveBeenCalledWith('Task title', 3);
+    });
+
+    // Enter used to be wired to the first input only, so confirming from the
+    // Time Spent field did nothing and the dialog just sat there (#896).
+    it('confirms on Enter from the numeric field, not just the main input', () => {
+        const onConfirm = vi.fn();
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                onConfirm={onConfirm}
+                numericField={{ label: 'Time Spent', defaultValue: '30' }}
+            />
+        );
+
+        fireEvent.keyDown(screen.getByLabelText('Time Spent'), { key: 'Enter' });
+
+        expect(onConfirm).toHaveBeenCalledWith('Task title', 30);
+    });
+
+    it('cancels on Escape from the numeric field', () => {
+        const onCancel = vi.fn();
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                onCancel={onCancel}
+                numericField={{ label: 'Time Spent', defaultValue: '30' }}
+            />
+        );
+
+        fireEvent.keyDown(screen.getByLabelText('Time Spent'), { key: 'Escape' });
+
+        expect(onCancel).toHaveBeenCalled();
+    });
+
+    // Matches the task editor's Time Spent control so arrow keys step it there too.
+    it('renders the numeric field as a stepping number input', () => {
+        render(
+            <PromptModal
+                {...baseProps}
+                defaultValue="Task title"
+                numericField={{ label: 'Time Spent', defaultValue: '30' }}
+            />
+        );
+
+        const numericInput = screen.getByLabelText('Time Spent') as HTMLInputElement;
+        expect(numericInput).toHaveAttribute('type', 'number');
+        expect(numericInput).toHaveAttribute('step', '5');
+        expect(numericInput).toHaveAttribute('min', '0');
     });
 
     it('normalizes a blank numeric field to undefined instead of 0', () => {

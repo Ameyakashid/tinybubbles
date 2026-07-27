@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type MouseEvent } from 'react';
+import { useEffect, useId, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { normalizeTimeSpentMinutes } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { ModalPortal } from './ModalPortal';
@@ -79,6 +79,23 @@ export function PromptModal({
         }
     };
 
+    // Shared by every field in the dialog so Enter confirms and Escape cancels
+    // wherever the caret happens to be, rather than only from the first input.
+    const handleFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            onCancel();
+            return;
+        }
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        if (canConfirm) {
+            confirmWithValue();
+        } else {
+            setHasInteracted(true);
+        }
+    };
+
     if (!isOpen) return null;
 
     // Keep the input focused while clicking footer buttons: the blur would
@@ -121,20 +138,7 @@ export function PromptModal({
                             }
                         }}
                         onBlur={() => setHasInteracted(true)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                                e.preventDefault();
-                                onCancel();
-                            }
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                if (canConfirm) {
-                                    confirmWithValue();
-                                } else {
-                                    setHasInteracted(true);
-                                }
-                            }
-                        }}
+                        onKeyDown={handleFieldKeyDown}
                         placeholder={placeholder}
                         aria-invalid={showValidation}
                         aria-describedby={showValidation ? validationId : undefined}
@@ -152,10 +156,21 @@ export function PromptModal({
                             </label>
                             <input
                                 id={numericFieldId}
-                                type="text"
+                                // Same control as the task editor's Time Spent field
+                                // (type/min/step), so arrow keys and the spinner adjust it
+                                // the same way in both places. step only drives those
+                                // affordances — any exact number can still be typed.
+                                type="number"
+                                min={0}
+                                step={5}
                                 inputMode="numeric"
                                 value={numericDraft}
-                                onChange={(e) => setNumericDraft(e.target.value.replace(/[^0-9]/g, ''))}
+                                // The number input already refuses non-numeric text, and
+                                // confirm runs the draft through normalizeTimeSpentMinutes
+                                // (which rounds and clamps). Stripping to digits here would
+                                // instead read "2.5" as 25.
+                                onChange={(e) => setNumericDraft(e.target.value)}
+                                onKeyDown={handleFieldKeyDown}
                                 placeholder={numericField.placeholder}
                                 aria-label={numericField.label}
                                 className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
