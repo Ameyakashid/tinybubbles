@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  AppState,
   LayoutAnimation,
   Platform,
   RefreshControl,
@@ -168,6 +169,40 @@ const getStartDateOffset = (days: number): Date => {
 
 const formatDateOnly = (date: Date): string => safeFormatDate(date, 'yyyy-MM-dd');
 
+function getLocalDayKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+}
+
+function useLocalDayKey(): string {
+  const [dayKey, setDayKey] = useState(getLocalDayKey);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNextDay = () => {
+      if (timer) clearTimeout(timer);
+      const now = new Date();
+      const nextDay = new Date(now);
+      nextDay.setHours(24, 0, 0, 0);
+      timer = setTimeout(refresh, Math.max(1, nextDay.getTime() - now.getTime() + 50));
+    };
+    const refresh = () => {
+      setDayKey(getLocalDayKey());
+      scheduleNextDay();
+    };
+
+    scheduleNextDay();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      subscription.remove();
+    };
+  }, []);
+
+  return dayKey;
+}
+
 function normalizeFocusGroupBy(value: unknown): FocusGroupBy {
   return FOCUS_GROUP_BY_OPTIONS.includes(value as FocusGroupBy) ? value as FocusGroupBy : 'none';
 }
@@ -234,6 +269,7 @@ export default function FocusScreen() {
   const tc = useThemeColors();
   const filledButton = useFilledButtonColors();
   const pullSync = useManualPullSync();
+  const localDayKey = useLocalDayKey();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [taskModalDefaultTab, setTaskModalDefaultTab] = useState<TaskEditTab>('view');
@@ -280,11 +316,12 @@ export default function FocusScreen() {
     ))
   ), [visibleTasks]);
   const activeTasks = useMemo(() => {
+    void localDayKey;
     const now = new Date();
     return baseActiveTasks.filter((task) => (
       shouldShowTaskForStart(task, { now })
     ));
-  }, [baseActiveTasks]);
+  }, [baseActiveTasks, localDayKey]);
   const tokenOptions = useMemo(() => getFocusTokenOptions(activeTasks), [activeTasks]);
   const metadataFilterVisibility = useMemo(() => getTaskMetadataFilterVisibility(activeTasks, {
     prioritiesEnabled,
@@ -722,6 +759,7 @@ export default function FocusScreen() {
   }, [activeSavedFilter?.sortOrder, effectiveFocusSortBy, prioritiesEnabled, projects]);
 
   const { focusedTasks, schedule, nextActions, reviewDue, projectDeadlineBoosts } = useMemo(() => {
+    void localDayKey;
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -794,6 +832,7 @@ export default function FocusScreen() {
     baseActiveTasks,
     effectiveFocusSortBy,
     filteredActiveTasks,
+    localDayKey,
     prioritiesEnabled,
     projects,
     sequentialProjectIds,
@@ -801,6 +840,7 @@ export default function FocusScreen() {
     sortBySavedPerspective,
   ]);
   const reviewDueProjects = useMemo(() => {
+    void localDayKey;
     const now = new Date();
     return visibleProjects
       .filter((project) => project.status !== 'archived' && isDueForReview(project.reviewAt, now))
@@ -810,7 +850,7 @@ export default function FocusScreen() {
         if (aReview !== bReview) return aReview - bReview;
         return a.title.localeCompare(b.title);
       });
-  }, [visibleProjects]);
+  }, [localDayKey, visibleProjects]);
 
   // Manual focusOrder is a full-list concept. focusedTasks derives from
   // filteredActiveTasks, so an active filter narrows it to a subset; reordering
@@ -1326,6 +1366,14 @@ export default function FocusScreen() {
     const secondaryLabel = getFocusReorderSecondaryLabel(item);
     const moveUpLabel = resolveText('projects.moveUp', 'Move up');
     const moveDownLabel = resolveText('projects.moveDown', 'Move down');
+    const positionLabel = resolveText(
+      'focus.reorderPosition',
+      '{{title}}. Position {{position}} of {{count}}',
+    )
+      .replace('{{position}}', String(index + 1))
+      .replace('{{count}}', String(focusReorderData.length))
+      .replace('{{title}}', item.title);
+    const reorderHint = resolveText('focus.reorderHint', 'Long press and drag to reorder');
     const accessibilityActions = [
       ...(index > 0 ? [{ name: 'moveUp', label: moveUpLabel }] : []),
       ...(index >= 0 && index < focusReorderData.length - 1
@@ -1338,8 +1386,8 @@ export default function FocusScreen() {
         <ScaleDecorator activeScale={1.025}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={`${item.title}. Position ${index + 1} of ${focusReorderData.length}`}
-            accessibilityHint="Long press and drag to reorder"
+            accessibilityLabel={positionLabel}
+            accessibilityHint={reorderHint}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={(event) => {
               if (event.nativeEvent.actionName === 'moveUp') moveFocusReorderTask(item.id, -1);
@@ -1440,7 +1488,7 @@ export default function FocusScreen() {
             contentContainerStyle={[styles.reorderListContent, { paddingBottom: listBottomPadding }]}
             ListFooterComponent={showFocusReorderHint ? (
               <Text style={[styles.reorderHint, { color: tc.secondaryText }]}>
-                Long press a task, then drag to reorder
+                {resolveText('focus.reorderHint', 'Long press and drag to reorder')}
               </Text>
             ) : null}
           />

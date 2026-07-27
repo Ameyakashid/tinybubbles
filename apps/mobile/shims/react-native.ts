@@ -90,6 +90,11 @@ export const Alert = {
   alert: () => {},
 };
 
+export const AppState = {
+  currentState: 'active',
+  addEventListener: () => ({ remove: () => {} }),
+};
+
 export const AccessibilityInfo = {
   isReduceMotionEnabled: async () => false,
   addEventListener: () => ({ remove: () => {} }),

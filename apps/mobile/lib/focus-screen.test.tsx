@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Modal, SectionList, Text, TextInput, View } from 'react-native';
+import { Alert, AppState, Modal, SectionList, Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppData, AppSettings, Project, StorageAdapter, Task } from '@mindwtr/core';
@@ -197,6 +197,8 @@ vi.mock('../contexts/language-context', () => ({
         'filters.label': 'Filters',
         'savedFilters.save': 'Save',
         'projects.reorderTasks': 'Reorder',
+        'focus.reorderPosition': '{{title}}. Item {{position}} of {{count}}',
+        'focus.reorderHint': 'Hold and drag to reorder',
         'common.done': 'Done',
         'taskEdit.locationLabel': 'Location',
         'taskEdit.locationPlaceholder': 'e.g. Office',
@@ -1300,6 +1302,61 @@ describe('FocusScreen', () => {
     expect(textContent(tree.root)).not.toContain('Wait for vendor');
   });
 
+  it('refreshes date-sensitive sections at local midnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 2, 23, 59, 59, 900));
+    storeState.tasks = [
+      makeTask('starts-tomorrow', {
+        title: 'Starts tomorrow',
+        startTime: '2026-05-03',
+      }),
+    ];
+
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<FocusScreen />);
+    });
+    expect(textContent(tree.root)).not.toContain('Starts tomorrow');
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(tree.root.findAllByType(SwipeableTaskItem).map((node) => node.props.task.id))
+      .toContain('starts-tomorrow');
+  });
+
+  it('refreshes date-sensitive sections when the app resumes on a new day', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 2, 10, 0, 0));
+    let onAppStateChange: ((state: string) => void) | undefined;
+    const appStateSpy = vi.spyOn(AppState, 'addEventListener').mockImplementation(((_event: string, listener: (state: string) => void) => {
+      onAppStateChange = listener;
+      return { remove: vi.fn() };
+    }) as typeof AppState.addEventListener);
+    storeState.tasks = [
+      makeTask('starts-tomorrow', {
+        title: 'Starts tomorrow',
+        startTime: '2026-05-03',
+      }),
+    ];
+
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<FocusScreen />);
+    });
+    expect(textContent(tree.root)).not.toContain('Starts tomorrow');
+
+    vi.setSystemTime(new Date(2026, 4, 3, 10, 0, 0));
+    act(() => {
+      onAppStateChange?.('active');
+    });
+
+    expect(tree.root.findAllByType(SwipeableTaskItem).map((node) => node.props.task.id))
+      .toContain('starts-tomorrow');
+    appStateSpy.mockRestore();
+  });
+
   it('applies and clears saved Focus filters from the chip row', () => {
     storeState.settings = {
       appearance: {},
@@ -1882,7 +1939,7 @@ describe('FocusScreen', () => {
   it('exposes Move up and Move down accessibility actions in reorder mode', () => {
     storeState.tasks = [
       makeTask('focus-a', { title: 'A', isFocusedToday: true, focusOrder: 0 }),
-      makeTask('focus-b', { title: 'B', isFocusedToday: true, focusOrder: 1 }),
+      makeTask('focus-b', { title: 'B {{position}} {{count}}', isFocusedToday: true, focusOrder: 1 }),
       makeTask('focus-c', { title: 'C', isFocusedToday: true, focusOrder: 2 }),
     ];
 
@@ -1896,10 +1953,14 @@ describe('FocusScreen', () => {
     });
 
     const row = tree.root.findByProps({ testID: 'focus-reorder-row-focus-b' });
+    expect(row.props.accessibilityLabel).toBe('B {{position}} {{count}}. Item 2 of 3');
+    expect(row.props.accessibilityHint).toBe('Hold and drag to reorder');
     expect(row.props.accessibilityActions).toEqual([
       { name: 'moveUp', label: 'Move up' },
       { name: 'moveDown', label: 'Move down' },
     ]);
+    expect(tree.root.findByProps({ testID: 'focus-reorder-list' }).props.ListFooterComponent.props.children)
+      .toBe('Hold and drag to reorder');
 
     act(() => {
       row.props.onAccessibilityAction({ nativeEvent: { actionName: 'moveUp' } });
