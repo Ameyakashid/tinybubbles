@@ -28,7 +28,10 @@ test("stable release validates tags and committed versions before any build or p
   );
   expect(releaseNotesStep.run).toContain('docs/release-notes/${TAG}.md');
   expect(releaseNotesStep.run).toContain('docs/release-notes/${VERSION}.md');
-  expect(releaseNotesStep.run).toContain("Stable release notes heading must include");
+  expect(releaseNotesStep.run).toContain(
+    '[[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]'
+  );
+  expect(releaseNotesStep.run).not.toContain('!= *"$VERSION"*');
   const fossStep = steps.find(
     (step) => step.name === "Verify committed FOSS release version matches the stable tag"
   );

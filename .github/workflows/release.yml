@@ -140,8 +140,8 @@ jobs:
             "docs/release-notes/${VERSION}.md"; do
             [ -f "$path" ] || continue
             heading="$(head -n 1 "$path")"
-            if [[ "$heading" != *"$VERSION"* && "$heading" != *"$TAG"* ]]; then
-              echo "Stable release notes heading must include ${VERSION} or ${TAG}: $path" >&2
+            if [[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]; then
+              echo "Stable release notes heading must be '# Mindwtr ${VERSION}' or '# Mindwtr ${TAG}': $path" >&2
               exit 1
             fi
             echo "Using release notes at $path"
