@@ -543,7 +543,7 @@ describe('cloud server utils', () => {
             status: 'next',
             repeatReminderMinutes: 15,
             relativeStartOffset: { amount: -3, unit: 'day' },
-            recurrence: { rule: 'weekly', byDay: ['MO'] },
+            recurrence: { rule: 'weekly', seriesId: 'series-1', byDay: ['MO'] },
         }).ok).toBe(true);
         expect(validateEntityProps('task', 'patch', {
             repeatReminderMinutes: 0,

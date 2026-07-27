@@ -206,6 +206,9 @@ export function normalizeRecurrenceForLoad(value: unknown): Recurrence | undefin
     const rule = isRecurrenceRule(recurrence.rule) ? recurrence.rule : parsed.rule;
     if (!rule) return undefined;
 
+    const seriesId = typeof recurrence.seriesId === 'string' && recurrence.seriesId.trim().length > 0
+        ? recurrence.seriesId.trim()
+        : undefined;
     const strategy = recurrence.strategy === 'fluid' || recurrence.strategy === 'strict'
         ? recurrence.strategy
         : undefined;
@@ -237,6 +240,7 @@ export function normalizeRecurrenceForLoad(value: unknown): Recurrence | undefin
 
     return {
         rule,
+        ...(seriesId ? { seriesId } : {}),
         ...(strategy ? { strategy } : {}),
         ...(byDay ? { byDay } : {}),
         ...(byMonthDay ? { byMonthDay } : {}),
@@ -1105,12 +1109,16 @@ export function createNextRecurringTask(
         }));
 
     const nextCompletedOccurrences = completedOccurrences + 1;
-    let nextRecurrence = task.recurrence;
+    const seriesId = typeof task.recurrence === 'object' && typeof task.recurrence.seriesId === 'string'
+        ? task.recurrence.seriesId.trim() || task.id
+        : task.id;
+    let nextRecurrence: Recurrence = { rule, seriesId };
     const nextAnchorDays = getNextRecurrenceAnchorDays(task, rule);
     if (task.recurrence && typeof task.recurrence === 'object') {
         const recurrence = task.recurrence as Recurrence;
         nextRecurrence = {
             ...recurrence,
+            seriesId,
             ...nextAnchorDays,
             ...(byMonthDay ? { byMonthDay } : {}),
             ...(typeof recurrence.count === 'number' || count ? { count } : {}),
@@ -1127,9 +1135,10 @@ export function createNextRecurringTask(
                 }
                 : {}),
         };
-    } else if (Object.keys(nextAnchorDays).length > 0) {
+    } else {
         nextRecurrence = {
             rule,
+            seriesId,
             ...nextAnchorDays,
         };
     }

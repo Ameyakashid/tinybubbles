@@ -37,6 +37,7 @@ const hasOwnField = (value: object, field: PropertyKey): boolean => (
 
 const CLOUD_RECURRENCE_ALLOWED_KEYS = new Set([
     'rule',
+    'seriesId',
     'strategy',
     'byDay',
     'byMonthDay',

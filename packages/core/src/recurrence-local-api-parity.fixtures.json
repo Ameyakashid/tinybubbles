@@ -17,7 +17,10 @@
     "expected": {
       "status": "next",
       "dueDate": "2026-06-15",
-      "recurrence": "daily"
+      "recurrence": {
+        "rule": "daily",
+        "seriesId": "parity-daily-due-date"
+      }
     }
   },
   {
@@ -38,7 +41,10 @@
     "expected": {
       "status": "next",
       "startTime": "2026-06-08T09:00:00.000Z",
-      "recurrence": "weekly"
+      "recurrence": {
+        "rule": "weekly",
+        "seriesId": "parity-weekly-start-time"
+      }
     }
   },
   {
@@ -61,6 +67,7 @@
       "dueDate": "2025-02-28",
       "recurrence": {
         "rule": "monthly",
+        "seriesId": "parity-monthly-clamp",
         "anchorDay": 31,
         "dueAnchorDay": 31
       }
@@ -90,6 +97,7 @@
       "dueDate": "2025-03-31",
       "recurrence": {
         "rule": "monthly",
+        "seriesId": "parity-monthly-anchor-followup",
         "anchorDay": 31,
         "startAnchorDay": 31,
         "dueAnchorDay": 31,
@@ -121,6 +129,7 @@
       "dueDate": "2028-02-29T09:30:00.000Z",
       "recurrence": {
         "rule": "yearly",
+        "seriesId": "parity-yearly-leap-anchor",
         "anchorDay": 29,
         "startAnchorDay": 29,
         "dueAnchorDay": 29,
@@ -151,6 +160,7 @@
       "dueDate": "2025-01-06T14:00:00.000Z",
       "recurrence": {
         "rule": "daily",
+        "seriesId": "parity-fluid-due-datetime",
         "strategy": "fluid"
       }
     }
@@ -177,6 +187,7 @@
       "dueDate": "2028-04-15T09:00:00.000Z",
       "recurrence": {
         "rule": "yearly",
+        "seriesId": "parity-yearly-window",
         "anchorDay": 15,
         "startAnchorDay": 1,
         "dueAnchorDay": 15
@@ -205,6 +216,7 @@
       "startTime": "2025-01-06",
       "recurrence": {
         "rule": "daily",
+        "seriesId": "parity-unscheduled-fluid",
         "strategy": "fluid"
       }
     }
@@ -233,6 +245,7 @@
       "dueDate": "2025-01-02",
       "recurrence": {
         "rule": "daily",
+        "seriesId": "parity-counted-next",
         "count": 3,
         "completedOccurrences": 2
       }
@@ -283,6 +296,7 @@
       "startTime": "2026-07-22T09:00:00.000Z",
       "recurrence": {
         "rule": "weekly",
+        "seriesId": "parity-weekly-byday-defer",
         "byDay": ["MO", "WE", "FR"],
         "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
       }
@@ -313,6 +327,7 @@
       "dueDate": "2026-07-15",
       "recurrence": {
         "rule": "monthly",
+        "seriesId": "parity-monthly-bymonthday-defer",
         "byMonthDay": [1, 15],
         "rrule": "FREQ=MONTHLY;BYMONTHDAY=1,15",
         "anchorDay": 1,

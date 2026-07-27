@@ -145,6 +145,10 @@ describe('recurrence', () => {
             byMonthDay: [9],
             rrule: 'FREQ=MONTHLY;BYMONTHDAY=9',
         });
+        expect(normalizeRecurrenceForLoad({ rule: 'daily', seriesId: ' series-1 ' })).toEqual({
+            rule: 'daily',
+            seriesId: 'series-1',
+        });
     });
 
     it('creates next instance using weekly BYDAY (strict)', () => {

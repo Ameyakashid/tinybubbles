@@ -3499,7 +3499,7 @@ describe('TaskStore', () => {
 
         const nextInstance = state._allTasks.find(t => t.id !== original.id)!;
         expect(nextInstance.status).toBe('next');
-        expect(nextInstance.recurrence).toEqual({ rule: 'daily' });
+        expect(nextInstance.recurrence).toEqual({ rule: 'daily', seriesId: original.id });
         expect(nextInstance.dueDate).toBe('2023-01-02T09:00');
     });
 
@@ -3530,7 +3530,7 @@ describe('TaskStore', () => {
             id: 'weekly-current',
             title: 'Timeblock',
             status: 'next',
-            recurrence: { rule: 'weekly', strategy: 'strict' },
+            recurrence: { rule: 'weekly', strategy: 'strict', seriesId: 'weekly-series' },
             startTime: '2026-06-08T08:00:00.000Z',
             dueDate: '2026-06-08T17:00:00.000Z',
             createdAt: '2026-06-01T00:00:00.000Z',
@@ -3556,6 +3556,41 @@ describe('TaskStore', () => {
         const openTimeblocks = state._allTasks.filter((task) => task.title === 'Timeblock' && task.status === 'next');
         expect(openTimeblocks).toHaveLength(1);
         expect(openTimeblocks[0]?.id).toBe(existingFollowUp.id);
+    });
+
+    it('does not merge independent recurring series with the same title and schedule', async () => {
+        vi.setSystemTime(new Date('2026-06-09T00:00:00.000Z'));
+
+        const current: Task = {
+            id: 'home-timeblock',
+            title: 'Timeblock',
+            status: 'next',
+            recurrence: { rule: 'weekly', strategy: 'strict' },
+            contexts: ['@home'],
+            startTime: '2026-06-08T08:00:00.000Z',
+            dueDate: '2026-06-08T17:00:00.000Z',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            updatedAt: '2026-06-01T00:00:00.000Z',
+        };
+        const independent: Task = {
+            ...current,
+            id: 'work-timeblock',
+            contexts: ['@work'],
+            startTime: '2026-06-15T08:00:00.000Z',
+            dueDate: '2026-06-15T17:00:00.000Z',
+        };
+
+        useTaskStore.setState({
+            tasks: [current, independent],
+            _allTasks: [current, independent],
+        });
+
+        await useTaskStore.getState().updateTask(current.id, { status: 'done' });
+
+        const live = useTaskStore.getState()._allTasks.filter((task) => task.status === 'next');
+        expect(live).toHaveLength(2);
+        expect(live.find((task) => task.id === independent.id)?.contexts).toEqual(['@work']);
+        expect(live.find((task) => task.id !== independent.id)?.contexts).toEqual(['@home']);
     });
 
     // Completing an occurrence and then the one it just spawned, both on the same

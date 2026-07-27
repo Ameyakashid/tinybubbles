@@ -1292,9 +1292,21 @@ fn next_recurrence_value(
     rule: &str,
 ) -> Option<Value> {
     let anchor_days = next_recurrence_anchor_days(task, rule);
+    let series_id = match recurrence_value(task) {
+        Some(Value::Object(value)) => value
+            .get("seriesId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty()),
+        _ => None,
+    }
+    .or_else(|| task.get("id").and_then(Value::as_str))?;
     match recurrence_value(task)? {
         Value::Object(value) => {
             let mut next = value.clone();
+            next.insert(
+                "seriesId".to_string(),
+                Value::String(series_id.to_string()),
+            );
             for (key, value) in anchor_days {
                 next.insert(key, value);
             }
@@ -1310,9 +1322,13 @@ fn next_recurrence_value(
             }
             Some(Value::Object(next))
         }
-        Value::String(value) if !anchor_days.is_empty() => {
+        Value::String(value) => {
             let mut next = anchor_days;
             next.insert("rule".to_string(), Value::String(value.clone()));
+            next.insert(
+                "seriesId".to_string(),
+                Value::String(series_id.to_string()),
+            );
             Some(Value::Object(next))
         }
         value => Some(value.clone()),
@@ -1778,6 +1794,12 @@ mod tests {
                 .and_then(|value| value.get("completedOccurrences"))
                 .and_then(|value| value.as_i64()),
             Some(1)
+        );
+        assert_eq!(
+            next.get("recurrence")
+                .and_then(|value| value.get("seriesId"))
+                .and_then(|value| value.as_str()),
+            Some("task-1")
         );
         let checklist = next
             .get("checklist")
