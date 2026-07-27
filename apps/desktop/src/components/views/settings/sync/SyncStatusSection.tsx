@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listMergeConflictSamples, safeFormatDate, summarizeMergeStats, useTaskStore } from '@mindwtr/core';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
@@ -6,6 +6,8 @@ import { Switch } from '../../../ui/Switch';
 import { ConfirmModal } from '../../../ConfirmModal';
 import { formatClockSkew } from './sync-page-utils';
 import type { SettingsSyncPageProps, SyncPreferences } from './types';
+
+const RECENT_SYNC_RESULT_MS = 8000;
 
 type SyncStatusSectionProps = Pick<
     SettingsSyncPageProps,
@@ -121,11 +123,24 @@ export function SyncStatusSection({
     };
     const historyEntries = (lastSyncHistory ?? []).slice(0, 6);
     const syncPrefs = syncPreferences ?? {};
+    const [recentResultNow, setRecentResultNow] = useState(Date.now);
+    useEffect(() => {
+        if (!syncLastResultAt || !syncLastResult) return;
+        const timestamp = Date.parse(syncLastResultAt);
+        if (!Number.isFinite(timestamp)) return;
+        const remaining = timestamp + RECENT_SYNC_RESULT_MS - Date.now();
+        if (remaining < 0) {
+            setRecentResultNow(Date.now());
+            return;
+        }
+        const timer = window.setTimeout(() => setRecentResultNow(Date.now()), remaining + 1);
+        return () => window.clearTimeout(timer);
+    }, [syncLastResult, syncLastResultAt]);
     const recentResultLabel = (() => {
         if (!syncLastResultAt || !syncLastResult) return null;
         const timestamp = Date.parse(syncLastResultAt);
         if (!Number.isFinite(timestamp)) return null;
-        if (Date.now() - timestamp > 8000) return null;
+        if (recentResultNow - timestamp > RECENT_SYNC_RESULT_MS) return null;
         return syncLastResult === 'success' ? t.lastSyncSuccess : t.lastSyncError;
     })();
     const syncStatusLabel = isSyncing
