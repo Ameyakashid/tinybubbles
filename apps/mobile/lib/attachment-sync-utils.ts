@@ -669,4 +669,3 @@ export const hasPendingAttachmentSyncWork = async (appData: AppData): Promise<bo
 
   return false;
 };
-

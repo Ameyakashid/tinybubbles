@@ -45,4 +45,3 @@ describe('getFocusTokenOptions', () => {
         ] as any)).toEqual(['@home', '@work', '@work/calls', '#deep', '#ops']);
     });
 });
-

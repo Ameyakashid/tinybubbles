@@ -409,4 +409,3 @@ export const resolveTaskStatus = (
   counters.unmappedStatuses += 1;
   return { status: 'inbox' };
 };
-
