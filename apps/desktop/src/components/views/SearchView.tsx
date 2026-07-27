@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { buildBulkOrganizeTaskUpdates, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, TaskStatus, updateRangeSelection } from '@mindwtr/core';
-import type { BulkOrganizeTaskUpdateInput, RangeSelectionOptions, TaskSortBy } from '@mindwtr/core';
+import { buildBulkOrganizeTaskUpdates, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, TaskStatus } from '@mindwtr/core';
+import type { BulkOrganizeTaskUpdateInput, TaskSortBy } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
@@ -22,6 +22,7 @@ import {
 } from './list/useVirtualList';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
+import { useTaskSelection } from './list/useTaskSelection';
 
 interface SearchViewProps {
     savedSearchId: string;
@@ -46,8 +47,6 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     );
     const { t } = useLanguage();
     const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
     const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
@@ -56,7 +55,6 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
     const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const multiSelectAnchorIdRef = useRef<string | null>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
     const [listScrollTop, setListScrollTop] = useState(0);
@@ -136,44 +134,18 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         overscan: LIST_VIRTUAL_OVERSCAN,
     });
 
-    const exitSelectionMode = useCallback(() => {
-        setSelectionMode(false);
-        setMultiSelectedIds(new Set());
-        multiSelectAnchorIdRef.current = null;
-    }, []);
-
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
-    const selectedVisibleCount = useMemo(
-        () => filteredTaskIds.filter((id) => multiSelectedIds.has(id)).length,
-        [filteredTaskIds, multiSelectedIds],
-    );
-    const allVisibleTasksSelected = filteredTaskIds.length > 0 && selectedVisibleCount === filteredTaskIds.length;
-
-    useEffect(() => {
-        setMultiSelectedIds((prev) => {
-            const visible = new Set(filteredTaskIds);
-            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-            if (next.size === prev.size) return prev;
-            return next;
-        });
-        if (multiSelectAnchorIdRef.current && !filteredTaskIds.includes(multiSelectAnchorIdRef.current)) {
-            multiSelectAnchorIdRef.current = null;
-        }
-    }, [filteredTaskIds]);
-
-    const toggleMultiSelect = useCallback((taskId: string, options: RangeSelectionOptions = {}) => {
-        setMultiSelectedIds((prev) => {
-            const result = updateRangeSelection({
-                anchorId: multiSelectAnchorIdRef.current,
-                range: options.range,
-                selectedIds: prev,
-                targetId: taskId,
-                visibleIds: filteredTaskIds,
-            });
-            multiSelectAnchorIdRef.current = result.anchorId;
-            return result.selectedIds;
-        });
-    }, [filteredTaskIds]);
+    const {
+        allVisibleTasksSelected,
+        clearTaskSelection,
+        exitSelectionMode,
+        multiSelectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks,
+        toggleMultiSelect,
+        toggleSelectionMode,
+    } = useTaskSelection(filteredTaskIds);
 
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
@@ -181,25 +153,8 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
         t,
-        // Keyboard select reveals the checkboxes: without selection mode the
-        // toggled rows would have nothing to show for it.
-        toggleSelect: (task) => {
-            setSelectionMode(true);
-            toggleMultiSelect(task.id);
-        },
+        toggleSelect: (task) => toggleMultiSelect(task.id),
     });
-
-    const selectAllVisibleTasks = useCallback(() => {
-        multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;
-        setMultiSelectedIds(new Set(filteredTaskIds));
-    }, [filteredTaskIds]);
-
-    const clearTaskSelection = useCallback(() => {
-        multiSelectAnchorIdRef.current = null;
-        setMultiSelectedIds(new Set());
-    }, []);
-
-    const selectedIdsArray = useMemo(() => Array.from(multiSelectedIds), [multiSelectedIds]);
 
     const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
         if (selectedIdsArray.length === 0) return;
@@ -296,10 +251,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                     <div className="flex items-center gap-2">
                         <button
                             data-task-selection-toggle
-                            onClick={() => {
-                                if (selectionMode) exitSelectionMode();
-                                else setSelectionMode(true);
-                            }}
+                            onClick={toggleSelectionMode}
                             className={cn(
                                 "text-xs px-3 py-1 rounded-md border transition-colors",
                                 selectionMode

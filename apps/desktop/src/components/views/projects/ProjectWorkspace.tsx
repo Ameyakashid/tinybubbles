@@ -11,14 +11,12 @@ import {
     type BulkOrganizeTaskUpdateInput,
     type Project,
     type ProjectSequenceTaskCue,
-    type RangeSelectionOptions,
     type Section,
     type TaskSortBy,
     type TaskStatus,
     generateUUID,
     sortTasksBy,
     splitCompletedTasks,
-    updateRangeSelection,
 } from '@mindwtr/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
@@ -34,6 +32,7 @@ import { BulkSelectionToolbar } from '../list/BulkSelectionToolbar';
 import { SortBySelect } from '../list/list-toolbar';
 import { sortDoneTasksForListView } from '../list/done-sort';
 import { useTaskListScope } from '../list/task-list-scope';
+import { useTaskSelection } from '../list/useTaskSelection';
 import { ListBulkActions } from '../list/ListBulkActions';
 import { TaskBulkOrganizeModal } from '../list/TaskBulkOrganizeModal';
 import { normalizeAttachmentInput } from '../../../lib/attachment-utils';
@@ -381,8 +380,6 @@ export function ProjectWorkspace({
     const projectTaskSortBy: TaskSortBy = selectedProject?.taskSortBy ?? 'default';
     const [projectDetailsExpanded, setProjectDetailsExpanded] = useState(false);
     const [isProjectDeleting, setIsProjectDeleting] = useState(false);
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
     const [bulkTokenPicker, setBulkTokenPicker] = useState<BulkTokenPickerState>(null);
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
     const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
@@ -390,7 +387,6 @@ export function ProjectWorkspace({
     const [completedTasksCollapsed, setCompletedTasksCollapsed] = useState(true);
     const [projectTaskToolbarCompact, setProjectTaskToolbarCompact] = useState(false);
     const editingTaskId = useUiStore((state) => state.editingTaskId);
-    const multiSelectAnchorIdRef = useRef<string | null>(null);
     const projectScrollRef = useRef<HTMLDivElement | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const lastProjectScrollTopRef = useRef(0);
@@ -652,9 +648,17 @@ export function ProjectWorkspace({
         () => visibleProjectTaskList.map((task) => task.id),
         [visibleProjectTaskList],
     );
-    const selectedIdsArray = useMemo(() => Array.from(multiSelectedIds), [multiSelectedIds]);
-    const selectedVisibleCount = visibleProjectTaskIds.filter((id) => multiSelectedIds.has(id)).length;
-    const allVisibleTasksSelected = visibleProjectTaskIds.length > 0 && selectedVisibleCount === visibleProjectTaskIds.length;
+    const {
+        allVisibleTasksSelected,
+        clearTaskSelection,
+        exitSelectionMode: exitTaskSelectionMode,
+        multiSelectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks,
+        setSelectionMode,
+        toggleMultiSelect,
+    } = useTaskSelection(visibleProjectTaskIds);
     const tasksById = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
     const bulkAreaOptions = useMemo(
         () => sortedAreas
@@ -680,52 +684,14 @@ export function ProjectWorkspace({
     );
 
     const exitSelectionMode = useCallback(() => {
-        setSelectionMode(false);
-        setMultiSelectedIds(new Set());
+        exitTaskSelectionMode();
         setBulkTokenPicker(null);
         setBulkOrganizeOpen(false);
-        multiSelectAnchorIdRef.current = null;
-    }, []);
-
-    useEffect(() => {
-        setMultiSelectedIds((prev) => {
-            const visible = new Set(visibleProjectTaskIds);
-            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-            if (next.size === prev.size) return prev;
-            return next;
-        });
-        if (multiSelectAnchorIdRef.current && !visibleProjectTaskIds.includes(multiSelectAnchorIdRef.current)) {
-            multiSelectAnchorIdRef.current = null;
-        }
-    }, [visibleProjectTaskIds]);
+    }, [exitTaskSelectionMode]);
 
     useEffect(() => {
         exitSelectionMode();
     }, [exitSelectionMode, selectedProjectId]);
-
-    const toggleMultiSelect = useCallback((taskId: string, options: RangeSelectionOptions = {}) => {
-        setMultiSelectedIds((prev) => {
-            const result = updateRangeSelection({
-                anchorId: multiSelectAnchorIdRef.current,
-                range: options.range,
-                selectedIds: prev,
-                targetId: taskId,
-                visibleIds: visibleProjectTaskIds,
-            });
-            multiSelectAnchorIdRef.current = result.anchorId;
-            return result.selectedIds;
-        });
-    }, [visibleProjectTaskIds]);
-
-    const selectAllVisibleTasks = useCallback(() => {
-        multiSelectAnchorIdRef.current = visibleProjectTaskIds[0] ?? null;
-        setMultiSelectedIds(new Set(visibleProjectTaskIds));
-    }, [visibleProjectTaskIds]);
-
-    const clearTaskSelection = useCallback(() => {
-        multiSelectAnchorIdRef.current = null;
-        setMultiSelectedIds(new Set());
-    }, []);
 
     const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
         if (selectedIdsArray.length === 0) return;
@@ -846,12 +812,7 @@ export function ProjectWorkspace({
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
         t,
-        // Keyboard select reveals the checkboxes: without selection mode the
-        // toggled rows would have nothing to show for it.
-        toggleSelect: (task) => {
-            setSelectionMode(true);
-            toggleMultiSelect(task.id);
-        },
+        toggleSelect: (task) => toggleMultiSelect(task.id),
     });
 
     useEffect(() => {

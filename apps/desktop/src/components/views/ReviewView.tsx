@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ReviewHeader, ReviewListControls } from './review/ReviewHeader';
 import { ReviewFiltersBar } from './review/ReviewFiltersBar';
@@ -11,7 +11,7 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { buildBulkOrganizeTaskUpdates, shallow, sortTasksBy, updateRangeSelection, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type RangeSelectionOptions, type Task, type TaskStatus, type TaskSortBy, isTaskInActiveProject } from '@mindwtr/core';
+import { buildBulkOrganizeTaskUpdates, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, type TaskSortBy, isTaskInActiveProject } from '@mindwtr/core';
 
 import { PromptModal } from '../PromptModal';
 import { useLanguage } from '../../contexts/language-context';
@@ -22,6 +22,7 @@ import { useUiStore } from '../../store/ui-store';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { CONTEXTS_AXES, groupTasks, sanitizeAxis, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
+import { useTaskSelection } from './list/useTaskSelection';
 
 const STATUS_OPTIONS: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
 const REVIEW_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:review:v1';
@@ -88,8 +89,6 @@ export function ReviewView() {
         }));
     }, [setPersistedViewState]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
     const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [showGuide, setShowGuide] = useState(false);
@@ -97,7 +96,6 @@ export function ReviewView() {
     const [moveToStatus, setMoveToStatus] = useState<TaskStatus | ''>('');
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
     const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
-    const multiSelectAnchorIdRef = useRef<string | null>(null);
     const showListDetails = useUiStore((state) => state.listOptions.showDetails);
     const setListOptions = useUiStore((state) => state.setListOptions);
     const collapseAllTaskDetails = useUiStore((state) => state.collapseAllTaskDetails);
@@ -168,13 +166,18 @@ export function ReviewView() {
         });
     }, [filterStatus, normalizedSearchQuery, projects, sortBy, tasks, resolvedAreaFilter, projectMapById, areaById]);
 
-    const selectedIdsArray = useMemo(() => Array.from(multiSelectedIds), [multiSelectedIds]);
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
-    const selectedVisibleCount = useMemo(
-        () => filteredTaskIds.filter((id) => multiSelectedIds.has(id)).length,
-        [filteredTaskIds, multiSelectedIds],
-    );
-    const allVisibleTasksSelected = filteredTaskIds.length > 0 && selectedVisibleCount === filteredTaskIds.length;
+    const {
+        allVisibleTasksSelected,
+        clearTaskSelection,
+        exitSelectionMode,
+        multiSelectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks,
+        toggleMultiSelect,
+        toggleSelectionMode,
+    } = useTaskSelection(filteredTaskIds);
     const groupedTasks = useMemo<TaskGroup[]>(
         () => groupTasks(groupBy, { tasks: filteredTasks, areas, projectMap: projectMapById, t }),
         [areas, filteredTasks, groupBy, projectMapById, t],
@@ -183,42 +186,9 @@ export function ReviewView() {
 
     const bulkStatuses: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done'];
 
-    const exitSelectionMode = useCallback(() => {
-        setSelectionMode(false);
-        setMultiSelectedIds(new Set());
-        multiSelectAnchorIdRef.current = null;
-    }, []);
-
     useEffect(() => {
         exitSelectionMode();
     }, [filterStatus, exitSelectionMode]);
-
-    useEffect(() => {
-        setMultiSelectedIds((prev) => {
-            const visible = new Set(filteredTaskIds);
-            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-            if (next.size === prev.size) return prev;
-            return next;
-        });
-        if (multiSelectAnchorIdRef.current && !filteredTaskIds.includes(multiSelectAnchorIdRef.current)) {
-            multiSelectAnchorIdRef.current = null;
-        }
-    }, [filteredTaskIds]);
-
-    const toggleMultiSelect = useCallback((taskId: string, options: RangeSelectionOptions = {}) => {
-        if (!selectionMode) setSelectionMode(true);
-        setMultiSelectedIds(prev => {
-            const result = updateRangeSelection({
-                anchorId: multiSelectAnchorIdRef.current,
-                range: options.range,
-                selectedIds: prev,
-                targetId: taskId,
-                visibleIds: filteredTaskIds,
-            });
-            multiSelectAnchorIdRef.current = result.anchorId;
-            return result.selectedIds;
-        });
-    }, [filteredTaskIds, selectionMode]);
 
     // Grouping reorders the rows, so the keyboard walks the grouped order.
     const keyboardVisibleTasks = useMemo(
@@ -233,17 +203,6 @@ export function ReviewView() {
         t,
         toggleSelect: (task) => toggleMultiSelect(task.id),
     });
-
-    const selectAllVisibleTasks = useCallback(() => {
-        setSelectionMode(true);
-        multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;
-        setMultiSelectedIds(new Set(filteredTaskIds));
-    }, [filteredTaskIds]);
-
-    const clearTaskSelection = useCallback(() => {
-        multiSelectAnchorIdRef.current = null;
-        setMultiSelectedIds(new Set());
-    }, []);
 
     const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
         if (selectedIdsArray.length === 0) return;
@@ -319,10 +278,7 @@ export function ReviewView() {
                     />
                     <ReviewListControls
                         selectionMode={selectionMode}
-                        onToggleSelection={() => {
-                            if (selectionMode) exitSelectionMode();
-                            else setSelectionMode(true);
-                        }}
+                        onToggleSelection={toggleSelectionMode}
                         sortBy={sortBy}
                         onChangeSortBy={(value) => updateSettings({ taskSortBy: value })}
                         groupBy={groupBy}

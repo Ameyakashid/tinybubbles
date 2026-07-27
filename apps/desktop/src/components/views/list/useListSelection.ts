@@ -7,7 +7,6 @@ import {
     useCallback,
     type RefObject,
 } from 'react';
-import { updateRangeSelection } from '@mindwtr/core';
 import type {
     StoreActionResult,
     Task,
@@ -22,6 +21,7 @@ import { registerUndoableAction } from '../../../lib/undo-registry';
 import type { TaskListScope } from '../../../contexts/keybinding-context';
 import { useRegisteredTaskListScope } from './task-list-scope';
 import type { NextGroupBy } from './next-grouping';
+import { useTaskSelection } from './useTaskSelection';
 
 type ShowToast = (
     message: string,
@@ -140,8 +140,6 @@ export function useListSelection({
     undoNotificationsEnabled,
 }: UseListSelectionOptions): UseListSelectionResult {
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
     const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
@@ -150,7 +148,6 @@ export function useListSelection({
     const [selectionScrollVersion, setSelectionScrollVersion] = useState(0);
     const [isBatchDeleting, setIsBatchDeleting] = useState(false);
     const lastFilterKeyRef = useRef('');
-    const multiSelectAnchorIdRef = useRef<string | null>(null);
     const pendingSelectionScrollRef = useRef(false);
     // Set by keyboard navigation (selectNext/Prev/First/Last) to request that
     // DOM focus follow the selection. The follow only happens when focus was
@@ -158,36 +155,23 @@ export function useListSelection({
     // navigation from the sidebar/body keeps working without focus side effects.
     const pendingSelectionFocusRef = useRef(false);
 
-    const exitSelectionMode = useCallback(() => {
-        setSelectionMode(false);
-        setMultiSelectedIds(new Set());
-        multiSelectAnchorIdRef.current = null;
-    }, []);
-
     const requestSelectionScroll = useCallback(() => {
         pendingSelectionScrollRef.current = true;
         setSelectionScrollVersion((current) => current + 1);
     }, []);
 
-    const selectedIdsArray = useMemo(() => Array.from(multiSelectedIds), [multiSelectedIds]);
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
-    const selectedVisibleCount = useMemo(
-        () => filteredTaskIds.filter((id) => multiSelectedIds.has(id)).length,
-        [filteredTaskIds, multiSelectedIds],
-    );
-    const allVisibleTasksSelected = filteredTaskIds.length > 0 && selectedVisibleCount === filteredTaskIds.length;
-
-    useEffect(() => {
-        setMultiSelectedIds((prev) => {
-            const visible = new Set(filteredTaskIds);
-            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-            if (next.size === prev.size) return prev;
-            return next;
-        });
-        if (multiSelectAnchorIdRef.current && !filteredTaskIds.includes(multiSelectAnchorIdRef.current)) {
-            multiSelectAnchorIdRef.current = null;
-        }
-    }, [filteredTaskIds]);
+    const {
+        allVisibleTasksSelected,
+        clearTaskSelection,
+        exitSelectionMode,
+        multiSelectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks,
+        toggleMultiSelect,
+        toggleSelectionMode,
+    } = useTaskSelection(filteredTaskIds);
 
     useEffect(() => {
         const filterKey = [
@@ -366,16 +350,8 @@ export function useListSelection({
     // leaving it when the selection empties keeps the mode invisible unless
     // it is actually in use.
     const toggleSelectTask = useCallback((task: Task) => {
-        const result = updateRangeSelection({
-            anchorId: multiSelectAnchorIdRef.current,
-            selectedIds: multiSelectedIds,
-            targetId: task.id,
-            visibleIds: filteredTaskIds,
-        });
-        multiSelectAnchorIdRef.current = result.anchorId;
-        setMultiSelectedIds(result.selectedIds);
-        setSelectionMode(result.selectedIds.size > 0);
-    }, [filteredTaskIds, multiSelectedIds]);
+        toggleMultiSelect(task.id);
+    }, [toggleMultiSelect]);
 
     useRegisteredTaskListScope(registerTaskListScope, {
         addInputRef,
@@ -388,30 +364,6 @@ export function useListSelection({
         t,
         toggleSelect: toggleSelectTask,
     });
-
-    const toggleMultiSelect = useCallback((taskId: string, options: RangeSelectionOptions = {}) => {
-        setMultiSelectedIds((previous) => {
-            const result = updateRangeSelection({
-                anchorId: multiSelectAnchorIdRef.current,
-                range: options.range,
-                selectedIds: previous,
-                targetId: taskId,
-                visibleIds: filteredTaskIds,
-            });
-            multiSelectAnchorIdRef.current = result.anchorId;
-            return result.selectedIds;
-        });
-    }, [filteredTaskIds]);
-
-    const selectAllVisibleTasks = useCallback(() => {
-        multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;
-        setMultiSelectedIds(new Set(filteredTaskIds));
-    }, [filteredTaskIds]);
-
-    const clearTaskSelection = useCallback(() => {
-        multiSelectAnchorIdRef.current = null;
-        setMultiSelectedIds(new Set());
-    }, []);
 
     const handleSelectIndex = useCallback((index: number) => {
         if (!selectionMode) setSelectedIndex(index);
@@ -535,14 +487,6 @@ export function useListSelection({
         setContextPromptIds([]);
         exitSelectionMode();
     }, [batchUpdateTasks, contextPromptIds, contextPromptMode, exitSelectionMode, tasksById]);
-
-    const toggleSelectionMode = useCallback(() => {
-        if (selectionMode) {
-            exitSelectionMode();
-            return;
-        }
-        setSelectionMode(true);
-    }, [exitSelectionMode, selectionMode]);
 
     return {
         contextPromptMode,

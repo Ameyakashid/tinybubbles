@@ -12,9 +12,7 @@ import {
     buildBulkTaskTokenUpdates,
     collectBulkTaskTokens,
     tFallback,
-    updateRangeSelection,
 } from '@mindwtr/core';
-import type { RangeSelectionOptions } from '@mindwtr/core';
 import type { TaskSortBy } from '@mindwtr/core';
 import { AtSign, CheckSquare, ChevronDown, ChevronRight, Filter, Hash, Tag, type LucideIcon } from 'lucide-react';
 import { TokenPickerModal } from '../TokenPickerModal';
@@ -28,6 +26,7 @@ import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { reportError } from '../../lib/report-error';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { VirtualTaskRow } from './list/VirtualTaskRow';
+import { useTaskSelection } from './list/useTaskSelection';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
     LIST_VIRTUAL_ROW_ESTIMATE,
@@ -83,14 +82,11 @@ export function ContextsView() {
     const selectedStatusSet = useMemo(() => new Set(statusFilters), [statusFilters]);
     const sortBy = (taskSortBy ?? 'default') as TaskSortBy;
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
     const [bulkTokenPicker, setBulkTokenPicker] = useState<BulkTokenPickerState>(null);
     const [isBatchDeleting, setIsBatchDeleting] = useState(false);
     const [contextsCollapsed, setContextsCollapsed] = useState(false);
     const [tagsCollapsed, setTagsCollapsed] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const multiSelectAnchorIdRef = useRef<string | null>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
     const [listScrollTop, setListScrollTop] = useState(0);
@@ -218,9 +214,18 @@ export function ContextsView() {
         () => (isGrouping ? groupedTasks.flatMap((group) => group.tasks) : sortedTasks),
         [groupedTasks, isGrouping, sortedTasks],
     );
-    const filteredTaskIds = sortedTasks.map((task) => task.id);
-    const selectedVisibleCount = filteredTaskIds.filter((id) => multiSelectedIds.has(id)).length;
-    const allVisibleTasksSelected = filteredTaskIds.length > 0 && selectedVisibleCount === filteredTaskIds.length;
+    const filteredTaskIds = useMemo(() => sortedTasks.map((task) => task.id), [sortedTasks]);
+    const {
+        allVisibleTasksSelected,
+        clearTaskSelection,
+        exitSelectionMode,
+        multiSelectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks,
+        toggleMultiSelect,
+        toggleSelectionMode,
+    } = useTaskSelection(filteredTaskIds);
     const shouldVirtualize = !isGrouping && filteredTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
@@ -255,51 +260,14 @@ export function ContextsView() {
         [activeTasks]
     );
 
-    const exitSelectionMode = () => {
-        setSelectionMode(false);
-        setMultiSelectedIds(new Set());
-        multiSelectAnchorIdRef.current = null;
-    };
-
-    const toggleMultiSelect = (taskId: string, options: RangeSelectionOptions = {}) => {
-        setMultiSelectedIds((prev) => {
-            const result = updateRangeSelection({
-                anchorId: multiSelectAnchorIdRef.current,
-                range: options.range,
-                selectedIds: prev,
-                targetId: taskId,
-                visibleIds: filteredTaskIds,
-            });
-            multiSelectAnchorIdRef.current = result.anchorId;
-            return result.selectedIds;
-        });
-    };
-
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
         getTasks: () => keyboardVisibleTasks,
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
         t,
-        // Keyboard select reveals the checkboxes: without selection mode the
-        // toggled rows would have nothing to show for it.
-        toggleSelect: (task) => {
-            setSelectionMode(true);
-            toggleMultiSelect(task.id);
-        },
+        toggleSelect: (task) => toggleMultiSelect(task.id),
     });
-
-    const selectAllVisibleTasks = () => {
-        multiSelectAnchorIdRef.current = filteredTaskIds[0] ?? null;
-        setMultiSelectedIds(new Set(filteredTaskIds));
-    };
-
-    const clearTaskSelection = () => {
-        multiSelectAnchorIdRef.current = null;
-        setMultiSelectedIds(new Set());
-    };
-
-    const selectedIdsArray = useMemo(() => Array.from(multiSelectedIds), [multiSelectedIds]);
     const removableTagOptions = useMemo(
         () => collectBulkTaskTokens(selectedIdsArray, tasksById, 'tags'),
         [selectedIdsArray, tasksById]
@@ -390,19 +358,6 @@ export function ContextsView() {
             reportError('Failed to batch assign energy level in contexts view', error);
         }
     };
-
-    useEffect(() => {
-        setMultiSelectedIds((prev) => {
-            const visible = new Set(sortedTasks.map((task) => task.id));
-            const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
-            if (next.size === prev.size) return prev;
-            return next;
-        });
-        const visible = new Set(sortedTasks.map((task) => task.id));
-        if (multiSelectAnchorIdRef.current && !visible.has(multiSelectAnchorIdRef.current)) {
-            multiSelectAnchorIdRef.current = null;
-        }
-    }, [sortedTasks]);
 
     const removeTagLabelRaw = t('bulk.removeTag');
     const removeTagLabel = removeTagLabelRaw === 'bulk.removeTag' ? 'Remove tag' : removeTagLabelRaw;
@@ -626,10 +581,7 @@ export function ContextsView() {
                                     <ToolbarButton
                                         active={selectionMode}
                                         data-task-selection-toggle
-                                        onClick={() => {
-                                            if (selectionMode) exitSelectionMode();
-                                            else setSelectionMode(true);
-                                        }}
+                                        onClick={toggleSelectionMode}
                                         aria-pressed={selectionMode}
                                         icon={<CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />}
                                     >

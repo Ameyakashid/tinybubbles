@@ -19,6 +19,7 @@ import {
 } from './list/useVirtualList';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { useTaskListScope } from './list/task-list-scope';
+import { useTaskSelection } from './list/useTaskSelection';
 
 type ArchiveTaskRowInnerProps = {
     task: Task;
@@ -239,8 +240,6 @@ export function ArchiveView() {
     const [segment, setSegment] = useState<ArchiveSegment>('tasks');
     const [searchQuery, setSearchQuery] = useState('');
     const [completedAtTaskId, setCompletedAtTaskId] = useState<string | null>(null);
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const listScrollRef = useRef<HTMLDivElement>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
@@ -301,17 +300,18 @@ export function ArchiveView() {
         const query = searchQuery.toLowerCase();
         return filtered.filter((project) => project.title.toLowerCase().includes(query));
     }, [projects, searchQuery]);
-    const selectedIdsArray = useMemo(() => Array.from(selectedIds), [selectedIds]);
-    const allVisibleSelected = archivedTasks.length > 0
-        && selectedIds.size === archivedTasks.length;
-
-    useEffect(() => {
-        const visibleIds = new Set(archivedTasks.map((task) => task.id));
-        setSelectedIds((previous) => {
-            const next = new Set(Array.from(previous).filter((id) => visibleIds.has(id)));
-            return next.size === previous.size ? previous : next;
-        });
-    }, [archivedTasks]);
+    const archivedTaskIds = useMemo(() => archivedTasks.map((task) => task.id), [archivedTasks]);
+    const {
+        allVisibleTasksSelected: allVisibleSelected,
+        clearTaskSelection: clearSelection,
+        exitSelectionMode,
+        multiSelectedIds: selectedIds,
+        selectedIdsArray,
+        selectionMode,
+        selectAllVisibleTasks: selectAllVisible,
+        toggleMultiSelect: toggleTaskSelection,
+        toggleSelectionMode,
+    } = useTaskSelection(archivedTaskIds);
     const shouldVirtualize = archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
@@ -336,28 +336,6 @@ export function ArchiveView() {
         updateTask(taskId, { status: 'inbox' }); // Restore to inbox? Or previous status? Inbox is safest.
     }, [updateTask]);
 
-    const exitSelectionMode = useCallback(() => {
-        setSelectionMode(false);
-        setSelectedIds(new Set());
-    }, []);
-
-    const toggleSelectionMode = useCallback(() => {
-        if (selectionMode) {
-            exitSelectionMode();
-            return;
-        }
-        setSelectionMode(true);
-    }, [exitSelectionMode, selectionMode]);
-
-    const toggleTaskSelection = useCallback((taskId: string) => {
-        setSelectedIds((previous) => {
-            const next = new Set(previous);
-            if (next.has(taskId)) next.delete(taskId);
-            else next.add(taskId);
-            return next;
-        });
-    }, []);
-
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
         // The projects segment renders no task rows, so the keyboard must not
@@ -366,21 +344,8 @@ export function ArchiveView() {
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
         t,
-        // Keyboard select reveals the checkboxes: without selection mode the
-        // toggled rows would have nothing to show for it.
-        toggleSelect: (task) => {
-            setSelectionMode(true);
-            toggleTaskSelection(task.id);
-        },
+        toggleSelect: (task) => toggleTaskSelection(task.id),
     });
-
-    const selectAllVisible = useCallback(() => {
-        setSelectedIds(new Set(archivedTasks.map((task) => task.id)));
-    }, [archivedTasks]);
-
-    const clearSelection = useCallback(() => {
-        setSelectedIds(new Set());
-    }, []);
 
     const handleBulkRestore = useCallback(async () => {
         if (selectedIdsArray.length === 0) return;
