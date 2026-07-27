@@ -633,11 +633,11 @@ describe('QuickAddModal', () => {
     });
 
     it('confirms and creates one task per nonblank pasted text line', async () => {
-        const addTask = vi.fn(async () => ({ success: true, id: 'task-id' }));
+        const addTasks = vi.fn(async () => ({ success: true, ids: ['task-id'] }));
         act(() => {
             useTaskStore.setState((state) => ({
                 ...state,
-                addTask,
+                addTasks,
             }));
         });
 
@@ -663,10 +663,12 @@ describe('QuickAddModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Create tasks' }));
 
-        await waitFor(() => expect(addTask).toHaveBeenCalledTimes(3));
-        expect(addTask).toHaveBeenNthCalledWith(1, 'Email Bob', expect.objectContaining({ status: 'inbox' }));
-        expect(addTask).toHaveBeenNthCalledWith(2, 'Call Alice', expect.objectContaining({ status: 'inbox' }));
-        expect(addTask).toHaveBeenNthCalledWith(3, 'Review notes', expect.objectContaining({ status: 'inbox' }));
+        await waitFor(() => expect(addTasks).toHaveBeenCalledTimes(1));
+        expect(addTasks).toHaveBeenCalledWith([
+            { title: 'Email Bob', initialProps: expect.objectContaining({ status: 'inbox' }) },
+            { title: 'Call Alice', initialProps: expect.objectContaining({ status: 'inbox' }) },
+            { title: 'Review notes', initialProps: expect.objectContaining({ status: 'inbox' }) },
+        ]);
     });
 
     it('automatically keeps blank-line-separated project text as one task', async () => {
@@ -715,11 +717,11 @@ describe('QuickAddModal', () => {
     });
 
     it('imports a text file through the same bulk quick-add confirmation', async () => {
-        const addTask = vi.fn(async () => ({ success: true, id: 'task-id' }));
+        const addTasks = vi.fn(async () => ({ success: true, ids: ['task-id'] }));
         act(() => {
             useTaskStore.setState((state) => ({
                 ...state,
-                addTask,
+                addTasks,
             }));
         });
 
@@ -738,12 +740,14 @@ describe('QuickAddModal', () => {
         expect(await screen.findByText('Create 2 tasks?')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Create tasks' }));
 
-        await waitFor(() => expect(addTask).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(addTasks).toHaveBeenCalledTimes(1));
         expect(dataTransferMocks.createDesktopRecoverySnapshot).toHaveBeenCalledOnce();
         expect(dataTransferMocks.createDesktopRecoverySnapshot.mock.invocationCallOrder[0])
-            .toBeLessThan(addTask.mock.invocationCallOrder[0]);
-        expect(addTask).toHaveBeenNthCalledWith(1, 'First imported task', expect.objectContaining({ status: 'inbox' }));
-        expect(addTask).toHaveBeenNthCalledWith(2, 'Second imported task', expect.objectContaining({ status: 'inbox' }));
+            .toBeLessThan(addTasks.mock.invocationCallOrder[0]);
+        expect(addTasks).toHaveBeenCalledWith([
+            { title: 'First imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },
+            { title: 'Second imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },
+        ]);
     });
 
     it('shows a settings notice and keeps the dialog open when speech-to-text is unconfigured', async () => {
@@ -822,5 +826,40 @@ describe('QuickAddModal', () => {
         expect(useUiStore.getState().toasts.some((toast) => (
             toast.message === 'Enable a speech-to-text model in Settings to use voice input.'
         ))).toBe(false);
+    });
+
+    it('creates a bulk import in a single store commit (#942)', async () => {
+        const lines = Array.from({ length: 100 }, (_, index) => `Item ${index + 1} of Example bulk import #DeleteMe`);
+        renderQuickAddModal();
+
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', { detail: {} }));
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            fireEvent.paste(screen.getByPlaceholderText('Add Task'), {
+                clipboardData: { getData: () => lines.join('\n'), files: [], items: [] },
+            });
+            await Promise.resolve();
+        });
+
+        // A per-line write loop still ends with 100 tasks, so counting tasks alone
+        // cannot catch a regression: pin the number of store commits instead.
+        let commits = 0;
+        const unsubscribe = useTaskStore.subscribe((state, prevState) => {
+            if (state.lastDataChangeAt !== prevState.lastDataChangeAt) commits += 1;
+        });
+        try {
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: 'Create tasks' }));
+                await Promise.resolve();
+            });
+        } finally {
+            unsubscribe();
+        }
+
+        expect(useTaskStore.getState().tasks).toHaveLength(100);
+        expect(commits).toBe(1);
     });
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent } from 'react';
 import {
     executeCaptureTransaction,
+    prepareCaptureTask,
     canStarNewCapture,
     shallow,
     useTaskStore,
@@ -144,9 +145,10 @@ async function readTextFile(file: File): Promise<string> {
 
 export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) {
     const getDerivedState = useTaskStore((state) => state.getDerivedState);
-    const { addTask, addProject, projects, areas, settings, setHighlightTask } = useTaskStore(
+    const { addTask, addTasks, addProject, projects, areas, settings, setHighlightTask } = useTaskStore(
         (state) => ({
             addTask: state.addTask,
+            addTasks: state.addTasks,
             addProject: state.addProject,
             projects: state.projects,
             areas: state.areas,
@@ -902,6 +904,34 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         }
     }, [setEditingTaskId, setHighlightTask, setProjectView]);
 
+    const buildQuickAddCaptureInput = useCallback(({
+        currentProjects,
+        extraAttachments,
+        input,
+        parsed,
+    }: {
+        currentProjects: Project[];
+        extraAttachments?: Attachment[];
+        input: string;
+        parsed: QuickAddResult;
+    }) => {
+        const mergedAttachments = mergeQuickAddAttachments(
+            initialProps?.attachments,
+            parsed.props.attachments,
+            extraAttachments,
+        );
+        return {
+            parsed,
+            rawInput: input,
+            fallbackTitle: extraAttachments?.[0]?.title || tFallback(t, 'quickAdd.pastedImageTitle', 'Screenshot'),
+            projects: currentProjects,
+            initialProps: initialProps ?? undefined,
+            extraProps: mergedAttachments ? { attachments: mergedAttachments } : undefined,
+            selectedAreaId,
+            starNewTask: focusNewTask && canFocusNewTask,
+        };
+    }, [canFocusNewTask, focusNewTask, initialProps, selectedAreaId, t]);
+
     const createTaskFromParsedQuickAdd = useCallback(async ({
         currentAreas,
         currentProjects,
@@ -915,21 +945,10 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         input: string;
         parsed: QuickAddResult;
     }) => {
-        const mergedAttachments = mergeQuickAddAttachments(
-            initialProps?.attachments,
-            parsed.props.attachments,
-            extraAttachments,
+        const transaction = await executeCaptureTransaction(
+            buildQuickAddCaptureInput({ currentProjects, extraAttachments, input, parsed }),
+            { addProject, addTask },
         );
-        const transaction = await executeCaptureTransaction({
-            parsed,
-            rawInput: input,
-            fallbackTitle: extraAttachments?.[0]?.title || tFallback(t, 'quickAdd.pastedImageTitle', 'Screenshot'),
-            projects: currentProjects,
-            initialProps: initialProps ?? undefined,
-            extraProps: mergedAttachments ? { attachments: mergedAttachments } : undefined,
-            selectedAreaId,
-            starNewTask: focusNewTask && canFocusNewTask,
-        }, { addProject, addTask });
         const createdProject = 'createdProject' in transaction
             ? transaction.createdProject
             : undefined;
@@ -946,7 +965,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             currentAreas,
             currentProjects: nextProjects,
         };
-    }, [addProject, addTask, canFocusNewTask, focusNewTask, initialProps, selectedAreaId, t]);
+    }, [addProject, addTask, buildQuickAddCaptureInput]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -1037,19 +1056,33 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             return;
         }
 
+        // One store write for the whole import, not one per line (#942): a
+        // per-line loop left a half-imported inbox behind whenever any line
+        // failed, and queued one full-data save snapshot per task. Mobile's
+        // bulk capture already prepares then batches the same way.
+        const bulkFailed = (detail?: string) => {
+            const message = tFallback(t, 'quickAdd.bulkCreateError', 'Could not create all tasks.');
+            setBulkQuickAddError(detail ? `${message} (${detail})` : message);
+        };
+        const taskInputs: Array<{ title: string; initialProps: Partial<Task> }> = [];
         for (const item of parsedItems) {
-            const result = await createTaskFromParsedQuickAdd({
-                currentAreas,
-                currentProjects,
-                input: item.input,
-                parsed: item.parsed,
-            });
-            if (!result.success) {
-                setBulkQuickAddError(tFallback(t, 'quickAdd.bulkCreateError', 'Could not create all tasks.'));
+            const prepared = await prepareCaptureTask(
+                buildQuickAddCaptureInput({ currentProjects, input: item.input, parsed: item.parsed }),
+                { addProject },
+            );
+            if (!prepared.success) {
+                reportError('Failed to prepare a bulk quick add task', prepared.reason);
+                bulkFailed(prepared.reason);
                 return;
             }
-            currentProjects = result.currentProjects;
-            currentAreas = result.currentAreas;
+            taskInputs.push({ title: prepared.title, initialProps: prepared.props });
+            if (prepared.createdProject) currentProjects = [...currentProjects, prepared.createdProject];
+        }
+        const bulkResult = await addTasks(taskInputs);
+        if (!bulkResult.success) {
+            reportError('Failed to create bulk quick add tasks', bulkResult.error);
+            bulkFailed(bulkResult.error);
+            return;
         }
 
         if (standaloneWindow) {
