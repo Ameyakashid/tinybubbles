@@ -624,16 +624,52 @@ describe('sync-helpers computeSyncPayloadFingerprint', () => {
         const added: AppData = { ...base, tasks: [...base.tasks, { ...base.tasks[0], id: 'task-2' }] };
         const removed: AppData = { ...base, tasks: [] };
         const deleted: AppData = { ...base, tasks: [{ ...base.tasks[0], deletedAt: now }] };
-        const projectAdded: AppData = {
-            ...base,
-            projects: [{ id: 'project-1', name: 'P', color: '#fff', tagIds: [], createdAt: now, updatedAt: now }],
-        };
+        const entityAdditions: AppData[] = [
+            {
+                ...base,
+                projects: [{
+                    id: 'project-1',
+                    title: 'P',
+                    status: 'active',
+                    color: '#fff',
+                    order: 0,
+                    tagIds: [],
+                    createdAt: now,
+                    updatedAt: now,
+                }],
+            },
+            {
+                ...base,
+                sections: [{
+                    id: 'section-1',
+                    projectId: 'project-1',
+                    title: 'S',
+                    order: 0,
+                    createdAt: now,
+                    updatedAt: now,
+                }],
+            },
+            {
+                ...base,
+                areas: [{ id: 'area-1', name: 'A', order: 0, createdAt: now, updatedAt: now }],
+            },
+            {
+                ...base,
+                people: [{ id: 'person-1', name: 'P', createdAt: now, updatedAt: now }],
+            },
+            {
+                ...base,
+                settings: { syncPreferences: { appearance: true }, theme: 'dark' },
+            },
+        ];
 
         const baseFingerprint = computeSyncChangeFingerprint(base);
         expect(computeSyncChangeFingerprint(added)).not.toBe(baseFingerprint);
         expect(computeSyncChangeFingerprint(removed)).not.toBe(baseFingerprint);
         expect(computeSyncChangeFingerprint(deleted)).not.toBe(baseFingerprint);
-        expect(computeSyncChangeFingerprint(projectAdded)).not.toBe(baseFingerprint);
+        for (const changed of entityAdditions) {
+            expect(computeSyncChangeFingerprint(changed)).not.toBe(baseFingerprint);
+        }
     });
 
     it('uses a deterministic fallback timestamp for missing file attachments', () => {
