@@ -686,6 +686,7 @@ function TaskListComponent({
         return items;
       }
       if (activeGroupBy === 'completedDate') {
+        void localDayKey;
         const items: ListItem[] = [];
         const buckets = new Map<CompletionDateGroup, Task[]>();
         const now = new Date();
