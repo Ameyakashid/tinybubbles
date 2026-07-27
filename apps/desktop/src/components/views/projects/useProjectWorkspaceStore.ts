@@ -24,6 +24,7 @@ export const useProjectWorkspaceStore = (selectedProjectId: string | null) => {
             deleteProject: state.deleteProject,
             restoreProject: state.restoreProject,
             updateTask: state.updateTask,
+            restoreTask: state.restoreTask,
             batchMoveTasks: state.batchMoveTasks,
             batchDeleteTasks: state.batchDeleteTasks,
             batchUpdateTasks: state.batchUpdateTasks,

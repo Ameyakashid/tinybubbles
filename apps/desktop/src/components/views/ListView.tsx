@@ -2,7 +2,6 @@ import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, us
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { HelpCircle } from 'lucide-react';
 import {
-    buildBulkOrganizeTaskUpdates,
     buildProjectOrderMap,
     compareTasksByProjectThenOrder,
     createTaskFilterPredicate,
@@ -314,7 +313,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
-    const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
     const {
         allContexts,
         allTags,
@@ -671,7 +669,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const {
         contextPromptMode,
         contextPromptOpen,
-        exitSelectionMode,
         handleBatchAddContext,
         handleBatchAddTag,
         handleBatchAssignArea,
@@ -682,9 +679,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         handleConfirmTagPrompt,
         handleSelectIndex,
         isBatchDeleting,
+        isBulkOrganizing,
         allVisibleTasksSelected,
         clearTaskSelection,
         multiSelectedIds,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectedIndex,
         selectAllVisibleTasks,
@@ -695,7 +694,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         toggleMultiSelect,
         toggleSelectionMode,
     } = useListSelection({
-        activeNextGroupBy,
         addInputRef,
         batchDeleteTasks,
         batchMoveTasks,
@@ -703,7 +701,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         filteredTasks,
         highlightTaskId,
         isProcessing,
-        prioritiesEnabled,
         registerTaskListScope,
         restoreTask,
         scrollToVirtualIndex: (index, align) => {
@@ -713,50 +710,42 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 : index;
             rowVirtualizer.scrollToIndex(virtualIndex, { align });
         },
-        selectedPriorities,
-        selectedTimeEstimates,
-        selectedTokens,
-        selectedWaitingPerson,
+        selectionResetKey: [
+            statusFilter,
+            prioritiesEnabled ? '1' : '0',
+            timeEstimatesEnabled ? '1' : '0',
+            selectedTokens.join('|'),
+            selectedPriorities.join('|'),
+            selectedTimeEstimates.join('|'),
+            selectedWaitingPerson,
+            activeNextGroupBy,
+        ].join('::'),
         setHighlightTask,
         shouldVirtualize,
         showToast,
-        statusFilter,
         t,
         tasksById,
-        timeEstimatesEnabled,
-        translateWithFallback,
         undoNotificationsEnabled,
     });
     const bulkAreaOptions = [...areas]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((area) => ({ id: area.id, name: area.name }));
     const handleApplyTaskBulkOrganize = useCallback(async (input: BulkOrganizeTaskUpdateInput) => {
-        if (selectedIdsArray.length === 0 || isBulkOrganizing) return;
-        const updates = buildBulkOrganizeTaskUpdates(selectedIdsArray, tasksById, input);
-        if (updates.length === 0) return;
-        setIsBulkOrganizing(true);
-        try {
-            await batchUpdateTasks(updates);
+        const selectedCount = selectedIdsArray.length;
+        await organizeSelectedTasks(input, {
+            afterSuccess: () => {
             setBulkOrganizeOpen(false);
-            exitSelectionMode();
             const message = translateWithFallback(
                 'bulk.organizeApplied',
                 '{{count}} selected tasks organized',
-            ).replace('{{count}}', String(updates.length));
+            ).replace('{{count}}', String(selectedCount));
             showToast(message, 'success');
-        } catch (error) {
-            reportError('Failed to bulk organize selected tasks', error);
-            showToast(translateWithFallback('bulk.organizeFailed', 'Failed to organize selected tasks'), 'error');
-        } finally {
-            setIsBulkOrganizing(false);
-        }
+            },
+        });
     }, [
-        batchUpdateTasks,
-        exitSelectionMode,
-        isBulkOrganizing,
+        organizeSelectedTasks,
         selectedIdsArray,
         showToast,
-        tasksById,
         translateWithFallback,
     ]);
 

@@ -6,10 +6,8 @@ import {
     shallow,
     sortTasksBy,
     TaskStatus,
-    TaskEnergyLevel,
     getFrequentTaskTokens,
     getUsedTaskTokens,
-    buildBulkTaskTokenUpdates,
     collectBulkTaskTokens,
     tFallback,
 } from '@mindwtr/core';
@@ -23,7 +21,6 @@ import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
-import { reportError } from '../../lib/report-error';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { VirtualTaskRow } from './list/VirtualTaskRow';
 import { useTaskSelection } from './list/useTaskSelection';
@@ -48,6 +45,7 @@ import { CONTEXTS_AXES, groupTasks, type TaskGroup } from './list/next-grouping'
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { GroupBySelect } from './list/GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list/list-toolbar';
+import { useUiStore } from '../../store/ui-store';
 
 type BulkTokenPickerState = {
     field: 'tags' | 'contexts';
@@ -56,7 +54,7 @@ type BulkTokenPickerState = {
 
 export function ContextsView() {
     const perf = usePerformanceMonitor('ContextsView');
-    const { tasks, tasksById, projects, areas, areaFilterId, taskSortBy, updateSettings } = useTaskStore(
+    const { tasks, tasksById, projects, areas, areaFilterId, taskSortBy, undoNotificationsEnabled, updateSettings } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             tasksById: state._tasksById,
@@ -64,6 +62,7 @@ export function ContextsView() {
             areas: state.areas,
             areaFilterId: state.settings?.filters?.areaId,
             taskSortBy: state.settings?.taskSortBy,
+            undoNotificationsEnabled: state.settings?.undoNotificationsEnabled !== false,
             updateSettings: state.updateSettings,
         }),
         shallow
@@ -71,7 +70,9 @@ export function ContextsView() {
     const batchMoveTasks = useTaskStore((state) => state.batchMoveTasks);
     const batchDeleteTasks = useTaskStore((state) => state.batchDeleteTasks);
     const batchUpdateTasks = useTaskStore((state) => state.batchUpdateTasks);
+    const restoreTask = useTaskStore((state) => state.restoreTask);
     const { t } = useLanguage();
+    const showToast = useUiStore((state) => state.showToast);
     const [persistedViewState, setPersistedViewState] = usePersistedViewState(
         CONTEXTS_VIEW_STATE_STORAGE_KEY,
         DEFAULT_CONTEXTS_VIEW_STATE,
@@ -83,7 +84,6 @@ export function ContextsView() {
     const sortBy = (taskSortBy ?? 'default') as TaskSortBy;
     const [searchQuery, setSearchQuery] = useState('');
     const [bulkTokenPicker, setBulkTokenPicker] = useState<BulkTokenPickerState>(null);
-    const [isBatchDeleting, setIsBatchDeleting] = useState(false);
     const [contextsCollapsed, setContextsCollapsed] = useState(false);
     const [tagsCollapsed, setTagsCollapsed] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
@@ -216,16 +216,30 @@ export function ContextsView() {
     );
     const filteredTaskIds = useMemo(() => sortedTasks.map((task) => task.id), [sortedTasks]);
     const {
+        activeAction,
         allVisibleTasksSelected,
+        assignAreaToSelectedTasks,
+        assignEnergyToSelectedTasks,
         clearTaskSelection,
-        exitSelectionMode,
+        deleteSelectedTasks,
         multiSelectedIds,
+        moveSelectedTasks,
         selectedIdsArray,
         selectionMode,
         selectAllVisibleTasks,
         toggleMultiSelect,
         toggleSelectionMode,
-    } = useTaskSelection(filteredTaskIds);
+        updateSelectedTaskTokens,
+    } = useTaskSelection(filteredTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        batchUpdateTasks,
+        restoreTask,
+        showToast,
+        t,
+        tasksById,
+        undoNotificationsEnabled,
+    });
     const shouldVirtualize = !isGrouping && filteredTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
@@ -283,34 +297,17 @@ export function ContextsView() {
         [areas]
     );
 
-    const handleBatchMove = async (newStatus: TaskStatus) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await batchMoveTasks(selectedIdsArray, newStatus);
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch move tasks in contexts view', error);
-        }
-    };
+    const handleBatchMove = moveSelectedTasks;
 
     const handleBatchDelete = async () => {
-        if (selectedIdsArray.length === 0) return;
-        const confirmed = await requestConfirmation({
-            title: t('common.delete') || 'Delete',
-            description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+        await deleteSelectedTasks({
+            confirm: () => requestConfirmation({
+                title: t('common.delete') || 'Delete',
+                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
+                confirmLabel: t('common.delete') || 'Delete',
+                cancelLabel: t('common.cancel') || 'Cancel',
+            }),
         });
-        if (!confirmed) return;
-        setIsBatchDeleting(true);
-        try {
-            await batchDeleteTasks(selectedIdsArray);
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch delete tasks in contexts view', error);
-        } finally {
-            setIsBatchDeleting(false);
-        }
     };
 
     const handleBatchRemoveTag = () => {
@@ -333,31 +330,9 @@ export function ContextsView() {
         setBulkTokenPicker({ field: 'contexts', action: 'remove' });
     };
 
-    const handleBatchAssignArea = async (areaId: string | null) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await batchUpdateTasks(selectedIdsArray.map((id) => ({
-                id,
-                updates: { areaId: areaId ?? undefined },
-            })));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch assign area in contexts view', error);
-        }
-    };
+    const handleBatchAssignArea = assignAreaToSelectedTasks;
 
-    const handleBatchAssignEnergyLevel = async (energyLevel: TaskEnergyLevel) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await batchUpdateTasks(selectedIdsArray.map((id) => ({
-                id,
-                updates: { energyLevel },
-            })));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch assign energy level in contexts view', error);
-        }
-    };
+    const handleBatchAssignEnergyLevel = assignEnergyToSelectedTasks;
 
     const removeTagLabelRaw = t('bulk.removeTag');
     const removeTagLabel = removeTagLabelRaw === 'bulk.removeTag' ? 'Remove tag' : removeTagLabelRaw;
@@ -453,24 +428,15 @@ export function ContextsView() {
 
     const handleBulkTokenConfirm = async (value: string) => {
         if (!bulkTokenPicker || selectedIdsArray.length === 0) return;
-        try {
-            const updates = buildBulkTaskTokenUpdates(
-                selectedIdsArray,
-                tasksById,
-                bulkTokenPicker.field,
-                value,
-                bulkTokenPicker.action
-            );
-            if (updates.length === 0) {
-                setBulkTokenPicker(null);
-                return;
-            }
-            await batchUpdateTasks(updates);
-            setBulkTokenPicker(null);
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch update tokens in contexts view', error);
-        }
+        await updateSelectedTaskTokens(
+            bulkTokenPicker.field,
+            value,
+            bulkTokenPicker.action,
+            {
+                afterNoop: () => setBulkTokenPicker(null),
+                afterSuccess: () => setBulkTokenPicker(null),
+            },
+        );
     };
 
     return (
@@ -670,7 +636,7 @@ export function ContextsView() {
                                     onRemoveContext={handleBatchRemoveContext}
                                     disableRemoveContext={removableContextOptions.length === 0}
                                     onDelete={handleBatchDelete}
-                                    isDeleting={isBatchDeleting}
+                                    isDeleting={activeAction === 'delete'}
                                     t={t}
                                 />
                             </div>

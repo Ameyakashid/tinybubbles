@@ -8,19 +8,14 @@ import {
     type RefObject,
 } from 'react';
 import type {
-    StoreActionResult,
+    BulkOrganizeTaskUpdateInput,
     Task,
-    TaskPriority,
     TaskStatus,
-    TimeEstimate,
     RangeSelectionOptions,
 } from '@mindwtr/core';
 
-import { reportError } from '../../../lib/report-error';
-import { registerUndoableAction } from '../../../lib/undo-registry';
 import type { TaskListScope } from '../../../contexts/keybinding-context';
 import { useRegisteredTaskListScope } from './task-list-scope';
-import type { NextGroupBy } from './next-grouping';
 import { useTaskSelection } from './useTaskSelection';
 
 type ShowToast = (
@@ -31,7 +26,6 @@ type ShowToast = (
 ) => void;
 
 type UseListSelectionOptions = {
-    activeNextGroupBy: NextGroupBy;
     addInputRef: RefObject<HTMLInputElement | null>;
     batchDeleteTasks: (taskIds: string[]) => Promise<unknown> | unknown;
     batchMoveTasks: (taskIds: string[], newStatus: TaskStatus) => Promise<unknown> | unknown;
@@ -41,22 +35,15 @@ type UseListSelectionOptions = {
     filteredTasks: Task[];
     highlightTaskId: string | null;
     isProcessing: boolean;
-    prioritiesEnabled: boolean;
     registerTaskListScope: (scope: TaskListScope | null) => void;
-    restoreTask: (taskId: string) => Promise<StoreActionResult>;
+    restoreTask: (taskId: string) => Promise<unknown> | unknown;
     scrollToVirtualIndex: (index: number, align: 'auto' | 'center') => void;
-    selectedPriorities: TaskPriority[];
-    selectedTimeEstimates: TimeEstimate[];
-    selectedTokens: string[];
-    selectedWaitingPerson: string;
+    selectionResetKey: string;
     setHighlightTask: (taskId: string | null) => void;
     shouldVirtualize: boolean;
     showToast: ShowToast;
-    statusFilter: TaskStatus | 'all';
     t: (key: string) => string;
     tasksById: Map<string, Task>;
-    timeEstimatesEnabled: boolean;
-    translateWithFallback: (key: string, fallback: string) => string;
     undoNotificationsEnabled: boolean;
 };
 
@@ -74,6 +61,11 @@ type UseListSelectionResult = {
     handleConfirmTagPrompt: (value: string) => Promise<void>;
     handleSelectIndex: (index: number) => void;
     isBatchDeleting: boolean;
+    isBulkOrganizing: boolean;
+    organizeSelectedTasks: (
+        input: BulkOrganizeTaskUpdateInput,
+        options?: { afterSuccess?: () => void },
+    ) => Promise<boolean>;
     allVisibleTasksSelected: boolean;
     clearTaskSelection: () => void;
     multiSelectedIds: Set<string>;
@@ -88,32 +80,7 @@ type UseListSelectionResult = {
     toggleSelectionMode: () => void;
 };
 
-export async function restoreDeletedTasksWithFeedback(
-    taskIds: string[],
-    restoreTask: (taskId: string) => Promise<StoreActionResult>,
-    showToast: ShowToast,
-): Promise<void> {
-    const results = await Promise.allSettled(taskIds.map((taskId) => restoreTask(taskId)));
-    const failedRestore = results.find(
-        (result): result is PromiseRejectedResult | PromiseFulfilledResult<StoreActionResult> =>
-            result.status === 'rejected' || !result.value.success,
-    );
-
-    if (!failedRestore) return;
-
-    const message = failedRestore.status === 'rejected'
-        ? (failedRestore.reason instanceof Error ? failedRestore.reason.message : 'Failed to restore deleted tasks')
-        : (failedRestore.value.error || 'Failed to restore deleted tasks');
-    const error = failedRestore.status === 'rejected'
-        ? failedRestore.reason
-        : new Error(message);
-
-    reportError('Failed to restore deleted tasks', error);
-    showToast(message, 'error');
-}
-
 export function useListSelection({
-    activeNextGroupBy,
     addInputRef,
     batchDeleteTasks,
     batchMoveTasks,
@@ -121,32 +88,22 @@ export function useListSelection({
     filteredTasks,
     highlightTaskId,
     isProcessing,
-    prioritiesEnabled,
     registerTaskListScope,
     restoreTask,
     scrollToVirtualIndex,
-    selectedPriorities,
-    selectedTimeEstimates,
-    selectedTokens,
-    selectedWaitingPerson,
+    selectionResetKey,
     setHighlightTask,
     shouldVirtualize,
     showToast,
-    statusFilter,
     t,
     tasksById,
-    timeEstimatesEnabled,
-    translateWithFallback,
     undoNotificationsEnabled,
 }: UseListSelectionOptions): UseListSelectionResult {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
-    const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');
-    const [contextPromptIds, setContextPromptIds] = useState<string[]>([]);
     const [selectionScrollVersion, setSelectionScrollVersion] = useState(0);
-    const [isBatchDeleting, setIsBatchDeleting] = useState(false);
     const lastFilterKeyRef = useRef('');
     const pendingSelectionScrollRef = useRef(false);
     // Set by keyboard navigation (selectNext/Prev/First/Last) to request that
@@ -162,31 +119,35 @@ export function useListSelection({
 
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
     const {
+        activeAction,
         allVisibleTasksSelected,
+        assignAreaToSelectedTasks,
         clearTaskSelection,
+        deleteSelectedTasks,
         exitSelectionMode,
         multiSelectedIds,
+        moveSelectedTasks,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectionMode,
         selectAllVisibleTasks,
         toggleMultiSelect,
         toggleSelectionMode,
-    } = useTaskSelection(filteredTaskIds);
+        updateSelectedTaskTokens,
+    } = useTaskSelection(filteredTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        batchUpdateTasks,
+        restoreTask,
+        showToast,
+        t,
+        tasksById,
+        undoNotificationsEnabled,
+    });
 
     useEffect(() => {
-        const filterKey = [
-            statusFilter,
-            prioritiesEnabled ? '1' : '0',
-            timeEstimatesEnabled ? '1' : '0',
-            selectedTokens.join('|'),
-            selectedPriorities.join('|'),
-            selectedTimeEstimates.join('|'),
-            selectedWaitingPerson,
-            activeNextGroupBy,
-        ].join('::');
-
-        if (lastFilterKeyRef.current !== filterKey) {
-            lastFilterKeyRef.current = filterKey;
+        if (lastFilterKeyRef.current !== selectionResetKey) {
+            lastFilterKeyRef.current = selectionResetKey;
             requestSelectionScroll();
             setSelectedIndex(0);
             exitSelectionMode();
@@ -205,18 +166,11 @@ export function useListSelection({
             setSelectedIndex(filteredTasks.length - 1);
         }
     }, [
-        activeNextGroupBy,
         exitSelectionMode,
         filteredTasks,
-        prioritiesEnabled,
         requestSelectionScroll,
+        selectionResetKey,
         selectedIndex,
-        selectedPriorities,
-        selectedTimeEstimates,
-        selectedTokens,
-        selectedWaitingPerson,
-        statusFilter,
-        timeEstimatesEnabled,
     ]);
 
     useLayoutEffect(() => {
@@ -370,88 +324,30 @@ export function useListSelection({
     }, [selectionMode]);
 
     const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await Promise.resolve(batchMoveTasks(selectedIdsArray, newStatus));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch move tasks', error);
-            showToast(translateWithFallback('bulk.moveFailed', 'Failed to update selected tasks'), 'error');
-        }
-    }, [batchMoveTasks, exitSelectionMode, selectedIdsArray, showToast, translateWithFallback]);
+        await moveSelectedTasks(newStatus);
+    }, [moveSelectedTasks]);
 
     const handleBatchDelete = useCallback(async () => {
-        const taskIds = [...selectedIdsArray];
-        if (taskIds.length === 0) return;
-
-        setIsBatchDeleting(true);
-        try {
-            await Promise.resolve(batchDeleteTasks(taskIds));
-            exitSelectionMode();
-            const undo = registerUndoableAction(() => {
-                void restoreDeletedTasksWithFeedback(taskIds, restoreTask, showToast);
-            });
-            if (undoNotificationsEnabled) {
-                const deletedMessage = taskIds.length === 1
-                    ? (t('list.taskDeleted') || 'Task deleted')
-                    : (t('list.tasksDeleted') || '{{count}} tasks deleted').replace('{{count}}', String(taskIds.length));
-                showToast(
-                    deletedMessage,
-                    'info',
-                    5000,
-                    {
-                        label: t('common.undo') || 'Undo',
-                        onClick: undo,
-                    },
-                );
-            }
-        } catch (error) {
-            reportError('Failed to batch delete tasks', error);
-            showToast(translateWithFallback('bulk.deleteFailed', 'Failed to delete selected tasks'), 'error');
-        } finally {
-            setIsBatchDeleting(false);
-        }
-    }, [
-        batchDeleteTasks,
-        exitSelectionMode,
-        restoreTask,
-        selectedIdsArray,
-        showToast,
-        t,
-        translateWithFallback,
-        undoNotificationsEnabled,
-    ]);
+        await deleteSelectedTasks();
+    }, [deleteSelectedTasks]);
 
     const handleBatchAssignArea = useCallback(async (areaId: string | null) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await Promise.resolve(batchUpdateTasks(selectedIdsArray.map((id) => ({
-                id,
-                updates: { areaId: areaId ?? undefined },
-            }))));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch assign area', error);
-            showToast(translateWithFallback('bulk.moveFailed', 'Failed to update selected tasks'), 'error');
-        }
-    }, [batchUpdateTasks, exitSelectionMode, selectedIdsArray, showToast, translateWithFallback]);
+        await assignAreaToSelectedTasks(areaId);
+    }, [assignAreaToSelectedTasks]);
 
     const handleBatchAddTag = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setTagPromptIds(selectedIdsArray);
         setTagPromptOpen(true);
     }, [selectedIdsArray]);
 
     const handleBatchAddContext = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setContextPromptIds(selectedIdsArray);
         setContextPromptMode('add');
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
 
     const handleBatchRemoveContext = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setContextPromptIds(selectedIdsArray);
         setContextPromptMode('remove');
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
@@ -460,33 +356,25 @@ export function useListSelection({
         const input = value.trim();
         if (!input) return;
         const tag = input.startsWith('#') ? input : `#${input}`;
-        await Promise.resolve(batchUpdateTasks(tagPromptIds.map((id) => {
-            const task = tasksById.get(id);
-            const existingTags = task?.tags || [];
-            const nextTags = Array.from(new Set([...existingTags, tag]));
-            return { id, updates: { tags: nextTags } };
-        })));
-        setTagPromptOpen(false);
-        setTagPromptIds([]);
-        exitSelectionMode();
-    }, [batchUpdateTasks, exitSelectionMode, tagPromptIds, tasksById]);
+        await updateSelectedTaskTokens('tags', tag, 'add', {
+            afterNoop: () => setTagPromptOpen(false),
+            afterSuccess: () => {
+                setTagPromptOpen(false);
+            },
+        });
+    }, [updateSelectedTaskTokens]);
 
     const handleConfirmContextPrompt = useCallback(async (value: string) => {
         const input = value.trim();
         if (!input) return;
         const context = input.startsWith('@') ? input : `@${input}`;
-        await Promise.resolve(batchUpdateTasks(contextPromptIds.map((id) => {
-            const task = tasksById.get(id);
-            const existing = task?.contexts || [];
-            const nextContexts = contextPromptMode === 'add'
-                ? Array.from(new Set([...existing, context]))
-                : existing.filter((token) => token !== context);
-            return { id, updates: { contexts: nextContexts } };
-        })));
-        setContextPromptOpen(false);
-        setContextPromptIds([]);
-        exitSelectionMode();
-    }, [batchUpdateTasks, contextPromptIds, contextPromptMode, exitSelectionMode, tasksById]);
+        await updateSelectedTaskTokens('contexts', context, contextPromptMode, {
+            afterNoop: () => setContextPromptOpen(false),
+            afterSuccess: () => {
+                setContextPromptOpen(false);
+            },
+        });
+    }, [contextPromptMode, updateSelectedTaskTokens]);
 
     return {
         contextPromptMode,
@@ -501,10 +389,12 @@ export function useListSelection({
         handleConfirmContextPrompt,
         handleConfirmTagPrompt,
         handleSelectIndex,
-        isBatchDeleting,
+        isBatchDeleting: activeAction === 'delete',
+        isBulkOrganizing: activeAction === 'organize',
         allVisibleTasksSelected,
         clearTaskSelection,
         multiSelectedIds,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectedIndex,
         selectAllVisibleTasks,

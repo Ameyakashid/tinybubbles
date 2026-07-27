@@ -20,6 +20,7 @@ import {
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
+import { useUiStore } from '../../store/ui-store';
 
 type ArchiveTaskRowInnerProps = {
     task: Task;
@@ -219,6 +220,7 @@ export function ArchiveView() {
         deleteProject,
         batchMoveTasks,
         batchDeleteTasks,
+        restoreTask,
         settings,
     } = useTaskStore(
         (state) => ({
@@ -231,11 +233,13 @@ export function ArchiveView() {
             deleteProject: state.deleteProject,
             batchMoveTasks: state.batchMoveTasks,
             batchDeleteTasks: state.batchDeleteTasks,
+            restoreTask: state.restoreTask,
             settings: state.settings,
         }),
         shallow
     );
     const { t } = useLanguage();
+    const showToast = useUiStore((state) => state.showToast);
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const [segment, setSegment] = useState<ArchiveSegment>('tasks');
     const [searchQuery, setSearchQuery] = useState('');
@@ -304,14 +308,22 @@ export function ArchiveView() {
     const {
         allVisibleTasksSelected: allVisibleSelected,
         clearTaskSelection: clearSelection,
+        deleteSelectedTasks,
         exitSelectionMode,
         multiSelectedIds: selectedIds,
-        selectedIdsArray,
+        moveSelectedTasks,
         selectionMode,
         selectAllVisibleTasks: selectAllVisible,
         toggleMultiSelect: toggleTaskSelection,
         toggleSelectionMode,
-    } = useTaskSelection(archivedTaskIds);
+    } = useTaskSelection(archivedTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        restoreTask,
+        showToast,
+        t,
+        undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
+    });
     const shouldVirtualize = archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
@@ -348,29 +360,23 @@ export function ArchiveView() {
     });
 
     const handleBulkRestore = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        await batchMoveTasks(selectedIdsArray, 'inbox');
-        exitSelectionMode();
-    }, [batchMoveTasks, exitSelectionMode, selectedIdsArray]);
+        await moveSelectedTasks('inbox');
+    }, [moveSelectedTasks]);
 
     const handleBulkMoveToDone = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        await batchMoveTasks(selectedIdsArray, 'done');
-        exitSelectionMode();
-    }, [batchMoveTasks, exitSelectionMode, selectedIdsArray]);
+        await moveSelectedTasks('done');
+    }, [moveSelectedTasks]);
 
     const handleBulkDelete = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        const confirmed = await requestConfirmation({
-            title: t('bulk.confirmDeleteTitle'),
-            description: t('bulk.confirmDeleteBody'),
-            confirmLabel: t('common.delete'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+        await deleteSelectedTasks({
+            confirm: () => requestConfirmation({
+                title: t('bulk.confirmDeleteTitle'),
+                description: t('bulk.confirmDeleteBody'),
+                confirmLabel: t('common.delete'),
+                cancelLabel: t('common.cancel') || 'Cancel',
+            }),
         });
-        if (!confirmed) return;
-        await batchDeleteTasks(selectedIdsArray);
-        exitSelectionMode();
-    }, [batchDeleteTasks, exitSelectionMode, requestConfirmation, selectedIdsArray, t]);
+    }, [deleteSelectedTasks, requestConfirmation, t]);
 
     const handleEditCompletedAt = useCallback((taskId: string) => {
         setCompletedAtTaskId(taskId);

@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { buildBulkOrganizeTaskUpdates, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, TaskStatus } from '@mindwtr/core';
+import { shallow, useTaskStore, filterTasksBySearch, sortTasksBy } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput, TaskSortBy } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
@@ -23,6 +23,7 @@ import {
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
+import { useUiStore } from '../../store/ui-store';
 
 interface SearchViewProps {
     savedSearchId: string;
@@ -31,7 +32,7 @@ interface SearchViewProps {
 
 export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const perf = usePerformanceMonitor('SearchView');
-    const { tasks, tasksById, projects, areas, settings, updateSettings, batchUpdateTasks, batchDeleteTasks, batchMoveTasks } = useTaskStore(
+    const { tasks, tasksById, projects, areas, settings, updateSettings, batchUpdateTasks, batchDeleteTasks, batchMoveTasks, restoreTask } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             tasksById: state._tasksById,
@@ -42,18 +43,17 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
             batchUpdateTasks: state.batchUpdateTasks,
             batchDeleteTasks: state.batchDeleteTasks,
             batchMoveTasks: state.batchMoveTasks,
+            restoreTask: state.restoreTask,
         }),
         shallow
     );
     const { t } = useLanguage();
+    const showToast = useUiStore((state) => state.showToast);
     const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
-    const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');
-    const [contextPromptIds, setContextPromptIds] = useState<string[]>([]);
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
-    const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
@@ -136,16 +136,30 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
 
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
     const {
+        activeAction,
         allVisibleTasksSelected,
+        assignAreaToSelectedTasks,
         clearTaskSelection,
-        exitSelectionMode,
+        deleteSelectedTasks,
         multiSelectedIds,
+        moveSelectedTasks,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectionMode,
         selectAllVisibleTasks,
         toggleMultiSelect,
         toggleSelectionMode,
-    } = useTaskSelection(filteredTaskIds);
+        updateSelectedTaskTokens,
+    } = useTaskSelection(filteredTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        batchUpdateTasks,
+        restoreTask,
+        showToast,
+        t,
+        tasksById,
+        undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
+    });
 
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
@@ -156,64 +170,39 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         toggleSelect: (task) => toggleMultiSelect(task.id),
     });
 
-    const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
-        if (selectedIdsArray.length === 0) return;
-        await batchMoveTasks(selectedIdsArray, newStatus);
-        exitSelectionMode();
-    }, [batchMoveTasks, selectedIdsArray, exitSelectionMode]);
-
-    const handleBatchAssignArea = useCallback(async (areaId: string | null) => {
-        if (selectedIdsArray.length === 0) return;
-        await batchUpdateTasks(selectedIdsArray.map((id) => ({
-            id,
-            updates: { areaId: areaId ?? undefined },
-        })));
-        exitSelectionMode();
-    }, [batchUpdateTasks, exitSelectionMode, selectedIdsArray]);
+    const handleBatchMove = moveSelectedTasks;
+    const handleBatchAssignArea = assignAreaToSelectedTasks;
 
     const handleApplyTaskBulkOrganize = useCallback(async (input: BulkOrganizeTaskUpdateInput) => {
-        if (selectedIdsArray.length === 0 || isBulkOrganizing) return;
-        const updates = buildBulkOrganizeTaskUpdates(selectedIdsArray, tasksById, input);
-        if (updates.length === 0) return;
-        setIsBulkOrganizing(true);
-        try {
-            await batchUpdateTasks(updates);
-            setBulkOrganizeOpen(false);
-            exitSelectionMode();
-        } finally {
-            setIsBulkOrganizing(false);
-        }
-    }, [batchUpdateTasks, exitSelectionMode, isBulkOrganizing, selectedIdsArray, tasksById]);
+        await organizeSelectedTasks(input, {
+            afterSuccess: () => setBulkOrganizeOpen(false),
+        });
+    }, [organizeSelectedTasks]);
 
     const handleBatchDelete = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        const confirmed = await requestConfirmation({
-            title: t('common.delete') || 'Delete',
-            description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+        await deleteSelectedTasks({
+            confirm: () => requestConfirmation({
+                title: t('common.delete') || 'Delete',
+                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
+                confirmLabel: t('common.delete') || 'Delete',
+                cancelLabel: t('common.cancel') || 'Cancel',
+            }),
         });
-        if (!confirmed) return;
-        await batchDeleteTasks(selectedIdsArray);
-        exitSelectionMode();
-    }, [batchDeleteTasks, exitSelectionMode, requestConfirmation, selectedIdsArray, t]);
+    }, [deleteSelectedTasks, requestConfirmation, t]);
 
     const handleBatchAddTag = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setTagPromptIds(selectedIdsArray);
         setTagPromptOpen(true);
     }, [selectedIdsArray]);
 
     const handleBatchAddContext = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setContextPromptIds(selectedIdsArray);
         setContextPromptMode('add');
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
 
     const handleBatchRemoveContext = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setContextPromptIds(selectedIdsArray);
         setContextPromptMode('remove');
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
@@ -356,14 +345,10 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                     const input = value.trim();
                     if (!input) return;
                     const tag = input.startsWith('#') ? input : `#${input}`;
-                    await batchUpdateTasks(tagPromptIds.map((id) => {
-                        const task = tasksById.get(id);
-                        const existingTags = task?.tags || [];
-                        const nextTags = Array.from(new Set([...existingTags, tag]));
-                        return { id, updates: { tags: nextTags } };
-                    }));
-                    setTagPromptOpen(false);
-                    exitSelectionMode();
+                    await updateSelectedTaskTokens('tags', tag, 'add', {
+                        afterNoop: () => setTagPromptOpen(false),
+                        afterSuccess: () => setTagPromptOpen(false),
+                    });
                 }}
             />
             <PromptModal
@@ -379,16 +364,10 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                     const input = value.trim();
                     if (!input) return;
                     const ctx = input.startsWith('@') ? input : `@${input}`;
-                    await batchUpdateTasks(contextPromptIds.map((id) => {
-                        const task = tasksById.get(id);
-                        const existing = task?.contexts || [];
-                        const nextContexts = contextPromptMode === 'add'
-                            ? Array.from(new Set([...existing, ctx]))
-                            : existing.filter((token) => token !== ctx);
-                        return { id, updates: { contexts: nextContexts } };
-                    }));
-                    setContextPromptOpen(false);
-                    exitSelectionMode();
+                    await updateSelectedTaskTokens('contexts', ctx, contextPromptMode, {
+                        afterNoop: () => setContextPromptOpen(false),
+                        afterSuccess: () => setContextPromptOpen(false),
+                    });
                 }}
             />
             <TaskBulkOrganizeModal
@@ -396,7 +375,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                 selectedCount={selectedIdsArray.length}
                 projects={projects}
                 areas={areas}
-                isApplying={isBulkOrganizing}
+                isApplying={activeAction === 'organize'}
                 t={t}
                 onCancel={() => setBulkOrganizeOpen(false)}
                 onApply={handleApplyTaskBulkOrganize}

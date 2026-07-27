@@ -3,8 +3,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     Attachment,
     Task,
-    buildBulkOrganizeTaskUpdates,
-    buildBulkTaskTokenUpdates,
     collectBulkTaskTokens,
     compareTasksByProjectOrder,
     getSequentialProjectTaskCues,
@@ -13,7 +11,6 @@ import {
     type ProjectSequenceTaskCue,
     type Section,
     type TaskSortBy,
-    type TaskStatus,
     generateUUID,
     sortTasksBy,
     splitCompletedTasks,
@@ -346,6 +343,7 @@ export function ProjectWorkspace({
         deleteProject,
         restoreProject,
         updateTask,
+        restoreTask,
         batchMoveTasks,
         batchDeleteTasks,
         batchUpdateTasks,
@@ -382,8 +380,6 @@ export function ProjectWorkspace({
     const [isProjectDeleting, setIsProjectDeleting] = useState(false);
     const [bulkTokenPicker, setBulkTokenPicker] = useState<BulkTokenPickerState>(null);
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
-    const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
-    const [isBatchDeleting, setIsBatchDeleting] = useState(false);
     const [completedTasksCollapsed, setCompletedTasksCollapsed] = useState(true);
     const [projectTaskToolbarCompact, setProjectTaskToolbarCompact] = useState(false);
     const editingTaskId = useUiStore((state) => state.editingTaskId);
@@ -648,18 +644,33 @@ export function ProjectWorkspace({
         () => visibleProjectTaskList.map((task) => task.id),
         [visibleProjectTaskList],
     );
+    const tasksById = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
     const {
+        activeAction,
         allVisibleTasksSelected,
+        assignAreaToSelectedTasks,
         clearTaskSelection,
+        deleteSelectedTasks,
         exitSelectionMode: exitTaskSelectionMode,
         multiSelectedIds,
+        moveSelectedTasks,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectionMode,
         selectAllVisibleTasks,
         setSelectionMode,
         toggleMultiSelect,
-    } = useTaskSelection(visibleProjectTaskIds);
-    const tasksById = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
+        updateSelectedTaskTokens,
+    } = useTaskSelection(visibleProjectTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        batchUpdateTasks,
+        restoreTask,
+        showToast,
+        t,
+        tasksById,
+        undoNotificationsEnabled,
+    });
     const bulkAreaOptions = useMemo(
         () => sortedAreas
             .filter((area) => !area.deletedAt)
@@ -693,67 +704,26 @@ export function ProjectWorkspace({
         exitSelectionMode();
     }, [exitSelectionMode, selectedProjectId]);
 
-    const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await Promise.resolve(batchMoveTasks(selectedIdsArray, newStatus));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch move project tasks', error);
-            showToast(resolveText('bulk.moveFailed', 'Failed to move selected tasks'), 'error');
-        }
-    }, [batchMoveTasks, exitSelectionMode, resolveText, selectedIdsArray, showToast]);
+    const handleBatchMove = moveSelectedTasks;
 
-    const handleBatchAssignArea = useCallback(async (areaId: string | null) => {
-        if (selectedIdsArray.length === 0) return;
-        try {
-            await Promise.resolve(batchUpdateTasks(selectedIdsArray.map((id) => ({
-                id,
-                updates: { areaId: areaId ?? undefined },
-            }))));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch assign project task area', error);
-            showToast(resolveText('bulk.updateFailed', 'Failed to update selected tasks'), 'error');
-        }
-    }, [batchUpdateTasks, exitSelectionMode, resolveText, selectedIdsArray, showToast]);
+    const handleBatchAssignArea = assignAreaToSelectedTasks;
 
     const handleApplyTaskBulkOrganize = useCallback(async (input: BulkOrganizeTaskUpdateInput) => {
-        if (selectedIdsArray.length === 0 || isBulkOrganizing) return;
-        const updates = buildBulkOrganizeTaskUpdates(selectedIdsArray, tasksById, input);
-        if (updates.length === 0) return;
-        setIsBulkOrganizing(true);
-        try {
-            await Promise.resolve(batchUpdateTasks(updates));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to bulk organize project tasks', error);
-            showToast(resolveText('bulk.organizeFailed', 'Failed to organize selected tasks'), 'error');
-        } finally {
-            setIsBulkOrganizing(false);
-        }
-    }, [batchUpdateTasks, exitSelectionMode, isBulkOrganizing, resolveText, selectedIdsArray, showToast, tasksById]);
+        await organizeSelectedTasks(input, {
+            afterSuccess: () => setBulkOrganizeOpen(false),
+        });
+    }, [organizeSelectedTasks]);
 
     const handleBatchDelete = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        const confirmed = await requestConfirmation({
-            title: t('common.delete') || 'Delete',
-            description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+        await deleteSelectedTasks({
+            confirm: () => requestConfirmation({
+                title: t('common.delete') || 'Delete',
+                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
+                confirmLabel: t('common.delete') || 'Delete',
+                cancelLabel: t('common.cancel') || 'Cancel',
+            }),
         });
-        if (!confirmed) return;
-        setIsBatchDeleting(true);
-        try {
-            await Promise.resolve(batchDeleteTasks(selectedIdsArray));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch delete project tasks', error);
-            showToast(resolveText('projects.deleteFailed', 'Failed to delete selected tasks'), 'error');
-        } finally {
-            setIsBatchDeleting(false);
-        }
-    }, [batchDeleteTasks, exitSelectionMode, requestConfirmation, resolveText, selectedIdsArray, showToast, t]);
+    }, [deleteSelectedTasks, requestConfirmation, t]);
 
     const handleBatchTokenPick = useCallback((field: 'tags' | 'contexts', action: 'add' | 'remove') => {
         if (selectedIdsArray.length === 0) return;
@@ -762,23 +732,16 @@ export function ProjectWorkspace({
 
     const handleBulkTokenConfirm = useCallback(async (value: string) => {
         if (!bulkTokenPicker || selectedIdsArray.length === 0) return;
-        try {
-            const updates = buildBulkTaskTokenUpdates(
-                selectedIdsArray,
-                tasksById,
-                bulkTokenPicker.field,
-                value,
-                bulkTokenPicker.action,
-            );
-            setBulkTokenPicker(null);
-            if (updates.length === 0) return;
-            await Promise.resolve(batchUpdateTasks(updates));
-            exitSelectionMode();
-        } catch (error) {
-            reportError('Failed to batch update project task tokens', error);
-            showToast(resolveText('bulk.updateFailed', 'Failed to update selected tasks'), 'error');
-        }
-    }, [batchUpdateTasks, bulkTokenPicker, exitSelectionMode, resolveText, selectedIdsArray, showToast, tasksById]);
+        await updateSelectedTaskTokens(
+            bulkTokenPicker.field,
+            value,
+            bulkTokenPicker.action,
+            {
+                afterNoop: () => setBulkTokenPicker(null),
+                afterSuccess: () => setBulkTokenPicker(null),
+            },
+        );
+    }, [bulkTokenPicker, selectedIdsArray.length, updateSelectedTaskTokens]);
 
     const projectReferenceTasks = useMemo(() => {
         if (!selectedProject) return [] as Task[];
@@ -1640,7 +1603,7 @@ export function ProjectWorkspace({
                                                     onRemoveContext={() => handleBatchTokenPick('contexts', 'remove')}
                                                     disableRemoveContext={removableContextOptions.length === 0}
                                                     onDelete={handleBatchDelete}
-                                                    isDeleting={isBatchDeleting}
+                                        isDeleting={activeAction === 'delete'}
                                                     t={t}
                                                 />
                                             )}
@@ -1749,7 +1712,7 @@ export function ProjectWorkspace({
                 selectedCount={selectedIdsArray.length}
                 projects={projects}
                 areas={areas}
-                isApplying={isBulkOrganizing}
+                isApplying={activeAction === 'organize'}
                 t={t}
                 onCancel={() => setBulkOrganizeOpen(false)}
                 onApply={handleApplyTaskBulkOrganize}

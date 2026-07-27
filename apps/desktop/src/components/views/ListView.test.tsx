@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
 import { useUiStore } from '../../store/ui-store';
-import { restoreDeletedTasksWithFeedback } from './list/useListSelection';
+import { restoreDeletedTasksWithFeedback } from './list/useTaskSelection';
 import { ListView, reportArchivedTaskQueryFailure } from './ListView';
 import { selectToolbarOption } from '../../test/toolbar-select';
 

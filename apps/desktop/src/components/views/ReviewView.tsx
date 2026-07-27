@@ -11,7 +11,7 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { buildBulkOrganizeTaskUpdates, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, type TaskSortBy, isTaskInActiveProject } from '@mindwtr/core';
+import { shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, type TaskSortBy, isTaskInActiveProject } from '@mindwtr/core';
 
 import { PromptModal } from '../PromptModal';
 import { useLanguage } from '../../contexts/language-context';
@@ -53,7 +53,7 @@ function sanitizeReviewViewState(value: unknown, fallback: ReviewPersistedViewSt
 
 export function ReviewView() {
     const perf = usePerformanceMonitor('ReviewView');
-    const { tasks, projects, areas, settings, updateSettings, batchMoveTasks, batchDeleteTasks, batchUpdateTasks, highlightTaskId } = useTaskStore(
+    const { tasks, projects, areas, settings, updateSettings, batchMoveTasks, batchDeleteTasks, batchUpdateTasks, restoreTask, highlightTaskId } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             projects: state.projects,
@@ -63,6 +63,7 @@ export function ReviewView() {
             batchMoveTasks: state.batchMoveTasks,
             batchDeleteTasks: state.batchDeleteTasks,
             batchUpdateTasks: state.batchUpdateTasks,
+            restoreTask: state.restoreTask,
             highlightTaskId: state.highlightTaskId,
         }),
         shallow
@@ -90,13 +91,12 @@ export function ReviewView() {
     }, [setPersistedViewState]);
     const [searchQuery, setSearchQuery] = useState('');
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
-    const [tagPromptIds, setTagPromptIds] = useState<string[]>([]);
     const [showGuide, setShowGuide] = useState(false);
     const [showDailyGuide, setShowDailyGuide] = useState(false);
     const [moveToStatus, setMoveToStatus] = useState<TaskStatus | ''>('');
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
-    const [isBulkOrganizing, setIsBulkOrganizing] = useState(false);
     const showListDetails = useUiStore((state) => state.listOptions.showDetails);
+    const showToast = useUiStore((state) => state.showToast);
     const setListOptions = useUiStore((state) => state.setListOptions);
     const collapseAllTaskDetails = useUiStore((state) => state.collapseAllTaskDetails);
 
@@ -168,16 +168,30 @@ export function ReviewView() {
 
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
     const {
+        activeAction,
         allVisibleTasksSelected,
         clearTaskSelection,
+        deleteSelectedTasks,
         exitSelectionMode,
         multiSelectedIds,
+        moveSelectedTasks,
+        organizeSelectedTasks,
         selectedIdsArray,
         selectionMode,
         selectAllVisibleTasks,
         toggleMultiSelect,
         toggleSelectionMode,
-    } = useTaskSelection(filteredTaskIds);
+        updateSelectedTaskTokens,
+    } = useTaskSelection(filteredTaskIds, {
+        batchDeleteTasks,
+        batchMoveTasks,
+        batchUpdateTasks,
+        restoreTask,
+        showToast,
+        t,
+        tasksById,
+        undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
+    });
     const groupedTasks = useMemo<TaskGroup[]>(
         () => groupTasks(groupBy, { tasks: filteredTasks, areas, projectMap: projectMapById, t }),
         [areas, filteredTasks, groupBy, projectMapById, t],
@@ -205,37 +219,21 @@ export function ReviewView() {
     });
 
     const handleBatchMove = useCallback(async (newStatus: TaskStatus) => {
-        if (selectedIdsArray.length === 0) return;
-        await batchMoveTasks(selectedIdsArray, newStatus);
-        setMoveToStatus('');
-        exitSelectionMode();
-    }, [batchMoveTasks, selectedIdsArray, exitSelectionMode]);
+        await moveSelectedTasks(newStatus, { afterSuccess: () => setMoveToStatus('') });
+    }, [moveSelectedTasks]);
 
-    const handleBatchDelete = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        await batchDeleteTasks(selectedIdsArray);
-        exitSelectionMode();
-    }, [batchDeleteTasks, selectedIdsArray, exitSelectionMode]);
+    const handleBatchDelete = deleteSelectedTasks;
 
     const handleApplyTaskBulkOrganize = useCallback(async (input: BulkOrganizeTaskUpdateInput) => {
-        if (selectedIdsArray.length === 0 || isBulkOrganizing) return;
-        const updates = buildBulkOrganizeTaskUpdates(selectedIdsArray, tasksById, input);
-        if (updates.length === 0) return;
-        setIsBulkOrganizing(true);
-        try {
-            await batchUpdateTasks(updates);
-            setBulkOrganizeOpen(false);
-            exitSelectionMode();
-        } finally {
-            setIsBulkOrganizing(false);
-        }
-    }, [batchUpdateTasks, exitSelectionMode, isBulkOrganizing, selectedIdsArray, tasksById]);
+        await organizeSelectedTasks(input, {
+            afterSuccess: () => setBulkOrganizeOpen(false),
+        });
+    }, [organizeSelectedTasks]);
 
-    const handleBatchAddTag = useCallback(async () => {
+    const handleBatchAddTag = useCallback(() => {
         if (selectedIdsArray.length === 0) return;
-        setTagPromptIds(selectedIdsArray);
         setTagPromptOpen(true);
-    }, [batchUpdateTasks, selectedIdsArray, tasksById, t, exitSelectionMode]);
+    }, [selectedIdsArray]);
 
     const handleToggleDetails = useCallback(() => {
         if (showListDetails) {
@@ -359,7 +357,7 @@ export function ReviewView() {
                     selectedCount={selectedIdsArray.length}
                     projects={projects}
                     areas={areas}
-                    isApplying={isBulkOrganizing}
+                    isApplying={activeAction === 'organize'}
                     t={t}
                     onCancel={() => setBulkOrganizeOpen(false)}
                     onApply={handleApplyTaskBulkOrganize}
@@ -378,14 +376,10 @@ export function ReviewView() {
                         const input = value.trim();
                         if (!input) return;
                         const tag = input.startsWith('#') ? input : `#${input}`;
-                        await batchUpdateTasks(tagPromptIds.map((id) => {
-                            const task = tasksById[id];
-                            const existingTags = task?.tags || [];
-                            const nextTags = Array.from(new Set([...existingTags, tag]));
-                            return { id, updates: { tags: nextTags } };
-                        }));
-                        setTagPromptOpen(false);
-                        exitSelectionMode();
+                        await updateSelectedTaskTokens('tags', tag, 'add', {
+                            afterNoop: () => setTagPromptOpen(false),
+                            afterSuccess: () => setTagPromptOpen(false),
+                        });
                     }}
                 />
             </div>
