@@ -40,12 +40,23 @@ export type ImportRunnerLog = {
     logInfo: TransferLogInfo;
 };
 
-type ImportDescriptor = {
-    apply: (data: AppData, parsed: unknown) => { data: AppData; result: unknown };
+// Maps each import source to its real parsed-input and applied-result types. The descriptor
+// table below is keyed off this so each entry's `apply`/`countExtra` is checked against the
+// actual importer signature instead of erasing to `unknown` and casting back per source.
+type ImportTypeMap = {
+    backup: { parsed: AppData; result: AppData };
+    todoist: { parsed: ParsedTodoistProject[]; result: ReturnType<typeof applyTodoistImport> };
+    ticktick: { parsed: ParsedTickTickImportData; result: ReturnType<typeof applyTickTickImport> };
+    dgt: { parsed: ParsedDgtImportData; result: ReturnType<typeof applyDgtImport> };
+    omnifocus: { parsed: ParsedOmniFocusImportData; result: ReturnType<typeof applyOmniFocusImport> };
+};
+
+type ImportDescriptor<S extends ImportSourceId> = {
+    apply: (data: AppData, parsed: ImportTypeMap[S]['parsed']) => { data: AppData; result: ImportTypeMap[S]['result'] };
     completeLabel: string;
-    countExtra: (result: unknown) => Record<string, string>;
+    countExtra: (result: ImportTypeMap[S]['result']) => Record<string, string>;
     operation: string;
-    source: ImportSourceId;
+    source: S;
     startLabel: string;
 };
 
@@ -56,17 +67,17 @@ const toBackupCountExtra = (data: AppData): Record<string, string> => ({
     areas: String(data.areas.filter((area) => !area.deletedAt).length),
 });
 
-const IMPORT_DESCRIPTORS: Record<ImportSourceId, ImportDescriptor> = {
+const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
     backup: {
         operation: 'restoreBackup',
         source: 'backup',
         startLabel: 'Backup restore started',
         completeLabel: 'Backup restore complete',
         apply: (_currentData, parsed) => {
-            const restored = prepareRestoredBackupDataForSync(parsed as AppData);
+            const restored = prepareRestoredBackupDataForSync(parsed);
             return { data: restored, result: restored };
         },
-        countExtra: (result) => toBackupCountExtra(result as AppData),
+        countExtra: toBackupCountExtra,
     },
     todoist: {
         operation: 'importTodoist',
@@ -74,18 +85,15 @@ const IMPORT_DESCRIPTORS: Record<ImportSourceId, ImportDescriptor> = {
         startLabel: 'Todoist import started',
         completeLabel: 'Todoist import complete',
         apply: (data, parsed) => {
-            const result = applyTodoistImport(data, parsed as ParsedTodoistProject[]);
+            const result = applyTodoistImport(data, parsed);
             return { data: result.data, result };
         },
-        countExtra: (result) => {
-            const typed = result as ReturnType<typeof applyTodoistImport>;
-            return {
-                tasks: String(typed.importedTaskCount),
-                projects: String(typed.importedProjectCount),
-                sections: String(typed.importedSectionCount),
-                checklistItems: String(typed.importedChecklistItemCount),
-            };
-        },
+        countExtra: (result) => ({
+            tasks: String(result.importedTaskCount),
+            projects: String(result.importedProjectCount),
+            sections: String(result.importedSectionCount),
+            checklistItems: String(result.importedChecklistItemCount),
+        }),
     },
     ticktick: {
         operation: 'importTickTick',
@@ -93,18 +101,15 @@ const IMPORT_DESCRIPTORS: Record<ImportSourceId, ImportDescriptor> = {
         startLabel: 'TickTick import started',
         completeLabel: 'TickTick import complete',
         apply: (data, parsed) => {
-            const result = applyTickTickImport(data, parsed as ParsedTickTickImportData);
+            const result = applyTickTickImport(data, parsed);
             return { data: result.data, result };
         },
-        countExtra: (result) => {
-            const typed = result as ReturnType<typeof applyTickTickImport>;
-            return {
-                tasks: String(typed.importedTaskCount),
-                projects: String(typed.importedProjectCount),
-                areas: String(typed.importedAreaCount),
-                checklistItems: String(typed.importedChecklistItemCount),
-            };
-        },
+        countExtra: (result) => ({
+            tasks: String(result.importedTaskCount),
+            projects: String(result.importedProjectCount),
+            areas: String(result.importedAreaCount),
+            checklistItems: String(result.importedChecklistItemCount),
+        }),
     },
     dgt: {
         operation: 'importDgt',
@@ -112,18 +117,15 @@ const IMPORT_DESCRIPTORS: Record<ImportSourceId, ImportDescriptor> = {
         startLabel: 'DGT import started',
         completeLabel: 'DGT import complete',
         apply: (data, parsed) => {
-            const result = applyDgtImport(data, parsed as ParsedDgtImportData);
+            const result = applyDgtImport(data, parsed);
             return { data: result.data, result };
         },
-        countExtra: (result) => {
-            const typed = result as ReturnType<typeof applyDgtImport>;
-            return {
-                tasks: String(typed.importedTaskCount),
-                projects: String(typed.importedProjectCount),
-                areas: String(typed.importedAreaCount),
-                checklistItems: String(typed.importedChecklistItemCount),
-            };
-        },
+        countExtra: (result) => ({
+            tasks: String(result.importedTaskCount),
+            projects: String(result.importedProjectCount),
+            areas: String(result.importedAreaCount),
+            checklistItems: String(result.importedChecklistItemCount),
+        }),
     },
     omnifocus: {
         operation: 'importOmniFocus',
@@ -131,28 +133,30 @@ const IMPORT_DESCRIPTORS: Record<ImportSourceId, ImportDescriptor> = {
         startLabel: 'OmniFocus import started',
         completeLabel: 'OmniFocus import complete',
         apply: (data, parsed) => {
-            const result = applyOmniFocusImport(data, parsed as ParsedOmniFocusImportData);
+            const result = applyOmniFocusImport(data, parsed);
             return { data: result.data, result };
         },
-        countExtra: (result) => {
-            const typed = result as ReturnType<typeof applyOmniFocusImport>;
-            return {
-                areas: String(typed.importedAreaCount),
-                checklistItems: String(typed.importedChecklistItemCount),
-                tasks: String(typed.importedTaskCount),
-                projects: String(typed.importedProjectCount),
-                standaloneTasks: String(typed.importedStandaloneTaskCount),
-            };
-        },
+        countExtra: (result) => ({
+            areas: String(result.importedAreaCount),
+            checklistItems: String(result.importedChecklistItemCount),
+            tasks: String(result.importedTaskCount),
+            projects: String(result.importedProjectCount),
+            standaloneTasks: String(result.importedStandaloneTaskCount),
+        }),
     },
 };
 
-export async function runImport<TParsed, TResult>(
-    source: ImportSourceId,
-    parsed: TParsed,
+// Closing this on `source` (rather than two free type parameters the caller had to spell out)
+// lets `parsed`'s and the return value's types be inferred from the source id literal itself —
+// `ImportTypeMap[S]` is exact per source, so every cast this function used to need to bridge
+// "the caller's declared TParsed/TResult" against "whatever IMPORT_DESCRIPTORS[source] resolves
+// to at runtime" is now just a correct, unconditional type instead of an erasure.
+export async function runImport<S extends ImportSourceId>(
+    source: S,
+    parsed: ImportTypeMap[S]['parsed'],
     boundaries: DataTransferBoundaries,
     log: ImportRunnerLog
-): Promise<{ result: TResult; snapshotName: string | null }> {
+): Promise<{ result: ImportTypeMap[S]['result']; snapshotName: string | null }> {
     const descriptor = IMPORT_DESCRIPTORS[source];
     addBreadcrumb('transfer:restore');
     void log.logInfo(descriptor.startLabel, {
@@ -165,7 +169,7 @@ export async function runImport<TParsed, TResult>(
             operation: descriptor.operation,
             apply: (currentData: AppData) => descriptor.apply(currentData, parsed),
         });
-        const result = transaction.result as TResult;
+        const result = transaction.result;
         void log.logInfo(descriptor.completeLabel, {
             scope: 'transfer',
             extra: {

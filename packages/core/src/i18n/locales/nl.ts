@@ -40,6 +40,7 @@ export const nlOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Project maken van taak mislukt',
         'task.promoteToProjectCreated': 'Project gemaakt van taak',
         'task.promoteToProjectMoved': 'Taak verplaatst naar bestaand project',
+        'task.updateFailed': 'Taak bijwerken mislukt',
         'nav.sectionLists': 'Lijsten',
         'nav.sectionOrganize': 'Organiseren',
         'nav.sectionArchive': 'Archief',

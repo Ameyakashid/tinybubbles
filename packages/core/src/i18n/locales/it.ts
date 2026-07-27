@@ -221,6 +221,7 @@ export const itOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Impossibile creare il progetto dall\'attività',
         'task.promoteToProjectCreated': 'Progetto creato dall\'attività',
         'task.promoteToProjectMoved': 'Attività spostata in un progetto esistente',
+        'task.updateFailed': 'Impossibile aggiornare l\'attività',
         'taskEdit.duplicateTask': 'Duplica attività',
         'taskEdit.duplicateDoneTitle': 'Attività duplicata',
         'taskEdit.duplicateDoneBody': 'Una nuova copia è stata creata nell\'Entrata.',

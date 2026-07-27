@@ -9,6 +9,25 @@ import {
 
 export const BACKUP_FILE_PREFIX = 'mindwtr-backup-';
 
+export type ActiveRecordCounts = {
+    areas: number;
+    people: number;
+    projects: number;
+    sections: number;
+    tasks: number;
+};
+
+// Both desktop's and mobile's data-transfer.ts carried byte-identical copies of this for their
+// own export/restore/snapshot logging — and both omitted `people`, a first-class synced entity,
+// undercounting it in every backup/restore log line on both platforms.
+export const countActiveRecords = (data: AppData): ActiveRecordCounts => ({
+    tasks: data.tasks.filter((task) => !task.deletedAt).length,
+    projects: data.projects.filter((project) => !project.deletedAt).length,
+    sections: data.sections.filter((section) => !section.deletedAt).length,
+    areas: data.areas.filter((area) => !area.deletedAt).length,
+    people: (data.people ?? []).filter((person) => !person.deletedAt).length,
+});
+
 export type BackupMetadata = {
     fileName?: string;
     backupAt?: string;

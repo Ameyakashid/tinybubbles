@@ -1,4 +1,4 @@
-import type { AppData, Area, Attachment, Person, Project, SavedFilter, Task, Section } from './types';
+import type { AppData, Area, Person, Project, SavedFilter, Task, Section } from './types';
 
 export type CalendarSyncEntry = {
     taskId: string;
@@ -14,13 +14,19 @@ import { normalizeRecurrenceForLoad } from './recurrence';
 import { normalizeRelativeStartOffset } from './task-relative-start';
 import { logWarn } from './logger';
 import { normalizeSavedFilter, normalizeSavedFilters } from './saved-filters';
-import { normalizeProjectSequentialScope, normalizeProjectTaskSortBy } from './project-utils';
 import { sleep } from './async-utils';
-import { TASK_SQLITE_COLUMNS, TASK_SQLITE_MIGRATION_COLUMNS } from './task-sync-schema';
-import { PROJECT_SQLITE_COLUMNS, PROJECT_SQLITE_MIGRATION_COLUMNS } from './project-sync-schema';
-import { SECTION_SQLITE_COLUMNS, SECTION_SQLITE_MIGRATION_COLUMNS } from './section-sync-schema';
-import { AREA_SQLITE_COLUMNS, AREA_SQLITE_MIGRATION_COLUMNS } from './area-sync-schema';
-import { PERSON_SQLITE_COLUMNS, PERSON_SQLITE_MIGRATION_COLUMNS } from './person-sync-schema';
+import { TASK_SQLITE_COLUMNS, TASK_SQLITE_MIGRATION_COLUMNS, taskFromSqliteRow, taskToSqliteRow } from './task-sync-schema';
+import {
+    normalizeProjectStatus,
+    PROJECT_SQLITE_COLUMNS,
+    PROJECT_SQLITE_MIGRATION_COLUMNS,
+    projectFromSqliteRow,
+    projectToSqliteRow,
+} from './project-sync-schema';
+import { SECTION_SQLITE_COLUMNS, SECTION_SQLITE_MIGRATION_COLUMNS, sectionFromSqliteRow, sectionToSqliteRow } from './section-sync-schema';
+import { AREA_SQLITE_COLUMNS, AREA_SQLITE_MIGRATION_COLUMNS, areaFromSqliteRow, areaToSqliteRow } from './area-sync-schema';
+import { PERSON_SQLITE_COLUMNS, PERSON_SQLITE_MIGRATION_COLUMNS, personFromSqliteRow, personToSqliteRow } from './person-sync-schema';
+import { fromJson, toJson, toStringArray } from './entity-sync-schema';
 
 export interface SqliteClient {
     run(sql: string, params?: unknown[]): Promise<void>;
@@ -103,40 +109,6 @@ export const splitSqlStatements = (sql: string): string[] => {
     const tail = current.trim();
     if (tail) statements.push(tail);
     return statements;
-};
-
-const toJson = (value: unknown) => (value === undefined ? null : JSON.stringify(value));
-const fromJson = <T>(value: unknown, fallback: T): T => {
-    if (value === null || value === undefined || value === '') return fallback;
-    try {
-        const parsed = JSON.parse(String(value));
-        if (fallback === undefined) {
-            return parsed && typeof parsed === 'object' ? (parsed as T) : fallback;
-        }
-        if (Array.isArray(fallback)) {
-            return Array.isArray(parsed) ? (parsed as T) : fallback;
-        }
-        if (typeof fallback === 'object' && fallback !== null) {
-            return parsed && typeof parsed === 'object' ? (parsed as T) : fallback;
-        }
-        return parsed as T;
-    } catch (error) {
-        logWarn('Failed to parse JSON value, falling back to defaults', {
-            scope: 'sqlite',
-            category: 'storage',
-            error,
-        });
-        return fallback;
-    }
-};
-
-const toBool = (value?: boolean) => (value ? 1 : 0);
-const fromBool = (value: unknown) => Boolean(value);
-const toNullableBool = (value?: boolean | null) => value === null || value === undefined ? null : toBool(value);
-const fromNullableBool = (value: unknown): boolean | null | undefined => {
-    if (value === null) return null;
-    if (value === undefined) return undefined;
-    return Boolean(value);
 };
 
 type SqliteReferenceIssue = {
@@ -254,54 +226,10 @@ export const PERSON_UPSERT_UPDATE_CLAUSE = `${PERSON_SQLITE_COLUMNS
     .join(',\n')}
 WHERE people.rev IS NULL OR people.rev <= excluded.rev`;
 
-export const taskToSqliteRow = (task: Task): unknown[] => {
-    const taskOrder = Number.isFinite(task.order) ? task.order : task.orderNum;
-    return [
-        task.id,
-        task.title,
-        task.status,
-        task.priority ?? null,
-        task.energyLevel ?? null,
-        task.assignedTo ?? null,
-        task.taskMode ?? null,
-        task.startTime ?? null,
-        toJson(task.relativeStartOffset),
-        task.dueDate ?? null,
-        toJson(task.recurrence),
-        toBool(task.showFutureRecurrence),
-        task.pushCount ?? null,
-        task.repeatReminderMinutes ?? null,
-        toJson(task.tags ?? []),
-        toJson(task.contexts ?? []),
-        toJson(task.checklist),
-        task.description ?? null,
-        task.textDirection ?? null,
-        toJson(task.attachments),
-        task.location ?? null,
-        task.projectId ?? null,
-        task.sectionId ?? null,
-        task.areaId ?? null,
-        Number.isFinite(taskOrder) ? taskOrder : null,
-        Number.isFinite(task.boardOrder) ? task.boardOrder : null,
-        Number.isFinite(task.focusOrder) ? task.focusOrder : null,
-        toBool(task.isFocusedToday),
-        task.timeEstimate ?? null,
-        task.timeSpentMinutes ?? null,
-        toBool(task.suppressMindwtrReminders),
-        task.reviewAt ?? null,
-        task.completedAt ?? null,
-        task.statusBeforeProjectArchive ?? null,
-        task.completedAtBeforeProjectArchive ?? null,
-        toNullableBool(task.isFocusedTodayBeforeProjectArchive),
-        task.projectArchivedAt ?? null,
-        task.rev ?? null,
-        task.revBy ?? null,
-        task.createdAt,
-        task.updatedAt,
-        task.deletedAt ?? null,
-        task.purgedAt ?? null,
-    ];
-};
+// taskToSqliteRow is now generated from TASK_SYNC_FIELD_SCHEMA (task-sync-schema.ts) — see the
+// comment there. Re-exported under its existing name for this module's existing consumers.
+export { taskToSqliteRow };
+
 // Serialized row + fingerprint cache keyed by task object identity. Store and
 // sync updates are immutable — a changed task is a new object — and
 // taskToSqliteRow is pure, so an unchanged object always serializes to the
@@ -346,9 +274,6 @@ const SEARCH_PROJECT_SELECT = [
     'p.areaId AS areaId',
 ].join(', ');
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 let tempIdTableCounter = 0;
 
 type SqliteEntityTable = 'tasks' | 'projects' | 'sections' | 'areas' | 'people' | 'saved_filters';
@@ -366,125 +291,19 @@ const createTempIdTableName = (table: SqliteEntityTable): string => {
     return `temp_${table}_ids_${timestamp}_${tempIdTableCounter.toString(36)}_${random}`;
 };
 
-const normalizeProjectStatus = (value: unknown): Project['status'] => {
-    if (value === 'active' || value === 'someday' || value === 'waiting' || value === 'archived') {
-        return value;
-    }
-    if (typeof value === 'string') {
-        const lowered = value.toLowerCase().trim();
-        if (lowered === 'active' || lowered === 'someday' || lowered === 'waiting' || lowered === 'archived') {
-            return lowered as Project['status'];
-        }
-    }
-    return 'active';
-};
-
-const toStringArray = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.filter((item): item is string => typeof item === 'string');
-};
-
-const toChecklist = (value: unknown): Task['checklist'] => {
-    if (!Array.isArray(value)) return undefined;
-    const cleaned = value
-        .filter(isRecord)
-        .filter((item) => typeof item.id === 'string' && typeof item.title === 'string')
-        .map((item) => ({
-            id: item.id as string,
-            title: item.title as string,
-            isCompleted: Boolean(item.isCompleted),
-        }));
-    return cleaned.length > 0 ? cleaned : undefined;
-};
-
-const toAttachments = (value: unknown): Attachment[] | undefined => {
-    if (!Array.isArray(value)) return undefined;
-    const allowedStatuses = new Set<Attachment['localStatus']>([
-        'available',
-        'missing',
-        'uploading',
-        'downloading',
-    ]);
-    const cleaned = value
-        .filter(isRecord)
-        .filter(
-            (item) =>
-                typeof item.id === 'string' &&
-                typeof item.kind === 'string' &&
-                typeof item.title === 'string' &&
-                typeof item.uri === 'string'
-        )
-        .map((item) => ({
-            id: item.id as string,
-            kind: item.kind as Attachment['kind'],
-            title: item.title as string,
-            uri: item.uri as string,
-            mimeType: typeof item.mimeType === 'string' ? item.mimeType : undefined,
-            size: typeof item.size === 'number' ? item.size : undefined,
-            createdAt: typeof item.createdAt === 'string' ? item.createdAt : '',
-            updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : '',
-            deletedAt: typeof item.deletedAt === 'string' ? item.deletedAt : undefined,
-            cloudKey: typeof item.cloudKey === 'string' ? item.cloudKey : undefined,
-            fileHash: typeof item.fileHash === 'string' ? item.fileHash : undefined,
-            localStatus: typeof item.localStatus === 'string' && allowedStatuses.has(item.localStatus as Attachment['localStatus'])
-                ? (item.localStatus as Attachment['localStatus'])
-                : undefined,
-        }));
-    return cleaned.length > 0 ? cleaned : undefined;
-};
-
+// mapSqliteTaskRow layers the three normalizers taskFromSqliteRow (task-sync-schema.ts) can't
+// perform itself — normalizeTaskStatus, normalizeRecurrenceForLoad, and
+// normalizeRelativeStartOffset all transitively import date-fns, which task-sync-schema.ts may
+// not depend on (see the zero-dependency comment there). Every other field comes back from
+// taskFromSqliteRow unchanged, so this produces byte-for-byte the same Task the previous
+// hand-written mapSqliteTaskRow did.
 export function mapSqliteTaskRow(row: Record<string, unknown>): Task {
-    const orderNumRaw = row.orderNum;
-    const order = orderNumRaw === null || orderNumRaw === undefined ? undefined : Number(orderNumRaw);
+    const base = taskFromSqliteRow(row);
     return {
-        id: String(row.id),
-        title: String(row.title ?? ''),
+        ...base,
         status: normalizeTaskStatus(row.status),
-        priority: row.priority as Task['priority'] | undefined,
-        energyLevel: row.energyLevel as Task['energyLevel'] | undefined,
-        assignedTo: row.assignedTo as string | undefined,
-        taskMode: row.taskMode as Task['taskMode'] | undefined,
-        startTime: row.startTime as string | undefined,
-        relativeStartOffset: normalizeRelativeStartOffset(fromJson<unknown>(row.relativeStartOffset, undefined)),
-        dueDate: row.dueDate as string | undefined,
-        recurrence: normalizeRecurrenceForLoad(fromJson<unknown>(row.recurrence, null)),
-        showFutureRecurrence: fromBool(row.showFutureRecurrence),
-        pushCount: row.pushCount === null || row.pushCount === undefined ? undefined : Number(row.pushCount),
-        repeatReminderMinutes: row.repeatReminderMinutes === null || row.repeatReminderMinutes === undefined
-            ? undefined
-            : Number(row.repeatReminderMinutes),
-        tags: toStringArray(fromJson<unknown>(row.tags, [])),
-        contexts: toStringArray(fromJson<unknown>(row.contexts, [])),
-        checklist: toChecklist(fromJson<unknown>(row.checklist, undefined)),
-        description: row.description as string | undefined,
-        textDirection: row.textDirection as Task['textDirection'] | undefined,
-        attachments: toAttachments(fromJson<unknown>(row.attachments, undefined)),
-        location: row.location as string | undefined,
-        projectId: row.projectId as string | undefined,
-        sectionId: row.sectionId as string | undefined,
-        areaId: row.areaId as string | undefined,
-        order,
-        orderNum: order,
-        boardOrder: row.boardOrder === null || row.boardOrder === undefined ? undefined : Number(row.boardOrder),
-        focusOrder: row.focusOrder === null || row.focusOrder === undefined ? undefined : Number(row.focusOrder),
-        isFocusedToday: fromBool(row.isFocusedToday),
-        timeEstimate: row.timeEstimate as Task['timeEstimate'] | undefined,
-        timeSpentMinutes: row.timeSpentMinutes === null || row.timeSpentMinutes === undefined
-            ? undefined
-            : Number(row.timeSpentMinutes),
-        suppressMindwtrReminders: fromBool(row.suppressMindwtrReminders),
-        reviewAt: row.reviewAt as string | undefined,
-        completedAt: row.completedAt as string | undefined,
-        statusBeforeProjectArchive: row.statusBeforeProjectArchive as Task['statusBeforeProjectArchive'] | undefined,
-        completedAtBeforeProjectArchive: row.completedAtBeforeProjectArchive as string | null | undefined,
-        isFocusedTodayBeforeProjectArchive: fromNullableBool(row.isFocusedTodayBeforeProjectArchive),
-        projectArchivedAt: row.projectArchivedAt as string | undefined,
-        rev: row.rev === null || row.rev === undefined ? undefined : Number(row.rev),
-        revBy: row.revBy as string | undefined,
-        createdAt: String(row.createdAt ?? ''),
-        updatedAt: String(row.updatedAt ?? ''),
-        deletedAt: row.deletedAt as string | undefined,
-        purgedAt: row.purgedAt as string | undefined,
+        recurrence: normalizeRecurrenceForLoad(base.recurrence),
+        relativeStartOffset: normalizeRelativeStartOffset(base.relativeStartOffset),
     };
 }
 
@@ -1039,35 +858,6 @@ export class SqliteAdapter {
         return mapSqliteTaskRow(row);
     }
 
-    private mapProjectRow(row: Record<string, unknown>): Project {
-        const orderNumRaw = row.orderNum;
-        const fallbackOrder = typeof row._rowid === 'number' ? row._rowid : 0;
-        return {
-            id: String(row.id),
-            title: String(row.title ?? ''),
-            status: normalizeProjectStatus(row.status),
-            color: String(row.color ?? '#6B7280'),
-            order: orderNumRaw === null || orderNumRaw === undefined ? fallbackOrder : Number(orderNumRaw),
-            tagIds: toStringArray(fromJson<unknown>(row.tagIds, [])),
-            isSequential: fromBool(row.isSequential),
-            sequentialScope: normalizeProjectSequentialScope(row.sequentialScope),
-            taskSortBy: normalizeProjectTaskSortBy(row.taskSortBy),
-            isFocused: fromBool(row.isFocused),
-            supportNotes: row.supportNotes as string | undefined,
-            attachments: toAttachments(fromJson<unknown>(row.attachments, undefined)),
-            dueDate: row.dueDate as string | undefined,
-            reviewAt: row.reviewAt as string | undefined,
-            areaId: row.areaId as string | undefined,
-            areaTitle: row.areaTitle as string | undefined,
-            rev: row.rev === null || row.rev === undefined ? undefined : Number(row.rev),
-            revBy: row.revBy as string | undefined,
-            createdAt: String(row.createdAt ?? ''),
-            updatedAt: String(row.updatedAt ?? ''),
-            deletedAt: row.deletedAt as string | undefined,
-            purgedAt: row.purgedAt as string | undefined,
-        };
-    }
-
     private mapSearchTaskRow(row: Record<string, unknown>): SearchTaskResult {
         return {
             id: String(row.id),
@@ -1089,26 +879,6 @@ export class SqliteAdapter {
             title: String(row.title ?? ''),
             status: normalizeProjectStatus(row.status),
             areaId: row.areaId as string | undefined,
-        };
-    }
-
-    private mapSectionRow(row: Record<string, unknown>): Section {
-        const orderNumRaw = row.orderNum;
-        const fallbackOrder = typeof row._rowid === 'number' ? row._rowid : 0;
-        return {
-            id: String(row.id),
-            projectId: String(row.projectId ?? ''),
-            title: String(row.title ?? ''),
-            description: row.description as string | undefined,
-            order: orderNumRaw === null || orderNumRaw === undefined ? fallbackOrder : Number(orderNumRaw),
-            isCollapsed: fromBool(row.isCollapsed),
-            rev: row.rev === null || row.rev === undefined ? undefined : Number(row.rev),
-            revBy: row.revBy as string | undefined,
-            createdAt: String(row.createdAt ?? ''),
-            updatedAt: String(row.updatedAt ?? ''),
-            deletedAt: row.deletedAt as string | undefined,
-            deletedAtBeforeProjectArchive: row.deletedAtBeforeProjectArchive as string | null | undefined,
-            projectArchivedAt: row.projectArchivedAt as string | undefined,
         };
     }
 
@@ -1141,53 +911,15 @@ export class SqliteAdapter {
         ]);
 
         const tasks: Task[] = tasksRows.map((row) => this.mapTaskRow(row));
-        const projects: Project[] = projectsRows.map((row) => this.mapProjectRow(row));
-        const sections: Section[] = sectionsRows.map((row) => this.mapSectionRow(row));
+        const projects: Project[] = projectsRows.map((row) => projectFromSqliteRow(row));
+        const sections: Section[] = sectionsRows.map((row) => sectionFromSqliteRow(row));
         const nowIso = new Date().toISOString();
 
-        const areas: Area[] = areasRows.map((row) => {
-            const createdAtRaw = typeof row.createdAt === 'string' && row.createdAt.trim().length > 0
-                ? row.createdAt
-                : undefined;
-            const updatedAtRaw = typeof row.updatedAt === 'string' && row.updatedAt.trim().length > 0
-                ? row.updatedAt
-                : undefined;
-            const createdAt = createdAtRaw ?? updatedAtRaw ?? nowIso;
-            const updatedAt = updatedAtRaw ?? createdAtRaw ?? nowIso;
-            return {
-                id: String(row.id),
-                name: String(row.name ?? ''),
-                color: row.color as string | undefined,
-                icon: row.icon as string | undefined,
-                order: Number(row.orderNum ?? 0),
-                rev: row.rev === null || row.rev === undefined ? undefined : Number(row.rev),
-                revBy: row.revBy as string | undefined,
-                createdAt,
-                updatedAt,
-                deletedAt: row.deletedAt as string | undefined,
-            };
-        });
-        const people: Person[] = peopleRows.map((row) => {
-            const createdAtRaw = typeof row.createdAt === 'string' && row.createdAt.trim().length > 0
-                ? row.createdAt
-                : undefined;
-            const updatedAtRaw = typeof row.updatedAt === 'string' && row.updatedAt.trim().length > 0
-                ? row.updatedAt
-                : undefined;
-            const createdAt = createdAtRaw ?? updatedAtRaw ?? nowIso;
-            const updatedAt = updatedAtRaw ?? createdAtRaw ?? nowIso;
-            return {
-                id: String(row.id),
-                name: String(row.name ?? ''),
-                note: row.note as string | undefined,
-                referenceLink: row.referenceLink as string | undefined,
-                rev: row.rev === null || row.rev === undefined ? undefined : Number(row.rev),
-                revBy: row.revBy as string | undefined,
-                createdAt,
-                updatedAt,
-                deletedAt: row.deletedAt as string | undefined,
-            };
-        });
+        // areaFromSqliteRow/personFromSqliteRow share one nowIso per read, matching the
+        // original inline mapping's behaviour (every area/person in this read falls back to
+        // the same timestamp, not a fresh one per row).
+        const areas: Area[] = areasRows.map((row) => areaFromSqliteRow(row, nowIso));
+        const people: Person[] = peopleRows.map((row) => personFromSqliteRow(row, nowIso));
 
         const settings = settingsRow?.data ? fromJson<AppData['settings']>(settingsRow.data, {}) : {};
         const savedFiltersFromTable = savedFilterRows
@@ -1504,22 +1236,7 @@ export class SqliteAdapter {
             await upsertBatch(
                 'areas',
                 [...AREA_UPSERT_COLUMNS],
-                data.areas.map((area) => {
-                    const createdAt = area.createdAt ?? area.updatedAt ?? nowIso;
-                    const updatedAt = area.updatedAt ?? area.createdAt ?? nowIso;
-                    return [
-                        area.id,
-                        area.name,
-                        area.color ?? null,
-                        area.icon ?? null,
-                        area.order,
-                        area.rev ?? null,
-                        area.revBy ?? null,
-                        createdAt,
-                        updatedAt,
-                        area.deletedAt ?? null,
-                    ];
-                }),
+                data.areas.map((area) => areaToSqliteRow(area, nowIso)),
                 AREA_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,
@@ -1533,30 +1250,7 @@ export class SqliteAdapter {
             await upsertBatch(
                 'projects',
                 [...PROJECT_UPSERT_COLUMNS],
-                data.projects.map((project) => [
-                    project.id,
-                    project.title,
-                    project.status,
-                    project.color,
-                    Number.isFinite(project.order) ? project.order : 0,
-                    toJson(project.tagIds ?? []),
-                    toBool(project.isSequential),
-                    normalizeProjectSequentialScope(project.sequentialScope) ?? null,
-                    normalizeProjectTaskSortBy(project.taskSortBy) ?? null,
-                    toBool(project.isFocused),
-                    project.supportNotes ?? null,
-                    toJson(project.attachments),
-                    project.dueDate ?? null,
-                    project.reviewAt ?? null,
-                    project.areaId ?? null,
-                    project.areaTitle ?? null,
-                    project.rev ?? null,
-                    project.revBy ?? null,
-                    project.createdAt,
-                    project.updatedAt,
-                    project.deletedAt ?? null,
-                    project.purgedAt ?? null,
-                ]),
+                data.projects.map((project) => projectToSqliteRow(project)),
                 PROJECT_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,
@@ -1571,21 +1265,7 @@ export class SqliteAdapter {
             await upsertBatch(
                 'people',
                 [...PERSON_UPSERT_COLUMNS],
-                people.map((person) => {
-                    const createdAt = person.createdAt ?? person.updatedAt ?? nowIso;
-                    const updatedAt = person.updatedAt ?? person.createdAt ?? nowIso;
-                    return [
-                        person.id,
-                        person.name,
-                        person.note ?? null,
-                        person.referenceLink ?? null,
-                        person.rev ?? null,
-                        person.revBy ?? null,
-                        createdAt,
-                        updatedAt,
-                        person.deletedAt ?? null,
-                    ];
-                }),
+                people.map((person) => personToSqliteRow(person, nowIso)),
                 PERSON_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,
@@ -1599,21 +1279,7 @@ export class SqliteAdapter {
             await upsertBatch(
                 'sections',
                 [...SECTION_UPSERT_COLUMNS],
-                data.sections.map((section) => [
-                    section.id,
-                    section.projectId,
-                    section.title,
-                    section.description ?? null,
-                    Number.isFinite(section.order) ? section.order : 0,
-                    toBool(section.isCollapsed),
-                    section.rev ?? null,
-                    section.revBy ?? null,
-                    section.createdAt,
-                    section.updatedAt,
-                    section.deletedAt ?? null,
-                    section.deletedAtBeforeProjectArchive ?? null,
-                    section.projectArchivedAt ?? null,
-                ]),
+                data.sections.map((section) => sectionToSqliteRow(section)),
                 SECTION_UPSERT_UPDATE_CLAUSE,
                 200,
                 undefined,

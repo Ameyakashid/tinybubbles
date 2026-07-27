@@ -41,7 +41,11 @@ describe('package.json exports map', () => {
     });
 });
 
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.expo', '.git']);
+// 'target', 'ios' and 'android' hold no .ts but carry ~5.5k directories of Rust/Pods/Gradle
+// build output between them -- skipping them is the difference between walking 105 dirs and 5673.
+const SKIP_DIRS = new Set([
+    'node_modules', 'dist', 'build', 'coverage', '.expo', '.git', '.gradle', 'target', 'ios', 'android',
+]);
 
 function collectSourceFiles(dir: string): string[] {
     const files: string[] = [];
@@ -83,5 +87,9 @@ describe('@mindwtr/core subpath imports under apps/', () => {
             }
         }
         expect(unreachable).toEqual([]);
-    });
+    // Dynamically importing every subpath module pulls a large transitive graph through the
+    // transform pipeline. On a loaded machine that overran the 5s default and reported a
+    // timeout -- which reads as "flaky, rerun" instead of "your export is missing". A guard
+    // must give a real verdict under load, so it gets a generous explicit budget.
+    }, 60_000);
 });

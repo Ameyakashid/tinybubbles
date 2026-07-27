@@ -198,6 +198,7 @@ export const csOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Projekt z úkolu se nepodařilo vytvořit',
         'task.promoteToProjectCreated': 'Projekt vytvořen z úkolu',
         'task.promoteToProjectMoved': 'Úkol přesunut do existujícího projektu',
+        'task.updateFailed': 'Úkol se nepodařilo aktualizovat',
         'taskEdit.duplicateTask': 'Duplikovat úkol',
         'taskEdit.duplicateDoneTitle': 'Úkol zduplikován',
         'taskEdit.duplicateDoneBody': 'Nová kopie byla vytvořena ve Schránce.',

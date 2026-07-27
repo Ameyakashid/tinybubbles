@@ -187,6 +187,7 @@ export const trOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Görevden proje oluşturulamadı',
         'task.promoteToProjectCreated': 'Görevden proje oluşturuldu',
         'task.promoteToProjectMoved': 'Görev mevcut projeye taşındı',
+        'task.updateFailed': 'Görev güncellenemedi',
         'taskEdit.duplicateTask': 'Yinelenen görev',
         'taskEdit.duplicateDoneTitle': 'Görev kopyalandı',
         'taskEdit.duplicateDoneBody': 'Gelen Kutusu\'nda yeni bir kopya oluşturuldu.',

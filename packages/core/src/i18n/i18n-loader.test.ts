@@ -90,4 +90,16 @@ describe('i18n-loader sync fallback', () => {
         expect(en['quickAdd.inlineHint']).toBe('Try: Call mom /due:tomorrow 5pm @phone #family');
         expect(en['quickAdd.inlineHint']).not.toContain('/start:<when>');
     });
+
+    it('registers task.updateFailed with a real translation instead of leaking English', async () => {
+        // getTranslationsSync would silently pass this assertion against English
+        // (see i18n-loader.ts), so this must go through loadTranslations and
+        // compare against the English string, not just check truthiness.
+        const en = await loadTranslations('en');
+        const cs = await loadTranslations('cs');
+
+        expect(en['task.updateFailed']).toBe('Could not update task.');
+        expect(cs['task.updateFailed']).toBeTruthy();
+        expect(cs['task.updateFailed']).not.toBe(en['task.updateFailed']);
+    });
 });

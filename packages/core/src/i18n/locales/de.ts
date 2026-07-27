@@ -207,6 +207,7 @@ export const deOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Projekt konnte nicht aus der Aufgabe erstellt werden',
         'task.promoteToProjectCreated': 'Projekt aus der Aufgabe erstellt',
         'task.promoteToProjectMoved': 'Aufgabe in vorhandenes Projekt verschoben',
+        'task.updateFailed': 'Aufgabe konnte nicht aktualisiert werden',
         'taskEdit.duplicateTask': 'Aufgabe duplizieren',
         'taskEdit.duplicateDoneTitle': 'Aufgabe dupliziert',
         'taskEdit.duplicateDoneBody': 'Es wurde eine neue Kopie im Posteingang erstellt.',

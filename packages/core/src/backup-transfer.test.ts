@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    countActiveRecords,
     createBackupFileName,
     prepareRestoredBackupDataForSync,
     serializeBackupData,
@@ -305,5 +306,48 @@ describe('backup transfer', () => {
             });
             expect(merged.people?.[0].deletedAt).toBeUndefined();
         }
+    });
+
+    describe('countActiveRecords', () => {
+        // Pinned verbatim from desktop's and mobile's data-transfer.ts before this refactor —
+        // both had this exact 4-field object and both silently omitted `people`. Per the "a test
+        // that iterates the new thing can't catch it shrinking" gotcha, this compares against the
+        // OLD predicate directly rather than re-deriving expectations from countActiveRecords
+        // itself, so a regression that drops a field back out would fail this test.
+        const oldFourFieldPredicate = (data: AppData) => ({
+            tasks: data.tasks.filter((task) => !task.deletedAt).length,
+            projects: data.projects.filter((project) => !project.deletedAt).length,
+            sections: data.sections.filter((section) => !section.deletedAt).length,
+            areas: data.areas.filter((area) => !area.deletedAt).length,
+        });
+
+        it('matches the old hand-written predicate on every field it had, plus counts people', () => {
+            const now = '2026-03-30T12:00:00.000Z';
+            const data: AppData = {
+                ...buildAppData(),
+                sections: [
+                    { id: 'section-1', projectId: 'project-1', title: 'Live', order: 0, createdAt: now, updatedAt: now },
+                    { id: 'section-2', projectId: 'project-1', title: 'Gone', order: 1, createdAt: now, updatedAt: now, deletedAt: now },
+                ],
+                areas: [
+                    { id: 'area-1', name: 'Live area', color: '#000', order: 0, createdAt: now, updatedAt: now },
+                    { id: 'area-2', name: 'Gone area', color: '#000', order: 1, createdAt: now, updatedAt: now, deletedAt: now },
+                ],
+                people: [
+                    { id: 'person-1', name: 'Alex', createdAt: now, updatedAt: now },
+                    { id: 'person-2', name: 'Departed', createdAt: now, updatedAt: now, deletedAt: now },
+                ],
+            };
+
+            const result = countActiveRecords(data);
+
+            expect(result).toMatchObject(oldFourFieldPredicate(data));
+            expect(result.people).toBe(1);
+        });
+
+        it('treats a missing people array as zero, not a crash', () => {
+            const data: AppData = { ...buildAppData(), people: undefined as unknown as AppData['people'] };
+            expect(countActiveRecords(data).people).toBe(0);
+        });
     });
 });

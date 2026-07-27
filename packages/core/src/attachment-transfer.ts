@@ -90,6 +90,38 @@ export type AttachmentTransferLifecycleOptions = {
     onDownloadError: (attachment: Attachment, error: unknown) => void;
     resolveLocalPath?: (uri: string) => string;
     beforeEachAttachment?: () => Promise<void>;
+    /**
+     * Whether `attachment` already has a cloud copy. Defaults to `Boolean(attachment.cloudKey)`.
+     * CloudKit overrides this: a `cloudKey` written by a different backend before a provider
+     * switch isn't a valid CloudKit record key, so CloudKit must still treat it as needing upload.
+     */
+    hasCloudCopy?: (attachment: Attachment) => boolean;
+    /**
+     * Optional throttle/backoff/cap gate. Every field is optional, and the whole object may be
+     * omitted; omitting it (the default) preserves today's unthrottled behaviour, so the callers
+     * that don't need it are unaffected. A backend that needs rate-limit protection (e.g. WebDAV)
+     * supplies these as closures over its own counters and backoff state.
+     */
+    policy?: {
+        /** Return true to skip `attachment` entirely this run (including its local-status
+         *  refresh) — e.g. once a backend has detected it is rate-limited. */
+        shouldSkip?: (attachment: Attachment) => boolean;
+        /** Gate before attempting an upload, e.g. to enforce a per-run upload cap. */
+        shouldUpload?: (attachment: Attachment) => boolean;
+        /** Gate before attempting a download, e.g. to enforce a per-run download cap or a
+         *  per-attachment backoff window. */
+        shouldDownload?: (attachment: Attachment) => boolean;
+    };
+    /**
+     * Predicate for errors that must abort the whole lifecycle run rather than being treated as
+     * an isolated per-attachment failure — e.g. an AbortSignal firing mid-transfer. When it
+     * matches an upload/download error, the lifecycle rethrows immediately instead of calling
+     * onUploadError/onDownloadError: the promise this function returns rejects, and whichever
+     * attachments were mutated by earlier, already-completed iterations this run keep their
+     * mutations (the same as if the caller's own loop had thrown) — only the interrupted
+     * attachment's own onUpload/onDownload side effects are the caller's to reason about.
+     */
+    isFatalError?: (error: unknown) => boolean;
 };
 
 const defaultResolveLocalPath = (uri: string): string => {
@@ -121,11 +153,13 @@ export async function runAttachmentTransferLifecycle(
     options: AttachmentTransferLifecycleOptions,
 ): Promise<boolean> {
     let didMutate = false;
+    const hasCloudCopy = options.hasCloudCopy ?? ((attachment: Attachment) => Boolean(attachment.cloudKey));
 
     for (const attachment of options.attachmentsById.values()) {
         await options.beforeEachAttachment?.();
         if (attachment.kind !== 'file') continue;
         if (attachment.deletedAt) continue;
+        if (options.policy?.shouldSkip?.(attachment)) continue;
 
         const rawUri = attachment.uri ? (options.resolveLocalPath ?? defaultResolveLocalPath)(attachment.uri) : '';
         const isHttp = /^https?:\/\//i.test(rawUri);
@@ -139,23 +173,29 @@ export async function runAttachmentTransferLifecycle(
             didMutate = true;
         }
 
-        if (!attachment.cloudKey && existsLocally) {
-            try {
-                if (await options.onUpload(attachment, localPath)) {
-                    didMutate = true;
+        if (!hasCloudCopy(attachment) && existsLocally) {
+            if (!options.policy?.shouldUpload || options.policy.shouldUpload(attachment)) {
+                try {
+                    if (await options.onUpload(attachment, localPath)) {
+                        didMutate = true;
+                    }
+                } catch (error) {
+                    if (options.isFatalError?.(error)) throw error;
+                    options.onUploadError(attachment, error);
                 }
-            } catch (error) {
-                options.onUploadError(attachment, error);
             }
         }
 
-        if (attachment.cloudKey && !existsLocally) {
-            try {
-                if (await options.onDownload(attachment)) {
-                    didMutate = true;
+        if (hasCloudCopy(attachment) && !existsLocally) {
+            if (!options.policy?.shouldDownload || options.policy.shouldDownload(attachment)) {
+                try {
+                    if (await options.onDownload(attachment)) {
+                        didMutate = true;
+                    }
+                } catch (error) {
+                    if (options.isFatalError?.(error)) throw error;
+                    options.onDownloadError(attachment, error);
                 }
-            } catch (error) {
-                options.onDownloadError(attachment, error);
             }
         }
     }

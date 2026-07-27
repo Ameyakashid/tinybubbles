@@ -74,6 +74,18 @@ export type ImportExecutionResult = {
     warnings: string[];
 };
 
+// OmniFocus/TickTick/DGT's *ImportParseResult types were structurally identical — only the
+// parsed-data and preview shapes differed. Todoist keeps its own distinct type (its field is
+// `parsedProjects`, not `parsedData`, and is never null) since that field name is read directly
+// by desktop/mobile settings UI outside this refactor's scope.
+export type ImportParseResult<TData, TPreview> = {
+    errors: string[];
+    parsedData: TData | null;
+    preview: TPreview | null;
+    valid: boolean;
+    warnings: string[];
+};
+
 export type ImportApplyOptions = {
     fallbacks: {
         area: string;

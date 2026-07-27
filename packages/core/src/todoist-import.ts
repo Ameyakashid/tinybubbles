@@ -1,12 +1,21 @@
-import { unzipSync, strFromU8 } from 'fflate';
 import { DEFAULT_PROJECT_COLOR } from './color-constants';
+import {
+    appendWarning,
+    basename,
+    buildHeaderIndex,
+    decodeTextBytes,
+    detectDelimiter,
+    getCell,
+    joinDescription,
+    parseCsvRows,
+    readImportSource,
+    sanitizeCsvText,
+} from './import-source-reader';
 import { ensureDeviceId, normalizeTagId } from './store-helpers';
 import type { AppData, Project, Section, Task, TaskPriority } from './types';
 import { generateDeterministicUUID, generateUUID as uuidv4 } from './uuid';
 
 const TODOIST_REQUIRED_COLUMNS = ['TYPE', 'CONTENT'];
-const TODOIST_DELIMITER_FALLBACK = ',';
-const TODOIST_ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const TODOIST_PROJECT_FALLBACK = 'Todoist Import';
 const TODOIST_IMPORT_SUFFIX = ' (Todoist)';
 const TODOIST_IMPORT_ID_NAMESPACE = 'mindwtr:todoist-import:v1';
@@ -137,11 +146,6 @@ const createWarningCounters = (): TodoistWarningCounters => ({
     unparsedDates: 0,
 });
 
-const appendWarning = (warnings: string[], count: number, singular: string, plural = singular): void => {
-    if (count <= 0) return;
-    warnings.push(count === 1 ? singular : plural.replace('{count}', String(count)));
-};
-
 const buildTodoistWarnings = (counters: TodoistWarningCounters): string[] => {
     const warnings: string[] = [];
     appendWarning(warnings, counters.recurringTasks, '1 recurring Todoist task will be imported once.', '{count} recurring Todoist tasks will be imported once.');
@@ -157,121 +161,11 @@ const buildTodoistWarnings = (counters: TodoistWarningCounters): string[] => {
     return warnings;
 };
 
-const basename = (value: string): string => {
-    const parts = String(value || '').split(/[\\/]/);
-    return parts[parts.length - 1] || value;
-};
-
 const stripExtension = (value: string): string => value.replace(/\.[^.]+$/u, '');
 
 const normalizeProjectName = (value: string): string => {
     const base = stripExtension(basename(value)).trim();
     return base || TODOIST_PROJECT_FALLBACK;
-};
-
-const isZipBytes = (bytes: Uint8Array): boolean =>
-    bytes.length >= TODOIST_ZIP_SIGNATURE.length
-    && TODOIST_ZIP_SIGNATURE.every((byte, index) => bytes[index] === byte);
-
-const toUint8Array = (value?: ArrayBuffer | Uint8Array | null): Uint8Array | null => {
-    if (!value) return null;
-    if (value instanceof Uint8Array) return value;
-    return new Uint8Array(value);
-};
-
-const decodeTextBytes = (bytes: Uint8Array): string => {
-    try {
-        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    } catch {
-        return strFromU8(bytes, true);
-    }
-};
-
-const sanitizeCsvText = (raw: string): string => String(raw || '').replace(/^\uFEFF/u, '');
-
-const detectDelimiter = (text: string): string => {
-    const firstLine = sanitizeCsvText(text)
-        .split(/\r?\n/u)
-        .find((line) => line.trim().length > 0);
-    if (!firstLine) return TODOIST_DELIMITER_FALLBACK;
-    const commaCount = (firstLine.match(/,/gu) || []).length;
-    const semicolonCount = (firstLine.match(/;/gu) || []).length;
-    return semicolonCount > commaCount ? ';' : ',';
-};
-
-const parseCsvRows = (text: string, delimiter: string): { rows: string[][]; hasUnclosedQuote: boolean } => {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentCell = '';
-    let inQuotes = false;
-
-    for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-        const next = text[index + 1];
-        if (inQuotes) {
-            if (char === '"') {
-                if (next === '"') {
-                    currentCell += '"';
-                    index += 1;
-                } else {
-                    inQuotes = false;
-                }
-            } else {
-                currentCell += char;
-            }
-            continue;
-        }
-
-        if (char === '"') {
-            inQuotes = true;
-            continue;
-        }
-        if (char === delimiter) {
-            currentRow.push(currentCell);
-            currentCell = '';
-            continue;
-        }
-        if (char === '\r' || char === '\n') {
-            if (char === '\r' && next === '\n') {
-                index += 1;
-            }
-            currentRow.push(currentCell);
-            rows.push(currentRow);
-            currentRow = [];
-            currentCell = '';
-            continue;
-        }
-        currentCell += char;
-    }
-
-    currentRow.push(currentCell);
-    if (currentRow.length > 1 || currentRow[0] !== '' || rows.length === 0) {
-        rows.push(currentRow);
-    }
-
-    return {
-        rows: rows.filter((row) => row.some((cell) => cell.length > 0)),
-        hasUnclosedQuote: inQuotes,
-    };
-};
-
-const normalizeHeaderCell = (value: string): string => value.trim().toUpperCase();
-
-const buildHeaderIndex = (headerRow: string[]): Map<string, number> => {
-    const index = new Map<string, number>();
-    headerRow.forEach((cell, cellIndex) => {
-        const normalized = normalizeHeaderCell(cell);
-        if (normalized && !index.has(normalized)) {
-            index.set(normalized, cellIndex);
-        }
-    });
-    return index;
-};
-
-const getCell = (row: string[], headerIndex: Map<string, number>, key: string): string => {
-    const index = headerIndex.get(key);
-    if (index === undefined) return '';
-    return String(row[index] ?? '').trim();
 };
 
 const extractTodoistLabels = (content: string): { labels: string[]; title: string } => {
@@ -382,14 +276,6 @@ const buildDescriptionParts = (rawTask: RawTodoistTask): string[] => {
     return parts;
 };
 
-const joinDescriptionParts = (parts: string[]): string | undefined => {
-    const cleaned = parts
-        .map((part) => part.trim())
-        .filter(Boolean);
-    if (cleaned.length === 0) return undefined;
-    return cleaned.join('\n\n');
-};
-
 const appendSubtaskDetails = (task: MutableParsedTodoistTask, rawTask: RawTodoistTask, checklistTitle: string): void => {
     const details: string[] = [];
     if (rawTask.description.trim()) {
@@ -412,7 +298,7 @@ const finalizeParsedTask = (task: MutableParsedTodoistTask): ParsedTodoistTask =
     title: task.title,
     tags: Array.from(new Set(task.tags)),
     checklist: task.checklist,
-    ...(task.descriptionParts.length > 0 ? { description: joinDescriptionParts(task.descriptionParts) } : {}),
+    ...(task.descriptionParts.length > 0 ? { description: joinDescription(task.descriptionParts) } : {}),
     ...(task.priority ? { priority: task.priority } : {}),
     ...(task.dueDate ? { dueDate: task.dueDate } : {}),
     ...(task.recurringText ? { recurringText: task.recurringText } : {}),
@@ -667,7 +553,6 @@ const buildPreview = (fileName: string, parsedProjects: ParsedTodoistProject[], 
 
 export const parseTodoistImportSource = (input: TodoistFileInput): TodoistImportParseResult => {
     const fileName = basename(input.fileName);
-    const bytes = toUint8Array(input.bytes);
     const counters = createWarningCounters();
     const parsedProjects: ParsedTodoistProject[] = [];
     const errors: string[] = [];
@@ -680,28 +565,27 @@ export const parseTodoistImportSource = (input: TodoistFileInput): TodoistImport
     };
 
     try {
-        if (bytes && isZipBytes(bytes)) {
-            const entries = unzipSync(bytes);
-            for (const [entryName, entryBytes] of Object.entries(entries)) {
+        const source = readImportSource(input);
+        if (source.kind === 'archive') {
+            source.entries.forEach(({ entryName, entryBytes }) => {
                 const lowerName = entryName.toLowerCase();
-                if (!entryName || entryName.endsWith('/')) continue;
+                if (!entryName || entryName.endsWith('/')) return;
                 if (lowerName.endsWith('.zip')) {
                     counters.nestedZipFiles += 1;
-                    continue;
+                    return;
                 }
                 if (!lowerName.endsWith('.csv')) {
                     counters.nonCsvEntries += 1;
-                    continue;
+                    return;
                 }
                 try {
                     parseOneCsv(decodeTextBytes(entryBytes), entryName);
                 } catch {
                     counters.invalidCsvFiles += 1;
                 }
-            }
+            });
         } else {
-            const text = input.text ?? (bytes ? decodeTextBytes(bytes) : '');
-            parseOneCsv(text, fileName);
+            parseOneCsv(source.text, fileName);
         }
     } catch (error) {
         return {

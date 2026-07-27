@@ -33,16 +33,10 @@ export function buildTasksByProjectId(tasks: readonly Task[]): Map<string, Task[
 /**
  * Standard task colors for each status.
  * Used for badges, borders, and highlights across the app.
+ * Owned by theme-scheme.ts (the single "what colors does this theme use" module);
+ * re-exported here for compatibility with existing callers.
  */
-export const STATUS_COLORS: Record<TaskStatus, { bg: string; text: string; border: string }> = {
-    'inbox': { bg: '#6B728020', text: '#6B7280', border: '#6B7280' },
-    'next': { bg: '#3B82F620', text: '#2563EB', border: '#2563EB' },
-    'waiting': { bg: '#F59E0B20', text: '#F59E0B', border: '#F59E0B' },
-    'someday': { bg: '#8B5CF620', text: '#8B5CF6', border: '#8B5CF6' },
-    'reference': { bg: '#0EA5E920', text: '#0EA5E9', border: '#0EA5E9' },
-    'done': { bg: '#22C55E20', text: '#22C55E', border: '#22C55E' },
-    'archived': { bg: '#6B728020', text: '#6B7280', border: '#6B7280' },
-};
+export { STATUS_COLORS, getStatusColor } from './theme-scheme';
 
 const TASK_PRIORITY_SORT_RANK: Record<TaskPriority, number> = {
     low: 1,
@@ -50,6 +44,15 @@ const TASK_PRIORITY_SORT_RANK: Record<TaskPriority, number> = {
     high: 3,
     urgent: 4,
 };
+
+/**
+ * Canonical priority ordering (higher = more urgent). `priority` is a TEXT column/field
+ * everywhere it's persisted, so anything that needs to rank it — SQL `ORDER BY`, JS
+ * `.sort()` — must go through this map rather than comparing the string directly
+ * (lexicographic order puts 'high' after 'medium' and 'urgent', which is wrong).
+ * Shared by the MCP server's local SQLite and cloud REST adapters so they can't drift.
+ */
+export const PRIORITY_RANK: Record<TaskPriority, number> = TASK_PRIORITY_SORT_RANK;
 
 const TASK_ENERGY_SORT_RANK: Record<NonNullable<Task['energyLevel']>, number> = {
     low: 1,
@@ -987,13 +990,6 @@ export function getCalendarPlanningCandidates<T extends Task>(
     }) as T[];
     const limit = Number.isFinite(options.limit) ? Math.max(0, Math.floor(options.limit as number)) : sorted.length;
     return sorted.slice(0, limit);
-}
-
-/**
- * Get display color for a task status
- */
-export function getStatusColor(status: TaskStatus): { bg: string; text: string; border: string } {
-    return STATUS_COLORS[status] || STATUS_COLORS['inbox'];
 }
 
 /**

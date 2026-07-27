@@ -171,6 +171,7 @@ export const zhHant: Record<string, string> = {
         'task.promoteToProjectFailed': '無法從任務建立專案',
         'task.promoteToProjectCreated': '已從任務建立專案',
         'task.promoteToProjectMoved': '已將任務移至現有專案',
+        'task.updateFailed': '更新任務失敗',
         'taskEdit.duplicateTask': '複製任務',
         'taskEdit.duplicateDoneTitle': '已複製任務',
         'taskEdit.duplicateDoneBody': '已在收集箱創建一份新的副本。',

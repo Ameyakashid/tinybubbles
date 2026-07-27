@@ -186,6 +186,7 @@ export const esOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'No se pudo crear el proyecto a partir de la tarea',
         'task.promoteToProjectCreated': 'Proyecto creado a partir de la tarea',
         'task.promoteToProjectMoved': 'Tarea movida a un proyecto existente',
+        'task.updateFailed': 'No se pudo actualizar la tarea',
         'taskEdit.duplicateTask': 'Duplicar tarea',
         'taskEdit.duplicateDoneTitle': 'Tarea duplicada',
         'taskEdit.duplicateDoneBody': 'Copia creada en la bandeja de entrada.',

@@ -258,5 +258,67 @@
       "updatedAt": "2025-01-01T00:00:00.000Z"
     },
     "expected": null
+  },
+  {
+    "name": "weekly byDay defers on the local API instead of guessing a wrong date",
+    "completedAt": "2026-07-20T09:00:00.000Z",
+    "previousStatus": "next",
+    "task": {
+      "id": "parity-weekly-byday-defer",
+      "title": "Standup",
+      "status": "next",
+      "startTime": "2026-07-20T09:00:00.000Z",
+      "recurrence": {
+        "rule": "weekly",
+        "byDay": ["MO", "WE", "FR"],
+        "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+      },
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z"
+    },
+    "expected": {
+      "status": "next",
+      "startTime": "2026-07-22T09:00:00.000Z",
+      "recurrence": {
+        "rule": "weekly",
+        "byDay": ["MO", "WE", "FR"],
+        "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
+      }
+    },
+    "localApiExpected": null
+  },
+  {
+    "name": "monthly byMonthDay defers on the local API instead of guessing a wrong date",
+    "completedAt": "2026-07-01T12:00:00.000Z",
+    "previousStatus": "next",
+    "task": {
+      "id": "parity-monthly-bymonthday-defer",
+      "title": "Pay rent",
+      "status": "next",
+      "dueDate": "2026-07-01",
+      "recurrence": {
+        "rule": "monthly",
+        "byMonthDay": [1, 15],
+        "rrule": "FREQ=MONTHLY;BYMONTHDAY=1,15"
+      },
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-06-01T00:00:00.000Z",
+      "updatedAt": "2026-06-01T00:00:00.000Z"
+    },
+    "expected": {
+      "status": "next",
+      "dueDate": "2026-07-15",
+      "recurrence": {
+        "rule": "monthly",
+        "byMonthDay": [1, 15],
+        "rrule": "FREQ=MONTHLY;BYMONTHDAY=1,15",
+        "anchorDay": 1,
+        "dueAnchorDay": 1
+      }
+    },
+    "localApiExpected": null
   }
 ]

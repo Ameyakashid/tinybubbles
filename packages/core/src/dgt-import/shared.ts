@@ -1,9 +1,17 @@
-import { strFromU8 } from 'fflate';
-
 import { safeParseDate } from '../date';
+import { type ImportExecutionResult, type ImportParseResult } from '../import-apply';
+import {
+  appendWarning,
+  basename,
+  decodeTextBytes,
+  dedupeStrings,
+  isZipBytes,
+  joinDescription,
+  normalizeContextName,
+  sanitizeJsonText,
+} from '../import-source-reader';
 import { buildRRuleString } from '../recurrence';
 import type {
-  AppData,
   ChecklistItem,
   RecurrenceByDay,
   RecurrenceWeekday,
@@ -12,7 +20,19 @@ import type {
   TaskStatus,
 } from '../types';
 
-export const DGT_ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
+// Re-exported so parse.ts's existing `from './shared'` import list needs no changes — these are
+// now single shared implementations from import-source-reader.ts, not DGT's own copies.
+export {
+  appendWarning,
+  basename,
+  decodeTextBytes,
+  dedupeStrings,
+  isZipBytes,
+  joinDescription,
+  normalizeContextName,
+  sanitizeJsonText,
+};
+
 export const DGT_AREA_FALLBACK = 'Imported Area';
 export const DGT_PROJECT_FALLBACK = 'Imported Project';
 export const DGT_TASK_FALLBACK = 'Imported Task';
@@ -135,22 +155,11 @@ export type DgtImportPreview = {
   warnings: string[];
 };
 
-export type DgtImportParseResult = {
-  errors: string[];
-  parsedData: ParsedDgtImportData | null;
-  preview: DgtImportPreview | null;
-  valid: boolean;
-  warnings: string[];
-};
+export type DgtImportParseResult = ImportParseResult<ParsedDgtImportData, DgtImportPreview>;
 
-export type DgtImportExecutionResult = {
-  data: AppData;
-  importedAreaCount: number;
-  importedChecklistItemCount: number;
-  importedProjectCount: number;
-  importedTaskCount: number;
-  warnings: string[];
-};
+// DGT doesn't surface importedStandaloneTaskCount even though applyImport() (called by
+// applyDgtImport) always computes it — same trade-off as TickTick.
+export type DgtImportExecutionResult = Omit<ImportExecutionResult, 'importedStandaloneTaskCount'>;
 
 export const createWarningCounters = (): DgtWarningCounters => ({
   emptyExports: 0,
@@ -162,11 +171,6 @@ export const createWarningCounters = (): DgtWarningCounters => ({
   unmappedStatuses: 0,
   unsupportedRepeats: 0,
 });
-
-const appendWarning = (warnings: string[], count: number, singular: string, plural = singular): void => {
-  if (count <= 0) return;
-  warnings.push(count === 1 ? singular : plural.replace('{count}', String(count)));
-};
 
 export const buildWarnings = (counters: DgtWarningCounters): string[] => {
   const warnings: string[] = [];
@@ -220,30 +224,6 @@ export const buildWarnings = (counters: DgtWarningCounters): string[] => {
   );
   return warnings;
 };
-
-export const basename = (value: string): string => {
-  const parts = String(value || '').split(/[\\/]/u);
-  return parts[parts.length - 1] || value;
-};
-
-export const toUint8Array = (value?: ArrayBuffer | Uint8Array | null): Uint8Array | null => {
-  if (!value) return null;
-  return value instanceof Uint8Array ? value : new Uint8Array(value);
-};
-
-export const isZipBytes = (bytes: Uint8Array): boolean =>
-  bytes.length >= DGT_ZIP_SIGNATURE.length &&
-  DGT_ZIP_SIGNATURE.every((byte, index) => bytes[index] === byte);
-
-export const decodeTextBytes = (bytes: Uint8Array): string => {
-  try {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  } catch {
-    return strFromU8(bytes, true);
-  }
-};
-
-export const sanitizeJsonText = (raw: string): string => String(raw || '').replace(/^\uFEFF/u, '').trim();
 
 export const toRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -300,35 +280,10 @@ export const normalizeOrder = (value: unknown, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const normalizeContextName = (value: string): string | undefined => {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
-};
-
 export const normalizeTagName = (value: string): string | undefined => {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-};
-
-export const dedupeStrings = (values: Array<string | undefined>): string[] => {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  values.forEach((value) => {
-    const trimmed = String(value || '').trim();
-    if (!trimmed) return;
-    const normalized = trimmed.toLowerCase();
-    if (seen.has(normalized)) return;
-    seen.add(normalized);
-    result.push(trimmed);
-  });
-  return result;
-};
-
-export const joinDescription = (parts: Array<string | undefined>): string | undefined => {
-  const normalized = parts.map((part) => String(part || '').trim()).filter(Boolean);
-  return normalized.length > 0 ? normalized.join('\n\n') : undefined;
 };
 
 export const normalizePriority = (priorityValue: number, starred: boolean): TaskPriority | undefined => {

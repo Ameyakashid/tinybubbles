@@ -1,7 +1,20 @@
-import { strFromU8, unzipSync } from 'fflate';
-
 import { safeParseDate } from './date';
-import { applyImport } from './import-apply';
+import { applyImport, type ImportExecutionResult, type ImportParseResult } from './import-apply';
+import {
+    appendWarning,
+    basename,
+    buildHeaderIndex,
+    dedupeStrings,
+    decodeTextBytes,
+    detectDelimiter,
+    getCell,
+    joinDescription,
+    normalizeContextName,
+    parseCsvRows,
+    readImportSource,
+    sanitizeCsvText,
+    sanitizeJsonText,
+} from './import-source-reader';
 import { buildRRuleString, parseRRuleString } from './recurrence';
 import { normalizeTagId } from './store-helpers';
 import type {
@@ -18,8 +31,6 @@ import type {
 import { generateUUID as uuidv4 } from './uuid';
 
 const OMNIFOCUS_REQUIRED_COLUMNS = ['TYPE', 'NAME'];
-const OMNIFOCUS_DELIMITER_FALLBACK = ',';
-const OMNIFOCUS_ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const OMNIFOCUS_PROJECT_FALLBACK = 'OmniFocus Import';
 const OMNIFOCUS_AREA_FALLBACK = 'OmniFocus';
 const OMNIFOCUS_TASK_FALLBACK = 'Untitled OmniFocus task';
@@ -151,23 +162,11 @@ export type OmniFocusImportPreview = {
     warnings: string[];
 };
 
-export type OmniFocusImportParseResult = {
-    errors: string[];
-    parsedData: ParsedOmniFocusImportData | null;
-    preview: OmniFocusImportPreview | null;
-    valid: boolean;
-    warnings: string[];
-};
+export type OmniFocusImportParseResult = ImportParseResult<ParsedOmniFocusImportData, OmniFocusImportPreview>;
 
-export type OmniFocusImportExecutionResult = {
-    data: AppData;
-    importedAreaCount: number;
-    importedChecklistItemCount: number;
-    importedProjectCount: number;
-    importedStandaloneTaskCount: number;
-    importedTaskCount: number;
-    warnings: string[];
-};
+// Identical to import-apply.ts's ImportExecutionResult (OmniFocus is the one format that
+// surfaces every field applyImport() computes, including importedStandaloneTaskCount).
+export type OmniFocusImportExecutionResult = ImportExecutionResult;
 
 const createWarningCounters = (): OmniFocusWarningCounters => ({
     emptyExports: 0,
@@ -179,11 +178,6 @@ const createWarningCounters = (): OmniFocusWarningCounters => ({
     unresolvedTagIds: 0,
     unsupportedRecurrencePatterns: 0,
 });
-
-const appendWarning = (warnings: string[], count: number, singular: string, plural = singular): void => {
-    if (count <= 0) return;
-    warnings.push(count === 1 ? singular : plural.replace('{count}', String(count)));
-};
 
 const buildWarnings = (counters: OmniFocusWarningCounters): string[] => {
     const warnings: string[] = [];
@@ -238,15 +232,6 @@ const buildWarnings = (counters: OmniFocusWarningCounters): string[] => {
     return warnings;
 };
 
-const basename = (value: string): string => {
-    const parts = String(value || '').split(/[\\/]/u);
-    return parts[parts.length - 1] || value;
-};
-
-const sanitizeCsvText = (raw: string): string => String(raw || '').replace(/^\uFEFF/u, '');
-
-const sanitizeJsonText = (raw: string): string => String(raw || '').replace(/^\uFEFF/u, '').trim();
-
 const decodeUtf16Be = (bytes: Uint8Array): string => {
     const swapped = new Uint8Array(bytes.length - (bytes.length % 2));
     for (let index = 0; index < swapped.length; index += 2) {
@@ -256,6 +241,8 @@ const decodeUtf16Be = (bytes: Uint8Array): string => {
     return new TextDecoder('utf-16le', { fatal: false }).decode(swapped);
 };
 
+// OmniFocus can export UTF-16 (BOM-prefixed); every other importer only ever sees UTF-8, so this
+// BOM sniff stays OmniFocus-specific and only the plain-UTF-8 tail is shared.
 const decodeOmniFocusBytes = (bytes: Uint8Array): string => {
     if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
         return new TextDecoder('utf-16le', { fatal: false }).decode(bytes);
@@ -263,107 +250,7 @@ const decodeOmniFocusBytes = (bytes: Uint8Array): string => {
     if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
         return decodeUtf16Be(bytes.slice(2));
     }
-    try {
-        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    } catch {
-        return strFromU8(bytes, true);
-    }
-};
-
-const toUint8Array = (value?: ArrayBuffer | Uint8Array | null): Uint8Array | null => {
-    if (!value) return null;
-    return value instanceof Uint8Array ? value : new Uint8Array(value);
-};
-
-const isZipBytes = (bytes: Uint8Array): boolean =>
-    bytes.length >= OMNIFOCUS_ZIP_SIGNATURE.length
-    && OMNIFOCUS_ZIP_SIGNATURE.every((byte, index) => bytes[index] === byte);
-
-const detectDelimiter = (text: string): string => {
-    const firstLine = sanitizeCsvText(text)
-        .split(/\r?\n/u)
-        .find((line) => line.trim().length > 0);
-    if (!firstLine) return OMNIFOCUS_DELIMITER_FALLBACK;
-    const commaCount = (firstLine.match(/,/gu) || []).length;
-    const semicolonCount = (firstLine.match(/;/gu) || []).length;
-    return semicolonCount > commaCount ? ';' : ',';
-};
-
-const parseCsvRows = (text: string, delimiter: string): string[][] => {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentCell = '';
-    let inQuotes = false;
-
-    for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-        const next = text[index + 1];
-        if (inQuotes) {
-            if (char === '"') {
-                if (next === '"') {
-                    currentCell += '"';
-                    index += 1;
-                } else {
-                    inQuotes = false;
-                }
-            } else {
-                currentCell += char;
-            }
-            continue;
-        }
-
-        if (char === '"') {
-            inQuotes = true;
-            continue;
-        }
-        if (char === delimiter) {
-            currentRow.push(currentCell);
-            currentCell = '';
-            continue;
-        }
-        if (char === '\r' || char === '\n') {
-            if (char === '\r' && next === '\n') {
-                index += 1;
-            }
-            currentRow.push(currentCell);
-            rows.push(currentRow);
-            currentRow = [];
-            currentCell = '';
-            continue;
-        }
-        currentCell += char;
-    }
-
-    currentRow.push(currentCell);
-    if (currentRow.length > 1 || currentRow[0] !== '' || rows.length === 0) {
-        rows.push(currentRow);
-    }
-    return rows.filter((row) => row.some((cell) => cell.length > 0));
-};
-
-const normalizeHeaderCell = (value: string): string => value.trim().toUpperCase();
-
-const buildHeaderIndex = (headerRow: string[]): Map<string, number> => {
-    const index = new Map<string, number>();
-    headerRow.forEach((cell, cellIndex) => {
-        const normalized = normalizeHeaderCell(cell);
-        if (normalized && !index.has(normalized)) {
-            index.set(normalized, cellIndex);
-        }
-    });
-    return index;
-};
-
-const getCell = (row: string[], headerIndex: Map<string, number>, key: string): string => {
-    const index = headerIndex.get(key);
-    if (index === undefined) return '';
-    return String(row[index] ?? '').trim();
-};
-
-const normalizeContextName = (value: string): string | undefined => {
-    const trimmed = value.trim();
-    if (!trimmed) return undefined;
-    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+    return decodeTextBytes(bytes);
 };
 
 const splitTokenList = (value: string): string[] =>
@@ -372,25 +259,11 @@ const splitTokenList = (value: string): string[] =>
         .map((entry) => entry.trim())
         .filter(Boolean);
 
-const dedupeCaseInsensitive = (values: string[]): string[] => {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    values.forEach((value) => {
-        const trimmed = String(value || '').trim();
-        if (!trimmed) return;
-        const normalized = trimmed.toLowerCase();
-        if (seen.has(normalized)) return;
-        seen.add(normalized);
-        result.push(trimmed);
-    });
-    return result;
-};
-
 const normalizeTags = (value: string): string[] =>
-    dedupeCaseInsensitive(splitTokenList(value).map((tag) => normalizeTagId(tag)).filter(Boolean));
+    dedupeStrings(splitTokenList(value).map((tag) => normalizeTagId(tag)).filter(Boolean));
 
 const normalizeContexts = (value: string): string[] =>
-    dedupeCaseInsensitive(splitTokenList(value).map((context) => normalizeContextName(context)).filter(Boolean) as string[]);
+    dedupeStrings(splitTokenList(value).map((context) => normalizeContextName(context)).filter(Boolean) as string[]);
 
 const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
 
@@ -463,11 +336,6 @@ const parseRowType = (value: string, counters: OmniFocusWarningCounters): 'proje
     return 'task';
 };
 
-const joinDescription = (parts: Array<string | undefined>): string | undefined => {
-    const normalized = parts.map((part) => String(part || '').trim()).filter(Boolean);
-    return normalized.length > 0 ? normalized.join('\n\n') : undefined;
-};
-
 const ensureProjectRecord = (
     projectsByKey: Map<string, ParsedOmniFocusProject>,
     projectName: string,
@@ -499,7 +367,7 @@ const mergeProjectSupportNotes = (currentValue: string | undefined, nextValue: s
 
 const parseCsvImport = (csvText: string, counters: OmniFocusWarningCounters): ParsedOmniFocusImportData => {
     const delimiter = detectDelimiter(csvText);
-    const rows = parseCsvRows(sanitizeCsvText(csvText), delimiter);
+    const { rows } = parseCsvRows(sanitizeCsvText(csvText), delimiter);
     if (rows.length === 0) {
         counters.emptyExports += 1;
         return { areas: [], projects: [], tasks: [], warnings: buildWarnings(counters) };
@@ -577,7 +445,7 @@ const parseCsvImport = (csvText: string, counters: OmniFocusWarningCounters): Pa
                     ...rawDateNotes,
                 ])
             );
-            project.tagIds = dedupeCaseInsensitive([...project.tagIds, ...row.tagNames]);
+            project.tagIds = dedupeStrings([...project.tagIds, ...row.tagNames]);
             return;
         }
 
@@ -687,13 +555,12 @@ const readTagsArray = (document: OmniFocusJsonDocument | null | undefined): unkn
     document && Array.isArray(document.data.tags) ? document.data.tags : [];
 
 const decodeJsonDocumentsFromArchive = (
-    bytes: Uint8Array,
+    entries: { entryBytes: Uint8Array; entryName: string }[],
     counters: OmniFocusWarningCounters
 ): OmniFocusJsonDocument[] => {
-    const entries = unzipSync(bytes);
     const documents: OmniFocusJsonDocument[] = [];
-    Object.entries(entries).forEach(([name, entryBytes]) => {
-        const lowerName = basename(name).toLowerCase();
+    entries.forEach(({ entryName, entryBytes }) => {
+        const lowerName = basename(entryName).toLowerCase();
         if (lowerName.endsWith('.zip')) {
             counters.nestedZipFiles += 1;
             return;
@@ -702,7 +569,7 @@ const decodeJsonDocumentsFromArchive = (
             counters.nonJsonEntries += 1;
             return;
         }
-        documents.push(parseJsonDocument(decodeOmniFocusBytes(entryBytes), name));
+        documents.push(parseJsonDocument(decodeOmniFocusBytes(entryBytes), entryName));
     });
     return documents;
 };
@@ -772,7 +639,7 @@ const resolveTagNames = (
         }
         resolved.push(tagName);
     });
-    return dedupeCaseInsensitive(resolved);
+    return dedupeStrings(resolved);
 };
 
 const supportedRRuleKeys = new Set(['FREQ', 'INTERVAL', 'BYDAY', 'BYMONTHDAY', 'COUNT', 'UNTIL', 'BYSETPOS']);
@@ -793,7 +660,7 @@ const parseByDayValues = (value: unknown): RecurrenceByDay[] | undefined => {
     const parsed = tokens
         .map((token) => parseByDayToken(String(token || '')))
         .filter((token): token is RecurrenceByDay => Boolean(token));
-    return parsed.length > 0 ? dedupeCaseInsensitive(parsed as string[]) as RecurrenceByDay[] : undefined;
+    return parsed.length > 0 ? dedupeStrings(parsed as string[]) as RecurrenceByDay[] : undefined;
 };
 
 const parseByMonthDayValues = (value: unknown): number[] | undefined => {
@@ -1119,7 +986,7 @@ const parseJsonImport = (
                 repeatNote,
                 ...dateNotes.rawDateNotes,
             ]),
-            tagIds: dedupeCaseInsensitive([
+            tagIds: dedupeStrings([
                 ...resolveTagNames(project.tagIds, tagNameById, counters),
                 ...resolveTagNames(rootTask?.tagIds ?? [], tagNameById, counters),
             ]),
@@ -1246,20 +1113,19 @@ const parseOmniFocusImportData = (
     input: OmniFocusFileInput,
     counters: OmniFocusWarningCounters
 ): ParsedOmniFocusImportData => {
-    const bytes = toUint8Array(input.bytes);
-    if (bytes && isZipBytes(bytes)) {
-        const documents = decodeJsonDocumentsFromArchive(bytes, counters);
+    const source = readImportSource(input, decodeOmniFocusBytes);
+    if (source.kind === 'archive') {
+        const documents = decodeJsonDocumentsFromArchive(source.entries, counters);
         if (documents.length === 0) {
             throw new Error('The selected OmniFocus ZIP archive did not contain any supported JSON export files.');
         }
         return parseJsonImport(documents, counters);
     }
 
-    const rawText = input.text ?? (bytes ? decodeOmniFocusBytes(bytes) : '');
-    if (isLikelyJsonText(rawText)) {
-        return parseJsonImport([parseJsonDocument(rawText, input.fileName)], counters);
+    if (isLikelyJsonText(source.text)) {
+        return parseJsonImport([parseJsonDocument(source.text, input.fileName)], counters);
     }
-    return parseCsvImport(rawText, counters);
+    return parseCsvImport(source.text, counters);
 };
 
 const buildPreview = (fileName: string, parsedData: ParsedOmniFocusImportData): OmniFocusImportPreview => {

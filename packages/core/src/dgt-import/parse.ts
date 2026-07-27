@@ -1,5 +1,4 @@
-import { unzipSync } from 'fflate';
-
+import { readImportSource } from '../import-source-reader';
 import type { Task } from '../types';
 import { generateUUID as uuidv4 } from '../uuid';
 
@@ -17,7 +16,6 @@ import {
   createWarningCounters,
   decodeTextBytes,
   dedupeStrings,
-  isZipBytes,
   joinDescription,
   normalizeColor,
   normalizeContextName,
@@ -35,7 +33,6 @@ import {
   toPositiveInt,
   toRecord,
   toStringValue,
-  toUint8Array,
   type DgtImportParseResult,
   type DgtImportPreview,
   type DgtWarningCounters,
@@ -381,13 +378,12 @@ const parseRawDgtExport = (text: string, counters: DgtWarningCounters): ParsedDg
 export const parseDgtImportSource = (input: DgtFileInput): DgtImportParseResult => {
   const fileName = basename(input.fileName);
   const counters = createWarningCounters();
-  const bytes = toUint8Array(input.bytes);
 
   try {
     let parsedData: ParsedDgtImportData | null = null;
-    if (bytes && isZipBytes(bytes)) {
-      const entries = unzipSync(bytes);
-      for (const [entryName, entryBytes] of Object.entries(entries)) {
+    const source = readImportSource(input);
+    if (source.kind === 'archive') {
+      for (const { entryName, entryBytes } of source.entries) {
         const lowerName = entryName.toLowerCase();
         if (!entryName || entryName.endsWith('/')) continue;
         if (lowerName.endsWith('.zip')) {
@@ -435,8 +431,7 @@ export const parseDgtImportSource = (input: DgtFileInput): DgtImportParseResult 
       };
     }
 
-    const text = input.text ?? (bytes ? decodeTextBytes(bytes) : '');
-    const parsedTextResult = parseRawDgtExport(text, counters);
+    const parsedTextResult = parseRawDgtExport(source.text, counters);
     const warnings = buildWarnings(counters);
     parsedTextResult.warnings = warnings;
     if (parsedTextResult.projects.length === 0 && parsedTextResult.tasks.length === 0) {

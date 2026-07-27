@@ -190,6 +190,7 @@ export const frOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Impossible de créer le projet à partir de la tâche',
         'task.promoteToProjectCreated': 'Projet créé à partir de la tâche',
         'task.promoteToProjectMoved': 'Tâche déplacée vers un projet existant',
+        'task.updateFailed': 'Impossible de mettre à jour la tâche',
         'taskEdit.duplicateTask': 'Dupliquer la tâche',
         'taskEdit.duplicateDoneTitle': 'Tâche dupliquée',
         'taskEdit.duplicateDoneBody': 'Une nouvelle copie a été créée dans la boîte de réception.',

@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    areDueDateRemindersEnabled,
+    areStartDateRemindersEnabled,
+    areTaskRemindersEnabled,
+    buildReminderNotificationBody,
+    buildReminderSchedule,
+    getDigestSchedule,
     getDueReminderRepeatTimes,
     getNextScheduledAt,
     getProjectReviewReminderIntent,
     getTaskReminderPlan,
+    hasActiveMobileNotificationFeature,
+    isWeeklyReviewReminderEnabled,
     normalizeRepeatReminderMinutes,
     REPEAT_REMINDER_INTERVAL_OPTIONS,
 } from './schedule-utils';
@@ -18,6 +26,18 @@ const buildTask = (overrides: Partial<Task>): Task => ({
     contexts: [],
     createdAt: '2026-03-16T12:00:00.000Z',
     updatedAt: '2026-03-16T12:00:00.000Z',
+    ...overrides,
+});
+
+const buildProject = (overrides: Partial<Project>): Project => ({
+    id: 'project-1',
+    title: 'Launch',
+    status: 'active',
+    color: '#000000',
+    order: 0,
+    tagIds: [],
+    createdAt: '2026-06-01T00:00:00.000Z',
+    updatedAt: '2026-06-01T00:00:00.000Z',
     ...overrides,
 });
 
@@ -219,5 +239,269 @@ describe('reminder intent planning', () => {
             kind: 'project-review',
             scheduledAt: new Date('2026-06-18T09:00:00.000Z'),
         });
+    });
+});
+
+describe('reminder gating predicates', () => {
+    it('gates start/due reminders behind the master switch and their own flag', () => {
+        expect(areTaskRemindersEnabled({})).toBe(true);
+        expect(areTaskRemindersEnabled({ notificationsEnabled: false })).toBe(false);
+
+        expect(areStartDateRemindersEnabled({})).toBe(true);
+        expect(areStartDateRemindersEnabled({ startDateNotificationsEnabled: false })).toBe(false);
+        expect(areStartDateRemindersEnabled({ notificationsEnabled: false, startDateNotificationsEnabled: true })).toBe(false);
+
+        expect(areDueDateRemindersEnabled({ dueDateNotificationsEnabled: false })).toBe(false);
+        expect(areDueDateRemindersEnabled({ notificationsEnabled: false })).toBe(false);
+    });
+
+    it('keeps the weekly review independent of the task-reminder master switch', () => {
+        expect(isWeeklyReviewReminderEnabled({ notificationsEnabled: false, weeklyReviewEnabled: true })).toBe(true);
+        expect(hasActiveMobileNotificationFeature({ notificationsEnabled: false, weeklyReviewEnabled: true })).toBe(true);
+        expect(hasActiveMobileNotificationFeature({ notificationsEnabled: false, weeklyReviewEnabled: false })).toBe(false);
+    });
+});
+
+describe('getDigestSchedule', () => {
+    it('reads defaults, explicit config, and clamps an out-of-range weekly review day', () => {
+        expect(getDigestSchedule({})).toEqual({
+            morning: { enabled: false, hour: 9, minute: 0 },
+            evening: { enabled: false, hour: 20, minute: 0 },
+            weekly: { enabled: false, day: 0, hour: 18, minute: 0 },
+        });
+
+        expect(getDigestSchedule({
+            dailyDigestMorningEnabled: true,
+            dailyDigestMorningTime: '07:15',
+            dailyDigestEveningEnabled: true,
+            dailyDigestEveningTime: '21:45',
+            weeklyReviewEnabled: true,
+            weeklyReviewDay: 9, // out of range, clamps to 6
+            weeklyReviewTime: '17:30',
+        })).toEqual({
+            morning: { enabled: true, hour: 7, minute: 15 },
+            evening: { enabled: true, hour: 21, minute: 45 },
+            weekly: { enabled: true, day: 6, hour: 17, minute: 30 },
+        });
+
+        expect(getDigestSchedule({ weeklyReviewDay: -3 }).weekly.day).toBe(0);
+        expect(getDigestSchedule({ weeklyReviewDay: Number.NaN }).weekly.day).toBe(0);
+    });
+});
+
+describe('buildReminderNotificationBody', () => {
+    it('labels the body by kind and strips markdown from the description', () => {
+        const task = buildTask({ description: '**Bring** notes' });
+        expect(buildReminderNotificationBody(task, 'due', { 'settings.dueDateNotifications': 'Due date reminder' }))
+            .toBe('Due date reminder\nBring notes');
+    });
+
+    it('falls back to a default English label when the translation key is missing', () => {
+        const task = buildTask({ startTime: '2026-03-17T14:30:00.000Z' });
+        expect(buildReminderNotificationBody(task, 'start', {})).toBe('Start date reminder');
+    });
+
+    it('treats a due-repeat kind the same as due for labelling', () => {
+        expect(buildReminderNotificationBody(buildTask({}), 'due-repeat', {})).toBe('Due date reminder');
+    });
+
+    it('shows the label alone when there is no description', () => {
+        expect(buildReminderNotificationBody(buildTask({}), 'review', {})).toBe('Review date reminder');
+    });
+});
+
+describe('buildReminderSchedule', () => {
+    const translations = {
+        'digest.morningTitle': 'Morning',
+        'digest.morningBody': 'Morning body',
+        'digest.eveningTitle': 'Evening',
+        'digest.eveningBody': 'Evening body',
+        'digest.weeklyReviewTitle': 'Weekly review',
+        'digest.weeklyReviewBody': 'Weekly review body',
+        'settings.dueDateNotifications': 'Due date reminder',
+        'settings.reviewAtNotifications': 'Review date reminder',
+        'review.projectsStep': 'Review project',
+    };
+
+    it('schedules the morning/evening digests at local wall-clock time, rolling to tomorrow once today\'s slot has passed', () => {
+        const now = new Date();
+        now.setHours(12, 0, 0, 0); // fixed local midday, independent of the runner's timezone
+
+        const { requests } = buildReminderSchedule({
+            settings: {
+                dailyDigestMorningEnabled: true,
+                dailyDigestMorningTime: '09:00', // already passed today -> tomorrow
+                dailyDigestEveningEnabled: true,
+                dailyDigestEveningTime: '20:00', // still ahead today -> today
+            },
+            tasks: [],
+            projects: [],
+            now,
+            translations,
+        });
+
+        const morning = requests.find((request) => request.key === 'digest:morning');
+        const evening = requests.find((request) => request.key === 'digest:evening');
+        expect(morning).toMatchObject({ title: 'Morning', message: 'Morning body', repeatInterval: 'daily' });
+        expect(evening).toMatchObject({ title: 'Evening', message: 'Evening body', repeatInterval: 'daily' });
+        expect(morning!.fireAt.getHours()).toBe(9);
+        expect(morning!.fireAt.getDate()).not.toBe(now.getDate());
+        expect(evening!.fireAt.getHours()).toBe(20);
+        expect(evening!.fireAt.getDate()).toBe(now.getDate());
+    });
+
+    it('schedules the weekly review independent of the task-reminder master switch', () => {
+        const now = new Date();
+        now.setHours(12, 0, 0, 0);
+        const targetDay = (now.getDay() + 2) % 7;
+
+        const { requests, diagnostics } = buildReminderSchedule({
+            settings: {
+                notificationsEnabled: false, // task reminders off entirely
+                weeklyReviewEnabled: true,
+                weeklyReviewDay: targetDay,
+                weeklyReviewTime: '18:00',
+            },
+            tasks: [],
+            projects: [],
+            now,
+            translations,
+        });
+
+        expect(requests).toEqual([expect.objectContaining({
+            key: 'digest:weekly-review',
+            repeatInterval: 'weekly',
+        })]);
+        expect(diagnostics.weeklyReviewEnabled).toBe(true);
+        expect(diagnostics.taskRemindersEnabled).toBe(false);
+    });
+
+    const now = new Date('2026-06-17T08:00:00.000Z');
+
+    it('derives a due reminder and its bounded repeats through the real getTaskReminderPlan seam, with a labelled markdown-stripped body', () => {
+        const task = buildTask({
+            id: 'task-1',
+            title: 'Pay rent',
+            description: '**Important**',
+            dueDate: '2026-06-17T09:00:00.000Z',
+            repeatReminderMinutes: 30,
+        });
+
+        const { requests, diagnostics } = buildReminderSchedule({
+            settings: {},
+            tasks: [task],
+            projects: [],
+            now,
+            translations,
+        });
+
+        const due = requests.find((request) => request.key === 'task:task-1');
+        expect(due).toMatchObject({
+            title: 'Pay rent',
+            message: 'Due date reminder\nImportant',
+            data: { kind: 'task-reminder', taskId: 'task-1' },
+            hasCompleteAction: true,
+        });
+        expect(due!.fireAt).toEqual(new Date('2026-06-17T09:00:00.000Z'));
+
+        const repeatKeys = requests.filter((request) => request.key.startsWith('task:task-1:r')).map((request) => request.key);
+        expect(repeatKeys).toEqual(['task:task-1:r1', 'task:task-1:r2', 'task:task-1:r3', 'task:task-1:r4']);
+
+        expect(diagnostics.taskReminderCount).toBe(1);
+        expect(diagnostics.taskReviewReminderCount).toBe(0);
+        expect(diagnostics.futureDueDateReminderCount).toBe(1);
+    });
+
+    it('picks the review kind and disables the complete action when reviewAt wins the plan', () => {
+        const task = buildTask({
+            id: 'task-2',
+            title: 'Review proposal',
+            reviewAt: '2026-06-17T09:00:00.000Z',
+        });
+
+        const { requests, diagnostics } = buildReminderSchedule({
+            settings: {},
+            tasks: [task],
+            projects: [],
+            now,
+            translations,
+        });
+
+        const review = requests.find((request) => request.key === 'task:task-2');
+        expect(review).toMatchObject({
+            message: 'Review date reminder',
+            data: { kind: 'task-review', taskId: 'task-2' },
+            hasCompleteAction: false,
+        });
+        expect(diagnostics.taskReviewReminderCount).toBe(1);
+        expect(diagnostics.taskReminderCount).toBe(0);
+    });
+
+    it('derives project review reminders', () => {
+        const project = buildProject({ reviewAt: '2026-06-18T09:00:00.000Z' });
+        const { requests, diagnostics } = buildReminderSchedule({
+            settings: {},
+            tasks: [],
+            projects: [project],
+            now,
+            translations,
+        });
+        expect(requests).toEqual([
+            expect.objectContaining({
+                key: 'project:project-1',
+                title: 'Launch',
+                message: 'Review project',
+                data: { kind: 'project-review', projectId: 'project-1' },
+            }),
+        ]);
+        expect(diagnostics.projectReviewReminderCount).toBe(1);
+    });
+
+    it('sorts one-shot reminders by fire time and applies the platform cap without ever dropping a digest', () => {
+        const tasks = Array.from({ length: 5 }, (_, index) => buildTask({
+            id: `task-${index}`,
+            title: `Task ${index}`,
+            dueDate: new Date(now.getTime() + (5 - index) * 60_000).toISOString(), // reverse order on purpose
+        }));
+
+        const { requests } = buildReminderSchedule({
+            settings: { weeklyReviewEnabled: true, weeklyReviewDay: 0 },
+            tasks,
+            projects: [],
+            now,
+            translations,
+            maxOneShotReminders: 2,
+        });
+
+        expect(requests.some((request) => request.key === 'digest:weekly-review')).toBe(true);
+        const taskRequests = requests.filter((request) => request.data.taskId);
+        expect(taskRequests).toHaveLength(2);
+        // earliest fire times survive the cap, in fire-time order
+        expect(taskRequests.map((request) => request.data.taskId)).toEqual(['task-4', 'task-3']);
+    });
+
+    it('keeps diagnostics counts in lockstep with the requests they describe, so they cannot drift', () => {
+        const tasks = [
+            buildTask({ id: 'due-task', dueDate: '2026-06-17T09:00:00.000Z' }),
+            buildTask({ id: 'review-task', reviewAt: '2026-06-17T09:30:00.000Z' }),
+            buildTask({ id: 'inactive-task', status: 'done', dueDate: '2026-06-17T09:00:00.000Z' }),
+        ];
+        const projects = [buildProject({ id: 'project-a', reviewAt: '2026-06-17T10:00:00.000Z' })];
+
+        const { requests, diagnostics } = buildReminderSchedule({
+            settings: {},
+            tasks,
+            projects,
+            now,
+            translations,
+        });
+
+        const taskReminderRequests = requests.filter((request) => request.data.kind === 'task-reminder' && request.data.taskId);
+        const taskReviewRequests = requests.filter((request) => request.data.kind === 'task-review');
+        const projectReviewRequests = requests.filter((request) => request.data.kind === 'project-review');
+
+        expect(taskReminderRequests).toHaveLength(diagnostics.taskReminderCount);
+        expect(taskReviewRequests).toHaveLength(diagnostics.taskReviewReminderCount);
+        expect(projectReviewRequests).toHaveLength(diagnostics.projectReviewReminderCount);
     });
 });

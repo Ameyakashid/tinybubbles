@@ -1,7 +1,17 @@
-import { strFromU8, unzipSync } from 'fflate';
-
 import { safeParseDate } from './date';
-import { applyImport } from './import-apply';
+import { applyImport, type ImportExecutionResult, type ImportParseResult } from './import-apply';
+import {
+    appendWarning,
+    basename,
+    buildHeaderIndex,
+    dedupeStrings,
+    decodeTextBytes,
+    getCell,
+    joinDescription,
+    parseCsvRows,
+    readImportSource,
+    sanitizeCsvText,
+} from './import-source-reader';
 import { normalizeRecurrenceForLoad } from './recurrence';
 import { normalizeTagId } from './store-helpers';
 import type { AppData, ChecklistItem, Task, TaskPriority, TaskStatus } from './types';
@@ -9,7 +19,6 @@ import { generateDeterministicUUID, generateUUID as uuidv4 } from './uuid';
 
 const TICKTICK_REQUIRED_COLUMNS = ['TITLE', 'LIST NAME'];
 const TICKTICK_DELIMITER = ',';
-const TICKTICK_ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const TICKTICK_AREA_FALLBACK = 'TickTick Area';
 const TICKTICK_PROJECT_FALLBACK = 'TickTick Import';
 const TICKTICK_TASK_FALLBACK = 'Imported TickTick Task';
@@ -120,22 +129,11 @@ export type TickTickImportPreview = {
     warnings: string[];
 };
 
-export type TickTickImportParseResult = {
-    errors: string[];
-    parsedData: ParsedTickTickImportData | null;
-    preview: TickTickImportPreview | null;
-    valid: boolean;
-    warnings: string[];
-};
+export type TickTickImportParseResult = ImportParseResult<ParsedTickTickImportData, TickTickImportPreview>;
 
-export type TickTickImportExecutionResult = {
-    data: AppData;
-    importedAreaCount: number;
-    importedChecklistItemCount: number;
-    importedProjectCount: number;
-    importedTaskCount: number;
-    warnings: string[];
-};
+// TickTick doesn't surface importedStandaloneTaskCount even though applyImport() (called by
+// applyTickTickImport below) always computes it — same trade-off as DGT.
+export type TickTickImportExecutionResult = Omit<ImportExecutionResult, 'importedStandaloneTaskCount'>;
 
 const createWarningCounters = (): TickTickWarningCounters => ({
     childTasksConverted: 0,
@@ -149,11 +147,6 @@ const createWarningCounters = (): TickTickWarningCounters => ({
     unknownStatuses: 0,
     unsupportedRepeats: 0,
 });
-
-const appendWarning = (warnings: string[], count: number, singular: string, plural = singular): void => {
-    if (count <= 0) return;
-    warnings.push(count === 1 ? singular : plural.replace('{count}', String(count)));
-};
 
 const buildWarnings = (counters: TickTickWarningCounters): string[] => {
     const warnings: string[] = [];
@@ -220,105 +213,10 @@ const buildWarnings = (counters: TickTickWarningCounters): string[] => {
     return warnings;
 };
 
-const basename = (value: string): string => {
-    const parts = String(value || '').split(/[\\/]/u);
-    return parts[parts.length - 1] || value;
-};
-
-const toUint8Array = (value?: ArrayBuffer | Uint8Array | null): Uint8Array | null => {
-    if (!value) return null;
-    return value instanceof Uint8Array ? value : new Uint8Array(value);
-};
-
-const isZipBytes = (bytes: Uint8Array): boolean =>
-    bytes.length >= TICKTICK_ZIP_SIGNATURE.length
-    && TICKTICK_ZIP_SIGNATURE.every((byte, index) => bytes[index] === byte);
-
-const decodeTextBytes = (bytes: Uint8Array): string => {
-    try {
-        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-    } catch {
-        return strFromU8(bytes, true);
-    }
-};
-
-const sanitizeCsvText = (raw: string): string => String(raw || '').replace(/^\uFEFF/u, '');
-
-const parseCsvRows = (text: string, delimiter: string): { hasUnclosedQuote: boolean; rows: string[][] } => {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentCell = '';
-    let inQuotes = false;
-
-    for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-        const next = text[index + 1];
-        if (inQuotes) {
-            if (char === '"') {
-                if (next === '"') {
-                    currentCell += '"';
-                    index += 1;
-                } else {
-                    inQuotes = false;
-                }
-            } else {
-                currentCell += char;
-            }
-            continue;
-        }
-
-        if (char === '"') {
-            inQuotes = true;
-            continue;
-        }
-        if (char === delimiter) {
-            currentRow.push(currentCell);
-            currentCell = '';
-            continue;
-        }
-        if (char === '\r' || char === '\n') {
-            if (char === '\r' && next === '\n') index += 1;
-            currentRow.push(currentCell);
-            rows.push(currentRow);
-            currentRow = [];
-            currentCell = '';
-            continue;
-        }
-        currentCell += char;
-    }
-
-    currentRow.push(currentCell);
-    if (currentRow.length > 1 || currentRow[0] !== '' || rows.length === 0) {
-        rows.push(currentRow);
-    }
-
-    return {
-        rows: rows.filter((row) => row.some((cell) => cell.length > 0)),
-        hasUnclosedQuote: inQuotes,
-    };
-};
-
-const normalizeHeaderCell = (value: string): string => value.trim().toUpperCase();
-
-const buildHeaderIndex = (headerRow: string[]): Map<string, number> => {
-    const index = new Map<string, number>();
-    headerRow.forEach((cell, cellIndex) => {
-        const normalized = normalizeHeaderCell(cell);
-        if (normalized && !index.has(normalized)) index.set(normalized, cellIndex);
-    });
-    return index;
-};
-
 const findHeaderRowIndex = (rows: string[][]): number => rows.findIndex((row) => {
     const headerIndex = buildHeaderIndex(row);
     return TICKTICK_REQUIRED_COLUMNS.every((column) => headerIndex.has(column));
 });
-
-const getCell = (row: string[], headerIndex: Map<string, number>, key: string): string => {
-    const index = headerIndex.get(key);
-    if (index === undefined) return '';
-    return String(row[index] ?? '').trim();
-};
 
 const normalizeSourcePart = (value: string, fallback: string): string => {
     const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
@@ -331,25 +229,6 @@ const toNumber = (value: string, fallback: number): number => {
 };
 
 const toBoolean = (value: string): boolean => /^(?:true|1|y|yes)$/iu.test(value.trim());
-
-const dedupeStrings = (values: string[]): string[] => {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    values.forEach((value) => {
-        const trimmed = value.trim();
-        if (!trimmed) return;
-        const normalized = trimmed.toLowerCase();
-        if (seen.has(normalized)) return;
-        seen.add(normalized);
-        result.push(trimmed);
-    });
-    return result;
-};
-
-const joinDescription = (parts: Array<string | undefined>): string | undefined => {
-    const normalized = parts.map((part) => String(part || '').trim()).filter(Boolean);
-    return normalized.length > 0 ? normalized.join('\n\n') : undefined;
-};
 
 const parseTickTickTags = (value: string): string[] => dedupeStrings(
     value
@@ -686,7 +565,6 @@ const buildPreview = (fileName: string, parsedData: ParsedTickTickImportData): T
 
 export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImportParseResult => {
     const fileName = basename(input.fileName);
-    const bytes = toUint8Array(input.bytes);
     const counters = createWarningCounters();
     const parsedData: ParsedTickTickImportData = { areas: [], projects: [], tasks: [], warnings: [] };
 
@@ -695,28 +573,27 @@ export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImp
     };
 
     try {
-        if (bytes && isZipBytes(bytes)) {
-            const entries = unzipSync(bytes);
-            for (const [entryName, entryBytes] of Object.entries(entries)) {
+        const source = readImportSource(input);
+        if (source.kind === 'archive') {
+            source.entries.forEach(({ entryName, entryBytes }) => {
                 const lowerName = entryName.toLowerCase();
-                if (!entryName || entryName.endsWith('/')) continue;
+                if (!entryName || entryName.endsWith('/')) return;
                 if (lowerName.endsWith('.zip')) {
                     counters.nestedZipFiles += 1;
-                    continue;
+                    return;
                 }
                 if (!lowerName.endsWith('.csv')) {
                     counters.nonCsvEntries += 1;
-                    continue;
+                    return;
                 }
                 try {
                     parseOneCsv(decodeTextBytes(entryBytes));
                 } catch {
                     counters.invalidCsvFiles += 1;
                 }
-            }
+            });
         } else {
-            const text = input.text ?? (bytes ? decodeTextBytes(bytes) : '');
-            parseOneCsv(text);
+            parseOneCsv(source.text);
         }
     } catch (error) {
         const warnings = buildWarnings(counters);

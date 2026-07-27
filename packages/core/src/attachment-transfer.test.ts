@@ -147,6 +147,116 @@ describe('runAttachmentTransferLifecycle', () => {
         expect(localFileExists).not.toHaveBeenCalled();
     });
 
+    it('supports a custom hasCloudCopy predicate for backends whose cloudKey format differs', async () => {
+        // Simulates CloudKit: a cloudKey written by a different backend before a provider switch
+        // isn't a valid CloudKit record key, so CloudKit must still upload.
+        const attachment = makeAttachment({ cloudKey: 'attachments/from-other-backend.txt' });
+        const onUpload = vi.fn(async () => true);
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[attachment.id, attachment]]),
+            localFileExists: vi.fn(async () => true),
+            hasCloudCopy: (item) => item.cloudKey?.startsWith('cloudkit:') ?? false,
+            onUpload,
+            onUploadError: vi.fn(),
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+        });
+
+        expect(didMutate).toBe(true);
+        expect(onUpload).toHaveBeenCalledWith(attachment, '/local/file.txt');
+    });
+
+    it('lets a policy cap uploads and downloads without touching the default (uncapped) callers', async () => {
+        const uploadA = makeAttachment({ id: 'upload-a', uri: '/local/a.txt' });
+        const uploadB = makeAttachment({ id: 'upload-b', uri: '/local/b.txt' });
+        const onUpload = vi.fn(async () => true);
+        const shouldUpload = vi.fn(() => false);
+
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[uploadA.id, uploadA], [uploadB.id, uploadB]]),
+            localFileExists: vi.fn(async () => true),
+            onUpload,
+            onUploadError: vi.fn(),
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+            policy: { shouldUpload },
+        });
+
+        expect(onUpload).not.toHaveBeenCalled();
+        expect(shouldUpload).toHaveBeenCalledTimes(2);
+        // localStatus still refreshes even when the cap blocks the transfer itself.
+        expect(didMutate).toBe(true);
+        expect(uploadA.localStatus).toBe('available');
+    });
+
+    it('lets a policy skip an attachment entirely, including its local-status refresh', async () => {
+        const attachment = makeAttachment({ localStatus: 'missing' });
+        const localFileExists = vi.fn(async () => true);
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[attachment.id, attachment]]),
+            localFileExists,
+            onUpload: vi.fn(),
+            onUploadError: vi.fn(),
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+            policy: { shouldSkip: () => true },
+        });
+
+        expect(didMutate).toBe(false);
+        expect(localFileExists).not.toHaveBeenCalled();
+        expect(attachment.localStatus).toBe('missing');
+    });
+
+    it('gates downloads through a policy backoff without affecting other attachments', async () => {
+        const backedOff = makeAttachment({ id: 'backed-off', cloudKey: 'attachments/backed-off.txt' });
+        const ready = makeAttachment({ id: 'ready', cloudKey: 'attachments/ready.txt' });
+        const onDownload = vi.fn(async () => true);
+        const shouldDownload = vi.fn((attachment: Attachment) => attachment.id !== 'backed-off');
+
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[backedOff.id, backedOff], [ready.id, ready]]),
+            localFileExists: vi.fn(async () => false),
+            onUpload: vi.fn(),
+            onUploadError: vi.fn(),
+            onDownload,
+            onDownloadError: vi.fn(),
+            policy: { shouldDownload },
+        });
+
+        expect(didMutate).toBe(true);
+        expect(onDownload).toHaveBeenCalledTimes(1);
+        expect(onDownload).toHaveBeenCalledWith(ready);
+    });
+
+    it('rethrows a fatal error immediately instead of routing it to onUploadError, keeping earlier mutations', async () => {
+        // Mirrors an AbortSignal firing mid-run on a mobile backend: the first attachment's
+        // upload already succeeded and mutated in place before the second attachment's upload
+        // hits the fatal error, so the whole call rejects but attachment #1 stays mutated.
+        const first = makeAttachment({ id: 'first', uri: '/local/first.txt' });
+        const second = makeAttachment({ id: 'second', uri: '/local/second.txt' });
+        const abortError = new Error('aborted');
+        abortError.name = 'AbortError';
+        const onUpload = vi.fn(async (item: Attachment) => {
+            if (item.id === 'second') throw abortError;
+            item.cloudKey = 'attachments/first.txt';
+            return true;
+        });
+        const onUploadError = vi.fn();
+
+        await expect(runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[first.id, first], [second.id, second]]),
+            localFileExists: vi.fn(async () => true),
+            onUpload,
+            onUploadError,
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+            isFatalError: (error) => error instanceof Error && error.name === 'AbortError',
+        })).rejects.toBe(abortError);
+
+        expect(onUploadError).not.toHaveBeenCalled();
+        expect(first.cloudKey).toBe('attachments/first.txt');
+    });
+
     it('lets platform adapters resolve local URI paths', async () => {
         const attachment = makeAttachment({ uri: 'file:///tmp/upload.txt' });
         const localFileExists = vi.fn(async () => true);

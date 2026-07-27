@@ -173,6 +173,7 @@ export const arOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'تعذر إنشاء مشروع من المهمة',
         'task.promoteToProjectCreated': 'تم إنشاء مشروع من المهمة',
         'task.promoteToProjectMoved': 'تم نقل المهمة إلى مشروع موجود',
+        'task.updateFailed': 'تعذر تحديث المهمة',
         'taskEdit.duplicateTask': 'مهمة مكررة',
         'taskEdit.duplicateDoneTitle': 'المهمة مكررة',
         'taskEdit.duplicateDoneBody': 'تم إنشاء نسخة من هذه المهمة.',

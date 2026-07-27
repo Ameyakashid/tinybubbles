@@ -243,15 +243,6 @@ const requireSourcePattern = (label: string, source: string, pattern: RegExp): s
     pattern.test(source) ? [] : [`${label} is not derived from the synced SQLite schema.`]
 );
 
-const parseMcpProjectMapperFields = (source: string): string[] => {
-    const match = source.match(/const mapProjectRow = \(row: ProjectSqliteRow\): Project => \(\{([\s\S]*?)\n\}\);/);
-    if (!match) throw new Error('Could not find MCP mapProjectRow.');
-    return unique(
-        Array.from(match[1].matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*):/gm), (entry) => entry[1]),
-        'MCP mapProjectRow',
-    );
-};
-
 const compareTaskInterface = (source: string): string[] => {
     const actual = parseTaskInterfaceFields(source);
     unique(actual.map((field) => field.name), 'Task interface');
@@ -578,9 +569,15 @@ failures.push(...compareNativeTaskFixtureRoundTrip('macOS CloudKit task mapper',
 failures.push(...runNativeTaskMapperFixtureChecks());
 failures.push(...checkCloudKitProductionSchema());
 
-// MCP read tools promise core Task/Project entities. Keep their SELECT lists
-// schema-derived, and ensure the manual Project row mapper exposes every core
-// project field so a newly persisted field cannot silently disappear there.
+// MCP read tools promise core Task/Project entities. Keep their SELECT lists schema-derived.
+// There used to be a third check here (assertSuperset over a regex-parsed MCP mapProjectRow)
+// guarding against a newly persisted project field silently disappearing from MCP's own
+// hand-written row mapper. That mapper (and section/area/person's equivalents) no longer
+// exist: MCP now imports projectFromSqliteRow/sectionFromSqliteRow/areaFromSqliteRow/
+// personFromSqliteRow from core instead of hand-writing four of its own (sqlite-row-codec
+// follow-up). The generic round-trip test in packages/core/src/sync-schema-row-codec.test.ts
+// covers the same "a field silently disappears" failure mode for all five entities now, so
+// there is nothing left to regex-parse out of MCP's source.
 failures.push(...requireSourcePattern(
     'MCP task projection',
     mcpQueries,
@@ -590,11 +587,6 @@ failures.push(...requireSourcePattern(
     'MCP project projection',
     mcpQueries,
     /const BASE_PROJECT_COLUMNS = \[\.\.\.PROJECT_SQLITE_COLUMNS\];/,
-));
-failures.push(...assertSuperset(
-    'MCP project row mapper',
-    parseMcpProjectMapperFields(mcpQueries),
-    PROJECT_SYNC_FIELD_SCHEMA.map((field) => String(field.name)),
 ));
 
 for (const entity of ['task', 'project', 'section'] as const) {

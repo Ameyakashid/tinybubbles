@@ -181,6 +181,7 @@ export const ptOverrides: Record<string, string> = {
         'task.promoteToProjectFailed': 'Não foi possível criar o projeto a partir da tarefa',
         'task.promoteToProjectCreated': 'Projeto criado a partir da tarefa',
         'task.promoteToProjectMoved': 'Tarefa movida para um projeto existente',
+        'task.updateFailed': 'Não foi possível atualizar a tarefa',
         'taskEdit.duplicateTask': 'Duplicar tarefa',
         'taskEdit.duplicateDoneTitle': 'Tarefa duplicada',
         'taskEdit.duplicateDoneBody': 'Uma nova cópia foi criada na Caixa de entrada.',
