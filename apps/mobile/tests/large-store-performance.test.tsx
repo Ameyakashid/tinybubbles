@@ -241,12 +241,18 @@ vi.mock('../contexts/language-context', () => ({
   }),
 }));
 
+// ToastProvider hands out one stable showToast/dismissToast pair (useCallback with no deps,
+// behind a memoized context value). Returning fresh spies per render would instead churn every
+// handler that closes over them, which is exactly what the render-count assertions below watch
+// for — the mock has to keep production's identity guarantee to measure anything real.
+const toastControls = vi.hoisted(() => ({
+  showToast: vi.fn(),
+  dismissToast: vi.fn(),
+}));
+
 vi.mock('@/contexts/toast-context', () => ({
   ToastViewport: () => null,
-  useToast: () => ({
-    showToast: vi.fn(),
-    dismissToast: vi.fn(),
-  }),
+  useToast: () => toastControls,
 }));
 
 vi.mock('@/lib/sync-service', () => ({
