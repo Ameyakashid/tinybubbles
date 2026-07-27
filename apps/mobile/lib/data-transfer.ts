@@ -11,38 +11,30 @@ import {
     runDataTransferTransactionWithoutSnapshot,
     serializeBackupData,
     type AppData,
-    type BackupValidation,
-    validateBackupJson,
     useTaskStore,
 } from '@mindwtr/core';
 import {
+    parseImportSource,
     runImport,
     type DataTransferBoundaries,
-    type ImportSourceId,
+    type ImportPickerSourceId,
+    type ImportSourceParseResultMap,
 } from '@mindwtr/core/import-runner';
 import {
-    parseDgtImportSource,
     type DgtImportExecutionResult,
-    type DgtImportParseResult,
     type ParsedDgtImportData,
 } from '@mindwtr/core/dgt-import';
 import {
-    parseOmniFocusImportSource,
     type OmniFocusImportExecutionResult,
-    type OmniFocusImportParseResult,
     type ParsedOmniFocusImportData,
 } from '@mindwtr/core/omnifocus-import';
 import {
-    parseTodoistImportSource,
     type ParsedTodoistProject,
     type TodoistImportExecutionResult,
-    type TodoistImportParseResult,
 } from '@mindwtr/core/todoist-import';
 import {
-    parseTickTickImportSource,
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
-    type TickTickImportParseResult,
 } from '@mindwtr/core/ticktick-import';
 
 import { logError, logInfo } from './app-log';
@@ -286,35 +278,22 @@ export const pickBackupDocument = async (): Promise<TransferDocument | null> =>
 export const inspectBackupDocument = async (
     document: TransferDocument,
     options?: { appVersion?: string | null }
-): Promise<BackupValidation> => {
+): Promise<ImportSourceParseResultMap['backup']> => {
     const rawJson = await readTextFile(document.uri);
-    return validateBackupJson(rawJson, {
+    return parseImportSource('backup', {
         appVersion: options?.appVersion,
-        fileModifiedAt: document.lastModified,
         fileName: document.fileName,
+        lastModified: document.lastModified,
+        text: rawJson,
     });
 };
 
-// The four non-backup import sources each need only a document-picker MIME allowlist and their
-// own parser — everything else about "pick a document, read its bytes, hand them to the right
-// parser" is identical. This table + the two generic functions below replace what used to be 4
-// near-identical pick*Document functions and 4 near-identical inspect*Document functions.
-// ImportSourceId (backup excluded) is the same key import-runner.ts's own descriptor table uses.
-type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
-
-type ImportSourceParseResultMap = {
-    dgt: DgtImportParseResult;
-    omnifocus: OmniFocusImportParseResult;
-    ticktick: TickTickImportParseResult;
-    todoist: TodoistImportParseResult;
-};
-
-type ImportPickerDescriptor<S extends ImportPickerSourceId> = {
+// Core owns parser dispatch; only mobile document-picker metadata stays here.
+type ImportPickerDescriptor = {
     mimeTypes: string[];
-    parse: (input: { bytes?: Uint8Array; fileName: string }) => ImportSourceParseResultMap[S];
 };
 
-const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDescriptor<S> } = {
+const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescriptor> = {
     todoist: {
         mimeTypes: [
             'text/csv',
@@ -323,7 +302,6 @@ const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDesc
             'application/x-zip-compressed',
             'application/octet-stream',
         ],
-        parse: parseTodoistImportSource,
     },
     ticktick: {
         mimeTypes: [
@@ -333,7 +311,6 @@ const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDesc
             'application/x-zip-compressed',
             'application/octet-stream',
         ],
-        parse: parseTickTickImportSource,
     },
     dgt: {
         mimeTypes: [
@@ -342,7 +319,6 @@ const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDesc
             'application/x-zip-compressed',
             'application/octet-stream',
         ],
-        parse: parseDgtImportSource,
     },
     omnifocus: {
         mimeTypes: [
@@ -353,7 +329,6 @@ const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDesc
             'application/x-zip-compressed',
             'application/octet-stream',
         ],
-        parse: parseOmniFocusImportSource,
     },
 };
 
@@ -365,7 +340,7 @@ const inspectImportDocument = async <S extends ImportPickerSourceId>(
     document: TransferDocument
 ): Promise<ImportSourceParseResultMap[S]> => {
     const bytes = await readBinaryFile(document.uri);
-    return IMPORT_PICKER_DESCRIPTORS[source].parse({ bytes, fileName: document.fileName });
+    return parseImportSource(source, { bytes, fileName: document.fileName });
 };
 
 export const pickTodoistDocument = (): Promise<TransferDocument | null> => pickImportDocument('todoist');
@@ -376,16 +351,16 @@ export const pickDgtDocument = (): Promise<TransferDocument | null> => pickImpor
 
 export const pickOmniFocusDocument = (): Promise<TransferDocument | null> => pickImportDocument('omnifocus');
 
-export const inspectTodoistDocument = (document: TransferDocument): Promise<TodoistImportParseResult> =>
+export const inspectTodoistDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['todoist']> =>
     inspectImportDocument('todoist', document);
 
-export const inspectTickTickDocument = (document: TransferDocument): Promise<TickTickImportParseResult> =>
+export const inspectTickTickDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['ticktick']> =>
     inspectImportDocument('ticktick', document);
 
-export const inspectDgtDocument = (document: TransferDocument): Promise<DgtImportParseResult> =>
+export const inspectDgtDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['dgt']> =>
     inspectImportDocument('dgt', document);
 
-export const inspectOmniFocusDocument = (document: TransferDocument): Promise<OmniFocusImportParseResult> =>
+export const inspectOmniFocusDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['omnifocus']> =>
     inspectImportDocument('omnifocus', document);
 
 // Mobile's snapshot writer never returns null (unlike desktop's Tauri-only snapshot), so the

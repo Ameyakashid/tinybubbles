@@ -4,39 +4,31 @@ import {
     createBackupFileName,
     flushPendingSave,
     serializeBackupData,
-    validateBackupJson,
     type AppData,
-    type BackupValidation,
     useTaskStore,
 } from '@mindwtr/core';
 import {
+    parseImportSource,
     runImport,
     type DataTransferBoundaries,
-    type ImportSourceId,
+    type ImportPickerSourceId,
+    type ImportSourceParseResultMap,
 } from '@mindwtr/core/import-runner';
 import {
-    parseDgtImportSource,
     type DgtImportExecutionResult,
-    type DgtImportParseResult,
     type ParsedDgtImportData,
 } from '@mindwtr/core/dgt-import';
 import {
-    parseOmniFocusImportSource,
     type OmniFocusImportExecutionResult,
-    type OmniFocusImportParseResult,
     type ParsedOmniFocusImportData,
 } from '@mindwtr/core/omnifocus-import';
 import {
-    parseTodoistImportSource,
     type ParsedTodoistProject,
     type TodoistImportExecutionResult,
-    type TodoistImportParseResult,
 } from '@mindwtr/core/todoist-import';
 import {
-    parseTickTickImportSource,
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
-    type TickTickImportParseResult,
 } from '@mindwtr/core/ticktick-import';
 
 import { SyncService } from './sync-service';
@@ -227,7 +219,9 @@ export const exportDesktopBackup = async (data: AppData): Promise<void> => {
     }
 };
 
-export const inspectDesktopBackup = async (appVersion?: string | null): Promise<BackupValidation | null> => {
+export const inspectDesktopBackup = async (
+    appVersion?: string | null,
+): Promise<ImportSourceParseResultMap['backup'] | null> => {
     const document = await pickTransferDocument({
         accept: '.json,application/json',
         extensions: ['json'],
@@ -235,58 +229,41 @@ export const inspectDesktopBackup = async (appVersion?: string | null): Promise<
         title: 'Mindwtr Backup',
     });
     if (!document?.text) return null;
-    return validateBackupJson(document.text, {
+    return parseImportSource('backup', {
         appVersion,
-        fileModifiedAt: document.lastModified,
         fileName: document.fileName,
+        lastModified: document.lastModified,
+        text: document.text,
     });
 };
 
-// The four non-backup import sources each need only a file-picker filter/title and their own
-// parser — everything else about "pick a file, hand its bytes to the right parser" is identical.
-// This table + the one generic function below replace what used to be 4 near-identical
-// inspect*Import functions; ImportSourceId (backup excluded) is the same key import-runner.ts's
-// own descriptor table uses, so a fifth format only ever needs one new row here.
-type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
-
-type ImportSourceParseResultMap = {
-    dgt: DgtImportParseResult;
-    omnifocus: OmniFocusImportParseResult;
-    ticktick: TickTickImportParseResult;
-    todoist: TodoistImportParseResult;
-};
-
-type ImportPickerDescriptor<S extends ImportPickerSourceId> = {
+// Core owns parser dispatch; only desktop file-picker metadata stays here.
+type ImportPickerDescriptor = {
     accept: string;
     extensions: string[];
-    parse: (input: { bytes?: Uint8Array; fileName: string }) => ImportSourceParseResultMap[S];
     title: string;
 };
 
-const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDescriptor<S> } = {
+const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescriptor> = {
     todoist: {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
         title: 'Todoist Export',
-        parse: parseTodoistImportSource,
     },
     ticktick: {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
         title: 'TickTick Backup',
-        parse: parseTickTickImportSource,
     },
     dgt: {
         accept: '.json,.zip,application/json,application/zip',
         extensions: ['json', 'zip'],
         title: 'DGT GTD Export',
-        parse: parseDgtImportSource,
     },
     omnifocus: {
         accept: '.csv,.json,.zip,text/csv,application/json,application/zip,application/octet-stream',
         extensions: ['csv', 'json', 'zip'],
         title: 'OmniFocus Export',
-        parse: parseOmniFocusImportSource,
     },
 };
 
@@ -301,19 +278,19 @@ const inspectDesktopImportSource = async <S extends ImportPickerSourceId>(
         title: descriptor.title,
     });
     if (!document) return null;
-    return descriptor.parse({ bytes: document.bytes, fileName: document.fileName });
+    return parseImportSource(source, { bytes: document.bytes, fileName: document.fileName });
 };
 
-export const inspectDesktopTodoistImport = (): Promise<TodoistImportParseResult | null> =>
+export const inspectDesktopTodoistImport = (): Promise<ImportSourceParseResultMap['todoist'] | null> =>
     inspectDesktopImportSource('todoist');
 
-export const inspectDesktopTickTickImport = (): Promise<TickTickImportParseResult | null> =>
+export const inspectDesktopTickTickImport = (): Promise<ImportSourceParseResultMap['ticktick'] | null> =>
     inspectDesktopImportSource('ticktick');
 
-export const inspectDesktopDgtImport = (): Promise<DgtImportParseResult | null> =>
+export const inspectDesktopDgtImport = (): Promise<ImportSourceParseResultMap['dgt'] | null> =>
     inspectDesktopImportSource('dgt');
 
-export const inspectDesktopOmniFocusImport = (): Promise<OmniFocusImportParseResult | null> =>
+export const inspectDesktopOmniFocusImport = (): Promise<ImportSourceParseResultMap['omnifocus'] | null> =>
     inspectDesktopImportSource('omnifocus');
 
 const desktopLog = { logInfo, logError };

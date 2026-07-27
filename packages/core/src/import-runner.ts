@@ -2,19 +2,54 @@
 // addBreadcrumb -> logInfo(start) -> transaction -> logInfo(complete)/logError boilerplate once
 // per import source. This module owns that boilerplate once; each shell keeps only its own
 // boundaries object (storage/refresh/snapshot plumbing) and its own logInfo/logError module.
-import { prepareRestoredBackupDataForSync } from './backup-transfer';
+import { prepareRestoredBackupDataForSync, validateBackupJson, type BackupValidation } from './backup-transfer';
 import {
     runDataTransferTransaction,
     type DataTransferStaleDetails,
 } from './data-transfer-transaction';
-import { applyDgtImport, type ParsedDgtImportData } from './dgt-import';
+import {
+    applyDgtImport,
+    parseDgtImportSource,
+    type DgtImportParseResult,
+    type ParsedDgtImportData,
+} from './dgt-import';
 import { addBreadcrumb } from './log-breadcrumbs';
-import { applyOmniFocusImport, type ParsedOmniFocusImportData } from './omnifocus-import';
-import { applyTickTickImport, type ParsedTickTickImportData } from './ticktick-import';
-import { applyTodoistImport, type ParsedTodoistProject } from './todoist-import';
+import type { ImportSourceInput } from './import-source-reader';
+import {
+    applyOmniFocusImport,
+    parseOmniFocusImportSource,
+    type OmniFocusImportParseResult,
+    type ParsedOmniFocusImportData,
+} from './omnifocus-import';
+import {
+    applyTickTickImport,
+    parseTickTickImportSource,
+    type ParsedTickTickImportData,
+    type TickTickImportParseResult,
+} from './ticktick-import';
+import {
+    applyTodoistImport,
+    parseTodoistImportSource,
+    type ParsedTodoistProject,
+    type TodoistImportParseResult,
+} from './todoist-import';
 import type { AppData } from './types';
 
 export type ImportSourceId = 'backup' | 'dgt' | 'omnifocus' | 'ticktick' | 'todoist';
+export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
+
+export type ImportDescriptorInput = ImportSourceInput & {
+    appVersion?: string | null;
+    lastModified?: number | null;
+};
+
+export type ImportSourceParseResultMap = {
+    backup: BackupValidation;
+    dgt: DgtImportParseResult;
+    omnifocus: OmniFocusImportParseResult;
+    ticktick: TickTickImportParseResult;
+    todoist: TodoistImportParseResult;
+};
 
 export type DataTransferBoundaries = {
     createRecoverySnapshot: (currentData: AppData) => Promise<string | null>;
@@ -56,6 +91,7 @@ type ImportDescriptor<S extends ImportSourceId> = {
     completeLabel: string;
     countExtra: (result: ImportTypeMap[S]['result']) => Record<string, string>;
     operation: string;
+    parse: (input: ImportDescriptorInput) => ImportSourceParseResultMap[S];
     source: S;
     startLabel: string;
 };
@@ -73,6 +109,14 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         source: 'backup',
         startLabel: 'Backup restore started',
         completeLabel: 'Backup restore complete',
+        parse: (input) => validateBackupJson(
+            input.text ?? new TextDecoder().decode(input.bytes ?? undefined),
+            {
+                appVersion: input.appVersion,
+                fileModifiedAt: input.lastModified,
+                fileName: input.fileName,
+            },
+        ),
         apply: (_currentData, parsed) => {
             const restored = prepareRestoredBackupDataForSync(parsed);
             return { data: restored, result: restored };
@@ -84,6 +128,7 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         source: 'todoist',
         startLabel: 'Todoist import started',
         completeLabel: 'Todoist import complete',
+        parse: parseTodoistImportSource,
         apply: (data, parsed) => {
             const result = applyTodoistImport(data, parsed);
             return { data: result.data, result };
@@ -100,6 +145,7 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         source: 'ticktick',
         startLabel: 'TickTick import started',
         completeLabel: 'TickTick import complete',
+        parse: parseTickTickImportSource,
         apply: (data, parsed) => {
             const result = applyTickTickImport(data, parsed);
             return { data: result.data, result };
@@ -116,6 +162,7 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         source: 'dgt',
         startLabel: 'DGT import started',
         completeLabel: 'DGT import complete',
+        parse: parseDgtImportSource,
         apply: (data, parsed) => {
             const result = applyDgtImport(data, parsed);
             return { data: result.data, result };
@@ -132,6 +179,7 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         source: 'omnifocus',
         startLabel: 'OmniFocus import started',
         completeLabel: 'OmniFocus import complete',
+        parse: parseOmniFocusImportSource,
         apply: (data, parsed) => {
             const result = applyOmniFocusImport(data, parsed);
             return { data: result.data, result };
@@ -145,6 +193,13 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         }),
     },
 };
+
+export function parseImportSource<S extends ImportSourceId>(
+    source: S,
+    input: ImportDescriptorInput,
+): ImportSourceParseResultMap[S] {
+    return IMPORT_DESCRIPTORS[source].parse(input);
+}
 
 // Closing this on `source` (rather than two free type parameters the caller had to spell out)
 // lets `parsed`'s and the return value's types be inferred from the source id literal itself —

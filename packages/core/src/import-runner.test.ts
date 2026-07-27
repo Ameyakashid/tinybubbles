@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { runImport, type DataTransferBoundaries, type ImportRunnerLog } from './import-runner';
+import {
+    parseImportSource,
+    runImport,
+    type DataTransferBoundaries,
+    type ImportRunnerLog,
+} from './import-runner';
 import { mockAppData } from './sync-test-utils';
 import type { ParsedTodoistProject } from './todoist-import';
 import type { AppData } from './types';
@@ -44,6 +49,19 @@ const buildLog = () => {
 };
 
 describe('runImport', () => {
+    it('dispatches source parsing through the same descriptor as apply and count', () => {
+        const result = parseImportSource('todoist', {
+            fileName: 'Inbox.csv',
+            text: 'TYPE,CONTENT\n task,Inbox task',
+        });
+
+        expect(result.valid).toBe(true);
+        expect(result.preview).toMatchObject({
+            fileName: 'Inbox.csv',
+            taskCount: 1,
+        });
+    });
+
     it('dispatches to the backup descriptor, persists, and logs start/complete', async () => {
         const restoredData = mockAppData();
         const { boundaries, persisted, refreshedCount } = buildBoundaries(mockAppData());
