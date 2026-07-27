@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { StoreActionResult, Task } from '@mindwtr/core';
 
 import { createTaskEditDraft } from './task-edit-draft-adapter';
 import { useTaskEditActions } from './use-task-edit-actions';
@@ -23,6 +23,7 @@ const baseTask: Task = {
     status: 'next',
     tags: [],
     contexts: [],
+    checklist: [{ id: 'step-1', title: 'Ship it', isCompleted: true }],
     createdAt: '2026-07-01T00:00:00.000Z',
     updatedAt: '2026-07-01T00:00:00.000Z',
 };
@@ -33,18 +34,32 @@ type Harness = {
     onSave: (taskId: string, updates: Partial<Task>) => unknown;
     onClose: () => void;
     showToast: ReturnType<typeof vi.fn>;
+    deleteTask?: (taskId: string) => Promise<StoreActionResult>;
+    resetTaskChecklist?: (taskId: string) => Promise<StoreActionResult>;
+    restoreTask?: (taskId: string) => Promise<StoreActionResult>;
+    setChecklist?: ReturnType<typeof vi.fn>;
 };
 
 let saveHandle: () => Promise<void>;
+let deleteHandle: () => Promise<void>;
+let resetHandle: () => Promise<void>;
 
-function SaveProbe({ onSave, onClose, showToast }: Harness) {
+function SaveProbe({
+    onSave,
+    onClose,
+    showToast,
+    deleteTask = vi.fn(async () => ({ success: true })),
+    resetTaskChecklist = vi.fn(async () => ({ success: true })),
+    restoreTask = vi.fn(async () => ({ success: true })),
+    setChecklist = vi.fn(),
+}: Harness) {
     const draft = createTaskEditDraft(baseTask);
-    const { handleSave } = useTaskEditActions({
+    const actions = useTaskEditActions({
         aiEnabled: false,
         baseTaskRef: { current: baseTask },
         closeAIModal: vi.fn(),
         contextInputDraft: '',
-        deleteTask: vi.fn(),
+        deleteTask,
         descriptionDebounceRef: { current: null },
         descriptionDraft: '',
         descriptionDraftRef: { current: '' },
@@ -60,11 +75,11 @@ function SaveProbe({ onSave, onClose, showToast }: Harness) {
         onClose,
         onSave,
         prioritiesEnabled: true,
-        resetTaskChecklist: vi.fn(),
-        restoreTask: vi.fn(),
+        resetTaskChecklist,
+        restoreTask,
         sections: [],
         setAiModal: vi.fn(),
-        setChecklist: vi.fn(),
+        setChecklist,
         setDraftField: vi.fn(),
         setIsAIWorking: vi.fn(),
         setTitleImmediate: vi.fn(),
@@ -80,7 +95,9 @@ function SaveProbe({ onSave, onClose, showToast }: Harness) {
         titleDraftRef: { current: 'Plan launch v2' },
     } as unknown as Parameters<typeof useTaskEditActions>[0]);
 
-    saveHandle = handleSave;
+    saveHandle = actions.handleSave;
+    deleteHandle = actions.handleDeleteTask;
+    resetHandle = actions.handleResetChecklist;
     return <Text>probe</Text>;
 }
 
@@ -95,6 +112,24 @@ async function runSave(onSave: Harness['onSave']) {
         await Promise.resolve();
     });
     return { onClose, showToast };
+}
+
+async function renderActions(overrides: Partial<Harness> = {}) {
+    const showToast = vi.fn();
+    const onClose = vi.fn();
+    const setChecklist = vi.fn();
+    await act(async () => {
+        renderer.create(
+            <SaveProbe
+                onSave={vi.fn()}
+                onClose={onClose}
+                showToast={showToast}
+                setChecklist={setChecklist}
+                {...overrides}
+            />,
+        );
+    });
+    return { onClose, setChecklist, showToast };
 }
 
 describe('task editor save results', () => {
@@ -147,5 +182,57 @@ describe('task editor save results', () => {
         const { showToast } = await runSave(onSave);
 
         expect(showToast).not.toHaveBeenCalled();
+    });
+
+    it('keeps the editor open when delete resolves to a failure', async () => {
+        const { onClose, showToast } = await renderActions({
+            deleteTask: vi.fn(async () => ({ success: false, error: 'Task is missing' })),
+        });
+
+        await act(async () => {
+            await deleteHandle();
+        });
+
+        expect(onClose).not.toHaveBeenCalled();
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+            tone: 'error',
+            message: 'Task is missing',
+        }));
+    });
+
+    it('does not reset the draft when checklist reset resolves to a failure', async () => {
+        const { setChecklist, showToast } = await renderActions({
+            resetTaskChecklist: vi.fn(async () => ({ success: false, error: 'Task is deleted' })),
+        });
+
+        await act(async () => {
+            await resetHandle();
+        });
+
+        expect(setChecklist).not.toHaveBeenCalled();
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+            tone: 'error',
+            message: 'Task is deleted',
+        }));
+    });
+
+    it('reports a fulfilled undo failure', async () => {
+        const { showToast } = await renderActions({
+            deleteTask: vi.fn(async () => ({ success: true })),
+            restoreTask: vi.fn(async () => ({ success: false, error: 'Restore conflicted' })),
+        });
+
+        await act(async () => {
+            await deleteHandle();
+        });
+        const deletedToast = showToast.mock.calls[0]?.[0];
+        await act(async () => {
+            await deletedToast.onAction();
+        });
+
+        expect(showToast).toHaveBeenLastCalledWith(expect.objectContaining({
+            tone: 'error',
+            message: 'Restore conflicted',
+        }));
     });
 });

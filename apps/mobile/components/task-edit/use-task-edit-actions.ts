@@ -54,7 +54,7 @@ type TaskEditActionsParams = {
     baseTaskRef: React.MutableRefObject<Task | null>;
     closeAIModal: () => void;
     contextInputDraft: string;
-    deleteTask: (taskId: string) => Promise<unknown>;
+    deleteTask: (taskId: string) => Promise<StoreActionResult>;
     descriptionDebounceRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
     descriptionDraft: string;
     descriptionDraftRef: React.MutableRefObject<string>;
@@ -77,8 +77,8 @@ type TaskEditActionsParams = {
     onSave: (taskId: string, updates: Partial<Task>) => unknown;
     prioritiesEnabled: boolean;
     projectContext?: Record<string, unknown> | null;
-    resetTaskChecklist: (taskId: string) => Promise<unknown>;
-    restoreTask: (taskId: string) => Promise<unknown>;
+    resetTaskChecklist: (taskId: string) => Promise<StoreActionResult>;
+    restoreTask: (taskId: string) => Promise<StoreActionResult>;
     sections: Array<{ id: string; projectId?: string; deletedAt?: string | null }>;
     setAiModal: React.Dispatch<React.SetStateAction<AIResponseModalState>>;
     setChecklist: SetTaskEditDraftValue<Task['checklist']>;
@@ -137,21 +137,37 @@ export function useTaskEditActions({
     titleDebounceRef,
     titleDraftRef,
 }: TaskEditActionsParams) {
+    const showTaskWriteError = useCallback((message?: string) => showToast({
+        title: tFallback(t, 'common.error', 'Error'),
+        message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
+        tone: 'error',
+        durationMs: 4200,
+    }), [showToast, t]);
+
+    const runStoreAction = useCallback(async (
+        action: () => Promise<StoreActionResult>,
+        logMessage: string,
+    ): Promise<boolean> => {
+        try {
+            const result = await action();
+            if (!isActionFailure(result)) return true;
+            showTaskWriteError(getActionFailureMessage(result));
+        } catch (error) {
+            logTaskError(logMessage, error);
+            showTaskWriteError(getUnknownErrorMessage(error));
+        }
+        return false;
+    }, [showTaskWriteError]);
+
     // The modal closes as soon as a save is handed off, so a store write that
     // resolves to `{ success: false }` would otherwise read as a saved task.
     const reportSaveResult = useCallback((result: unknown) => {
-        const showSaveError = (message?: string) => showToast({
-            title: tFallback(t, 'common.error', 'Error'),
-            message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
-            tone: 'error',
-            durationMs: 4200,
-        });
         void Promise.resolve(result)
             .then((settled) => {
-                if (isActionFailure(settled)) showSaveError(getActionFailureMessage(settled));
+                if (isActionFailure(settled)) showTaskWriteError(getActionFailureMessage(settled));
             })
-            .catch((error) => showSaveError(getUnknownErrorMessage(error)));
-    }, [showToast, t]);
+            .catch((error) => showTaskWriteError(getUnknownErrorMessage(error)));
+    }, [showTaskWriteError]);
 
     const applyChecklistUpdate = useCallback((nextChecklist: NonNullable<Task['checklist']>) => {
         const currentStatus = taskEditDraft?.draft.status ?? task?.status ?? 'inbox';
@@ -168,13 +184,17 @@ export function useTaskEditActions({
         if (nextStatus !== currentStatus) setDraftField('status', nextStatus);
     }, [setChecklist, setDraftField, task?.status, task?.taskMode, taskEditDraft?.draft.status]);
 
-    const handleResetChecklist = useCallback(() => {
+    const handleResetChecklist = useCallback(async () => {
         const current = taskEditDraft?.checklist || [];
         if (current.length === 0 || !task) return;
+        const succeeded = await runStoreAction(
+            () => resetTaskChecklist(task.id),
+            'Failed to reset checklist',
+        );
+        if (!succeeded) return;
         const reset = current.map((item) => ({ ...item, isCompleted: false }));
         applyChecklistUpdate(reset);
-        resetTaskChecklist(task.id).catch((error) => logTaskError('Failed to reset checklist', error));
-    }, [applyChecklistUpdate, resetTaskChecklist, task, taskEditDraft?.checklist]);
+    }, [applyChecklistUpdate, resetTaskChecklist, runStoreAction, task, taskEditDraft?.checklist]);
 
     const handleSave = useCallback(async () => {
         if (!task) return;
@@ -415,17 +435,26 @@ export function useTaskEditActions({
 
     const handleDeleteTask = useCallback(async () => {
         if (!task) return;
-        await deleteTask(task.id).catch((error) => logTaskError('Failed to delete task', error));
+        const deleted = await runStoreAction(
+            () => deleteTask(task.id),
+            'Failed to delete task',
+        );
+        if (!deleted) return;
         showToast({
             title: t('common.notice') || 'Notice',
             message: t('list.taskDeleted') || 'Task deleted',
             tone: 'info',
             actionLabel: t('common.undo') || 'Undo',
-            onAction: () => { void restoreTask(task.id); },
+            onAction: async () => {
+                await runStoreAction(
+                    () => restoreTask(task.id),
+                    'Failed to restore task',
+                );
+            },
             durationMs: 5200,
         });
         onClose();
-    }, [deleteTask, onClose, restoreTask, showToast, t, task]);
+    }, [deleteTask, onClose, restoreTask, runStoreAction, showToast, t, task]);
 
     const handleConvertToReference = useCallback(() => {
         if (!task) return;
