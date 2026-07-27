@@ -121,8 +121,8 @@ use sync::{
 use ui::{
     acknowledge_close_request, apply_global_quick_add_shortcut, consume_quick_add_pending,
     create_quick_add_window, get_system_theme_preference, hide_quick_add_window,
-    hide_quick_add_window_for_app, quit_app, set_global_quick_add_shortcut, set_tray_visible,
-    show_main, show_quick_add_window,
+    hide_quick_add_window_for_app, quit_app, set_global_quick_add_shortcut, set_tray_tooltip,
+    set_tray_visible, show_main, show_quick_add_window,
 };
 
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
@@ -1798,6 +1798,7 @@ pub fn run() {
             read_sync_file,
             write_sync_file,
             set_tray_visible,
+            set_tray_tooltip,
             set_macos_activation_policy,
             get_linux_distro,
             start_audio_recording,

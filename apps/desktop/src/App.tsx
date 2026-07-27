@@ -29,12 +29,14 @@ import {
     shouldShowDonationPrompt,
     shouldCheckUpdateReminder,
     shouldShowUpdateReminder,
+    sortTasksByFocusOrder,
     summarizeMergeStats,
     translateWithFallback,
     useTaskStore,
     type AppAnnouncement,
     type AppAnnouncementAction,
 } from '@mindwtr/core';
+import { buildTrayTooltip } from './lib/tray-tooltip';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StartupPromptModal, type StartupPromptPresentation } from './components/StartupPromptModal';
@@ -230,6 +232,11 @@ const buildPromptTestReviewAnnouncement = (installSource: InstallSource | null):
     };
 };
 
+// Task titles cannot contain a NUL, so it is safe to join the Focus titles into a
+// single string for the tray-tooltip selector. A visible separator such as a space
+// would split multi-word titles apart when the string is parsed back.
+const FOCUS_TITLE_SEPARATOR = '\u0000';
+
 function App() {
     // Reopening shortly after the app closed resumes the interrupted session on
     // the same screen; a fresh session starts on the default view (#842).
@@ -287,6 +294,22 @@ function App() {
     const showToast = useUiStore((state) => state.showToast);
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const { t, language, setLanguage } = useLanguage();
+    // Selected as one joined string, not an array: a fresh array would fail the
+    // store's identity check and re-render on every write. NUL is the separator
+    // because it cannot occur in a task title — a space would split multi-word
+    // titles into separate entries.
+    const focusTaskTitles = useTaskStore((state) => (
+        sortTasksByFocusOrder(
+            state.tasks.filter((task) => (
+                task.isFocusedToday && task.status !== 'done' && task.status !== 'archived'
+            ))
+        ).map((task) => task.title).join(FOCUS_TITLE_SEPARATOR)
+    ));
+    const trayTooltip = useMemo(() => buildTrayTooltip({
+        appName: translateWithFallback(t, 'app.name', 'Mindwtr'),
+        focusLabel: translateWithFallback(t, 'agenda.todaysFocus', "Today's Focus"),
+        titles: focusTaskTitles ? focusTaskTitles.split(FOCUS_TITLE_SEPARATOR) : [],
+    }), [focusTaskTitles, t]);
     const isActiveRef = useRef(true);
     const lastSyncErrorRef = useRef<string | null>(null);
     const lastSyncErrorAtRef = useRef(0);
@@ -1092,6 +1115,25 @@ function App() {
             cancelled = true;
         };
     }, [showTray]);
+
+    // Hovering the tray icon showed an empty rectangle because no tooltip was
+    // ever set. Fill it with today's Focus so the list can be glanced at without
+    // opening the window (#935). Linux ignores this natively — Tauri does not
+    // support tray tooltips there — so the command is a no-op on that platform.
+    useEffect(() => {
+        if (!isTauriRuntime()) return;
+        if (showTray === false) return;
+        let cancelled = false;
+        import('@tauri-apps/api/core')
+            .then(async ({ invoke }) => {
+                if (cancelled) return;
+                await invoke('set_tray_tooltip', { tooltip: trayTooltip });
+            })
+            .catch((error) => void logError(error, { scope: 'tray', step: 'setTooltip' }));
+        return () => {
+            cancelled = true;
+        };
+    }, [showTray, trayTooltip]);
 
     useEffect(() => {
         if (!isTauriRuntime()) return;

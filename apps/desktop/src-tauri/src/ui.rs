@@ -375,6 +375,27 @@ pub(crate) fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(
     }
 }
 
+/// Sets the hover text on the tray icon, used to surface today's Focus (#935).
+///
+/// Linux is a deliberate no-op: Tauri lists tray tooltips as unsupported there,
+/// so the call would just error on every Focus change. The frontend still sends
+/// the update rather than branching per platform.
+#[tauri::command]
+pub(crate) fn set_tray_tooltip(app: tauri::AppHandle, tooltip: Option<String>) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (&app, &tooltip);
+        Ok(())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let Some(tray) = app.tray_by_id("main") else {
+            return Ok(());
+        };
+        tray.set_tooltip(tooltip.as_deref()).map_err(|e| e.to_string())
+    }
+}
+
 pub(crate) fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_skip_taskbar(false);
