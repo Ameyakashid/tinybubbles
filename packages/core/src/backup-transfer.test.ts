@@ -308,6 +308,71 @@ describe('backup transfer', () => {
         }
     });
 
+    it('does not let the remote hand back records the restored backup dropped (#939)', () => {
+        // The reported flow: import a pile of tasks, delete them, then restore a
+        // backup taken before the import. The backup has no trace of them, the
+        // remote still does, and without carrying the deletion forward the next
+        // merge reads that absence as "new over there" and restores them.
+        const restoredAt = '2026-04-01T00:00:10.000Z';
+        const backup = buildAppData();
+        const previousData: AppData = {
+            ...backup,
+            tasks: [
+                ...backup.tasks,
+                {
+                    ...backup.tasks[0],
+                    id: 'imported-task',
+                    title: 'Imported then deleted',
+                    rev: 3,
+                    revBy: 'other-device',
+                },
+            ],
+        };
+        const remote: AppData = {
+            ...previousData,
+            tasks: previousData.tasks.map((task) => ({ ...task, rev: 12, revBy: 'other-device' })),
+            settings: {},
+        };
+
+        const restored = prepareRestoredBackupDataForSync(backup, { previousData, restoredAt });
+
+        for (const merged of [
+            mergeAppData(restored, remote, { nowIso: restoredAt }),
+            mergeAppData(remote, restored, { nowIso: restoredAt }),
+        ]) {
+            const imported = merged.tasks.find((task) => task.id === 'imported-task');
+            expect(imported?.deletedAt).toBe(restoredAt);
+            expect(merged.tasks.filter((task) => !task.deletedAt).map((task) => task.id)).toEqual(['task-1']);
+        }
+    });
+
+    it('leaves records the restoring device never saw alone (#939)', () => {
+        // Absence from a backup only means "deleted" for ids this device knew
+        // about. A task another device created while this one was offline is not
+        // ours to tombstone.
+        const restoredAt = '2026-04-01T00:00:10.000Z';
+        const backup = buildAppData();
+        const restored = prepareRestoredBackupDataForSync(backup, { previousData: backup, restoredAt });
+        const remote: AppData = {
+            ...backup,
+            tasks: [
+                ...backup.tasks,
+                {
+                    ...backup.tasks[0],
+                    id: 'other-device-task',
+                    title: 'Made elsewhere',
+                    rev: 2,
+                    revBy: 'other-device',
+                },
+            ],
+            settings: {},
+        };
+
+        const merged = mergeAppData(restored, remote, { nowIso: restoredAt });
+
+        expect(merged.tasks.find((task) => task.id === 'other-device-task')?.deletedAt).toBeUndefined();
+    });
+
     describe('countActiveRecords', () => {
         // Pinned verbatim from desktop's and mobile's data-transfer.ts before this refactor —
         // both had this exact 4-field object and both silently omitted `people`. Per the "a test

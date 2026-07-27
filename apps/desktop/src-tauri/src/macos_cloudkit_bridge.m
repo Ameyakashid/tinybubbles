@@ -66,8 +66,38 @@ static char *ck_copy_json(id object) {
     return utf8 ? strdup(utf8) : strdup("{\"error\":\"json-encode-failed\"}");
 }
 
+// CloudKit reports how long to wait before retrying a throttled or unavailable
+// request in CKErrorRetryAfterKey, and Apple asks callers to wait that long
+// rather than guess one. A partial failure carries the real reason, including
+// that interval, on its per-item errors instead of the top-level one, so look
+// there too. Read whenever CloudKit supplies the key, not for one error code.
+static NSNumber *ck_retry_after_seconds(NSError *error) {
+    if (!error) return nil;
+    id retryAfter = [error userInfo][CKErrorRetryAfterKey];
+    if ([retryAfter isKindOfClass:[NSNumber class]]) return (NSNumber *)retryAfter;
+    id partial = [error userInfo][CKPartialErrorsByItemIDKey];
+    if ([partial isKindOfClass:[NSDictionary class]]) {
+        NSNumber *longest = nil;
+        for (id value in [(NSDictionary *)partial allValues]) {
+            if (![value isKindOfClass:[NSError class]]) continue;
+            NSNumber *nested = ck_retry_after_seconds((NSError *)value);
+            if (nested && (!longest || [nested doubleValue] > [longest doubleValue])) {
+                longest = nested;
+            }
+        }
+        return longest;
+    }
+    return nil;
+}
+
 static char *ck_error_json(NSError *error) {
     NSString *msg = [error localizedDescription] ?: @"unknown error";
+    // The JS layer only ever sees this string, so carry the interval in the
+    // fixed form it parses (#948).
+    NSNumber *retryAfter = ck_retry_after_seconds(error);
+    if (retryAfter) {
+        msg = [NSString stringWithFormat:@"%@ [retryAfter=%@]", msg, retryAfter];
+    }
     return ck_copy_json(@{@"error": msg, @"errorCode": @([error code])});
 }
 

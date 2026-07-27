@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { flushPendingSave, getInMemorySyncChangeFingerprint, useTaskStore } from '@mindwtr/core';
+import { flushPendingSave, getInMemorySyncChangeFingerprint, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { getNotificationPermissionStatus, startMobileNotifications, stopMobileNotifications } from '@/lib/notification-service';
@@ -52,6 +52,9 @@ const APP_STATE_TRIGGER_DEDUPE_MS = 1_000;
 // cycles cannot occupy the app back-to-back while the user is working (#766).
 const ADAPTIVE_SYNC_DURATION_MULTIPLIER = 2;
 const MAX_ADAPTIVE_SYNC_INTERVAL_MS = 5 * 60_000;
+// Same base and ceiling as the desktop auto-sync controller.
+const AUTO_SYNC_FAILURE_COOLDOWN_MS = 60_000;
+const MAX_AUTO_SYNC_FAILURE_COOLDOWN_MS = 10 * 60_000;
 const AUTO_SYNC_CADENCE_FILE: AutoSyncCadence = {
     minIntervalMs: 30_000,
     debounceFirstChangeMs: 8_000,
@@ -119,6 +122,8 @@ export function useRootLayoutSyncEffects({
     const isActive = useRef(true);
     const lastLoggedAutoSyncError = useRef<string | null>(null);
     const lastLoggedAutoSyncErrorAt = useRef(0);
+    const autoSyncRetryAfter = useRef(0);
+    const consecutiveSyncFailures = useRef(0);
     const notificationPermissionWarningShown = useRef(false);
     const syncCadenceRef = useRef<AutoSyncCadence>(AUTO_SYNC_CADENCE_REMOTE);
     const syncBackendCacheRef = useRef<{ backend: SyncBackend; readAt: number }>({
@@ -211,6 +216,21 @@ export function useRootLayoutSyncEffects({
         if (syncInFlight.current) {
             return;
         }
+        // A failed cycle parks the automatic triggers until its cooldown expires,
+        // so a CloudKit throttle is not met with another request on the next
+        // debounce. Pending edits stay queued and the timer below retries once.
+        // Explicit 0 (manual sync, app-state transitions, this retry itself) is
+        // deliberate and still goes through, matching the desktop controller.
+        if (requestedMinIntervalMs > 0 && Date.now() < autoSyncRetryAfter.current) {
+            if (!syncThrottleTimer.current) {
+                const waitMs = Math.max(0, autoSyncRetryAfter.current - Date.now());
+                syncThrottleTimer.current = setTimeout(() => {
+                    syncThrottleTimer.current = null;
+                    runSync(0);
+                }, waitMs);
+            }
+            return;
+        }
         const now = Date.now();
         if (now - lastAutoSyncAt.current < effectiveMinIntervalMs) {
             if (!syncThrottleTimer.current) {
@@ -230,10 +250,23 @@ export function useRootLayoutSyncEffects({
         syncInFlight.current = (async () => {
             await flushPendingSave().catch(logAppError);
             const result = await performMobileSync().catch((error) => ({ success: false, error: String(error) }));
+            if (result.success) {
+                autoSyncRetryAfter.current = 0;
+                consecutiveSyncFailures.current = 0;
+            }
             if (!result.success && result.error) {
                 if (isLikelyOfflineSyncError(result.error)) {
                     return;
                 }
+                // Honour the delay CloudKit asked for (CKErrorRetryAfterKey);
+                // otherwise back off from the same base the desktop uses (#948).
+                consecutiveSyncFailures.current += 1;
+                autoSyncRetryAfter.current = Date.now() + resolveSyncFailureCooldownMs({
+                    error: result.error,
+                    consecutiveFailures: consecutiveSyncFailures.current,
+                    baseMs: AUTO_SYNC_FAILURE_COOLDOWN_MS,
+                    maxMs: MAX_AUTO_SYNC_FAILURE_COOLDOWN_MS,
+                });
                 const nowMs = Date.now();
                 const shouldLog = result.error !== lastLoggedAutoSyncError.current
                     || nowMs - lastLoggedAutoSyncErrorAt.current > 10 * 60 * 1000;

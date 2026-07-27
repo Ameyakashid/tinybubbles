@@ -117,8 +117,8 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
                 fileName: input.fileName,
             },
         ),
-        apply: (_currentData, parsed) => {
-            const restored = prepareRestoredBackupDataForSync(parsed);
+        apply: (currentData, parsed) => {
+            const restored = prepareRestoredBackupDataForSync(parsed, { previousData: currentData });
             return { data: restored, result: restored };
         },
         countExtra: toBackupCountExtra,

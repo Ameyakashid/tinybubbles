@@ -1,4 +1,4 @@
-import { createSyncOrchestrator } from '@mindwtr/core';
+import { createSyncOrchestrator, resolveSyncFailureCooldownMs } from '@mindwtr/core';
 
 type SyncResult = {
     success: boolean;
@@ -23,6 +23,7 @@ type DesktopAutoSyncControllerOptions = {
     debounceFirstChangeMs?: number;
     debounceContinuousChangeMs?: number;
     autoFailureCooldownMs?: number;
+    maxFailureCooldownMs?: number;
     initialSyncDelayMs?: number;
     periodicSyncIntervalMs?: number | null;
 };
@@ -47,6 +48,7 @@ const DEFAULT_FOCUS_MIN_INTERVAL_MS = 30_000;
 const DEFAULT_DEBOUNCE_FIRST_CHANGE_MS = 2_000;
 const DEFAULT_DEBOUNCE_CONTINUOUS_CHANGE_MS = 5_000;
 const DEFAULT_AUTO_FAILURE_COOLDOWN_MS = 60_000;
+const DEFAULT_MAX_FAILURE_COOLDOWN_MS = 10 * 60_000;
 const DEFAULT_INITIAL_SYNC_DELAY_MS = 1_500;
 const DEFAULT_PERIODIC_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const FOCUS_TRIGGER_DEDUPE_MS = 1_000;
@@ -62,6 +64,7 @@ export const createDesktopAutoSyncController = (
     const debounceFirstChangeMs = options.debounceFirstChangeMs ?? DEFAULT_DEBOUNCE_FIRST_CHANGE_MS;
     const debounceContinuousChangeMs = options.debounceContinuousChangeMs ?? DEFAULT_DEBOUNCE_CONTINUOUS_CHANGE_MS;
     const autoFailureCooldownMs = options.autoFailureCooldownMs ?? DEFAULT_AUTO_FAILURE_COOLDOWN_MS;
+    const maxFailureCooldownMs = options.maxFailureCooldownMs ?? DEFAULT_MAX_FAILURE_COOLDOWN_MS;
     const initialSyncDelayMs = options.initialSyncDelayMs ?? DEFAULT_INITIAL_SYNC_DELAY_MS;
     const periodicSyncIntervalMs = options.periodicSyncIntervalMs ?? DEFAULT_PERIODIC_SYNC_INTERVAL_MS;
     const periodicSyncEnabled = typeof periodicSyncIntervalMs === 'number'
@@ -74,6 +77,7 @@ export const createDesktopAutoSyncController = (
     let initialSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let periodicSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let autoSyncRetryAfter = 0;
+    let consecutiveAutoSyncFailures = 0;
     let lastFocusTriggerAt = 0;
     let disposed = false;
 
@@ -190,8 +194,24 @@ export const createDesktopAutoSyncController = (
             });
             if (result.success) {
                 autoSyncRetryAfter = 0;
+                consecutiveAutoSyncFailures = 0;
             } else {
-                autoSyncRetryAfter = Math.max(autoSyncRetryAfter, now() + autoFailureCooldownMs);
+                // CloudKit answers a throttle with the delay it wants; honour it
+                // rather than retrying on a fixed 60s that keeps tripping the
+                // same limit. Local changes stay queued and the existing
+                // failure-cooldown timer retries once it expires (#948).
+                consecutiveAutoSyncFailures += 1;
+                const cooldownMs = resolveSyncFailureCooldownMs({
+                    error: result.error,
+                    consecutiveFailures: consecutiveAutoSyncFailures,
+                    baseMs: autoFailureCooldownMs,
+                    maxMs: maxFailureCooldownMs,
+                });
+                trace('Auto sync cooldown', {
+                    cooldownMs: String(cooldownMs),
+                    consecutiveFailures: String(consecutiveAutoSyncFailures),
+                });
+                autoSyncRetryAfter = Math.max(autoSyncRetryAfter, now() + cooldownMs);
             }
             if (!result.success && result.error) {
                 options.onSyncFailure?.(result.error);

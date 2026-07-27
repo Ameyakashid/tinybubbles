@@ -48,12 +48,12 @@ public class CloudKitSyncModule: Module {
         // MARK: - Zone & Subscription Setup
 
         AsyncFunction("ensureZone") { () -> Bool in
-            try await self.manager.ensureZone()
+            try await self.reportingRetryAfter { try await self.manager.ensureZone() }
             return true
         }
 
         AsyncFunction("ensureSubscription") { () -> Bool in
-            try await self.manager.ensureSubscription()
+            try await self.reportingRetryAfter { try await self.manager.ensureSubscription() }
             return true
         }
 
@@ -63,11 +63,13 @@ public class CloudKitSyncModule: Module {
         /// Returns { records: { [recordType]: [...json] }, deletedIDs: { [recordType]: [...ids] }, changeToken: string? }
         AsyncFunction("fetchChanges") { (changeTokenBase64: String?) -> [String: Any] in
             do {
-                let result = try await CloudKitChangeTracker.fetchChanges(
-                    database: self.manager.privateDB,
-                    zoneID: self.manager.zoneID,
-                    changeTokenBase64: changeTokenBase64
-                )
+                let result = try await self.reportingRetryAfter {
+                    try await CloudKitChangeTracker.fetchChanges(
+                        database: self.manager.privateDB,
+                        zoneID: self.manager.zoneID,
+                        changeTokenBase64: changeTokenBase64
+                    )
+                }
                 return self.formatChangeResult(result)
             } catch is ChangeTokenExpiredError {
                 // Return a sentinel so JS knows to do a full fetch
@@ -79,7 +81,9 @@ public class CloudKitSyncModule: Module {
 
         /// Fetch all records of a given type. Returns JSON array.
         AsyncFunction("fetchAllRecords") { (recordType: String) -> [[String: Any]] in
-            let records = try await self.manager.fetchAllRecords(recordType: recordType)
+            let records = try await self.reportingRetryAfter {
+                try await self.manager.fetchAllRecords(recordType: recordType)
+            }
             return records.map { CloudKitRecordMapper.json(from: $0) }
         }
 
@@ -95,31 +99,39 @@ public class CloudKitSyncModule: Module {
                 ])
             }
 
-            return try await self.manager.saveRecords(jsonArray, recordType: recordType)
+            return try await self.reportingRetryAfter {
+                try await self.manager.saveRecords(jsonArray, recordType: recordType)
+            }
         }
 
         // MARK: - Delete Records
 
         AsyncFunction("deleteRecords") { (recordType: String, recordIDs: [String]) -> Bool in
-            try await self.manager.deleteRecords(recordType: recordType, recordIDs: recordIDs)
+            try await self.reportingRetryAfter {
+                try await self.manager.deleteRecords(recordType: recordType, recordIDs: recordIDs)
+            }
             return true
         }
 
         // MARK: - Attachment Assets
 
         AsyncFunction("saveAttachmentAsset") { (recordName: String, filePath: String, metadata: [String: Any]) -> [String: Any] in
-            return try await self.manager.saveAttachmentAsset(
-                recordName: recordName,
-                filePath: filePath,
-                metadata: metadata
-            )
+            return try await self.reportingRetryAfter {
+                try await self.manager.saveAttachmentAsset(
+                    recordName: recordName,
+                    filePath: filePath,
+                    metadata: metadata
+                )
+            }
         }
 
         AsyncFunction("fetchAttachmentAsset") { (recordName: String, targetPath: String) -> [String: Any] in
-            return try await self.manager.fetchAttachmentAsset(
-                recordName: recordName,
-                targetPath: targetPath
-            )
+            return try await self.reportingRetryAfter {
+                try await self.manager.fetchAttachmentAsset(
+                    recordName: recordName,
+                    targetPath: targetPath
+                )
+            }
         }
 
         AsyncFunction("consumePendingRemoteChange") { () -> Bool in
@@ -133,6 +145,39 @@ public class CloudKitSyncModule: Module {
     }
 
     // MARK: - Helpers
+
+    /// CloudKit reports how long to wait before retrying a throttled or
+    /// unavailable request in CKErrorRetryAfterKey, and Apple asks callers to
+    /// wait that long rather than guess. The JS layer only ever sees an error
+    /// string, so append the interval in the fixed form it parses. Attached
+    /// whenever CloudKit supplies the key, not for one error code (#948).
+    private func reportingRetryAfter<T>(_ operation: () async throws -> T) async throws -> T {
+        do {
+            return try await operation()
+        } catch {
+            throw Self.annotatingRetryAfter(error)
+        }
+    }
+
+    static func annotatingRetryAfter(_ error: Error) -> Error {
+        guard let seconds = retryAfterSeconds(in: error) else { return error }
+        return NSError(domain: (error as NSError).domain, code: (error as NSError).code, userInfo: [
+            NSLocalizedDescriptionKey: "\(error.localizedDescription) [retryAfter=\(seconds)]"
+        ])
+    }
+
+    /// A partial failure carries the real reason — including the retry
+    /// interval — on the per-item errors rather than the top-level one.
+    private static func retryAfterSeconds(in error: Error) -> Double? {
+        let nsError = error as NSError
+        if let retryAfter = nsError.userInfo[CKErrorRetryAfterKey] as? NSNumber {
+            return retryAfter.doubleValue
+        }
+        if let partial = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
+            return partial.values.compactMap { retryAfterSeconds(in: $0) }.max()
+        }
+        return nil
+    }
 
     private func formatChangeResult(_ result: CloudKitChangeTracker.ChangeResult) -> [String: Any] {
         // Group changed records by type

@@ -197,6 +197,55 @@ describe('createDesktopAutoSyncController', () => {
         expect(performSync).toHaveBeenCalledTimes(2);
     });
 
+    it('waits exactly as long as CloudKit asked before retrying (#948)', async () => {
+        const scheduler = createManualScheduler();
+        // CloudKit answers a throttle with the delay it wants. Retrying on the
+        // fixed 60s cooldown either hammers a limit that wanted longer, or sits
+        // idle when it only wanted a few seconds.
+        const performSync = vi.fn(async () => ({
+            success: false,
+            error: 'CloudKit error: Request Rate Limited [retryAfter=180]',
+        }));
+        const controller = createDesktopAutoSyncController({
+            canSync: async () => true,
+            performSync,
+            flushPendingSave: async () => undefined,
+            reportError: vi.fn(),
+            isRuntimeActive: () => true,
+            now: scheduler.now,
+            setTimer: scheduler.setTimer,
+            clearTimer: scheduler.clearTimer,
+            minIntervalMs: 0,
+            autoFailureCooldownMs: 60_000,
+            periodicSyncIntervalMs: null,
+        });
+
+        controller.handleDataChange();
+        await scheduler.advanceBy(2_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(1);
+        });
+
+        // A further edit arms the retry, and is held rather than sent.
+        controller.handleDataChange();
+        await scheduler.advanceBy(2_000);
+        await Promise.resolve();
+        expect(performSync).toHaveBeenCalledTimes(1);
+
+        // Still parked well past the 60s this used to wait.
+        await scheduler.advanceBy(118_000);
+        expect(performSync).toHaveBeenCalledTimes(1);
+
+        // ...and goes once the delay CloudKit asked for is up, carrying the
+        // edits made in the meantime.
+        await scheduler.advanceBy(61_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(2);
+        });
+
+        controller.dispose();
+    });
+
     it('delays a queued auto follow-up when the in-flight sync enters failure cooldown', async () => {
         const scheduler = createManualScheduler();
         const logInfo = vi.fn();

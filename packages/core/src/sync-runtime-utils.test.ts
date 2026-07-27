@@ -4,6 +4,8 @@ import {
     createWebdavDownloadBackoff,
     getErrorStatus,
     isWebdavRateLimitedError,
+    parseCloudKitRetryAfterMs,
+    resolveSyncFailureCooldownMs,
 } from './sync-runtime-utils';
 
 describe('sync-runtime-utils', () => {
@@ -74,5 +76,35 @@ describe('sync-runtime-utils', () => {
         expect(backoff.size()).toBe(0);
 
         nowSpy.mockRestore();
+    });
+
+    it('reads the delay CloudKit asked for out of a bridge error (#948)', () => {
+        expect(parseCloudKitRetryAfterMs('CloudKit error: Service Unavailable [retryAfter=42]')).toBe(42_000);
+        expect(parseCloudKitRetryAfterMs(new Error('rate limited [retryAfter=3.5]'))).toBe(3_500);
+        expect(parseCloudKitRetryAfterMs('CloudKit error: Network Failure')).toBeNull();
+        expect(parseCloudKitRetryAfterMs('[retryAfter=0]')).toBeNull();
+        expect(parseCloudKitRetryAfterMs('[retryAfter=-5]')).toBeNull();
+        // Never park sync for a whole session on one absurd value.
+        expect(parseCloudKitRetryAfterMs('[retryAfter=999999]')).toBe(60 * 60 * 1000);
+    });
+
+    it('prefers the requested delay over its own backoff, and backs off when none is given (#948)', () => {
+        const baseMs = 60_000;
+        const maxMs = 600_000;
+
+        // A requested delay wins outright, even when it is shorter than the
+        // fixed cooldown this replaced — waiting longer than asked is the bug.
+        expect(resolveSyncFailureCooldownMs({
+            error: 'CloudKit error: Request Rate Limited [retryAfter=5]',
+            consecutiveFailures: 4,
+            baseMs,
+            maxMs,
+        })).toBe(5_000);
+
+        // Without one, grow instead of retrying on the same interval forever.
+        expect(resolveSyncFailureCooldownMs({ error: 'offline', consecutiveFailures: 1, baseMs, maxMs })).toBe(60_000);
+        expect(resolveSyncFailureCooldownMs({ error: 'offline', consecutiveFailures: 3, baseMs, maxMs })).toBe(240_000);
+        expect(resolveSyncFailureCooldownMs({ error: 'offline', consecutiveFailures: 99, baseMs, maxMs })).toBe(maxMs);
+        expect(resolveSyncFailureCooldownMs({ consecutiveFailures: 0, baseMs, maxMs })).toBe(baseMs);
     });
 });

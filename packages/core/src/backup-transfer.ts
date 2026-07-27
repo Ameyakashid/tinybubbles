@@ -62,10 +62,16 @@ type BackupEnvelope = {
 
 type BackupRestoreSyncPreparationOptions = {
     restoredAt?: string | number | Date | null;
+    // The data being replaced. Anything it holds that the backup does not is
+    // carried over as a tombstone so the restore survives the next merge — see
+    // carryForwardEntitiesMissingFromBackup.
+    previousData?: AppData | null;
 };
 
 type RestorableEntity = {
+    id: string;
     deletedAt?: string;
+    purgedAt?: string;
     rev?: number;
     revBy?: string;
     updatedAt: string;
@@ -150,6 +156,40 @@ const prepareRestoredEntityForSync = <T extends RestorableEntity>(
     };
 };
 
+/**
+ * Restoring replaces local data wholesale, which silently drops the tombstones
+ * this device was holding for anything deleted since the backup was taken. The
+ * remote still has those records, so the next merge reads their absence as
+ * "new over there" and hands them all back — the restore appears to work and
+ * then undoes itself (#939).
+ *
+ * So every id the replaced data knows about but the backup does not is carried
+ * over as a tombstone, at a revision above the one it was last seen at, making
+ * the restored snapshot authoritative rather than merely newer in places.
+ * Records this device never saw are untouched: absence here is ignorance, not a
+ * deletion, and another device's work is not ours to erase.
+ */
+const carryForwardEntitiesMissingFromBackup = <T extends RestorableEntity>(
+    restored: T[],
+    previous: T[] | undefined,
+    restoredAt: string
+): T[] => {
+    if (!previous?.length) return restored;
+    const restoredIds = new Set(restored.map((item) => item.id));
+    const carried = previous
+        // An already-purged tombstone is gone everywhere; reviving it into the
+        // payload would only re-broadcast a delete that has already landed.
+        .filter((item) => !item.purgedAt && !restoredIds.has(item.id))
+        .map((item) => ({
+            ...item,
+            deletedAt: item.deletedAt ?? restoredAt,
+            updatedAt: restoredAt,
+            rev: nextRevision(item.rev),
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+        }));
+    return carried.length > 0 ? [...restored, ...carried] : restored;
+};
+
 const stripDeviceLocalRestoreSettings = (settings: AppData['settings']): AppData['settings'] => {
     if (settings.security?.mobileAppLockEnabled === undefined) return settings;
     const nextSettings: AppData['settings'] = {
@@ -169,13 +209,18 @@ export const prepareRestoredBackupDataForSync = (
 ): AppData => {
     const restoredAt = toIsoString(options.restoredAt) ?? new Date().toISOString();
     const restoredSettings = stripDeviceLocalRestoreSettings(data.settings);
+    const previous = options.previousData ?? null;
+    const prepare = <T extends RestorableEntity>(restored: T[], before: T[] | undefined): T[] => (
+        carryForwardEntitiesMissingFromBackup(restored, before, restoredAt)
+            .map((item) => prepareRestoredEntityForSync(item, restoredAt))
+    );
     return {
         ...data,
-        tasks: data.tasks.map((task) => prepareRestoredEntityForSync(task, restoredAt)),
-        projects: data.projects.map((project) => prepareRestoredEntityForSync(project, restoredAt)),
-        sections: data.sections.map((section) => prepareRestoredEntityForSync(section, restoredAt)),
-        areas: data.areas.map((area) => prepareRestoredEntityForSync(area, restoredAt)),
-        people: (data.people ?? []).map((person) => prepareRestoredEntityForSync(person, restoredAt)),
+        tasks: prepare(data.tasks, previous?.tasks),
+        projects: prepare(data.projects, previous?.projects),
+        sections: prepare(data.sections, previous?.sections),
+        areas: prepare(data.areas, previous?.areas),
+        people: prepare(data.people ?? [], previous?.people),
         settings: {
             ...restoredSettings,
             pendingRemoteWriteAt: restoredAt,
