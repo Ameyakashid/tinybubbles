@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   type Task,
@@ -27,6 +28,7 @@ import {
 } from '../lib/notification-service';
 import { logWarn } from '../lib/app-log';
 import {
+  POMODORO_COLLAPSED_STORAGE_KEY,
   POMODORO_SESSION_STORAGE_KEY,
   pausePomodoroSession,
   resolvePomodoroSession,
@@ -57,6 +59,11 @@ export function PomodoroPanel({
   const [durations, setDurations] = useState<PomodoroDurations>(DEFAULT_POMODORO_DURATIONS);
   const [timerState, setTimerState] = useState(() => createPomodoroState(DEFAULT_POMODORO_DURATIONS));
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
+  // Presentation only, and deliberately device-local: a phone folding the card
+  // away should not fold it away on the desktop too, so this lives in
+  // AsyncStorage rather than synced settings (#946, matching desktop's #875).
+  // Starts expanded so an update never hides a timer someone was already using.
+  const [collapsed, setCollapsed] = useState(false);
   const [phaseEndsAt, setPhaseEndsAt] = useState<string | undefined>(undefined);
   const [lastEvent, setLastEvent] = useState<PomodoroEvent | null>(null);
   const [sessionHistory, setSessionHistory] = useState<PomodoroSessionHistory>(() => sanitizePomodoroSessionHistory());
@@ -277,6 +284,28 @@ export function PomodoroPanel({
     });
   };
 
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(POMODORO_COLLAPSED_STORAGE_KEY)
+      .then((raw) => {
+        if (!active || raw === null) return;
+        setCollapsed(raw === 'true');
+      })
+      .catch((error) => {
+        logWarn('Failed to read pomodoro collapse preference', { scope: 'pomodoro', extra: { error: String(error) } });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggleCollapsed = (next: boolean) => {
+    setCollapsed(next);
+    void AsyncStorage.setItem(POMODORO_COLLAPSED_STORAGE_KEY, String(next)).catch((error) => {
+      logWarn('Failed to save pomodoro collapse preference', { scope: 'pomodoro', extra: { error: String(error) } });
+    });
+  };
+
   const handleToggleRun = () => {
     const session = resolvePomodoroSession({
       durations,
@@ -337,6 +366,46 @@ export function PomodoroPanel({
     setLastEvent(null);
   };
 
+  const collapseLabel = tFallback(t, 'pomodoro.collapse', 'Collapse timer');
+  const expandLabel = tFallback(t, 'pomodoro.expand', 'Expand timer');
+  const phaseColor = timerState.phase === 'focus' ? tc.tint : tc.success;
+
+  const collapseToggle = (
+    <Pressable
+      accessibilityLabel={collapsed ? expandLabel : collapseLabel}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={() => toggleCollapsed(!collapsed)}
+      style={styles.collapseToggle}
+    >
+      {collapsed
+        ? <ChevronDown size={18} color={tc.secondaryText} />
+        : <ChevronUp size={18} color={tc.secondaryText} />}
+    </Pressable>
+  );
+
+  if (collapsed) {
+    // The session state and its timers live above this branch, so folding the
+    // card away never stops the run — the clock here is the same one.
+    return (
+      <View style={[styles.card, styles.collapsedCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
+        <View style={styles.collapsedRow}>
+          <Text style={[styles.collapsedClock, { color: tc.text }]}>
+            {formatPomodoroClock(timerState.remainingSeconds)}
+          </Text>
+          <Text style={[styles.phaseStatusText, { color: phaseColor }]} numberOfLines={1}>
+            {phaseLabel}
+          </Text>
+          {timerState.isRunning && (
+            <View style={[styles.collapsedRunningDot, { backgroundColor: phaseColor }]} />
+          )}
+          <View style={styles.collapsedSpacer} />
+          {collapseToggle}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
       <View style={styles.headerRow}>
@@ -344,10 +413,11 @@ export function PomodoroPanel({
           <Text style={[styles.title, { color: tc.text }]}>{cardTitle}</Text>
         </View>
         <View style={styles.phaseStatus}>
-          <Text style={[styles.phaseStatusText, { color: timerState.phase === 'focus' ? tc.tint : tc.success }]}>
+          <Text style={[styles.phaseStatusText, { color: phaseColor }]}>
             {phaseLabel}
           </Text>
         </View>
+        {collapseToggle}
       </View>
 
       {isHydratingSession && (
@@ -565,6 +635,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  collapsedCard: {
+    paddingVertical: 10,
+  },
+  collapsedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  collapsedClock: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  collapsedRunningDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  collapsedSpacer: {
+    flex: 1,
+  },
+  collapseToggle: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+
   headerText: {
     flex: 1,
   },

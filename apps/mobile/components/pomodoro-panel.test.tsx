@@ -230,4 +230,53 @@ describe('PomodoroPanel', () => {
     expect(pressableText(tree)).toContain('Switch to Focus');
     expect(tree.root.findAllByType(Text).some((node) => flattenText(node.props.children) === 'Break')).toBe(true);
   });
+
+  // The shared getItem mock is key-blind, and the panel now reads two keys.
+  // Keying the implementation keeps the collapse read from consuming a value
+  // queued for the session read (or vice versa).
+  const mockStorage = (values: Record<string, string | null>) => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => values[key] ?? null);
+  };
+
+  it('starts expanded so an update never hides a timer someone was using (#946)', async () => {
+    mockStorage({});
+
+    const tree = await renderPanel();
+
+    expect(pressableText(tree)).toContain('Switch to Break');
+  });
+
+  it('folds down to the clock and phase when collapsed, keeping the timer readable (#946)', async () => {
+    mockStorage({ '@mindwtr_pomodoro_collapsed': 'true' });
+
+    const tree = await renderPanel();
+    const textValues = tree.root.findAllByType(Text).map((node) => flattenText(node.props.children));
+
+    // The clock and the phase survive the fold; the controls do not.
+    expect(textValues).toContain('25:00');
+    expect(textValues).toContain('Focus');
+    expect(pressableText(tree)).not.toContain('Switch to Break');
+  });
+
+  it('persists the fold to this device only (#946)', async () => {
+    mockStorage({});
+
+    const tree = await renderPanel();
+    const toggle = tree.root.findAllByType(Pressable)
+      .find((node) => node.props.accessibilityLabel === 'Collapse timer');
+    expect(toggle).toBeDefined();
+
+    await act(async () => {
+      toggle?.props.onPress();
+    });
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('@mindwtr_pomodoro_collapsed', 'true');
+    // Collapsing is a presentation choice, not task data: it must never ride
+    // along in the synced session payload.
+    const sessionWrites = vi.mocked(AsyncStorage.setItem).mock.calls
+      .filter(([key]) => key === '@mindwtr_pomodoro_state');
+    sessionWrites.forEach(([, value]) => {
+      expect(String(value)).not.toContain('collapsed');
+    });
+  });
 });
