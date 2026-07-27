@@ -166,6 +166,100 @@ describe('ListView', () => {
     expect(html).toContain('data-view-filter-input');
   });
 
+  it('keeps a legacy completed sort in Done without leaking it after navigation', () => {
+    useTaskStore.setState({
+      settings: { taskSortBy: 'completed' },
+      _allTasks: [
+        makeTask('next-z', { title: 'Zulu first', status: 'next', order: 0 }),
+        makeTask('next-a', { title: 'Alpha second', status: 'next', order: 1 }),
+      ],
+      lastDataChangeAt: 1,
+    });
+
+    const next = renderListView('next', 'Next');
+    expect(next.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Default');
+    expect(next.container.textContent?.indexOf('Zulu first'))
+      .toBeLessThan(next.container.textContent?.indexOf('Alpha second') ?? -1);
+    next.unmount();
+
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('done-old', {
+          title: 'Older',
+          status: 'done',
+          completedAt: new Date(2026, 6, 26, 12).toISOString(),
+        }),
+        makeTask('done-new', {
+          title: 'Newer',
+          status: 'done',
+          completedAt: new Date(2026, 6, 27, 12).toISOString(),
+        }),
+      ],
+      lastDataChangeAt: 2,
+    });
+    const done = renderListView('done', 'Done');
+    expect(done.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Completion date');
+    expect(done.container.textContent?.indexOf('Newer'))
+      .toBeLessThan(done.container.textContent?.indexOf('Older') ?? -1);
+  });
+
+  it('persists a separate Done sort without changing the synced list preference', () => {
+    useTaskStore.setState({
+      settings: { taskSortBy: 'title' },
+      _allTasks: [makeTask('done', { status: 'done' })],
+      lastDataChangeAt: 1,
+    });
+
+    const done = renderListView('done', 'Done');
+    selectToolbarOption('Sort', 'Completion date', done);
+
+    expect(useUiStore.getState().listOptions.doneSortBy).toBe('completed');
+    expect(useTaskStore.getState().settings.taskSortBy).toBe('title');
+    done.unmount();
+
+    useTaskStore.setState({
+      _allTasks: [makeTask('next', { status: 'next' })],
+      lastDataChangeAt: 2,
+    });
+    const next = renderListView('next', 'Next');
+    expect(next.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Title');
+  });
+
+  it('moves completion-date groups across local midnight', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 6, 27, 23, 59, 59, 900));
+      useTaskStore.setState({
+        _allTasks: [
+          makeTask('done-today', {
+            title: 'Finished today',
+            status: 'done',
+            completedAt: new Date(2026, 6, 27, 12).toISOString(),
+          }),
+        ],
+        lastDataChangeAt: 1,
+      });
+      useUiStore.setState((state) => ({
+        ...state,
+        listOptions: {
+          ...state.listOptions,
+          doneGroupBy: 'completedDate',
+        },
+      }));
+
+      const done = renderListView('done', 'Done');
+      expect(done.getByText('Today')).toBeInTheDocument();
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+        await Promise.resolve();
+      });
+      expect(done.getByText('Yesterday')).toBeInTheDocument();
+      done.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     ['waiting', 'Waiting'],
     ['someday', 'Someday'],

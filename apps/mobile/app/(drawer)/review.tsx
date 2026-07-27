@@ -10,7 +10,6 @@ import {
   tFallback,
   type Task,
   type TaskStatus,
-  type TaskSortBy,
 } from '@mindwtr/core';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
@@ -28,6 +27,7 @@ import { SwipeableTaskItem } from '@/components/swipeable-task-item';
 import { buildReviewTaskGroups, getReviewOverviewTasks } from '@/components/review/review-task-groups';
 import { TaskListBulkOrganizeModal } from '@/components/task-list/TaskListBulkOrganizeModal';
 import { useTaskListSelection } from '@/components/use-task-list-selection';
+import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
 
 export default function ReviewScreen() {
   const router = useRouter();
@@ -176,7 +176,7 @@ export default function ReviewScreen() {
     tasks,
   }), [areaById, projectById, resolvedAreaFilter, tasks]);
 
-  const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+  const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
   const sortedTasks = sortTasksBy(activeTasks, sortBy);
   const noAreaLabel = t('review.noArea');
   const singleActionsLabel = t('review.singleActions');
@@ -269,7 +269,7 @@ export default function ReviewScreen() {
       onToggleSelect={() => toggleMultiSelect(task.id)}
       onLongPressAction={() => toggleMultiSelect(task.id)}
       onStatusChange={(status) => updateTask(task.id, { status: status as TaskStatus })}
-      onDelete={() => { void deleteTask(task.id); }}
+      onDelete={() => deleteTask(task.id)}
       onProjectPress={openProjectScreen}
       onContextPress={openContextsScreen}
       onTagPress={openContextsScreen}

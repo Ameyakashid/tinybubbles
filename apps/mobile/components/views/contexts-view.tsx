@@ -20,7 +20,6 @@ import {
   isTaskInActiveProject,
   tFallback,
   type Task,
-  type TaskSortBy,
   type TaskStatus,
 } from '@mindwtr/core';
 import { useEffect, useMemo, useState } from 'react';
@@ -45,6 +44,7 @@ import {
 } from './contexts-view-filter-utils';
 import { assertBulkActionSucceeded, useTaskListSelection } from '../use-task-list-selection';
 import { TASK_LIST_WINDOWING_PROPS } from '../task-list-windowing';
+import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
 
 type BulkTokenPickerState = {
   field: 'tags' | 'contexts';
@@ -151,7 +151,7 @@ export function ContextsView() {
       ? activeTasks.filter((t) => selectedContexts.every((ctx) => matchesSelected(t, ctx)))
       : activeTasks;
 
-  const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+  const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
   const sortedTasks = sortTasksBy(filteredTasks, sortBy);
   const restoreActionLabel = tFallback(t, 'trash.restoreToInbox', 'Restore');
   const {
@@ -190,7 +190,7 @@ export function ContextsView() {
   };
 
   const handleDelete = (taskId: string) => {
-    deleteTask(taskId);
+    return deleteTask(taskId);
   };
 
   const handleSaveTask = (taskId: string, updates: Partial<Task>) => {

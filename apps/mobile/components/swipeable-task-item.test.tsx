@@ -221,6 +221,7 @@ describe('SwipeableTaskItem', () => {
     storeState._tasksById = new Map();
     addTask.mockResolvedValue({ success: true, id: 'created-task' });
     updateTask.mockResolvedValue({ success: true });
+    restoreTask.mockResolvedValue({ success: true });
     getTaskAgeLabel.mockReturnValue('3 weeks old');
     getTaskStaleness.mockReturnValue('stale');
     getChecklistProgress.mockReturnValue(null);
@@ -446,6 +447,111 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       message: 'Task deleted',
       actionLabel: 'Undo',
       onAction: expect.any(Function),
+    }));
+  });
+
+  it('does not report delete success when the action resolves to a failure', async () => {
+    const onDelete = vi.fn(async () => ({ success: false, error: 'Storage is read-only' }));
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(
+        <SwipeableTaskItem
+          task={{
+            id: 'task-1',
+            title: 'Pay rent',
+            status: 'inbox',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          } as any}
+          isDark={false}
+          tc={{
+            taskItemBg: '#111111',
+            border: '#222222',
+            text: '#ffffff',
+            secondaryText: '#999999',
+            tint: '#3b82f6',
+            warning: '#f59e0b',
+          } as any}
+          onPress={vi.fn()}
+          onStatusChange={vi.fn()}
+          onDelete={onDelete}
+        />
+      );
+    });
+
+    const deleteAction = tree.root.find(
+      (node) => node.props.accessibilityLabel === 'Delete task' && typeof node.props.onPress === 'function'
+    );
+    await renderer.act(async () => {
+      deleteAction.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Storage is read-only',
+      tone: 'error',
+    }));
+    expect(showToast).not.toHaveBeenCalledWith(expect.objectContaining({ message: 'Task deleted' }));
+  });
+
+  it('surfaces resolved failures from delete undo and focus-star actions', async () => {
+    const onDelete = vi.fn(async () => ({ success: true }));
+    restoreTask.mockResolvedValueOnce({ success: false, error: 'Restore failed' });
+    updateTask.mockResolvedValueOnce({ success: false, error: 'Focus update failed' });
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(
+        <SwipeableTaskItem
+          task={{
+            id: 'task-1',
+            title: 'Pay rent',
+            status: 'inbox',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          } as any}
+          isDark={false}
+          tc={{
+            taskItemBg: '#111111',
+            border: '#222222',
+            text: '#ffffff',
+            secondaryText: '#999999',
+            tint: '#3b82f6',
+            warning: '#f59e0b',
+          } as any}
+          onPress={vi.fn()}
+          onStatusChange={vi.fn()}
+          onDelete={onDelete}
+          showFocusToggle
+        />
+      );
+    });
+
+    const deleteAction = tree.root.find(
+      (node) => node.props.accessibilityLabel === 'Delete task' && typeof node.props.onPress === 'function'
+    );
+    await renderer.act(async () => {
+      deleteAction.props.onPress();
+      await Promise.resolve();
+    });
+    const undo = showToast.mock.calls.find(([toast]) => toast.message === 'Task deleted')?.[0]?.onAction;
+    await renderer.act(async () => {
+      undo?.();
+      await Promise.resolve();
+    });
+
+    const focus = tree.root.find((node) => node.props.accessibilityLabel === 'Add to focus');
+    await renderer.act(async () => {
+      focus.props.onPress({ stopPropagation: vi.fn() });
+      await Promise.resolve();
+    });
+
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Restore failed',
+      tone: 'error',
+    }));
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Focus update failed',
+      tone: 'error',
     }));
   });
 

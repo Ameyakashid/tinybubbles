@@ -18,7 +18,6 @@ import {
     tFallback,
     type ExternalCalendarEvent,
     type Task,
-    type TaskSortBy,
     type TaskStatus,
 } from '@mindwtr/core';
 
@@ -33,6 +32,7 @@ import { TaskEditModal } from './task-edit-modal';
 import { InboxProcessingModal } from './inbox-processing-modal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { fetchExternalCalendarEvents } from '../lib/external-calendar';
+import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
 
 type DailyReviewStep = 'today' | 'focus' | 'inbox' | 'waiting' | 'completed';
 type DailyReviewStepDefinition = {
@@ -79,7 +79,7 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
     const [externalError, setExternalError] = useState<string | null>(null);
     const [calendarExpanded, setCalendarExpanded] = useState(true);
 
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const includeFocusStep = settings.gtd?.dailyReview?.includeFocusStep !== false;
     const focusTaskLimit = normalizeFocusTaskLimit(settings.gtd?.focusTaskLimit);
 
@@ -273,7 +273,7 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
                         tc={tc}
                         onPress={() => openTask(task)}
                         onStatusChange={(status) => updateTask(task.id, { status: status as TaskStatus })}
-                        onDelete={() => { void deleteTask(task.id); }}
+                        onDelete={() => deleteTask(task.id)}
                         showFocusToggle={options?.showFocusToggle}
                         hideStatusBadge={options?.hideStatusBadge}
                         footerContent={footerContent}

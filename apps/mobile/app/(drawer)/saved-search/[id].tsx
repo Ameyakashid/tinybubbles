@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, type TaskSortBy } from '@mindwtr/core';
+import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus } from '@mindwtr/core';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { TaskEditModal } from '@/components/task-edit-modal';
@@ -12,6 +12,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { taskMatchesAreaFilter } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { Trash2 } from 'lucide-react-native';
+import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
 
 export default function SavedSearchScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,7 +47,7 @@ export default function SavedSearchScreen() {
 
   const savedSearch = savedSearches?.find(s => s.id === id);
   const query = savedSearch?.query || '';
-  const sortBy = (taskSortBy ?? 'default') as TaskSortBy;
+  const sortBy = resolveNonDoneTaskSortBy(taskSortBy);
 
   const filteredTasks = useMemo(() => {
     if (!query) return [];
@@ -105,7 +106,7 @@ export default function SavedSearchScreen() {
         setIsModalVisible(true);
       }}
       onStatusChange={(status) => updateTask(item.id, { status: status as TaskStatus })}
-      onDelete={() => { void deleteTask(item.id); }}
+      onDelete={() => deleteTask(item.id)}
       onProjectPress={openProjectScreen}
       onContextPress={openContextsScreen}
       onTagPress={openContextsScreen}

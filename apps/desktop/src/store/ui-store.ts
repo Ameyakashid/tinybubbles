@@ -1,6 +1,7 @@
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { FilterCriteria } from '@mindwtr/core';
+import type { FilterCriteria, TaskSortBy } from '@mindwtr/core';
 import { DONE_AXES, FOCUS_AXES, REFERENCE_AXES, sanitizeAxis, type DoneGroupBy, type NextGroupBy, type ReferenceGroupBy } from '../components/views/list/next-grouping';
+import { DONE_SORT_OPTIONS } from '../lib/task-list-sort';
 
 const toastTimeouts = new Map<string, number>();
 // These are the localStorage sanitizers for what the Focus/Next and Reference
@@ -17,6 +18,7 @@ type ListOptions = {
     // Done keeps its own axis rather than sharing nextGroupBy: 'completedDate'
     // is not in FOCUS_AXES, so that sanitizer would reset it on every launch.
     doneGroupBy: ListDoneGroupBy;
+    doneSortBy?: TaskSortBy;
     focusTop3Only: boolean;
 };
 
@@ -46,11 +48,15 @@ function readStoredListOptions(): ListOptions {
         const raw = storage.getItem(LIST_OPTIONS_STORAGE_KEY);
         if (!raw) return DEFAULT_LIST_OPTIONS;
         const parsed = JSON.parse(raw) as Partial<ListOptions> | null;
+        const doneSortBy = DONE_SORT_OPTIONS.includes(parsed?.doneSortBy as TaskSortBy)
+            ? parsed?.doneSortBy as TaskSortBy
+            : undefined;
         return {
             showDetails: typeof parsed?.showDetails === 'boolean' ? parsed.showDetails : DEFAULT_LIST_OPTIONS.showDetails,
             nextGroupBy: sanitizeAxis(FOCUS_AXES, parsed?.nextGroupBy, DEFAULT_LIST_OPTIONS.nextGroupBy),
             referenceGroupBy: sanitizeAxis(REFERENCE_AXES, parsed?.referenceGroupBy, DEFAULT_LIST_OPTIONS.referenceGroupBy),
             doneGroupBy: sanitizeAxis(DONE_AXES, parsed?.doneGroupBy, DEFAULT_LIST_OPTIONS.doneGroupBy),
+            ...(doneSortBy ? { doneSortBy } : {}),
             focusTop3Only: typeof parsed?.focusTop3Only === 'boolean' ? parsed.focusTop3Only : DEFAULT_LIST_OPTIONS.focusTop3Only,
         };
     } catch {

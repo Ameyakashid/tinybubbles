@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, filterTasksBySearch, sortTasksBy } from '@mindwtr/core';
-import type { BulkOrganizeTaskUpdateInput, TaskSortBy } from '@mindwtr/core';
+import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
@@ -24,6 +24,7 @@ import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
+import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 interface SearchViewProps {
     savedSearchId: string;
@@ -49,7 +50,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     );
     const { t } = useLanguage();
     const showToast = useUiStore((state) => state.showToast);
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');

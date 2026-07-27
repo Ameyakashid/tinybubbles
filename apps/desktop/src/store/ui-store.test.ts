@@ -66,6 +66,7 @@ describe('useUiStore list options', () => {
             nextGroupBy: 'project',
             referenceGroupBy: 'tag',
             doneGroupBy: 'completedDate',
+            doneSortBy: 'completed',
             focusTop3Only: true,
         });
 
@@ -74,6 +75,7 @@ describe('useUiStore list options', () => {
             nextGroupBy: 'project',
             referenceGroupBy: 'tag',
             doneGroupBy: 'completedDate',
+            doneSortBy: 'completed',
             focusTop3Only: true,
         });
     });

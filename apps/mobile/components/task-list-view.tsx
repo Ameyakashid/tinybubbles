@@ -27,7 +27,7 @@ export interface TaskListViewProps {
   /** Row interaction handlers. */
   onPressTask: (task: Task) => void;
   onChangeTaskStatus: (task: Task, status: TaskStatus) => void | Promise<unknown>;
-  onDeleteTask: (task: Task) => void;
+  onDeleteTask: (task: Task) => void | Promise<unknown>;
   highlightTaskId?: string | null;
   rowContext?: SwipeableTaskItemRowContext;
 

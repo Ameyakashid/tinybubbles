@@ -217,7 +217,7 @@ export function WaitingView() {
         t={t}
         onPressTask={setEditingTask}
         onChangeTaskStatus={handleStatusChange}
-        onDeleteTask={(task) => { void deleteTask(task.id); }}
+        onDeleteTask={(task) => deleteTask(task.id)}
         highlightTaskId={highlightTaskId}
         selection={selection}
         bulkStatusOptions={bulkMoveStatusOptions}

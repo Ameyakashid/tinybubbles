@@ -135,7 +135,7 @@ export function useReviewModalController({
     }, [updateTask]);
 
     const handleDelete = useCallback((taskId: string) => {
-        deleteTask(taskId);
+        return deleteTask(taskId);
     }, [deleteTask]);
 
     const handleSaveTask = useCallback((taskId: string, updates: Partial<Task>) => {

@@ -39,7 +39,7 @@ export interface SwipeableTaskItemProps {
     tc: ThemeColors;
     onPress: () => void;
     onStatusChange: (status: TaskStatus) => void | Promise<unknown>;
-    onDelete: () => void | Promise<void>;
+    onDelete: () => void | Promise<unknown>;
     onLongPressAction?: () => void;
     onLongPressActionLabel?: string;
     /** Hide context tags (useful when viewing a specific context) */
@@ -385,7 +385,19 @@ function SwipeableTaskItemInner({
             }
             return;
         }
-        updateTask(task.id, action.patch);
+        let updatePromise: Promise<unknown>;
+        try {
+            updatePromise = Promise.resolve(updateTask(task.id, action.patch));
+        } catch (error) {
+            updatePromise = Promise.reject(error);
+        }
+        void updatePromise
+            .then((result) => {
+                if (isActionFailure(result)) {
+                    showActionFailure(getActionFailureMessage(result));
+                }
+            })
+            .catch((error) => showActionFailure(getUnknownErrorMessage(error)));
     };
 
     // Status-aware left swipe action
@@ -505,17 +517,35 @@ function SwipeableTaskItemInner({
             deletePromise = Promise.reject(error);
         }
         void deletePromise
-            .then(() => {
+            .then((result) => {
+                if (isActionFailure(result)) {
+                    showActionFailure(getActionFailureMessage(result));
+                    return;
+                }
                 showToast({
                     title: t('common.notice') || 'Notice',
                     message: t('list.taskDeleted') || 'Task deleted',
                     tone: 'info',
                     actionLabel: t('common.undo') || 'Undo',
-                    onAction: () => { void restoreTask(task.id); },
+                    onAction: () => {
+                        let restorePromise: Promise<unknown>;
+                        try {
+                            restorePromise = Promise.resolve(restoreTask(task.id));
+                        } catch (error) {
+                            restorePromise = Promise.reject(error);
+                        }
+                        void restorePromise
+                            .then((restoreResult) => {
+                                if (isActionFailure(restoreResult)) {
+                                    showActionFailure(getActionFailureMessage(restoreResult));
+                                }
+                            })
+                            .catch((error) => showActionFailure(getUnknownErrorMessage(error)));
+                    },
                     durationMs: 5200,
                 });
             })
-            .catch(() => undefined);
+            .catch((error) => showActionFailure(getUnknownErrorMessage(error)));
     };
 
     const handleLongPress = () => {

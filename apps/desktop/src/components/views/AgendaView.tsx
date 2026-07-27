@@ -44,6 +44,7 @@ import { PromptModal } from '../PromptModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { FocusStarIcon } from '../FocusStarIcon';
+import { useLocalDayKey } from '../../hooks/useLocalDayKey';
 
 const AGENDA_VIRTUALIZATION_THRESHOLD = 25;
 const NO_PROJECT_FILTER_ID = SAVED_FILTER_NO_PROJECT_ID;
@@ -115,41 +116,6 @@ function getAgendaScrollMargin(containerElement: HTMLDivElement, scrollElement: 
 function getSavedFilterDefaultName(chips: AgendaActiveFilterChip[], fallback: string): string {
     const label = chips.slice(0, 3).map((chip) => chip.label).join(' + ');
     return label || fallback;
-}
-
-function getLocalDayKey(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-}
-
-function useLocalDayKey(): string {
-    const [dayKey, setDayKey] = useState(getLocalDayKey);
-
-    useEffect(() => {
-        let timer: number | undefined;
-        const scheduleNextDay = () => {
-            if (timer) window.clearTimeout(timer);
-            const now = new Date();
-            const nextDay = new Date(now);
-            nextDay.setHours(24, 0, 0, 0);
-            timer = window.setTimeout(refresh, Math.max(1, nextDay.getTime() - now.getTime() + 50));
-        };
-        const refresh = () => {
-            setDayKey(getLocalDayKey());
-            scheduleNextDay();
-        };
-
-        scheduleNextDay();
-        window.addEventListener('focus', refresh);
-        document.addEventListener('visibilitychange', refresh);
-        return () => {
-            if (timer) window.clearTimeout(timer);
-            window.removeEventListener('focus', refresh);
-            document.removeEventListener('visibilitychange', refresh);
-        };
-    }, []);
-
-    return dayKey;
 }
 
 function AgendaTaskList({

@@ -12,7 +12,6 @@ import {
     tFallback,
     type ExternalCalendarEvent,
     type Task,
-    type TaskSortBy,
     shallow,
     useTaskStore,
     isTaskInActiveProject,
@@ -24,6 +23,7 @@ import { InboxProcessor } from '../InboxProcessor';
 import { ModalPortal } from '../../ModalPortal';
 import { TaskItem } from '../../TaskItem';
 import { fetchExternalCalendarEvents, summarizeExternalCalendarWarnings } from '../../../lib/external-calendar-events';
+import { resolveNonDoneTaskSortBy } from '../../../lib/task-list-sort';
 
 type DailyReviewStep = 'today' | 'focus' | 'inbox' | 'waiting' | 'completed';
 type DailyReviewStepDefinition = {
@@ -71,7 +71,7 @@ export function DailyReviewGuideModal({ onClose }: DailyReviewGuideModalProps) {
     const [today] = useState(() => new Date());
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const followUpTodayReviewAt = startOfToday.toISOString();
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
     const followUpTodayLabel = tFallback(t, 'dailyReview.followUpToday', 'Follow up today');
     const reviewDueLabel = tFallback(t, 'agenda.reviewDue', 'Review Due');

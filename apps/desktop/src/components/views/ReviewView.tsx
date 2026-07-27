@@ -11,7 +11,7 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, type TaskSortBy, isTaskInActiveProject } from '@mindwtr/core';
+import { shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, isTaskInActiveProject } from '@mindwtr/core';
 
 import { PromptModal } from '../PromptModal';
 import { useLanguage } from '../../contexts/language-context';
@@ -23,6 +23,7 @@ import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { CONTEXTS_AXES, groupTasks, sanitizeAxis, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { useTaskSelection } from './list/useTaskSelection';
+import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 const STATUS_OPTIONS: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
 const REVIEW_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:review:v1';
@@ -100,7 +101,7 @@ export function ReviewView() {
     const setListOptions = useUiStore((state) => state.setListOptions);
     const collapseAllTaskDetails = useUiStore((state) => state.collapseAllTaskDetails);
 
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     const statusOptions = STATUS_OPTIONS;
     const projectMapById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);

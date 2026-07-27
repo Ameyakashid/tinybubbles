@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  AppState,
   LayoutAnimation,
   Platform,
   RefreshControl,
@@ -78,6 +77,7 @@ import { useToast } from '../../../contexts/toast-context';
 import { addHardwareBackPressListener } from '@/lib/hardware-back';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import type { TaskEditTab } from '@/components/task-edit/use-task-edit-state';
+import { useLocalDayKey } from '@/hooks/use-local-day-key';
 import { PomodoroPanel } from '@/components/pomodoro-panel';
 import {
   getFocusTokenOptions,
@@ -168,40 +168,6 @@ const getStartDateOffset = (days: number): Date => {
 };
 
 const formatDateOnly = (date: Date): string => safeFormatDate(date, 'yyyy-MM-dd');
-
-function getLocalDayKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-}
-
-function useLocalDayKey(): string {
-  const [dayKey, setDayKey] = useState(getLocalDayKey);
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const scheduleNextDay = () => {
-      if (timer) clearTimeout(timer);
-      const now = new Date();
-      const nextDay = new Date(now);
-      nextDay.setHours(24, 0, 0, 0);
-      timer = setTimeout(refresh, Math.max(1, nextDay.getTime() - now.getTime() + 50));
-    };
-    const refresh = () => {
-      setDayKey(getLocalDayKey());
-      scheduleNextDay();
-    };
-
-    scheduleNextDay();
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
-    });
-    return () => {
-      if (timer) clearTimeout(timer);
-      subscription.remove();
-    };
-  }, []);
-
-  return dayKey;
-}
 
 function normalizeFocusGroupBy(value: unknown): FocusGroupBy {
   return FOCUS_GROUP_BY_OPTIONS.includes(value as FocusGroupBy) ? value as FocusGroupBy : 'none';
@@ -1335,7 +1301,7 @@ export default function FocusScreen() {
           tc={tc}
           onPress={() => onEdit(item.task)}
           onStatusChange={(status) => updateTask(item.task.id, { status: status as TaskStatus })}
-          onDelete={() => { void deleteTask(item.task.id); }}
+          onDelete={() => deleteTask(item.task.id)}
           isHighlighted={item.task.id === highlightTaskId}
           showFocusToggle
           showFocusHighlight={section.type !== 'focus'}

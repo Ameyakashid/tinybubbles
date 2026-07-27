@@ -100,6 +100,13 @@ import {
   useTaskFilterSelections,
 } from '@/hooks/use-task-filter-selections';
 import { useTaskListSelection } from './use-task-list-selection';
+import { useLocalDayKey } from '@/hooks/use-local-day-key';
+import {
+  DONE_TASK_LIST_SORT_OPTIONS,
+  TASK_LIST_SORT_OPTIONS,
+  resolveTaskListSortBy,
+} from '@/lib/task-list-sort';
+import { DONE_LIST_GROUP_OPTIONS } from '@/lib/view-state/done-list-view-state';
 
 const REMOVE_CLIPPED_SUBVIEWS_MIN_ITEMS = 15;
 const PROJECT_REORDER_ITEM_HEIGHT = 80;
@@ -139,6 +146,8 @@ interface TaskListContentProps {
   includeDone?: boolean;
   groupCompletedTasksLast?: boolean;
   projectSortBy?: TaskSortBy;
+  viewSortBy?: TaskSortBy;
+  onChangeViewSortBy?: (value: TaskSortBy) => void;
   groupBy?: TaskListGroupBy;
   onChangeGroupBy?: (value: TaskListGroupBy) => void;
   getTaskSequenceCue?: (task: Task) => ProjectSequenceTaskCue | undefined;
@@ -224,6 +233,8 @@ function TaskListComponent({
   enableProjectReorder = false,
   externalFilterOpenSignal = 0,
   projectSortBy,
+  viewSortBy,
+  onChangeViewSortBy,
   onQuickAddInputFocus,
   projectReorderMode: projectReorderModeProp,
   onProjectReorderModeChange,
@@ -410,8 +421,14 @@ function TaskListComponent({
     tasksById,
   });
 
-  const sortBy = (projectSortBy ?? settings?.taskSortBy ?? 'default') as TaskSortBy;
+  const sortBy = resolveTaskListSortBy({
+    globalSortBy: settings?.taskSortBy,
+    projectSortBy,
+    statusFilter,
+    viewSortBy,
+  });
   const activeGroupBy: TaskListGroupBy = groupBy ?? 'none';
+  const localDayKey = useLocalDayKey(activeGroupBy === 'completedDate');
   const handleChangeGroupBy = onChangeGroupBy;
   const canUseProjectReorder = Boolean(enableProjectReorder && projectId && sortBy === 'default');
   const shouldGroupCompletedTasks = Boolean(groupCompletedTasksLast && projectId && statusFilter === 'all');
@@ -799,7 +816,7 @@ function TaskListComponent({
       unsectioned.forEach((task) => items.push({ type: 'task', task, reorderSectionId }));
     }
     return appendCompletedTasks(items);
-  }, [activeGroupBy, areas, completedTasksCollapsed, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
+  }, [activeGroupBy, areas, completedTasksCollapsed, localDayKey, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
   const orderedTaskIds = useMemo(
     () => Array.from(new Set(listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])))),
     [listItems],
@@ -871,8 +888,8 @@ function TaskListComponent({
   );
   // Grouping by completion only says anything in a list of finished work, so
   // Done gets the extra axis rather than every list growing it (#945).
-  const groupByOptions: TaskListGroupBy[] = statusFilter === 'done'
-    ? ['none', 'completedDate', 'area', 'project', 'tag']
+  const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'done'
+    ? DONE_LIST_GROUP_OPTIONS
     : ['none', 'area', 'project', 'tag'];
   const getGroupByLabel = useCallback((groupBy: TaskListGroupBy) => {
     switch (groupBy) {
@@ -1446,9 +1463,9 @@ function TaskListComponent({
     return result;
   }, [listItemCountForDiagnostics, performanceRoute, updateTask]);
 
-  const sortOptions: TaskSortBy[] = statusFilter === 'done'
-    ? ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc', 'completed']
-    : ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
+  const sortOptions = statusFilter === 'done'
+    ? DONE_TASK_LIST_SORT_OPTIONS
+    : TASK_LIST_SORT_OPTIONS;
   // Single-status lists (inbox/next/waiting/someday/done/reference) repeat the same status on every
   // row, so show a compact icon button to change status instead of the redundant status-name badge.
   // The 'all' list keeps the labeled badge because its rows have mixed statuses.
@@ -1466,6 +1483,7 @@ function TaskListComponent({
         visibleItemCount: listItemCountForDiagnostics,
       });
     });
+    return result;
   }, [listItemCountForDiagnostics, performanceRoute, updateTask]);
 
   const renderTask = useCallback(({ item }: { item: Task }) => {
@@ -1483,7 +1501,7 @@ function TaskListComponent({
           isMultiSelected={enableBulkActions && multiSelectedIds.has(item.id)}
           onToggleSelect={enableBulkActions ? () => toggleMultiSelect(item.id, { visibleTaskIds: orderedTaskIds }) : undefined}
           onStatusChange={(status) => handleTaskStatusChange(item.id, status as TaskStatus)}
-          onDelete={() => { void deleteTask(item.id); }}
+          onDelete={() => deleteTask(item.id)}
           isHighlighted={item.id === highlightTaskId}
           statusBadgeAsIcon={statusBadgeAsIconForList}
           hideChecklistProgress={hideChecklistProgressForList}
@@ -1947,7 +1965,11 @@ function TaskListComponent({
       <TaskListSortModal
         onClose={() => setSortModalVisible(false)}
         onSelect={(option) => {
-          updateSettings({ taskSortBy: option });
+          if (statusFilter === 'done' && onChangeViewSortBy) {
+            onChangeViewSortBy(option);
+          } else {
+            void updateSettings({ taskSortBy: option });
+          }
           setSortModalVisible(false);
         }}
         sortBy={sortBy}

@@ -11,7 +11,6 @@ import {
     collectBulkTaskTokens,
     tFallback,
 } from '@mindwtr/core';
-import type { TaskSortBy } from '@mindwtr/core';
 import { AtSign, CheckSquare, ChevronDown, ChevronRight, Filter, Hash, Tag, type LucideIcon } from 'lucide-react';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
@@ -46,6 +45,7 @@ import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { GroupBySelect } from './list/GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list/list-toolbar';
 import { useUiStore } from '../../store/ui-store';
+import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 type BulkTokenPickerState = {
     field: 'tags' | 'contexts';
@@ -81,7 +81,7 @@ export function ContextsView() {
     const selectedContext = persistedViewState.selectedContext;
     const statusFilters = persistedViewState.statusFilters;
     const selectedStatusSet = useMemo(() => new Set(statusFilters), [statusFilters]);
-    const sortBy = (taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(taskSortBy);
     const [searchQuery, setSearchQuery] = useState('');
     const [bulkTokenPicker, setBulkTokenPicker] = useState<BulkTokenPickerState>(null);
     const [contextsCollapsed, setContextsCollapsed] = useState(false);

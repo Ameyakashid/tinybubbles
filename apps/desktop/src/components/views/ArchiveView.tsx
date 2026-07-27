@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, sortTasksBy, safeFormatDate, tFallback } from '@mindwtr/core';
-import type { Task, TaskSortBy, Project } from '@mindwtr/core';
+import type { Task, Project } from '@mindwtr/core';
 
 import { CheckCircle2, Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
@@ -21,6 +21,7 @@ import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
+import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 type ArchiveTaskRowInnerProps = {
     task: Task;
@@ -249,7 +250,7 @@ export function ArchiveView() {
     const [measureVersion, setMeasureVersion] = useState(0);
     const [listScrollTop, setListScrollTop] = useState(0);
     const [listHeight, setListHeight] = useState(0);
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
 
     useEffect(() => {
         if (!perf.enabled) return;

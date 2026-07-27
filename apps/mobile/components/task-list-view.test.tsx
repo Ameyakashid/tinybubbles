@@ -119,6 +119,16 @@ describe('TaskListView', () => {
     expect(renderer.root.findAllByType('SwipeableTaskItem' as never)).toHaveLength(3);
   });
 
+  it('returns the delete action result through the row wrapper', () => {
+    const result = Promise.resolve({ success: false, error: 'Delete failed' });
+    const onDeleteTask = vi.fn(() => result);
+    const renderer = renderView({ tasks: [makeTask('a')], onDeleteTask });
+    const row = renderer.root.findByType('SwipeableTaskItem' as never);
+
+    expect(row.props.onDelete()).toBe(result);
+    expect(onDeleteTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+  });
+
   it('wires selection state and the visible-id list into each row', () => {
     const selection = makeSelection({
       selectionMode: true,

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowUpDown } from 'lucide-react';
 import { tFallback, type TaskSortBy } from '@mindwtr/core';
 import { cn } from '../../../lib/utils';
+import { DONE_SORT_OPTIONS, SORT_OPTIONS } from '../../../lib/task-list-sort';
 import { ToolbarSelect } from './ToolbarSelect';
 
 // One toolbar style for every list view. Focus, Review, Contexts and the status
@@ -11,11 +12,7 @@ export const TOOLBAR_CONTROL_BASE = 'h-9 text-xs border transition-colors focus:
 export const TOOLBAR_CONTROL_MUTED = 'bg-card text-muted-foreground border-border hover:bg-muted/70 hover:text-foreground';
 export const TOOLBAR_CONTROL_ACTIVE = 'bg-primary/10 text-primary border-primary';
 
-export const SORT_OPTIONS: readonly TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
-
-// Sorting by completion only says anything in a list of finished work, so the
-// Done list gets one extra entry rather than every toolbar growing it (#945).
-export const DONE_SORT_OPTIONS: readonly TaskSortBy[] = [...SORT_OPTIONS, 'completed'];
+export { DONE_SORT_OPTIONS, SORT_OPTIONS };
 
 type ToolbarButtonProps = {
     active?: boolean;

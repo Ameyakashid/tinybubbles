@@ -22,7 +22,6 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, isTaskInActiveProject, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
 import { resolveBoardDragEnd } from './board-view-dnd';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
-import type { TaskSortBy } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Filter, GripVertical } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
@@ -31,6 +30,7 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
+import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 const BOARD_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:board:v1';
 
@@ -207,7 +207,7 @@ export function BoardView() {
         shallow
     );
     const { t } = useLanguage();
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const isDense = (settings?.appearance?.density ?? 'comfortable') !== 'comfortable';
 
     const [activeTask, setActiveTask] = React.useState<Task | null>(null);

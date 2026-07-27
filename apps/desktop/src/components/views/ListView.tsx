@@ -71,6 +71,8 @@ import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { LIST_VIRTUALIZATION_THRESHOLD, LIST_VIRTUAL_ROW_ESTIMATE, LIST_VIRTUAL_OVERSCAN } from './list/useVirtualList';
 import { QuickAddSyntaxHint } from '../ui/QuickAddSyntaxHint';
+import { useLocalDayKey } from '../../hooks/useLocalDayKey';
+import { resolveDoneTaskSortBy, resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 
 interface ListViewProps {
@@ -221,7 +223,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     }), shallow);
     const { t } = useLanguage();
     const { registerTaskListScope } = useKeybindings();
-    const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
+    const globalSortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
     const density = settings?.appearance?.density ?? 'comfortable';
     const densityMode: 'comfortable' | 'compact' | 'condensed' =
         density === 'condensed' ? 'condensed' : density === 'compact' ? 'compact' : 'comfortable';
@@ -240,7 +242,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const nextGroupBy = useUiStore((state) => state.listOptions.nextGroupBy);
     const referenceGroupBy = useUiStore((state) => state.listOptions.referenceGroupBy);
     const doneGroupBy = useUiStore((state) => state.listOptions.doneGroupBy);
+    const doneSortBy = useUiStore((state) => state.listOptions.doneSortBy);
     const setListOptions = useUiStore((state) => state.setListOptions);
+    const sortBy: TaskSortBy = statusFilter === 'done'
+        ? resolveDoneTaskSortBy(globalSortBy, doneSortBy)
+        : resolveNonDoneTaskSortBy(globalSortBy);
     const collapseAllTaskDetails = useUiStore((state) => state.collapseAllTaskDetails);
     const setProjectView = useUiStore((state) => state.setProjectView);
     const [baseTasks, setBaseTasks] = useState<Task[]>(() => (statusFilter === 'archived' ? [] : tasks));
@@ -570,6 +576,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         : statusFilter === 'done'
             ? activeDoneGroupBy
             : activeNextGroupBy;
+    const localDayKey = useLocalDayKey(activeDoneGroupBy === 'completedDate');
     const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'reference'
         ? REFERENCE_AXES
         : statusFilter === 'done'
@@ -581,7 +588,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         isListGrouping
             ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t })
             : [] as TaskGroup[]
-    ), [activeGroupBy, areas, filteredTasks, isListGrouping, projectMap, t]);
+    ), [activeGroupBy, areas, filteredTasks, isListGrouping, localDayKey, projectMap, t]);
     const activeReferenceCollapseKey: ReferenceGroupCollapseKey | null = isReferenceGrouping
         ? activeReferenceGroupBy as ReferenceGroupCollapseKey
         : null;
@@ -954,7 +961,13 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     filterSummarySuffix={filterSummarySuffix}
                     sortBy={sortBy}
                     sortByOptions={statusFilter === 'done' ? DONE_SORT_OPTIONS : undefined}
-                    onChangeSortBy={(value) => updateSettings({ taskSortBy: value })}
+                    onChangeSortBy={(value) => {
+                        if (statusFilter === 'done') {
+                            setListOptions({ doneSortBy: value });
+                            return;
+                        }
+                        void updateSettings({ taskSortBy: value });
+                    }}
                     activeGroupBy={activeGroupBy}
                     groupByOptions={groupByOptions}
                     showGroupBy

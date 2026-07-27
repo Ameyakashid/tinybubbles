@@ -15,7 +15,7 @@ type TaskListSortModalProps = {
   onClose: () => void;
   onSelect: (option: TaskSortBy) => void;
   sortBy: TaskSortBy;
-  sortOptions: TaskSortBy[];
+  sortOptions: readonly TaskSortBy[];
   t: (key: string) => string;
   themeColors: ThemeColors;
   visible: boolean;
