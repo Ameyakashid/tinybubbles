@@ -1,5 +1,6 @@
 import {
   DEFAULT_PROJECT_COLOR,
+  executeCaptureTransaction,
   parseQuickAdd,
   normalizeTaskStatus,
   TASK_STATUS_SET,
@@ -385,24 +386,47 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
         if (normalizedInput.quickAdd) {
           const projects = await withDb((db) => deps.listProjects(db));
           const quick = deps.parseQuickAdd(normalizedInput.quickAdd, projects as CoreProject[]);
-          const title = normalizedInput.title ?? quick.title ?? normalizedInput.quickAdd;
-          const status = parseInputStatus(normalizedInput.status);
-          const props = filterUndefined({
-            ...quick.props,
-            status: status ?? quick.props.status,
-            projectId: normalizedInput.projectId ?? quick.props.projectId,
-            sectionId: normalizedInput.sectionId ?? quick.props.sectionId,
-            dueDate: normalizedInput.dueDate ?? quick.props.dueDate,
-            startTime: normalizedInput.startTime ?? quick.props.startTime,
-            contexts: normalizedInput.contexts ?? quick.props.contexts,
-            tags: normalizedInput.tags ?? quick.props.tags,
-            description: normalizedInput.description ?? quick.props.description,
-            priority: normalizedInput.priority ?? quick.props.priority,
-            energyLevel: normalizedInput.energyLevel ?? quick.props.energyLevel,
-            assignedTo: normalizedInput.assignedTo ?? quick.props.assignedTo,
-            timeEstimate: normalizedInput.timeEstimate ?? quick.props.timeEstimate,
+          let createdTask: Task | undefined;
+          const capture = await executeCaptureTransaction({
+            parsed: {
+              ...quick,
+              title: normalizedInput.title ?? quick.title,
+            },
+            rawInput: normalizedInput.quickAdd,
+            projects,
+            extraProps: filterUndefined({
+              status: parseInputStatus(normalizedInput.status),
+              projectId: normalizedInput.projectId,
+              sectionId: normalizedInput.sectionId,
+              dueDate: normalizedInput.dueDate,
+              startTime: normalizedInput.startTime,
+              contexts: normalizedInput.contexts,
+              tags: normalizedInput.tags,
+              description: normalizedInput.description,
+              priority: normalizedInput.priority,
+              energyLevel: normalizedInput.energyLevel,
+              assignedTo: normalizedInput.assignedTo,
+              timeEstimate: normalizedInput.timeEstimate,
+            }),
+          }, {
+            addProject: (title, color, initialProps) => core.addProject({
+              title,
+              color,
+              props: initialProps,
+            }),
+            addTask: async (title, initialProps) => {
+              createdTask = await core.addTask({ title, props: initialProps });
+              return { success: true, id: createdTask.id };
+            },
           });
-          return core.addTask({ title, props });
+          if (!capture.success) {
+            if (capture.reason === 'invalid-date-command') {
+              throw new ValidationError(`Invalid date command: ${capture.invalidDateCommands.join(', ')}`);
+            }
+            throw new Error('error' in capture ? capture.error : `Capture failed: ${capture.reason}`);
+          }
+          if (!createdTask) throw new Error('Capture completed without creating a task');
+          return createdTask;
         }
         const status = parseInputStatus(normalizedInput.status);
         return core.addTask({

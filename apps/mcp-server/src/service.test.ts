@@ -144,6 +144,56 @@ describe('mcp service', () => {
     expect(receivedAddTaskInput.props.assignedTo).toBe('Dana');
   });
 
+  test('creates an unknown quick-add project before adding the task', async () => {
+    let receivedAddProjectInput: any = null;
+    let receivedAddTaskInput: any = null;
+    const fakeDb = {} as any;
+    const deps = {
+      openMindwtrDb: async () => ({ db: fakeDb }),
+      closeDb: () => undefined,
+      listProjects: () => [],
+      parseQuickAdd: () => ({
+        title: 'Buy milk',
+        props: {},
+        projectTitle: 'Errands',
+      }),
+      runCoreService: async (_options: any, fn: any) =>
+        fn({
+          addProject: async (input: any) => {
+            receivedAddProjectInput = input;
+            return {
+              id: 'p-new',
+              title: input.title,
+              status: 'active',
+              color: input.color,
+              order: 0,
+              tagIds: [],
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            };
+          },
+          addTask: async (input: any) => {
+            receivedAddTaskInput = input;
+            return {
+              id: 't-new',
+              title: input.title,
+              status: input.props?.status ?? 'inbox',
+              projectId: input.props?.projectId,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            };
+          },
+        }),
+    };
+    const service = createService({ readonly: false }, deps as any);
+
+    const task = await service.addTask({ quickAdd: 'Buy milk +Errands' });
+
+    expect(receivedAddProjectInput.title).toBe('Errands');
+    expect(receivedAddTaskInput.props.projectId).toBe('p-new');
+    expect(task.projectId).toBe('p-new');
+  });
+
   test('retries transient sqlite write conflicts by rerunning the write operation', async () => {
     let runCoreCalls = 0;
     let addTaskCalls = 0;
