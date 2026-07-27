@@ -13,6 +13,7 @@ type ListHeaderProps = {
     filterSummaryLabel: string;
     filterSummarySuffix: string;
     sortBy: TaskSortBy;
+    sortByOptions?: readonly TaskSortBy[];
     onChangeSortBy: (value: TaskSortBy) => void;
     showGroupBy?: boolean;
     groupBy?: TaskListGroupBy;
@@ -39,6 +40,7 @@ export function ListHeader({
     filterSummaryLabel,
     filterSummarySuffix,
     sortBy,
+    sortByOptions,
     onChangeSortBy,
     showGroupBy = false,
     groupBy = 'none',
@@ -121,6 +123,7 @@ export function ListHeader({
                     {selectionMode ? t('bulk.exitSelect') : t('bulk.select')}
                 </ToolbarButton>
                 <SortBySelect
+                    options={sortByOptions}
                     value={sortBy}
                     onChange={onChangeSortBy}
                     t={t}

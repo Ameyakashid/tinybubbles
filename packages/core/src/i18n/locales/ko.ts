@@ -1326,6 +1326,13 @@ export const koOverrides: Record<string, string> = {
         'sort.title': '제목',
         'sort.created': '오래된순',
         'sort.created-desc': '최신순',
+        'sort.completed': '완료 날짜',
+        'list.groupByCompletedDate': '완료 날짜',
+        'list.completedGroup.today': '오늘',
+        'list.completedGroup.yesterday': '어제',
+        'list.completedGroup.previous7Days': '지난 7일',
+        'list.completedGroup.earlier': '이전',
+        'list.completedGroup.notCompleted': '완료되지 않음',
 
         // Agenda
         'agenda.title': '집중',

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FOCUS_AXES, REFERENCE_AXES } from '../components/views/list/next-grouping';
+import { DONE_AXES, FOCUS_AXES, REFERENCE_AXES } from '../components/views/list/next-grouping';
 
 // The `===` chains these sanitizers used before the rosters were unified,
 // copied verbatim. Shipped builds persisted exactly what these accepted, so
@@ -52,6 +52,8 @@ describe('useUiStore list options', () => {
             showDetails: true,
             nextGroupBy: 'project',
             referenceGroupBy: 'context',
+            // Written by a build that predates the Done axis: defaulted, not undefined.
+            doneGroupBy: 'none',
             focusTop3Only: true,
         });
     });
@@ -63,6 +65,7 @@ describe('useUiStore list options', () => {
             showDetails: true,
             nextGroupBy: 'project',
             referenceGroupBy: 'tag',
+            doneGroupBy: 'completedDate',
             focusTop3Only: true,
         });
 
@@ -70,6 +73,7 @@ describe('useUiStore list options', () => {
             showDetails: true,
             nextGroupBy: 'project',
             referenceGroupBy: 'tag',
+            doneGroupBy: 'completedDate',
             focusTop3Only: true,
         });
     });
@@ -80,6 +84,9 @@ describe('useUiStore list options', () => {
         }
         for (const axis of REFERENCE_AXES) {
             expect((await hydrate({ referenceGroupBy: axis })).referenceGroupBy).toBe(axis);
+        }
+        for (const axis of DONE_AXES) {
+            expect((await hydrate({ doneGroupBy: axis })).doneGroupBy).toBe(axis);
         }
     // One module reload per axis (13) — well under a second idle, but the
     // default 5s timeout is not enough when another suite has the CPU.

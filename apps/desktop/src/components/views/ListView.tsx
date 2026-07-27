@@ -51,13 +51,16 @@ import { nextDensityMode } from '../../lib/density';
 import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
+import { DONE_SORT_OPTIONS } from './list/list-toolbar';
 import {
+    DONE_AXES,
     emptyCollapsedGroups,
     FOCUS_AXES,
     groupTasks,
     REFERENCE_AXES,
     sanitizeCollapsedGroups,
     type CollapsedGroups,
+    type DoneGroupBy,
     type NextGroupBy,
     type ReferenceGroupBy,
     type TaskGroup,
@@ -236,6 +239,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const showListDetails = useUiStore((state) => state.listOptions.showDetails);
     const nextGroupBy = useUiStore((state) => state.listOptions.nextGroupBy);
     const referenceGroupBy = useUiStore((state) => state.listOptions.referenceGroupBy);
+    const doneGroupBy = useUiStore((state) => state.listOptions.doneGroupBy);
     const setListOptions = useUiStore((state) => state.setListOptions);
     const collapseAllTaskDetails = useUiStore((state) => state.collapseAllTaskDetails);
     const setProjectView = useUiStore((state) => state.setProjectView);
@@ -558,12 +562,19 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const resolveText = useCallback((key: string, fallback: string) => {
         return translateTextWithFallback(t, key, fallback);
     }, [t]);
-    const activeNextGroupBy: NextGroupBy = statusFilter !== 'reference' ? nextGroupBy : 'none';
+    const activeNextGroupBy: NextGroupBy = statusFilter !== 'reference' && statusFilter !== 'done' ? nextGroupBy : 'none';
     const activeReferenceGroupBy: ReferenceGroupBy = statusFilter === 'reference' ? (referenceGroupBy ?? 'area') : 'none';
-    const activeGroupBy: TaskListGroupBy = statusFilter === 'reference' ? activeReferenceGroupBy : activeNextGroupBy;
+    const activeDoneGroupBy: DoneGroupBy = statusFilter === 'done' ? (doneGroupBy ?? 'none') : 'none';
+    const activeGroupBy: TaskListGroupBy = statusFilter === 'reference'
+        ? activeReferenceGroupBy
+        : statusFilter === 'done'
+            ? activeDoneGroupBy
+            : activeNextGroupBy;
     const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'reference'
         ? REFERENCE_AXES
-        : FOCUS_AXES;
+        : statusFilter === 'done'
+            ? DONE_AXES
+            : FOCUS_AXES;
     const isReferenceGrouping = statusFilter === 'reference' && activeReferenceGroupBy !== 'none';
     const isListGrouping = activeGroupBy !== 'none';
     const groupedTasks = useMemo(() => (
@@ -942,6 +953,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     filterSummaryLabel={filterSummaryLabel}
                     filterSummarySuffix={filterSummarySuffix}
                     sortBy={sortBy}
+                    sortByOptions={statusFilter === 'done' ? DONE_SORT_OPTIONS : undefined}
                     onChangeSortBy={(value) => updateSettings({ taskSortBy: value })}
                     activeGroupBy={activeGroupBy}
                     groupByOptions={groupByOptions}
@@ -949,6 +961,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     onChangeGroupBy={(value) => {
                         if (statusFilter === 'reference') {
                             setListOptions({ referenceGroupBy: value as ReferenceGroupBy });
+                            return;
+                        }
+                        if (statusFilter === 'done') {
+                            setListOptions({ doneGroupBy: value as DoneGroupBy });
                             return;
                         }
                         setListOptions({ nextGroupBy: value as NextGroupBy });

@@ -1,6 +1,6 @@
 import { createWithEqualityFn } from 'zustand/traditional';
 import type { FilterCriteria } from '@mindwtr/core';
-import { FOCUS_AXES, REFERENCE_AXES, sanitizeAxis, type NextGroupBy, type ReferenceGroupBy } from '../components/views/list/next-grouping';
+import { DONE_AXES, FOCUS_AXES, REFERENCE_AXES, sanitizeAxis, type DoneGroupBy, type NextGroupBy, type ReferenceGroupBy } from '../components/views/list/next-grouping';
 
 const toastTimeouts = new Map<string, number>();
 // These are the localStorage sanitizers for what the Focus/Next and Reference
@@ -9,10 +9,14 @@ const toastTimeouts = new Map<string, number>();
 // grouping to the default on the next launch.
 type ListNextGroupBy = NextGroupBy;
 type ListReferenceGroupBy = ReferenceGroupBy;
+type ListDoneGroupBy = DoneGroupBy;
 type ListOptions = {
     showDetails: boolean;
     nextGroupBy: ListNextGroupBy;
     referenceGroupBy: ListReferenceGroupBy;
+    // Done keeps its own axis rather than sharing nextGroupBy: 'completedDate'
+    // is not in FOCUS_AXES, so that sanitizer would reset it on every launch.
+    doneGroupBy: ListDoneGroupBy;
     focusTop3Only: boolean;
 };
 
@@ -22,6 +26,7 @@ const DEFAULT_LIST_OPTIONS: ListOptions = {
     showDetails: false,
     nextGroupBy: 'none',
     referenceGroupBy: 'area',
+    doneGroupBy: 'none',
     focusTop3Only: false,
 };
 
@@ -45,6 +50,7 @@ function readStoredListOptions(): ListOptions {
             showDetails: typeof parsed?.showDetails === 'boolean' ? parsed.showDetails : DEFAULT_LIST_OPTIONS.showDetails,
             nextGroupBy: sanitizeAxis(FOCUS_AXES, parsed?.nextGroupBy, DEFAULT_LIST_OPTIONS.nextGroupBy),
             referenceGroupBy: sanitizeAxis(REFERENCE_AXES, parsed?.referenceGroupBy, DEFAULT_LIST_OPTIONS.referenceGroupBy),
+            doneGroupBy: sanitizeAxis(DONE_AXES, parsed?.doneGroupBy, DEFAULT_LIST_OPTIONS.doneGroupBy),
             focusTop3Only: typeof parsed?.focusTop3Only === 'boolean' ? parsed.focusTop3Only : DEFAULT_LIST_OPTIONS.focusTop3Only,
         };
     } catch {

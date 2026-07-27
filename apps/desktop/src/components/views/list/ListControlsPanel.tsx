@@ -43,6 +43,7 @@ type ListControlsPanelProps = {
     onAssignArea: (areaId: string | null) => Promise<void>;
     onBulkOrganize?: () => void;
     groupByOptions: readonly TaskListGroupBy[];
+    sortByOptions?: readonly TaskSortBy[];
     onChangeGroupBy: (value: TaskListGroupBy) => void;
     onChangeQuickAdd: (value: string) => void;
     onChangeSearch: (value: string) => void;
@@ -124,6 +125,7 @@ export function ListControlsPanel({
     onAssignArea,
     onBulkOrganize,
     groupByOptions,
+    sortByOptions,
     onChangeGroupBy,
     onChangeQuickAdd,
     onChangeSearch,
@@ -195,6 +197,7 @@ export function ListControlsPanel({
                 showGroupBy={showGroupBy}
                 groupBy={activeGroupBy}
                 groupByOptions={groupByOptions}
+                sortByOptions={sortByOptions}
                 onChangeGroupBy={onChangeGroupBy}
                 showFiltersButton={showFilters}
                 filtersOpen={showFiltersPanel}

@@ -1173,6 +1173,13 @@ export const itOverrides: Record<string, string> = {
         'sort.title': 'Titolo',
         'sort.created': 'Meno recenti',
         'sort.created-desc': 'Più recenti',
+        'sort.completed': 'Data di completamento',
+        'list.groupByCompletedDate': 'Data di completamento',
+        'list.completedGroup.today': 'Oggi',
+        'list.completedGroup.yesterday': 'Ieri',
+        'list.completedGroup.previous7Days': 'Ultimi 7 giorni',
+        'list.completedGroup.earlier': 'Prima',
+        'list.completedGroup.notCompleted': 'Non completato',
 
         // Agenda
         'agenda.active': 'elementi attivi',

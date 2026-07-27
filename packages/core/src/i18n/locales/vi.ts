@@ -1466,6 +1466,13 @@ export const viOverrides: Record<string, string> = {
         'sort.title': 'Tiêu đề',
         'sort.created': 'Đã tạo (cũ nhất)',
         'sort.created-desc': 'Đã tạo (mới nhất)',
+        'sort.completed': 'Ngày hoàn thành',
+        'list.groupByCompletedDate': 'Ngày hoàn thành',
+        'list.completedGroup.today': 'Hôm nay',
+        'list.completedGroup.yesterday': 'Hôm qua',
+        'list.completedGroup.previous7Days': '7 ngày qua',
+        'list.completedGroup.earlier': 'Trước đó',
+        'list.completedGroup.notCompleted': 'Chưa hoàn thành',
 
         // Agenda
         'agenda.title': 'Tập trung',

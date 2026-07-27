@@ -1,4 +1,12 @@
-import { compareProjectsByOrder, DEFAULT_AREA_COLOR, getContextColor, tFallback } from '@mindwtr/core';
+import {
+    compareProjectsByOrder,
+    COMPLETION_DATE_GROUPS,
+    DEFAULT_AREA_COLOR,
+    getCompletionDateGroup,
+    getContextColor,
+    tFallback,
+    type CompletionDateGroup,
+} from '@mindwtr/core';
 import type { Area, Project, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from '@mindwtr/core';
 
 // The rosters are data, and the types are derived from them — never the other
@@ -15,7 +23,12 @@ export type NextGroupBy = typeof FOCUS_AXES[number];
 export const REFERENCE_AXES = ['none', 'context', 'area', 'project', 'tag'] as const;
 export type ReferenceGroupBy = typeof REFERENCE_AXES[number];
 
-export type TaskListGroupBy = NextGroupBy | ReferenceGroupBy;
+// Done is the only list where every task has a completion to group by, so the
+// axis lives here rather than in FOCUS_AXES (#945).
+export const DONE_AXES = ['none', 'completedDate', 'context', 'area', 'project', 'tag'] as const;
+export type DoneGroupBy = typeof DONE_AXES[number];
+
+export type TaskListGroupBy = NextGroupBy | ReferenceGroupBy | DoneGroupBy;
 
 // Contexts and Review both span every status, so status itself is a useful axis
 // there (see one #topic across Next / Waiting / Someday / Reference at a glance).
@@ -441,6 +454,48 @@ export type GroupTasksInputs = {
  * included. Views declare which axes they offer and where the choice
  * persists — nothing else.
  */
+const COMPLETION_GROUP_FALLBACKS: Record<CompletionDateGroup, string> = {
+    today: 'Today',
+    yesterday: 'Yesterday',
+    previous7Days: 'Previous 7 days',
+    earlier: 'Earlier',
+    notCompleted: 'Not completed',
+};
+
+/**
+ * Newest bucket first, and a bucket with nothing in it is not shown — an
+ * Archive list of old work should not open on four empty headings (#945).
+ */
+export function groupTasksByCompletionDate({
+    tasks,
+    getGroupLabel,
+    now,
+}: {
+    tasks: Task[];
+    getGroupLabel: (group: CompletionDateGroup) => string;
+    now?: Date;
+}): TaskGroup[] {
+    const reference = now ?? new Date();
+    const buckets = new Map<CompletionDateGroup, Task[]>();
+    tasks.forEach((task) => {
+        const group = getCompletionDateGroup(task, reference);
+        const items = buckets.get(group) ?? [];
+        items.push(task);
+        buckets.set(group, items);
+    });
+
+    return COMPLETION_DATE_GROUPS.flatMap((group) => {
+        const items = buckets.get(group) ?? [];
+        if (items.length === 0) return [];
+        return [{
+            id: `completedDate:${group}`,
+            title: getGroupLabel(group),
+            tasks: items,
+            muted: group === 'notCompleted',
+        }];
+    });
+}
+
 export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }: GroupTasksInputs): TaskGroup[] {
     switch (axis) {
         case 'none':
@@ -461,12 +516,18 @@ export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }:
             return groupTasksByTag({ tasks, noTagLabel: tFallback(t, 'projects.noTags', 'No tags') });
         case 'context':
             return groupTasksByContext({ tasks, noContextLabel: tFallback(t, 'contexts.none', 'No context') });
+        case 'completedDate':
+            return groupTasksByCompletionDate({
+                tasks,
+                getGroupLabel: (group) => tFallback(t, `list.completedGroup.${group}`, COMPLETION_GROUP_FALLBACKS[group]),
+            });
     }
 }
 
 export function getGroupAxisLabel(axis: TaskGroupAxis, t: (key: string) => string): string {
     switch (axis) {
         case 'none': return tFallback(t, 'list.groupByNone', 'No grouping');
+        case 'completedDate': return tFallback(t, 'list.groupByCompletedDate', 'Completion date');
         case 'status': return tFallback(t, 'taskEdit.statusLabel', 'Status');
         case 'context': return tFallback(t, 'list.groupByContext', 'Context');
         case 'area': return tFallback(t, 'list.groupByArea', 'Area');

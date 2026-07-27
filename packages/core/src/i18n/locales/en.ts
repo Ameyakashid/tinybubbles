@@ -155,6 +155,12 @@ export const en: Record<string, string> = {
         'list.densityCondensed': 'Condensed',
         'list.groupBy': 'Group',
         'list.groupByNone': 'No grouping',
+        'list.groupByCompletedDate': 'Completion date',
+        'list.completedGroup.today': 'Today',
+        'list.completedGroup.yesterday': 'Yesterday',
+        'list.completedGroup.previous7Days': 'Previous 7 days',
+        'list.completedGroup.earlier': 'Earlier',
+        'list.completedGroup.notCompleted': 'Not completed',
         'list.groupByContext': 'Context',
         'list.groupByArea': 'Area',
         'reference.empty': 'Nothing filed yet',
@@ -1326,6 +1332,7 @@ export const en: Record<string, string> = {
         'sort.title': 'Title',
         'sort.created': 'Oldest',
         'sort.created-desc': 'Newest',
+        'sort.completed': 'Completion date',
 
         // Agenda
         'agenda.title': 'Focus',

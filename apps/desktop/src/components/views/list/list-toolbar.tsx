@@ -11,7 +11,11 @@ export const TOOLBAR_CONTROL_BASE = 'h-9 text-xs border transition-colors focus:
 export const TOOLBAR_CONTROL_MUTED = 'bg-card text-muted-foreground border-border hover:bg-muted/70 hover:text-foreground';
 export const TOOLBAR_CONTROL_ACTIVE = 'bg-primary/10 text-primary border-primary';
 
-const SORT_OPTIONS: TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
+export const SORT_OPTIONS: readonly TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
+
+// Sorting by completion only says anything in a list of finished work, so the
+// Done list gets one extra entry rather than every toolbar growing it (#945).
+export const DONE_SORT_OPTIONS: readonly TaskSortBy[] = [...SORT_OPTIONS, 'completed'];
 
 type ToolbarButtonProps = {
     active?: boolean;
@@ -51,10 +55,12 @@ type SortBySelectProps = {
     t: (key: string) => string;
     className?: string;
     iconTestId?: string;
+    /** Defaults to SORT_OPTIONS; the Done list passes DONE_SORT_OPTIONS. */
+    options?: readonly TaskSortBy[];
 };
 
 /** The labelled SORT select shared by every list toolbar. */
-export function SortBySelect({ value, onChange, t, className, iconTestId }: SortBySelectProps) {
+export function SortBySelect({ value, onChange, t, className, iconTestId, options }: SortBySelectProps) {
     const sortLabel = tFallback(t, 'sort.label', 'Sort');
     return (
         <ToolbarSelect
@@ -68,7 +74,7 @@ export function SortBySelect({ value, onChange, t, className, iconTestId }: Sort
                 />
             )}
             value={value}
-            options={SORT_OPTIONS.map((option) => ({ value: option, label: t(`sort.${option}`) }))}
+            options={(options ?? SORT_OPTIONS).map((option) => ({ value: option, label: t(`sort.${option}`) }))}
             onChange={(next) => onChange(next as TaskSortBy)}
         />
     );

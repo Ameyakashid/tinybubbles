@@ -3,6 +3,7 @@
  */
 
 import { Task, TaskStatus, TaskSortBy, TaskPriority, Project, AppData, SortField } from './types';
+import { differenceInCalendarDays, startOfDay } from 'date-fns';
 import { isDueForReview, safeParseDate, safeParseDueDate } from './date';
 import { hasRecurrenceRule } from './recurrence';
 import { timeEstimateToMinutes } from './calendar-scheduling';
@@ -727,6 +728,18 @@ export function sortTasksBy(tasks: Task[], sortBy: TaskSortBy = 'default'): Task
             return copy.sort((a, b) => timeOrZero(a.createdAt) - timeOrZero(b.createdAt));
         case 'created-desc':
             return copy.sort((a, b) => timeOrZero(b.createdAt) - timeOrZero(a.createdAt));
+        case 'completed':
+            // Deliberately keyed on completedAt alone, unlike the Done list's
+            // default order (sortDoneTasksForListView), which falls back to
+            // updatedAt/createdAt so every done task gets a position. Archive
+            // holds archived-but-never-completed tasks, and those belong at the
+            // end rather than sorted in by when they were last touched (#945).
+            return copy.sort((a, b) => {
+                const aCompleted = safeTime(a.completedAt, -Infinity);
+                const bCompleted = safeTime(b.completedAt, -Infinity);
+                if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+                return a.title.localeCompare(b.title);
+            });
         default:
             return sortTasks(tasks);
     }
@@ -1259,4 +1272,36 @@ export function summarizeTaskLifecycleCounts(
         }
     }
     return { total: tasks.length, live, trashed, tombstones, createdLast7d };
+}
+
+/**
+ * Buckets for grouping a completed list by when the work was finished (#945).
+ * Ordered oldest-last, which is the order the groups are shown in.
+ */
+export const COMPLETION_DATE_GROUPS = ['today', 'yesterday', 'previous7Days', 'earlier', 'notCompleted'] as const;
+export type CompletionDateGroup = typeof COMPLETION_DATE_GROUPS[number];
+
+/**
+ * Which bucket a task falls in, on local calendar-day boundaries rather than
+ * rolling 24-hour windows — "yesterday" has to mean the previous calendar day
+ * however close to midnight the task was finished.
+ *
+ * Keyed on completedAt alone, matching the 'completed' sort: a task with no
+ * completion time is 'notCompleted' rather than being placed by when it last
+ * changed. Archive holds archived-but-never-completed tasks; a done task can
+ * also predate completedAt being recorded.
+ */
+export function getCompletionDateGroup(
+    task: Pick<Task, 'completedAt'>,
+    now: Date = new Date(),
+): CompletionDateGroup {
+    const completedAt = safeParseDate(task.completedAt);
+    if (!completedAt) return 'notCompleted';
+    const daysAgo = differenceInCalendarDays(startOfDay(now), startOfDay(completedAt));
+    // A completion stamped later today than `now` (clock skew, or a sync from a
+    // device running ahead) is still today's work, not the future.
+    if (daysAgo <= 0) return 'today';
+    if (daysAgo === 1) return 'yesterday';
+    if (daysAgo <= 7) return 'previous7Days';
+    return 'earlier';
 }

@@ -1288,6 +1288,13 @@ export const frOverrides: Record<string, string> = {
         'sort.title': 'Titre',
         'sort.created': 'Plus ancien',
         'sort.created-desc': 'Plus récent',
+        'sort.completed': 'Date d’achèvement',
+        'list.groupByCompletedDate': 'Date d’achèvement',
+        'list.completedGroup.today': 'Aujourd’hui',
+        'list.completedGroup.yesterday': 'Hier',
+        'list.completedGroup.previous7Days': '7 derniers jours',
+        'list.completedGroup.earlier': 'Plus tôt',
+        'list.completedGroup.notCompleted': 'Non terminé',
 
         // Agenda
         'agenda.title': 'Priorités du jour',

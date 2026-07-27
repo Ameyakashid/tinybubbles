@@ -12,6 +12,9 @@ import {
   sortTasksBy,
   splitCompletedTasks,
   sortDoneTasksForListView,
+  COMPLETION_DATE_GROUPS,
+  getCompletionDateGroup,
+  type CompletionDateGroup,
   isNaturalLanguageDatesEnabled,
   parseQuickAdd,
   formatFocusTaskLimitText,
@@ -116,7 +119,15 @@ type AddTaskOptions = {
   openAfterCreate?: boolean;
 };
 
-export type TaskListGroupBy = 'none' | 'area' | 'project' | 'tag';
+export type TaskListGroupBy = 'none' | 'area' | 'project' | 'tag' | 'completedDate';
+
+const COMPLETION_GROUP_FALLBACKS: Record<CompletionDateGroup, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
+  previous7Days: 'Previous 7 days',
+  earlier: 'Earlier',
+  notCompleted: 'Not completed',
+};
 
 /** What the list shows: which tasks, in what order, grouped how. */
 interface TaskListContentProps {
@@ -657,6 +668,27 @@ function TaskListComponent({
         sortedProjects.forEach((project) => appendSection(items, `project:${project.id}`, project.title, grouped.get(project.id) ?? []));
         return items;
       }
+      if (activeGroupBy === 'completedDate') {
+        const items: ListItem[] = [];
+        const buckets = new Map<CompletionDateGroup, Task[]>();
+        const now = new Date();
+        orderedActiveTasks.forEach((task) => {
+          const group = getCompletionDateGroup(task, now);
+          const bucket = buckets.get(group) ?? [];
+          bucket.push(task);
+          buckets.set(group, bucket);
+        });
+        COMPLETION_DATE_GROUPS.forEach((group) => {
+          appendSection(
+            items,
+            `completedDate:${group}`,
+            tFallback(t, `list.completedGroup.${group}`, COMPLETION_GROUP_FALLBACKS[group]),
+            buckets.get(group) ?? [],
+            group === 'notCompleted',
+          );
+        });
+        return items;
+      }
       if (activeGroupBy === 'tag') {
         const grouped = new Map<string, Task[]>();
         const noTagTasks: Task[] = [];
@@ -837,7 +869,11 @@ function TaskListComponent({
     () => projectReorderFlatItems.some((item) => item.type === 'header'),
     [projectReorderFlatItems],
   );
-  const groupByOptions: TaskListGroupBy[] = ['none', 'area', 'project', 'tag'];
+  // Grouping by completion only says anything in a list of finished work, so
+  // Done gets the extra axis rather than every list growing it (#945).
+  const groupByOptions: TaskListGroupBy[] = statusFilter === 'done'
+    ? ['none', 'completedDate', 'area', 'project', 'tag']
+    : ['none', 'area', 'project', 'tag'];
   const getGroupByLabel = useCallback((groupBy: TaskListGroupBy) => {
     switch (groupBy) {
       case 'none':
@@ -848,6 +884,8 @@ function TaskListComponent({
         return tFallback(t, 'taskEdit.projectLabel', 'Project');
       case 'tag':
         return tFallback(t, 'taskEdit.tagsLabel', 'Tags');
+      case 'completedDate':
+        return tFallback(t, 'list.groupByCompletedDate', 'Completion date');
       default:
         return groupBy;
     }
@@ -1408,7 +1446,9 @@ function TaskListComponent({
     return result;
   }, [listItemCountForDiagnostics, performanceRoute, updateTask]);
 
-  const sortOptions: TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
+  const sortOptions: TaskSortBy[] = statusFilter === 'done'
+    ? ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc', 'completed']
+    : ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
   // Single-status lists (inbox/next/waiting/someday/done/reference) repeat the same status on every
   // row, so show a compact icon button to change status instead of the redundant status-name badge.
   // The 'all' list keeps the labeled badge because its rows have mixed statuses.

@@ -1065,6 +1065,13 @@ export const deOverrides: Record<string, string> = {
         'sort.title': 'Titel',
         'sort.created': 'Älteste',
         'sort.created-desc': 'Neueste',
+        'sort.completed': 'Abschlussdatum',
+        'list.groupByCompletedDate': 'Abschlussdatum',
+        'list.completedGroup.today': 'Heute',
+        'list.completedGroup.yesterday': 'Gestern',
+        'list.completedGroup.previous7Days': 'Letzte 7 Tage',
+        'list.completedGroup.earlier': 'Früher',
+        'list.completedGroup.notCompleted': 'Nicht abgeschlossen',
         
         // Agenda
         'agenda.title': 'Fokus',
