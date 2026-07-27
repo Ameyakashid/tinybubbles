@@ -102,6 +102,7 @@ jobs:
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
+      release_notes_path: ${{ steps.release_notes.outputs.body_path }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -126,6 +127,31 @@ jobs:
             echo "Expected stable tag like v1.1.5, got: $TAG" >&2
             exit 1
           fi
+
+      - name: Resolve and validate release notes
+        id: release_notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for path in \
+            "docs/release-notes/${TAG}.md" \
+            "docs/release-notes/${VERSION}.md"; do
+            [ -f "$path" ] || continue
+            heading="$(head -n 1 "$path")"
+            if [[ "$heading" != *"$VERSION"* && "$heading" != *"$TAG"* ]]; then
+              echo "Stable release notes heading must include ${VERSION} or ${TAG}: $path" >&2
+              exit 1
+            fi
+            echo "Using release notes at $path"
+            echo "body_path=$path" >> "$GITHUB_OUTPUT"
+            exit 0
+          done
+          echo "Missing stable release notes. Expected one of:" >&2
+          echo "  - docs/release-notes/${TAG}.md" >&2
+          echo "  - docs/release-notes/${VERSION}.md" >&2
+          exit 1
 
       - name: Verify app versions match the stable tag
         env:
@@ -454,35 +480,14 @@ jobs:
           )
           echo "Generated checksum manifest at release-assets/SHA256SUMS"
 
-      - name: Resolve release notes
-        id: release_notes
-        run: |
-          CURRENT_TAG="${{ needs.validate.outputs.tag }}"
-          NOTES_PATH="docs/release-notes/${CURRENT_TAG}.md"
-          ALT_NOTES_PATH="docs/release-notes/${CURRENT_TAG#v}.md"
-          if [ -f "$NOTES_PATH" ]; then
-            echo "Using release notes at $NOTES_PATH"
-            echo "body_path=$NOTES_PATH" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -f "$ALT_NOTES_PATH" ]; then
-            echo "Using release notes at $ALT_NOTES_PATH"
-            echo "body_path=$ALT_NOTES_PATH" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "Missing release notes file. Expected one of:" >&2
-          echo "  - $NOTES_PATH" >&2
-          echo "  - $ALT_NOTES_PATH" >&2
-          exit 1
-
       - name: Create Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES_FILE: ${{ needs.validate.outputs.release_notes_path }}
         run: |
           set -euo pipefail
 
           TAG="${{ needs.validate.outputs.tag }}"
-          NOTES_FILE="${{ steps.release_notes.outputs.body_path }}"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; stable release assets are immutable. Publish fixes under a new tag." >&2

@@ -11,18 +11,36 @@ test("stable release validates tags and committed versions before any build or p
   const stepNames = steps.map((step) => step.name);
 
   expect(stepNames).toContain("Validate stable tag naming");
+  expect(stepNames).toContain("Resolve and validate release notes");
   expect(stepNames).toContain("Verify app versions match the stable tag");
   expect(stepNames).toContain("Verify committed FOSS release version matches the stable tag");
   expect(stepNames).toContain("Verify CloudKit production schema is fully deployed");
   expect(stepNames).toContain("Verify stable tag points at this commit");
+  expect(validate.outputs.release_notes_path).toBe(
+    "${{ steps.release_notes.outputs.body_path }}"
+  );
 
   const versionStep = steps.find((step) => step.name === "Verify app versions match the stable tag");
   expect(versionStep.run).toContain("apps/desktop/src-tauri/tauri.conf.json");
   expect(versionStep.run).toContain("apps/desktop/src-tauri/Cargo.toml");
+  const releaseNotesStep = steps.find(
+    (step) => step.name === "Resolve and validate release notes"
+  );
+  expect(releaseNotesStep.run).toContain('docs/release-notes/${TAG}.md');
+  expect(releaseNotesStep.run).toContain('docs/release-notes/${VERSION}.md');
+  expect(releaseNotesStep.run).toContain("Stable release notes heading must include");
   const fossStep = steps.find(
     (step) => step.name === "Verify committed FOSS release version matches the stable tag"
   );
   expect(fossStep.run).toContain("apps/mobile/release-version.json");
+
+  const releaseSteps = workflow.jobs.release.steps;
+  expect(releaseSteps.some((step) => step.name === "Resolve release notes")).toBe(false);
+  const createReleaseStep = releaseSteps.find((step) => step.name === "Create Release");
+  expect(createReleaseStep.env.NOTES_FILE).toBe(
+    "${{ needs.validate.outputs.release_notes_path }}"
+  );
+  expect(createReleaseStep.run).toContain('--notes-file "$NOTES_FILE"');
 
   const buildJobs = [
     "linux",
