@@ -158,11 +158,10 @@ export function PromptModal({
                                 id={numericFieldId}
                                 // Same control as the task editor's Time Spent field
                                 // (type/min/step), so arrow keys and the spinner adjust it
-                                // the same way in both places. step only drives those
-                                // affordances — any exact number can still be typed.
+                                // the same way in both places.
                                 type="number"
                                 min={0}
-                                step={5}
+                                step={1}
                                 inputMode="numeric"
                                 value={numericDraft}
                                 // The number input already refuses non-numeric text, and

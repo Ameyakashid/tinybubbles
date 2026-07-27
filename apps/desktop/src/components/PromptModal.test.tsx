@@ -143,7 +143,9 @@ describe('PromptModal numericField', () => {
     });
 
     // Matches the task editor's Time Spent control so arrow keys step it there too.
-    it('renders the numeric field as a stepping number input', () => {
+    // step must stay 1: with step=5 the browser reports stepMismatch for any value
+    // off the grid, so 7 minutes was rejected as invalid (#896).
+    it('accepts a minute count that is not a multiple of five', () => {
         render(
             <PromptModal
                 {...baseProps}
@@ -154,8 +156,12 @@ describe('PromptModal numericField', () => {
 
         const numericInput = screen.getByLabelText('Time Spent') as HTMLInputElement;
         expect(numericInput).toHaveAttribute('type', 'number');
-        expect(numericInput).toHaveAttribute('step', '5');
         expect(numericInput).toHaveAttribute('min', '0');
+
+        fireEvent.change(numericInput, { target: { value: '7' } });
+
+        expect(numericInput.validity.stepMismatch).toBe(false);
+        expect(numericInput.validity.valid).toBe(true);
     });
 
     it('normalizes a blank numeric field to undefined instead of 0', () => {

@@ -109,6 +109,7 @@ const t = (key: string) => {
         'markdown.preview': 'Preview',
         'markdown.edit': 'Edit',
         'markdown.expand': 'Expand',
+        'taskEdit.timeSpentLabel': 'Time Spent',
     };
     return labels[key] ?? key;
 };
@@ -613,6 +614,22 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         fireEvent.click(getByLabelText('Due date'));
 
         expect(getByRole('dialog', { name: 'Due Date Calendar' })).toBeInTheDocument();
+    });
+
+    // step=5 made the browser report stepMismatch for any minute count off the
+    // grid, so entering 7 minutes was flagged invalid (#896).
+    it('accepts a Time Spent value that is not a multiple of five', () => {
+        // The live-draft harness is required here: with a no-op setField the
+        // controlled input never actually holds 7, and an empty value reports no
+        // stepMismatch, so the assertion would pass no matter what step is set to.
+        const { getByLabelText } = render(<DraftFieldHarness fieldId="timeEstimate" />);
+
+        const input = getByLabelText('Time Spent') as HTMLInputElement;
+        fireEvent.change(input, { target: { value: '7' } });
+        expect(input.value).toBe('7');
+
+        expect(input.validity.stepMismatch).toBe(false);
+        expect(input.validity.valid).toBe(true);
     });
 
     it('shows the quick-date suggestions inside the calendar popover', () => {

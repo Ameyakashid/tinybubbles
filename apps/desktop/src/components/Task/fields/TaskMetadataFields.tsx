@@ -847,7 +847,11 @@ export function TimeSpentField({
             <input
                 type="number"
                 min={0}
-                step={5}
+                // step=1 so every whole minute is a valid value. step=5 made the
+                // arrows move in fives but marked anything off the grid (7, 23)
+                // as stepMismatch, so the browser rejected times people had
+                // actually spent (#896).
+                step={1}
                 inputMode="numeric"
                 aria-label={t('taskEdit.timeSpentLabel')}
                 value={value ?? ''}
