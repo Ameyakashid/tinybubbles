@@ -817,8 +817,13 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
 
     /**
      * Duplicate a task as a fresh, re-doable copy: clones the details (title, dates,
-     * recurrence, tags, project) but resets completion — unchecks the checklist, clears
-     * completedAt, and reactivates done/archived tasks so the copy is always actionable.
+     * recurrence, tags, project) but resets completion — unchecks the checklist and
+     * clears completedAt.
+     *
+     * The copy keeps the source's status, which done/archived cannot do (a
+     * pre-completed copy is useless). Those land in the Inbox instead of straight
+     * on the actionable list: work finished once is not automatically still worth
+     * doing, so it gets clarified again like any other capture (#950).
      */
     duplicateTask: async (id: string, asNextAction?: boolean) => {
         const changeAt = Date.now();
@@ -865,7 +870,11 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 ...sourceTask,
                 id: newTaskId,
                 title: sourceTask.title,
-                status: asNextAction || sourceTask.status === 'done' || sourceTask.status === 'archived' ? 'next' : sourceTask.status,
+                status: asNextAction
+                    ? 'next'
+                    : sourceTask.status === 'done' || sourceTask.status === 'archived'
+                        ? 'inbox'
+                        : sourceTask.status,
                 recurrence: typeof sourceTask.recurrence === 'object'
                     ? { ...sourceTask.recurrence, seriesId: newTaskId }
                     : sourceTask.recurrence,

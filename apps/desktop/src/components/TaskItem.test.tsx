@@ -1109,7 +1109,7 @@ describe('TaskItem', () => {
         expect(useTaskStore.getState().highlightTaskId).toBe(duplicatedTask?.id);
     });
 
-    it('duplicates a completed task from the row button and reveals the copy in Next', async () => {
+    it('duplicates a completed task from the row button and reveals the copy in the Inbox', async () => {
         const doneTask: Task = {
             ...mockTask,
             id: 'done-duplicate-task',
@@ -1140,11 +1140,11 @@ describe('TaskItem', () => {
             const duplicatedTask = useTaskStore.getState()._allTasks.find((task) => task.id !== doneTask.id);
             expect(duplicatedTask).toMatchObject({
                 title: 'Test Task',
-                status: 'next',
+                status: 'inbox',
             });
             expect(duplicatedTask?.completedAt).toBeUndefined();
             expect(onNavigate).toHaveBeenCalledWith(
-                expect.objectContaining({ detail: { view: 'next' } }),
+                expect.objectContaining({ detail: { view: 'inbox' } }),
             );
         } finally {
             window.removeEventListener('mindwtr:navigate', onNavigate as EventListener);
@@ -1179,7 +1179,7 @@ describe('TaskItem', () => {
         });
 
         expect(useTaskStore.getState()._allTasks.find((task) => task.id !== doneTask.id)).toMatchObject({
-            status: 'next',
+            status: 'inbox',
         });
     });
 

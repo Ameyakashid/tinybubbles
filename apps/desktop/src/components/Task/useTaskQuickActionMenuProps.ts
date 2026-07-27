@@ -95,11 +95,11 @@ export async function duplicateTaskAndReveal(
             useUiStore.getState().setProjectView({ selectedProjectId: task.projectId });
             dispatchNavigateEvent('projects');
         } else if (task.status === 'done' || task.status === 'archived') {
-            // The copy is reactivated as a next action, so it is never in the
+            // The copy goes to the Inbox to be re-clarified, so it is never in the
             // Done/Archived list it was made from. Without this the duplicate
             // succeeds somewhere the user cannot see and the click reads as a
             // no-op (#950).
-            dispatchNavigateEvent('next');
+            dispatchNavigateEvent('inbox');
         }
         useUiStore.getState().setTaskExpanded(result.id, false);
         useUiStore.getState().setEditingTaskId(result.id);

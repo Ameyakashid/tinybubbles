@@ -618,7 +618,7 @@ describe('TaskStore', () => {
         ]);
     });
 
-    it('resets completion when duplicating a done task', async () => {
+    it('sends a duplicated done task back to the Inbox to be re-clarified', async () => {
         const { addTask, duplicateTask } = useTaskStore.getState();
         const addResult = await addTask('Weekly review', {
             status: 'done',
@@ -634,9 +634,17 @@ describe('TaskStore', () => {
         expect(duplicateResult.success).toBe(true);
 
         const copy = useTaskStore.getState()._allTasks.find((task) => task.id === duplicateResult.id);
-        expect(copy?.status).toBe('next');
+        expect(copy?.status).toBe('inbox');
         expect(copy?.completedAt).toBeUndefined();
         expect(copy?.checklist?.every((item) => item.isCompleted === false)).toBe(true);
+    });
+
+    it('keeps the source status when duplicating a task that is not done', async () => {
+        const { addTask, duplicateTask } = useTaskStore.getState();
+        const someday = await addTask('Packing list template', { status: 'someday' });
+        const copy = await duplicateTask(someday.id!, false);
+
+        expect(useTaskStore.getState()._tasksById.get(copy.id!)?.status).toBe('someday');
     });
 
     it('creates a project from a task without replacing the task', async () => {
