@@ -60,7 +60,10 @@ export function ConfirmModal({
         >
             <div
                 ref={modalRef}
-                className="w-full max-w-md bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
+                // Capped at the space left below the 20vh top offset: callers pass
+                // user content as the title (Trash confirms with the task title),
+                // so an unbounded card pushed the buttons off-screen (#947).
+                className="w-full max-w-md max-h-[60vh] bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                     if (e.key === 'Escape') {
@@ -91,18 +94,20 @@ export function ConfirmModal({
                     }
                 }}
             >
-                <div className="px-4 py-3 border-b">
-                    <h3 id={titleId} className="font-semibold">{title}</h3>
+                {/* Header scrolls as one block so the buttons below stay pinned
+                    and reachable no matter how long the title or description is. */}
+                <div className="min-h-0 overflow-y-auto px-4 py-3 border-b">
+                    <h3 id={titleId} className="font-semibold break-words">{title}</h3>
                     {description && (
                         <p
                             id={descriptionId}
-                            className="mt-1 max-h-64 overflow-y-auto whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground"
+                            className="mt-1 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground"
                         >
                             {description}
                         </p>
                     )}
                 </div>
-                <div className="p-4 flex justify-end gap-2">
+                <div className="shrink-0 p-4 flex justify-end gap-2">
                     <Button variant="secondary" onClick={onCancel}>
                         {cancelLabel}
                     </Button>

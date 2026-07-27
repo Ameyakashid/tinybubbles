@@ -62,4 +62,28 @@ describe('ConfirmModal', () => {
 
         expect(getByText(/Import 10 tasks\?/)).toHaveClass('whitespace-pre-line');
     });
+
+    it('keeps the buttons reachable when the title is very long (#947)', () => {
+        // Trash confirms a permanent delete with the task title as the dialog
+        // title, so a pasted-paragraph title used to grow the card past the
+        // bottom of the screen. jsdom has no layout, so pin the structure that
+        // makes it impossible: a height-capped card whose header scrolls on its
+        // own, with the buttons outside that scroll area.
+        const { getByRole } = render(
+            <ConfirmModal
+                isOpen
+                title={'Paragraph pasted as a task title. '.repeat(200)}
+                description="This cannot be undone."
+                confirmLabel="Delete"
+                cancelLabel="Cancel"
+                onConfirm={vi.fn()}
+                onCancel={vi.fn()}
+            />,
+        );
+
+        const scroller = getByRole('heading').parentElement;
+        expect(scroller?.className).toContain('overflow-y-auto');
+        expect(scroller?.contains(getByRole('button', { name: 'Delete' }))).toBe(false);
+        expect(scroller?.parentElement?.className).toMatch(/\bmax-h-/);
+    });
 });
