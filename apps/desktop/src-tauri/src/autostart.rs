@@ -11,15 +11,7 @@ use tauri_plugin_autostart::ManagerExt;
 /// (generated in .github/workflows/release-windows.yml). Keep both in sync.
 #[cfg(target_os = "windows")]
 const STORE_STARTUP_TASK_ID: &str = "MindwtrStartup";
-const AUTOSTART_MIGRATION_PENDING: &str = "pending";
 const AUTOSTART_MIGRATION_COMPLETE: &str = "true";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AutostartMigrationState {
-    NotStarted,
-    Pending,
-    Complete,
-}
 
 fn autostart_error(error: tauri_plugin_autostart::Error) -> String {
     error.to_string()
@@ -56,11 +48,6 @@ pub(crate) async fn set_launch_at_startup_enabled(
 
     let autostart = app.autolaunch();
     if enabled {
-        // Disable first: the plugin only writes the (now --startup-flag-
-        // carrying, see run()) command line on enable, so an entry that
-        // predates the flag and already reads as "enabled" would otherwise
-        // never get rewritten (#928).
-        let _ = autostart.disable();
         autostart.enable().map_err(autostart_error)?;
     } else {
         autostart.disable().map_err(autostart_error)?;
@@ -68,53 +55,20 @@ pub(crate) async fn set_launch_at_startup_enabled(
     autostart.is_enabled().map_err(autostart_error)
 }
 
-fn autostart_migration_state(value: Option<&str>) -> AutostartMigrationState {
-    if value.is_some_and(|value| {
-        value
-            .trim()
-            .eq_ignore_ascii_case(AUTOSTART_MIGRATION_PENDING)
-    }) {
-        return AutostartMigrationState::Pending;
-    }
-    if bool_setting_enabled(value) {
-        return AutostartMigrationState::Complete;
-    }
-    AutostartMigrationState::NotStarted
-}
-
 /// Re-register one pre-`--startup` entry using injected OS/config operations.
-///
-/// `pending` is persisted before disabling the live entry. If enabling then
-/// fails, the next launch knows the disabled state came from this migration
-/// and retries enable instead of mistaking it for the user's preference.
 fn migrate_autostart_entry_with(
-    state: AutostartMigrationState,
+    already_migrated: bool,
     mut is_enabled: impl FnMut() -> Option<bool>,
-    mut disable: impl FnMut() -> bool,
     mut enable: impl FnMut() -> bool,
     mut persist_state: impl FnMut(&'static str) -> bool,
 ) -> bool {
-    if state == AutostartMigrationState::Complete {
+    if already_migrated {
         return true;
     }
 
-    let enabled = is_enabled();
-    if state == AutostartMigrationState::NotStarted {
-        // Never turn on an entry that the user already had off.
-        if enabled != Some(true) {
-            return false;
-        }
-        // Do not risk disabling the only working entry unless the retry intent
-        // is already durable.
-        if !persist_state(AUTOSTART_MIGRATION_PENDING) {
-            return false;
-        }
-    }
-
-    // A pending migration can arrive here either before disable (for example,
-    // after a process interruption) or after a failed enable. Only the former
-    // still needs the old entry removed.
-    if enabled == Some(true) && !disable() {
+    // Never turn on an entry that the user already had off. enable() rewrites
+    // an existing entry in place, so failure leaves the working entry intact.
+    if is_enabled() != Some(true) {
         return false;
     }
     if !enable() {
@@ -127,10 +81,8 @@ fn migrate_autostart_entry_with(
 /// `--startup` command line on `enable()`, so an entry created before that
 /// flag existed and left on would otherwise never pick it up, and the
 /// tray-start behavior derived from it would never trigger for that install
-/// (#928). The existing config marker is a tiny pending/complete state machine:
-/// pending is written before disable, and complete only after enable succeeds.
-/// This makes an interrupted or failed rewrite retryable without adding a user
-/// setting or turning on autostart for someone who already had it off.
+/// (#928). The marker is written only after enable succeeds; a failed rewrite
+/// leaves the old working entry intact and retries on the next launch.
 pub(crate) fn migrate_autostart_entry_if_pending(app: &tauri::AppHandle) {
     #[cfg(target_os = "linux")]
     if is_flatpak() {
@@ -141,15 +93,14 @@ pub(crate) fn migrate_autostart_entry_if_pending(app: &tauri::AppHandle) {
         return;
     }
     let mut config = read_config(app);
-    let migration_state =
-        autostart_migration_state(config.autostart_startup_flag_migrated.as_deref());
+    let already_migrated =
+        bool_setting_enabled(config.autostart_startup_flag_migrated.as_deref());
     let autostart = app.autolaunch();
     let config_path = get_config_path(app);
     let secrets_path = get_secrets_path(app);
     let _ = migrate_autostart_entry_with(
-        migration_state,
+        already_migrated,
         || autostart.is_enabled().ok(),
-        || autostart.disable().is_ok(),
         || autostart.enable().is_ok(),
         |value| {
             config.autostart_startup_flag_migrated = Some(value.to_string());
@@ -248,9 +199,8 @@ mod tests {
     #[test]
     fn migration_never_turns_on_an_entry_that_was_already_disabled() {
         let completed = migrate_autostart_entry_with(
-            AutostartMigrationState::NotStarted,
+            false,
             || Some(false),
-            || panic!("disabled entry must not be removed"),
             || panic!("disabled entry must not be enabled"),
             |_| panic!("disabled entry must not start a migration"),
         );
@@ -259,17 +209,12 @@ mod tests {
     }
 
     #[test]
-    fn migration_retries_enable_after_its_successful_disable_was_followed_by_failure() {
-        let mut disable_calls = 0;
+    fn migration_retries_after_enable_failure_without_disabling_the_entry() {
         let mut enable_calls = 0;
         let mut persisted = Vec::new();
         let first_completed = migrate_autostart_entry_with(
-            AutostartMigrationState::NotStarted,
+            false,
             || Some(true),
-            || {
-                disable_calls += 1;
-                true
-            },
             || {
                 enable_calls += 1;
                 false
@@ -281,17 +226,14 @@ mod tests {
         );
 
         assert!(!first_completed);
-        assert_eq!(disable_calls, 1);
         assert_eq!(enable_calls, 1);
-        assert_eq!(persisted, [AUTOSTART_MIGRATION_PENDING]);
+        assert!(persisted.is_empty());
 
-        let retry_state = autostart_migration_state(persisted.last().copied());
         let mut retry_enable_calls = 0;
         let mut retry_persisted = Vec::new();
         let retry_completed = migrate_autostart_entry_with(
-            retry_state,
-            || Some(false),
-            || panic!("failed enable already left the entry disabled"),
+            false,
+            || Some(true),
             || {
                 retry_enable_calls += 1;
                 true
@@ -308,22 +250,20 @@ mod tests {
     }
 
     #[test]
-    fn migration_does_not_disable_until_pending_state_is_durable() {
-        let mut disable_calls = 0;
-
+    fn migration_marks_complete_only_after_enable_succeeds() {
+        let mut enable_calls = 0;
         let completed = migrate_autostart_entry_with(
-            AutostartMigrationState::NotStarted,
+            false,
             || Some(true),
             || {
-                disable_calls += 1;
+                enable_calls += 1;
                 true
             },
-            || panic!("entry must stay enabled when pending state cannot be saved"),
             |_| false,
         );
 
         assert!(!completed);
-        assert_eq!(disable_calls, 0);
+        assert_eq!(enable_calls, 1);
     }
 
     #[test]
