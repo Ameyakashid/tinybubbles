@@ -1,3 +1,10 @@
+import {
+    advanceProcessInboxSession,
+    type ProcessInboxCandidate,
+    type ProcessInboxSession,
+    type ProcessInboxTaskTransitionOptions,
+} from './process-inbox-session';
+import type { StoreActionResult } from './store-types';
 import type { Task } from './types';
 
 export type ProcessInboxWorkflowFields = Partial<Pick<
@@ -37,6 +44,24 @@ export type ProcessInboxWorkflowEffect =
     | { type: 'delete' }
     | { type: 'update'; updates: Partial<Task> };
 
+export type ProcessInboxWorkflowWriteActions = {
+    deleteTask: (taskId: string) => Promise<StoreActionResult>;
+    updateTask: (taskId: string, updates: Partial<Task>) => Promise<StoreActionResult>;
+};
+
+export type ProcessInboxWorkflowCommitOptions<Step extends string> =
+    ProcessInboxTaskTransitionOptions<Step> & {
+        /** Platform-prepared title, description, and date updates applied over the workflow effect. */
+        taskUpdates?: Partial<Task>;
+        /** Multi-write flows can defer advancing until their remaining writes succeed. */
+        advance?: boolean;
+    };
+
+export type ProcessInboxWorkflowCommitResult<Step extends string> = {
+    session: ProcessInboxSession<Step>;
+    writeResult: StoreActionResult;
+};
+
 function normalizeFields(fields: ProcessInboxWorkflowFields): ProcessInboxWorkflowFields {
     if (!Object.prototype.hasOwnProperty.call(fields, 'assignedTo')) return fields;
     const assignedTo = fields.assignedTo?.trim() || undefined;
@@ -75,4 +100,40 @@ export function resolveProcessInboxWorkflowEvent(
             return updateEffect('waiting', fields);
         }
     }
+}
+
+/**
+ * Commit one Inbox-processing decision and advance only after persistence
+ * confirms success. Platforms keep input collection and error presentation.
+ */
+export async function commitProcessInboxWorkflowEvent<
+    Candidate extends ProcessInboxCandidate,
+    Step extends string,
+>(
+    session: ProcessInboxSession<Step>,
+    candidates: readonly Candidate[],
+    event: ProcessInboxWorkflowEvent,
+    actions: ProcessInboxWorkflowWriteActions,
+    options: ProcessInboxWorkflowCommitOptions<Step> = {},
+): Promise<ProcessInboxWorkflowCommitResult<Step>> {
+    const taskId = session.currentTaskId;
+    if (!taskId) {
+        return {
+            session,
+            writeResult: { success: false, error: 'No current Inbox task' },
+        };
+    }
+
+    const effect = resolveProcessInboxWorkflowEvent(event);
+    const writeResult = effect.type === 'delete'
+        ? await actions.deleteTask(taskId)
+        : await actions.updateTask(taskId, { ...effect.updates, ...options.taskUpdates });
+    if (!writeResult.success || options.advance === false) {
+        return { session, writeResult };
+    }
+
+    return {
+        session: advanceProcessInboxSession(session, candidates, options),
+        writeResult,
+    };
 }

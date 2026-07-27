@@ -121,10 +121,10 @@ const renderInboxProcessor = (options?: AppData['settings'] | RenderInboxProcess
     const renderOptions = isRenderInboxProcessorOptions(options)
         ? options
         : { settings: options };
-    const addTask = vi.fn(async () => undefined);
+        const addTask = vi.fn(async () => ({ success: true }));
     const addProject = vi.fn(async () => createdProject);
-    const updateTask = vi.fn(async () => undefined);
-    const deleteTask = vi.fn(async () => undefined);
+        const updateTask = vi.fn(async () => ({ success: true }));
+        const deleteTask = vi.fn(async () => ({ success: true }));
     const tasks = renderOptions.tasks ?? [inboxTask];
     const projects = renderOptions.projects ?? [];
     const areas = renderOptions.areas ?? [];

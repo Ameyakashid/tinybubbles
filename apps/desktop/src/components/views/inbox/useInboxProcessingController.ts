@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo } from 'react';
 import {
     advanceProcessInboxSession,
     addBreadcrumb,
+    commitProcessInboxWorkflowEvent,
     DEFAULT_PROJECT_COLOR,
     enterProcessInboxStep,
     getPersonOptionNames,
     goBackProcessInboxStep,
     parseQuickAddDateCommands,
-    resolveProcessInboxWorkflowEvent,
     skipCurrentProcessInboxTask,
     startProcessInboxSession,
     tFallback,
@@ -17,6 +17,7 @@ import {
     type Project,
     type ProcessInboxWorkflowEvent,
     type ProcessInboxWorkflowFields,
+    type StoreActionResult,
     type Task,
 } from '@mindwtr/core';
 
@@ -39,9 +40,9 @@ type UseInboxProcessingControllerParams = {
     areas: Area[];
     settings?: AppData['settings'];
     addProject: (title: string, color: string, initialProps?: Partial<Project>) => Promise<Project | null>;
-    addTask: (title: string, initialProps?: Partial<Task>) => Promise<unknown>;
-    updateTask: (id: string, updates: Partial<Task>) => Promise<unknown>;
-    deleteTask: (id: string) => Promise<unknown>;
+    addTask: (title: string, initialProps?: Partial<Task>) => Promise<StoreActionResult>;
+    updateTask: (id: string, updates: Partial<Task>) => Promise<StoreActionResult>;
+    deleteTask: (id: string) => Promise<StoreActionResult>;
     allContexts: string[];
     allTags: string[];
     isProcessing: boolean;
@@ -289,12 +290,11 @@ export function useInboxProcessingController({
         ],
     );
 
-    const applyProcessingEdits = useCallback((
-        updates: Partial<Task>,
+    const prepareProcessingEdits = useCallback((
         titleInput: string = processingTitle,
         fallbackTitle?: string,
-    ) => {
-        if (!processingTask) return false;
+    ): Partial<Task> | null => {
+        if (!processingTask) return null;
         const { title: parsedTitle, props: parsedDateProps, invalidDateCommands } = parseQuickAddDateCommands(
             titleInput,
             new Date(),
@@ -302,33 +302,63 @@ export function useInboxProcessingController({
         );
         if (invalidDateCommands && invalidDateCommands.length > 0) {
             showToast(`${t('quickAdd.invalidDateCommand')}: ${invalidDateCommands.join(', ')}`, 'error');
-            return false;
+            return null;
         }
         const trimmedTitle = parsedTitle.trim();
         const title = trimmedTitle.length > 0 ? trimmedTitle : (fallbackTitle ?? processingTask.title);
         const description = processingDescription.trim();
-        void updateTask(processingTask.id, {
+        return {
             title,
             description: description.length > 0 ? description : undefined,
-            ...updates,
             ...parsedDateProps,
-        });
-        return true;
-    }, [processingDescription, processingTask, processingTitle, settings?.quickAddAutoClean, showToast, t, updateTask]);
+        };
+    }, [processingDescription, processingTask, processingTitle, settings?.quickAddAutoClean, showToast, t]);
 
-    const applyWorkflowEvent = useCallback((
+    const applyWorkflowEvent = useCallback(async (
         event: ProcessInboxWorkflowEvent,
         titleInput?: string,
         fallbackTitle?: string,
-    ) => {
+        options: { advance?: boolean } = {},
+    ): Promise<boolean> => {
         if (!processingTask) return false;
-        const effect = resolveProcessInboxWorkflowEvent(event);
-        if (effect.type === 'delete') {
-            void deleteTask(processingTask.id);
+        const taskUpdates = event.type === 'discard'
+            ? undefined
+            : prepareProcessingEdits(titleInput, fallbackTitle);
+        if (event.type !== 'discard' && !taskUpdates) return false;
+        try {
+            const outcome = await commitProcessInboxWorkflowEvent(
+                processingSession,
+                eligibleInboxTasks,
+                event,
+                { deleteTask, updateTask },
+                {
+                    entryStep: 'refine',
+                    taskUpdates: taskUpdates ?? undefined,
+                    advance: options.advance,
+                },
+            );
+            if (!outcome.writeResult.success) {
+                showToast(outcome.writeResult.error || t('task.updateFailed'), 'error');
+                return false;
+            }
+            if (options.advance !== false) applySessionTransition(outcome.session);
             return true;
+        } catch (error) {
+            reportError('Failed to commit inbox processing decision', error);
+            showToast(t('task.updateFailed'), 'error');
+            return false;
         }
-        return applyProcessingEdits(effect.updates, titleInput, fallbackTitle);
-    }, [applyProcessingEdits, deleteTask, processingTask]);
+    }, [
+        applySessionTransition,
+        deleteTask,
+        eligibleInboxTasks,
+        prepareProcessingEdits,
+        processingSession,
+        processingTask,
+        showToast,
+        t,
+        updateTask,
+    ]);
 
     const goToStep = useCallback((nextStep: ProcessingStep) => {
         setProcessingSession((current) => enterProcessInboxStep(current, nextStep));
@@ -345,10 +375,10 @@ export function useInboxProcessingController({
         return fields;
     }, [selectedContexts, selectedTags, showContextsField, showTagsField]);
 
-    const handleNotActionable = useCallback((action: 'trash' | 'someday' | 'reference') => {
+    const handleNotActionable = useCallback(async (action: 'trash' | 'someday' | 'reference') => {
         if (!processingTask) return;
         if (action === 'trash') {
-            if (applyWorkflowEvent({ type: 'discard' })) processNext();
+            await applyWorkflowEvent({ type: 'discard' });
             return;
         }
         if (action === 'reference') {
@@ -356,36 +386,26 @@ export function useInboxProcessingController({
                 goToStep('reference');
                 return;
             }
-            const applied = applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
-            if (applied) {
-                processNext();
-            }
+            await applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
             return;
         }
-        const applied = applyWorkflowEvent({ type: 'someday' });
-        if (applied) {
-            processNext();
-        }
+        await applyWorkflowEvent({ type: 'someday' });
     }, [
         applyWorkflowEvent,
         buildReferenceFields,
         goToStep,
-        processNext,
         processingMode,
         processingTask,
         showContextsField,
         showTagsField,
     ]);
 
-    const handleConfirmReference = useCallback(() => {
+    const handleConfirmReference = useCallback(async () => {
         if (!processingTask) return;
-        const applied = applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
-        if (applied) {
-            processNext();
-        }
-    }, [applyWorkflowEvent, buildReferenceFields, processNext, processingTask]);
+        await applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
+    }, [applyWorkflowEvent, buildReferenceFields, processingTask]);
 
-    const handleLater = useCallback(() => {
+    const handleLater = useCallback(async () => {
         if (!processingTask) return;
         handleScheduleTimeCommit();
         const startTime = buildDateTimeUpdate(scheduleDate, scheduleTimeDraft, scheduleTime);
@@ -399,17 +419,13 @@ export function useInboxProcessingController({
                 ...(showAreaField ? { areaId: selectedProjectId ? undefined : (selectedAreaId || undefined) } : {}),
             }
             : {};
-        const applied = applyWorkflowEvent({
+        await applyWorkflowEvent({
             type: 'later',
             fields: { ...projectUpdates, startTime },
         });
-        if (applied) {
-            processNext();
-        }
     }, [
         applyWorkflowEvent,
         handleScheduleTimeCommit,
-        processNext,
         processingTask,
         projectFirst,
         scheduleDate,
@@ -456,12 +472,10 @@ export function useInboxProcessingController({
         goToStep('project');
     }, [goToStep, processingTask?.title, processingTitle, setExtraActionDrafts, settings?.quickAddAutoClean]);
 
-    const handleTwoMinDone = useCallback(() => {
+    const handleTwoMinDone = useCallback(async () => {
         if (!processingTask) return;
-        if (applyWorkflowEvent({ type: 'complete' })) {
-            processNext();
-        }
-    }, [applyWorkflowEvent, processNext, processingTask]);
+        await applyWorkflowEvent({ type: 'complete' });
+    }, [applyWorkflowEvent, processingTask]);
 
     const handleTwoMinNo = useCallback(() => {
         goToStep(twoMinuteFirst ? 'actionable' : 'decide');
@@ -473,11 +487,11 @@ export function useInboxProcessingController({
         goToStep('delegate');
     }, [goToStep]);
 
-    const handleConfirmWaiting = useCallback(() => {
+    const handleConfirmWaiting = useCallback(async () => {
         if (!processingTask) return;
         const who = delegateWho.trim();
         const scheduleUpdates = buildScheduleUpdates();
-        const applied = applyWorkflowEvent({
+        const applied = await applyWorkflowEvent({
             type: 'waiting',
             fields: {
                 energyLevel: selectedEnergyLevel ?? undefined,
@@ -494,7 +508,6 @@ export function useInboxProcessingController({
         if (applied) {
             setDelegateWho('');
             setDelegateFollowUp('');
-            processNext();
         }
     }, [
         applyWorkflowEvent,
@@ -502,7 +515,6 @@ export function useInboxProcessingController({
         delegateFollowUp,
         delegateWho,
         prioritiesEnabled,
-        processNext,
         processingTask,
         selectedEnergyLevel,
         selectedPriority,
@@ -577,9 +589,9 @@ export function useInboxProcessingController({
         setCustomTag('');
     }, [customTag, selectedTags, setCustomTag, updateSelectedTags]);
 
-    const handleSetProject = useCallback((projectId: string | null) => {
+    const handleSetProject = useCallback(async (projectId: string | null) => {
         if (!processingTask) return;
-        const applied = applyWorkflowEvent({
+        await applyWorkflowEvent({
             type: 'next',
             fields: {
                 contexts: showContextsField ? selectedContexts : (processingTask.contexts ?? []),
@@ -593,14 +605,10 @@ export function useInboxProcessingController({
                 ...buildScheduleUpdates(),
             },
         });
-        if (applied) {
-            processNext();
-        }
     }, [
         applyWorkflowEvent,
         buildScheduleUpdates,
         prioritiesEnabled,
-        processNext,
         processingTask,
         selectedAreaId,
         selectedAssignedTo,
@@ -674,7 +682,7 @@ export function useInboxProcessingController({
                 showAreaField && selectedAreaId ? { areaId: selectedAreaId } : undefined,
             );
             if (!project) return;
-            const applied = applyWorkflowEvent({
+            const applied = await applyWorkflowEvent({
                 type: 'next',
                 fields: {
                     contexts: showContextsField ? selectedContexts : (processingTask.contexts ?? []),
@@ -686,7 +694,7 @@ export function useInboxProcessingController({
                     projectId: project.id,
                     ...buildScheduleUpdates(),
                 },
-            }, nextAction, processingTask.title);
+            }, nextAction, processingTask.title, { advance: false });
             if (applied) {
                 // The converted capture becomes the project's clarified next
                 // action. Extra actions typed at the split step are raw
@@ -695,7 +703,11 @@ export function useInboxProcessingController({
                 // with a +Project token (#827).
                 const extraActions = extraActionDrafts.map((title) => title.trim()).filter(Boolean);
                 for (const title of extraActions) {
-                    await addTask(title, { status: 'inbox', projectId: project.id });
+                    const result = await addTask(title, { status: 'inbox', projectId: project.id });
+                    if (!result.success) {
+                        showToast(result.error || t('task.addFailed'), 'error');
+                        return;
+                    }
                 }
                 setExtraActionDrafts([]);
                 processNext();
@@ -751,26 +763,26 @@ export function useInboxProcessingController({
         handleDueTimeCommit();
         handleReviewTimeCommit();
         if (quickActionability === 'later') {
-            handleLater();
+            await handleLater();
             return;
         }
         if (quickActionability !== 'actionable') {
-            handleNotActionable(quickActionability);
+            await handleNotActionable(quickActionability);
             return;
         }
         if (quickTwoMinuteChoice === 'yes') {
-            handleTwoMinDone();
+            await handleTwoMinDone();
             return;
         }
         if (quickExecutionChoice === 'delegate') {
-            handleConfirmWaiting();
+            await handleConfirmWaiting();
             return;
         }
         if (convertToProject) {
             await handleConvertToProject();
             return;
         }
-        handleSetProject(selectedProjectId);
+        await handleSetProject(selectedProjectId);
     }, [
         convertToProject,
         handleConfirmWaiting,

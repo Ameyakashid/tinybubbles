@@ -306,10 +306,13 @@ describe('InboxProcessingModal', () => {
     storeState.tasks = [{ ...baseInboxTask }];
     storeState.projects = [];
     storeState.areas = [];
-    updateTask.mockClear();
-    deleteTask.mockClear();
+    updateTask.mockReset();
+    updateTask.mockResolvedValue({ success: true });
+    deleteTask.mockReset();
+    deleteTask.mockResolvedValue({ success: true });
     addProject.mockClear();
-    addTask.mockClear();
+    addTask.mockReset();
+    addTask.mockResolvedValue({ success: true });
     push.mockClear();
     clarifyTask.mockClear();
     showToast.mockClear();
@@ -339,6 +342,13 @@ describe('InboxProcessingModal', () => {
         return children.some((child) => child === text);
       }
       return false;
+    });
+  };
+
+  const flushAsyncActions = async () => {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
     });
   };
 
@@ -490,7 +500,7 @@ describe('InboxProcessingModal', () => {
     expect(flattenStyle(tree!.root.findByType(KeyboardAvoidingView).props.style).paddingBottom).toBeUndefined();
   });
 
-  it('replaces the header next action with skip and saves edits before advancing', () => {
+  it('replaces the header next action with skip and saves edits before advancing', async () => {
     mockSettings.features = undefined;
     mockSettings.gtd.inboxProcessing = {};
     storeState.projects = [];
@@ -535,6 +545,7 @@ describe('InboxProcessingModal', () => {
         contexts: ['@home'],
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -603,7 +614,7 @@ describe('InboxProcessingModal', () => {
     expect(findNodesWithText(root, 'Home Project').length).toBeGreaterThan(0);
   });
 
-  it('respects the global area filter when building the processing queue', () => {
+  it('respects the global area filter when building the processing queue', async () => {
     mockSettings.filters = { areaId: workArea.id };
     storeState.areas = [workArea, homeArea];
     storeState.projects = [workProject, homeProject];
@@ -653,6 +664,7 @@ describe('InboxProcessingModal', () => {
         title: 'Work inbox',
       }),
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -1005,7 +1017,7 @@ describe('InboxProcessingModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('moves Later items to next with a date-only start date', () => {
+  it('moves Later items to next with a date-only start date', async () => {
     const onClose = vi.fn();
     let tree: ReturnType<typeof create>;
 
@@ -1059,6 +1071,7 @@ describe('InboxProcessingModal', () => {
         startTime: '2026-03-23',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -1183,7 +1196,7 @@ describe('InboxProcessingModal', () => {
     );
   });
 
-  it('moves Later items to next when No date is explicitly selected', () => {
+  it('moves Later items to next when No date is explicitly selected', async () => {
     const onClose = vi.fn();
     let tree: ReturnType<typeof create>;
 
@@ -1239,10 +1252,11 @@ describe('InboxProcessingModal', () => {
       })
     );
     expect(updateTask.mock.calls[0][1]).toHaveProperty('startTime', undefined);
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('advances to the next inbox item when Later No date is selected directly', () => {
+  it('advances to the next inbox item when Later No date is selected directly', async () => {
     storeState.tasks = [
       { ...baseInboxTask },
       {
@@ -1299,12 +1313,13 @@ describe('InboxProcessingModal', () => {
       })
     );
     expect(updateTask.mock.calls[0][1]).toHaveProperty('startTime', undefined);
+    await flushAsyncActions();
     expect(onClose).not.toHaveBeenCalled();
     expect(root.findByProps({ placeholder: 'taskEdit.titleLabel' }).props.value).toBe('Second inbox task');
     expect(showToast).not.toHaveBeenCalled();
   });
 
-  it('saves the selected priority when the priority field is shown', () => {
+  it('saves the selected priority when the priority field is shown', async () => {
     mockSettings.gtd.taskEditor = { hidden: [] };
     const onClose = vi.fn();
     let tree: ReturnType<typeof create>;
@@ -1345,10 +1360,11 @@ describe('InboxProcessingModal', () => {
         priority: 'high',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('saves energy level and time estimate during inbox processing', () => {
+  it('saves energy level and time estimate during inbox processing', async () => {
     mockSettings.gtd.taskEditor = { hidden: [] };
     const onClose = vi.fn();
     let tree: ReturnType<typeof create>;
@@ -1386,6 +1402,7 @@ describe('InboxProcessingModal', () => {
         timeEstimate: '30min',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -1413,7 +1430,7 @@ describe('InboxProcessingModal', () => {
     expect(root.findAllByProps({ children: '30m' })).toHaveLength(0);
   });
 
-  it('moves delegated tasks to waiting with assignedTo and keeps the description clean', () => {
+  it('moves delegated tasks to waiting with assignedTo and keeps the description clean', async () => {
     mockSettings.features = undefined;
     mockSettings.gtd.inboxProcessing = {};
     storeState.projects = [];
@@ -1463,10 +1480,11 @@ describe('InboxProcessingModal', () => {
         description: 'Original description',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('keeps the selected priority when delegating a task', () => {
+  it('keeps the selected priority when delegating a task', async () => {
     mockSettings.features = undefined;
     mockSettings.gtd.inboxProcessing = {};
     mockSettings.gtd.taskEditor = { hidden: [] };
@@ -1528,10 +1546,11 @@ describe('InboxProcessingModal', () => {
         priority: 'high',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('keeps the selected priority when delegating a task', () => {
+  it('keeps the selected priority when delegating a task', async () => {
     mockSettings.features = undefined;
     mockSettings.gtd.inboxProcessing = {};
     mockSettings.gtd.taskEditor = { hidden: [] };
@@ -1593,10 +1612,11 @@ describe('InboxProcessingModal', () => {
         priority: 'urgent',
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('allows delegation without an optional assignee name', () => {
+  it('allows delegation without an optional assignee name', async () => {
     mockSettings.features = undefined;
     mockSettings.gtd.inboxProcessing = {};
     storeState.projects = [];
@@ -1641,6 +1661,7 @@ describe('InboxProcessingModal', () => {
         assignedTo: undefined,
       })
     );
+    await flushAsyncActions();
     expect(onClose).toHaveBeenCalled();
   });
 

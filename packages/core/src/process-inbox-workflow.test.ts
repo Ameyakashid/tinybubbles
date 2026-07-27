@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveProcessInboxWorkflowEvent } from './process-inbox-workflow';
+import { startProcessInboxSession } from './process-inbox-session';
+import {
+    commitProcessInboxWorkflowEvent,
+    resolveProcessInboxWorkflowEvent,
+} from './process-inbox-workflow';
 
 describe('resolveProcessInboxWorkflowEvent', () => {
     it('turns discard into a delete effect', () => {
@@ -77,5 +81,38 @@ describe('resolveProcessInboxWorkflowEvent', () => {
             type: 'update',
             updates: { status: 'waiting', assignedTo: undefined },
         });
+    });
+
+    it('advances only after the task write succeeds', async () => {
+        const candidates = [{ id: 'task-1' }, { id: 'task-2' }];
+        const session = startProcessInboxSession(candidates);
+        const failed = await commitProcessInboxWorkflowEvent(
+            session,
+            candidates,
+            { type: 'complete' },
+            {
+                deleteTask: async () => ({ success: true }),
+                updateTask: async () => ({ success: false, error: 'disk full' }),
+            },
+        );
+
+        expect(failed.session.currentTaskId).toBe('task-1');
+        expect(failed.writeResult).toEqual({ success: false, error: 'disk full' });
+
+        const committed = await commitProcessInboxWorkflowEvent(
+            session,
+            candidates,
+            { type: 'complete' },
+            {
+                deleteTask: async () => ({ success: true }),
+                updateTask: async (_taskId, updates) => {
+                    expect(updates).toEqual({ status: 'done', title: 'Clarified title' });
+                    return { success: true };
+                },
+            },
+            { taskUpdates: { title: 'Clarified title' } },
+        );
+
+        expect(committed.session.currentTaskId).toBe('task-2');
     });
 });

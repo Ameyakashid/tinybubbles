@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react';
-import type { AppData, Area, Project, Task } from '@mindwtr/core';
+import type { AppData, Area, Project, StoreActionResult, Task } from '@mindwtr/core';
 
 import { InboxProcessingQuickPanel } from '../InboxProcessingQuickPanel';
 import { InboxProcessingWizard } from '../InboxProcessingWizard';
@@ -13,10 +13,10 @@ type InboxProcessorProps = {
     projects: Project[];
     areas: Area[];
     settings?: AppData['settings'];
-    addTask: (title: string, initialProps?: Partial<Task>) => Promise<unknown>;
+    addTask: (title: string, initialProps?: Partial<Task>) => Promise<StoreActionResult>;
     addProject: (title: string, color: string, initialProps?: Partial<Project>) => Promise<Project | null>;
-    updateTask: (id: string, updates: Partial<Task>) => Promise<unknown>;
-    deleteTask: (id: string) => Promise<unknown>;
+    updateTask: (id: string, updates: Partial<Task>) => Promise<StoreActionResult>;
+    deleteTask: (id: string) => Promise<StoreActionResult>;
     allContexts: string[];
     allTags: string[];
     isProcessing: boolean;
