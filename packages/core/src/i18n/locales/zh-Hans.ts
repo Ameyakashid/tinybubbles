@@ -1112,6 +1112,8 @@ export const zhHans: Record<string, string> = {
         'pomodoro.startForTask': '开始专注会话',
         'pomodoro.phaseFocusShort': '专注',
         'pomodoro.phaseBreakShort': '休息',
+        'pomodoro.running': '进行中',
+        'pomodoro.paused': '已暂停',
         'pomodoro.switchToBreak': '切换到休息',
         'pomodoro.switchToFocus': '切换到专注',
         'pomodoro.collapse': '收起计时器',

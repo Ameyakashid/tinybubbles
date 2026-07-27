@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text } from 'react-native';
+import { FlatList, Pressable, Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,6 +8,8 @@ import { PomodoroPanel } from './pomodoro-panel';
 
 const { storeState } = vi.hoisted(() => ({
   storeState: {
+    tasks: [] as any[],
+    updateTask: vi.fn(),
     settings: {
       notificationsEnabled: false,
       gtd: {
@@ -113,6 +115,8 @@ describe('PomodoroPanel', () => {
         pomodoro: {},
       },
     };
+    storeState.tasks = [];
+    storeState.updateTask.mockResolvedValue({ success: true });
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null);
     vi.mocked(AsyncStorage.setItem).mockResolvedValue(undefined);
     vi.mocked(AsyncStorage.setItem).mockClear();
@@ -254,8 +258,70 @@ describe('PomodoroPanel', () => {
 
     // The clock and the phase survive the fold; the controls do not.
     expect(textValues).toContain('25:00');
-    expect(textValues).toContain('Focus');
+    expect(textValues).toContain('Focus · Paused');
     expect(pressableText(tree)).not.toContain('Switch to Break');
+  });
+
+  it('keeps an out-of-scope live task linked while the picker stays scoped', async () => {
+    const linkedTask = {
+      id: 'linked-elsewhere',
+      title: 'Review follow-up',
+      status: 'waiting',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    storeState.settings = {
+      notificationsEnabled: false,
+      gtd: { pomodoro: { linkTask: true } },
+    };
+    storeState.tasks = [linkedTask];
+    mockStorage({
+      '@mindwtr_pomodoro_state': JSON.stringify({
+        durations: { focusMinutes: 25, breakMinutes: 5 },
+        timerState: {
+          phase: 'focus',
+          remainingSeconds: 1500,
+          isRunning: false,
+          completedFocusSessions: 0,
+        },
+        selectedTaskId: linkedTask.id,
+      }),
+    });
+
+    let tree!: renderer.ReactTestRenderer;
+    await act(async () => {
+      tree = renderer.create(<PomodoroPanel tasks={[]} onMarkDone={vi.fn()} />);
+    });
+
+    expect(tree.root.findAllByType(Text).map((node) => flattenText(node.props.children)))
+      .toContain('Review follow-up');
+    const picker = tree.root.findAllByType(Pressable)
+      .find((node) => node.props.accessibilityLabel === 'Timer task');
+    act(() => picker?.props.onPress());
+    expect(tree.root.findByType(FlatList).props.data).toEqual([]);
+    expect(tree.root.findAll((node) => node.props.accessibilityState?.selected === true))
+      .toHaveLength(0);
+  });
+
+  it('announces whether a collapsed timer is running', async () => {
+    const phaseEndsAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    mockStorage({
+      '@mindwtr_pomodoro_collapsed': 'true',
+      '@mindwtr_pomodoro_state': JSON.stringify({
+        durations: { focusMinutes: 25, breakMinutes: 5 },
+        timerState: {
+          phase: 'focus',
+          remainingSeconds: 600,
+          isRunning: true,
+          completedFocusSessions: 0,
+        },
+        phaseEndsAt,
+      }),
+    });
+
+    const tree = await renderPanel();
+    expect(tree.root.findAllByType(Text).map((node) => flattenText(node.props.children)))
+      .toContain('Focus · Running');
   });
 
   it('persists the fold to this device only (#946)', async () => {

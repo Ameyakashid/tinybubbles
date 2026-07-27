@@ -49,6 +49,7 @@ export function PomodoroPanel({
   const notificationsEnabled = useTaskStore((state) => state.settings.notificationsEnabled !== false);
   const customDurations = useTaskStore((state) => state.settings.gtd?.pomodoro?.customDurations);
   const linkTaskEnabled = useTaskStore((state) => state.settings.gtd?.pomodoro?.linkTask === true);
+  const liveTasks = useTaskStore((state) => state.tasks);
   const autoStartBreaks = useTaskStore((state) => state.settings.gtd?.pomodoro?.autoStartBreaks === true);
   const autoStartFocus = useTaskStore((state) => state.settings.gtd?.pomodoro?.autoStartFocus === true);
   const autoStartOptions = useMemo<PomodoroAutoStartOptions>(
@@ -138,9 +139,9 @@ export function PomodoroPanel({
       return;
     }
     if (!selectedTaskId) return;
-    if (tasks.some((task) => task.id === selectedTaskId)) return;
+    if (liveTasks.some((task) => task.id === selectedTaskId)) return;
     setSelectedTaskId(undefined);
-  }, [linkTaskEnabled, selectedTaskId, tasks]);
+  }, [linkTaskEnabled, liveTasks, selectedTaskId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,8 +223,8 @@ export function PomodoroPanel({
   }, [autoStartOptions, durations, phaseEndsAt, selectedTaskId, sessionHistory, timerState]);
 
   const selectedTask = useMemo(
-    () => (linkTaskEnabled && selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) : undefined),
-    [linkTaskEnabled, selectedTaskId, tasks]
+    () => (linkTaskEnabled && selectedTaskId ? liveTasks.find((task) => task.id === selectedTaskId) : undefined),
+    [linkTaskEnabled, liveTasks, selectedTaskId]
   );
   const presetOptions = useMemo(() => getPomodoroPresetOptions(customDurations), [customDurations]);
 
@@ -247,6 +248,8 @@ export function PomodoroPanel({
   const timerOnlyLabel = tFallback(t, 'pomodoro.timerOnly', 'Timer only');
   const changeTaskLabel = selectedTask ? tFallback(t, 'common.change', 'Change') : tFallback(t, 'pomodoro.linkTask', 'Link task');
   const taskDoneShortLabel = tFallback(t, 'pomodoro.taskDoneShort', 'Task done');
+  const runningLabel = tFallback(t, 'pomodoro.running', 'Running');
+  const pausedLabel = tFallback(t, 'pomodoro.paused', 'Paused');
   const timerIsRunning = timerState.isRunning;
   const timerPhase = timerState.phase;
 
@@ -394,10 +397,15 @@ export function PomodoroPanel({
             {formatPomodoroClock(timerState.remainingSeconds)}
           </Text>
           <Text style={[styles.phaseStatusText, { color: phaseColor }]} numberOfLines={1}>
-            {phaseLabel}
+            {`${phaseLabel} · ${timerState.isRunning ? runningLabel : pausedLabel}`}
           </Text>
           {timerState.isRunning && (
-            <View style={[styles.collapsedRunningDot, { backgroundColor: phaseColor }]} />
+            <View
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={[styles.collapsedRunningDot, { backgroundColor: phaseColor }]}
+            />
           )}
           <View style={styles.collapsedSpacer} />
           {collapseToggle}

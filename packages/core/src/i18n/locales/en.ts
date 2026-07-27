@@ -1207,6 +1207,8 @@ export const en: Record<string, string> = {
         'pomodoro.startForTask': 'Start focus session',
         'pomodoro.phaseFocusShort': 'Focus',
         'pomodoro.phaseBreakShort': 'Break',
+        'pomodoro.running': 'Running',
+        'pomodoro.paused': 'Paused',
         'pomodoro.switchToBreak': 'Switch to Break',
         'pomodoro.switchToFocus': 'Switch to Focus',
         'pomodoro.collapse': 'Collapse timer',
