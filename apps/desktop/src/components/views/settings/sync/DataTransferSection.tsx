@@ -1,8 +1,8 @@
 import { ExternalLink, RefreshCw } from 'lucide-react';
-import type { SettingsSyncPageProps } from './types';
+import type { SettingsDataPageProps } from './types';
 
 type DataTransferSectionProps = Pick<
-    SettingsSyncPageProps,
+    SettingsDataPageProps,
     | 't'
     | 'transferAction'
     | 'onExportBackup'
@@ -11,9 +11,8 @@ type DataTransferSectionProps = Pick<
     | 'onImportTickTick'
     | 'onImportDgt'
     | 'onImportOmniFocus'
-> & {
-    onAddGettingStartedContent: () => Promise<void> | void;
-};
+    | 'onAddGettingStartedContent'
+>;
 
 function TransferActionButton({
     description,

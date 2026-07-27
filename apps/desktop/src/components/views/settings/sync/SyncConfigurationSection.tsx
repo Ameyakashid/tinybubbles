@@ -7,6 +7,9 @@ type SyncConfigurationSectionProps = Pick<
     SettingsSyncPageProps,
     | 't'
     | 'isTauri'
+    | 'isMacOS'
+    | 'webdavUrlError'
+    | 'cloudUrlError'
     | 'syncBackend'
     | 'onSetSyncBackend'
     | 'syncPath'
@@ -47,11 +50,7 @@ type SyncConfigurationSectionProps = Pick<
     | 'onConnectDropbox'
     | 'onDisconnectDropbox'
     | 'onTestDropboxConnection'
-> & {
-    isMacOS: boolean;
-    webdavUrlError: boolean;
-    cloudUrlError: boolean;
-};
+>;
 
 type BackendButtonOption = 'off' | 'file' | 'dropbox' | 'webdav' | 'selfhosted' | 'cloudkit';
 type BackendButtonGroup = {

@@ -1,47 +1,43 @@
 import { format } from 'date-fns';
 import { Check, Search, X } from 'lucide-react';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel } from '@mindwtr/core';
 
 import { TaskInput } from '../../Task/TaskInput';
 import { TaskItem } from '../../TaskItem';
 import { ModalPortal } from '../../ModalPortal';
 import { QuickAddSyntaxHint } from '../../ui/QuickAddSyntaxHint';
 import { cn } from '../../../lib/utils';
-import {
-    DESKTOP_GRID_SNAP_MINUTES,
-    type DesktopCalendarController,
-} from './useDesktopCalendarController';
+import { DESKTOP_GRID_SNAP_MINUTES, combineDateAndTime } from './calendar-primitives';
+import type { DesktopCalendarController } from './useDesktopCalendarController';
 
 type CalendarOpenTaskModalController = Pick<
     DesktopCalendarController,
+    | 'closeOpenTask'
     | 'openProject'
     | 'openTask'
-    | 'setOpenTaskId'
     | 't'
 >;
 
 type CalendarTaskComposerModalController = Pick<
     DesktopCalendarController,
-    | 'combineDateAndTime'
-    | 'formatDurationLabel'
     | 'areas'
+    | 'closeTaskComposer'
     | 'projects'
     | 'quickAddSuggestionTokens'
     | 'resolveText'
     | 'saveTaskComposer'
     | 'selectTaskComposerTask'
     | 'selectedComposerTask'
-    | 'setTaskComposer'
-    | 'setTaskComposerMode'
-    | 'setTaskComposerQuery'
-    | 'setTaskComposerTitle'
     | 'taskComposer'
     | 'taskComposerCandidates'
     | 'taskComposerError'
     | 't'
     | 'updateTaskComposerDuration'
     | 'updateTaskComposerEndTime'
+    | 'updateTaskComposerMode'
+    | 'updateTaskComposerQuery'
     | 'updateTaskComposerStart'
+    | 'updateTaskComposerTitle'
 >;
 
 type CalendarOpenTaskModalProps = {
@@ -54,9 +50,9 @@ type CalendarTaskComposerModalProps = {
 
 export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps) {
     const {
+        closeOpenTask,
         openProject,
         openTask,
-        setOpenTaskId,
         t,
     } = controller;
 
@@ -73,14 +69,14 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true">
             <div
                 className="fixed inset-0"
-                onClick={() => setOpenTaskId(null)}
+                onClick={closeOpenTask}
             />
             <div className="relative my-auto w-full max-w-3xl bg-background border border-border rounded-xl shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-lg font-semibold">{t('taskEdit.editTask') || 'Task'}</h3>
                     <button
                         type="button"
-                        onClick={() => setOpenTaskId(null)}
+                        onClick={closeOpenTask}
                         className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground"
                     >
                         {t('common.close')}
@@ -102,26 +98,24 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
 
 export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerModalProps) {
     const {
-        combineDateAndTime,
-        formatDurationLabel,
         areas,
+        closeTaskComposer,
         projects,
         quickAddSuggestionTokens,
         resolveText,
         saveTaskComposer,
         selectTaskComposerTask,
         selectedComposerTask,
-        setTaskComposer,
-        setTaskComposerMode,
-        setTaskComposerQuery,
-        setTaskComposerTitle,
         taskComposer,
         taskComposerCandidates,
         taskComposerError,
         t,
         updateTaskComposerDuration,
         updateTaskComposerEndTime,
+        updateTaskComposerMode,
+        updateTaskComposerQuery,
         updateTaskComposerStart,
+        updateTaskComposerTitle,
     } = controller;
 
     if (!taskComposer) return null;
@@ -131,7 +125,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
             <div
                 className="absolute inset-0"
-                onClick={() => setTaskComposer(null)}
+                onClick={closeTaskComposer}
             />
             <form
                 className="relative mt-[10vh] w-full max-w-xl rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
@@ -149,7 +143,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                     </div>
                     <button
                         type="button"
-                        onClick={() => setTaskComposer(null)}
+                        onClick={closeTaskComposer}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                         aria-label={t('common.close')}
                     >
@@ -160,7 +154,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                     <div className="inline-flex rounded-md border border-border bg-muted/40 p-1">
                         <button
                             type="button"
-                            onClick={() => setTaskComposerMode('new')}
+                            onClick={() => updateTaskComposerMode('new')}
                             className={cn(
                                 "h-8 rounded px-3 text-xs font-medium transition-colors",
                                 taskComposer.mode === 'new'
@@ -172,7 +166,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                         </button>
                         <button
                             type="button"
-                            onClick={() => setTaskComposerMode('existing')}
+                            onClick={() => updateTaskComposerMode('existing')}
                             className={cn(
                                 "h-8 rounded px-3 text-xs font-medium transition-colors",
                                 taskComposer.mode === 'existing'
@@ -193,7 +187,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                 id="calendar-task-composer-title"
                                 autoFocus
                                 value={taskComposer.title}
-                                onChange={setTaskComposerTitle}
+                                onChange={updateTaskComposerTitle}
                                 projects={projects}
                                 contexts={quickAddSuggestionTokens}
                                 areas={areas}
@@ -214,7 +208,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                         autoFocus
                                         type="text"
                                         value={taskComposer.query}
-                                        onChange={(event) => setTaskComposerQuery(event.target.value)}
+                                        onChange={(event) => updateTaskComposerQuery(event.target.value)}
                                         className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary/30"
                                         placeholder={t('calendar.schedulePlaceholder')}
                                     />
@@ -291,7 +285,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                             >
                                 {CALENDAR_TIME_ESTIMATE_OPTIONS.map((option) => (
                                     <option key={option.estimate} value={option.minutes}>
-                                        {formatDurationLabel(option.minutes)}
+                                        {formatCalendarDurationLabel(option.minutes)}
                                     </option>
                                 ))}
                             </select>
@@ -307,7 +301,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                 <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
                     <button
                         type="button"
-                        onClick={() => setTaskComposer(null)}
+                        onClick={closeTaskComposer}
                         className="h-9 rounded-md bg-muted px-3 text-sm font-medium hover:bg-muted/80"
                     >
                         {t('common.cancel')}

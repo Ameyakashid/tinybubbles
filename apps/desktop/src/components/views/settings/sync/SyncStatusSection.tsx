@@ -10,6 +10,7 @@ import type { SettingsSyncPageProps, SyncPreferences } from './types';
 type SyncStatusSectionProps = Pick<
     SettingsSyncPageProps,
     | 't'
+    | 'isSyncTargetValid'
     | 'syncPreferences'
     | 'onUpdateSyncPreferences'
     | 'onSyncNow'
@@ -28,9 +29,7 @@ type SyncStatusSectionProps = Pick<
     | 'isLoadingSnapshots'
     | 'isRestoringSnapshot'
     | 'onRestoreSnapshot'
-> & {
-    isSyncTargetValid: boolean;
-};
+>;
 
 function SyncPreferenceToggle({
     checked,

@@ -52,7 +52,18 @@ import { nextDensityMode } from '../../lib/density';
 import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
-import { groupTasks, type NextGroupBy, type ReferenceGroupBy, type TaskGroup, type TaskListGroupBy } from './list/next-grouping';
+import {
+    emptyCollapsedGroups,
+    FOCUS_AXES,
+    groupTasks,
+    REFERENCE_AXES,
+    sanitizeCollapsedGroups,
+    type CollapsedGroups,
+    type NextGroupBy,
+    type ReferenceGroupBy,
+    type TaskGroup,
+    type TaskListGroupBy,
+} from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
@@ -70,15 +81,10 @@ const EMPTY_ESTIMATES: TimeEstimate[] = [];
 const REFERENCE_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:reference:v1';
 type ReferenceGroupCollapseKey = Exclude<ReferenceGroupBy, 'none'>;
 type ReferencePersistedViewState = {
-    collapsedGroups: Partial<Record<ReferenceGroupCollapseKey, string[]>>;
+    collapsedGroups: CollapsedGroups<ReferenceGroupBy>;
 };
 const DEFAULT_REFERENCE_VIEW_STATE: ReferencePersistedViewState = {
-    collapsedGroups: {
-        context: [],
-        area: [],
-        project: [],
-        tag: [],
-    },
+    collapsedGroups: emptyCollapsedGroups(REFERENCE_AXES),
 };
 type ShowToast = (
     message: string,
@@ -105,21 +111,8 @@ function sanitizeReferenceViewState(value: unknown, fallback: ReferencePersisted
     const parsed = value && typeof value === 'object' && !Array.isArray(value)
         ? value as Partial<ReferencePersistedViewState>
         : {};
-    const collapsedGroups = parsed.collapsedGroups && typeof parsed.collapsedGroups === 'object' && !Array.isArray(parsed.collapsedGroups)
-        ? parsed.collapsedGroups as Partial<Record<ReferenceGroupCollapseKey, unknown>>
-        : {};
-    const sanitizeGroupIds = (ids: unknown, fallbackIds: string[] | undefined = []) => (
-        Array.isArray(ids)
-            ? Array.from(new Set(ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)))
-            : fallbackIds ?? []
-    );
     return {
-        collapsedGroups: {
-            context: sanitizeGroupIds(collapsedGroups.context, fallback.collapsedGroups.context),
-            area: sanitizeGroupIds(collapsedGroups.area, fallback.collapsedGroups.area),
-            project: sanitizeGroupIds(collapsedGroups.project, fallback.collapsedGroups.project),
-            tag: sanitizeGroupIds(collapsedGroups.tag, fallback.collapsedGroups.tag),
-        },
+        collapsedGroups: sanitizeCollapsedGroups(REFERENCE_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
     };
 }
 
@@ -525,9 +518,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const activeNextGroupBy: NextGroupBy = statusFilter !== 'reference' ? nextGroupBy : 'none';
     const activeReferenceGroupBy: ReferenceGroupBy = statusFilter === 'reference' ? (referenceGroupBy ?? 'area') : 'none';
     const activeGroupBy: TaskListGroupBy = statusFilter === 'reference' ? activeReferenceGroupBy : activeNextGroupBy;
-    const groupByOptions: TaskListGroupBy[] = statusFilter === 'reference'
-        ? ['none', 'context', 'area', 'project', 'tag']
-        : ['none', 'context', 'area', 'project', 'tag', 'energy', 'priority', 'person'];
+    const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'reference'
+        ? REFERENCE_AXES
+        : FOCUS_AXES;
     const isReferenceGrouping = statusFilter === 'reference' && activeReferenceGroupBy !== 'none';
     const isListGrouping = activeGroupBy !== 'none';
     const groupedTasks = useMemo(() => (

@@ -5,7 +5,7 @@ import type { Area, Project, Task } from '@mindwtr/core';
 import { LanguageProvider } from '../../contexts/language-context';
 import { useUiStore } from '../../store/ui-store';
 import { CalendarView } from './CalendarView';
-import { combineDateAndTime } from './calendar/useDesktopCalendarController';
+import { combineDateAndTime } from './calendar/calendar-primitives';
 import { fetchExternalCalendarEvents } from '../../lib/external-calendar-events';
 import { setCalendarTaskDragData } from '../../lib/calendar-task-drag';
 

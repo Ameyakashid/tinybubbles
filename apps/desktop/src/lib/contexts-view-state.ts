@@ -1,4 +1,5 @@
 import type { TaskStatus } from '@mindwtr/core';
+import { CONTEXTS_AXES, sanitizeAxis, type ContextsGroupBy } from '../components/views/list/next-grouping';
 
 export const CONTEXTS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:contexts:v1';
 export const NO_CONTEXT_TOKEN = '__no_context__';
@@ -7,8 +8,9 @@ export const CONTEXTS_TOKEN_SELECTION_EVENT = 'mindwtr:contexts-token-selection'
 const CONTEXT_STATUS_VALUES: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done'];
 const LEGACY_CONTEXT_STATUS_VALUES: Array<TaskStatus | 'all'> = ['all', ...CONTEXT_STATUS_VALUES];
 
-export const CONTEXTS_GROUP_BY_VALUES = ['none', 'status', 'context', 'area', 'project', 'tag'] as const;
-export type ContextsViewGroupBy = (typeof CONTEXTS_GROUP_BY_VALUES)[number];
+// The dropdown this sanitizer has to agree with is CONTEXTS_AXES, so read that
+// array rather than keeping a second copy of it here.
+export type ContextsViewGroupBy = ContextsGroupBy;
 
 export type ContextsPersistedViewState = {
     selectedContext: string | null;
@@ -51,9 +53,7 @@ export function sanitizeContextsViewState(
     const legacyFallback = parsed.statusFilter === undefined
         ? fallback.statusFilters
         : normalizeStatusFilters(parsed.statusFilter, fallback.statusFilters);
-    const groupBy = CONTEXTS_GROUP_BY_VALUES.includes(parsed.groupBy as ContextsViewGroupBy)
-        ? parsed.groupBy as ContextsViewGroupBy
-        : fallback.groupBy;
+    const groupBy = sanitizeAxis(CONTEXTS_AXES, parsed.groupBy, fallback.groupBy);
     return {
         selectedContext,
         statusFilters: normalizeStatusFilters(parsed.statusFilters, legacyFallback),

@@ -45,7 +45,7 @@ import {
     subscribeContextsTokenSelection,
     type ContextsViewGroupBy,
 } from '../../lib/contexts-view-state';
-import { groupTasks, type TaskGroup } from './list/next-grouping';
+import { CONTEXTS_AXES, groupTasks, type TaskGroup } from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { GroupBySelect } from './list/GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list/list-toolbar';
@@ -643,7 +643,7 @@ export function ContextsView() {
                                     />
                                     <GroupBySelect
                                         value={groupBy}
-                                        axes={['none', 'status', 'tag', 'context', 'area', 'project'] as const}
+                                        axes={CONTEXTS_AXES}
                                         onChange={setGroupBy}
                                         t={t}
                                     />

@@ -1,4 +1,4 @@
-import { getEnglishI18nValue } from '@mindwtr/core';
+import { getEnglishI18nValue, SETTINGS_SEARCH_PAGE_KEYS } from '@mindwtr/core';
 
 // The keys settings pages read through the `t` prop. Every key resolves to a
 // `settings.<key>` string in packages/core/src/i18n (or an explicit override
@@ -640,32 +640,13 @@ export function getEnglishSettingsLabels(): SettingsLabels {
 // Search index source of truth: for each settings page, the label keys of the
 // settings that page actually renders. The sidebar search derives its keywords
 // from the *translated* values of these keys, so searchable terms stay
-// localized and cannot drift when new settings are added to a page. Keep this
-// in step with the pages under ./settings and the nav items in SettingsView.
-export const SETTINGS_PAGE_LABEL_KEYS: Record<string, ReadonlyArray<keyof SettingsLabels>> = {
-    main: [
-        'general', 'appearance', 'density', 'textSize', 'showTaskAge', 'language',
-        'weekStart', 'dateFormat', 'calendarSystem', 'timeFormat', 'keybindings',
-        'windowDecorations', 'closeBehavior', 'showTray', 'launchAtStartup',
-        'undoNotifications',
-    ],
-    gtd: [
-        'gtd', 'features', 'featurePomodoro', 'autoArchive', 'defaultScheduleTime',
-        'focusTaskLimit', 'defaultProjectFlowMode', 'projectFlowParallel',
-        'projectFlowSequential', 'timeEstimatePresets', 'captureDefault',
-        'defaultArea', 'quickAddAutoClean', 'naturalLanguageDates', 'markdownEditorAssist',
-        'weeklyReviewConfig', 'inboxProcessing', 'taskEditorLayout',
-        'taskEditorPresentation',
-    ],
-    manage: ['manage'],
-    notifications: ['notifications'],
-    sync: ['sync', 'backgroundSync'],
-    data: ['dataTransfer', 'restoreBackup', 'importTodoist', 'importTickTick', 'importDgt', 'importOmniFocus'],
-    integrations: ['integrations', 'obsidianVault', 'calendarChooseLocalFile'],
-    ai: ['ai'],
-    advanced: ['advanced', 'localApiServer'],
-    about: ['about'],
-};
+// localized and cannot drift when new settings are added to a page. This
+// roster now lives in core (packages/core/src/settings-search-keys.ts) so
+// mobile can derive its own row keywords from the same data instead of
+// hand-listing a second copy — keep it in step with the pages under
+// ./settings and the nav items in SettingsView.
+export const SETTINGS_PAGE_LABEL_KEYS: Record<string, ReadonlyArray<keyof SettingsLabels>> =
+    SETTINGS_SEARCH_PAGE_KEYS as Record<string, ReadonlyArray<keyof SettingsLabels>>;
 
 // Combine the label-derived keywords for a page with a hand-curated synonym
 // list. Synonyms supplement the localized labels (e.g. "dark mode", "autostart")

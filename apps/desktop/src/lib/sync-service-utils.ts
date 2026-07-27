@@ -10,6 +10,7 @@ import {
     toStableJson,
     type SyncBackend,
 } from '@mindwtr/core';
+import { normalizeAttachmentPathForUrl } from './attachment-paths';
 
 export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension };
 
@@ -87,6 +88,53 @@ export const stripFileScheme = (uri: string): string => {
     } catch {
         return uri.replace(/^file:\/\//i, '');
     }
+};
+
+const normalizeAttachmentFsPath = (path: string): string => normalizeAttachmentPathForUrl(path.trim());
+
+/**
+ * Every attachment sync backend needs the same two local-file primitives:
+ * read a path that may be relative to Tauri's app-data dir (Windows paths
+ * carried the raw drive letter before {@link stripFileScheme} normalized
+ * them) or an absolute path elsewhere on disk. This factory is the single
+ * home for that logic — previously duplicated verbatim across all five
+ * backends in `sync-attachment-backends.ts`.
+ */
+export const createLocalAttachmentFs = (
+    logSyncWarning: (message: string, error?: unknown) => void,
+    deps: {
+        baseDataDir: string;
+        dataBaseDir: any;
+        exists: (path: string, options?: { baseDir: any }) => Promise<boolean>;
+        readFile: (path: string, options?: { baseDir: any }) => Promise<Uint8Array>;
+    },
+    warningMessage = 'Failed to check attachment file',
+): {
+    readLocalFile: (path: string) => Promise<Uint8Array>;
+    localFileExists: (path: string) => Promise<boolean>;
+} => {
+    const toRelative = (path: string): string => path.slice(deps.baseDataDir.length).replace(/^[\\/]/, '');
+
+    const readLocalFile = async (path: string): Promise<Uint8Array> => {
+        if (path.startsWith(deps.baseDataDir)) {
+            return await deps.readFile(toRelative(path), { baseDir: deps.dataBaseDir });
+        }
+        return await deps.readFile(normalizeAttachmentFsPath(path));
+    };
+
+    const localFileExists = async (path: string): Promise<boolean> => {
+        try {
+            if (path.startsWith(deps.baseDataDir)) {
+                return await deps.exists(toRelative(path), { baseDir: deps.dataBaseDir });
+            }
+            return await deps.exists(normalizeAttachmentFsPath(path));
+        } catch (error) {
+            logSyncWarning(warningMessage, error);
+            return false;
+        }
+    };
+
+    return { readLocalFile, localFileExists };
 };
 
 const buildTempPath = (relativePath: string): string => {

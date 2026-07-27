@@ -1,13 +1,15 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { buildTrashTimeline, shallow, useTaskStore, safeFormatDate, tFallback } from '@mindwtr/core';
-import type { Project } from '@mindwtr/core';
+import type { Project, Task } from '@mindwtr/core';
 import { Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
+import { useOptionalKeybindings } from '../../contexts/keybinding-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
+import { createTaskListScope } from './list/task-list-scope';
 
 export function TrashView() {
     const perf = usePerformanceMonitor('TrashView');
@@ -69,6 +71,13 @@ export function TrashView() {
     const trashItems = useMemo(
         () => buildTrashTimeline(trashedTasks, trashedProjects),
         [trashedProjects, trashedTasks]
+    );
+
+    // The scope navigates tasks only, but it walks them in the order they are
+    // rendered — the deleted-at timeline, not the raw store order.
+    const timelineTasks = useMemo(
+        () => trashItems.flatMap((item) => (item.type === 'task' ? [item.task] : [])),
+        [trashItems]
     );
 
     const trashedItemCount = trashItems.length;
@@ -196,6 +205,62 @@ export function TrashView() {
         if (!confirmed) return;
         purgeProject(project.id);
     };
+
+    // Trash registers the shared scope by hand instead of through
+    // useTaskListScope: `updateTask`/`moveTask` write to a tombstone just fine,
+    // so the generic "mark done" and the s-chords would silently mutate a task
+    // while its row sat unchanged in Trash. Here the done key restores and the
+    // delete key purges — the only two things this view actually does — and the
+    // status chords stay unbound.
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    const scopeRef = useRef({ timelineTasks, selectedTaskIndex, restoreTask, handlePurgeTask, toggleTaskSelection, t });
+    scopeRef.current = { timelineTasks, selectedTaskIndex, restoreTask, handlePurgeTask, toggleTaskSelection, t };
+
+    const trashScope = useMemo(() => {
+        // Same resolution rule as the shared scope: DOM focus wins over the
+        // stored index, so the keys act on the row the user is actually on.
+        const actingTask = (): Task | null => {
+            const { timelineTasks: tasks, selectedTaskIndex: index } = scopeRef.current;
+            if (tasks.length === 0) return null;
+            const focused = document.activeElement instanceof HTMLElement
+                ? document.activeElement.closest<HTMLElement>('[data-task-id]')?.dataset.taskId
+                : undefined;
+            return tasks.find((task) => task.id === focused)
+                ?? tasks[Math.min(Math.max(index, 0), tasks.length - 1)]
+                ?? null;
+        };
+        return {
+            ...createTaskListScope({
+                getTasks: () => scopeRef.current.timelineTasks,
+                getSelectedIndex: () => scopeRef.current.selectedTaskIndex,
+                setSelectedIndex: setSelectedTaskIndex,
+                t: (key) => scopeRef.current.t(key),
+                // Keyboard select reveals the checkboxes: without selection mode
+                // the toggled rows would have nothing to show for it.
+                toggleSelect: (task) => {
+                    setSelectionMode(true);
+                    scopeRef.current.toggleTaskSelection(task.id);
+                },
+            }),
+            toggleDoneSelected: () => {
+                const task = actingTask();
+                if (task) void scopeRef.current.restoreTask(task.id);
+            },
+            deleteSelected: () => {
+                const task = actingTask();
+                if (task) void scopeRef.current.handlePurgeTask(task.id);
+            },
+            setStatusSelected: undefined,
+        };
+    }, []);
+
+    const keybindings = useOptionalKeybindings();
+    const registerTaskListScope = keybindings?.registerTaskListScope;
+    useEffect(() => {
+        if (!registerTaskListScope) return;
+        registerTaskListScope(trashScope);
+        return () => registerTaskListScope(null);
+    }, [registerTaskListScope, trashScope]);
 
     const renderDeletedAt = (deletedAt?: string) => (
         deletedAt ? [t('trash.deletedAt'), safeFormatDate(deletedAt, 'P')].join(': ') : null
@@ -335,8 +400,12 @@ export function TrashView() {
 
                             const { task } = item;
                             return (
+                                // data-task-id is what the shared task-list scope resolves
+                                // keyboard actions against; project rows carry none because
+                                // the scope navigates tasks only.
                                 <div
                                     key={`task-${task.id}`}
+                                    data-task-id={task.id}
                                     className="rounded-lg px-3 py-3 flex items-center justify-between group hover:bg-muted/50 transition-colors"
                                 >
                                     <div className="flex min-w-0 items-center gap-3">
@@ -355,6 +424,9 @@ export function TrashView() {
                                     {!selectionMode && <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                                         <button
                                             onClick={() => restoreTask(task.id)}
+                                            // A trashed task has no editor, so `e` maps to the
+                                            // one non-destructive row action it does have.
+                                            data-task-edit-trigger
                                             className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary transition-colors"
                                             title={t('trash.restore')}
                                         >

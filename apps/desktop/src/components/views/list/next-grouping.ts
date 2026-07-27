@@ -1,12 +1,26 @@
 import { compareProjectsByOrder, DEFAULT_AREA_COLOR, getContextColor, tFallback } from '@mindwtr/core';
 import type { Area, Project, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from '@mindwtr/core';
 
-export type NextGroupBy = 'none' | 'context' | 'area' | 'project' | 'energy' | 'priority' | 'person' | 'tag';
-export type ReferenceGroupBy = 'none' | 'context' | 'area' | 'project' | 'tag';
+// The rosters are data, and the types are derived from them — never the other
+// way round. One array per view is what the dropdown renders AND what the
+// persistence sanitizer accepts, so an axis the menu offers can never be one
+// the sanitizer silently rewrites to 'none' on the next reload. Adding an axis
+// to a view is one entry here plus one `groupTasks` case, nothing else.
+// (Same reason `lib/view-url-params.ts` derives URL_KNOWN_VIEWS from
+// RESTORABLE_VIEWS instead of restating it.)
+// Order is the order users see in the dropdown.
+export const FOCUS_AXES = ['none', 'context', 'area', 'project', 'tag', 'energy', 'priority', 'person'] as const;
+export type NextGroupBy = typeof FOCUS_AXES[number];
+
+export const REFERENCE_AXES = ['none', 'context', 'area', 'project', 'tag'] as const;
+export type ReferenceGroupBy = typeof REFERENCE_AXES[number];
+
 export type TaskListGroupBy = NextGroupBy | ReferenceGroupBy;
-// Contexts view spans every status, so status itself is a useful axis there
-// (see one #topic across Next / Waiting / Someday / Reference at a glance).
-export type ContextsGroupBy = 'none' | 'status' | 'context' | 'area' | 'project' | 'tag';
+
+// Contexts and Review both span every status, so status itself is a useful axis
+// there (see one #topic across Next / Waiting / Someday / Reference at a glance).
+export const CONTEXTS_AXES = ['none', 'status', 'tag', 'context', 'area', 'project'] as const;
+export type ContextsGroupBy = typeof CONTEXTS_AXES[number];
 
 export interface TaskGroup {
     id: string;
@@ -408,7 +422,12 @@ export function groupTasksByTag({
     return groups;
 }
 
-export type TaskGroupAxis = 'none' | 'status' | 'context' | 'area' | 'project' | 'tag' | 'energy' | 'priority' | 'person';
+/**
+ * Every axis any view offers — the union of the rosters above, so a new roster
+ * entry lands here (and therefore in the `groupTasks` switch below, which the
+ * compiler checks for exhaustiveness) automatically.
+ */
+export type TaskGroupAxis = TaskListGroupBy | ContextsGroupBy;
 
 export type GroupTasksInputs = {
     tasks: Task[];
@@ -457,4 +476,62 @@ export function getGroupAxisLabel(axis: TaskGroupAxis, t: (key: string) => strin
         case 'energy': return tFallback(t, 'focus.group.energy', 'Energy');
         case 'person': return tFallback(t, 'people.title', 'People');
     }
+}
+
+/**
+ * A persisted axis in, a valid one out — checked against the same array the
+ * dropdown renders, so a stored choice the menu offers is never rejected.
+ */
+export function sanitizeAxis<Axis extends TaskGroupAxis>(
+    axes: readonly Axis[],
+    value: unknown,
+    fallback: Axis,
+): Axis {
+    return axes.includes(value as Axis) ? value as Axis : fallback;
+}
+
+/** Collapsed group ids per axis. Deliberately not `Partial`: see below. */
+export type CollapsedGroups<Axis extends TaskGroupAxis> = Record<Exclude<Axis, 'none'>, string[]>;
+
+type CollapseKey<Axis extends TaskGroupAxis> = Exclude<Axis, 'none'>;
+
+export function emptyCollapsedGroups<Axis extends TaskGroupAxis>(
+    axes: readonly Axis[],
+): CollapsedGroups<Axis> {
+    const state = {} as CollapsedGroups<Axis>;
+    axes.forEach((axis) => {
+        if (axis === 'none') return;
+        state[axis as CollapseKey<Axis>] = [];
+    });
+    return state;
+}
+
+/**
+ * Collapse state for every axis in the roster.
+ *
+ * Iterating the roster is the whole point. This used to be a hand-written
+ * `Partial<Record<Axis, string[]>>` literal per view, and because it was
+ * `Partial`, omitting an axis compiled clean — a new axis's collapse state was
+ * dropped on every read with nothing to catch it. Driving both the default and
+ * the sanitizer off the array means a new axis is covered the moment it is
+ * added to the roster.
+ */
+export function sanitizeCollapsedGroups<Axis extends TaskGroupAxis>(
+    axes: readonly Axis[],
+    value: unknown,
+    fallback: CollapsedGroups<Axis>,
+): CollapsedGroups<Axis> {
+    const stored: Record<string, unknown> = value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {};
+    const state = {} as CollapsedGroups<Axis>;
+    axes.forEach((axis) => {
+        if (axis === 'none') return;
+        const key = axis as CollapseKey<Axis>;
+        const ids = stored[axis];
+        state[key] = Array.isArray(ids)
+            ? Array.from(new Set(ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)))
+            : fallback[key] ?? [];
+    });
+    return state;
 }

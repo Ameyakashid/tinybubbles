@@ -1,4 +1,5 @@
-import type { AppData } from '@mindwtr/core';
+import type { AppData, AppTheme } from '@mindwtr/core';
+import { resolveThemeColorScheme } from '@mindwtr/core';
 
 export type DesktopThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia';
 export type SystemThemePreference = 'light' | 'dark' | null;
@@ -35,20 +36,24 @@ const isDesktopThemeMode = (value: string | null | undefined): value is DesktopT
     || value === 'sepia'
 );
 
+// Desktop has no material3-* or oled theme of its own; collapse those into the
+// plain light/dark mode they render as. Classification comes from core so this
+// stays in lockstep with mobile and the iOS widget.
+const collapseUnsupportedDesktopTheme = (value: string): DesktopThemeMode | null => {
+    if (value !== 'material3-dark' && value !== 'material3-light' && value !== 'oled') return null;
+    return resolveThemeColorScheme(value as AppTheme, 'light');
+};
+
 export const coerceDesktopThemeMode = (value: string | null | undefined): DesktopThemeMode | null => {
     if (!value) return null;
     if (isDesktopThemeMode(value)) return value;
-    if (value === 'material3-dark' || value === 'oled') return 'dark';
-    if (value === 'material3-light') return 'light';
-    return null;
+    return collapseUnsupportedDesktopTheme(value);
 };
 
 export const mapSyncedThemeToDesktop = (value: AppData['settings']['theme'] | null | undefined): DesktopThemeMode | null => {
     if (!value) return null;
     if (isDesktopThemeMode(value)) return value;
-    if (value === 'material3-dark' || value === 'oled') return 'dark';
-    if (value === 'material3-light') return 'light';
-    return null;
+    return collapseUnsupportedDesktopTheme(value);
 };
 
 export const resolveDesktopThemeMode = (

@@ -1,9 +1,9 @@
 import { Info } from 'lucide-react';
 import { Switch } from '../../../ui/Switch';
-import type { SettingsSyncPageProps } from './types';
+import type { SettingsDataPageProps } from './types';
 
 type DiagnosticsSectionProps = Pick<
-    SettingsSyncPageProps,
+    SettingsDataPageProps,
     | 't'
     | 'analyticsHeartbeatAvailable'
     | 'analyticsHeartbeatEnabled'

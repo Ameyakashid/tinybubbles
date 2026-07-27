@@ -1,8 +1,8 @@
 import { Trash2 } from 'lucide-react';
-import type { SettingsSyncPageProps } from './types';
+import type { SettingsDataPageProps } from './types';
 
 type AttachmentsCleanupSectionProps = Pick<
-    SettingsSyncPageProps,
+    SettingsDataPageProps,
     | 't'
     | 'isTauri'
     | 'attachmentsLastCleanupDisplay'

@@ -26,6 +26,7 @@ import {
 import {
     ATTACHMENTS_DIR_NAME,
     buildCloudKey,
+    createLocalAttachmentFs,
     extractExtension,
     resolveFileBackendPath,
     sleep,
@@ -51,7 +52,6 @@ import {
     saveCloudKitAttachmentAsset,
     type CloudKitAttachmentMetadata,
 } from './cloudkit-sync';
-import { normalizeAttachmentPathForUrl } from './attachment-paths';
 
 export type WebDavConfig = {
     url: string;
@@ -97,8 +97,6 @@ const WEBDAV_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC = 10;
 const WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC = 10;
 const WEBDAV_ATTACHMENT_MISSING_BACKOFF_MS = 15 * 60_000;
 const WEBDAV_ATTACHMENT_ERROR_BACKOFF_MS = 2 * 60_000;
-
-const normalizeAttachmentFsPath = (path: string): string => normalizeAttachmentPathForUrl(path.trim());
 
 const webdavDownloadBackoff = createWebdavDownloadBackoff({
     missingBackoffMs: WEBDAV_ATTACHMENT_MISSING_BACKOFF_MS,
@@ -285,36 +283,23 @@ export async function syncWebdavAttachments(
         return markWebdavAttachmentRateLimited(error, deps.logSyncWarning);
     };
 
-    const readLocalFile = async (path: string): Promise<Uint8Array> => {
-        if (path.startsWith(baseDataDir)) {
-            const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-            return await readFile(relative, { baseDir: BaseDirectory.Data });
-        }
-        return await readFile(normalizeAttachmentFsPath(path));
-    };
+    const { readLocalFile, localFileExists } = createLocalAttachmentFs(deps.logSyncWarning, {
+        baseDataDir,
+        dataBaseDir: BaseDirectory.Data,
+        exists,
+        readFile,
+    });
 
-    const localFileExists = async (path: string): Promise<boolean> => {
-        try {
-            if (path.startsWith(baseDataDir)) {
-                const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-                return await exists(relative, { baseDir: BaseDirectory.Data });
-            }
-            return await exists(normalizeAttachmentFsPath(path));
-        } catch (error) {
-            deps.logSyncWarning('Failed to check attachment file', error);
-            return false;
-        }
-    };
-
-    let didMutate = false;
-    const downloadQueue: Attachment[] = [];
     let abortedByRateLimit = false;
-    let uploadCount = 0;
-    let uploadLimitLogged = false;
-    const maybeYieldAttachmentLoop = createCooperativeYield(4);
 
+    // WebDAV alone verifies that an already-uploaded attachment's remote copy is still there —
+    // if it was deleted directly on the server, clear cloudKey so the lifecycle below re-uploads
+    // it. This has to run as its own pass before the lifecycle: it's an async, network-calling,
+    // state-mutating check, which doesn't fit the lifecycle's synchronous `hasCloudCopy` predicate.
+    let preMutated = false;
+    const maybeYieldPrePass = createCooperativeYield(4);
     for (const attachment of attachmentsById.values()) {
-        await maybeYieldAttachmentLoop();
+        await maybeYieldPrePass();
         if (attachment.kind !== 'file' || attachment.deletedAt || abortedByRateLimit) continue;
 
         const rawUri = attachment.uri ? stripFileScheme(attachment.uri) : '';
@@ -331,11 +316,6 @@ export async function syncWebdavAttachments(
             exists: existsLocally ? 'true' : 'false',
         });
 
-        const nextStatus: Attachment['localStatus'] = existsLocally ? 'available' : 'missing';
-        if (attachment.localStatus !== nextStatus) {
-            attachment.localStatus = nextStatus;
-            didMutate = true;
-        }
         if (existsLocally) {
             webdavDownloadBackoff.deleteEntry(attachment.id);
         }
@@ -357,7 +337,7 @@ export async function syncWebdavAttachments(
                 });
                 if (!remoteExists) {
                     attachment.cloudKey = undefined;
-                    didMutate = true;
+                    preMutated = true;
                 }
             } catch (error) {
                 if (handleRateLimit(error)) {
@@ -367,130 +347,161 @@ export async function syncWebdavAttachments(
                 deps.logSyncWarning('Failed to check WebDAV attachment remote status', error);
             }
         }
+    }
 
-        if (!attachment.cloudKey && existsLocally) {
-            if (uploadCount >= WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC) {
-                if (!uploadLimitLogged) {
-                    deps.logSyncInfo('WebDAV attachment upload limit reached', {
-                        limit: String(WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC),
-                    });
-                    uploadLimitLogged = true;
-                }
-                continue;
+    // Throttle policy: per-run upload/download caps, plus the same rate-limit abort the pre-pass
+    // above already tripped. Passed to the shared lifecycle as optional `policy` hooks (default
+    // off for every other backend) so the caps/backoff live in one place other backends can reuse.
+    let uploadCount = 0;
+    let uploadLimitLogged = false;
+    let downloadCount = 0;
+    let downloadLimitLogged = false;
+
+    const shouldUpload = (): boolean => {
+        if (uploadCount >= WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC) {
+            if (!uploadLimitLogged) {
+                deps.logSyncInfo('WebDAV attachment upload limit reached', {
+                    limit: String(WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC),
+                });
+                uploadLimitLogged = true;
             }
-            uploadCount += 1;
+            return false;
+        }
+        uploadCount += 1;
+        return true;
+    };
+
+    const shouldDownload = (attachment: Attachment): boolean => {
+        if (getWebdavDownloadBackoff(attachment.id)) return false;
+        if (downloadCount >= WEBDAV_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC) {
+            if (!downloadLimitLogged) {
+                deps.logSyncInfo('WebDAV attachment download limit reached', {
+                    limit: String(WEBDAV_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC),
+                });
+                downloadLimitLogged = true;
+            }
+            return false;
+        }
+        downloadCount += 1;
+        return true;
+    };
+
+    const syncMutated = await syncBasicRemoteAttachments({
+        attachmentsById,
+        localFileExists,
+        policy: {
+            shouldSkip: () => abortedByRateLimit,
+            shouldUpload,
+            shouldDownload,
+        },
+        onUpload: async (attachment, localPath) => {
             const cloudKey = buildCloudKey(attachment);
-            try {
-                const fileData = await readLocalFile(localPath);
-                const validation = await validateAttachmentForUpload(attachment, fileData.length);
-                if (!validation.valid) {
-                    const failure = handleAttachmentValidationFailure(attachment, validation.error);
-                    reportProgress(
-                        attachment.id,
-                        'upload',
-                        0,
-                        attachment.size ?? fileData.length,
-                        'failed',
-                        failure.message,
-                    );
-                    deps.logSyncWarning(
-                        failure.reachedLimit ? `${failure.message}; marking attachment unrecoverable` : failure.message,
-                    );
-                    didMutate = didMutate || failure.mutated;
-                    continue;
-                }
-                clearAttachmentValidationFailure(attachment.id);
-                reportProgress(attachment.id, 'upload', 0, fileData.length, 'active');
-                deps.logSyncInfo('WebDAV attachment upload start', {
-                    id: attachment.id,
-                    bytes: String(fileData.length),
-                    cloudKey,
-                });
-                await withRetry(
-                    async () => {
-                        await waitForSlot();
-                        return await webdavPutFile(
-                            `${baseSyncUrl}/${cloudKey}`,
-                            fileData,
-                            attachment.mimeType || 'application/octet-stream',
-                            {
-                                allowInsecureHttp: webDavConfig.allowInsecureHttp,
-                                headers: { 'Content-Length': String(fileData.length) },
-                                username: webDavConfig.username,
-                                password,
-                                fetcher,
-                                timeoutMs: UPLOAD_TIMEOUT_MS,
-                            },
-                        );
-                    },
-                    {
-                        ...WEBDAV_ATTACHMENT_RETRY_OPTIONS,
-                        onRetry: (error, attempt, delayMs) => {
-                            deps.logSyncInfo('Retrying WebDAV attachment upload', {
-                                id: attachment.id,
-                                attempt: String(attempt + 1),
-                                delayMs: String(delayMs),
-                                error: sanitizeLogMessage(error instanceof Error ? error.message : String(error)),
-                            });
-                        },
-                    },
-                );
-                attachment.cloudKey = cloudKey;
-                attachment.localStatus = 'available';
-                didMutate = true;
-                reportProgress(attachment.id, 'upload', fileData.length, fileData.length, 'completed');
-                deps.logSyncInfo('WebDAV attachment upload done', {
-                    id: attachment.id,
-                    bytes: String(fileData.length),
-                });
-            } catch (error) {
-                if (handleRateLimit(error)) {
-                    abortedByRateLimit = true;
-                    break;
-                }
+            const fileData = await readLocalFile(localPath);
+            const validation = await validateAttachmentForUpload(attachment, fileData.length);
+            if (!validation.valid) {
+                const failure = handleAttachmentValidationFailure(attachment, validation.error);
                 reportProgress(
                     attachment.id,
                     'upload',
                     0,
-                    attachment.size ?? 0,
+                    attachment.size ?? fileData.length,
                     'failed',
-                    error instanceof Error ? error.message : String(error),
+                    failure.message,
                 );
-                deps.logSyncWarning(`Failed to upload attachment ${attachment.title}`, error);
+                deps.logSyncWarning(
+                    failure.reachedLimit ? `${failure.message}; marking attachment unrecoverable` : failure.message,
+                );
+                return failure.mutated;
             }
-            continue;
-        }
-
-        if (attachment.cloudKey && !existsLocally) {
-            downloadQueue.push(attachment);
-        }
-    }
-
-    let downloadCount = 0;
-    for (const attachment of downloadQueue) {
-        await maybeYieldAttachmentLoop();
-        if (attachment.kind !== 'file' || attachment.deletedAt || abortedByRateLimit || !attachment.cloudKey) continue;
-        if (getWebdavDownloadBackoff(attachment.id)) continue;
-        if (downloadCount >= WEBDAV_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC) {
-            deps.logSyncInfo('WebDAV attachment download limit reached', {
-                limit: String(WEBDAV_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC),
+            clearAttachmentValidationFailure(attachment.id);
+            reportProgress(attachment.id, 'upload', 0, fileData.length, 'active');
+            deps.logSyncInfo('WebDAV attachment upload start', {
+                id: attachment.id,
+                bytes: String(fileData.length),
+                cloudKey,
             });
-            break;
-        }
-        downloadCount += 1;
-
-        const cloudKey = attachment.cloudKey;
-        try {
-            const fileData = await withRetry(async () => {
-                await waitForSlot();
-                return await webdavGetFile(`${baseSyncUrl}/${cloudKey}`, {
-                    allowInsecureHttp: webDavConfig.allowInsecureHttp,
-                    username: webDavConfig.username,
-                    password,
-                    fetcher,
-                    onProgress: (loaded, total) => reportProgress(attachment.id, 'download', loaded, total, 'active'),
-                });
-            }, WEBDAV_ATTACHMENT_RETRY_OPTIONS);
+            await withRetry(
+                async () => {
+                    await waitForSlot();
+                    return await webdavPutFile(
+                        `${baseSyncUrl}/${cloudKey}`,
+                        fileData,
+                        attachment.mimeType || 'application/octet-stream',
+                        {
+                            allowInsecureHttp: webDavConfig.allowInsecureHttp,
+                            headers: { 'Content-Length': String(fileData.length) },
+                            username: webDavConfig.username,
+                            password,
+                            fetcher,
+                            timeoutMs: UPLOAD_TIMEOUT_MS,
+                        },
+                    );
+                },
+                {
+                    ...WEBDAV_ATTACHMENT_RETRY_OPTIONS,
+                    onRetry: (error, attempt, delayMs) => {
+                        deps.logSyncInfo('Retrying WebDAV attachment upload', {
+                            id: attachment.id,
+                            attempt: String(attempt + 1),
+                            delayMs: String(delayMs),
+                            error: sanitizeLogMessage(error instanceof Error ? error.message : String(error)),
+                        });
+                    },
+                },
+            );
+            attachment.cloudKey = cloudKey;
+            attachment.localStatus = 'available';
+            reportProgress(attachment.id, 'upload', fileData.length, fileData.length, 'completed');
+            deps.logSyncInfo('WebDAV attachment upload done', {
+                id: attachment.id,
+                bytes: String(fileData.length),
+            });
+            return true;
+        },
+        onUploadError: (attachment, error) => {
+            if (handleRateLimit(error)) {
+                abortedByRateLimit = true;
+                return;
+            }
+            reportProgress(
+                attachment.id,
+                'upload',
+                0,
+                attachment.size ?? 0,
+                'failed',
+                error instanceof Error ? error.message : String(error),
+            );
+            deps.logSyncWarning(`Failed to upload attachment ${attachment.title}`, error);
+        },
+        onDownload: async (attachment) => {
+            if (!attachment.cloudKey) return false;
+            const cloudKey = attachment.cloudKey;
+            let fileData: ArrayBuffer;
+            try {
+                fileData = await withRetry(async () => {
+                    await waitForSlot();
+                    return await webdavGetFile(`${baseSyncUrl}/${cloudKey}`, {
+                        allowInsecureHttp: webDavConfig.allowInsecureHttp,
+                        username: webDavConfig.username,
+                        password,
+                        fetcher,
+                        onProgress: (loaded, total) =>
+                            reportProgress(attachment.id, 'download', loaded, total, 'active'),
+                    });
+                }, WEBDAV_ATTACHMENT_RETRY_OPTIONS);
+            } catch (error) {
+                if (handleRateLimit(error)) {
+                    abortedByRateLimit = true;
+                    return false;
+                }
+                if (getErrorStatus(error) === 404) {
+                    webdavDownloadBackoff.deleteEntry(attachment.id);
+                    const mutated = markAttachmentUnrecoverable(attachment);
+                    deps.logSyncInfo('Cleared missing WebDAV cloud key after 404', { id: attachment.id });
+                    return mutated;
+                }
+                throw error;
+            }
             const bytes =
                 fileData instanceof ArrayBuffer ? new Uint8Array(fileData) : new Uint8Array(fileData as ArrayBuffer);
             await validateAttachmentHash(attachment, bytes);
@@ -502,33 +513,19 @@ export async function syncWebdavAttachments(
                 remove,
             });
             attachment.uri = targetPath;
-            if (attachment.localStatus !== 'available') {
+            const statusChanged = attachment.localStatus !== 'available';
+            if (statusChanged) {
                 attachment.localStatus = 'available';
-                didMutate = true;
             }
             webdavDownloadBackoff.deleteEntry(attachment.id);
             reportProgress(attachment.id, 'download', bytes.length, bytes.length, 'completed');
-        } catch (error) {
-            if (handleRateLimit(error)) {
-                abortedByRateLimit = true;
-                break;
-            }
-            const status = getErrorStatus(error);
-            if (status === 404 && attachment.cloudKey) {
-                webdavDownloadBackoff.deleteEntry(attachment.id);
-                if (markAttachmentUnrecoverable(attachment)) {
-                    didMutate = true;
-                }
-                deps.logSyncInfo('Cleared missing WebDAV cloud key after 404', {
-                    id: attachment.id,
-                });
-            } else {
-                setWebdavDownloadBackoff(attachment.id, error);
-            }
-            if (status !== 404 && attachment.localStatus !== 'missing') {
-                attachment.localStatus = 'missing';
-                didMutate = true;
-            }
+            return statusChanged;
+        },
+        onDownloadError: (attachment, error) => {
+            // Rate-limit and 404 are handled inside onDownload's own try/catch above, since only
+            // onDownload's return value can signal a mutation back to the lifecycle. Only "other"
+            // (retry-exhausted / hash-validation / write) errors reach here.
+            setWebdavDownloadBackoff(attachment.id, error);
             reportProgress(
                 attachment.id,
                 'download',
@@ -538,8 +535,10 @@ export async function syncWebdavAttachments(
                 error instanceof Error ? error.message : String(error),
             );
             deps.logSyncWarning(`Failed to download attachment ${attachment.title}`, error);
-        }
-    }
+        },
+    });
+
+    const didMutate = preMutated || syncMutated;
 
     if (abortedByRateLimit) {
         deps.logSyncWarning('WebDAV attachment sync aborted due to rate limiting');
@@ -572,26 +571,12 @@ export async function syncCloudAttachments(
     const managedAttachmentsDir = await getManagedPath(ATTACHMENTS_DIR_NAME);
     const attachmentsById = collectAttachmentsById(appData);
 
-    const readLocalFile = async (path: string): Promise<Uint8Array> => {
-        if (path.startsWith(baseDataDir)) {
-            const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-            return await readFile(relative, { baseDir: BaseDirectory.Data });
-        }
-        return await readFile(normalizeAttachmentFsPath(path));
-    };
-
-    const localFileExists = async (path: string): Promise<boolean> => {
-        try {
-            if (path.startsWith(baseDataDir)) {
-                const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-                return await exists(relative, { baseDir: BaseDirectory.Data });
-            }
-            return await exists(normalizeAttachmentFsPath(path));
-        } catch (error) {
-            deps.logSyncWarning('Failed to check attachment file', error);
-            return false;
-        }
-    };
+    const { readLocalFile, localFileExists } = createLocalAttachmentFs(deps.logSyncWarning, {
+        baseDataDir,
+        dataBaseDir: BaseDirectory.Data,
+        exists,
+        readFile,
+    });
 
     return await syncBasicRemoteAttachments({
         attachmentsById,
@@ -745,26 +730,12 @@ export async function syncDropboxAttachments(
         }
     };
 
-    const readLocalFile = async (path: string): Promise<Uint8Array> => {
-        if (path.startsWith(baseDataDir)) {
-            const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-            return await readFile(relative, { baseDir: BaseDirectory.Data });
-        }
-        return await readFile(normalizeAttachmentFsPath(path));
-    };
-
-    const localFileExists = async (path: string): Promise<boolean> => {
-        try {
-            if (path.startsWith(baseDataDir)) {
-                const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-                return await exists(relative, { baseDir: BaseDirectory.Data });
-            }
-            return await exists(normalizeAttachmentFsPath(path));
-        } catch (error) {
-            deps.logSyncWarning('Failed to check attachment file', error);
-            return false;
-        }
-    };
+    const { readLocalFile, localFileExists } = createLocalAttachmentFs(deps.logSyncWarning, {
+        baseDataDir,
+        dataBaseDir: BaseDirectory.Data,
+        exists,
+        readFile,
+    });
 
     return await syncBasicRemoteAttachments({
         attachmentsById,
@@ -891,122 +862,100 @@ export async function syncCloudKitAttachments(appData: AppData, deps: Attachment
     const baseDataDir = await dataDir();
     const managedAttachmentsDir = await getManagedPath(ATTACHMENTS_DIR_NAME);
     const attachmentsById = collectAttachmentsById(appData);
-    let didMutate = await flushPendingCloudKitAttachmentDeletes(appData);
-    const maybeYieldAttachmentLoop = createCooperativeYield(4);
+    // Same task/project walk as `attachmentsById`, kept as its own owner-tagged list because
+    // CloudKit's upload metadata needs the owning task/project id, which the shared lifecycle's
+    // per-attachment callbacks don't carry.
+    const ownedByAttachmentId = new Map(
+        collectCloudKitOwnedAttachments(appData).map((owned) => [owned.attachment.id, owned]),
+    );
+    const flushMutated = await flushPendingCloudKitAttachmentDeletes(appData);
 
-    const readLocalFile = async (path: string): Promise<Uint8Array> => {
-        if (path.startsWith(baseDataDir)) {
-            const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-            return await readFile(relative, { baseDir: BaseDirectory.Data });
-        }
-        return await readFile(normalizeAttachmentFsPath(path));
-    };
-
-    const localFileExists = async (path: string): Promise<boolean> => {
-        try {
-            if (path.startsWith(baseDataDir)) {
-                const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-                return await exists(relative, { baseDir: BaseDirectory.Data });
-            }
-            return await exists(normalizeAttachmentFsPath(path));
-        } catch (error) {
-            deps.logSyncWarning('Failed to check CloudKit attachment file', error);
-            return false;
-        }
-    };
+    const { readLocalFile, localFileExists } = createLocalAttachmentFs(
+        deps.logSyncWarning,
+        { baseDataDir, dataBaseDir: BaseDirectory.Data, exists, readFile },
+        'Failed to check CloudKit attachment file',
+    );
 
     deps.logSyncInfo('CloudKit attachment sync start', {
         count: String(attachmentsById.size),
     });
 
-    for (const owned of collectCloudKitOwnedAttachments(appData)) {
-        await maybeYieldAttachmentLoop();
-        const attachment = owned.attachment;
-        if (attachment.kind !== 'file' || attachment.deletedAt) continue;
-
-        const rawUri = attachment.uri ? stripFileScheme(attachment.uri) : '';
-        const isHttp = /^https?:\/\//i.test(rawUri);
-        const localPath = isHttp ? '' : rawUri;
-        const hasLocalPath = Boolean(localPath);
-        const existsLocally = hasLocalPath ? await localFileExists(localPath) : false;
-        const recordName = parseCloudKitAttachmentKey(attachment.cloudKey);
-
-        const nextStatus: Attachment['localStatus'] = existsLocally ? 'available' : 'missing';
-        if (attachment.localStatus !== nextStatus) {
-            attachment.localStatus = nextStatus;
-            didMutate = true;
-        }
-
-        if (existsLocally && !recordName) {
-            try {
-                const fileData = await readLocalFile(localPath);
-                const validation = await validateAttachmentForUpload(attachment, fileData.length);
-                if (!validation.valid) {
-                    const failure = handleAttachmentValidationFailure(attachment, validation.error);
-                    reportProgress(
-                        attachment.id,
-                        'upload',
-                        0,
-                        attachment.size ?? fileData.length,
-                        'failed',
-                        failure.message,
-                    );
-                    deps.logSyncWarning(failure.message, validation.error);
-                    didMutate = didMutate || failure.mutated;
-                    continue;
-                }
-
-                clearAttachmentValidationFailure(attachment.id);
-                reportProgress(attachment.id, 'upload', 0, fileData.length, 'active');
-                const metadata = buildCloudKitAttachmentMetadata(owned, fileData.length);
-                const savedMetadata = await saveCloudKitAttachmentAsset(attachment.id, localPath, metadata);
-                attachment.cloudKey = buildCloudKitAttachmentKey(attachment.id);
-                attachment.localStatus = 'available';
-                didMutate = true;
-                didMutate = applyCloudKitAttachmentMetadata(attachment, savedMetadata, fileData.length) || didMutate;
-                reportProgress(attachment.id, 'upload', fileData.length, fileData.length, 'completed');
-            } catch (error) {
+    const syncMutated = await syncBasicRemoteAttachments({
+        attachmentsById,
+        localFileExists,
+        // A cloudKey written by a different backend before a provider switch isn't a valid
+        // CloudKit record key, so CloudKit must still treat the attachment as needing upload.
+        hasCloudCopy: (attachment) => Boolean(parseCloudKitAttachmentKey(attachment.cloudKey)),
+        onUpload: async (attachment, localPath) => {
+            const owned = ownedByAttachmentId.get(attachment.id);
+            if (!owned) return false;
+            const fileData = await readLocalFile(localPath);
+            const validation = await validateAttachmentForUpload(attachment, fileData.length);
+            if (!validation.valid) {
+                const failure = handleAttachmentValidationFailure(attachment, validation.error);
                 reportProgress(
                     attachment.id,
                     'upload',
                     0,
-                    attachment.size ?? 0,
+                    attachment.size ?? fileData.length,
                     'failed',
-                    error instanceof Error ? error.message : String(error),
+                    failure.message,
                 );
-                deps.logSyncWarning(`Failed to upload CloudKit attachment ${attachment.title}`, error);
+                deps.logSyncWarning(failure.message, validation.error);
+                return failure.mutated;
             }
-        }
 
-        const nextRecordName = parseCloudKitAttachmentKey(attachment.cloudKey);
-        if (nextRecordName && !existsLocally) {
-            try {
-                const extension = extractExtension(attachment.title) || extractExtension(attachment.uri);
-                const filename = `${attachment.id}${extension}`;
-                const targetPath = await join(managedAttachmentsDir, filename);
-                reportProgress(attachment.id, 'download', 0, attachment.size ?? 0, 'active');
-                const metadata = await fetchCloudKitAttachmentAsset(nextRecordName, targetPath);
-                const bytes = await readFile(targetPath);
-                await validateAttachmentHash(attachment, bytes);
-                attachment.uri = targetPath;
-                attachment.localStatus = 'available';
-                didMutate = true;
-                didMutate = applyCloudKitAttachmentMetadata(attachment, metadata, bytes.length) || didMutate;
-                reportProgress(attachment.id, 'download', bytes.length, bytes.length, 'completed');
-            } catch (error) {
-                reportProgress(
-                    attachment.id,
-                    'download',
-                    0,
-                    attachment.size ?? 0,
-                    'failed',
-                    error instanceof Error ? error.message : String(error),
-                );
-                deps.logSyncWarning(`Failed to download CloudKit attachment ${attachment.title}`, error);
-            }
-        }
-    }
+            clearAttachmentValidationFailure(attachment.id);
+            reportProgress(attachment.id, 'upload', 0, fileData.length, 'active');
+            const metadata = buildCloudKitAttachmentMetadata(owned, fileData.length);
+            const savedMetadata = await saveCloudKitAttachmentAsset(attachment.id, localPath, metadata);
+            attachment.cloudKey = buildCloudKitAttachmentKey(attachment.id);
+            attachment.localStatus = 'available';
+            applyCloudKitAttachmentMetadata(attachment, savedMetadata, fileData.length);
+            reportProgress(attachment.id, 'upload', fileData.length, fileData.length, 'completed');
+            return true;
+        },
+        onUploadError: (attachment, error) => {
+            reportProgress(
+                attachment.id,
+                'upload',
+                0,
+                attachment.size ?? 0,
+                'failed',
+                error instanceof Error ? error.message : String(error),
+            );
+            deps.logSyncWarning(`Failed to upload CloudKit attachment ${attachment.title}`, error);
+        },
+        onDownload: async (attachment) => {
+            const recordName = parseCloudKitAttachmentKey(attachment.cloudKey);
+            if (!recordName) return false;
+            const extension = extractExtension(attachment.title) || extractExtension(attachment.uri);
+            const filename = `${attachment.id}${extension}`;
+            const targetPath = await join(managedAttachmentsDir, filename);
+            reportProgress(attachment.id, 'download', 0, attachment.size ?? 0, 'active');
+            const metadata = await fetchCloudKitAttachmentAsset(recordName, targetPath);
+            const bytes = await readFile(targetPath);
+            await validateAttachmentHash(attachment, bytes);
+            attachment.uri = targetPath;
+            attachment.localStatus = 'available';
+            applyCloudKitAttachmentMetadata(attachment, metadata, bytes.length);
+            reportProgress(attachment.id, 'download', bytes.length, bytes.length, 'completed');
+            return true;
+        },
+        onDownloadError: (attachment, error) => {
+            reportProgress(
+                attachment.id,
+                'download',
+                0,
+                attachment.size ?? 0,
+                'failed',
+                error instanceof Error ? error.message : String(error),
+            );
+            deps.logSyncWarning(`Failed to download CloudKit attachment ${attachment.title}`, error);
+        },
+    });
 
+    const didMutate = flushMutated || syncMutated;
     deps.logSyncInfo('CloudKit attachment sync done', {
         mutated: didMutate ? 'true' : 'false',
     });
@@ -1041,26 +990,12 @@ export async function syncFileAttachments(
     const managedAttachmentsDir = await getManagedPath(ATTACHMENTS_DIR_NAME);
     const attachmentsById = collectAttachmentsById(appData);
 
-    const readLocalFile = async (path: string): Promise<Uint8Array> => {
-        if (path.startsWith(baseDataDir)) {
-            const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-            return await readFile(relative, { baseDir: BaseDirectory.Data });
-        }
-        return await readFile(normalizeAttachmentFsPath(path));
-    };
-
-    const localFileExists = async (path: string): Promise<boolean> => {
-        try {
-            if (path.startsWith(baseDataDir)) {
-                const relative = path.slice(baseDataDir.length).replace(/^[\\/]/, '');
-                return await exists(relative, { baseDir: BaseDirectory.Data });
-            }
-            return await exists(normalizeAttachmentFsPath(path));
-        } catch (error) {
-            deps.logSyncWarning('Failed to check attachment file', error);
-            return false;
-        }
-    };
+    const { readLocalFile, localFileExists } = createLocalAttachmentFs(deps.logSyncWarning, {
+        baseDataDir,
+        dataBaseDir: BaseDirectory.Data,
+        exists,
+        readFile,
+    });
 
     return await syncBasicRemoteAttachments({
         attachmentsById,

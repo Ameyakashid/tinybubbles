@@ -20,12 +20,11 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { useUiStore } from '../../store/ui-store';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
-import { groupTasks, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
+import { CONTEXTS_AXES, groupTasks, sanitizeAxis, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 
 const STATUS_OPTIONS: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
 const REVIEW_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:review:v1';
-const REVIEW_GROUP_BY_VALUES: ContextsGroupBy[] = ['none', 'status', 'context', 'area', 'project', 'tag'];
 
 type ReviewPersistedViewState = {
     filterStatus: TaskStatus | 'all';
@@ -44,9 +43,7 @@ function sanitizeReviewViewState(value: unknown, fallback: ReviewPersistedViewSt
     const filterStatus = parsed.filterStatus === 'all' || STATUS_OPTIONS.includes(parsed.filterStatus as TaskStatus)
         ? parsed.filterStatus as TaskStatus | 'all'
         : fallback.filterStatus;
-    const candidateGroupBy = REVIEW_GROUP_BY_VALUES.includes(parsed.groupBy as ContextsGroupBy)
-        ? parsed.groupBy as ContextsGroupBy
-        : fallback.groupBy;
+    const candidateGroupBy = sanitizeAxis(CONTEXTS_AXES, parsed.groupBy, fallback.groupBy);
     return {
         filterStatus,
         groupBy: filterStatus !== 'all' && candidateGroupBy === 'status' ? 'none' : candidateGroupBy,

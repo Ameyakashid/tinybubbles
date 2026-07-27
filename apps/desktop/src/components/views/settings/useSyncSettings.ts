@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SyncService, type CloudProvider } from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { logError } from '../../../lib/app-log';
+import { reportError } from '../../../lib/report-error';
 import { markSettingsOpenTrace, measureSettingsOpenStep } from '../../../lib/settings-open-diagnostics';
 import { useLanguage } from '../../../contexts/language-context';
 import {
@@ -10,9 +11,12 @@ import {
     getInMemoryAppDataSnapshot,
     isConnectionAllowed,
     isValidCloudSyncToken,
+    safeFormatDate,
     SYNC_LOCAL_INSECURE_URL_OPTIONS,
     summarizeMergeStats,
     translateWithFallback,
+    useTaskStore,
+    type AppData,
     type SyncBackend,
 } from '@mindwtr/core';
 import {
@@ -29,6 +33,11 @@ import {
     restoreDesktopBackup,
 } from '../../../lib/data-transfer';
 import { isValidHttpUrl } from './sync/sync-page-utils';
+import type {
+    SettingsDataTransferProps,
+    SettingsSyncPageProps,
+    SyncPreferences,
+} from './sync/types';
 
 export type { SyncBackend };
 export type DropboxTestState = 'idle' | 'success' | 'error';
@@ -48,6 +57,7 @@ type UseSyncSettingsOptions = {
     isTauri: boolean;
     showSaved: () => void;
     selectSyncFolderTitle: string;
+    lastSyncNeverLabel: string;
     requestConfirmation: (options: { title: string; message: string }) => Promise<boolean>;
 };
 
@@ -56,6 +66,7 @@ export const useSyncSettings = ({
     isTauri,
     showSaved,
     selectSyncFolderTitle,
+    lastSyncNeverLabel,
     requestConfirmation,
 }: UseSyncSettingsOptions) => {
     const [syncPath, setSyncPath] = useState('');
@@ -87,6 +98,8 @@ export const useSyncSettings = ({
     const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
     const [transferAction, setTransferAction] = useState<null | 'export' | 'restore' | 'import'>(null);
     const showToast = useUiStore((state) => state.showToast);
+    const settings = useTaskStore((state) => state.settings) ?? ({} as AppData['settings']);
+    const updateSettings = useTaskStore((state) => state.updateSettings);
     const { t } = useLanguage();
 
     const formatSyncPathError = useCallback((message?: string): string => {
@@ -908,66 +921,127 @@ export const useSyncSettings = ({
         }
     }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
+    const syncPreferences = settings?.syncPreferences ?? {};
+    const handleUpdateSyncPreferences = useCallback(
+        (updates: Partial<SyncPreferences>) => {
+            updateSettings({ syncPreferences: { ...syncPreferences, ...updates } })
+                .then(showSaved)
+                .catch((error) => reportError('Failed to update sync preferences', error));
+        },
+        [syncPreferences, showSaved, updateSettings],
+    );
+
+    const lastSyncAt = settings?.lastSyncAt;
+    const lastSyncStats = settings?.lastSyncStats ?? null;
+    const lastSyncDisplay = lastSyncAt
+        ? safeFormatDate(lastSyncAt, 'PPpp', lastSyncAt)
+        : lastSyncNeverLabel;
+
+    // Target validity used to live in SettingsSyncPage; it belongs next to the
+    // state it validates so the page stays pure layout.
+    const isMacOS = typeof navigator !== 'undefined'
+        && /mac/i.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`);
+    const webdavUrlError = webdavUrl.trim() ? !isValidHttpUrl(webdavUrl.trim()) : false;
+    const cloudUrlError = cloudUrl.trim() ? !isValidHttpUrl(cloudUrl.trim()) : false;
+    const webdavConnectionAllowed = !webdavUrlError && webdavUrl.trim()
+        ? isConnectionAllowed(webdavUrl.trim(), {
+            ...SYNC_LOCAL_INSECURE_URL_OPTIONS,
+            allowInsecureHttp: webdavAllowInsecureHttp,
+        })
+        : !webdavUrl.trim();
+    const cloudConnectionAllowed = !cloudUrlError && cloudUrl.trim()
+        ? isConnectionAllowed(cloudUrl.trim(), {
+            ...SYNC_LOCAL_INSECURE_URL_OPTIONS,
+            allowInsecureHttp: cloudAllowInsecureHttp,
+        })
+        : !cloudUrl.trim();
+    const isSyncTargetValid =
+        syncBackend === 'file'
+            ? !!syncPath.trim()
+            : syncBackend === 'cloudkit'
+                ? true
+                : syncBackend === 'webdav'
+                    ? !!webdavUrl.trim() && !webdavUrlError && webdavConnectionAllowed
+                    : syncBackend === 'cloud'
+                        ? (cloudProvider === 'selfhosted'
+                            ? !!cloudUrl.trim() && !cloudUrlError && cloudConnectionAllowed
+                            : dropboxConfigured && !!dropboxAppKey.trim() && dropboxConnected)
+                        : false;
+
     return {
-        syncPath,
-        setSyncPath,
-        isSyncing: syncStatus.inFlight,
-        syncQueued: syncStatus.queued,
-        syncLastResult: syncStatus.lastResult,
-        syncLastResultAt: syncStatus.lastResultAt,
-        syncError,
-        syncBackend,
-        setSyncBackend,
-        webdavUrl,
-        setWebdavUrl,
-        webdavUsername,
-        setWebdavUsername,
-        webdavPassword,
-        setWebdavPassword,
-        webdavHasPassword,
-        webdavAllowInsecureHttp,
-        setWebdavAllowInsecureHttp,
-        isSavingWebDav,
-        isTestingWebDav,
-        webdavTestState,
-        cloudUrl,
-        setCloudUrl,
-        cloudToken,
-        setCloudToken,
-        cloudRememberToken,
-        setCloudRememberToken,
-        cloudAllowInsecureHttp,
-        setCloudAllowInsecureHttp,
-        cloudProvider,
-        setCloudProvider,
-        dropboxAppKey,
-        dropboxConfigured,
-        dropboxConnected,
-        dropboxBusy,
-        dropboxAuthInProgress,
-        dropboxRedirectUri,
-        dropboxTestState,
-        snapshots,
-        isLoadingSnapshots,
-        isRestoringSnapshot,
-        transferAction,
-        handleSaveSyncPath,
-        handleChangeSyncLocation,
-        handleSetSyncBackend,
-        handleSaveWebDav,
-        handleTestWebDavConnection,
-        handleSaveCloud,
-        handleSetCloudProvider,
-        handleConnectDropbox,
-        handleDisconnectDropbox,
-        handleTestDropboxConnection,
-        handleSync,
-        handleRestoreSnapshot,
-        handleExportBackup,
-        handleRestoreBackup,
-        handleImportTodoist,
-        handleImportTickTick,
-        handleImportDgt,
-        handleImportOmniFocus,
+        syncPageProps: {
+            isTauri,
+            isMacOS,
+            syncBackend,
+            onSetSyncBackend: handleSetSyncBackend,
+            syncPath,
+            onSyncPathChange: setSyncPath,
+            onSaveSyncPath: handleSaveSyncPath,
+            onBrowseSyncPath: handleChangeSyncLocation,
+            webdavUrl,
+            webdavUsername,
+            webdavPassword,
+            webdavHasPassword,
+            webdavAllowInsecureHttp,
+            webdavUrlError,
+            isSavingWebDav,
+            isTestingWebDav,
+            webdavTestState,
+            onWebdavUrlChange: setWebdavUrl,
+            onWebdavUsernameChange: setWebdavUsername,
+            onWebdavPasswordChange: setWebdavPassword,
+            onWebdavAllowInsecureHttpChange: setWebdavAllowInsecureHttp,
+            onSaveWebDav: handleSaveWebDav,
+            onTestWebDavConnection: handleTestWebDavConnection,
+            cloudUrl,
+            cloudUrlError,
+            cloudToken,
+            cloudRememberToken,
+            cloudAllowInsecureHttp,
+            cloudProvider,
+            dropboxConfigured,
+            dropboxConnected,
+            dropboxBusy,
+            dropboxAuthInProgress,
+            dropboxRedirectUri,
+            dropboxTestState,
+            onCloudUrlChange: setCloudUrl,
+            onCloudTokenChange: setCloudToken,
+            onCloudRememberTokenChange: setCloudRememberToken,
+            onCloudAllowInsecureHttpChange: setCloudAllowInsecureHttp,
+            onCloudProviderChange: handleSetCloudProvider,
+            onSaveCloud: handleSaveCloud,
+            onConnectDropbox: handleConnectDropbox,
+            onDisconnectDropbox: handleDisconnectDropbox,
+            onTestDropboxConnection: handleTestDropboxConnection,
+            isSyncTargetValid,
+            syncPreferences,
+            onUpdateSyncPreferences: handleUpdateSyncPreferences,
+            onSyncNow: handleSync,
+            isSyncing: syncStatus.inFlight,
+            syncQueued: syncStatus.queued,
+            syncLastResult: syncStatus.lastResult,
+            syncLastResultAt: syncStatus.lastResultAt,
+            syncError,
+            lastSyncDisplay,
+            lastSyncStatus: settings?.lastSyncStatus,
+            lastSyncStats,
+            lastSyncHistory: settings?.lastSyncHistory ?? [],
+            conflictCount: summarizeMergeStats(lastSyncStats).conflicts,
+            lastSyncError: settings?.lastSyncError,
+            snapshots,
+            isLoadingSnapshots,
+            isRestoringSnapshot,
+            onRestoreSnapshot: handleRestoreSnapshot,
+        } satisfies Omit<SettingsSyncPageProps, 't'>,
+        dataTransferProps: {
+            transferAction,
+            onExportBackup: handleExportBackup,
+            onRestoreBackup: handleRestoreBackup,
+            onImportTodoist: handleImportTodoist,
+            onImportTickTick: handleImportTickTick,
+            onImportDgt: handleImportDgt,
+            onImportOmniFocus: handleImportOmniFocus,
+        } satisfies SettingsDataTransferProps,
     };
 };

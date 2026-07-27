@@ -42,7 +42,7 @@ type ListControlsPanelProps = {
     onAddTag: () => void;
     onAssignArea: (areaId: string | null) => Promise<void>;
     onBulkOrganize?: () => void;
-    groupByOptions: TaskListGroupBy[];
+    groupByOptions: readonly TaskListGroupBy[];
     onChangeGroupBy: (value: TaskListGroupBy) => void;
     onChangeQuickAdd: (value: string) => void;
     onChangeSearch: (value: string) => void;

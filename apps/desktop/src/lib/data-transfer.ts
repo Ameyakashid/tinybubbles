@@ -1,5 +1,6 @@
 import {
     addBreadcrumb,
+    countActiveRecords,
     createBackupFileName,
     flushPendingSave,
     serializeBackupData,
@@ -11,6 +12,7 @@ import {
 import {
     runImport,
     type DataTransferBoundaries,
+    type ImportSourceId,
 } from '@mindwtr/core/import-runner';
 import {
     parseDgtImportSource,
@@ -56,13 +58,6 @@ type DesktopTransferResult = {
     snapshotName: string | null;
 };
 
-const countActiveRecords = (data: AppData) => ({
-    tasks: data.tasks.filter((task) => !task.deletedAt).length,
-    projects: data.projects.filter((project) => !project.deletedAt).length,
-    sections: data.sections.filter((section) => !section.deletedAt).length,
-    areas: data.areas.filter((area) => !area.deletedAt).length,
-});
-
 const toCountExtra = (data: AppData): Record<string, string> => {
     const counts = countActiveRecords(data);
     return {
@@ -70,6 +65,7 @@ const toCountExtra = (data: AppData): Record<string, string> => {
         projects: String(counts.projects),
         sections: String(counts.sections),
         areas: String(counts.areas),
+        people: String(counts.people),
     };
 };
 
@@ -232,95 +228,103 @@ export const inspectDesktopBackup = async (appVersion?: string | null): Promise<
     });
 };
 
-export const inspectDesktopTodoistImport = async (): Promise<TodoistImportParseResult | null> => {
-    const document = await pickTransferDocument({
+// The four non-backup import sources each need only a file-picker filter/title and their own
+// parser — everything else about "pick a file, hand its bytes to the right parser" is identical.
+// This table + the one generic function below replace what used to be 4 near-identical
+// inspect*Import functions; ImportSourceId (backup excluded) is the same key import-runner.ts's
+// own descriptor table uses, so a fifth format only ever needs one new row here.
+type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
+
+type ImportSourceParseResultMap = {
+    dgt: DgtImportParseResult;
+    omnifocus: OmniFocusImportParseResult;
+    ticktick: TickTickImportParseResult;
+    todoist: TodoistImportParseResult;
+};
+
+type ImportPickerDescriptor<S extends ImportPickerSourceId> = {
+    accept: string;
+    extensions: string[];
+    parse: (input: { bytes?: Uint8Array; fileName: string }) => ImportSourceParseResultMap[S];
+    title: string;
+};
+
+const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDescriptor<S> } = {
+    todoist: {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
-        mode: 'binary',
         title: 'Todoist Export',
-    });
-    if (!document) return null;
-    return parseTodoistImportSource({
-        bytes: document.bytes,
-        fileName: document.fileName,
-    });
-};
-
-export const inspectDesktopTickTickImport = async (): Promise<TickTickImportParseResult | null> => {
-    const document = await pickTransferDocument({
+        parse: parseTodoistImportSource,
+    },
+    ticktick: {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
-        mode: 'binary',
         title: 'TickTick Backup',
-    });
-    if (!document) return null;
-    return parseTickTickImportSource({
-        bytes: document.bytes,
-        fileName: document.fileName,
-    });
-};
-
-export const inspectDesktopDgtImport = async (): Promise<DgtImportParseResult | null> => {
-    const document = await pickTransferDocument({
+        parse: parseTickTickImportSource,
+    },
+    dgt: {
         accept: '.json,.zip,application/json,application/zip',
         extensions: ['json', 'zip'],
-        mode: 'binary',
         title: 'DGT GTD Export',
-    });
-    if (!document) return null;
-    return parseDgtImportSource({
-        bytes: document.bytes,
-        fileName: document.fileName,
-    });
-};
-
-export const inspectDesktopOmniFocusImport = async (): Promise<OmniFocusImportParseResult | null> => {
-    const document = await pickTransferDocument({
+        parse: parseDgtImportSource,
+    },
+    omnifocus: {
         accept: '.csv,.json,.zip,text/csv,application/json,application/zip,application/octet-stream',
         extensions: ['csv', 'json', 'zip'],
-        mode: 'binary',
         title: 'OmniFocus Export',
+        parse: parseOmniFocusImportSource,
+    },
+};
+
+const inspectDesktopImportSource = async <S extends ImportPickerSourceId>(
+    source: S
+): Promise<ImportSourceParseResultMap[S] | null> => {
+    const descriptor = IMPORT_PICKER_DESCRIPTORS[source];
+    const document = await pickTransferDocument({
+        accept: descriptor.accept,
+        extensions: descriptor.extensions,
+        mode: 'binary',
+        title: descriptor.title,
     });
     if (!document) return null;
-    return parseOmniFocusImportSource({
-        bytes: document.bytes,
-        fileName: document.fileName,
-    });
+    return descriptor.parse({ bytes: document.bytes, fileName: document.fileName });
 };
+
+export const inspectDesktopTodoistImport = (): Promise<TodoistImportParseResult | null> =>
+    inspectDesktopImportSource('todoist');
+
+export const inspectDesktopTickTickImport = (): Promise<TickTickImportParseResult | null> =>
+    inspectDesktopImportSource('ticktick');
+
+export const inspectDesktopDgtImport = (): Promise<DgtImportParseResult | null> =>
+    inspectDesktopImportSource('dgt');
+
+export const inspectDesktopOmniFocusImport = (): Promise<OmniFocusImportParseResult | null> =>
+    inspectDesktopImportSource('omnifocus');
 
 const desktopLog = { logInfo, logError };
 
 export const restoreDesktopBackup = async (data: AppData): Promise<DesktopTransferResult> => {
-    const { snapshotName } = await runImport<AppData, AppData>('backup', data, desktopBoundaries, desktopLog);
+    const { snapshotName } = await runImport('backup', data, desktopBoundaries, desktopLog);
     return { snapshotName };
 };
 
-export const importDesktopTodoistData = async (
+export const importDesktopTodoistData = (
     parsedProjects: ParsedTodoistProject[]
-): Promise<DesktopTransferResult & { result: TodoistImportExecutionResult }> => (
-    runImport<ParsedTodoistProject[], TodoistImportExecutionResult>(
-        'todoist', parsedProjects, desktopBoundaries, desktopLog
-    )
-);
+): Promise<DesktopTransferResult & { result: TodoistImportExecutionResult }> =>
+    runImport('todoist', parsedProjects, desktopBoundaries, desktopLog);
 
-export const importDesktopTickTickData = async (
+export const importDesktopTickTickData = (
     parsedData: ParsedTickTickImportData
-): Promise<DesktopTransferResult & { result: TickTickImportExecutionResult }> => (
-    runImport<ParsedTickTickImportData, TickTickImportExecutionResult>(
-        'ticktick', parsedData, desktopBoundaries, desktopLog
-    )
-);
+): Promise<DesktopTransferResult & { result: TickTickImportExecutionResult }> =>
+    runImport('ticktick', parsedData, desktopBoundaries, desktopLog);
 
-export const importDesktopDgtData = async (
+export const importDesktopDgtData = (
     parsedData: ParsedDgtImportData
-): Promise<DesktopTransferResult & { result: DgtImportExecutionResult }> => (
-    runImport<ParsedDgtImportData, DgtImportExecutionResult>('dgt', parsedData, desktopBoundaries, desktopLog)
-);
+): Promise<DesktopTransferResult & { result: DgtImportExecutionResult }> =>
+    runImport('dgt', parsedData, desktopBoundaries, desktopLog);
 
-export const importDesktopOmniFocusData = async (
+export const importDesktopOmniFocusData = (
     parsedData: ParsedOmniFocusImportData
-): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> => (
-    runImport<ParsedOmniFocusImportData, OmniFocusImportExecutionResult>(
-        'omnifocus', parsedData, desktopBoundaries, desktopLog
-    )
-);
+): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> =>
+    runImport('omnifocus', parsedData, desktopBoundaries, desktopLog);

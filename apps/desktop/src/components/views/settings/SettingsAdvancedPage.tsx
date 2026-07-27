@@ -5,7 +5,7 @@ import type { LocalApiServerStatus } from '../../../lib/local-api-server';
 import type { DesktopRenderingConfig } from '../../../lib/desktop-rendering';
 import { Switch } from '../../ui/Switch';
 
-type SettingsAdvancedPageProps = {
+export type SettingsAdvancedPageProps = {
     t: SettingsLabels;
     isTauri: boolean;
     localApiStatus: LocalApiServerStatus;

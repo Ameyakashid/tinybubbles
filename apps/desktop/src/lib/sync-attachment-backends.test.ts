@@ -267,6 +267,68 @@ describe('desktop sync attachment backends', () => {
         expect(coreMocks.webdavMakeDirectory).toHaveBeenCalledTimes(2);
     });
 
+    it('caps WebDAV uploads per sync run and logs once when the limit is reached', async () => {
+        // WEBDAV_ATTACHMENT_MAX_UPLOADS_PER_SYNC is 10; one attachment over that must be skipped.
+        const attachmentCount = 11;
+        const bytes = new Uint8Array([1, 2, 3]);
+        const fetcher = vi.fn(async (_url: string, _init?: RequestInit) => new Response(null, { status: 200 }));
+        const logSyncInfo = vi.fn();
+        const logSyncWarning = vi.fn();
+        const appData: AppData = {
+            tasks: Array.from({ length: attachmentCount }, (_, index) => ({
+                id: `task-${index}`,
+                title: `Task ${index}`,
+                status: 'next',
+                tags: [],
+                contexts: [],
+                attachments: [
+                    {
+                        id: `attachment-${index}`,
+                        kind: 'file',
+                        title: `file-${index}.txt`,
+                        uri: `/data/file-${index}.txt`,
+                        createdAt: '2026-06-27T00:00:00.000Z',
+                        updatedAt: '2026-06-27T00:00:00.000Z',
+                    },
+                ],
+                createdAt: '2026-06-27T00:00:00.000Z',
+                updatedAt: '2026-06-27T00:00:00.000Z',
+            })),
+            projects: [],
+            sections: [],
+            areas: [],
+            settings: {},
+        };
+        const deps: AttachmentBackendDeps = {
+            getTauriFetch: async () => fetcher as unknown as typeof fetch,
+            isTauriRuntimeEnv: () => true,
+            logSyncInfo,
+            logSyncWarning,
+            resolveWebdavPassword: vi.fn(async () => 'secret'),
+        };
+
+        fsMocks.exists.mockResolvedValue(true);
+        fsMocks.readFile.mockResolvedValue(bytes);
+
+        const result = await syncWebdavAttachments(
+            appData,
+            { url: 'https://dav.example/mindwtr', username: 'alice' },
+            'https://dav.example/mindwtr',
+            deps,
+        );
+
+        expect(result).not.toBeNull();
+        const uploadedCount = result!.tasks.filter((task) => task.attachments?.[0]?.cloudKey).length;
+        expect(uploadedCount).toBe(10);
+        const putCalls = fetcher.mock.calls.filter(([, init]) => (init as RequestInit)?.method === 'PUT');
+        expect(putCalls).toHaveLength(10);
+        expect(logSyncInfo).toHaveBeenCalledWith('WebDAV attachment upload limit reached', { limit: '10' });
+        expect(logSyncWarning).not.toHaveBeenCalledWith(
+            expect.stringContaining('Failed to upload attachment'),
+            expect.anything(),
+        );
+    });
+
     it('uploads local attachments to CloudKit and flushes CloudKit pending deletes', async () => {
         const bytes = new Uint8Array([1, 2, 3]);
         const logSyncWarning = vi.fn();

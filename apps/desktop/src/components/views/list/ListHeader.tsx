@@ -1,10 +1,8 @@
 import { CheckSquare, ChevronsUpDown, Filter, List, SlidersHorizontal } from 'lucide-react';
 import type { TaskSortBy } from '@mindwtr/core';
-import type { TaskListGroupBy } from './next-grouping';
+import { FOCUS_AXES, type TaskListGroupBy } from './next-grouping';
 import { GroupBySelect } from './GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list-toolbar';
-
-const DEFAULT_GROUP_BY_OPTIONS: TaskListGroupBy[] = ['none', 'context', 'area', 'project', 'tag', 'energy', 'priority', 'person'];
 
 type ListHeaderProps = {
     title: string;
@@ -18,7 +16,7 @@ type ListHeaderProps = {
     onChangeSortBy: (value: TaskSortBy) => void;
     showGroupBy?: boolean;
     groupBy?: TaskListGroupBy;
-    groupByOptions?: TaskListGroupBy[];
+    groupByOptions?: readonly TaskListGroupBy[];
     onChangeGroupBy?: (value: TaskListGroupBy) => void;
     showFiltersButton?: boolean;
     filtersOpen?: boolean;
@@ -44,7 +42,7 @@ export function ListHeader({
     onChangeSortBy,
     showGroupBy = false,
     groupBy = 'none',
-    groupByOptions = DEFAULT_GROUP_BY_OPTIONS,
+    groupByOptions = FOCUS_AXES,
     onChangeGroupBy,
     showFiltersButton = false,
     filtersOpen = false,

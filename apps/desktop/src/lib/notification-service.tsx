@@ -1,12 +1,11 @@
 import {
+    buildReminderNotificationBody,
     getDailyDigestSummary,
+    getDigestSchedule,
     getProjectReviewReminderIntent,
     getTaskReminderPlan,
-    stripMarkdown,
     type Language,
     type Task,
-    type TaskReminderIntentKind,
-    parseTimeOfDay,
     getTranslationsSync,
     loadTranslations,
     loadStoredLanguageSync,
@@ -81,21 +80,9 @@ function localDateKey(date: Date): string {
     return `${year}-${month}-${day}`;
 }
 
-export function buildDesktopTaskNotificationBody(
-    task: Task,
-    kind: TaskReminderIntentKind,
-    translations: Record<string, string>
-): string | undefined {
-    const reminderLabel = kind === 'start'
-        ? (translations['settings.startDateNotifications'] ?? 'Start date reminder')
-        : kind === 'due' || kind === 'due-repeat'
-            ? (translations['settings.dueDateNotifications'] ?? 'Due date reminder')
-            : kind === 'review'
-                ? (translations['settings.reviewAtNotifications'] ?? 'Review date reminder')
-                : (translations['settings.notifications'] ?? 'Task reminder');
-    const description = stripMarkdown(task.description || '').trim();
-    return description ? `${reminderLabel}\n${description}` : reminderLabel;
-}
+// Moved to core (`buildReminderNotificationBody`) so mobile can share the same labelled,
+// markdown-stripped body instead of showing raw description text (#reminder-schedule).
+export const buildDesktopTaskNotificationBody = buildReminderNotificationBody;
 
 async function loadTauriNotificationApi(): Promise<TauriNotificationApi | null> {
     if (!isTauriRuntime()) return null;
@@ -238,21 +225,11 @@ function checkDueAndNotify() {
         });
     }
 
-    const morningEnabled = settings.dailyDigestMorningEnabled === true;
-    const eveningEnabled = settings.dailyDigestEveningEnabled === true;
-    const weeklyReviewEnabled = settings.weeklyReviewEnabled === true;
-
-    const { hour: morningHour, minute: morningMinute } = parseTimeOfDay(settings.dailyDigestMorningTime, { hour: 9, minute: 0 });
-    const { hour: eveningHour, minute: eveningMinute } = parseTimeOfDay(settings.dailyDigestEveningTime, { hour: 20, minute: 0 });
-    const { hour: weeklyHour, minute: weeklyMinute } = parseTimeOfDay(settings.weeklyReviewTime, { hour: 18, minute: 0 });
-    const weeklyReviewDay = Number.isFinite(settings.weeklyReviewDay)
-        ? Math.max(0, Math.min(6, Math.floor(settings.weeklyReviewDay as number)))
-        : 0;
-
+    const digest = getDigestSchedule(settings);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-    if (morningEnabled) {
-        const target = morningHour * 60 + morningMinute;
+    if (digest.morning.enabled) {
+        const target = digest.morning.hour * 60 + digest.morning.minute;
         if (nowMinutes >= target && digestSentOnByKind.get('morning') !== dateKey) {
             const summary = getDailyDigestSummary(tasks, projects, now);
             const reviewDue = summary.reviewDueTasks + summary.reviewDueProjects;
@@ -273,17 +250,17 @@ function checkDueAndNotify() {
         }
     }
 
-    if (eveningEnabled) {
-        const target = eveningHour * 60 + eveningMinute;
+    if (digest.evening.enabled) {
+        const target = digest.evening.hour * 60 + digest.evening.minute;
         if (nowMinutes >= target && digestSentOnByKind.get('evening') !== dateKey) {
             void sendNotification(tr['digest.eveningTitle'], tr['digest.eveningBody']);
             digestSentOnByKind.set('evening', dateKey);
         }
     }
 
-    if (weeklyReviewEnabled) {
-        const target = weeklyHour * 60 + weeklyMinute;
-        if (now.getDay() === weeklyReviewDay && nowMinutes >= target && weeklyReviewSentOnDate !== dateKey) {
+    if (digest.weekly.enabled) {
+        const target = digest.weekly.hour * 60 + digest.weekly.minute;
+        if (now.getDay() === digest.weekly.day && nowMinutes >= target && weeklyReviewSentOnDate !== dateKey) {
             void sendNotification(tr['digest.weeklyReviewTitle'], tr['digest.weeklyReviewBody']);
             weeklyReviewSentOnDate = dateKey;
         }

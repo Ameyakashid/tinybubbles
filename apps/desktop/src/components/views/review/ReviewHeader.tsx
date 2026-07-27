@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { CheckSquare, ChevronDown, List, SlidersHorizontal } from 'lucide-react';
 import { tFallback, type TaskSortBy } from '@mindwtr/core';
 import { cn } from '../../../lib/utils';
-import type { ContextsGroupBy } from '../list/next-grouping';
+import { CONTEXTS_AXES, type ContextsGroupBy } from '../list/next-grouping';
 import { GroupBySelect } from '../list/GroupBySelect';
 import {
     SortBySelect,
@@ -161,7 +161,7 @@ export function ReviewListControls({
                         />
                         <GroupBySelect
                             value={groupBy}
-                            axes={['none', 'status', 'tag', 'context', 'area', 'project'] as const}
+                            axes={CONTEXTS_AXES}
                             disabledAxes={disableStatusGrouping ? ['status'] : []}
                             onChange={onChangeGroupBy}
                             t={t}

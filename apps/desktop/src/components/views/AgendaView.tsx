@@ -15,7 +15,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSo
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, criteriaFromSelections, removeAdvancedFilterCriteriaChip, selectionsFromCriteria, formatFocusTaskLimitText,
     getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, hasActiveFilterCriteria, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback } from '@mindwtr/core';
-import type { FilterCriteria, FocusGroupBy, MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
+import type { FilterCriteria, MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
@@ -31,7 +31,15 @@ import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaS
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
-import { groupTasks, type NextGroupBy } from './list/next-grouping';
+import {
+    emptyCollapsedGroups,
+    FOCUS_AXES,
+    groupTasks,
+    sanitizeAxis,
+    sanitizeCollapsedGroups,
+    type CollapsedGroups,
+    type NextGroupBy,
+} from './list/next-grouping';
 import { PromptModal } from '../PromptModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
@@ -41,7 +49,6 @@ const AGENDA_VIRTUALIZATION_THRESHOLD = 25;
 const NO_PROJECT_FILTER_ID = SAVED_FILTER_NO_PROJECT_ID;
 const AGENDA_ACTIVE_STATUSES: Task['status'][] = ['inbox', 'next', 'waiting', 'someday'];
 const DEFAULT_FOCUS_SORT_BY: SortField = 'default';
-const FOCUS_GROUP_BY_VALUES = new Set<FocusGroupBy>(['none', 'context', 'project', 'area', 'energy', 'priority', 'person', 'tag']);
 const FOCUS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:focus:v1';
 
 type FocusSectionKey = 'schedule' | 'nextActions' | 'reviewDue';
@@ -49,7 +56,7 @@ type FocusGroupCollapseKey = Exclude<NextGroupBy, 'none'>;
 
 type FocusPersistedViewState = {
     expandedSections: Record<FocusSectionKey, boolean>;
-    collapsedGroups: Partial<Record<FocusGroupCollapseKey, string[]>>;
+    collapsedGroups: CollapsedGroups<NextGroupBy>;
 };
 
 const DEFAULT_FOCUS_VIEW_STATE: FocusPersistedViewState = {
@@ -58,15 +65,7 @@ const DEFAULT_FOCUS_VIEW_STATE: FocusPersistedViewState = {
         nextActions: true,
         reviewDue: true,
     },
-    collapsedGroups: {
-        context: [],
-        area: [],
-        project: [],
-        energy: [],
-        priority: [],
-        person: [],
-        tag: [],
-    },
+    collapsedGroups: emptyCollapsedGroups(FOCUS_AXES),
 };
 
 function sanitizeFocusViewState(value: unknown, fallback: FocusPersistedViewState): FocusPersistedViewState {
@@ -76,34 +75,18 @@ function sanitizeFocusViewState(value: unknown, fallback: FocusPersistedViewStat
     const expandedSections = parsed.expandedSections && typeof parsed.expandedSections === 'object' && !Array.isArray(parsed.expandedSections)
         ? parsed.expandedSections as Partial<Record<FocusSectionKey, boolean>>
         : {};
-    const collapsedGroups = parsed.collapsedGroups && typeof parsed.collapsedGroups === 'object' && !Array.isArray(parsed.collapsedGroups)
-        ? parsed.collapsedGroups as Partial<Record<FocusGroupCollapseKey, unknown>>
-        : {};
-    const sanitizeGroupIds = (ids: unknown, fallbackIds: string[] | undefined = []) => (
-        Array.isArray(ids)
-            ? Array.from(new Set(ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)))
-            : fallbackIds ?? []
-    );
     return {
         expandedSections: {
             schedule: typeof expandedSections.schedule === 'boolean' ? expandedSections.schedule : fallback.expandedSections.schedule,
             nextActions: typeof expandedSections.nextActions === 'boolean' ? expandedSections.nextActions : fallback.expandedSections.nextActions,
             reviewDue: typeof expandedSections.reviewDue === 'boolean' ? expandedSections.reviewDue : fallback.expandedSections.reviewDue,
         },
-        collapsedGroups: {
-            context: sanitizeGroupIds(collapsedGroups.context, fallback.collapsedGroups.context),
-            area: sanitizeGroupIds(collapsedGroups.area, fallback.collapsedGroups.area),
-            project: sanitizeGroupIds(collapsedGroups.project, fallback.collapsedGroups.project),
-            energy: sanitizeGroupIds(collapsedGroups.energy, fallback.collapsedGroups.energy),
-            priority: sanitizeGroupIds(collapsedGroups.priority, fallback.collapsedGroups.priority),
-            person: sanitizeGroupIds(collapsedGroups.person, fallback.collapsedGroups.person),
-            tag: sanitizeGroupIds(collapsedGroups.tag, fallback.collapsedGroups.tag),
-        },
+        collapsedGroups: sanitizeCollapsedGroups(FOCUS_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
     };
 }
 
 function normalizeAgendaGroupBy(value: unknown): NextGroupBy {
-    return FOCUS_GROUP_BY_VALUES.has(value as FocusGroupBy) ? value as NextGroupBy : 'none';
+    return sanitizeAxis(FOCUS_AXES, value, 'none');
 }
 
 function getFocusGroupCollapseKey(value: NextGroupBy): FocusGroupCollapseKey | null {

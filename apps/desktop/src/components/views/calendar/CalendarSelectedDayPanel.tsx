@@ -13,16 +13,16 @@ type CalendarSelectedDayPanelController = Pick<
     | 'beginEditScheduledTime'
     | 'calendarNameById'
     | 'cancelEditScheduledTime'
+    | 'closeSelectedDay'
     | 'commitEditScheduledTime'
     | 'createTaskFromExternalEvent'
     | 'editingTimeTaskId'
     | 'editingTimeValue'
-    | 'externalCalendarColor'
+    | 'getExternalCalendarColor'
     | 'isExternalLoading'
     | 'markTaskDone'
     | 'openQuickAddForDate'
     | 'openTaskFromCalendar'
-    | 'resetSelectedDayState'
     | 'resolveText'
     | 'scheduleCandidates'
     | 'scheduleError'
@@ -33,12 +33,10 @@ type CalendarSelectedDayPanelController = Pick<
     | 'selectedExternalEvents'
     | 'selectedTaskRows'
     | 'selectedTimedEvents'
-    | 'setEditingTimeValue'
-    | 'setScheduleError'
-    | 'setScheduleQuery'
-    | 'setSelectedDate'
     | 't'
     | 'timeEstimateToMinutes'
+    | 'updateEditingTimeValue'
+    | 'updateScheduleQuery'
     | 'updateTask'
 >;
 
@@ -61,16 +59,16 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
         beginEditScheduledTime,
         calendarNameById,
         cancelEditScheduledTime,
+        closeSelectedDay,
         commitEditScheduledTime,
         createTaskFromExternalEvent,
         editingTimeTaskId,
         editingTimeValue,
-        externalCalendarColor,
+        getExternalCalendarColor,
         isExternalLoading,
         markTaskDone,
         openQuickAddForDate,
         openTaskFromCalendar,
-        resetSelectedDayState,
         resolveText,
         scheduleCandidates,
         scheduleError,
@@ -81,12 +79,10 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
         selectedExternalEvents,
         selectedTaskRows,
         selectedTimedEvents,
-        setEditingTimeValue,
-        setScheduleError,
-        setScheduleQuery,
-        setSelectedDate,
         t,
         timeEstimateToMinutes,
+        updateEditingTimeValue,
+        updateScheduleQuery,
         updateTask,
     } = controller;
     const handleTaskDragStart = (event: DragEvent<HTMLElement>, taskId: string, kind: 'scheduled' | 'deadline') => {
@@ -117,10 +113,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                     <button
                         type="button"
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        onClick={() => {
-                            setSelectedDate(null);
-                            resetSelectedDayState();
-                        }}
+                        onClick={closeSelectedDay}
                         aria-label={t('common.close')}
                         title={t('common.close')}
                     >
@@ -141,7 +134,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                         <div
                                             key={event.id}
                                             className="flex items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-sm"
-                                            style={{ borderLeftColor: externalCalendarColor(event.sourceId) }}
+                                            style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                         >
                                             <span className="min-w-0 flex-1 truncate">{event.title}</span>
                                             {sourceLabel && <span className="truncate text-xs text-muted-foreground">{sourceLabel}</span>}
@@ -181,7 +174,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                     <div
                                         key={event.id}
                                         className="flex items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-sm"
-                                        style={{ borderLeftColor: externalCalendarColor(event.sourceId) }}
+                                        style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                     >
                                         <span className="w-28 shrink-0 text-xs font-medium text-muted-foreground">{timeLabel}</span>
                                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
@@ -269,7 +262,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                                 <input
                                                     type="time"
                                                     value={editingTimeValue}
-                                                    onChange={(e) => setEditingTimeValue(e.target.value)}
+                                                    onChange={(e) => updateEditingTimeValue(e.target.value)}
                                                     className="h-8 rounded border border-border bg-background px-2 text-xs"
                                                 />
                                                 <button
@@ -346,10 +339,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                     <input
                         type="text"
                         value={scheduleQuery}
-                        onChange={(e) => {
-                            setScheduleQuery(e.target.value);
-                            if (scheduleError) setScheduleError(null);
-                        }}
+                        onChange={(e) => updateScheduleQuery(e.target.value)}
                         placeholder={t('calendar.schedulePlaceholder')}
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />

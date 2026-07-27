@@ -74,6 +74,13 @@ describe('resolveDesktopThemeMode', () => {
     it('prefers synced settings over older local storage', () => {
         expect(resolveDesktopThemeMode('system', 'dark')).toBe('system');
     });
+
+    it('collapses unsupported material3/oled theme values to the scheme they render as', () => {
+        expect(resolveDesktopThemeMode('material3-dark', null)).toBe('dark');
+        expect(resolveDesktopThemeMode('material3-light', null)).toBe('light');
+        expect(resolveDesktopThemeMode('oled', null)).toBe('dark');
+        expect(resolveDesktopThemeMode(undefined, 'material3-light')).toBe('light');
+    });
 });
 
 describe('applyNativeTheme', () => {

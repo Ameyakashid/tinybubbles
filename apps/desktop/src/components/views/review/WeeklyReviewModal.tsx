@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+    buildReviewSteps,
     createAIProvider,
     DEFAULT_AREA_COLOR,
     formatI18nTemplate,
+    getExternalCalendarDaySummaries,
     getPersonOptionNames,
     getStaleItems,
     getUsedTaskTokens,
+    getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
-    isDueForReview,
     isNaturalLanguageDatesEnabled,
     isTaskInActiveProject,
     normalizeClockTimeInput,
     parseProjectNextActionInput,
-    partitionByReviewDate,
     safeFormatDate,
     safeParseDate,
-    safeParseDueDate,
     shallow,
+    type CalendarReviewEntry,
+    type ExternalCalendarDaySummary,
     type ExternalCalendarEvent,
     type ReviewSuggestion,
     useTaskStore,
@@ -46,21 +48,6 @@ type ReviewStepDefinition = {
     icon: LucideIcon;
     hasWork: boolean;
 };
-type CalendarReviewEntry = {
-    task: Task;
-    date: Date;
-    kind: 'due' | 'start';
-};
-type ContextReviewGroup = {
-    context: string;
-    tasks: Task[];
-};
-type ExternalCalendarDaySummary = {
-    dayStart: Date;
-    events: ExternalCalendarEvent[];
-    totalCount: number;
-};
-
 type WeeklyReviewGuideModalProps = {
     onClose: () => void;
 };
@@ -140,141 +127,62 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
         () => staleItems.filter((item) => item.id.startsWith('project:')),
         [staleItems],
     );
-    const calendarReviewItems = useMemo(() => {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const upcomingEnd = new Date(startOfToday);
-        upcomingEnd.setDate(upcomingEnd.getDate() + 7);
-        const entries: CalendarReviewEntry[] = [];
-
-        tasks.forEach((task) => {
-            if (task.deletedAt) return;
-            if (!isTaskInActiveProject(task, projectMap)) return;
-            if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
-            const dueDate = safeParseDueDate(task.dueDate);
-            if (dueDate) entries.push({ task, date: dueDate, kind: 'due' });
-            const startTime = safeParseDate(task.startTime);
-            if (startTime) entries.push({ task, date: startTime, kind: 'start' });
-        });
-
-        const upcoming = entries
-            .filter((entry) => entry.date >= startOfToday && entry.date < upcomingEnd)
-            .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-        return upcoming;
-    }, [tasks, projectMap]);
-    const externalCalendarReviewItems = useMemo<ExternalCalendarDaySummary[]>(() => {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const summaries: ExternalCalendarDaySummary[] = [];
-        for (let offset = 0; offset < 7; offset += 1) {
-            const dayStart = new Date(startOfToday);
-            dayStart.setDate(dayStart.getDate() + offset);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
-            const dayEvents = externalCalendarEvents
-                .filter((event) => {
-                    const start = safeParseDate(event.start);
-                    const end = safeParseDate(event.end);
-                    if (!start || !end) return false;
-                    return start.getTime() < dayEnd.getTime() && end.getTime() > dayStart.getTime();
-                })
-                .sort((a, b) => {
-                    const aStart = safeParseDate(a.start)?.getTime() ?? Number.POSITIVE_INFINITY;
-                    const bStart = safeParseDate(b.start)?.getTime() ?? Number.POSITIVE_INFINITY;
-                    return aStart - bStart;
-                });
-            if (dayEvents.length > 0) {
-                summaries.push({
-                    dayStart,
-                    events: dayEvents,
-                    totalCount: dayEvents.length,
-                });
-            }
-        }
-        return summaries;
-    }, [externalCalendarEvents]);
-    const contextReviewGroups = useMemo<ContextReviewGroup[]>(() => {
-        const groups = new Map<string, Task[]>();
-        tasks.forEach((task) => {
-            if (task.deletedAt) return;
-            if (!isTaskInActiveProject(task, projectMap)) return;
-            if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
-            (task.contexts ?? []).forEach((contextValue) => {
-                const normalized = contextValue.trim();
-                if (!normalized) return;
-                const existing = groups.get(normalized) ?? [];
-                existing.push(task);
-                groups.set(normalized, existing);
-            });
-        });
-        return Array.from(groups.entries())
-            .map(([context, contextTasks]) => ({
-                context,
-                tasks: contextTasks.sort((a, b) => a.title.localeCompare(b.title)),
-            }))
-            .sort((a, b) => (b.tasks.length - a.tasks.length) || a.context.localeCompare(b.context));
-    }, [tasks, projectMap]);
-    const inboxTasks = useMemo(() => tasks.filter((task) => (
-        task.status === 'inbox'
-        && !task.deletedAt
-        && isTaskInActiveProject(task, projectMap)
-    )), [projectMap, tasks]);
-    const waitingTasks = useMemo(() => tasks.filter((task) => (
-        task.status === 'waiting'
-        && !task.deletedAt
-        && isTaskInActiveProject(task, projectMap)
-    )), [projectMap, tasks]);
-    const waitingGroups = useMemo(() => partitionByReviewDate(waitingTasks), [waitingTasks]);
-    const somedayTasks = useMemo(() => tasks.filter((task) => (
-        task.status === 'someday'
-        && !task.deletedAt
-        && isTaskInActiveProject(task, projectMap)
-    )), [projectMap, tasks]);
-    const somedayGroups = useMemo(() => partitionByReviewDate(somedayTasks), [somedayTasks]);
-    const activeProjects = useMemo(
-        () => projects.filter((project) => project.status === 'active' && !project.deletedAt),
-        [projects],
+    // Single source of Weekly Review's per-step candidate lists (ADR 0021):
+    // shared with mobile so these six filters can't drift apart.
+    const weeklyBuckets = useMemo(
+        () => getWeeklyReviewBuckets(tasks, projects),
+        [tasks, projects],
+    );
+    const inboxTasks = weeklyBuckets.inbox;
+    const waitingGroups = weeklyBuckets.waitingGroups;
+    const somedayGroups = weeklyBuckets.somedayGroups;
+    const orderedProjects = weeklyBuckets.orderedProjects;
+    const contextReviewGroups = weeklyBuckets.contextGroups;
+    const calendarReviewItems = weeklyBuckets.calendarItems;
+    // Only used for the "nothing waiting/someday at all" empty state; the
+    // step content itself renders due+unscheduled and a collapsible
+    // "not due yet" section from waitingGroups/somedayGroups directly.
+    const waitingTasks = useMemo(
+        () => [...waitingGroups.due, ...waitingGroups.scheduled, ...waitingGroups.unscheduled],
+        [waitingGroups],
+    );
+    const somedayTasks = useMemo(
+        () => [...somedayGroups.due, ...somedayGroups.scheduled, ...somedayGroups.unscheduled],
+        [somedayGroups],
+    );
+    const externalCalendarReviewItems = useMemo(
+        () => getExternalCalendarDaySummaries(externalCalendarEvents),
+        [externalCalendarEvents],
     );
     const reviewSummary = useMemo(() => getWeeklyReviewSummary(tasks, projects), [tasks, projects]);
-    const dueProjects = useMemo(() => activeProjects.filter((project) => isDueForReview(project.reviewAt)), [activeProjects]);
-    const futureProjects = useMemo(() => activeProjects.filter((project) => !isDueForReview(project.reviewAt)), [activeProjects]);
-    const orderedProjects = useMemo(() => [...dueProjects, ...futureProjects], [dueProjects, futureProjects]);
 
+    const stepFlags = useMemo(() => buildReviewSteps(weeklyBuckets, {
+        kind: 'weekly',
+        includeContextStep,
+        staleItemCount: staleItems.length,
+        externalCalendarDayCount: externalCalendarReviewItems.length,
+        externalCalendarHasError: Boolean(externalCalendarError),
+    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, staleItems.length, weeklyBuckets]);
+    const stepHasWork = useMemo(() => new Map(stepFlags.map((flag) => [flag.id, flag.hasWork])), [stepFlags]);
     const steps = useMemo<ReviewStepDefinition[]>(() => {
-        const calendarHasWork = calendarReviewItems.length > 0
-            || externalCalendarReviewItems.length > 0
-            || Boolean(externalCalendarError);
         const list: ReviewStepDefinition[] = [
-            { id: 'inbox', title: t('review.inboxStep'), description: t('review.inboxStepDesc'), icon: CheckSquare, hasWork: inboxTasks.length > 0 },
-            { id: 'stale', title: t('review.staleStep'), description: t('review.staleStepDesc'), icon: History, hasWork: staleItems.length > 0 },
+            { id: 'inbox', title: t('review.inboxStep'), description: t('review.inboxStepDesc'), icon: CheckSquare, hasWork: stepHasWork.get('inbox') ?? false },
+            { id: 'stale', title: t('review.staleStep'), description: t('review.staleStepDesc'), icon: History, hasWork: stepHasWork.get('stale') ?? false },
         ];
         list.push(
-            { id: 'calendar', title: t('review.calendarStep'), description: t('review.calendarStepDesc'), icon: Calendar, hasWork: calendarHasWork },
-            { id: 'waiting', title: t('review.waitingStep'), description: t('review.waitingStepDesc'), icon: ArrowRight, hasWork: waitingGroups.due.length + waitingGroups.unscheduled.length > 0 },
+            { id: 'calendar', title: t('review.calendarStep'), description: t('review.calendarStepDesc'), icon: Calendar, hasWork: stepHasWork.get('calendar') ?? false },
+            { id: 'waiting', title: t('review.waitingStep'), description: t('review.waitingStepDesc'), icon: ArrowRight, hasWork: stepHasWork.get('waiting') ?? false },
         );
         if (includeContextStep) {
-            list.push({ id: 'contexts', title: t('review.contexts'), description: t('review.contextsStepDesc'), icon: MapPin, hasWork: contextReviewGroups.length > 0 });
+            list.push({ id: 'contexts', title: t('review.contexts'), description: t('review.contextsStepDesc'), icon: MapPin, hasWork: stepHasWork.get('contexts') ?? false });
         }
         list.push(
-            { id: 'projects', title: t('review.projectsStep'), description: t('review.projectsStepDesc'), icon: Layers, hasWork: orderedProjects.length > 0 },
-            { id: 'someday', title: t('review.somedayStep'), description: t('review.somedayStepDesc'), icon: Archive, hasWork: somedayGroups.due.length + somedayGroups.unscheduled.length > 0 },
+            { id: 'projects', title: t('review.projectsStep'), description: t('review.projectsStepDesc'), icon: Layers, hasWork: stepHasWork.get('projects') ?? false },
+            { id: 'someday', title: t('review.somedayStep'), description: t('review.somedayStepDesc'), icon: Archive, hasWork: stepHasWork.get('someday') ?? false },
             { id: 'completed', title: t('review.allDone'), description: t('review.allDoneDesc'), icon: Check, hasWork: true },
         );
         return list;
-    }, [
-        calendarReviewItems.length,
-        contextReviewGroups.length,
-        externalCalendarError,
-        externalCalendarReviewItems.length,
-        inboxTasks.length,
-        includeContextStep,
-        orderedProjects.length,
-        somedayGroups,
-        staleItems.length,
-        t,
-        waitingGroups,
-    ]);
+    }, [includeContextStep, stepHasWork, t]);
     const activeSteps = useMemo(
         () => steps.filter((step) => step.hasWork || step.id === 'completed'),
         [steps],

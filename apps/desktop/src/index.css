@@ -65,6 +65,7 @@
     --status-someday: 270 70% 55%;
     --status-reference: 199 80% 30%;
     --status-done: 220 10% 38%;
+    --status-archived: 217 91% 45%;
 
     --badge-project-bg: 214 100% 96%;
     --badge-project-fg: 214 30% 30%;
@@ -129,6 +130,7 @@
     --status-someday: 270 65% 70%;
     --status-reference: 199 75% 60%;
     --status-done: 220 10% 60%;
+    --status-archived: 217 91% 65%;
 
     --badge-project-bg: 220 18% 24%;
     --badge-project-fg: 210 40% 90%;
@@ -180,6 +182,7 @@
     --status-someday: 0 0% 0%;
     --status-reference: 0 0% 0%;
     --status-done: 0 0% 0%;
+    --status-archived: 0 0% 0%;
     --badge-project-bg: 0 0% 100%;
     --badge-project-fg: 0 0% 0%;
     --badge-context-bg: 0 0% 100%;
@@ -241,6 +244,7 @@
     --status-someday: 280 35% 75%;
     --status-reference: 199 55% 70%;
     --status-done: 220 10% 70%;
+    --status-archived: 193.3 43.4% 67.5%;
     --badge-project-bg: 220 16% 31%;
     --badge-project-fg: 217.5 26.7% 94.1%;
     --badge-context-bg: 270 20% 30%;
@@ -291,6 +295,7 @@
     --status-someday: 270 40% 38%;
     --status-reference: 199 60% 35%;
     --status-done: 0 11.3% 38%;
+    --status-archived: 31.9 44.4% 37%;
     --badge-project-bg: 41.7 69.7% 90%;
     --badge-project-fg: 0 11.3% 20.8%;
     --badge-context-bg: 37.6 54.8% 85%;

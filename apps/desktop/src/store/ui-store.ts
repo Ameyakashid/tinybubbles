@@ -1,9 +1,14 @@
 import { createWithEqualityFn } from 'zustand/traditional';
 import type { FilterCriteria } from '@mindwtr/core';
+import { FOCUS_AXES, REFERENCE_AXES, sanitizeAxis, type NextGroupBy, type ReferenceGroupBy } from '../components/views/list/next-grouping';
 
 const toastTimeouts = new Map<string, number>();
-type ListNextGroupBy = 'none' | 'context' | 'area' | 'project' | 'energy' | 'priority' | 'person' | 'tag';
-type ListReferenceGroupBy = 'none' | 'context' | 'area' | 'project' | 'tag';
+// These are the localStorage sanitizers for what the Focus/Next and Reference
+// dropdowns write. They read the dropdowns' own rosters, so a value the menu
+// offers can never be one this rejects — which would silently reset the user's
+// grouping to the default on the next launch.
+type ListNextGroupBy = NextGroupBy;
+type ListReferenceGroupBy = ReferenceGroupBy;
 type ListOptions = {
     showDetails: boolean;
     nextGroupBy: ListNextGroupBy;
@@ -19,25 +24,6 @@ const DEFAULT_LIST_OPTIONS: ListOptions = {
     referenceGroupBy: 'area',
     focusTop3Only: false,
 };
-
-function isListNextGroupBy(value: unknown): value is ListNextGroupBy {
-    return value === 'none'
-        || value === 'context'
-        || value === 'area'
-        || value === 'project'
-        || value === 'energy'
-        || value === 'priority'
-        || value === 'person'
-        || value === 'tag';
-}
-
-function isListReferenceGroupBy(value: unknown): value is ListReferenceGroupBy {
-    return value === 'none'
-        || value === 'context'
-        || value === 'area'
-        || value === 'project'
-        || value === 'tag';
-}
 
 function getListOptionsStorage(): Storage | null {
     if (typeof window === 'undefined') return null;
@@ -57,8 +43,8 @@ function readStoredListOptions(): ListOptions {
         const parsed = JSON.parse(raw) as Partial<ListOptions> | null;
         return {
             showDetails: typeof parsed?.showDetails === 'boolean' ? parsed.showDetails : DEFAULT_LIST_OPTIONS.showDetails,
-            nextGroupBy: isListNextGroupBy(parsed?.nextGroupBy) ? parsed.nextGroupBy : DEFAULT_LIST_OPTIONS.nextGroupBy,
-            referenceGroupBy: isListReferenceGroupBy(parsed?.referenceGroupBy) ? parsed.referenceGroupBy : DEFAULT_LIST_OPTIONS.referenceGroupBy,
+            nextGroupBy: sanitizeAxis(FOCUS_AXES, parsed?.nextGroupBy, DEFAULT_LIST_OPTIONS.nextGroupBy),
+            referenceGroupBy: sanitizeAxis(REFERENCE_AXES, parsed?.referenceGroupBy, DEFAULT_LIST_OPTIONS.referenceGroupBy),
             focusTop3Only: typeof parsed?.focusTop3Only === 'boolean' ? parsed.focusTop3Only : DEFAULT_LIST_OPTIONS.focusTop3Only,
         };
     } catch {

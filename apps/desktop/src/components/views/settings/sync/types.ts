@@ -130,20 +130,16 @@ export type CloudProvider = 'selfhosted' | 'dropbox';
 export type DropboxTestState = 'idle' | 'success' | 'error';
 export type SyncPreferences = SettingsSyncPreferences;
 
-export type SettingsSyncPageProps = {
-    t: SettingsSyncLabels;
+/**
+ * Prop groups, one per section component. `useSyncSettings` and
+ * `useSettingsDataPage` return these already named as props, so `SettingsView`
+ * spreads them instead of re-listing every member (see SettingsView renderPage).
+ */
+export type SyncConfigurationProps = {
     isTauri: boolean;
-    loggingEnabled: boolean;
-    analyticsHeartbeatAvailable: boolean;
-    analyticsHeartbeatEnabled: boolean;
-    logPath: string;
-    onToggleLogging: () => void;
-    onAnalyticsHeartbeatChange: (enabled: boolean) => Promise<void> | void;
-    onClearLog: () => void;
+    isMacOS: boolean;
     syncBackend: SyncBackend;
     onSetSyncBackend: (backend: SyncBackend) => void;
-    syncPreferences: AppSettings['syncPreferences'] | undefined;
-    onUpdateSyncPreferences: (updates: Partial<SyncPreferences>) => Promise<void> | void;
     syncPath: string;
     onSyncPathChange: (value: string) => void;
     onSaveSyncPath: () => Promise<void> | void;
@@ -153,6 +149,7 @@ export type SettingsSyncPageProps = {
     webdavPassword: string;
     webdavHasPassword: boolean;
     webdavAllowInsecureHttp: boolean;
+    webdavUrlError: boolean;
     isSavingWebDav: boolean;
     isTestingWebDav: boolean;
     webdavTestState: 'idle' | 'success' | 'error';
@@ -163,11 +160,11 @@ export type SettingsSyncPageProps = {
     onSaveWebDav: () => Promise<void> | void;
     onTestWebDavConnection: () => Promise<void> | void;
     cloudUrl: string;
+    cloudUrlError: boolean;
     cloudToken: string;
     cloudRememberToken: boolean;
     cloudAllowInsecureHttp: boolean;
     cloudProvider: CloudProvider;
-    dropboxAppKey: string;
     dropboxConfigured: boolean;
     dropboxConnected: boolean;
     dropboxBusy: boolean;
@@ -183,6 +180,12 @@ export type SettingsSyncPageProps = {
     onConnectDropbox: () => Promise<void> | void;
     onDisconnectDropbox: () => Promise<void> | void;
     onTestDropboxConnection: () => Promise<void> | void;
+};
+
+export type SyncStatusProps = {
+    isSyncTargetValid: boolean;
+    syncPreferences: AppSettings['syncPreferences'] | undefined;
+    onUpdateSyncPreferences: (updates: Partial<SyncPreferences>) => Promise<void> | void;
     onSyncNow: () => Promise<void> | void;
     isSyncing: boolean;
     syncQueued: boolean;
@@ -195,16 +198,24 @@ export type SettingsSyncPageProps = {
     lastSyncHistory: AppSettings['lastSyncHistory'] | null;
     conflictCount: number;
     lastSyncError?: string;
-    attachmentsLastCleanupDisplay: string;
-    pendingRemoteDeleteCount: number;
-    onClearPendingRemoteDeletes: () => Promise<void> | void;
-    onRunAttachmentsCleanup: () => Promise<void> | void;
-    isCleaningAttachments: boolean;
     snapshots: string[];
     isLoadingSnapshots: boolean;
     isRestoringSnapshot: boolean;
-    transferAction: null | 'export' | 'restore' | 'import';
     onRestoreSnapshot: (snapshotFileName: string) => Promise<boolean | void> | boolean | void;
+};
+
+export type SettingsDiagnosticsProps = {
+    loggingEnabled: boolean;
+    analyticsHeartbeatAvailable: boolean;
+    analyticsHeartbeatEnabled: boolean;
+    logPath: string;
+    onToggleLogging: () => void;
+    onAnalyticsHeartbeatChange: (enabled: boolean) => Promise<void> | void;
+    onClearLog: () => void;
+};
+
+export type SettingsDataTransferProps = {
+    transferAction: null | 'export' | 'restore' | 'import';
     onExportBackup: () => Promise<void> | void;
     onRestoreBackup: () => Promise<void> | void;
     onImportTodoist: () => Promise<void> | void;
@@ -212,3 +223,21 @@ export type SettingsSyncPageProps = {
     onImportDgt: () => Promise<void> | void;
     onImportOmniFocus: () => Promise<void> | void;
 };
+
+export type SettingsAttachmentsProps = {
+    attachmentsLastCleanupDisplay: string;
+    pendingRemoteDeleteCount: number;
+    onClearPendingRemoteDeletes: () => Promise<void> | void;
+    onRunAttachmentsCleanup: () => Promise<void> | void;
+    isCleaningAttachments: boolean;
+};
+
+export type SettingsSyncPageProps = { t: SettingsSyncLabels }
+    & SyncConfigurationProps
+    & SyncStatusProps;
+
+export type SettingsDataPageProps = { t: SettingsSyncLabels; isTauri: boolean }
+    & SettingsDiagnosticsProps
+    & SettingsDataTransferProps
+    & SettingsAttachmentsProps
+    & { onAddGettingStartedContent: () => Promise<void> | void };

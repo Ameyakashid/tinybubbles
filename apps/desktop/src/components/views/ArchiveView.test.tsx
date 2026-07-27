@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Project, Task } from '@mindwtr/core';
 import { safeFormatDate, useTaskStore } from '@mindwtr/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
+import { KeybindingProvider } from '../../contexts/keybinding-context';
 import { ArchiveView } from './ArchiveView';
 
 const initialTaskState = useTaskStore.getState();
@@ -209,6 +210,74 @@ describe('ArchiveView', () => {
             const deleted = useTaskStore.getState()._allProjects.find((p) => p.id === archivedProject.id);
             expect(deleted?.deletedAt).toBeTruthy();
             expect(deleted?.purgedAt).toBeUndefined();
+        });
+    });
+
+    // Archive registered no task-list scope at all, so every key that works in
+    // the seven other lists silently did nothing here.
+    describe('keyboard scope', () => {
+        const secondTask: Task = { ...archivedTask, id: 'task-2', title: 'Second archived task' };
+
+        const renderWithKeys = () => {
+            useTaskStore.setState({
+                _allTasks: [archivedTask, secondTask],
+                _tasksById: new Map([
+                    [archivedTask.id, archivedTask],
+                    [secondTask.id, secondTask],
+                ]),
+                settings: { keybindingStyle: 'vim' },
+            });
+            return render(
+                <LanguageProvider>
+                    <KeybindingProvider currentView="archived" onNavigate={vi.fn()}>
+                        <ArchiveView />
+                    </KeybindingProvider>
+                </LanguageProvider>
+            );
+        };
+
+        const focusedTaskId = () => (
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement.closest<HTMLElement>('[data-task-id]')?.dataset.taskId
+                : undefined
+        );
+
+        it('moves between archived rows with j/k', () => {
+            renderWithKeys();
+
+            fireEvent.keyDown(window, { key: 'j' });
+            expect(focusedTaskId()).toBe(secondTask.id);
+
+            fireEvent.keyDown(window, { key: 'k' });
+            expect(focusedTaskId()).toBe(archivedTask.id);
+        });
+
+        it('opens the completion-time editor with e', () => {
+            renderWithKeys();
+
+            fireEvent.keyDown(window, { key: 'e' });
+
+            expect(screen.getByRole('dialog')).toHaveTextContent('Completion time');
+        });
+
+        it('moves the selected task to another status with an s-chord', async () => {
+            renderWithKeys();
+
+            fireEvent.keyDown(window, { key: 's' });
+            fireEvent.keyDown(window, { key: 'n' });
+
+            await waitFor(() => {
+                expect(useTaskStore.getState()._tasksById.get(archivedTask.id)?.status).toBe('next');
+            });
+        });
+
+        it('does not act on archived tasks while the projects segment is showing', () => {
+            renderWithKeys();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+            fireEvent.keyDown(window, { key: 'j' });
+
+            expect(focusedTaskId()).toBeUndefined();
         });
     });
 

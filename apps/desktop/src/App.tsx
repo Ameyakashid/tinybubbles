@@ -37,7 +37,7 @@ import {
 } from '@mindwtr/core';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { AppAnnouncementModal } from './components/AppAnnouncementModal';
+import { StartupPromptModal, type StartupPromptPresentation } from './components/StartupPromptModal';
 import { DesktopOnboardingFlow } from './components/DesktopOnboardingFlow';
 import { ModalPortal } from './components/ModalPortal';
 import { useLanguage } from './contexts/language-context';
@@ -116,7 +116,7 @@ import {
     PROMPT_TEST_CONTROLS_ENABLED,
     subscribePromptTest,
 } from './lib/prompt-test-controls';
-import { useStartupPromptQueue, type StartupPromptDescriptor } from './hooks/use-startup-prompt-queue';
+import { useStartupPromptQueue, type StartupPromptDescriptor } from '@mindwtr/core';
 import { useUiStore } from './store/ui-store';
 import { useObsidianStore } from './store/obsidian-store';
 import type { SettingsOnboardingHintPage, SettingsPage } from './components/views/SettingsView';
@@ -308,7 +308,7 @@ function App() {
     // Startup prompts share one gate and open one at a time. The descriptors
     // below carry each prompt's own eligibility/present logic; the queue owns
     // precedence (announcement > update > donation), the startup delays, and
-    // session dismissal. See use-startup-prompt-queue.ts.
+    // session dismissal. See packages/core/src/startup-prompts.ts.
     const startupPromptsEnabled = !(
         import.meta.env.MODE === 'test' || import.meta.env.VITEST || process.env.NODE_ENV === 'test'
     );
@@ -1360,8 +1360,11 @@ function App() {
         }
     }, []);
 
-    const handleAppAnnouncementAction = useCallback((action: AppAnnouncementAction) => {
-        dismissAppAnnouncement();
+    // Shared by all three startup-prompt action handlers below: dismissal and
+    // any prompt-specific side effect (e.g. donation's support-click record)
+    // happen in the handler itself; only the "feedback -> Settings, otherwise
+    // open the URL" branch was tripled, so it lives here once.
+    const performAnnouncementNavigation = useCallback((action: AppAnnouncementAction) => {
         if (action.type === 'feedback') {
             setSettingsInitialPage('about');
             setSettingsOnboardingHintPage(undefined);
@@ -1369,7 +1372,12 @@ function App() {
             return;
         }
         void openAnnouncementUrl(action.url);
-    }, [dismissAppAnnouncement, handleViewChange, openAnnouncementUrl]);
+    }, [handleViewChange, openAnnouncementUrl]);
+
+    const handleAppAnnouncementAction = useCallback((action: AppAnnouncementAction) => {
+        dismissAppAnnouncement();
+        performAnnouncementNavigation(action);
+    }, [dismissAppAnnouncement, performAnnouncementNavigation]);
 
     const dismissDonationPrompt = useCallback(() => {
         startupPromptQueue.dismiss('donation');
@@ -1377,19 +1385,15 @@ function App() {
 
     const handleDonationPromptAction = useCallback((action: AppAnnouncementAction) => {
         dismissDonationPrompt();
-        if (action.type === 'feedback') {
-            setSettingsInitialPage('about');
-            setSettingsOnboardingHintPage(undefined);
-            handleViewChange('settings');
-            return;
+        if (action.type !== 'feedback') {
+            try {
+                updateLocalUserPromptState((state) => recordDonationPromptSupportClicked(state, Date.now()));
+            } catch (error) {
+                void logError(error, { scope: 'prompt-state', step: 'recordDonationSupportClicked' });
+            }
         }
-        try {
-            updateLocalUserPromptState((state) => recordDonationPromptSupportClicked(state, Date.now()));
-        } catch (error) {
-            void logError(error, { scope: 'prompt-state', step: 'recordDonationSupportClicked' });
-        }
-        void openAnnouncementUrl(action.url);
-    }, [dismissDonationPrompt, handleViewChange, openAnnouncementUrl]);
+        performAnnouncementNavigation(action);
+    }, [dismissDonationPrompt, performAnnouncementNavigation]);
 
     const recordDonationPromptVisible = useCallback(() => {
         try {
@@ -1413,14 +1417,45 @@ function App() {
 
     const handleUpdateReminderAction = useCallback((action: AppAnnouncementAction) => {
         dismissUpdateReminder();
-        if (action.type === 'feedback') {
-            setSettingsInitialPage('about');
-            setSettingsOnboardingHintPage(undefined);
-            handleViewChange('settings');
-            return;
-        }
-        void openAnnouncementUrl(action.url);
-    }, [dismissUpdateReminder, handleViewChange, openAnnouncementUrl]);
+        performAnnouncementNavigation(action);
+    }, [dismissUpdateReminder, performAnnouncementNavigation]);
+
+    // Single shared gate: previously each of the three <AppAnnouncementModal>
+    // instances repeated this same 4-clause check inline (#19 follow-up).
+    const startupPromptsBlocked = desktopOnboardingOpen || closePromptOpen || Boolean(externalSyncChange);
+
+    const startupPrompts = useMemo<StartupPromptPresentation[]>(() => [
+        {
+            id: 'announcement',
+            announcement: activeAnnouncement,
+            onAction: handleAppAnnouncementAction,
+            onDismiss: dismissAppAnnouncement,
+        },
+        {
+            id: 'donation',
+            announcement: donationPromptAnnouncement,
+            onAction: handleDonationPromptAction,
+            onDismiss: dismissDonationPrompt,
+            onShown: recordDonationPromptVisible,
+        },
+        {
+            id: 'update-reminder',
+            announcement: updateReminderInfo ? buildUpdateReminderAnnouncement(updateReminderInfo) : null,
+            onAction: handleUpdateReminderAction,
+            onDismiss: dismissUpdateReminder,
+        },
+    ], [
+        activeAnnouncement,
+        dismissAppAnnouncement,
+        dismissDonationPrompt,
+        dismissUpdateReminder,
+        donationPromptAnnouncement,
+        handleAppAnnouncementAction,
+        handleDonationPromptAction,
+        handleUpdateReminderAction,
+        recordDonationPromptVisible,
+        updateReminderInfo,
+    ]);
 
     useEffect(() => {
         if (!PROMPT_TEST_CONTROLS_ENABLED) return;
@@ -1611,39 +1646,10 @@ function App() {
                         onStartFresh={handleStartFreshOnboarding}
                         onSkip={dismissDesktopOnboarding}
                     />
-                    <AppAnnouncementModal
-                        announcement={activeAnnouncement}
-                        isOpen={
-                            startupPromptOpenId === 'announcement'
-                            && !desktopOnboardingOpen
-                            && !closePromptOpen
-                            && !externalSyncChange
-                        }
-                        onAction={handleAppAnnouncementAction}
-                        onDismiss={dismissAppAnnouncement}
-                    />
-                    <AppAnnouncementModal
-                        announcement={donationPromptAnnouncement}
-                        isOpen={
-                            startupPromptOpenId === 'donation'
-                            && !desktopOnboardingOpen
-                            && !closePromptOpen
-                            && !externalSyncChange
-                        }
-                        onAction={handleDonationPromptAction}
-                        onDismiss={dismissDonationPrompt}
-                        onShown={recordDonationPromptVisible}
-                    />
-                    <AppAnnouncementModal
-                        announcement={updateReminderInfo ? buildUpdateReminderAnnouncement(updateReminderInfo) : null}
-                        isOpen={
-                            startupPromptOpenId === 'update-reminder'
-                            && !desktopOnboardingOpen
-                            && !closePromptOpen
-                            && !externalSyncChange
-                        }
-                        onAction={handleUpdateReminderAction}
-                        onDismiss={dismissUpdateReminder}
+                    <StartupPromptModal
+                        openId={startupPromptOpenId}
+                        blocked={startupPromptsBlocked}
+                        prompts={startupPrompts}
                     />
                     {externalSyncChange && (
                         <ModalPortal>

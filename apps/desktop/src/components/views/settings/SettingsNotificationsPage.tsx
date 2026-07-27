@@ -25,7 +25,7 @@ type Labels = {
 
 type WeekdayOption = { value: number; label: string };
 
-type SettingsNotificationsPageProps = {
+export type SettingsNotificationsPageProps = {
     t: Labels;
     notificationsEnabled: boolean;
     startDateNotificationsEnabled: boolean;

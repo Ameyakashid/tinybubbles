@@ -37,11 +37,11 @@ import {
     DESKTOP_DAY_START_HOUR,
     DESKTOP_GRID_SNAP_MINUTES,
     DESKTOP_HOUR_HEIGHT,
-    type CalendarViewMode,
-    type CalendarCellItem,
     dayKey,
-    useDesktopCalendarController,
-} from './calendar/useDesktopCalendarController';
+    type CalendarCellItem,
+    type CalendarViewMode,
+} from './calendar/calendar-primitives';
+import { useDesktopCalendarController } from './calendar/useDesktopCalendarController';
 
 const PROJECTED_RECURRENCE_LABEL_DATE_FORMAT = 'MMM d';
 const CALENDAR_PLANNING_PANEL_COLLAPSED_KEY = 'mindwtr.calendar.planningPanelCollapsed';
@@ -78,7 +78,7 @@ export function CalendarView() {
         days,
         externalCalendars,
         externalError,
-        externalCalendarColor,
+        getExternalCalendarColor,
         getAllDayItemsForDay,
         getCalendarItemsForDate,
         handleMonthChange,
@@ -99,11 +99,11 @@ export function CalendarView() {
         scheduleDays,
         selectCalendarDate,
         selectedDate,
-        setIsMonthPickerOpen,
-        setViewFilterQuery,
         timelineDays,
         t,
         toggleExternalCalendar,
+        toggleMonthPicker,
+        updateViewFilterQuery,
         updateTask,
         updateTaskDateFromDrop,
         updateTaskStartTimeFromDrop,
@@ -298,7 +298,7 @@ export function CalendarView() {
                         <div className="relative min-w-0 flex-1 sm:flex-none">
                             <button
                                 type="button"
-                                onClick={() => setIsMonthPickerOpen((open) => !open)}
+                                onClick={toggleMonthPicker}
                                 className="h-8 w-full min-w-0 rounded px-3 text-sm font-semibold hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 sm:min-w-[11rem]"
                                 aria-haspopup="dialog"
                                 aria-expanded={isMonthPickerOpen}
@@ -360,7 +360,7 @@ export function CalendarView() {
                             placeholder={t('common.search')}
                             aria-label={t('common.search')}
                             value={viewFilterQuery}
-                            onChange={(event) => setViewFilterQuery(event.target.value)}
+                            onChange={(event) => updateViewFilterQuery(event.target.value)}
                             className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                     </div>
@@ -401,7 +401,7 @@ export function CalendarView() {
                             >
                                 <span
                                     className="h-2.5 w-2.5 rounded-full"
-                                    style={{ backgroundColor: hidden ? 'hsl(var(--muted-foreground))' : externalCalendarColor(calendar.id) }}
+                                    style={{ backgroundColor: hidden ? 'hsl(var(--muted-foreground))' : getExternalCalendarColor(calendar.id) }}
                                     aria-hidden="true"
                                 />
                                 {calendar.name}
@@ -494,7 +494,7 @@ export function CalendarView() {
                                                 <div
                                                     key={item.id}
                                                     className="truncate rounded border-l-[3px] bg-muted/70 px-1.5 py-1 text-xs text-muted-foreground"
-                                                    style={{ borderLeftColor: externalCalendarColor(item.event.sourceId) }}
+                                                    style={{ borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                     title={item.title}
                                                 >
                                                     {content}
@@ -618,7 +618,7 @@ export function CalendarView() {
                                                     <div
                                                         key={item.id}
                                                         className="truncate rounded border-l-[3px] bg-muted/60 px-2 py-1 text-xs text-muted-foreground"
-                                                        style={{ borderLeftColor: externalCalendarColor(item.event.sourceId) }}
+                                                        style={{ borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                         title={item.title}
                                                     >
                                                         {item.title}
@@ -731,7 +731,7 @@ export function CalendarView() {
                                                             key={item.id}
                                                             data-calendar-block
                                                             className="absolute z-10 overflow-hidden rounded border-l-[4px] bg-muted/80 px-2 py-1 text-xs text-muted-foreground shadow-sm"
-                                                            style={{ ...commonStyle, borderLeftColor: externalCalendarColor(item.event.sourceId) }}
+                                                            style={{ ...commonStyle, borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                             title={`${item.title} ${timeLabel}`}
                                                             onClick={(event) => event.stopPropagation()}
                                                         >
@@ -826,7 +826,7 @@ export function CalendarView() {
                                                         <div
                                                             key={item.id}
                                                             className="flex items-center gap-3 rounded border-l-[3px] bg-muted/50 px-3 py-2 text-sm"
-                                                            style={{ borderLeftColor: externalCalendarColor(item.event.sourceId) }}
+                                                            style={{ borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                         >
                                                             <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">{timeLabel}</span>
                                                             <span className="min-w-0 flex-1 truncate">{item.title}</span>

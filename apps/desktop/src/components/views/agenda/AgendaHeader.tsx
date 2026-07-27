@@ -2,9 +2,7 @@ import { Filter, List } from 'lucide-react';
 
 import { GroupBySelect } from '../list/GroupBySelect';
 import { ToolbarButton } from '../list/list-toolbar';
-import type { NextGroupBy } from '../list/next-grouping';
-
-const AGENDA_GROUP_BY_AXES: NextGroupBy[] = ['none', 'context', 'area', 'project', 'tag', 'energy', 'priority', 'person'];
+import { FOCUS_AXES, type NextGroupBy } from '../list/next-grouping';
 
 type AgendaHeaderProps = {
     filterCount: number;
@@ -82,7 +80,7 @@ export function AgendaHeader({
                 </ToolbarButton>
                 <GroupBySelect
                     value={nextGroupBy}
-                    axes={AGENDA_GROUP_BY_AXES}
+                    axes={FOCUS_AXES}
                     onChange={onChangeGroupBy}
                     t={t}
                 />

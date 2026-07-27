@@ -23,11 +23,8 @@ import {
   X,
 } from "lucide-react";
 import {
-  resolveDateLocaleTag,
   DEFAULT_ANTHROPIC_THINKING_BUDGET,
   getEnglishI18nValue,
-  safeFormatDate,
-  summarizeMergeStats,
   translateText,
   translateWithFallback,
   LOCALES,
@@ -44,10 +41,7 @@ import {
   isLocalCalendarFileUrl,
   localCalendarFileUrlToPath,
 } from "../../lib/external-calendar-source";
-import { reportError } from "../../lib/report-error";
-import { SyncService } from "../../lib/sync-service";
-import { isSupportedProxyUrl, normalizeProxyUrl, syncNativeProxyUrl } from "../../lib/tauri-http";
-import { clearLog, collectFeedbackDiagnostics } from "../../lib/app-log";
+import { collectFeedbackDiagnostics } from "../../lib/app-log";
 import {
   markSettingsOpenTrace,
   wrapSettingsOpenImport,
@@ -59,35 +53,20 @@ import {
   SETTINGS_PAGE_LABEL_KEYS,
   type SettingsLabels,
 } from "./settings/labels";
-import {
-  isDesktopAnalyticsHeartbeatConfigured,
-  resetDesktopAnalyticsOptOutMarker,
-  sendDesktopAnalyticsOptOut,
-} from "../../lib/analytics-heartbeat";
 import { SettingsUpdateModal } from "./settings/SettingsUpdateModal";
 import { SettingsSidebar } from "./settings/SettingsSidebar";
 import { useAiSettings } from "./settings/useAiSettings";
 import { useCalendarSettings } from "./settings/useCalendarSettings";
 import { useObsidianSettings } from "./settings/useObsidianSettings";
 import { useSettingsAboutPage } from "./settings/useSettingsAboutPage";
+import { useSettingsAdvancedPage } from "./settings/useSettingsAdvancedPage";
+import { useSettingsDataPage } from "./settings/useSettingsDataPage";
 import { useSettingsMainPage } from "./settings/useSettingsMainPage";
+import { useSettingsNotificationsPage } from "./settings/useSettingsNotificationsPage";
 import { useSyncSettings } from "./settings/useSyncSettings";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { usePerformanceMonitor } from "../../hooks/usePerformanceMonitor";
 import { checkBudget } from "../../config/performanceBudgets";
-import { useUiStore } from "../../store/ui-store";
-import {
-  DEFAULT_LOCAL_API_PORT,
-  getLocalApiServerStatus,
-  normalizeLocalApiPortInput,
-  setLocalApiServerConfig,
-  type LocalApiServerStatus,
-} from "../../lib/local-api-server";
-import {
-  getDesktopRenderingConfig,
-  setDesktopRenderingConfig,
-  type DesktopRenderingConfig,
-} from "../../lib/desktop-rendering";
 import {
   dismissDesktopOnboardingHandoffHint,
   isDesktopOnboardingHandoffHintDismissed,
@@ -245,11 +224,6 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     useTaskStore((state) => state.settings) ?? ({} as AppData["settings"]);
   const areas = useTaskStore((state) => state.areas);
   const updateSettings = useTaskStore((state) => state.updateSettings);
-  const seedGettingStarted = useTaskStore((state) => state.seedGettingStarted);
-  const visibleDataCount = useTaskStore((state) => (
-    state.tasks.length + state.projects.length + state.sections.length + state.areas.length
-  ));
-  const showToast = useUiStore((state) => state.showToast);
   const isTauri = isTauriRuntime();
   const isFlatpak = isFlatpakRuntime();
   const isLinux = useMemo(() => {
@@ -268,48 +242,9 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
       return false;
     }
   }, [isTauri]);
-  const [localApiStatus, setLocalApiStatus] = useState<LocalApiServerStatus>({
-    enabled: false,
-    running: false,
-    port: DEFAULT_LOCAL_API_PORT,
-    url: null,
-    error: null,
-  });
-  const [localApiPortInput, setLocalApiPortInput] = useState(
-    String(DEFAULT_LOCAL_API_PORT),
-  );
-  const [localApiBusy, setLocalApiBusy] = useState(false);
-  const [localApiPortError, setLocalApiPortError] = useState("");
-  const [networkProxyUrl, setNetworkProxyUrl] = useState(() =>
-    normalizeProxyUrl(settings?.network?.proxyUrl),
-  );
-  const [desktopRenderingConfig, setDesktopRenderingConfigState] = useState<DesktopRenderingConfig>({
-    disableHardwareAcceleration: false,
-  });
-  const [desktopRenderingBusy, setDesktopRenderingBusy] = useState(false);
-  const notificationsEnabled = settings?.notificationsEnabled !== false;
-  const startDateNotificationsEnabled =
-    settings?.startDateNotificationsEnabled !== false;
-  const dueDateNotificationsEnabled =
-    settings?.dueDateNotificationsEnabled !== false;
-  const reviewAtNotificationsEnabled =
-    settings?.reviewAtNotificationsEnabled !== false;
-  const dailyDigestMorningEnabled =
-    settings?.dailyDigestMorningEnabled === true;
-  const dailyDigestEveningEnabled =
-    settings?.dailyDigestEveningEnabled === true;
-  const dailyDigestMorningTime = settings?.dailyDigestMorningTime || "09:00";
-  const dailyDigestEveningTime = settings?.dailyDigestEveningTime || "20:00";
   const autoArchiveDays = Number.isFinite(settings?.gtd?.autoArchiveDays)
     ? Math.max(0, Math.floor(settings?.gtd?.autoArchiveDays as number))
     : 7;
-  const loggingEnabled = settings?.diagnostics?.loggingEnabled === true;
-  const analyticsHeartbeatAvailable = isDesktopAnalyticsHeartbeatConfigured();
-  const analyticsHeartbeatEnabled =
-    analyticsHeartbeatAvailable && settings?.analytics?.heartbeatEnabled !== false;
-  const attachmentsLastCleanupAt = settings?.attachments?.lastCleanupAt;
-  const pendingRemoteDeleteCount =
-    settings?.attachments?.pendingRemoteDeletes?.length ?? 0;
   const { requestConfirmation, confirmModal } = useConfirmDialog();
 
   const showSaved = useCallback(() => {
@@ -321,87 +256,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     setPage(initialPage);
   }, [initialPage]);
 
-  useEffect(() => {
-    setNetworkProxyUrl(normalizeProxyUrl(settings?.network?.proxyUrl));
-  }, [settings?.network?.proxyUrl]);
-
-  const applyLocalApiStatus = useCallback((status: LocalApiServerStatus) => {
-    setLocalApiStatus(status);
-    setLocalApiPortInput(String(status.port || DEFAULT_LOCAL_API_PORT));
-    setLocalApiPortError("");
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri) return;
-    let cancelled = false;
-    getDesktopRenderingConfig()
-      .then((config) => {
-        if (!cancelled) setDesktopRenderingConfigState(config);
-      })
-      .catch((error) => {
-        if (!cancelled) reportError("Failed to read desktop rendering setting", error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isTauri]);
-
-  useEffect(() => {
-    if (!isTauri) return;
-    let cancelled = false;
-    getLocalApiServerStatus()
-      .then((status) => {
-        if (!cancelled) applyLocalApiStatus(status);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLocalApiPortError(error instanceof Error ? error.message : String(error));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [applyLocalApiStatus, isTauri]);
-
-  const {
-    aiEnabled,
-    aiProvider,
-    aiModel,
-    aiBaseUrl,
-    aiOpenAIExtraBodyParams,
-    aiModelOptions,
-    aiCopilotModel,
-    aiCopilotOptions,
-    aiReasoningEffort,
-    aiThinkingBudget,
-    anthropicThinkingEnabled,
-    aiApiKey,
-    speechEnabled,
-    speechProvider,
-    speechModel,
-    speechModelOptions,
-    speechBaseUrl,
-    speechLanguage,
-    speechMode,
-    speechFieldStrategy,
-    speechApiKey,
-    speechOfflineReady,
-    speechOfflineModelPath,
-    speechOfflineEstimatedSize,
-    speechOfflineSize,
-    speechDownloadState,
-    speechDownloadError,
-    speechDownloadProgress,
-    onUpdateAISettings,
-    onUpdateSpeechSettings,
-    onProviderChange,
-    onSpeechProviderChange,
-    onToggleAnthropicThinking,
-    onAiApiKeyChange,
-    onSpeechApiKeyChange,
-    onDownloadWhisperModel,
-    onDeleteWhisperModel,
-  } = useAiSettings({
+  const aiPageProps = useAiSettings({
     isTauri,
     settings,
     updateSettings,
@@ -418,9 +273,6 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     return translateWithFallback(translate, "common.cancel", "Cancel");
   }, [translate]);
 
-  // Heavy settings hooks are only needed when their page is active.
-  const [isCleaningAttachments, setIsCleaningAttachments] = useState(false);
-
   const t = useMemo(() => {
     const result = {} as SettingsLabels;
     SETTINGS_LABEL_KEYS.forEach((key) => {
@@ -431,120 +283,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     return result;
   }, [language, translate]);
 
-  const handleDesktopRenderingToggle = useCallback(async (disableHardwareAcceleration: boolean) => {
-    if (!isTauri || desktopRenderingBusy) return;
-    setDesktopRenderingBusy(true);
-    try {
-      const config = await setDesktopRenderingConfig({ disableHardwareAcceleration });
-      setDesktopRenderingConfigState(config);
-      showSaved();
-    } catch (error) {
-      reportError("Failed to update desktop rendering setting", error);
-      showToast(error instanceof Error ? error.message : String(error), "error");
-    } finally {
-      setDesktopRenderingBusy(false);
-    }
-  }, [desktopRenderingBusy, isTauri, showSaved, showToast]);
-
-  const handleSaveNetworkProxy = useCallback(async () => {
-    const trimmedProxyUrl = normalizeProxyUrl(networkProxyUrl);
-    if (!isSupportedProxyUrl(trimmedProxyUrl)) {
-      showToast(t.networkProxyInvalid, "error");
-      return;
-    }
-    try {
-      // Native sync requests read the proxy from config.toml; keep it in
-      // step with the setting or they keep going out direct (#864).
-      await syncNativeProxyUrl(trimmedProxyUrl);
-    } catch (error) {
-      reportError("Failed to apply proxy to native sync", error);
-      showToast(error instanceof Error ? error.message : String(error), "error");
-      return;
-    }
-    await updateSettings({
-      network: {
-        // Empty string is an explicit clear; undefined would read as
-        // "never configured" and skip the native mirror on startup.
-        proxyUrl: trimmedProxyUrl,
-      },
-    });
-    setNetworkProxyUrl(trimmedProxyUrl);
-    showSaved();
-  }, [networkProxyUrl, showSaved, showToast, t.networkProxyInvalid, updateSettings]);
-
-  const handleLocalApiToggle = useCallback(
-    async (enabled: boolean) => {
-      if (!isTauri || localApiBusy) return;
-      const port = normalizeLocalApiPortInput(localApiPortInput);
-      if (!port) {
-        setLocalApiPortError(t.localApiPortInvalid);
-        return;
-      }
-      setLocalApiBusy(true);
-      try {
-        const status = await setLocalApiServerConfig({ enabled, port });
-        applyLocalApiStatus(status);
-        if (enabled && !status.running && status.error) {
-          setLocalApiPortError(status.error);
-          return;
-        }
-        showSaved();
-      } catch (error) {
-        setLocalApiPortError(error instanceof Error ? error.message : String(error));
-        reportError("Failed to update local API server", error);
-      } finally {
-        setLocalApiBusy(false);
-      }
-    },
-    [
-      applyLocalApiStatus,
-      isTauri,
-      localApiBusy,
-      localApiPortInput,
-      showSaved,
-      t.localApiPortInvalid,
-    ],
-  );
-
-  const handleLocalApiPortCommit = useCallback(async () => {
-    if (!isTauri || localApiBusy) return;
-    const port = normalizeLocalApiPortInput(localApiPortInput);
-    if (!port) {
-      setLocalApiPortError(t.localApiPortInvalid);
-      return;
-    }
-    if (port === localApiStatus.port) {
-      setLocalApiPortError("");
-      return;
-    }
-    setLocalApiBusy(true);
-    try {
-      const status = await setLocalApiServerConfig({
-        enabled: localApiStatus.enabled,
-        port,
-      });
-      applyLocalApiStatus(status);
-      if (localApiStatus.enabled && !status.running && status.error) {
-        setLocalApiPortError(status.error);
-        return;
-      }
-      showSaved();
-    } catch (error) {
-      setLocalApiPortError(error instanceof Error ? error.message : String(error));
-      reportError("Failed to update local API server port", error);
-    } finally {
-      setLocalApiBusy(false);
-    }
-  }, [
-    applyLocalApiStatus,
-    isTauri,
-    localApiBusy,
-    localApiPortInput,
-    localApiStatus.enabled,
-    localApiStatus.port,
-    showSaved,
-    t.localApiPortInvalid,
-  ]);
+  const advancedPageProps = useSettingsAdvancedPage({ isTauri, showSaved, t });
 
   const requestSettingsConfirmation = useCallback(
     ({ title, message }: { title: string; message: string }) =>
@@ -612,134 +351,6 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     return () => window.clearTimeout(timer);
   }, [perf.enabled]);
 
-  const handleAttachmentsCleanup = useCallback(async () => {
-    if (!isTauri) return;
-    try {
-      setIsCleaningAttachments(true);
-      await SyncService.cleanupAttachmentsNow();
-    } catch (error) {
-      reportError("Attachment cleanup failed", error);
-    } finally {
-      setIsCleaningAttachments(false);
-    }
-  }, [isTauri]);
-
-  const handleClearPendingRemoteDeletes = useCallback(async () => {
-    if (pendingRemoteDeleteCount === 0) return;
-    const confirmed = await requestSettingsConfirmation({
-      title: t.attachmentsCleanupPendingDeletesConfirmTitle,
-      message: t.attachmentsCleanupPendingDeletesConfirm,
-    });
-    if (!confirmed) return;
-    await updateSettings({
-      attachments: {
-        ...(settings?.attachments ?? {}),
-        pendingRemoteDeletes: undefined,
-      },
-    })
-      .then(showSaved)
-      .catch((error) =>
-        reportError("Failed to clear pending attachment deletes", error),
-      );
-  }, [
-    pendingRemoteDeleteCount,
-    requestSettingsConfirmation,
-    settings?.attachments,
-    showSaved,
-    t.attachmentsCleanupPendingDeletesConfirm,
-    t.attachmentsCleanupPendingDeletesConfirmTitle,
-    updateSettings,
-  ]);
-
-  const toggleLogging = async () => {
-    const nextEnabled = !loggingEnabled;
-    await updateSettings({
-      diagnostics: {
-        ...(settings?.diagnostics ?? {}),
-        loggingEnabled: nextEnabled,
-      },
-    })
-      .then(showSaved)
-      .catch((error) =>
-        reportError("Failed to update logging settings", error),
-      );
-  };
-
-  const handleAnalyticsHeartbeatChange = useCallback(async (enabled: boolean) => {
-    if (!analyticsHeartbeatAvailable) return;
-    if (!enabled) {
-      const confirmed = await requestConfirmation({
-        title: t.analyticsHeartbeatDisableTitle,
-        description: t.analyticsHeartbeatDisableDesc,
-        confirmLabel: t.analyticsHeartbeatDisableConfirm,
-        cancelLabel: t.analyticsHeartbeatKeepEnabled,
-      });
-      if (!confirmed) return;
-    }
-
-    await updateSettings({
-      analytics: {
-        ...(settings?.analytics ?? {}),
-        heartbeatEnabled: enabled,
-      },
-    })
-      .then(async () => {
-        if (enabled) {
-          await resetDesktopAnalyticsOptOutMarker();
-          return;
-        }
-        await sendDesktopAnalyticsOptOut();
-      })
-      .then(showSaved)
-      .catch((error) =>
-        reportError("Failed to update analytics heartbeat setting", error),
-      );
-  }, [
-    analyticsHeartbeatAvailable,
-    requestConfirmation,
-    settings?.analytics,
-    showSaved,
-    t.analyticsHeartbeatDisableConfirm,
-    t.analyticsHeartbeatDisableDesc,
-    t.analyticsHeartbeatDisableTitle,
-    t.analyticsHeartbeatKeepEnabled,
-    updateSettings,
-  ]);
-
-  const handleClearLog = async () => {
-    await clearLog();
-    showSaved();
-  };
-
-  const handleAddGettingStartedContent = useCallback(async () => {
-    if (visibleDataCount > 0) {
-      const confirmed = await requestConfirmation({
-        title: "Add Getting Started content?",
-        description: "This adds a guided Getting Started project and sample inbox items to your current data. Existing Getting Started content will not be duplicated.",
-        confirmLabel: "Add content",
-        cancelLabel,
-      });
-      if (!confirmed) return;
-    }
-
-    try {
-      const result = await seedGettingStarted({ language });
-      if (result.id) {
-        useUiStore.getState().setProjectView({ selectedProjectId: result.id });
-        showToast("Getting Started content is ready in Projects.", "success");
-        return;
-      }
-      showToast("Getting Started content was not created.", "info");
-    } catch (error) {
-      showToast("Failed to add Getting Started content.", "error");
-      reportError("Failed to add Getting Started content", error);
-    }
-  }, [cancelLabel, language, requestConfirmation, seedGettingStarted, showToast, visibleDataCount]);
-
-  const attachmentsLastCleanupDisplay = useMemo(() => {
-    if (!attachmentsLastCleanupAt) return "";
-    return safeFormatDate(attachmentsLastCleanupAt, "Pp");
-  }, [attachmentsLastCleanupAt]);
   const anthropicThinkingOptions = [
     {
       value: DEFAULT_ANTHROPIC_THINKING_BUDGET || 1024,
@@ -749,40 +360,12 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     { value: 4096, label: t.aiThinkingHigh },
   ];
 
-  const lastSyncAt = settings?.lastSyncAt;
-  const lastSyncStats = settings?.lastSyncStats ?? null;
-  const lastSyncStatus = settings?.lastSyncStatus;
-  const lastSyncHistory = settings?.lastSyncHistory ?? [];
-  const lastSyncDisplay = lastSyncAt
-    ? safeFormatDate(lastSyncAt, "PPpp", lastSyncAt)
-    : t.lastSyncNever;
-  const conflictCount = summarizeMergeStats(lastSyncStats).conflicts;
-  const weeklyReviewEnabled = settings?.weeklyReviewEnabled === true;
-  const weeklyReviewTime = settings?.weeklyReviewTime || "18:00";
-  const weeklyReviewDay = Number.isFinite(settings?.weeklyReviewDay)
-    ? (settings?.weeklyReviewDay as number)
-    : 0;
-  const systemLocale =
-    typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function"
-      ? Intl.DateTimeFormat().resolvedOptions().locale
-      : "";
-  const locale = resolveDateLocaleTag({
+  const notificationsPageProps = useSettingsNotificationsPage({
     language,
     dateFormat: mainPageProps.dateFormat,
     calendarSystem: mainPageProps.calendarSystem,
-    systemLocale,
+    showSaved,
   });
-  const weekdayOptions = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const base = new Date(2021, 7, 1 + i);
-        return {
-          value: i,
-          label: base.toLocaleDateString(locale, { weekday: "long" }),
-        };
-      }),
-    [locale],
-  );
 
   const pageTitle = useMemo(() => {
     switch (page) {
@@ -1004,99 +587,25 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     [hasUpdateBadge, language, t],
   );
 
-  const {
-    syncPath,
-    setSyncPath,
-    isSyncing,
-    syncQueued,
-    syncLastResult,
-    syncLastResultAt,
-    syncError,
-    syncBackend,
-    webdavUrl,
-    setWebdavUrl,
-    webdavUsername,
-    setWebdavUsername,
-    webdavPassword,
-    setWebdavPassword,
-    webdavHasPassword,
-    webdavAllowInsecureHttp,
-    setWebdavAllowInsecureHttp,
-    isSavingWebDav,
-    isTestingWebDav,
-    webdavTestState,
-    cloudUrl,
-    setCloudUrl,
-    cloudToken,
-    setCloudToken,
-    cloudRememberToken,
-    setCloudRememberToken,
-    cloudAllowInsecureHttp,
-    setCloudAllowInsecureHttp,
-    cloudProvider,
-    dropboxAppKey,
-    dropboxConfigured,
-    dropboxConnected,
-    dropboxBusy,
-    dropboxAuthInProgress,
-    dropboxRedirectUri,
-    dropboxTestState,
-    snapshots,
-    isLoadingSnapshots,
-    isRestoringSnapshot,
-    transferAction,
-    handleSaveSyncPath,
-    handleChangeSyncLocation,
-    handleSetSyncBackend,
-    handleSaveWebDav,
-    handleTestWebDavConnection,
-    handleSaveCloud,
-    handleSetCloudProvider,
-    handleConnectDropbox,
-    handleDisconnectDropbox,
-    handleTestDropboxConnection,
-    handleSync,
-    handleRestoreSnapshot,
-    handleExportBackup,
-    handleRestoreBackup,
-    handleImportTodoist,
-    handleImportTickTick,
-    handleImportDgt,
-    handleImportOmniFocus,
-  } = useSyncSettings({
+  const { syncPageProps, dataTransferProps } = useSyncSettings({
     appVersion: aboutPageProps.appVersion,
     isTauri,
     showSaved,
     selectSyncFolderTitle,
+    lastSyncNeverLabel: t.lastSyncNever,
     requestConfirmation: requestSettingsConfirmation,
   });
-  const {
-    obsidianVaultPath,
-    setObsidianVaultPath,
-    obsidianEnabled,
-    setObsidianEnabled,
-    obsidianScanFoldersText,
-    setObsidianScanFoldersText,
-    obsidianInboxFile,
-    setObsidianInboxFile,
-    obsidianTaskNotesIncludeArchived,
-    setObsidianTaskNotesIncludeArchived,
-    obsidianDataviewMetadataEnabled,
-    setObsidianDataviewMetadataEnabled,
-    obsidianNewTaskFormat,
-    setObsidianNewTaskFormat,
-    obsidianLastScannedAt,
-    obsidianHasVaultMarker,
-    obsidianVaultWarning,
-    obsidianIsWatching,
-    obsidianWatcherError,
-    isSavingObsidian,
-    isScanningObsidian,
-    onBrowseObsidianVault,
-    onSaveObsidian,
-    onRemoveObsidian,
-    onRescanObsidian,
-  } = useObsidianSettings({
+  const dataPageProps = useSettingsDataPage({
+    isTauri,
+    language,
+    logPath,
+    cancelLabel,
+    showSaved,
+    requestConfirmation,
+    t,
+    dataTransferProps,
+  });
+  const obsidianPageProps = useObsidianSettings({
     isTauri,
     showSaved,
     selectVaultFolderTitle: selectObsidianVaultTitle,
@@ -1110,44 +619,12 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     },
   });
   // Keep integrations state at SettingsView scope so the page does not remount and flicker on parent rerenders.
-  const {
-    externalCalendars,
-    newCalendarName,
-    newCalendarUrl,
-    calendarError,
-    systemCalendarPermission,
-    calendarPushEnabled,
-    calendarPushTargetCalendarId,
-    calendarPushTargets,
-    calendarPushLoading,
-    setNewCalendarName,
-    setNewCalendarUrl,
-    handleAddCalendar,
-    handleChooseLocalCalendarFile,
-    handleToggleCalendar,
-    handleCalendarColorChange,
-    handleRemoveCalendar,
-    handleRequestSystemCalendarPermission,
-    handleToggleCalendarPush,
-    handleCalendarPushTargetChange,
-    handleRefreshCalendarPushTargets,
-  } = useCalendarSettings({
+  const calendarPageProps = useCalendarSettings({
     showSaved,
     settings,
     updateSettings,
     supportsSystemCalendar: isMac || isLinux,
   });
-  const syncPreferences = settings?.syncPreferences ?? {};
-  const handleUpdateSyncPreferences = useCallback(
-    (updates: Partial<NonNullable<AppData["settings"]["syncPreferences"]>>) => {
-      updateSettings({ syncPreferences: { ...syncPreferences, ...updates } })
-        .then(showSaved)
-        .catch((error) =>
-          reportError("Failed to update sync preferences", error),
-        );
-    },
-    [syncPreferences, showSaved, updateSettings],
-  );
 
   const renderPage = () => {
     if (page === "main") {
@@ -1176,68 +653,14 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
       return (
         <SettingsAiPage
           t={t}
-          aiEnabled={aiEnabled}
-          aiProvider={aiProvider}
-          aiModel={aiModel}
-          aiBaseUrl={aiBaseUrl}
-          aiOpenAIExtraBodyParams={aiOpenAIExtraBodyParams}
-          aiModelOptions={aiModelOptions}
-          aiCopilotModel={aiCopilotModel}
-          aiCopilotOptions={aiCopilotOptions}
-          aiReasoningEffort={aiReasoningEffort}
-          aiThinkingBudget={aiThinkingBudget}
-          anthropicThinkingEnabled={anthropicThinkingEnabled}
           anthropicThinkingOptions={anthropicThinkingOptions}
-          aiApiKey={aiApiKey}
-          speechEnabled={speechEnabled}
-          speechProvider={speechProvider}
-          speechModel={speechModel}
-          speechModelOptions={speechModelOptions}
-          speechBaseUrl={speechBaseUrl}
-          speechLanguage={speechLanguage}
-          speechMode={speechMode}
-          speechFieldStrategy={speechFieldStrategy}
-          speechApiKey={speechApiKey}
-          speechOfflineReady={speechOfflineReady}
-          speechOfflineModelPath={speechOfflineModelPath}
-          speechOfflineEstimatedSize={speechOfflineEstimatedSize}
-          speechOfflineSize={speechOfflineSize}
-          speechDownloadState={speechDownloadState}
-          speechDownloadError={speechDownloadError}
-          speechDownloadProgress={speechDownloadProgress}
-          onUpdateAISettings={onUpdateAISettings}
-          onUpdateSpeechSettings={onUpdateSpeechSettings}
-          onProviderChange={onProviderChange}
-          onSpeechProviderChange={onSpeechProviderChange}
-          onToggleAnthropicThinking={onToggleAnthropicThinking}
-          onAiApiKeyChange={onAiApiKeyChange}
-          onSpeechApiKeyChange={onSpeechApiKeyChange}
-          onDownloadWhisperModel={onDownloadWhisperModel}
-          onDeleteWhisperModel={onDeleteWhisperModel}
+          {...aiPageProps}
         />
       );
     }
 
     if (page === "notifications") {
-      return (
-        <SettingsNotificationsPage
-          t={t}
-          notificationsEnabled={notificationsEnabled}
-          startDateNotificationsEnabled={startDateNotificationsEnabled}
-          dueDateNotificationsEnabled={dueDateNotificationsEnabled}
-          reviewAtNotificationsEnabled={reviewAtNotificationsEnabled}
-          weeklyReviewEnabled={weeklyReviewEnabled}
-          weeklyReviewDay={weeklyReviewDay}
-          weeklyReviewTime={weeklyReviewTime}
-          weekdayOptions={weekdayOptions}
-          dailyDigestMorningEnabled={dailyDigestMorningEnabled}
-          dailyDigestEveningEnabled={dailyDigestEveningEnabled}
-          dailyDigestMorningTime={dailyDigestMorningTime}
-          dailyDigestEveningTime={dailyDigestEveningTime}
-          updateSettings={updateSettings}
-          showSaved={showSaved}
-        />
-      );
+      return <SettingsNotificationsPage t={t} {...notificationsPageProps} />;
     }
 
     if (page === "integrations") {
@@ -1246,199 +669,23 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
           t={t}
           isTauri={isTauri}
           showSaved={showSaved}
-          newCalendarName={newCalendarName}
-          newCalendarUrl={newCalendarUrl}
-          calendarError={calendarError}
-          externalCalendars={externalCalendars}
-          showSystemCalendarSection={isMac || isLinux}
-          systemCalendarPermission={systemCalendarPermission}
-          calendarPushEnabled={calendarPushEnabled}
-          calendarPushTargetCalendarId={calendarPushTargetCalendarId}
-          calendarPushTargets={calendarPushTargets}
-          calendarPushLoading={calendarPushLoading}
-          onCalendarNameChange={setNewCalendarName}
-          onCalendarUrlChange={setNewCalendarUrl}
-          onAddCalendar={handleAddCalendar}
-          onChooseLocalCalendarFile={handleChooseLocalCalendarFile}
-          onToggleCalendar={handleToggleCalendar}
-          onCalendarColorChange={handleCalendarColorChange}
-          onRemoveCalendar={handleRemoveCalendar}
-          onRequestSystemCalendarPermission={
-            handleRequestSystemCalendarPermission
-          }
-          onToggleCalendarPush={handleToggleCalendarPush}
-          onCalendarPushTargetChange={handleCalendarPushTargetChange}
-          onRefreshCalendarPushTargets={handleRefreshCalendarPushTargets}
           maskCalendarUrl={maskCalendarUrl}
-          obsidianVaultPath={obsidianVaultPath}
-          obsidianEnabled={obsidianEnabled}
-          obsidianScanFoldersText={obsidianScanFoldersText}
-          obsidianInboxFile={obsidianInboxFile}
-          obsidianTaskNotesIncludeArchived={obsidianTaskNotesIncludeArchived}
-          obsidianDataviewMetadataEnabled={obsidianDataviewMetadataEnabled}
-          obsidianNewTaskFormat={obsidianNewTaskFormat}
-          obsidianLastScannedAt={obsidianLastScannedAt}
-          obsidianHasVaultMarker={obsidianHasVaultMarker}
-          obsidianVaultWarning={obsidianVaultWarning}
-          obsidianIsWatching={obsidianIsWatching}
-          obsidianWatcherError={obsidianWatcherError}
-          isSavingObsidian={isSavingObsidian}
-          isScanningObsidian={isScanningObsidian}
-          onObsidianVaultPathChange={setObsidianVaultPath}
-          onObsidianEnabledChange={setObsidianEnabled}
-          onObsidianScanFoldersTextChange={setObsidianScanFoldersText}
-          onObsidianInboxFileChange={setObsidianInboxFile}
-          onObsidianTaskNotesIncludeArchivedChange={
-            setObsidianTaskNotesIncludeArchived
-          }
-          onObsidianDataviewMetadataEnabledChange={
-            setObsidianDataviewMetadataEnabled
-          }
-          onObsidianNewTaskFormatChange={setObsidianNewTaskFormat}
-          onBrowseObsidianVault={onBrowseObsidianVault}
-          onSaveObsidian={onSaveObsidian}
-          onRemoveObsidian={onRemoveObsidian}
-          onRescanObsidian={onRescanObsidian}
+          {...calendarPageProps}
+          {...obsidianPageProps}
         />
       );
     }
 
     if (page === "sync") {
-      return (
-        <SettingsSyncPage
-          t={t}
-          isTauri={isTauri}
-          loggingEnabled={loggingEnabled}
-          analyticsHeartbeatAvailable={analyticsHeartbeatAvailable}
-          analyticsHeartbeatEnabled={analyticsHeartbeatEnabled}
-          logPath={logPath}
-          onToggleLogging={toggleLogging}
-          onAnalyticsHeartbeatChange={handleAnalyticsHeartbeatChange}
-          onClearLog={handleClearLog}
-          syncBackend={syncBackend}
-          onSetSyncBackend={handleSetSyncBackend}
-          syncPath={syncPath}
-          onSyncPathChange={setSyncPath}
-          onSaveSyncPath={handleSaveSyncPath}
-          onBrowseSyncPath={handleChangeSyncLocation}
-          webdavUrl={webdavUrl}
-          webdavUsername={webdavUsername}
-          webdavPassword={webdavPassword}
-          webdavHasPassword={webdavHasPassword}
-          webdavAllowInsecureHttp={webdavAllowInsecureHttp}
-          isSavingWebDav={isSavingWebDav}
-          isTestingWebDav={isTestingWebDav}
-          webdavTestState={webdavTestState}
-          onWebdavUrlChange={setWebdavUrl}
-          onWebdavUsernameChange={setWebdavUsername}
-          onWebdavPasswordChange={setWebdavPassword}
-          onWebdavAllowInsecureHttpChange={setWebdavAllowInsecureHttp}
-          onSaveWebDav={handleSaveWebDav}
-          onTestWebDavConnection={handleTestWebDavConnection}
-          cloudUrl={cloudUrl}
-          cloudToken={cloudToken}
-          cloudRememberToken={cloudRememberToken}
-          cloudAllowInsecureHttp={cloudAllowInsecureHttp}
-          cloudProvider={cloudProvider}
-          dropboxAppKey={dropboxAppKey}
-          dropboxConfigured={dropboxConfigured}
-          dropboxConnected={dropboxConnected}
-          dropboxBusy={dropboxBusy}
-          dropboxAuthInProgress={dropboxAuthInProgress}
-          dropboxRedirectUri={dropboxRedirectUri}
-          dropboxTestState={dropboxTestState}
-          onCloudUrlChange={setCloudUrl}
-          onCloudTokenChange={setCloudToken}
-          onCloudRememberTokenChange={setCloudRememberToken}
-          onCloudAllowInsecureHttpChange={setCloudAllowInsecureHttp}
-          onCloudProviderChange={handleSetCloudProvider}
-          onSaveCloud={handleSaveCloud}
-          onConnectDropbox={handleConnectDropbox}
-          onDisconnectDropbox={handleDisconnectDropbox}
-          onTestDropboxConnection={handleTestDropboxConnection}
-          onSyncNow={handleSync}
-          isSyncing={isSyncing}
-          syncQueued={syncQueued}
-          syncLastResult={syncLastResult}
-          syncLastResultAt={syncLastResultAt}
-          syncError={syncError}
-          syncPreferences={syncPreferences}
-          onUpdateSyncPreferences={handleUpdateSyncPreferences}
-          lastSyncDisplay={lastSyncDisplay}
-          lastSyncStatus={lastSyncStatus}
-          lastSyncStats={lastSyncStats}
-          lastSyncHistory={lastSyncHistory}
-          conflictCount={conflictCount}
-          lastSyncError={settings?.lastSyncError}
-          attachmentsLastCleanupDisplay={attachmentsLastCleanupDisplay}
-          pendingRemoteDeleteCount={pendingRemoteDeleteCount}
-          onClearPendingRemoteDeletes={handleClearPendingRemoteDeletes}
-          onRunAttachmentsCleanup={handleAttachmentsCleanup}
-          isCleaningAttachments={isCleaningAttachments}
-          snapshots={snapshots}
-          isLoadingSnapshots={isLoadingSnapshots}
-          isRestoringSnapshot={isRestoringSnapshot}
-          transferAction={transferAction}
-          onRestoreSnapshot={handleRestoreSnapshot}
-          onExportBackup={handleExportBackup}
-          onRestoreBackup={handleRestoreBackup}
-          onImportTodoist={handleImportTodoist}
-          onImportTickTick={handleImportTickTick}
-          onImportDgt={handleImportDgt}
-          onImportOmniFocus={handleImportOmniFocus}
-        />
-      );
+      return <SettingsSyncPage t={t} {...syncPageProps} />;
     }
 
     if (page === "data") {
-      return (
-        <SettingsDataPage
-          t={t}
-          isTauri={isTauri}
-          loggingEnabled={loggingEnabled}
-          analyticsHeartbeatAvailable={analyticsHeartbeatAvailable}
-          analyticsHeartbeatEnabled={analyticsHeartbeatEnabled}
-          logPath={logPath}
-          onToggleLogging={toggleLogging}
-          onAnalyticsHeartbeatChange={handleAnalyticsHeartbeatChange}
-          onClearLog={handleClearLog}
-          transferAction={transferAction}
-          onExportBackup={handleExportBackup}
-          onRestoreBackup={handleRestoreBackup}
-          onImportTodoist={handleImportTodoist}
-          onImportTickTick={handleImportTickTick}
-          onImportDgt={handleImportDgt}
-          onImportOmniFocus={handleImportOmniFocus}
-          onAddGettingStartedContent={handleAddGettingStartedContent}
-          attachmentsLastCleanupDisplay={attachmentsLastCleanupDisplay}
-          pendingRemoteDeleteCount={pendingRemoteDeleteCount}
-          onClearPendingRemoteDeletes={handleClearPendingRemoteDeletes}
-          onRunAttachmentsCleanup={handleAttachmentsCleanup}
-          isCleaningAttachments={isCleaningAttachments}
-        />
-      );
+      return <SettingsDataPage t={t} {...dataPageProps} />;
     }
 
     if (page === "advanced") {
-      return (
-        <SettingsAdvancedPage
-          t={t}
-          isTauri={isTauri}
-          localApiStatus={localApiStatus}
-          localApiPortInput={localApiPortInput}
-          localApiBusy={localApiBusy}
-          localApiPortError={localApiPortError}
-          networkProxyUrl={networkProxyUrl}
-          desktopRenderingConfig={desktopRenderingConfig}
-          desktopRenderingBusy={desktopRenderingBusy}
-          onLocalApiToggle={handleLocalApiToggle}
-          onLocalApiPortInputChange={setLocalApiPortInput}
-          onLocalApiPortCommit={handleLocalApiPortCommit}
-          onNetworkProxyUrlChange={setNetworkProxyUrl}
-          onSaveNetworkProxy={handleSaveNetworkProxy}
-          onDesktopRenderingToggle={handleDesktopRenderingToggle}
-        />
-      );
+      return <SettingsAdvancedPage t={t} {...advancedPageProps} />;
     }
 
     if (page === "about") {

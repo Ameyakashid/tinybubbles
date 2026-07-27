@@ -18,6 +18,7 @@ import {
     useVirtualList,
 } from './list/useVirtualList';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
+import { useTaskListScope } from './list/task-list-scope';
 
 type ArchiveTaskRowInnerProps = {
     task: Task;
@@ -54,7 +55,12 @@ const ArchiveTaskRowInner = memo(function ArchiveTaskRowInner({
     ].filter(Boolean);
 
     return (
-        <div className="rounded-lg px-3 py-3 flex items-center justify-between group hover:bg-muted/50 transition-colors">
+        // data-task-id is what the shared task-list scope resolves keyboard
+        // actions against; without it j/k/e/x/s silently do nothing here.
+        <div
+            data-task-id={task.id}
+            className="rounded-lg px-3 py-3 flex items-center justify-between group hover:bg-muted/50 transition-colors"
+        >
             <div className="flex min-w-0 items-center gap-3">
                 {selectionMode && (
                     <input
@@ -71,6 +77,9 @@ const ArchiveTaskRowInner = memo(function ArchiveTaskRowInner({
                         <button
                             type="button"
                             onClick={handleEditCompletedAt}
+                            // Completion time is the only editable field on an
+                            // archived task, so it is what `e` opens.
+                            data-task-edit-trigger
                             title={editCompletedAtLabel}
                             aria-label={editCompletedAtLabel}
                             className="hover:text-foreground hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
@@ -348,6 +357,22 @@ export function ArchiveView() {
             return next;
         });
     }, []);
+
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    useTaskListScope({
+        // The projects segment renders no task rows, so the keyboard must not
+        // act on archived tasks the user cannot see.
+        getTasks: () => (segment === 'tasks' ? archivedTasks : []),
+        getSelectedIndex: () => selectedTaskIndex,
+        setSelectedIndex: setSelectedTaskIndex,
+        t,
+        // Keyboard select reveals the checkboxes: without selection mode the
+        // toggled rows would have nothing to show for it.
+        toggleSelect: (task) => {
+            setSelectionMode(true);
+            toggleTaskSelection(task.id);
+        },
+    });
 
     const selectAllVisible = useCallback(() => {
         setSelectedIds(new Set(archivedTasks.map((task) => task.id)));
