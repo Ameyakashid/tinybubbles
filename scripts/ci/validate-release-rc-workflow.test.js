@@ -2,6 +2,61 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
+const asNeedsList = (needs) => Array.isArray(needs) ? needs : [needs];
+
+test("stable release validates tags and committed versions before any build or publish", () => {
+  const workflow = parse(readFileSync(".github/workflows/release.yml", "utf8"));
+  const validate = workflow.jobs.validate;
+  const steps = validate.steps;
+  const stepNames = steps.map((step) => step.name);
+
+  expect(stepNames).toContain("Validate stable tag naming");
+  expect(stepNames).toContain("Verify app versions match the stable tag");
+  expect(stepNames).toContain("Verify committed FOSS release version matches the stable tag");
+  expect(stepNames).toContain("Verify CloudKit production schema is fully deployed");
+  expect(stepNames).toContain("Verify stable tag points at this commit");
+
+  const versionStep = steps.find((step) => step.name === "Verify app versions match the stable tag");
+  expect(versionStep.run).toContain("apps/desktop/src-tauri/tauri.conf.json");
+  expect(versionStep.run).toContain("apps/desktop/src-tauri/Cargo.toml");
+  const fossStep = steps.find(
+    (step) => step.name === "Verify committed FOSS release version matches the stable tag"
+  );
+  expect(fossStep.run).toContain("apps/mobile/release-version.json");
+
+  const buildJobs = [
+    "linux",
+    "macos",
+    "windows",
+    "android-version-code",
+    "android",
+    "android-foss",
+    "ios-appstore",
+    "macos-appstore",
+    "release",
+  ];
+  for (const jobName of buildJobs) {
+    expect(asNeedsList(workflow.jobs[jobName].needs)).toContain("validate");
+  }
+
+  const publishJobs = [
+    "update-packages",
+    "update-flathub",
+    "update-flathub-beta",
+    "update-linux-repos",
+    "update-aur-bin-beta",
+    "update-linux-repos-beta",
+    "publish-chocolatey",
+    "update-aur",
+    "update-aur-source",
+  ];
+  for (const jobName of publishJobs) {
+    const job = workflow.jobs[jobName];
+    expect(asNeedsList(job.needs)).toContain("validate");
+    expect(job.if).toContain("needs.validate.result == 'success'");
+  }
+});
+
 test("RC tag pushes publish Android builds to Play internal and open testing", () => {
   const workflow = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
   const playTrack = workflow.jobs.android.with.play_track;
