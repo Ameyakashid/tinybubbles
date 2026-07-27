@@ -2,6 +2,20 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
+test("published prereleases target beta Linux repositories", () => {
+  const workflow = parse(readFileSync(".github/workflows/publish-repo.yml", "utf8"));
+  const job = workflow.jobs["build-repo"];
+
+  expect(job.env.REPO_CHANNEL).toContain("github.event.release.prerelease");
+  expect(job.env.REPO_DIR_SUFFIX).toContain("github.event.release.prerelease");
+
+  for (const name of ["Build DEB Repo", "Build RPM Repo"]) {
+    const step = job.steps.find((candidate) => candidate.name === name);
+    expect(step["working-directory"]).toContain("${{ env.REPO_DIR_SUFFIX }}");
+    expect(step["working-directory"]).not.toContain("inputs.channel");
+  }
+});
+
 test("beta repository package versions preserve the prerelease tilde", () => {
   const workflow = parse(readFileSync(".github/workflows/publish-repo.yml", "utf8"));
   const normalizeStep = workflow.jobs["build-repo"].steps.find(
