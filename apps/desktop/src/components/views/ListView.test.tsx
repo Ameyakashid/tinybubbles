@@ -288,6 +288,29 @@ describe('ListView', () => {
     expect(queryByText('No Area')).toBeInTheDocument();
   });
 
+  it('virtualizes grouped rows beyond the threshold even with fewer unique tasks', () => {
+    const tasks = Array.from({ length: 20 }, (_, index) => makeTask(`reference-${index}`, {
+      title: `Reference ${index}`,
+      status: 'reference',
+      tags: ['#alpha', '#beta'],
+    }));
+    useTaskStore.setState({
+      _allTasks: tasks,
+      lastDataChangeAt: 1,
+    });
+    useUiStore.setState((state) => ({
+      ...state,
+      listOptions: {
+        ...state.listOptions,
+        referenceGroupBy: 'tag',
+      },
+    }));
+
+    const { getByTestId } = renderListView('reference', 'Reference');
+
+    expect(getByTestId('virtualized-task-list')).toHaveAttribute('data-grouped', 'true');
+  });
+
   it('groups reference tasks by each tag when tag grouping is selected', () => {
     useTaskStore.setState({
       _allTasks: [

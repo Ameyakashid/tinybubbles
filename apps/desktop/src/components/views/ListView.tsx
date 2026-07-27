@@ -64,7 +64,7 @@ import {
     type TaskGroup,
     type TaskListGroupBy,
 } from './list/next-grouping';
-import { GroupedTaskSections } from './list/GroupedTaskSections';
+import { GroupedTaskSectionHeader, GroupedTaskSections } from './list/GroupedTaskSections';
 import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { LIST_VIRTUALIZATION_THRESHOLD, LIST_VIRTUAL_ROW_ESTIMATE, LIST_VIRTUAL_OVERSCAN } from './list/useVirtualList';
@@ -74,6 +74,51 @@ import { QuickAddSyntaxHint } from '../ui/QuickAddSyntaxHint';
 interface ListViewProps {
     title: string;
     statusFilter: TaskStatus | 'all';
+}
+
+type GroupedVirtualRow =
+    | {
+        kind: 'header';
+        group: TaskGroup;
+        collapsed: boolean;
+        controlsId?: string;
+    }
+    | {
+        kind: 'task';
+        group: TaskGroup;
+        task: Task;
+        isFirst: boolean;
+        isLast: boolean;
+        controlsId?: string;
+    };
+
+function buildGroupedVirtualRows(
+    groups: TaskGroup[],
+    collapsedGroupIds: Set<string>,
+    getSectionDomId?: (group: TaskGroup, index: number) => string | undefined,
+): GroupedVirtualRow[] {
+    return groups.flatMap((group, groupIndex) => {
+        const collapsed = collapsedGroupIds.has(group.id);
+        const controlsId = getSectionDomId?.(group, groupIndex);
+        const header: GroupedVirtualRow = {
+            kind: 'header',
+            group,
+            collapsed,
+            controlsId,
+        };
+        if (collapsed) return [header];
+        return [
+            header,
+            ...group.tasks.map((task, index): GroupedVirtualRow => ({
+                kind: 'task',
+                group,
+                task,
+                isFirst: index === 0,
+                isLast: index === group.tasks.length - 1,
+                controlsId,
+            })),
+        ];
+    });
 }
 
 const EMPTY_PRIORITIES: TaskPriority[] = [];
@@ -535,6 +580,23 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         if (!activeReferenceCollapseKey) return new Set<string>();
         return new Set(referenceViewState.collapsedGroups[activeReferenceCollapseKey] ?? []);
     }, [activeReferenceCollapseKey, referenceViewState.collapsedGroups]);
+    const getReferenceSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
+        `reference-group-${getListDomIdSegment(activeReferenceGroupBy)}-${groupIndex}-${getListDomIdSegment(group.id)}`
+    ), [activeReferenceGroupBy]);
+    const groupedVirtualRows = useMemo(() => buildGroupedVirtualRows(
+        groupedTasks,
+        collapsedReferenceGroupIds,
+        isReferenceGrouping ? getReferenceSectionDomId : undefined,
+    ), [collapsedReferenceGroupIds, getReferenceSectionDomId, groupedTasks, isReferenceGrouping]);
+    const firstGroupedRowIndexByTaskId = useMemo(() => {
+        const indices = new Map<string, number>();
+        groupedVirtualRows.forEach((row, index) => {
+            if (row.kind === 'task' && !indices.has(row.task.id)) {
+                indices.set(row.task.id, index);
+            }
+        });
+        return indices;
+    }, [groupedVirtualRows]);
     const toggleReferenceGroup = useCallback((groupId: string) => {
         if (!activeReferenceCollapseKey) return;
         setReferenceViewState((current) => {
@@ -580,13 +642,29 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             });
     }, [showToast, t, updateProject]);
 
-    const shouldVirtualize = !isListGrouping && filteredTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
+    const virtualRowCount = isListGrouping ? groupedVirtualRows.length : filteredTasks.length;
+    const shouldVirtualize = virtualRowCount > LIST_VIRTUALIZATION_THRESHOLD;
     const rowVirtualizer = useVirtualizer({
-        count: shouldVirtualize ? filteredTasks.length : 0,
+        count: shouldVirtualize ? virtualRowCount : 0,
         getScrollElement: () => listScrollRef.current,
-        estimateSize: () => (densityMode === 'condensed' ? 72 : densityMode === 'compact' ? 90 : LIST_VIRTUAL_ROW_ESTIMATE),
+        estimateSize: (index) => (
+            isListGrouping && groupedVirtualRows[index]?.kind === 'header'
+                ? 42
+                : densityMode === 'condensed'
+                    ? 72
+                    : densityMode === 'compact'
+                        ? 90
+                        : LIST_VIRTUAL_ROW_ESTIMATE
+        ),
         overscan: Math.max(2, Math.ceil(LIST_VIRTUAL_OVERSCAN / LIST_VIRTUAL_ROW_ESTIMATE)),
-        getItemKey: (index) => filteredTasks[index]?.id ?? index,
+        getItemKey: (index) => {
+            if (!isListGrouping) return filteredTasks[index]?.id ?? index;
+            const row = groupedVirtualRows[index];
+            if (!row) return index;
+            return row.kind === 'header'
+                ? `group:${row.group.id}`
+                : `task:${row.group.id}:${row.task.id}`;
+        },
     });
     const virtualRows = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
     const totalHeight = shouldVirtualize ? rowVirtualizer.getTotalSize() : 0;
@@ -628,7 +706,13 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         prioritiesEnabled,
         registerTaskListScope,
         restoreTask,
-        scrollToVirtualIndex: (index, align) => rowVirtualizer.scrollToIndex(index, { align }),
+        scrollToVirtualIndex: (index, align) => {
+            const taskId = filteredTasks[index]?.id;
+            const virtualIndex = isListGrouping && taskId
+                ? firstGroupedRowIndexByTaskId.get(taskId) ?? index
+                : index;
+            rowVirtualizer.scrollToIndex(virtualIndex, { align });
+        },
         selectedPriorities,
         selectedTimeEstimates,
         selectedTokens,
@@ -1045,10 +1129,46 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                         t={t}
                     />
                 ) : shouldVirtualize ? (
-                    <div style={{ height: totalHeight, position: 'relative' }}>
+                    <div
+                        data-testid="virtualized-task-list"
+                        data-grouped={isListGrouping ? 'true' : 'false'}
+                        style={{ height: totalHeight, position: 'relative' }}
+                    >
                         {virtualRows.map((virtualRow) => {
-                            const task = filteredTasks[virtualRow.index];
+                            const groupedRow = isListGrouping ? groupedVirtualRows[virtualRow.index] : undefined;
+                            if (groupedRow?.kind === 'header') {
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        ref={rowVirtualizer.measureElement}
+                                        data-index={virtualRow.index}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            paddingTop: virtualRow.index > 0 ? 8 : 0,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                    >
+                                        <GroupedTaskSectionHeader
+                                            group={groupedRow.group}
+                                            collapsed={groupedRow.collapsed}
+                                            controlsId={groupedRow.controlsId}
+                                            onToggleGroup={isReferenceGrouping ? toggleReferenceGroup : undefined}
+                                            className={cn(
+                                                'border border-border/40 bg-card/30',
+                                                groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
+                                            )}
+                                        />
+                                    </div>
+                                );
+                            }
+                            const task = groupedRow?.kind === 'task'
+                                ? groupedRow.task
+                                : filteredTasks[virtualRow.index];
                             if (!task) return null;
+                            const index = taskIndexById.get(task.id) ?? virtualRow.index;
                             return (
                                 <div
                                     key={virtualRow.key}
@@ -1062,11 +1182,26 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                                         transform: `translateY(${virtualRow.start}px)`,
                                     }}
                                 >
-                                    <div className={cn(densityMode === 'condensed' ? "pb-0.5" : densityMode === 'compact' ? "pb-1" : "pb-1.5")}>
+                                    <div
+                                        id={groupedRow?.kind === 'task' && groupedRow.isFirst ? groupedRow.controlsId : undefined}
+                                        className={cn(
+                                            groupedRow?.kind === 'task'
+                                                ? [
+                                                    'border-x border-border/40 bg-card/30',
+                                                    !groupedRow.isLast && 'border-b border-border/30',
+                                                    groupedRow.isLast && 'rounded-b-md border-b border-border/40',
+                                                ]
+                                                : densityMode === 'condensed'
+                                                    ? 'pb-0.5'
+                                                    : densityMode === 'compact'
+                                                        ? 'pb-1'
+                                                        : 'pb-1.5',
+                                        )}
+                                    >
                                         <StoreTaskItem
                                             taskId={task.id}
-                                            isSelected={virtualRow.index === selectedIndex}
-                                            index={virtualRow.index}
+                                            isSelected={index === selectedIndex}
+                                            index={index}
                                             onSelectIndex={handleSelectIndex}
                                             selectionMode={selectionMode}
                                             isMultiSelected={multiSelectedIds.has(task.id)}
@@ -1076,7 +1211,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                                             compactMetaEnabled={showListDetails}
                                             showProjectBadgeInActions={false}
                                         />
-                                        <div className="mx-3 mt-1 h-px bg-border/30" />
+                                        {!groupedRow && <div className="mx-3 mt-1 h-px bg-border/30" />}
                                     </div>
                                 </div>
                             );
@@ -1087,9 +1222,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                         groups={groupedTasks}
                         onToggleGroup={isReferenceGrouping ? toggleReferenceGroup : undefined}
                         collapsedGroupIds={collapsedReferenceGroupIds}
-                        getSectionDomId={(group, groupIndex) => (
-                            `reference-group-${getListDomIdSegment(activeReferenceGroupBy)}-${groupIndex}-${getListDomIdSegment(group.id)}`
-                        )}
+                        getSectionDomId={getReferenceSectionDomId}
                         renderTask={(task) => {
                             const index = taskIndexById.get(task.id) ?? 0;
                             return (
