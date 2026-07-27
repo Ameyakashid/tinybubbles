@@ -5,6 +5,7 @@ import { SqliteAdapter, type SqliteClient } from './sqlite-adapter';
 import { consoleLogger, setLogger, type LogPayload } from './logger';
 import { SQLITE_BASE_SCHEMA, SQLITE_FTS_SCHEMA } from './sqlite-schema';
 import type { AppData } from './types';
+import { prepareRestoredBackupDataForSync } from './backup-transfer';
 
 const require = createRequire(import.meta.url);
 type BunStatement = {
@@ -479,6 +480,76 @@ describeSqlite('SqliteAdapter', () => {
             rev: 5,
             revBy: 'device-new',
             updatedAt: '2026-06-10T08:01:00.000Z',
+        });
+    });
+
+    it('persists an authoritative backup over higher-revision live rows and deletions', async () => {
+        const currentAt = '2026-06-10T08:00:00.000Z';
+        const restoredAt = '2026-06-10T09:00:00.000Z';
+        const current: AppData = {
+            tasks: [
+                {
+                    id: 'task-live',
+                    title: 'Current live task',
+                    status: 'next',
+                    tags: [],
+                    contexts: [],
+                    createdAt: currentAt,
+                    updatedAt: currentAt,
+                    rev: 10,
+                    revBy: 'current-device',
+                },
+                {
+                    id: 'task-delete',
+                    title: 'Current task to delete',
+                    status: 'next',
+                    tags: [],
+                    contexts: [],
+                    createdAt: currentAt,
+                    updatedAt: currentAt,
+                    rev: 12,
+                    revBy: 'current-device',
+                },
+            ],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        };
+        const backup: AppData = {
+            ...current,
+            tasks: [
+                { ...current.tasks[0], title: 'Restored backup task', rev: 2, revBy: 'backup-device' },
+                {
+                    ...current.tasks[1],
+                    title: 'Deleted in backup',
+                    updatedAt: '2026-06-09T08:00:00.000Z',
+                    deletedAt: '2026-06-09T08:00:00.000Z',
+                    rev: 3,
+                    revBy: 'backup-device',
+                },
+            ],
+        };
+        await adapter.saveData(current);
+
+        const restored = prepareRestoredBackupDataForSync(backup, {
+            previousData: await adapter.getData(),
+            restoredAt,
+        });
+        await adapter.saveData(restored);
+
+        const loaded = await adapter.getData();
+        expect(loaded.tasks.find((task) => task.id === 'task-live')).toMatchObject({
+            title: 'Restored backup task',
+            rev: 11,
+            updatedAt: restoredAt,
+        });
+        expect(loaded.tasks.find((task) => task.id === 'task-delete')).toMatchObject({
+            title: 'Deleted in backup',
+            deletedAt: restoredAt,
+            rev: 13,
+            updatedAt: restoredAt,
         });
     });
 

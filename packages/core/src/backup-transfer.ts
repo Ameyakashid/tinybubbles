@@ -1,5 +1,5 @@
 import type { AppData } from './types';
-import { nextRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
+import { nextRevision, normalizeRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
 import {
     isObjectRecord,
     normalizeAppData,
@@ -145,13 +145,25 @@ export const serializeBackupData = (data: AppData): string => JSON.stringify(dat
 
 const prepareRestoredEntityForSync = <T extends RestorableEntity>(
     item: T,
-    restoredAt: string
+    restoredAt: string,
+    previous?: T,
 ): T => {
-    if (item.deletedAt) return item;
+    const retentionTimestamps = item.purgedAt
+        ? {
+            deletedAt: item.deletedAt ?? restoredAt,
+            purgedAt: restoredAt,
+        }
+        : item.deletedAt
+            ? { deletedAt: restoredAt }
+            : {};
     return {
         ...item,
+        ...retentionTimestamps,
         updatedAt: restoredAt,
-        rev: nextRevision(item.rev),
+        rev: nextRevision(Math.max(
+            normalizeRevision(item.rev),
+            normalizeRevision(previous?.rev),
+        )),
         revBy: SYNC_BACKUP_RESTORE_REV_BY,
     };
 };
@@ -177,15 +189,10 @@ const carryForwardEntitiesMissingFromBackup = <T extends RestorableEntity>(
     if (!previous?.length) return restored;
     const restoredIds = new Set(restored.map((item) => item.id));
     const carried = previous
-        // An already-purged tombstone is gone everywhere; reviving it into the
-        // payload would only re-broadcast a delete that has already landed.
-        .filter((item) => !item.purgedAt && !restoredIds.has(item.id))
+        .filter((item) => !restoredIds.has(item.id))
         .map((item) => ({
             ...item,
             deletedAt: item.deletedAt ?? restoredAt,
-            updatedAt: restoredAt,
-            rev: nextRevision(item.rev),
-            revBy: SYNC_BACKUP_RESTORE_REV_BY,
         }));
     return carried.length > 0 ? [...restored, ...carried] : restored;
 };
@@ -210,10 +217,11 @@ export const prepareRestoredBackupDataForSync = (
     const restoredAt = toIsoString(options.restoredAt) ?? new Date().toISOString();
     const restoredSettings = stripDeviceLocalRestoreSettings(data.settings);
     const previous = options.previousData ?? null;
-    const prepare = <T extends RestorableEntity>(restored: T[], before: T[] | undefined): T[] => (
-        carryForwardEntitiesMissingFromBackup(restored, before, restoredAt)
-            .map((item) => prepareRestoredEntityForSync(item, restoredAt))
-    );
+    const prepare = <T extends RestorableEntity>(restored: T[], before: T[] | undefined): T[] => {
+        const beforeById = new Map((before ?? []).map((item) => [item.id, item]));
+        return carryForwardEntitiesMissingFromBackup(restored, before, restoredAt)
+            .map((item) => prepareRestoredEntityForSync(item, restoredAt, beforeById.get(item.id)));
+    };
     return {
         ...data,
         tasks: prepare(data.tasks, previous?.tasks),

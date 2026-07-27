@@ -9,6 +9,7 @@ import {
 } from './backup-transfer';
 import { mergeAppData } from './sync';
 import { SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
+import { purgeExpiredTombstones } from './sync-tombstones';
 import type { AppData } from './types';
 
 const buildAppData = (): AppData => {
@@ -159,10 +160,10 @@ describe('backup transfer', () => {
             revBy: SYNC_BACKUP_RESTORE_REV_BY,
         });
         expect(restored.tasks.find((task) => task.id === 'deleted-task')).toMatchObject({
-            updatedAt: '2026-03-31T00:00:00.000Z',
-            rev: 8,
-            revBy: 'delete-device',
-            deletedAt: '2026-03-31T00:00:00.000Z',
+            updatedAt: restoredAt,
+            rev: 9,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            deletedAt: restoredAt,
         });
         expect(restored.settings).toMatchObject({
             pendingRemoteWriteAt: restoredAt,
@@ -184,6 +185,119 @@ describe('backup transfer', () => {
         expect(restored.settings.security).toBeUndefined();
         expect(restored.settings.diagnostics).toEqual({ loggingEnabled: true });
         expect(restored.settings.pendingRemoteWriteAt).toBe(restoredAt);
+    });
+
+    it('stamps backup rows above current same-id revisions, including deletions', () => {
+        const restoredAt = '2026-04-01T00:00:10.000Z';
+        const backup = buildAppData();
+        backup.tasks = [
+            { ...backup.tasks[0], title: 'Backup wins', rev: 2, revBy: 'backup-device' },
+            {
+                ...backup.tasks[0],
+                id: 'deleted-task',
+                title: 'Deleted in backup',
+                deletedAt: '2026-03-30T13:00:00.000Z',
+                rev: 3,
+                revBy: 'backup-device',
+            },
+        ];
+        const previousData = buildAppData();
+        previousData.tasks = [
+            { ...previousData.tasks[0], title: 'Newer current row', rev: 10, revBy: 'current-device' },
+            {
+                ...previousData.tasks[0],
+                id: 'deleted-task',
+                title: 'Current live row',
+                rev: 12,
+                revBy: 'current-device',
+            },
+        ];
+
+        const restored = prepareRestoredBackupDataForSync(backup, { previousData, restoredAt });
+
+        expect(restored.tasks.find((task) => task.id === 'task-1')).toMatchObject({
+            title: 'Backup wins',
+            rev: 11,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+        expect(restored.tasks.find((task) => task.id === 'deleted-task')).toMatchObject({
+            title: 'Deleted in backup',
+            deletedAt: restoredAt,
+            rev: 13,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+
+        const forward = mergeAppData(restored, previousData);
+        const reverse = mergeAppData(previousData, restored);
+        const forwardLive = forward.tasks.find((task) => task.id === 'task-1');
+        const reverseLive = reverse.tasks.find((task) => task.id === 'task-1');
+        const forwardDeleted = forward.tasks.find((task) => task.id === 'deleted-task');
+        const reverseDeleted = reverse.tasks.find((task) => task.id === 'deleted-task');
+        expect(forwardLive).toEqual(reverseLive);
+        expect(forwardLive).toMatchObject({
+            title: 'Backup wins',
+            rev: 11,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+        expect(forwardDeleted).toEqual(reverseDeleted);
+        expect(forwardDeleted).toMatchObject({
+            title: 'Deleted in backup',
+            deletedAt: restoredAt,
+            rev: 13,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+    });
+
+    it('refreshes expired backup and carried tombstones so restore cleanup retains them', () => {
+        const restoredAt = '2026-04-01T00:00:10.000Z';
+        const backup = buildAppData();
+        backup.tasks.push({
+            ...backup.tasks[0],
+            id: 'backup-deleted-task',
+            title: 'Deleted in old backup',
+            deletedAt: '2025-01-01T00:00:00.000Z',
+            rev: 3,
+            revBy: 'backup-device',
+        });
+        const previousData = buildAppData();
+        previousData.tasks.push({
+            ...previousData.tasks[0],
+            id: 'purged-task',
+            title: 'Purged after backup',
+            deletedAt: '2025-01-01T00:00:00.000Z',
+            purgedAt: '2025-01-02T00:00:00.000Z',
+            rev: 7,
+            revBy: 'current-device',
+        });
+
+        const restored = prepareRestoredBackupDataForSync(backup, { previousData, restoredAt });
+        const refreshed = purgeExpiredTombstones(restored, restoredAt, 90);
+
+        expect(restored.tasks.find((task) => task.id === 'purged-task')).toMatchObject({
+            deletedAt: '2025-01-01T00:00:00.000Z',
+            purgedAt: restoredAt,
+            rev: 8,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+        expect(restored.tasks.find((task) => task.id === 'backup-deleted-task')).toMatchObject({
+            deletedAt: restoredAt,
+            rev: 4,
+            revBy: SYNC_BACKUP_RESTORE_REV_BY,
+            updatedAt: restoredAt,
+        });
+        expect(refreshed.removedTaskTombstones).toBe(0);
+        expect(refreshed.data.tasks.find((task) => task.id === 'purged-task')).toMatchObject({
+            deletedAt: '2025-01-01T00:00:00.000Z',
+            purgedAt: restoredAt,
+        });
+        expect(refreshed.data.tasks.find((task) => task.id === 'backup-deleted-task')).toMatchObject({
+            deletedAt: restoredAt,
+        });
     });
 
     it('keeps recovered backup data live when remote sync still has stale cascade tombstones', () => {
