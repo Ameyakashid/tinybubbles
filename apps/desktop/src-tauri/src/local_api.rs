@@ -1549,6 +1549,35 @@ fn apply_task_patch(
 ) -> Result<(), String> {
     let mut sanitized = patch.clone();
     sanitize_task_patch_map(&mut sanitized)?;
+    let series_id = task
+        .get("recurrence")
+        .and_then(Value::as_object)
+        .and_then(|recurrence| recurrence.get("seriesId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| task.get("id").and_then(Value::as_str))
+        .map(str::to_string);
+    if let (Some(series_id), Some(recurrence)) =
+        (series_id, sanitized.get_mut("recurrence"))
+    {
+        match recurrence {
+            Value::Object(value) => {
+                let has_series_id = value
+                    .get("seriesId")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .is_some_and(|value| !value.is_empty());
+                if !has_series_id {
+                    value.insert("seriesId".to_string(), Value::String(series_id));
+                }
+            }
+            Value::String(rule) if is_recurrence_rule(rule) => {
+                *recurrence = json!({ "rule": rule.clone(), "seriesId": series_id });
+            }
+            _ => {}
+        }
+    }
     for (key, value) in sanitized {
         if value.is_null() {
             task.remove(&key);
@@ -1695,6 +1724,59 @@ mod tests {
         assert_eq!(
             task.get("revBy").and_then(|value| value.as_str()),
             Some("device-a")
+        );
+    }
+
+    #[test]
+    fn local_api_patch_preserves_recurrence_series_identity() {
+        let mut task = json!({
+            "id": "weekly-occurrence",
+            "title": "Timeblock",
+            "status": "next",
+            "recurrence": {
+                "rule": "weekly",
+                "strategy": "strict",
+                "seriesId": "weekly-series"
+            },
+            "createdAt": "2026-06-01T00:00:00Z",
+            "updatedAt": "2026-06-01T00:00:00Z",
+            "rev": 1
+        })
+        .as_object()
+        .expect("task object")
+        .clone();
+        let patch = json!({
+            "recurrence": {
+                "rule": "weekly",
+                "strategy": "fluid"
+            }
+        });
+
+        apply_task_patch(
+            &mut task,
+            patch.as_object().expect("patch object"),
+            "device-a",
+        )
+        .expect("patch");
+
+        assert_eq!(
+            task.get("recurrence")
+                .and_then(|value| value.get("seriesId"))
+                .and_then(Value::as_str),
+            Some("weekly-series")
+        );
+
+        let legacy_patch = json!({ "recurrence": "daily" });
+        apply_task_patch(
+            &mut task,
+            legacy_patch.as_object().expect("patch object"),
+            "device-a",
+        )
+        .expect("legacy patch");
+
+        assert_eq!(
+            task.get("recurrence"),
+            Some(&json!({ "rule": "daily", "seriesId": "weekly-series" }))
         );
     }
 

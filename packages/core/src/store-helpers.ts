@@ -151,9 +151,15 @@ export function applyTaskUpdates(oldTask: Task, updates: Partial<Task>, now: str
 export const normalizeTaskUpdate = (task: Task, updates: Partial<Task>): Partial<Task> => {
     let adjustedUpdates = updates;
     if (hasOwnField(updates, 'recurrence')) {
+        const recurrence = normalizeRecurrenceForLoad(updates.recurrence);
+        const existingSeriesId = typeof task.recurrence === 'object'
+            ? task.recurrence.seriesId
+            : undefined;
         adjustedUpdates = {
             ...adjustedUpdates,
-            recurrence: normalizeRecurrenceForLoad(updates.recurrence),
+            recurrence: recurrence
+                ? { ...recurrence, seriesId: recurrence.seriesId ?? existingSeriesId ?? task.id }
+                : undefined,
         };
     }
     const hasOrder = hasOwnField(updates, 'order');

@@ -3593,6 +3593,28 @@ describe('TaskStore', () => {
         expect(live.find((task) => task.id !== independent.id)?.contexts).toEqual(['@home']);
     });
 
+    it('preserves recurring series identity when recurrence settings are edited', async () => {
+        const occurrence: Task = {
+            id: 'weekly-occurrence',
+            title: 'Timeblock',
+            status: 'next',
+            recurrence: { rule: 'weekly', strategy: 'strict', seriesId: 'weekly-series' },
+            createdAt: '2026-06-01T00:00:00.000Z',
+            updatedAt: '2026-06-01T00:00:00.000Z',
+        };
+        useTaskStore.setState({ tasks: [occurrence], _allTasks: [occurrence] });
+
+        await useTaskStore.getState().updateTask(occurrence.id, {
+            recurrence: { rule: 'weekly', strategy: 'fluid' },
+        });
+
+        expect(useTaskStore.getState()._tasksById.get(occurrence.id)?.recurrence).toEqual({
+            rule: 'weekly',
+            strategy: 'fluid',
+            seriesId: 'weekly-series',
+        });
+    });
+
     it('keeps duplicated recurring tasks as independent series', async () => {
         vi.setSystemTime(new Date('2026-06-09T00:00:00.000Z'));
         const { addTask, duplicateTask, updateTask } = useTaskStore.getState();
