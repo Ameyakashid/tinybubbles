@@ -375,15 +375,21 @@ export default function CaptureScreen() {
   const placeholderColor = tc.secondaryText;
 
   const closeCapture = React.useCallback(() => {
+    // A real back entry always wins: the screen underneath is the one that
+    // opened capture, still holding the open project. Replacing capture with
+    // returnTo instead left a duplicate screen on the stack after every save,
+    // so leaving a project took one back tap per task added (#938). returnTo
+    // stays as the fallback for a capture with nothing behind it (a restored
+    // session that reopened straight into the capture route).
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     if (returnTo) {
       router.replace(returnTo as never);
       return;
     }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/inbox');
-    }
+    router.replace('/inbox');
   }, [returnTo, router]);
 
   const handleCancel = () => {

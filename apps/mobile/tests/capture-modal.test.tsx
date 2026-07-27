@@ -454,6 +454,43 @@ describe('CaptureScreen', () => {
     expect(routerMocks.replace).not.toHaveBeenCalledWith('/inbox');
   });
 
+  it('pops back to the project instead of stacking a duplicate screen per saved task (#938)', async () => {
+    // The project add-task flow pushes capture on top of the project screen, so
+    // replacing capture with returnTo left one extra screen on the stack per
+    // save: leaving the project then took one back tap per task added.
+    routerMocks.canGoBack.mockReturnValue(true);
+    routeParams.current = {
+      initialValue: encodeURIComponent('Project task'),
+      initialProps: encodeURIComponent(JSON.stringify({
+        projectId: 'project-1',
+        status: 'next',
+      })),
+      returnTo: encodeURIComponent('/projects-screen?projectId=project-1'),
+    };
+    storeState.projects = [{
+      id: 'project-1',
+      title: 'Launch',
+      status: 'active',
+    }];
+
+    let tree!: ReturnType<typeof create>;
+
+    act(() => {
+      tree = create(<CaptureScreen />);
+    });
+
+    await act(async () => {
+      await findTouchableByText(tree, 'Save').props.onPress();
+    });
+
+    expect(storeState.addTask).toHaveBeenCalledWith('Project task', {
+      status: 'next',
+      projectId: 'project-1',
+    });
+    expect(routerMocks.back).toHaveBeenCalledTimes(1);
+    expect(routerMocks.replace).not.toHaveBeenCalled();
+  });
+
   it('sanitizes capture return routes to app-internal paths', () => {
     expect(sanitizeCaptureReturnToParam(encodeURIComponent('/projects-screen?projectId=project-1')))
       .toBe('/projects-screen?projectId=project-1');
