@@ -1829,8 +1829,17 @@ pub fn run() {
             set_desktop_rendering_config,
             quit_app
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        // Runs after the plugins have handled the same event — Tauri dispatches to
+        // the plugin store first and calls this callback with the returned event —
+        // so the window-state plugin has already written its file and recreated the
+        // OS config directory by the time this clears the empty leftover (#936).
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                crate::storage::cleanup_portable_os_config_dir(app);
+            }
+        });
 }
 
 #[cfg(test)]

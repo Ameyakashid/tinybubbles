@@ -64,6 +64,29 @@ pub(crate) fn portable_window_state_path() -> Option<PathBuf> {
     window_state_path_for_mode(detect_storage_mode())
 }
 
+/// Removes `path` only when it is an empty directory. Returns whether it went.
+///
+/// `remove_dir` is non-recursive and fails on a non-empty directory, so this can
+/// never take anything with it — if some other component has put a file there,
+/// the call simply fails and the directory stays.
+fn remove_dir_if_empty(path: &Path) -> bool {
+    std::fs::remove_dir(path).is_ok()
+}
+
+/// Portable installs are meant to leave nothing outside their own folder, but the
+/// window-state plugin creates the OS config directory on every save even though
+/// its file is redirected into the profile (#936). Tauri has no hook to prevent
+/// that yet, so the empty leftover is cleared on the way out.
+pub(crate) fn cleanup_portable_os_config_dir(app: &tauri::AppHandle) {
+    if !is_portable_mode() {
+        return;
+    }
+    let Ok(os_config_dir) = app.path().app_config_dir() else {
+        return;
+    };
+    remove_dir_if_empty(&os_config_dir);
+}
+
 fn window_state_path_for_mode(mode: StorageMode) -> Option<PathBuf> {
     if let StorageMode::Portable { profile_root } = mode {
         return Some(
@@ -2350,6 +2373,38 @@ mod tests {
         let mode = detect_storage_mode_from_exe_dir(Some(&exe_dir));
 
         assert_eq!(mode, StorageMode::Standard);
+    }
+
+    #[test]
+    fn empty_leftover_directory_is_removed() {
+        let parent = tempfile::tempdir().expect("should create temp parent");
+        let target = parent.path().join("mindwtr-empty");
+        fs::create_dir(&target).expect("should create target dir");
+
+        assert!(remove_dir_if_empty(&target));
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn directory_holding_anything_is_left_alone() {
+        // The whole point of remove_dir over remove_dir_all: if another component
+        // has written into the OS config dir, the cleanup must not take it.
+        let parent = tempfile::tempdir().expect("should create temp parent");
+        let target = parent.path().join("mindwtr-occupied");
+        fs::create_dir(&target).expect("should create target dir");
+        let occupant = target.join("someone-elses.json");
+        fs::write(&occupant, b"{}").expect("should write occupant file");
+
+        assert!(!remove_dir_if_empty(&target));
+        assert!(target.exists());
+        assert!(occupant.exists());
+    }
+
+    #[test]
+    fn missing_directory_is_not_an_error() {
+        let parent = tempfile::tempdir().expect("should create temp parent");
+
+        assert!(!remove_dir_if_empty(&parent.path().join("never-created")));
     }
 
     #[test]
