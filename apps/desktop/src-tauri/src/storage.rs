@@ -5,6 +5,7 @@ const PORTABLE_PROFILE_DIR_NAME: &str = "profile";
 const PORTABLE_CONFIG_DIR_NAME: &str = "config";
 const PORTABLE_DATA_DIR_NAME: &str = "data";
 const PORTABLE_WEBVIEW_DIR_NAME: &str = "webview";
+const WINDOW_STATE_FILE_NAME: &str = "window-state.json";
 const SEARCH_RESULT_LIMIT: usize = 200;
 const SEARCH_RESULT_QUERY_LIMIT: i64 = (SEARCH_RESULT_LIMIT as i64) + 1;
 
@@ -47,6 +48,29 @@ pub(crate) fn is_portable_mode() -> bool {
 pub(crate) fn portable_webview_data_dir() -> Option<PathBuf> {
     if let StorageMode::Portable { profile_root } = detect_storage_mode() {
         return Some(profile_root.join(PORTABLE_WEBVIEW_DIR_NAME));
+    }
+    None
+}
+
+// Absolute path the window-state plugin should write to on a portable install,
+// or None when the OS-default location is correct (#936).
+//
+// The plugin has no "state directory" setting: it joins its configured filename
+// onto the OS app-config dir. Path::join replaces the base outright when the
+// joined path is absolute, so handing it an absolute path is what keeps a
+// portable profile self-contained instead of dropping window state into
+// %APPDATA% (the same leak that #855 fixed for the HTTP plugin's cookie jar).
+pub(crate) fn portable_window_state_path() -> Option<PathBuf> {
+    window_state_path_for_mode(detect_storage_mode())
+}
+
+fn window_state_path_for_mode(mode: StorageMode) -> Option<PathBuf> {
+    if let StorageMode::Portable { profile_root } = mode {
+        return Some(
+            profile_root
+                .join(PORTABLE_CONFIG_DIR_NAME)
+                .join(WINDOW_STATE_FILE_NAME),
+        );
     }
     None
 }
@@ -2326,6 +2350,34 @@ mod tests {
         let mode = detect_storage_mode_from_exe_dir(Some(&exe_dir));
 
         assert_eq!(mode, StorageMode::Standard);
+    }
+
+    #[test]
+    fn window_state_path_is_unset_outside_portable_mode() {
+        assert_eq!(window_state_path_for_mode(StorageMode::Standard), None);
+    }
+
+    #[test]
+    fn window_state_path_is_absolute_inside_the_portable_profile() {
+        let profile_root = tempfile::tempdir().expect("should create temp profile root");
+
+        let path = window_state_path_for_mode(StorageMode::Portable {
+            profile_root: profile_root.path().to_path_buf(),
+        })
+        .expect("portable mode should redirect window state");
+
+        // The plugin joins this onto the OS app-config dir, and Path::join only
+        // discards that base when the joined path is absolute. A relative path
+        // here would silently land window state back in %APPDATA% (#936, #855).
+        assert!(path.is_absolute(), "window state path must be absolute");
+        assert!(path.starts_with(profile_root.path()));
+        assert_eq!(
+            path,
+            profile_root
+                .path()
+                .join(PORTABLE_CONFIG_DIR_NAME)
+                .join(WINDOW_STATE_FILE_NAME)
+        );
     }
 
     #[test]

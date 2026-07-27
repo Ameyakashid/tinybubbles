@@ -925,6 +925,32 @@ fn should_start_hidden(launched_via_startup: bool, tray_icon_available: bool) ->
     launched_via_startup && tray_icon_available
 }
 
+/// Remembers the main window's geometry across restarts (#936).
+///
+/// Only the geometry the user deliberately set is persisted. VISIBLE is
+/// excluded because whether the window opens hidden is decided per launch by
+/// should_start_hidden (#928) — persisting it would let a single tray start
+/// leave every later manual launch invisible, with no window to bring back.
+/// DECORATIONS is excluded because it is a runtime decision for niri sessions,
+/// not a saved user preference.
+fn build_window_state_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    use tauri_plugin_window_state::StateFlags;
+
+    let mut builder = tauri_plugin_window_state::Builder::default().with_state_flags(
+        StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN,
+    );
+    if let Some(path) = crate::storage::portable_window_state_path() {
+        // The plugin only creates the OS app-config dir it thinks it is writing
+        // to, and it discards save errors, so a portable profile that has never
+        // written config would drop window state silently.
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        builder = builder.with_filename(path.to_string_lossy().into_owned());
+    }
+    builder.build()
+}
+
 // Shared by the pre-window-build availability check and the real tray
 // construction below, so both agree on whether a tray icon exists (#928).
 fn resolve_tray_icon(handle: &tauri::AppHandle) -> Option<Image<'_>> {
@@ -1346,6 +1372,7 @@ pub fn run() {
                 .args([STARTUP_LAUNCH_CLI_FLAG])
                 .build(),
         )
+        .plugin(build_window_state_plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
     #[cfg(target_os = "macos")]
     let builder = builder

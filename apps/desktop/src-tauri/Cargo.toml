@@ -56,6 +56,11 @@ sha2 = "0.10"
 notify = "8.2"
 tempfile = "3.23"
 tauri-plugin-autostart = "2.5.1"
+# Remembers the main window's geometry across restarts (#936). Restoring a
+# window correctly is mostly edge cases — a monitor that is no longer attached,
+# a saved position now off-screen, per-monitor DPI — so this uses the official
+# plugin rather than a hand-rolled save/restore that would get those wrong.
+tauri-plugin-window-state = "2"
 tar = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
