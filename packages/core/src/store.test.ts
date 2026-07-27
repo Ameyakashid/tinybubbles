@@ -12,6 +12,7 @@ import { buildEntityMap } from './store-helpers';
 import { shouldShowTaskForStart } from './task-utils';
 import type { StorageAdapter } from './storage';
 import type { AppData, Area, Project, Task } from './types';
+import { runDataTransferTransaction } from './data-transfer-transaction';
 
 const waitForExpectation = async (assertion: () => void, maxAttempts = 200): Promise<void> => {
     let lastError: unknown = null;
@@ -249,6 +250,87 @@ describe('TaskStore', () => {
         await flushPromise;
         expect(flushed).toBe(true);
         expect(mockStorage.saveData).not.toHaveBeenCalled();
+    });
+
+    it('queues task, project, and settings writes until a data transfer refreshes', async () => {
+        const task = createStoreTask('task-1', { status: 'next' });
+        const project = createStoreProject('project-1');
+        let persisted: AppData = {
+            tasks: [task],
+            projects: [project],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        };
+        let releaseTransferPersist: (() => void) | null = null;
+        let transferPersistStarted: (() => void) | null = null;
+        const transferPersistGate = new Promise<void>((resolve) => {
+            releaseTransferPersist = resolve;
+        });
+        const transferPersistStartedGate = new Promise<void>((resolve) => {
+            transferPersistStarted = resolve;
+        });
+        mockStorage = {
+            getData: async () => structuredClone(persisted),
+            saveData: async (data) => {
+                persisted = structuredClone(data);
+            },
+            saveTask: async (savedTask) => {
+                persisted = {
+                    ...persisted,
+                    tasks: persisted.tasks.map((item) => item.id === savedTask.id ? structuredClone(savedTask) : item),
+                };
+            },
+        };
+        setStorageAdapter(mockStorage);
+        await useTaskStore.getState().fetchData({ silent: true });
+
+        const transfer = runDataTransferTransaction({
+            operation: 'importTodoist',
+            flushPendingSave,
+            getCurrentChangeAt: () => useTaskStore.getState().lastDataChangeAt,
+            readCurrentData: () => mockStorage.getData(),
+            createRecoverySnapshot: async () => 'data.snapshot.json',
+            apply: (currentData) => ({
+                data: {
+                    ...currentData,
+                    tasks: [
+                        ...currentData.tasks,
+                        createStoreTask('imported-task', { title: 'Imported task' }),
+                    ],
+                },
+                result: undefined,
+            }),
+            persistData: async (data) => {
+                transferPersistStarted?.();
+                await transferPersistGate;
+                await mockStorage.saveData(data);
+            },
+            refreshData: () => useTaskStore.getState().fetchData({ silent: true }),
+        });
+        await transferPersistStartedGate;
+
+        const taskWrite = useTaskStore.getState().updateTask(task.id, { title: 'Edited during import' });
+        const projectWrite = useTaskStore.getState().updateProject(project.id, { title: 'Edited project' });
+        const settingsWrite = useTaskStore.getState().updateSettings({ language: 'de' });
+        expect(useTaskStore.getState()._tasksById.get(task.id)?.title).toBe(task.title);
+        expect(useTaskStore.getState()._projectsById.get(project.id)?.title).toBe(project.title);
+        expect(useTaskStore.getState().settings.language).toBeUndefined();
+
+        releaseTransferPersist?.();
+        await transfer;
+        await Promise.all([taskWrite, projectWrite, settingsWrite]);
+        await flushPendingSave();
+
+        expect(persisted.tasks.map((item) => item.id).sort()).toEqual(['imported-task', 'task-1']);
+        expect(persisted.tasks.find((item) => item.id === task.id)?.title).toBe('Edited during import');
+        expect(persisted.projects[0]?.title).toBe('Edited project');
+        expect(persisted.settings.language).toBe('de');
+        expect(useTaskStore.getState()._tasksById.get('imported-task')?.title).toBe('Imported task');
+        expect(useTaskStore.getState()._tasksById.get(task.id)?.title).toBe('Edited during import');
+        expect(useTaskStore.getState()._projectsById.get(project.id)?.title).toBe('Edited project');
+        expect(useTaskStore.getState().settings.language).toBe('de');
     });
 
     it('confirms incremental task storage for a scoped operation', async () => {

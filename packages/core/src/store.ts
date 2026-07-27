@@ -23,6 +23,7 @@ import { createSettingsActions } from './store-settings';
 import { createTaskActions } from './store-tasks';
 import { sleep } from './async-utils';
 import { instrumentStoreSubscribe } from './store-notify-profiler';
+import { runAfterStoreWriteLock } from './data-transfer-transaction';
 
 export { applyTaskUpdates } from './store-helpers';
 
@@ -506,6 +507,68 @@ export const flushPendingSave = async (): Promise<void> => {
     }
 };
 
+const STORE_WRITE_ACTION_KEYS = [
+    'seedGettingStarted',
+    'addTask',
+    'addTasks',
+    'updateTask',
+    'deleteTask',
+    'restoreTask',
+    'restoreTasks',
+    'purgeTask',
+    'purgeTasks',
+    'purgeDeletedTasks',
+    'duplicateTask',
+    'promoteTaskToProject',
+    'resetTaskChecklist',
+    'moveTask',
+    'batchUpdateTasks',
+    'batchMoveTasks',
+    'batchDeleteTasks',
+    'reorderFocusedTasks',
+    'addProject',
+    'updateProject',
+    'deleteProject',
+    'restoreProject',
+    'purgeProject',
+    'purgeDeletedProjects',
+    'duplicateProject',
+    'toggleProjectFocus',
+    'addSection',
+    'updateSection',
+    'deleteSection',
+    'reorderSections',
+    'addArea',
+    'updateArea',
+    'deleteArea',
+    'restoreArea',
+    'reorderAreas',
+    'reorderProjects',
+    'reorderProjectTasks',
+    'reorderBoardTasks',
+    'addPerson',
+    'updatePerson',
+    'renamePerson',
+    'deletePerson',
+    'restorePerson',
+    'deleteTag',
+    'renameTag',
+    'deleteContext',
+    'renameContext',
+    'updateSettings',
+    'persistSnapshot',
+] as const satisfies readonly (keyof TaskStore)[];
+
+const wrapStoreWriteActions = (actions: TaskStore): TaskStore => {
+    const wrapped = { ...actions };
+    for (const key of STORE_WRITE_ACTION_KEYS) {
+        const action = actions[key] as (...args: unknown[]) => Promise<unknown>;
+        (wrapped as unknown as Record<string, unknown>)[key] = (...args: unknown[]) =>
+            runAfterStoreWriteLock(() => action(...args));
+    }
+    return wrapped;
+};
+
 export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelector((rawSet, get, api) => {
     instrumentStoreSubscribe(api);
     const set: typeof rawSet = (partial) => rawSet((state) => {
@@ -513,7 +576,7 @@ export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelec
         return prepareStoreStateUpdate(state, nextState) as Partial<TaskStore> | TaskStore;
     });
 
-    return {
+    return wrapStoreWriteActions({
         tasks: [],
         projects: [],
         sections: [],
@@ -560,7 +623,7 @@ export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelec
             get,
             debouncedSave,
         }),
-    };
+    });
 }));
 
 const originalSetState = useTaskStore.setState;
