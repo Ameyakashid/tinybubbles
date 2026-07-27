@@ -467,12 +467,6 @@ export const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
-  staticList: {
-    flex: 1,
-  },
-  staticItem: {
-    marginBottom: 0,
-  },
   projectReorderModeBar: {
     minHeight: 44,
     paddingHorizontal: 16,

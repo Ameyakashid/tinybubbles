@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { View, FlatList, Text, TextInput, RefreshControl, Modal, Pressable, TouchableOpacity, useWindowDimensions, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { View, FlatList, Text, TextInput, RefreshControl, Modal, Pressable, TouchableOpacity, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical } from 'lucide-react-native';
 import DraggableFlatList, { type DragEndParams, type RenderItemParams } from 'react-native-draggable-flatlist';
@@ -84,10 +84,8 @@ import {
 import { styles } from './task-list/task-list.styles';
 import {
   buildProjectTaskReorderGroups,
-  buildStaticListVirtualWindow,
   flattenProjectReorderGroups,
   resolveProjectReorderDropPlan,
-  resolveStaticListViewportHeight,
   type ProjectReorderFlatItem,
   type ProjectTaskReorderGroup,
   sortProjectTasksByOrder,
@@ -110,17 +108,9 @@ const PROJECT_REORDER_ANIMATION_CONFIG = {
   restSpeedThreshold: 0.1,
   stiffness: 240,
 } as const;
-const STATIC_LIST_VIRTUALIZATION_THRESHOLD = 80;
-const STATIC_LIST_ROW_ESTIMATE = 88;
-const STATIC_LIST_OVERSCAN = 8;
 const SLOW_TASK_LIST_DERIVE_MS = 250;
 const SLOW_TASK_LIST_COMMIT_MS = 500;
 let nextTaskListInstanceId = 0;
-
-type StaticListVirtualizationWindow = {
-  scrollOffsetY: number;
-  viewportHeight: number;
-};
 
 type AddTaskOptions = {
   openAfterCreate?: boolean;
@@ -146,8 +136,6 @@ interface TaskListContentProps {
 
 /** The scroll container itself: which render path, its padding, refs and scroll events. */
 interface TaskListScrollProps {
-  staticList?: boolean;
-  staticListVirtualization?: StaticListVirtualizationWindow;
   contentPaddingBottom?: number;
   /** Element rendered inside the virtualized list, scrolling away with the rows (e.g. the project sheet's details/notes header). */
   listHeaderComponent?: React.ReactElement | null;
@@ -205,8 +193,6 @@ function TaskListComponent({
   showTimeEstimateFilters: showTimeEstimateFiltersProp = true,
   allowAdd = true,
   projectId,
-  staticList = false,
-  staticListVirtualization,
   enableBulkActions = true,
   enableInboxBulkOrganize = false,
   enableProjectBulkOrganize = false,
@@ -253,7 +239,7 @@ function TaskListComponent({
   const { isDark } = useTheme();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const {
     tasks,
     projects,
@@ -376,16 +362,6 @@ function TaskListComponent({
     }
     return [styles.listContent, { paddingBottom: 12 + contentPaddingBottom }];
   }, [contentPaddingBottom]);
-  const [taskListRootOffsetY, setTaskListRootOffsetY] = useState(0);
-  const [staticListOffsetY, setStaticListOffsetY] = useState(0);
-  const handleTaskListRootLayout = useCallback((event: LayoutChangeEvent) => {
-    if (!staticListVirtualization) return;
-    setTaskListRootOffsetY(event.nativeEvent.layout.y);
-  }, [staticListVirtualization]);
-  const handleStaticListLayout = useCallback((event: LayoutChangeEvent) => {
-    if (!staticListVirtualization) return;
-    setStaticListOffsetY(event.nativeEvent.layout.y);
-  }, [staticListVirtualization]);
   const emptyMessage = emptyText || t('list.noTasks');
 
   const tasksById = useMemo(() => {
@@ -879,37 +855,6 @@ function TaskListComponent({
   const groupByLabel = getGroupByLabel(activeGroupBy);
   const groupLabel = tFallback(t, 'list.groupBy', 'Group');
   const showGroupControl = !projectId && Boolean(handleChangeGroupBy);
-  const staticListVirtualWindow = useMemo(() => {
-    const effectiveViewportHeight = resolveStaticListViewportHeight(
-      staticListVirtualization?.viewportHeight ?? 0,
-      windowHeight,
-    );
-    if (
-      !staticList
-      || projectReorderMode
-      || !staticListVirtualization
-      || effectiveViewportHeight <= 0
-      || listItems.length <= STATIC_LIST_VIRTUALIZATION_THRESHOLD
-    ) {
-      return null;
-    }
-
-    return buildStaticListVirtualWindow(listItems, {
-      listOffsetY: taskListRootOffsetY + staticListOffsetY,
-      overscan: STATIC_LIST_OVERSCAN,
-      rowEstimate: STATIC_LIST_ROW_ESTIMATE,
-      scrollOffsetY: staticListVirtualization.scrollOffsetY,
-      viewportHeight: effectiveViewportHeight,
-    });
-  }, [
-    listItems,
-    projectReorderMode,
-    staticList,
-    staticListOffsetY,
-    staticListVirtualization,
-    taskListRootOffsetY,
-    windowHeight,
-  ]);
   // Keep the draggable pan handler on the handle strip so vertical scrolling still works.
   // DraggableFlatList gesture props: https://github.com/computerjazz/react-native-draggable-flatlist#props
   const projectDragHitSlop = useMemo(() => ({
@@ -1022,7 +967,7 @@ function TaskListComponent({
     (info: { index: number; averageItemLength: number }) => {
       const list = internalListRef.current;
       if (!list) return;
-      const estimate = (info.averageItemLength || STATIC_LIST_ROW_ESTIMATE) * info.index;
+      const estimate = (info.averageItemLength || 88) * info.index;
       list.scrollToOffset({ offset: estimate, animated: false });
       setTimeout(() => {
         try {
@@ -1720,10 +1665,7 @@ function TaskListComponent({
   ) : null;
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: themeColorsMemo.bg }]}
-      onLayout={handleTaskListRootLayout}
-    >
+    <View style={[styles.container, { backgroundColor: themeColorsMemo.bg }]}>
       <TaskListHeader
         activeFilterChips={activeFilterChips}
         count={orderedTasks.length}
@@ -1884,41 +1826,6 @@ function TaskListComponent({
           style={styles.projectDragSelfScrollList}
           contentContainerStyle={styles.projectDragSelfScrollContent}
         />
-      ) : staticList ? (
-        <View style={styles.staticList} onLayout={handleStaticListLayout}>
-          {listItems.length === 0 ? (
-            <ListEmptyState
-              message={filteredEmptyMessage}
-              hint={filteredEmptyHint}
-              backgroundColor={themeColorsMemo.cardBg}
-              borderColor={themeColorsMemo.border}
-              textColor={themeColorsMemo.text}
-              mutedTextColor={themeColorsMemo.secondaryText}
-              actionLabel={filteredEmptyActionLabel}
-              onAction={filteredEmptyAction}
-            />
-          ) : staticListVirtualWindow ? (
-            <>
-              {staticListVirtualWindow.topSpacerHeight > 0 ? (
-                <View style={{ height: staticListVirtualWindow.topSpacerHeight }} />
-              ) : null}
-              {staticListVirtualWindow.items.map((item) => (
-                <View key={getListItemKey(item)} style={styles.staticItem}>
-                  {renderListItem({ item })}
-                </View>
-              ))}
-              {staticListVirtualWindow.bottomSpacerHeight > 0 ? (
-                <View style={{ height: staticListVirtualWindow.bottomSpacerHeight }} />
-              ) : null}
-            </>
-          ) : (
-            listItems.map((item) => (
-              <View key={getListItemKey(item)} style={styles.staticItem}>
-                {renderListItem({ item })}
-              </View>
-            ))
-          )}
-        </View>
       ) : (
         <FlatList
           ref={setListRef}
