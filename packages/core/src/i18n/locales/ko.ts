@@ -1309,6 +1309,7 @@ export const koOverrides: Record<string, string> = {
         'bulk.selectRange': '범위',
         'bulk.selectRangeActive': '끝 선택',
         'bulk.addTag': '태그 추가',
+        'bulk.removeTag': '태그 삭제',
         'bulk.addContext': '상황 추가',
         'bulk.removeContext': '상황 삭제',
         'bulk.tagPlaceholder': '#tag',

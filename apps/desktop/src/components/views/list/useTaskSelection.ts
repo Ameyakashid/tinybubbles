@@ -291,7 +291,7 @@ export function useTaskSelection(
 
     const updateSelectedTaskTokens = useCallback((
         field: 'tags' | 'contexts',
-        value: string,
+        value: string | readonly string[],
         action: 'add' | 'remove',
         options?: TokenActionOptions,
     ) => {

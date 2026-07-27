@@ -8,6 +8,8 @@ type ReviewBulkActionsProps = {
     onChangeMoveToStatus: (status: TaskStatus) => void;
     onBulkOrganize?: () => void;
     onAddTag: () => void;
+    onRemoveTag?: () => void;
+    disableRemoveTag?: boolean;
     onDelete: () => void;
     statusOptions: TaskStatus[];
     t: (key: string) => string;
@@ -20,6 +22,8 @@ export function ReviewBulkActions({
     onChangeMoveToStatus,
     onBulkOrganize,
     onAddTag,
+    onRemoveTag,
+    disableRemoveTag = false,
     onDelete,
     statusOptions,
     t,
@@ -74,6 +78,15 @@ export function ReviewBulkActions({
                 >
                     {t('bulk.addTag')}
                 </button>
+                {onRemoveTag && (
+                    <button
+                        onClick={onRemoveTag}
+                        disabled={disableRemoveTag}
+                        className="text-xs px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {t('bulk.removeTag')}
+                    </button>
+                )}
                 <button
                     onClick={onDelete}
                     className="text-xs px-2 py-1 rounded bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"

@@ -1050,6 +1050,7 @@ export const deOverrides: Record<string, string> = {
         'bulk.selected': 'ausgewählt',
         'bulk.moveTo': 'Verschieben nach',
         'bulk.addTag': 'Schlagwort hinzufügen',
+        'bulk.removeTag': 'Schlagwort entfernen',
         'bulk.addContext': 'Kontext hinzufügen',
         'bulk.removeContext': 'Kontext entfernen',
         'bulk.delete': 'Ausgewählte löschen',

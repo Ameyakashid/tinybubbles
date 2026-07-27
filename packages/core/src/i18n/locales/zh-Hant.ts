@@ -1203,6 +1203,7 @@ export const zhHant: Record<string, string> = {
         'bulk.selectRange': '範圍',
         'bulk.selectRangeActive': '選擇終點',
         'bulk.addTag': '添加標籤',
+        'bulk.removeTag': '移除標籤',
         'bulk.addContext': '添加情境',
         'bulk.removeContext': '移除情境',
         'bulk.delete': '刪除所選',

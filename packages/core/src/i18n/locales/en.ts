@@ -1317,6 +1317,7 @@ export const en: Record<string, string> = {
         'bulk.selectRange': 'Range',
         'bulk.selectRangeActive': 'Pick end',
         'bulk.addTag': 'Add tag',
+        'bulk.removeTag': 'Remove tag',
         'bulk.addContext': 'Add context',
         'bulk.removeContext': 'Remove context',
         'bulk.tagPlaceholder': '#tag',

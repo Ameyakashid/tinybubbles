@@ -1071,6 +1071,7 @@ export const ptOverrides: Record<string, string> = {
         'bulk.selected': 'selecionado',
         'bulk.moveTo': 'Mover para',
         'bulk.addTag': 'Adicionar etiqueta',
+        'bulk.removeTag': 'Remover etiqueta',
         'bulk.addContext': 'Adicionar contexto',
         'bulk.removeContext': 'Remover contexto',
         'bulk.delete': 'Excluir selecionado',

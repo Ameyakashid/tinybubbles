@@ -11,9 +11,10 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, isTaskInActiveProject } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, isTaskInActiveProject } from '@mindwtr/core';
 
 import { PromptModal } from '../PromptModal';
+import { TokenPickerModal } from '../TokenPickerModal';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
@@ -92,6 +93,7 @@ export function ReviewView() {
     }, [setPersistedViewState]);
     const [searchQuery, setSearchQuery] = useState('');
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
+    const [removeTagPickerOpen, setRemoveTagPickerOpen] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
     const [showDailyGuide, setShowDailyGuide] = useState(false);
     const [moveToStatus, setMoveToStatus] = useState<TaskStatus | ''>('');
@@ -236,6 +238,16 @@ export function ReviewView() {
         setTagPromptOpen(true);
     }, [selectedIdsArray]);
 
+    const removableTagOptions = useMemo(
+        () => collectBulkTaskTokens(selectedIdsArray, tasksById, 'tags'),
+        [selectedIdsArray, tasksById],
+    );
+
+    const handleBatchRemoveTag = useCallback(() => {
+        if (selectedIdsArray.length === 0) return;
+        setRemoveTagPickerOpen(true);
+    }, [selectedIdsArray]);
+
     const handleToggleDetails = useCallback(() => {
         if (showListDetails) {
             collapseAllTaskDetails();
@@ -310,6 +322,8 @@ export function ReviewView() {
                             onChangeMoveToStatus={setMoveToStatus}
                             onBulkOrganize={() => setBulkOrganizeOpen(true)}
                             onAddTag={handleBatchAddTag}
+                            onRemoveTag={handleBatchRemoveTag}
+                            disableRemoveTag={removableTagOptions.length === 0}
                             onDelete={handleBatchDelete}
                             statusOptions={bulkStatuses}
                             t={t}
@@ -380,6 +394,25 @@ export function ReviewView() {
                         await updateSelectedTaskTokens('tags', tag, 'add', {
                             afterNoop: () => setTagPromptOpen(false),
                             afterSuccess: () => setTagPromptOpen(false),
+                        });
+                    }}
+                />
+
+                <TokenPickerModal
+                    isOpen={removeTagPickerOpen}
+                    title={t('bulk.removeTag')}
+                    description={t('bulk.removeTag')}
+                    tokens={removableTagOptions}
+                    placeholder={t('bulk.tagPlaceholder')}
+                    multiSelect
+                    confirmLabel={t('common.save')}
+                    cancelLabel={t('common.cancel')}
+                    onCancel={() => setRemoveTagPickerOpen(false)}
+                    onConfirm={async (values) => {
+                        if (values.length === 0) return;
+                        await updateSelectedTaskTokens('tags', values, 'remove', {
+                            afterNoop: () => setRemoveTagPickerOpen(false),
+                            afterSuccess: () => setRemoveTagPickerOpen(false),
                         });
                     }}
                 />

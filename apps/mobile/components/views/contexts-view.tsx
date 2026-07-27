@@ -232,14 +232,14 @@ export function ContextsView() {
     ? t('taskEdit.tagsPlaceholder')
     : t('taskEdit.contextsPlaceholder');
 
-  const handleBulkTokenConfirm = async (value: string) => {
+  const handleBulkTokenConfirm = async (values: string[]) => {
     if (!bulkTokenPicker || !hasSelection) return;
     await runBulkAction(tokenPickerTitle, async () => {
       const updates = buildBulkTaskTokenUpdates(
         selectedIdsArray,
         tasksById,
         bulkTokenPicker.field,
-        value,
+        values,
         bulkTokenPicker.action
       );
       setBulkTokenPicker(null);
@@ -591,9 +591,10 @@ export function ContextsView() {
           tokens={tokenPickerOptions}
           placeholder={tokenPickerPlaceholder}
           allowCustomValue={bulkTokenPicker?.action === 'add'}
+          multiSelect={bulkTokenPicker?.action === 'remove'}
           onClose={() => setBulkTokenPicker(null)}
-          onConfirm={(value) => {
-            void handleBulkTokenConfirm(value);
+          onConfirm={(values) => {
+            void handleBulkTokenConfirm(values);
           }}
         />
 

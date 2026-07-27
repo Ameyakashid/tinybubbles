@@ -1271,6 +1271,7 @@ export const frOverrides: Record<string, string> = {
         'bulk.selectRange': 'Choisir un intervalle',
         'bulk.selectRangeActive': 'Choisir la fin',
         'bulk.addTag': 'Ajouter un tag',
+        'bulk.removeTag': 'Supprimer le tag',
         'bulk.addContext': 'Ajouter un contexte',
         'bulk.removeContext': 'Supprimer le contexte',
         'bulk.tagPlaceholder': '#tag',

@@ -1203,6 +1203,7 @@ export const zhHans: Record<string, string> = {
         'bulk.selectRange': '范围',
         'bulk.selectRangeActive': '选择终点',
         'bulk.addTag': '添加标签',
+        'bulk.removeTag': '移除标签',
         'bulk.addContext': '添加情境',
         'bulk.removeContext': '移除情境',
         'bulk.delete': '删除所选',

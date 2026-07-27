@@ -1245,6 +1245,7 @@ export const csOverrides: Record<string, string> = {
         'bulk.selectRange': 'Rozsah',
         'bulk.selectRangeActive': 'Zvolte konec',
         'bulk.addTag': 'Přidat štítek',
+        'bulk.removeTag': 'Odebrat štítek',
         'bulk.addContext': 'Přidat kontext',
         'bulk.removeContext': 'Odebrat kontext',
         'bulk.tagPlaceholder': '#štítek',

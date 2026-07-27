@@ -84,6 +84,7 @@ import {
 import {
   TaskListTagModal,
 } from './task-list/TaskListTagModal';
+import { TokenPickerModal } from './token-picker-modal';
 import { styles } from './task-list/task-list.styles';
 import {
   buildProjectTaskReorderGroups,
@@ -400,11 +401,15 @@ function TaskListComponent({
     handleBatchDelete,
     handleBatchOrganize,
     handleBatchMove,
+    handleBatchRemoveTags,
     hasSelection,
     multiSelectedIds,
     rangeSelectMode,
+    removableTagOptions,
+    removeTagPickerVisible,
     selectedIdsArray,
     selectionMode,
+    setRemoveTagPickerVisible,
     setTagInput,
     setTagModalVisible,
     tagInput,
@@ -1136,6 +1141,8 @@ function TaskListComponent({
       onExitSelectionMode: exitSelectionMode,
       onOpenOrganize: canBulkOrganizeSelection ? () => setBulkOrganizeVisible(true) : undefined,
       onOpenTagModal: () => setTagModalVisible(true),
+      onOpenRemoveTagPicker: () => setRemoveTagPickerVisible(true),
+      canRemoveTags: removableTagOptions.length > 0,
       onToggleRangeSelectMode: toggleRangeSelectMode,
       rangeSelectMode,
       selectedCount: selectedIdsArray.length,
@@ -1155,8 +1162,10 @@ function TaskListComponent({
     hasSelection,
     projectReorderMode,
     rangeSelectMode,
+    removableTagOptions.length,
     selectedIdsArray.length,
     selectionMode,
+    setRemoveTagPickerVisible,
     setTagModalVisible,
     t,
     themeColorsMemo,
@@ -1946,6 +1955,19 @@ function TaskListComponent({
         tagInput={tagInput}
         themeColors={themeColorsMemo}
         visible={tagModalVisible}
+      />
+
+      <TokenPickerModal
+        visible={removeTagPickerVisible}
+        title={tFallback(t, 'bulk.removeTag', 'Remove tag')}
+        description={tFallback(t, 'bulk.removeTag', 'Remove tag')}
+        tokens={removableTagOptions}
+        placeholder={t('bulk.tagPlaceholder')}
+        multiSelect
+        onClose={() => setRemoveTagPickerVisible(false)}
+        onConfirm={(values) => {
+          void handleBatchRemoveTags(values);
+        }}
       />
 
       <TaskListBulkOrganizeModal

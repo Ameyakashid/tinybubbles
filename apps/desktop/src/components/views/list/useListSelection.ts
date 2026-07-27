@@ -7,6 +7,7 @@ import {
     useCallback,
     type RefObject,
 } from 'react';
+import { collectBulkTaskTokens } from '@mindwtr/core';
 import type {
     BulkOrganizeTaskUpdateInput,
     Task,
@@ -57,7 +58,9 @@ type UseListSelectionResult = {
     handleBatchDelete: () => Promise<void>;
     handleBatchMove: (newStatus: TaskStatus) => Promise<void>;
     handleBatchRemoveContext: () => void;
+    handleBatchRemoveTag: () => void;
     handleConfirmContextPrompt: (value: string) => Promise<void>;
+    handleConfirmRemoveTags: (values: string[]) => Promise<void>;
     handleConfirmTagPrompt: (value: string) => Promise<void>;
     handleSelectIndex: (index: number) => void;
     isBatchDeleting: boolean;
@@ -69,11 +72,14 @@ type UseListSelectionResult = {
     allVisibleTasksSelected: boolean;
     clearTaskSelection: () => void;
     multiSelectedIds: Set<string>;
+    removableTagOptions: string[];
+    removeTagPickerOpen: boolean;
     selectedIdsArray: string[];
     selectedIndex: number;
     selectAllVisibleTasks: () => void;
     selectionMode: boolean;
     setContextPromptOpen: (open: boolean) => void;
+    setRemoveTagPickerOpen: (open: boolean) => void;
     setTagPromptOpen: (open: boolean) => void;
     tagPromptOpen: boolean;
     toggleMultiSelect: (taskId: string, options?: RangeSelectionOptions) => void;
@@ -103,6 +109,7 @@ export function useListSelection({
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');
+    const [removeTagPickerOpen, setRemoveTagPickerOpen] = useState(false);
     const [selectionScrollVersion, setSelectionScrollVersion] = useState(0);
     const lastFilterKeyRef = useRef('');
     const pendingSelectionScrollRef = useRef(false);
@@ -352,6 +359,26 @@ export function useListSelection({
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
 
+    // Removal offers only the tags the selection actually carries, so a typo can
+    // never look like a silent no-op.
+    const removableTagOptions = useMemo(
+        () => collectBulkTaskTokens(selectedIdsArray, tasksById, 'tags'),
+        [selectedIdsArray, tasksById],
+    );
+
+    const handleBatchRemoveTag = useCallback(() => {
+        if (selectedIdsArray.length === 0) return;
+        setRemoveTagPickerOpen(true);
+    }, [selectedIdsArray]);
+
+    const handleConfirmRemoveTags = useCallback(async (values: string[]) => {
+        if (values.length === 0) return;
+        await updateSelectedTaskTokens('tags', values, 'remove', {
+            afterNoop: () => setRemoveTagPickerOpen(false),
+            afterSuccess: () => setRemoveTagPickerOpen(false),
+        });
+    }, [updateSelectedTaskTokens]);
+
     const handleConfirmTagPrompt = useCallback(async (value: string) => {
         const input = value.trim();
         if (!input) return;
@@ -386,7 +413,9 @@ export function useListSelection({
         handleBatchDelete,
         handleBatchMove,
         handleBatchRemoveContext,
+        handleBatchRemoveTag,
         handleConfirmContextPrompt,
+        handleConfirmRemoveTags,
         handleConfirmTagPrompt,
         handleSelectIndex,
         isBatchDeleting: activeAction === 'delete',
@@ -395,11 +424,14 @@ export function useListSelection({
         clearTaskSelection,
         multiSelectedIds,
         organizeSelectedTasks,
+        removableTagOptions,
+        removeTagPickerOpen,
         selectedIdsArray,
         selectedIndex,
         selectAllVisibleTasks,
         selectionMode,
         setContextPromptOpen,
+        setRemoveTagPickerOpen,
         setTagPromptOpen,
         tagPromptOpen,
         toggleMultiSelect,

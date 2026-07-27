@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, filterTasksBySearch, sortTasksBy } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { ListBulkActions } from './list/ListBulkActions';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { PromptModal } from '../PromptModal';
+import { TokenPickerModal } from '../TokenPickerModal';
 import { cn } from '../../lib/utils';
 import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -52,6 +53,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const showToast = useUiStore((state) => state.showToast);
     const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const [tagPromptOpen, setTagPromptOpen] = useState(false);
+    const [removeTagPickerOpen, setRemoveTagPickerOpen] = useState(false);
     const [contextPromptOpen, setContextPromptOpen] = useState(false);
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
@@ -208,6 +210,16 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         setContextPromptOpen(true);
     }, [selectedIdsArray]);
 
+    const removableTagOptions = useMemo(
+        () => collectBulkTaskTokens(selectedIdsArray, tasksById, 'tags'),
+        [selectedIdsArray, tasksById],
+    );
+
+    const handleBatchRemoveTag = useCallback(() => {
+        if (selectedIdsArray.length === 0) return;
+        setRemoveTagPickerOpen(true);
+    }, [selectedIdsArray]);
+
     const handleDelete = useCallback(async () => {
         if (!savedSearch) return;
         const confirmed = await requestConfirmation({
@@ -280,6 +292,8 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                             areaOptions={bulkAreaOptions}
                             onBulkOrganize={() => setBulkOrganizeOpen(true)}
                             onAddTag={handleBatchAddTag}
+                            onRemoveTag={handleBatchRemoveTag}
+                            disableRemoveTag={removableTagOptions.length === 0}
                             onAddContext={handleBatchAddContext}
                             onRemoveContext={handleBatchRemoveContext}
                             onDelete={handleBatchDelete}
@@ -349,6 +363,24 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                     await updateSelectedTaskTokens('tags', tag, 'add', {
                         afterNoop: () => setTagPromptOpen(false),
                         afterSuccess: () => setTagPromptOpen(false),
+                    });
+                }}
+            />
+            <TokenPickerModal
+                isOpen={removeTagPickerOpen}
+                title={t('bulk.removeTag')}
+                description={t('bulk.removeTag')}
+                tokens={removableTagOptions}
+                placeholder={t('bulk.tagPlaceholder')}
+                multiSelect
+                confirmLabel={t('common.save')}
+                cancelLabel={t('common.cancel')}
+                onCancel={() => setRemoveTagPickerOpen(false)}
+                onConfirm={async (values) => {
+                    if (values.length === 0) return;
+                    await updateSelectedTaskTokens('tags', values, 'remove', {
+                        afterNoop: () => setRemoveTagPickerOpen(false),
+                        afterSuccess: () => setRemoveTagPickerOpen(false),
                     });
                 }}
             />

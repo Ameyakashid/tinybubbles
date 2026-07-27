@@ -34,6 +34,7 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { ListEmptyState } from './list/ListEmptyState';
 import { ListControlsPanel } from './list/ListControlsPanel';
 import { PromptModal } from '../PromptModal';
+import { TokenPickerModal } from '../TokenPickerModal';
 import { InboxProcessor } from './InboxProcessor';
 import { MindSweepModal, MindSweepTrigger } from '../MindSweepModal';
 import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
@@ -693,7 +694,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         handleBatchDelete,
         handleBatchMove,
         handleBatchRemoveContext,
+        handleBatchRemoveTag,
         handleConfirmContextPrompt,
+        handleConfirmRemoveTags,
         handleConfirmTagPrompt,
         handleSelectIndex,
         isBatchDeleting,
@@ -702,11 +705,14 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         clearTaskSelection,
         multiSelectedIds,
         organizeSelectedTasks,
+        removableTagOptions,
+        removeTagPickerOpen,
         selectedIdsArray,
         selectedIndex,
         selectAllVisibleTasks,
         selectionMode,
         setContextPromptOpen,
+        setRemoveTagPickerOpen,
         setTagPromptOpen,
         tagPromptOpen,
         toggleMultiSelect,
@@ -1006,6 +1012,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     areaOptions={bulkAreaOptions}
                     onBulkOrganize={() => setBulkOrganizeOpen(true)}
                     onAddTag={handleBatchAddTag}
+                    onRemoveTag={handleBatchRemoveTag}
+                    disableRemoveTag={removableTagOptions.length === 0}
                     onAddContext={handleBatchAddContext}
                     onRemoveContext={handleBatchRemoveContext}
                     onDeleteSelection={handleBatchDelete}
@@ -1310,6 +1318,18 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             cancelLabel={t('common.cancel')}
             onCancel={() => setContextPromptOpen(false)}
             onConfirm={handleConfirmContextPrompt}
+        />
+        <TokenPickerModal
+            isOpen={removeTagPickerOpen}
+            title={t('bulk.removeTag')}
+            description={t('bulk.removeTag')}
+            tokens={removableTagOptions}
+            placeholder={t('bulk.tagPlaceholder')}
+            multiSelect
+            confirmLabel={t('common.save')}
+            cancelLabel={t('common.cancel')}
+            onCancel={() => setRemoveTagPickerOpen(false)}
+            onConfirm={handleConfirmRemoveTags}
         />
         <TaskBulkOrganizeModal
             isOpen={bulkOrganizeOpen}

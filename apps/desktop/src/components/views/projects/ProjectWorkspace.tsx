@@ -730,11 +730,11 @@ export function ProjectWorkspace({
         setBulkTokenPicker({ field, action });
     }, [selectedIdsArray.length]);
 
-    const handleBulkTokenConfirm = useCallback(async (value: string) => {
+    const handleBulkTokenConfirm = useCallback(async (values: string[]) => {
         if (!bulkTokenPicker || selectedIdsArray.length === 0) return;
         await updateSelectedTaskTokens(
             bulkTokenPicker.field,
-            value,
+            values,
             bulkTokenPicker.action,
             {
                 afterNoop: () => setBulkTokenPicker(null),
@@ -1702,6 +1702,7 @@ export function ProjectWorkspace({
                 tokens={tokenPickerOptions}
                 placeholder={tokenPickerPlaceholder}
                 allowCustomValue={bulkTokenPicker?.action === 'add'}
+                multiSelect={bulkTokenPicker?.action === 'remove'}
                 confirmLabel={t('common.save')}
                 cancelLabel={t('common.cancel')}
                 onCancel={() => setBulkTokenPicker(null)}

@@ -10,9 +10,11 @@ interface TokenPickerModalProps {
     tokens: string[];
     placeholder?: string;
     allowCustomValue?: boolean;
+    /** Let the user pick several tokens at once (used by the bulk remove flows). */
+    multiSelect?: boolean;
     confirmLabel: string;
     cancelLabel: string;
-    onConfirm: (value: string) => void;
+    onConfirm: (values: string[]) => void;
     onCancel: () => void;
 }
 
@@ -23,6 +25,7 @@ export function TokenPickerModal({
     tokens,
     placeholder,
     allowCustomValue = false,
+    multiSelect = false,
     confirmLabel,
     cancelLabel,
     onConfirm,
@@ -30,14 +33,14 @@ export function TokenPickerModal({
 }: TokenPickerModalProps) {
     const { t } = useLanguage();
     const [query, setQuery] = useState('');
-    const [selectedToken, setSelectedToken] = useState<string | null>(null);
+    const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
     const titleId = useId();
     const descriptionId = useId();
 
     useEffect(() => {
         if (!isOpen) return;
         setQuery('');
-        setSelectedToken(null);
+        setSelectedTokens([]);
     }, [isOpen]);
 
     const filteredTokens = useMemo(() => {
@@ -46,10 +49,22 @@ export function TokenPickerModal({
         return tokens.filter((token) => token.toLowerCase().includes(normalizedQuery));
     }, [query, tokens]);
 
-    const confirmValue = allowCustomValue
-        ? (selectedToken ?? query.trim())
-        : selectedToken;
-    const canConfirm = Boolean(confirmValue && confirmValue.trim().length > 0);
+    const toggleToken = (token: string) => {
+        if (multiSelect) {
+            setSelectedTokens((current) => (current.includes(token)
+                ? current.filter((item) => item !== token)
+                : [...current, token]));
+            return;
+        }
+        setSelectedTokens([token]);
+        setQuery(token);
+    };
+
+    const confirmValues = multiSelect
+        ? selectedTokens
+        : [allowCustomValue ? (selectedTokens[0] ?? query.trim()) : (selectedTokens[0] ?? '')]
+            .filter((value) => value.trim().length > 0);
+    const canConfirm = confirmValues.length > 0;
 
     if (!isOpen) return null;
 
@@ -83,11 +98,13 @@ export function TokenPickerModal({
                         onChange={(event) => {
                             const value = event.target.value;
                             setQuery(value);
+                            // In multi-select the field only filters; picks come from the chips.
+                            if (multiSelect) return;
                             if (!allowCustomValue) {
                                 const exactMatch = tokens.find((token) => token.toLowerCase() === value.trim().toLowerCase());
-                                setSelectedToken(exactMatch ?? null);
-                            } else if (selectedToken && selectedToken !== value) {
-                                setSelectedToken(null);
+                                setSelectedTokens(exactMatch ? [exactMatch] : []);
+                            } else if (selectedTokens[0] && selectedTokens[0] !== value) {
+                                setSelectedTokens([]);
                             }
                         }}
                         onKeyDown={(event) => {
@@ -95,9 +112,9 @@ export function TokenPickerModal({
                                 event.preventDefault();
                                 onCancel();
                             }
-                            if (event.key === 'Enter' && canConfirm && confirmValue) {
+                            if (event.key === 'Enter' && canConfirm) {
                                 event.preventDefault();
-                                onConfirm(confirmValue);
+                                onConfirm(confirmValues);
                             }
                         }}
                         placeholder={placeholder}
@@ -105,15 +122,13 @@ export function TokenPickerModal({
                     />
                     <div className="flex max-h-64 flex-wrap gap-2 overflow-y-auto rounded-lg border border-border/80 bg-card/60 p-3">
                         {filteredTokens.length > 0 ? filteredTokens.map((token) => {
-                            const isActive = token === selectedToken;
+                            const isActive = selectedTokens.includes(token);
                             return (
                                 <button
                                     key={token}
                                     type="button"
-                                    onClick={() => {
-                                        setSelectedToken(token);
-                                        setQuery(token);
-                                    }}
+                                    aria-pressed={multiSelect ? isActive : undefined}
+                                    onClick={() => toggleToken(token)}
                                     className={cn(
                                         'rounded-full border px-3 py-1.5 text-xs transition-colors',
                                         isActive
@@ -141,8 +156,8 @@ export function TokenPickerModal({
                         <button
                             type="button"
                             onClick={() => {
-                                if (confirmValue) {
-                                    onConfirm(confirmValue);
+                                if (canConfirm) {
+                                    onConfirm(confirmValues);
                                 }
                             }}
                             disabled={!canConfirm}

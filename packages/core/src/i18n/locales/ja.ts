@@ -1007,6 +1007,7 @@ export const jaOverrides: Record<string, string> = {
         'bulk.selected': '選択された',
         'bulk.moveTo': 'に移動します',
         'bulk.addTag': 'タグを追加',
+        'bulk.removeTag': 'タグを削除する',
         'bulk.addContext': 'コンテキストを追加する',
         'bulk.removeContext': 'コンテキストを削除する',
         'bulk.delete': '選択したものを削除',

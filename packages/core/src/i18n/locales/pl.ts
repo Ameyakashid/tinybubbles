@@ -1003,6 +1003,7 @@ export const plOverrides: Record<string, string> = {
         'bulk.selected': 'zaznaczonych',
         'bulk.moveTo': 'Przenieś do',
         'bulk.addTag': 'Dodaj tag',
+        'bulk.removeTag': 'Usuń tag',
         'bulk.addContext': 'Dodaj kontekst',
         'bulk.removeContext': 'Usuń kontekst',
         'bulk.delete': 'Usuń wybrane',

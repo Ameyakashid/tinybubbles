@@ -58,11 +58,14 @@ export const buildBulkTaskTokenUpdates = (
     ids: string[],
     tasksById: TaskLookup,
     field: BulkTaskTokenField,
-    value: string,
+    value: string | readonly string[],
     mode: BulkTaskTokenMode
 ): BulkTaskTokenUpdate[] => {
-    const token = normalizeBulkTaskTokenInput(value, field);
-    if (!token) return [];
+    const tokens = (Array.isArray(value) ? value : [value as string])
+        .map((item) => normalizeBulkTaskTokenInput(item, field))
+        .filter(Boolean);
+    if (tokens.length === 0) return [];
+    const tokenSet = new Set(tokens);
 
     return ids.flatMap((id) => {
         const task = getTaskFromLookup(tasksById, id);
@@ -74,8 +77,8 @@ export const buildBulkTaskTokenUpdates = (
                 .filter(Boolean)
         );
         const next = mode === 'add'
-            ? sortTokens([...existing, token])
-            : existing.filter((item) => item !== token);
+            ? sortTokens([...existing, ...tokens])
+            : existing.filter((item) => !tokenSet.has(item));
 
         if (existing.length === next.length && existing.every((item, index) => item === next[index])) {
             return [];

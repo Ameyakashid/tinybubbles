@@ -36,6 +36,8 @@ export type TaskListBulkBarProps = {
   onOpenOrganize?: () => void;
   onToggleRangeSelectMode: () => void;
   onOpenTagModal: () => void;
+  onOpenRemoveTagPicker?: () => void;
+  canRemoveTags?: boolean;
   rangeSelectMode: boolean;
   selectedCount: number;
   statusOptions?: readonly TaskStatus[];
@@ -53,6 +55,8 @@ export function TaskListBulkBar({
   onOpenOrganize,
   onToggleRangeSelectMode,
   onOpenTagModal,
+  onOpenRemoveTagPicker,
+  canRemoveTags = false,
   rangeSelectMode,
   selectedCount,
   statusOptions,
@@ -153,6 +157,25 @@ export function TaskListBulkBar({
         >
           <Text style={[styles.bulkActionText, { color: themeColors.text }]}>{t('bulk.addTag')}</Text>
         </TouchableOpacity>
+        {onOpenRemoveTagPicker ? (
+          <TouchableOpacity
+            onPress={onOpenRemoveTagPicker}
+            disabled={!hasSelection || bulkActionLoading || !canRemoveTags}
+            style={[
+              styles.bulkActionButton,
+              {
+                backgroundColor: themeColors.filterBg,
+                opacity: hasSelection && !bulkActionLoading && canRemoveTags ? 1 : 0.5,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={tFallback(t, 'bulk.removeTag', 'Remove tag')}
+          >
+            <Text style={[styles.bulkActionText, { color: themeColors.text }]}>
+              {tFallback(t, 'bulk.removeTag', 'Remove tag')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           onPress={handleBatchDelete}
           disabled={!hasSelection || bulkActionLoading}

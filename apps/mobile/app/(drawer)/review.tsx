@@ -26,6 +26,7 @@ import { TaskEditModal } from '@/components/task-edit-modal';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
 import { buildReviewTaskGroups, getReviewOverviewTasks } from '@/components/review/review-task-groups';
 import { TaskListBulkOrganizeModal } from '@/components/task-list/TaskListBulkOrganizeModal';
+import { TokenPickerModal } from '@/components/token-picker-modal';
 import { useTaskListSelection } from '@/components/use-task-list-selection';
 import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
 
@@ -78,10 +79,14 @@ export default function ReviewScreen() {
     handleBatchDelete,
     handleBatchMove,
     handleBatchOrganize,
+    handleBatchRemoveTags,
     hasSelection,
     multiSelectedIds,
+    removableTagOptions,
+    removeTagPickerVisible,
     selectedIdsArray,
     selectionMode,
+    setRemoveTagPickerVisible,
     setTagInput,
     setTagModalVisible,
     tagInput,
@@ -116,6 +121,7 @@ export default function ReviewScreen() {
       if (
         isModalVisible
         || tagModalVisible
+        || removeTagPickerVisible
         || moveModalVisible
         || bulkOrganizeVisible
         || showReviewModal
@@ -135,6 +141,7 @@ export default function ReviewScreen() {
     exitSelectionMode,
     isModalVisible,
     tagModalVisible,
+    removeTagPickerVisible,
     moveModalVisible,
     bulkOrganizeVisible,
     showReviewModal,
@@ -351,6 +358,21 @@ export default function ReviewScreen() {
               style={[styles.bulkActionButton, { backgroundColor: tc.filterBg, opacity: hasSelection ? 1 : 0.5 }]}
             >
               <Text style={[styles.bulkActionText, { color: tc.text }]}>{t('bulk.addTag')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setRemoveTagPickerVisible(true)}
+              disabled={!hasSelection || removableTagOptions.length === 0}
+              style={[
+                styles.bulkActionButton,
+                {
+                  backgroundColor: tc.filterBg,
+                  opacity: hasSelection && removableTagOptions.length > 0 ? 1 : 0.5,
+                },
+              ]}
+            >
+              <Text style={[styles.bulkActionText, { color: tc.text }]}>
+                {tFallback(t, 'bulk.removeTag', 'Remove tag')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleBatchShare}
@@ -632,6 +654,19 @@ export default function ReviewScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <TokenPickerModal
+        visible={removeTagPickerVisible}
+        title={tFallback(t, 'bulk.removeTag', 'Remove tag')}
+        description={tFallback(t, 'bulk.removeTag', 'Remove tag')}
+        tokens={removableTagOptions}
+        placeholder={t('bulk.tagPlaceholder')}
+        multiSelect
+        onClose={() => setRemoveTagPickerVisible(false)}
+        onConfirm={(values) => {
+          void handleBatchRemoveTags(values);
+        }}
+      />
 
       <TaskListBulkOrganizeModal
         areas={sortedAreas}

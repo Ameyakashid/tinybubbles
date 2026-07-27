@@ -1019,6 +1019,7 @@ export const trOverrides: Record<string, string> = {
         'bulk.selected': 'seçilmiş',
         'bulk.moveTo': 'Şuraya taşı:',
         'bulk.addTag': 'Etiket ekle',
+        'bulk.removeTag': 'Etiketi kaldır',
         'bulk.addContext': 'Bağlam ekle',
         'bulk.removeContext': 'İçeriği kaldır',
         'bulk.delete': 'Seçileni sil',

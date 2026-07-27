@@ -59,4 +59,25 @@ describe('bulk-task-tokens', () => {
             { id: 'b', updates: { contexts: [] } },
         ]);
     });
+
+    it('removes several tokens in one update and skips tasks that carry none of them', () => {
+        const tasksById = new Map<string, Task>([
+            ['a', createTask('a', { tags: ['#ops', '#urgent', '#keep'] })],
+            ['b', createTask('b', { tags: ['#urgent'] })],
+            ['c', createTask('c', { tags: ['#keep'] })],
+        ]);
+
+        expect(buildBulkTaskTokenUpdates(['a', 'b', 'c'], tasksById, 'tags', ['ops', '#urgent'], 'remove')).toEqual([
+            { id: 'a', updates: { tags: ['#keep'] } },
+            { id: 'b', updates: { tags: [] } },
+        ]);
+    });
+
+    it('adds several tokens in one update', () => {
+        const tasksById = new Map<string, Task>([['a', createTask('a', { tags: ['#urgent'] })]]);
+
+        expect(buildBulkTaskTokenUpdates(['a'], tasksById, 'tags', ['ops', '#urgent'], 'add')).toEqual([
+            { id: 'a', updates: { tags: ['#ops', '#urgent'] } },
+        ]);
+    });
 });

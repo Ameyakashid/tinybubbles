@@ -1052,6 +1052,7 @@ export const arOverrides: Record<string, string> = {
         'bulk.selected': 'مختارة',
         'bulk.moveTo': 'انتقل الى',
         'bulk.addTag': 'إضافة علامة',
+        'bulk.removeTag': 'إزالة العلامة',
         'bulk.addContext': 'أضف السياق',
         'bulk.removeContext': 'إزالة السياق',
         'bulk.delete': 'حذف المحدد',

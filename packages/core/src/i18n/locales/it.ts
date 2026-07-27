@@ -1158,6 +1158,7 @@ export const itOverrides: Record<string, string> = {
         'bulk.selected': 'selezionate',
         'bulk.moveTo': 'Sposta in',
         'bulk.addTag': 'Aggiungi tag',
+        'bulk.removeTag': 'Rimuovi tag',
         'bulk.addContext': 'Aggiungi contesto',
         'bulk.removeContext': 'Rimuovi contesto',
         'bulk.delete': 'Elimina selezionate',

@@ -1449,6 +1449,7 @@ export const viOverrides: Record<string, string> = {
         'bulk.selectRange': 'Phạm vi',
         'bulk.selectRangeActive': 'Chọn điểm cuối',
         'bulk.addTag': 'Thêm thẻ',
+        'bulk.removeTag': 'Xóa thẻ',
         'bulk.addContext': 'Thêm ngữ cảnh',
         'bulk.removeContext': 'Xóa ngữ cảnh',
         'bulk.tagPlaceholder': '#thẻ',

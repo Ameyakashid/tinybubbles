@@ -624,6 +624,52 @@ describe('ListView', () => {
     expect(queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('removes several picked tags from the selection and leaves untagged tasks alone', async () => {
+    const batchUpdateTasks = vi.fn(async () => ({ success: true }));
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('1', { title: 'First tagged task', tags: ['#ops', '#urgent', '#keep'] }),
+        makeTask('2', { title: 'Second tagged task', tags: ['#urgent'] }),
+        makeTask('3', { title: 'Untagged task', tags: ['#keep'] }),
+      ],
+      batchUpdateTasks,
+      lastDataChangeAt: 1,
+    });
+
+    const { getByRole } = renderListView();
+
+    fireEvent.click(getByRole('button', { name: 'Select' }));
+    fireEvent.click(getByRole('button', { name: 'Select All' }));
+    fireEvent.click(getByRole('button', { name: 'Remove tag' }));
+
+    fireEvent.click(getByRole('button', { name: '#ops' }));
+    fireEvent.click(getByRole('button', { name: '#urgent' }));
+    fireEvent.click(getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(batchUpdateTasks).toHaveBeenCalledWith([
+        { id: '1', updates: { tags: ['#keep'] } },
+        { id: '2', updates: { tags: [] } },
+      ]);
+    });
+  });
+
+  it('disables Remove tag when the selection carries no tags', async () => {
+    useTaskStore.setState({
+      _allTasks: [makeTask('1', { title: 'Plain task' })],
+      lastDataChangeAt: 1,
+    });
+
+    const { getByRole } = renderListView();
+
+    fireEvent.click(getByRole('button', { name: 'Select' }));
+    fireEvent.click(getByRole('button', { name: 'Select All' }));
+
+    await waitFor(() => {
+      expect(getByRole('button', { name: 'Remove tag' })).toBeDisabled();
+    });
+  });
+
   it('selects a visible range with shift-click in selection mode', async () => {
     useTaskStore.setState({
       _allTasks: [

@@ -1007,6 +1007,7 @@ export const ruOverrides: Record<string, string> = {
         'bulk.selected': 'выбрано',
         'bulk.moveTo': 'Перейти к',
         'bulk.addTag': 'Добавить тег',
+        'bulk.removeTag': 'Удалить тег',
         'bulk.addContext': 'Добавить контекст',
         'bulk.removeContext': 'Удалить контекст',
         'bulk.delete': 'Удалить выбранное',

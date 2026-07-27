@@ -59,6 +59,8 @@ type ListControlsPanelProps = {
     onOpenProject: (projectId: string) => void;
     onReactivateProject: (projectId: string) => void;
     onRemoveContext: () => void;
+    onRemoveTag: () => void;
+    disableRemoveTag?: boolean;
     onResetCopilot: () => void;
     onSubmitQuickAdd: (event: FormEvent) => void;
     onSelectAllVisible: () => void;
@@ -141,6 +143,8 @@ export function ListControlsPanel({
     onOpenProject,
     onReactivateProject,
     onRemoveContext,
+    onRemoveTag,
+    disableRemoveTag,
     onResetCopilot,
     onSubmitQuickAdd,
     onSelectAllVisible,
@@ -236,6 +240,8 @@ export function ListControlsPanel({
                             areaOptions={areaOptions}
                             onBulkOrganize={onBulkOrganize}
                             onAddTag={onAddTag}
+                            onRemoveTag={onRemoveTag}
+                            disableRemoveTag={disableRemoveTag}
                             onAddContext={onAddContext}
                             onRemoveContext={onRemoveContext}
                             onDelete={onDeleteSelection}

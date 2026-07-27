@@ -940,6 +940,7 @@ export const esOverrides: Record<string, string> = {
         'bulk.selected': 'seleccionadas',
         'bulk.moveTo': 'Mover a',
         'bulk.addTag': 'Añadir etiqueta',
+        'bulk.removeTag': 'Quitar etiqueta',
         'bulk.addContext': 'Añadir contexto',
         'bulk.removeContext': 'Quitar contexto',
         'bulk.delete': 'Eliminar seleccionadas',

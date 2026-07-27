@@ -2,6 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   buildBulkOrganizeTaskUpdates,
+  buildBulkTaskTokenUpdates,
+  collectBulkTaskTokens,
   tFallback,
   updateRangeSelection,
   type BulkOrganizeTaskUpdateInput,
@@ -49,6 +51,7 @@ export function useTaskListSelection({
   const [selectionMode, setSelectionMode] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [tagModalVisible, setTagModalVisible] = useState(false);
+  const [removeTagPickerVisible, setRemoveTagPickerVisible] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [bulkActionLabel, setBulkActionLabel] = useState('');
@@ -175,6 +178,29 @@ export function useTaskListSelection({
     });
   }, [batchUpdateTasks, bulkActionLoading, exitSelectionMode, hasSelection, runBulkAction, selectedIdsArray, showToast, t, tagInput, tasksById]);
 
+  // Removal offers only the tags the selection actually carries, so a typo can
+  // never look like a silent no-op.
+  const removableTagOptions = useMemo(
+    () => collectBulkTaskTokens(selectedIdsArray, tasksById, 'tags'),
+    [selectedIdsArray, tasksById]
+  );
+
+  const handleBatchRemoveTags = useCallback(async (tags: string[]) => {
+    if (!hasSelection || tags.length === 0 || bulkActionLoading) return;
+    await runBulkAction(tFallback(t, 'bulk.removeTag', 'Remove tag'), async () => {
+      const updates = buildBulkTaskTokenUpdates(selectedIdsArray, tasksById, 'tags', tags, 'remove');
+      setRemoveTagPickerVisible(false);
+      if (updates.length === 0) return;
+      assertBulkActionSucceeded(await batchUpdateTasks(updates));
+      exitSelectionMode();
+      showToast({
+        title: t('common.done'),
+        message: `${updates.length} ${t('common.tasks')}`,
+        tone: 'success',
+      });
+    });
+  }, [batchUpdateTasks, bulkActionLoading, exitSelectionMode, hasSelection, runBulkAction, selectedIdsArray, showToast, t, tasksById]);
+
   const handleBatchOrganize = useCallback(async (input: BulkOrganizeTaskUpdateInput) => {
     if (!hasSelection || bulkActionLoading) return;
     const updates = buildBulkOrganizeTaskUpdates(selectedIdsArray, tasksById, input);
@@ -198,13 +224,17 @@ export function useTaskListSelection({
     handleBatchDelete,
     handleBatchOrganize,
     handleBatchMove,
+    handleBatchRemoveTags,
     hasSelection,
     multiSelectedIds,
     rangeSelectMode,
+    removableTagOptions,
+    removeTagPickerVisible,
     runBulkAction,
     selectedIdsArray,
     selectionMode,
     setMultiSelectedIds,
+    setRemoveTagPickerVisible,
     setSelectionMode,
     setTagInput,
     setTagModalVisible,

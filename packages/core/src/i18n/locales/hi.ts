@@ -1006,6 +1006,7 @@ export const hiOverrides: Record<string, string> = {
         'bulk.selected': 'चयनित',
         'bulk.moveTo': 'करने के लिए कदम',
         'bulk.addTag': 'टैग जोड़ें',
+        'bulk.removeTag': 'टैग हटाएँ',
         'bulk.addContext': 'संदर्भ जोड़ें',
         'bulk.removeContext': 'प्रसंग हटाएँ',
         'bulk.delete': 'चयनित को हटाओ',

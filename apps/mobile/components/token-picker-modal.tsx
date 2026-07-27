@@ -20,7 +20,9 @@ type TokenPickerModalProps = {
   tokens: string[];
   placeholder?: string;
   allowCustomValue?: boolean;
-  onConfirm: (value: string) => void;
+  /** Let the user pick several tokens at once (used by the bulk remove flows). */
+  multiSelect?: boolean;
+  onConfirm: (values: string[]) => void;
   onClose: () => void;
 };
 
@@ -31,6 +33,7 @@ export function TokenPickerModal({
   tokens,
   placeholder,
   allowCustomValue = false,
+  multiSelect = false,
   onConfirm,
   onClose,
 }: TokenPickerModalProps) {
@@ -38,12 +41,12 @@ export function TokenPickerModal({
   const tc = useThemeColors();
   const keyboardInset = useAndroidKeyboardInset(visible);
   const [query, setQuery] = useState('');
-  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
 
   useEffect(() => {
     if (!visible) return;
     setQuery('');
-    setSelectedToken(null);
+    setSelectedTokens([]);
   }, [visible]);
 
   const filteredTokens = useMemo(() => {
@@ -52,8 +55,22 @@ export function TokenPickerModal({
     return tokens.filter((token) => token.toLowerCase().includes(normalizedQuery));
   }, [query, tokens]);
 
-  const confirmValue = allowCustomValue ? (selectedToken ?? query.trim()) : selectedToken;
-  const canConfirm = Boolean(confirmValue && confirmValue.trim().length > 0);
+  const toggleToken = (token: string) => {
+    if (multiSelect) {
+      setSelectedTokens((current) => (current.includes(token)
+        ? current.filter((item) => item !== token)
+        : [...current, token]));
+      return;
+    }
+    setSelectedTokens([token]);
+    setQuery(token);
+  };
+
+  const confirmValues = multiSelect
+    ? selectedTokens
+    : [allowCustomValue ? (selectedTokens[0] ?? query.trim()) : (selectedTokens[0] ?? '')]
+      .filter((value) => value.trim().length > 0);
+  const canConfirm = confirmValues.length > 0;
 
   return (
     <Modal
@@ -79,11 +96,13 @@ export function TokenPickerModal({
             value={query}
             onChangeText={(value) => {
               setQuery(value);
+              // In multi-select the field only filters; picks come from the chips.
+              if (multiSelect) return;
               if (!allowCustomValue) {
                 const exactMatch = tokens.find((token) => token.toLowerCase() === value.trim().toLowerCase());
-                setSelectedToken(exactMatch ?? null);
-              } else if (selectedToken && selectedToken !== value) {
-                setSelectedToken(null);
+                setSelectedTokens(exactMatch ? [exactMatch] : []);
+              } else if (selectedTokens[0] && selectedTokens[0] !== value) {
+                setSelectedTokens([]);
               }
             }}
             placeholder={placeholder}
@@ -102,14 +121,13 @@ export function TokenPickerModal({
             contentContainerStyle={styles.tokenListContent}
           >
             {filteredTokens.length > 0 ? filteredTokens.map((token) => {
-              const isActive = token === selectedToken;
+              const isActive = selectedTokens.includes(token);
               return (
                 <TouchableOpacity
                   key={token}
-                  onPress={() => {
-                    setSelectedToken(token);
-                    setQuery(token);
-                  }}
+                  onPress={() => toggleToken(token)}
+                  accessibilityRole="button"
+                  accessibilityState={multiSelect ? { selected: isActive } : undefined}
                   style={[
                     styles.tokenButton,
                     {
@@ -137,8 +155,8 @@ export function TokenPickerModal({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                if (confirmValue) {
-                  onConfirm(confirmValue);
+                if (canConfirm) {
+                  onConfirm(confirmValues);
                 }
               }}
               disabled={!canConfirm}
