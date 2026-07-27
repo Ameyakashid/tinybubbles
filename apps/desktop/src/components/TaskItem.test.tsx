@@ -1109,6 +1109,80 @@ describe('TaskItem', () => {
         expect(useTaskStore.getState().highlightTaskId).toBe(duplicatedTask?.id);
     });
 
+    it('duplicates a completed task from the row button and reveals the copy in Next', async () => {
+        const doneTask: Task = {
+            ...mockTask,
+            id: 'done-duplicate-task',
+            status: 'done',
+            completedAt: new Date().toISOString(),
+        };
+        act(() => {
+            useTaskStore.setState({
+                tasks: [doneTask],
+                _allTasks: [doneTask],
+                _tasksById: new Map([[doneTask.id, doneTask]]),
+            });
+        });
+        const onNavigate = vi.fn();
+        window.addEventListener('mindwtr:navigate', onNavigate as EventListener);
+
+        try {
+            const { getByRole } = render(
+                <LanguageProvider>
+                    <TaskItem task={doneTask} />
+                </LanguageProvider>
+            );
+
+            await act(async () => {
+                fireEvent.click(getByRole('button', { name: /duplicate task/i }));
+            });
+
+            const duplicatedTask = useTaskStore.getState()._allTasks.find((task) => task.id !== doneTask.id);
+            expect(duplicatedTask).toMatchObject({
+                title: 'Test Task',
+                status: 'next',
+            });
+            expect(duplicatedTask?.completedAt).toBeUndefined();
+            expect(onNavigate).toHaveBeenCalledWith(
+                expect.objectContaining({ detail: { view: 'next' } }),
+            );
+        } finally {
+            window.removeEventListener('mindwtr:navigate', onNavigate as EventListener);
+        }
+    });
+
+    it('duplicates a completed task from the quick actions menu too', async () => {
+        const doneTask: Task = {
+            ...mockTask,
+            id: 'done-menu-duplicate-task',
+            status: 'done',
+            completedAt: new Date().toISOString(),
+        };
+        act(() => {
+            useTaskStore.setState({
+                tasks: [doneTask],
+                _allTasks: [doneTask],
+                _tasksById: new Map([[doneTask.id, doneTask]]),
+            });
+        });
+
+        const { findByRole, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={doneTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.click(getByRole('button', { name: /more options/i }));
+        const duplicateItem = await findByRole('menuitem', { name: /duplicate/i });
+        await act(async () => {
+            fireEvent.click(duplicateItem);
+        });
+
+        expect(useTaskStore.getState()._allTasks.find((task) => task.id !== doneTask.id)).toMatchObject({
+            status: 'next',
+        });
+    });
+
     it('adds an eligible next action to today focus from the task quick actions menu', async () => {
         const nextTask: Task = {
             ...mockTask,

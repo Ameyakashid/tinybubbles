@@ -40,7 +40,7 @@ import { releaseTaskEditSession, tryClaimTaskEditSession } from './Task/task-edi
 import { TaskItemOverlays } from './Task/TaskItemOverlays';
 import { ProjectNextActionPrompt } from './Task/ProjectNextActionPrompt';
 import { PromptModal } from './PromptModal';
-import { deleteTaskWithUndo, TaskQuickActionMenuHost } from './Task/useTaskQuickActionMenuProps';
+import { deleteTaskWithUndo, duplicateTaskAndReveal, TaskQuickActionMenuHost } from './Task/useTaskQuickActionMenuProps';
 import {
     getRecurrenceRuleValue,
     getRecurrenceStrategyValue,
@@ -148,7 +148,6 @@ export const TaskItem = memo(function TaskItem({
         taskArea: storeTaskArea,
         settings,
         focusedCount,
-        duplicateTask,
         promoteTaskToProject,
         resetTaskChecklist,
         highlightTaskId,
@@ -743,26 +742,10 @@ export const TaskItem = memo(function TaskItem({
         setSelectedProjectId(projectId);
         dispatchNavigateEvent('projects');
     }, [setHighlightTask, setSelectedProjectId, task.id]);
-    const handleDuplicateTask = useCallback(async () => {
-        if (effectiveReadOnly) return;
-        try {
-            const result = await duplicateTask(task.id, false);
-            if (!result.success || !result.id) {
-                showToast(result.error || t('task.duplicateFailed'), 'error');
-                return;
-            }
-            setHighlightTask(result.id);
-            if (task.projectId) {
-                setSelectedProjectId(task.projectId);
-                dispatchNavigateEvent('projects');
-            }
-            setTaskExpanded(result.id, false);
-            setEditingTaskId(result.id);
-        } catch (error) {
-            reportError('Failed to duplicate task', error);
-            showToast(t('task.duplicateFailed'), 'error');
-        }
-    }, [duplicateTask, effectiveReadOnly, setEditingTaskId, setHighlightTask, setSelectedProjectId, setTaskExpanded, showToast, t, task.id, task.projectId]);
+    const handleDuplicateTask = useCallback(
+        () => duplicateTaskAndReveal(task, { t }),
+        [t, task],
+    );
     const handlePromoteTaskToProject = useCallback(async () => {
         if (effectiveReadOnly) return;
         try {

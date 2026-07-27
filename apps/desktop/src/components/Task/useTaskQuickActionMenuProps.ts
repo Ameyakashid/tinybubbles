@@ -72,6 +72,44 @@ export function deleteTaskWithUndo(
 }
 
 /**
+ * Single duplicate implementation for every surface that offers it: the row's
+ * hover button, the row menu, and the calendar menu.
+ *
+ * Deliberately NOT gated on read-only. Duplicating never touches the source
+ * task — it writes a new one — and the row only renders its Duplicate button on
+ * read-only (done/archived) rows, so a read-only guard made the button dead in
+ * the one place it appears (#950).
+ */
+export async function duplicateTaskAndReveal(
+    task: Pick<Task, 'id' | 'projectId' | 'status'>,
+    { t }: { t: (key: string) => string },
+): Promise<void> {
+    try {
+        const result = await useTaskStore.getState().duplicateTask(task.id, false);
+        if (!result.success || !result.id) {
+            useUiStore.getState().showToast(result.error || t('task.duplicateFailed'), 'error');
+            return;
+        }
+        useTaskStore.getState().setHighlightTask(result.id);
+        if (task.projectId) {
+            useUiStore.getState().setProjectView({ selectedProjectId: task.projectId });
+            dispatchNavigateEvent('projects');
+        } else if (task.status === 'done' || task.status === 'archived') {
+            // The copy is reactivated as a next action, so it is never in the
+            // Done/Archived list it was made from. Without this the duplicate
+            // succeeds somewhere the user cannot see and the click reads as a
+            // no-op (#950).
+            dispatchNavigateEvent('next');
+        }
+        useUiStore.getState().setTaskExpanded(result.id, false);
+        useUiStore.getState().setEditingTaskId(result.id);
+    } catch (error) {
+        reportError('Failed to duplicate task', error);
+        useUiStore.getState().showToast(t('task.duplicateFailed'), 'error');
+    }
+}
+
+/**
  * Builds the full prop bag for TaskQuickActionMenu from the store, with
  * override points for the handful of behaviours that differ by caller. Both
  * TaskItem's row menu and the calendar's block/chip menu render through this
@@ -130,26 +168,10 @@ export function useTaskQuickActionMenuProps(
         [task.id],
     );
 
-    const onDuplicate = useCallback(async () => {
-        if (readOnly) return;
-        try {
-            const result = await useTaskStore.getState().duplicateTask(task.id, false);
-            if (!result.success || !result.id) {
-                useUiStore.getState().showToast(result.error || t('task.duplicateFailed'), 'error');
-                return;
-            }
-            useTaskStore.getState().setHighlightTask(result.id);
-            if (task.projectId) {
-                useUiStore.getState().setProjectView({ selectedProjectId: task.projectId });
-                dispatchNavigateEvent('projects');
-            }
-            useUiStore.getState().setTaskExpanded(result.id, false);
-            useUiStore.getState().setEditingTaskId(result.id);
-        } catch (error) {
-            reportError('Failed to duplicate task', error);
-            useUiStore.getState().showToast(t('task.duplicateFailed'), 'error');
-        }
-    }, [readOnly, t, task.id, task.projectId]);
+    const onDuplicate = useCallback(
+        () => duplicateTaskAndReveal(task, { t }),
+        [t, task],
+    );
 
     const onDelete = useCallback(() => {
         deleteTaskWithUndo(task.id, { t, onBeforeDelete: overrides?.onBeforeDelete });
