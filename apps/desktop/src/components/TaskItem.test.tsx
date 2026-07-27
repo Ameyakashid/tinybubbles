@@ -19,6 +19,18 @@ const mockTask: Task = {
 const initialTaskState = useTaskStore.getState();
 const initialUiState = useUiStore.getState();
 
+// The completion dialog now uses the shared date control (#944): a locale-formatted
+// date field plus a separate time input, rather than one datetime-local box. jsdom
+// reports en-US, so the display order is month/day/year.
+const setCompletionDateTime = (dialog: HTMLElement, localIso: string) => {
+    const [date, time] = localIso.split('T');
+    const [year, month, day] = date.split('-');
+    fireEvent.change(within(dialog).getByLabelText('Date'), {
+        target: { value: `${month}/${day}/${year}` },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Time'), { target: { value: time } });
+};
+
 describe('TaskItem', () => {
     beforeEach(() => {
         act(() => {
@@ -312,7 +324,7 @@ describe('TaskItem', () => {
 
         const dialog = getByRole('dialog', { name: 'Completion time' });
         const completedAtInput = '2026-07-20T09:30';
-        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: completedAtInput } });
+        setCompletionDateTime(dialog, completedAtInput);
         await act(async () => {
             fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
         });
@@ -360,7 +372,7 @@ describe('TaskItem', () => {
 
         fireEvent.contextMenu(getAllByRole('button', { name: 'Done' })[0]);
         const dialog = getByRole('dialog', { name: 'Completion time' });
-        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        setCompletionDateTime(dialog, '2026-07-20T09:30');
         fireEvent.change(within(dialog).getByLabelText('Time Spent'), { target: { value: '45' } });
         await act(async () => {
             fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -407,7 +419,7 @@ describe('TaskItem', () => {
         fireEvent.contextMenu(getAllByRole('button', { name: 'Done' })[0]);
         const dialog = getByRole('dialog', { name: 'Completion time' });
         expect(within(dialog).queryByLabelText('Time Spent')).toBeNull();
-        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        setCompletionDateTime(dialog, '2026-07-20T09:30');
         await act(async () => {
             fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
         });
@@ -458,7 +470,7 @@ describe('TaskItem', () => {
         const timeSpentInput = within(dialog).getByLabelText('Time Spent') as HTMLInputElement;
         expect(timeSpentInput.value).toBe('30');
         fireEvent.change(timeSpentInput, { target: { value: '' } });
-        fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: '2026-07-20T09:30' } });
+        setCompletionDateTime(dialog, '2026-07-20T09:30');
         await act(async () => {
             fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
         });

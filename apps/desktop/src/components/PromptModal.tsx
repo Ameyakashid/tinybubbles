@@ -1,7 +1,14 @@
-import { useEffect, useId, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { normalizeTimeSpentMinutes } from '@mindwtr/core';
+import { useEffect, useId, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { normalizeTimeSpentMinutes, tFallback } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
+import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';
+import {
+    joinDateTimeLocal,
+    parseDateTimeLocalDate,
+    splitDateTimeLocal,
+} from '../lib/datetime-local-value';
 import { ModalPortal } from './ModalPortal';
+import { DateField } from './Task/TaskItemFieldRenderer';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { Button } from './ui/Button';
 
@@ -52,6 +59,7 @@ export function PromptModal({
     onCancel,
 }: PromptModalProps) {
     const { t } = useLanguage();
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
     const [value, setValue] = useState(defaultValue ?? '');
     const [hasInteracted, setHasInteracted] = useState(false);
     const [numericDraft, setNumericDraft] = useState(numericField?.defaultValue ?? '');
@@ -67,6 +75,7 @@ export function PromptModal({
             setNumericDraft(numericField?.defaultValue ?? '');
         }
     }, [isOpen, defaultValue, numericField?.defaultValue]);
+    const dateParts = useMemo(() => splitDateTimeLocal(value), [value]);
     const canConfirm = allowEmptyConfirm || value.trim().length > 0;
     const showValidation = !allowEmptyConfirm && hasInteracted && !canConfirm;
     // Only pass a second argument when numericField opted in — existing callers
@@ -126,24 +135,77 @@ export function PromptModal({
                     )}
                 </div>
                 <div className="p-4 space-y-3">
-                    <AutocompleteTextInput
-                        autoFocus
-                        type={inputType}
-                        value={value}
-                        suggestions={suggestions ?? []}
-                        onChange={(next) => {
-                            setValue(next);
-                            if (!hasInteracted) {
+                    {inputType === 'datetime-local' ? (
+                        // Completion time uses the same calendar and quick-date chips as the
+                        // editor's start/due/review fields rather than the WebView's own
+                        // control, so date entry looks and behaves the same everywhere (#944).
+                        // Enter reaches the dialog by bubbling out of the date input,
+                        // which DateField does not forward itself. Escape is deliberately
+                        // left to DateField: it closes the calendar popover first.
+                        <div onKeyDown={handleFieldKeyDown}>
+                        <DateField
+                            autoFocus
+                            t={t}
+                            // The modal header already names the dialog; labelling the
+                            // field "Date" avoids saying the same thing twice.
+                            label={tFallback(t, 'calendar.date', 'Date')}
+                            dateAriaLabel={tFallback(t, 'calendar.date', 'Date')}
+                            dateValue={dateParts.date}
+                            selectedDate={parseDateTimeLocalDate(value)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                            hasValue={false}
+                            onClear={() => undefined}
+                            onDateChange={(nextDate) => {
                                 setHasInteracted(true);
-                            }
-                        }}
-                        onBlur={() => setHasInteracted(true)}
-                        onKeyDown={handleFieldKeyDown}
-                        placeholder={placeholder}
-                        aria-invalid={showValidation}
-                        aria-describedby={showValidation ? validationId : undefined}
-                        className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
-                    />
+                                setValue(joinDateTimeLocal({ date: nextDate, time: dateParts.time }));
+                            }}
+                            timeInput={(
+                                <input
+                                    type="time"
+                                    aria-label={tFallback(t, 'calendar.time', 'Time')}
+                                    value={dateParts.time}
+                                    onClick={(event) => {
+                                        try {
+                                            event.currentTarget.showPicker?.();
+                                        } catch {
+                                            // Engine declined; the glyph still opens it.
+                                        }
+                                    }}
+                                    onKeyDown={handleFieldKeyDown}
+                                    onChange={(event) => {
+                                        setHasInteracted(true);
+                                        setValue(joinDateTimeLocal({
+                                            date: dateParts.date,
+                                            time: event.target.value,
+                                        }));
+                                    }}
+                                    className="w-28 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                                />
+                            )}
+                        />
+                        </div>
+                    ) : (
+                        <AutocompleteTextInput
+                            autoFocus
+                            type={inputType}
+                            value={value}
+                            suggestions={suggestions ?? []}
+                            onChange={(next) => {
+                                setValue(next);
+                                if (!hasInteracted) {
+                                    setHasInteracted(true);
+                                }
+                            }}
+                            onBlur={() => setHasInteracted(true)}
+                            onKeyDown={handleFieldKeyDown}
+                            placeholder={placeholder}
+                            aria-invalid={showValidation}
+                            aria-describedby={showValidation ? validationId : undefined}
+                            className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                        />
+                    )}
                     {showValidation && (
                         <p id={validationId} className="text-xs text-destructive">
                             {t('common.validationRequired')}

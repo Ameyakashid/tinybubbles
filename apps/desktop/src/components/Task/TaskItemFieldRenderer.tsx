@@ -278,6 +278,8 @@ type DateFieldProps = {
     onClear: () => void;
     onDateOnly?: () => void;
     hasValue: boolean;
+    /** Focus the date input on mount, for hosts that open with this field ready. */
+    autoFocus?: boolean;
 };
 
 export function DateField({
@@ -295,6 +297,7 @@ export function DateField({
     onClear,
     onDateOnly,
     hasValue,
+    autoFocus,
 }: DateFieldProps) {
     const rootRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
@@ -445,6 +448,7 @@ export function DateField({
                 <div className="relative min-w-0 flex-1">
                     <input
                         ref={inputRef}
+                        autoFocus={autoFocus}
                         type="text"
                         inputMode="numeric"
                         placeholder={getDateInputPlaceholder(dateInputOrder)}

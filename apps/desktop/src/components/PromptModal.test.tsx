@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PromptModal } from './PromptModal';
 
 vi.mock('../contexts/language-context', () => ({
@@ -54,6 +54,76 @@ describe('PromptModal browse', () => {
         expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Cancel' }))).toBe(false);
         expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Save' }))).toBe(false);
         expect(screen.queryByText('common.validationRequired')).toBeNull();
+    });
+});
+
+describe('PromptModal datetime-local field', () => {
+    const dateTimeProps = {
+        ...baseProps,
+        title: 'Completion time',
+        inputType: 'datetime-local' as const,
+        defaultValue: '2026-04-22T09:30',
+    };
+
+    // Completion time used to render the WebView's own datetime control, which
+    // looked nothing like the editor's date fields (#944).
+    it('renders the shared calendar popover rather than a native datetime input', () => {
+        render(<PromptModal {...dateTimeProps} />);
+
+        expect(screen.queryByRole('dialog', { name: /nav\.calendar/ })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /nav\.calendar/ }));
+
+        const calendar = screen.getByRole('dialog', { name: /nav\.calendar/ });
+        expect(within(calendar).getByRole('button', { name: 'Today' })).toBeInTheDocument();
+    });
+
+    // The plain input this replaced was autofocused and confirmed on Enter; both
+    // had to survive the swap, and DateField forwards neither on its own.
+    it('focuses the date input on open and confirms on Enter from it', () => {
+        const onConfirm = vi.fn();
+        render(<PromptModal {...dateTimeProps} onConfirm={onConfirm} />);
+
+        const dateInput = screen.getByLabelText('Date');
+        expect(document.activeElement).toBe(dateInput);
+
+        fireEvent.keyDown(dateInput, { key: 'Enter', bubbles: true });
+
+        expect(onConfirm).toHaveBeenCalledWith('2026-04-22T09:30');
+    });
+
+    it('keeps the date when only the time is edited', () => {
+        const onConfirm = vi.fn();
+        render(<PromptModal {...dateTimeProps} onConfirm={onConfirm} />);
+
+        const time = screen.getByLabelText('Time') as HTMLInputElement;
+        expect(time.value).toBe('09:30');
+
+        fireEvent.change(time, { target: { value: '17:45' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onConfirm).toHaveBeenCalledWith('2026-04-22T17:45');
+    });
+
+    it('keeps the time when a day is picked from the calendar', () => {
+        const onConfirm = vi.fn();
+        render(<PromptModal {...dateTimeProps} onConfirm={onConfirm} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /nav\.calendar/ }));
+        const calendar = screen.getByRole('dialog', { name: /nav\.calendar/ });
+        // Day cells are labelled with the full localized date, matching how the
+        // editor's calendar names them.
+        const dayLabel = new Intl.DateTimeFormat(undefined, {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        }).format(new Date(2026, 3, 17));
+        fireEvent.click(within(calendar).getByRole('button', { name: dayLabel }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onConfirm).toHaveBeenCalledWith('2026-04-17T09:30');
     });
 });
 
