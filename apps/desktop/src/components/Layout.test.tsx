@@ -232,6 +232,30 @@ describe('Layout Obsidian nav visibility', () => {
 });
 
 describe('Layout sync conflict surface', () => {
+    // A cycle that queues a follow-up leaves inFlight false while queued is true. If the
+    // footer only watched inFlight it would re-enable the button and drop animate-spin for
+    // that gap, flickering the cursor, hover background and spinner on every hand-off.
+    it('keeps the footer busy while a follow-up sync is queued but not yet in flight', () => {
+        const statusSpy = vi.spyOn(SyncService, 'getSyncStatus').mockReturnValue({
+            inFlight: false,
+            queued: true,
+            step: null,
+            lastResult: null,
+            lastResultAt: null,
+        } as ReturnType<typeof SyncService.getSyncStatus>);
+        const subscribeSpy = vi
+            .spyOn(SyncService, 'subscribeSyncStatus')
+            .mockImplementation(() => () => undefined);
+
+        const { container, getByRole } = renderLayout();
+
+        expect(getByRole('button', { name: /Sync now/i })).toBeDisabled();
+        expect(container.querySelector('[data-sidebar-sync-dot]')).toHaveClass('animate-pulse');
+
+        statusSpy.mockRestore();
+        subscribeSpy.mockRestore();
+    });
+
     it('keeps Settings, sync status, and manual sync on one compact footer row', () => {
         const { container, getByRole } = renderLayout();
 

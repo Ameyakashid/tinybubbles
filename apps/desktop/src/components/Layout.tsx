@@ -200,7 +200,14 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         showToast(syncConflictNotice, 'info', 6000);
     }, [lastSyncStatus, showToast, syncConflictNotice, syncConflictToastKey]);
 
-    const syncFreshnessDotClass = syncStatus.inFlight
+    // A sync cycle that queues a follow-up drops inFlight between runs while queued stays
+    // true. Reading inFlight alone made the footer flicker on every hand-off — the status dot
+    // stopped pulsing, the Sync now button re-enabled (swapping its cursor and hover
+    // background), and re-adding animate-spin restarted the spinner from 0deg, which reads as
+    // the icon jumping about while you hover it. Queued work is still sync work, so treat it
+    // as busy and the footer stays put for the whole cycle.
+    const syncBusy = syncStatus.inFlight || syncStatus.queued;
+    const syncFreshnessDotClass = syncBusy
         ? 'bg-info'
         : !isOnline
         ? 'bg-muted-foreground'
@@ -223,7 +230,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
             : lastSyncStatus === 'conflict'
                 ? `${tFallback(t, 'settings.lastSyncConflict', 'Conflicts resolved')}\n${syncConflictNotice}\n${tFallback(t, 'settings.lastSync', 'Last sync')}: ${fullSyncTimestamp}`
             : `${tFallback(t, 'settings.lastSync', 'Last sync')}: ${fullSyncTimestamp}`;
-    const syncStatusLabel = syncStatus.inFlight
+    const syncStatusLabel = syncBusy
         ? tFallback(t, 'settings.syncing', 'Syncing...')
         : !isOnline
             ? tFallback(t, 'common.offline', 'Offline')
@@ -240,7 +247,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                 : tFallback(t, 'settings.syncStatusNever', 'Not synced');
     const syncStatusDescription = `${syncStatusLabel}. ${syncTooltip}`;
     const syncNowLabel = tFallback(t, 'settings.syncNow', 'Sync now');
-    const manualSyncBusy = syncStatus.inFlight || isManualSyncing;
+    const manualSyncBusy = syncBusy || isManualSyncing;
     const formatCompactSyncTime = useCallback((iso: string) => {
         const date = new Date(iso);
         if (Number.isNaN(date.getTime())) return iso;
@@ -870,7 +877,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         className={cn(
                                             "absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-card",
                                             syncFreshnessDotClass,
-                                            syncStatus.inFlight && "animate-pulse"
+                                            syncBusy && "animate-pulse"
                                         )}
                                         title={syncTooltip}
                                         aria-hidden="true"
@@ -890,7 +897,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         className={cn(
                                             "h-2 w-2 shrink-0 rounded-full",
                                             syncFreshnessDotClass,
-                                            syncStatus.inFlight && "animate-pulse"
+                                            syncBusy && "animate-pulse"
                                         )}
                                         data-sidebar-sync-dot
                                         aria-hidden="true"
