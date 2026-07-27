@@ -148,9 +148,14 @@ function TaskEditModalInner({
     const timeSpentEnabled = settings.features?.pomodoro === true && settings.gtd?.pomodoro?.linkTask === true;
     const resetCopilotStateRef = useRef<() => void>(() => {});
     const descriptionToolbarInteractionUntilRef = useRef(0);
+    const showTaskWriteError = useCallback((message?: string) => showToast({
+        title: t('common.error') || 'Error',
+        message: message || t('task.updateFailed') || 'Could not update task.',
+        tone: 'error',
+        durationMs: 4200,
+    }), [showToast, t]);
     const {
         aiModal,
-        baseTaskRef,
         contextInputDraft,
         customWeekdays,
         descriptionDebounceRef,
@@ -189,12 +194,17 @@ function TaskEditModalInner({
         showSectionPicker,
         tagInputDraft,
         taskEditDraft,
+        draftLifecycle,
         titleDebounceRef,
         titleDraft,
         titleDraftRef,
     } = useTaskEditState({
         defaultTab,
+        onClose,
+        onSave,
+        onSaveError: showTaskWriteError,
         resetCopilotStateRef,
+        sections,
         task,
         tasks,
         visible,
@@ -631,13 +641,10 @@ function TaskEditModalInner({
         handleShare,
     } = useTaskEditActions({
         aiEnabled,
-        baseTaskRef,
         closeAIModal,
-        contextInputDraft,
         deleteTask,
-        descriptionDebounceRef,
         descriptionDraft,
-        descriptionDraftRef,
+        draftLifecycle,
         duplicateTask,
         promoteTaskToProject,
         mergedTask,
@@ -646,15 +653,11 @@ function TaskEditModalInner({
         formatDueDate,
         formatTimeEstimateLabel,
         isAIWorking,
-        isContextInputFocused,
-        isTagInputFocused,
         onClose,
-        onSave,
         prioritiesEnabled,
         projectContext,
         resetTaskChecklist,
         restoreTask,
-        sections,
         setAiModal,
         setChecklist,
         setDraftField,
@@ -663,11 +666,9 @@ function TaskEditModalInner({
         settings,
         showToast,
         t,
-        tagInputDraft,
         task,
         tasks,
         timeEstimatesEnabled,
-        titleDebounceRef,
         titleDraftRef,
     });
 

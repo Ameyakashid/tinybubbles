@@ -8,8 +8,16 @@ import {
 import { getRecurrenceByDayValue } from './recurrence-utils';
 import {
     createTaskEditDraft,
+    buildTaskEditUpdatePatch,
+    isTaskEditDraftDirty,
     type TaskEditDraft,
 } from './task-edit-draft-adapter';
+import { parseTokenList } from './task-edit-token-utils';
+import {
+    getActionFailureMessage,
+    getUnknownErrorMessage,
+    isActionFailure,
+} from '../store-action-result';
 
 export type TaskEditTab = 'task' | 'view';
 
@@ -24,6 +32,13 @@ export type SetTaskEditDraftField = <K extends TaskDraftField>(
     markDirty?: boolean,
 ) => void;
 
+export type TaskEditDraftLifecycle = {
+    convertToReference: () => Promise<boolean>;
+    discard: () => void;
+    hasPendingChanges: () => boolean;
+    save: () => Promise<boolean>;
+};
+
 export function resolveInitialTaskEditTab(target?: TaskEditTab, currentTask?: Task | null): TaskEditTab {
     if (target) return target;
     if (currentTask?.taskMode === 'list') return 'view';
@@ -32,7 +47,11 @@ export function resolveInitialTaskEditTab(target?: TaskEditTab, currentTask?: Ta
 
 type UseTaskEditStateParams = {
     defaultTab?: TaskEditTab;
+    onClose: () => void;
+    onSave: (taskId: string, updates: Partial<Task>) => unknown;
+    onSaveError: (message?: string) => void;
     resetCopilotStateRef: React.MutableRefObject<() => void>;
+    sections: { id: string; projectId?: string; deletedAt?: string | null }[];
     task: Task | null;
     tasks: Task[];
     visible: boolean;
@@ -40,7 +59,11 @@ type UseTaskEditStateParams = {
 
 export function useTaskEditState({
     defaultTab,
+    onClose,
+    onSave,
+    onSaveError,
     resetCopilotStateRef,
+    sections,
     task,
     tasks,
     visible,
@@ -99,6 +122,170 @@ export function useTaskEditState({
     const [customWeekdays, setCustomWeekdays] = React.useState<RecurrenceWeekday[]>([]);
     const [isAIWorking, setIsAIWorking] = React.useState(false);
     const [aiModal, setAiModal] = React.useState<{ title: string; message?: string; actions: { label: string; variant?: 'primary' | 'secondary'; onPress: () => void }[] } | null>(null);
+
+    const clearPendingTextChanges = React.useCallback(() => {
+        if (titleDebounceRef.current) {
+            clearTimeout(titleDebounceRef.current);
+            titleDebounceRef.current = null;
+        }
+        if (descriptionDebounceRef.current) {
+            clearTimeout(descriptionDebounceRef.current);
+            descriptionDebounceRef.current = null;
+        }
+    }, []);
+
+    const writePatch = React.useCallback((taskId: string, updates: Partial<Task>): boolean | Promise<boolean> => {
+        const settle = (result: unknown) => {
+            if (!isActionFailure(result)) return true;
+            onSaveError(getActionFailureMessage(result));
+            return false;
+        };
+        try {
+            const result = onSave(taskId, updates);
+            if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+                return Promise.resolve(result).then(settle).catch((error) => {
+                    onSaveError(getUnknownErrorMessage(error));
+                    return false;
+                });
+            }
+            return settle(result);
+        } catch (error) {
+            onSaveError(getUnknownErrorMessage(error));
+        }
+        return false;
+    }, [onSave, onSaveError]);
+
+    const saveDraft = React.useCallback((): Promise<boolean> => {
+        const currentTask = baseTaskRef.current ?? liveTask;
+        if (!currentTask || !taskEditDraft) return Promise.resolve(false);
+        clearPendingTextChanges();
+
+        let saveDraftState = taskEditDraft;
+        const nextProjectId = saveDraftState.draft.projectId;
+        const nextSectionId = saveDraftState.draft.sectionId;
+        if (nextProjectId && nextSectionId) {
+            const isValid = sections.some((section) =>
+                section.id === nextSectionId && section.projectId === nextProjectId && !section.deletedAt
+            );
+            if (!isValid) {
+                saveDraftState = {
+                    ...saveDraftState,
+                    draft: setTaskDraftField(saveDraftState.draft, 'sectionId', ''),
+                };
+            }
+        }
+
+        const updates = buildTaskEditUpdatePatch(saveDraftState, currentTask, {
+            title: titleDraftRef.current,
+            description: descriptionDraftRef.current,
+        });
+        if (updates && Object.keys(updates).length > 0) {
+            const saved = writePatch(currentTask.id, updates);
+            if (saved instanceof Promise) {
+                return saved.then((succeeded) => {
+                    if (!succeeded) return false;
+                    onClose();
+                    return true;
+                });
+            }
+            if (!saved) return Promise.resolve(false);
+        }
+        onClose();
+        return Promise.resolve(true);
+    }, [
+        clearPendingTextChanges,
+        liveTask,
+        onClose,
+        sections,
+        taskEditDraft,
+        writePatch,
+    ]);
+
+    const discardDraft = React.useCallback(() => {
+        clearPendingTextChanges();
+        onClose();
+    }, [clearPendingTextChanges, onClose]);
+
+    const hasPendingChanges = React.useCallback(() => {
+        const currentTask = baseTaskRef.current ?? liveTask;
+        if (!currentTask || !taskEditDraft) return false;
+        let pendingDraft = taskEditDraft.draft;
+        pendingDraft = setTaskDraftField(pendingDraft, 'title', titleDraftRef.current);
+        pendingDraft = setTaskDraftField(pendingDraft, 'description', descriptionDraftRef.current);
+        if (isContextInputFocused) {
+            pendingDraft = setTaskDraftField(
+                pendingDraft,
+                'contexts',
+                parseTokenList(contextInputDraft, '@').join(', '),
+            );
+        }
+        if (isTagInputFocused) {
+            pendingDraft = setTaskDraftField(
+                pendingDraft,
+                'tags',
+                parseTokenList(tagInputDraft, '#').join(', '),
+            );
+        }
+        return isTaskEditDraftDirty({ ...taskEditDraft, draft: pendingDraft }, currentTask);
+    }, [
+        contextInputDraft,
+        isContextInputFocused,
+        isTagInputFocused,
+        liveTask,
+        tagInputDraft,
+        taskEditDraft,
+    ]);
+
+    const convertToReference = React.useCallback((): Promise<boolean> => {
+        const currentTask = baseTaskRef.current ?? liveTask;
+        if (!currentTask) return Promise.resolve(false);
+        const referenceUpdate: Partial<Task> = {
+            status: 'reference',
+            startTime: undefined,
+            dueDate: undefined,
+            reviewAt: undefined,
+            recurrence: undefined,
+            showFutureRecurrence: undefined,
+            priority: undefined,
+            timeEstimate: undefined,
+            isFocusedToday: false,
+            pushCount: 0,
+        };
+        const applyReference = (saved: boolean) => {
+            if (!saved) return false;
+            const nextBaseTask = { ...currentTask, ...referenceUpdate };
+            baseTaskRef.current = nextBaseTask;
+            setTaskEditDraftState((current) => {
+                if (!current) return current;
+                let draft = current.draft;
+                draft = setTaskDraftField(draft, 'status', 'reference');
+                draft = setTaskDraftField(draft, 'startTime', '');
+                draft = setTaskDraftField(draft, 'dueDate', '');
+                draft = setTaskDraftField(draft, 'reviewAt', '');
+                draft = setTaskDraftField(draft, 'recurrence', '');
+                draft = setTaskDraftField(draft, 'recurrenceRRule', '');
+                draft = setTaskDraftField(draft, 'showFutureRecurrence', false);
+                draft = setTaskDraftField(draft, 'priority', '');
+                draft = setTaskDraftField(draft, 'timeEstimate', '');
+                draft = setTaskDraftField(draft, 'focusedToday', false);
+                const next = { ...current, draft };
+                isDirtyRef.current = isTaskEditDraftDirty(next, nextBaseTask);
+                return next;
+            });
+            return true;
+        };
+        const saved = writePatch(currentTask.id, referenceUpdate);
+        return saved instanceof Promise
+            ? saved.then(applyReference)
+            : Promise.resolve(applyReference(saved));
+    }, [liveTask, writePatch]);
+
+    const draftLifecycle = React.useMemo<TaskEditDraftLifecycle>(() => ({
+        convertToReference,
+        discard: discardDraft,
+        hasPendingChanges,
+        save: saveDraft,
+    }), [convertToReference, discardDraft, hasPendingChanges, saveDraft]);
 
     React.useEffect(() => {
         if (!visible) {
@@ -220,7 +407,6 @@ export function useTaskEditState({
 
     return {
         aiModal,
-        baseTaskRef,
         contextInputDraft,
         customWeekdays,
         descriptionDebounceRef,
@@ -261,6 +447,7 @@ export function useTaskEditState({
         showSectionPicker,
         tagInputDraft,
         taskEditDraft,
+        draftLifecycle,
         titleDebounceRef,
         titleDraft,
         titleDraftRef,

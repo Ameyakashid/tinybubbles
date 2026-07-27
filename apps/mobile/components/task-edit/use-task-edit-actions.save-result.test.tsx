@@ -6,6 +6,7 @@ import type { StoreActionResult, Task } from '@mindwtr/core';
 
 import { createTaskEditDraft } from './task-edit-draft-adapter';
 import { useTaskEditActions } from './use-task-edit-actions';
+import { useTaskEditState } from './use-task-edit-state';
 
 vi.mock('expo-router', () => ({
     router: { push: vi.fn() },
@@ -13,8 +14,7 @@ vi.mock('expo-router', () => ({
 
 /**
  * Store writes resolve `{ success: false, error }` WITHOUT throwing. The editor
- * closes the moment a save is handed off, so an unchecked result means the user
- * watches the modal close over a task that never saved.
+ * must be checked before the editor closes.
  */
 
 const baseTask: Task = {
@@ -40,7 +40,7 @@ type Harness = {
     setChecklist?: ReturnType<typeof vi.fn>;
 };
 
-let saveHandle: () => Promise<void>;
+let saveHandle: () => Promise<boolean>;
 let deleteHandle: () => Promise<void>;
 let resetHandle: () => Promise<void>;
 
@@ -54,15 +54,26 @@ function SaveProbe({
     setChecklist = vi.fn(),
 }: Harness) {
     const draft = createTaskEditDraft(baseTask);
+    const state = useTaskEditState({
+        onClose,
+        onSave,
+        onSaveError: (message) => showToast({
+            tone: 'error',
+            message: message || 'Could not update task.',
+        }),
+        resetCopilotStateRef: { current: vi.fn() },
+        sections: [],
+        task: baseTask,
+        tasks: [baseTask],
+        visible: true,
+    });
+    state.titleDraftRef.current = 'Plan launch v2';
     const actions = useTaskEditActions({
         aiEnabled: false,
-        baseTaskRef: { current: baseTask },
         closeAIModal: vi.fn(),
-        contextInputDraft: '',
         deleteTask,
-        descriptionDebounceRef: { current: null },
         descriptionDraft: '',
-        descriptionDraftRef: { current: '' },
+        draftLifecycle: state.draftLifecycle,
         duplicateTask: vi.fn(),
         mergedTask: baseTask,
         taskEditDraft: draft,
@@ -70,14 +81,10 @@ function SaveProbe({
         formatDueDate: () => '',
         formatTimeEstimateLabel: () => '',
         isAIWorking: false,
-        isContextInputFocused: false,
-        isTagInputFocused: false,
         onClose,
-        onSave,
         prioritiesEnabled: true,
         resetTaskChecklist,
         restoreTask,
-        sections: [],
         setAiModal: vi.fn(),
         setChecklist,
         setDraftField: vi.fn(),
@@ -86,16 +93,13 @@ function SaveProbe({
         settings: {},
         showToast,
         t,
-        tagInputDraft: '',
         task: baseTask,
         tasks: [baseTask],
         timeEstimatesEnabled: true,
-        titleDebounceRef: { current: null },
-        // A changed title is what makes the save patch non-empty.
-        titleDraftRef: { current: 'Plan launch v2' },
+        titleDraftRef: state.titleDraftRef,
     } as unknown as Parameters<typeof useTaskEditActions>[0]);
 
-    saveHandle = actions.handleSave;
+    saveHandle = state.draftLifecycle.save;
     deleteHandle = actions.handleDeleteTask;
     resetHandle = actions.handleResetChecklist;
     return <Text>probe</Text>;

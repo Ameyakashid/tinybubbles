@@ -16,23 +16,20 @@ import {
 import type { AIResponseAction } from '../ai-response-modal';
 import { buildAIConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logTaskError, logTaskWarn } from './task-edit-modal.utils';
-import { parseTokenList } from './task-edit-token-utils';
 import { openProjectScreen, openTaskScreen } from '../../lib/task-meta-navigation';
 import {
     getActionFailureMessage,
     getUnknownErrorMessage,
     isActionFailure,
 } from '../store-action-result';
+import { type TaskDraftSetter } from '@mindwtr/core/task-draft';
 import {
-    setTaskDraftField,
-    type TaskDraftSetter,
-} from '@mindwtr/core/task-draft';
-import {
-    buildTaskEditUpdatePatch,
-    isTaskEditDraftDirty,
     type TaskEditDraft,
 } from './task-edit-draft-adapter';
-import type { SetTaskEditDraftValue } from './use-task-edit-state';
+import type {
+    SetTaskEditDraftValue,
+    TaskEditDraftLifecycle,
+} from './use-task-edit-state';
 
 type AIResponseModalState = {
     title: string;
@@ -51,13 +48,10 @@ type ShowToast = (options: {
 
 type TaskEditActionsParams = {
     aiEnabled: boolean;
-    baseTaskRef: React.MutableRefObject<Task | null>;
     closeAIModal: () => void;
-    contextInputDraft: string;
     deleteTask: (taskId: string) => Promise<StoreActionResult>;
-    descriptionDebounceRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
     descriptionDraft: string;
-    descriptionDraftRef: React.MutableRefObject<string>;
+    draftLifecycle: TaskEditDraftLifecycle;
     duplicateTask: (taskId: string, includeDoneSubtasks?: boolean) => Promise<StoreActionResult>;
     promoteTaskToProject?: (taskId: string, options?: { title?: string; color?: string; areaId?: string }) => Promise<StoreActionResult>;
     mergedTask: Partial<Task>;
@@ -66,20 +60,11 @@ type TaskEditActionsParams = {
     formatDueDate: (dateStr?: string) => string;
     formatTimeEstimateLabel: (estimate: TimeEstimate) => string;
     isAIWorking: boolean;
-    isContextInputFocused: boolean;
-    isTagInputFocused: boolean;
     onClose: () => void;
-    /**
-     * Returns whatever the store write resolves to (callers wire this straight to
-     * `updateTask`), so a `{ success: false }` save can surface instead of the
-     * modal closing over a write that never landed.
-     */
-    onSave: (taskId: string, updates: Partial<Task>) => unknown;
     prioritiesEnabled: boolean;
     projectContext?: Record<string, unknown> | null;
     resetTaskChecklist: (taskId: string) => Promise<StoreActionResult>;
     restoreTask: (taskId: string) => Promise<StoreActionResult>;
-    sections: Array<{ id: string; projectId?: string; deletedAt?: string | null }>;
     setAiModal: React.Dispatch<React.SetStateAction<AIResponseModalState>>;
     setChecklist: SetTaskEditDraftValue<Task['checklist']>;
     setDraftField: TaskDraftSetter;
@@ -88,23 +73,18 @@ type TaskEditActionsParams = {
     settings: Record<string, any>;
     showToast: ShowToast;
     t: (key: string) => string;
-    tagInputDraft: string;
     task: Task | null;
     tasks: Task[];
     timeEstimatesEnabled: boolean;
-    titleDebounceRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
     titleDraftRef: React.MutableRefObject<string>;
 };
 
 export function useTaskEditActions({
     aiEnabled,
-    baseTaskRef,
     closeAIModal,
-    contextInputDraft,
     deleteTask,
-    descriptionDebounceRef,
     descriptionDraft,
-    descriptionDraftRef,
+    draftLifecycle,
     duplicateTask,
     promoteTaskToProject,
     mergedTask,
@@ -113,15 +93,11 @@ export function useTaskEditActions({
     formatDueDate,
     formatTimeEstimateLabel,
     isAIWorking,
-    isContextInputFocused,
-    isTagInputFocused,
     onClose,
-    onSave,
     prioritiesEnabled,
     projectContext,
     resetTaskChecklist,
     restoreTask,
-    sections,
     setAiModal,
     setChecklist,
     setDraftField,
@@ -130,11 +106,9 @@ export function useTaskEditActions({
     settings,
     showToast,
     t,
-    tagInputDraft,
     task,
     tasks,
     timeEstimatesEnabled,
-    titleDebounceRef,
     titleDraftRef,
 }: TaskEditActionsParams) {
     const showTaskWriteError = useCallback((message?: string) => showToast({
@@ -157,16 +131,6 @@ export function useTaskEditActions({
             showTaskWriteError(getUnknownErrorMessage(error));
         }
         return false;
-    }, [showTaskWriteError]);
-
-    // The modal closes as soon as a save is handed off, so a store write that
-    // resolves to `{ success: false }` would otherwise read as a saved task.
-    const reportSaveResult = useCallback((result: unknown) => {
-        void Promise.resolve(result)
-            .then((settled) => {
-                if (isActionFailure(settled)) showTaskWriteError(getActionFailureMessage(settled));
-            })
-            .catch((error) => showTaskWriteError(getUnknownErrorMessage(error)));
     }, [showTaskWriteError]);
 
     const applyChecklistUpdate = useCallback((nextChecklist: NonNullable<Task['checklist']>) => {
@@ -195,59 +159,6 @@ export function useTaskEditActions({
         const reset = current.map((item) => ({ ...item, isCompleted: false }));
         applyChecklistUpdate(reset);
     }, [applyChecklistUpdate, resetTaskChecklist, runStoreAction, task, taskEditDraft?.checklist]);
-
-    const handleSave = useCallback(async () => {
-        if (!task) return;
-        if (titleDebounceRef.current) {
-            clearTimeout(titleDebounceRef.current);
-            titleDebounceRef.current = null;
-        }
-        if (descriptionDebounceRef.current) {
-            clearTimeout(descriptionDebounceRef.current);
-            descriptionDebounceRef.current = null;
-        }
-
-        const baseTask = baseTaskRef.current ?? task;
-        if (!taskEditDraft) return;
-        let saveDraft = taskEditDraft;
-        const nextProjectId = saveDraft.draft.projectId;
-        const nextSectionId = saveDraft.draft.sectionId;
-        if (nextProjectId && nextSectionId) {
-            const isValid = sections.some((section) =>
-                section.id === nextSectionId && section.projectId === nextProjectId && !section.deletedAt
-            );
-            if (!isValid) {
-                saveDraft = {
-                    ...saveDraft,
-                    draft: setTaskDraftField(saveDraft.draft, 'sectionId', ''),
-                };
-            }
-        }
-
-        const updates = buildTaskEditUpdatePatch(saveDraft, baseTask, {
-            title: String(titleDraftRef.current ?? ''),
-            description: descriptionDraftRef.current,
-        });
-        if (!updates || Object.keys(updates).length === 0) {
-            onClose();
-            return;
-        }
-
-        reportSaveResult(onSave(task.id, updates));
-        onClose();
-    }, [
-        baseTaskRef,
-        descriptionDebounceRef,
-        descriptionDraftRef,
-        onClose,
-        onSave,
-        reportSaveResult,
-        sections,
-        task,
-        taskEditDraft,
-        titleDebounceRef,
-        titleDraftRef,
-    ]);
 
     const handleShare = useCallback(async () => {
         if (!task) return;
@@ -305,47 +216,9 @@ export function useTaskEditActions({
         }
     }, [mergedTask, formatDate, formatDueDate, formatTimeEstimateLabel, prioritiesEnabled, t, task, timeEstimatesEnabled, titleDraftRef]);
 
-    const discardAndClose = useCallback(() => {
-        if (titleDebounceRef.current) {
-            clearTimeout(titleDebounceRef.current);
-            titleDebounceRef.current = null;
-        }
-        if (descriptionDebounceRef.current) {
-            clearTimeout(descriptionDebounceRef.current);
-            descriptionDebounceRef.current = null;
-        }
-        onClose();
-    }, [descriptionDebounceRef, onClose, titleDebounceRef]);
-
-    const hasPendingChanges = useCallback((): boolean => {
-        if (!task || !taskEditDraft) return false;
-
-        const baseTask = baseTaskRef.current ?? task;
-        let pendingDraft = taskEditDraft.draft;
-        pendingDraft = setTaskDraftField(pendingDraft, 'title', String(titleDraftRef.current ?? pendingDraft.title));
-        pendingDraft = setTaskDraftField(pendingDraft, 'description', String(descriptionDraftRef.current ?? pendingDraft.description));
-        if (isContextInputFocused) {
-            pendingDraft = setTaskDraftField(pendingDraft, 'contexts', parseTokenList(contextInputDraft, '@').join(', '));
-        }
-        if (isTagInputFocused) {
-            pendingDraft = setTaskDraftField(pendingDraft, 'tags', parseTokenList(tagInputDraft, '#').join(', '));
-        }
-        return isTaskEditDraftDirty({ ...taskEditDraft, draft: pendingDraft }, baseTask);
-    }, [
-        baseTaskRef,
-        contextInputDraft,
-        descriptionDraftRef,
-        isContextInputFocused,
-        isTagInputFocused,
-        tagInputDraft,
-        task,
-        taskEditDraft,
-        titleDraftRef,
-    ]);
-
     const handleAttemptClose = useCallback(() => {
-        if (!hasPendingChanges()) {
-            discardAndClose();
+        if (!draftLifecycle.hasPendingChanges()) {
+            draftLifecycle.discard();
             return;
         }
 
@@ -360,22 +233,22 @@ export function useTaskEditActions({
                 {
                     text: t('common.discard'),
                     style: 'destructive',
-                    onPress: discardAndClose,
+                    onPress: draftLifecycle.discard,
                 },
                 {
                     text: t('common.save'),
                     onPress: () => {
-                        void handleSave();
+                        void draftLifecycle.save();
                     },
                 },
             ],
             { cancelable: true },
         );
-    }, [discardAndClose, handleSave, hasPendingChanges, t]);
+    }, [draftLifecycle, t]);
 
     const handleDone = useCallback(() => {
-        void handleSave();
-    }, [handleSave]);
+        void draftLifecycle.save();
+    }, [draftLifecycle]);
 
     const handleDuplicateTask = useCallback(async () => {
         if (!task) return;
@@ -457,31 +330,8 @@ export function useTaskEditActions({
     }, [deleteTask, onClose, restoreTask, runStoreAction, showToast, t, task]);
 
     const handleConvertToReference = useCallback(() => {
-        if (!task) return;
-        const referenceUpdate: Partial<Task> = {
-            status: 'reference',
-            startTime: undefined,
-            dueDate: undefined,
-            reviewAt: undefined,
-            recurrence: undefined,
-            showFutureRecurrence: undefined,
-            priority: undefined,
-            timeEstimate: undefined,
-            isFocusedToday: false,
-            pushCount: 0,
-        };
-        reportSaveResult(onSave(task.id, referenceUpdate));
-        setDraftField('status', 'reference');
-        setDraftField('startTime', '');
-        setDraftField('dueDate', '');
-        setDraftField('reviewAt', '');
-        setDraftField('recurrence', '');
-        setDraftField('recurrenceRRule', '');
-        setDraftField('showFutureRecurrence', false);
-        setDraftField('priority', '');
-        setDraftField('timeEstimate', '');
-        setDraftField('focusedToday', false);
-    }, [onSave, reportSaveResult, setDraftField, task]);
+        void draftLifecycle.convertToReference();
+    }, [draftLifecycle]);
 
     const getAIProvider = useCallback(async () => {
         if (!aiEnabled) {
@@ -648,7 +498,6 @@ export function useTaskEditActions({
         handleDuplicateTask,
         handlePromoteTaskToProject,
         handleResetChecklist,
-        handleSave,
         handleShare,
     };
 }

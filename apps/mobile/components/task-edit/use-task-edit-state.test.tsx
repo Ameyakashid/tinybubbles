@@ -22,7 +22,11 @@ describe('useTaskEditState', () => {
 
         function Probe() {
             state = useTaskEditState({
+                onClose: vi.fn(),
+                onSave: vi.fn(),
+                onSaveError: vi.fn(),
                 resetCopilotStateRef,
+                sections: [],
                 task,
                 tasks: [task],
                 visible: true,
@@ -46,5 +50,50 @@ describe('useTaskEditState', () => {
         });
 
         expect(state.isDirtyRef.current).toBe(true);
+    });
+
+    it('keeps the editor open until the draft write succeeds', async () => {
+        let state!: ReturnType<typeof useTaskEditState>;
+        const onClose = vi.fn();
+        const onSaveError = vi.fn();
+        const onSave = vi.fn()
+            .mockResolvedValueOnce({ success: false, error: 'disk full' })
+            .mockResolvedValueOnce({ success: true });
+        const resetCopilotStateRef = { current: vi.fn() };
+
+        function Probe() {
+            state = useTaskEditState({
+                onClose,
+                onSave,
+                onSaveError,
+                resetCopilotStateRef,
+                sections: [],
+                task,
+                tasks: [task],
+                visible: true,
+            });
+            return null;
+        }
+
+        renderer.act(() => {
+            renderer.create(React.createElement(Probe));
+        });
+        renderer.act(() => {
+            state.titleDraftRef.current = 'Edited';
+            state.setTitleDraft('Edited');
+            state.setDraftField('title', 'Edited');
+        });
+
+        await renderer.act(async () => {
+            expect(await state.draftLifecycle.save()).toBe(false);
+        });
+        expect(onSave).toHaveBeenLastCalledWith('task-1', { title: 'Edited' });
+        expect(onSaveError).toHaveBeenCalledWith('disk full');
+        expect(onClose).not.toHaveBeenCalled();
+
+        await renderer.act(async () => {
+            expect(await state.draftLifecycle.save()).toBe(true);
+        });
+        expect(onClose).toHaveBeenCalledOnce();
     });
 });
