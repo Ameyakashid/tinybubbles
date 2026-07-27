@@ -1,6 +1,7 @@
-import { CloudHttpError, cloudGetJson, cloudRequestJson, normalizeCloudUrl, type AppData } from '@mindwtr/core';
+import { CloudHttpError, cloudGetJson, cloudRequestJson, normalizeCloudUrl, PRIORITY_RANK, type AppData } from '@mindwtr/core';
 
 import { NotFoundError, ValidationError } from './errors.js';
+import { filterUndefined } from './filter-undefined.js';
 import {
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
@@ -96,15 +97,8 @@ const matchesSearch = (task: Task, search: string | undefined): boolean => {
   return haystack.includes(query);
 };
 
-const priorityRank: Record<string, number> = {
-  urgent: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-};
-
 const taskSortValue = (task: Task, sortBy: NonNullable<ListTasksInput['sortBy']>): string | number => {
-  if (sortBy === 'priority') return task.priority ? priorityRank[task.priority] ?? 0 : 0;
+  if (sortBy === 'priority') return task.priority ? PRIORITY_RANK[task.priority] ?? 0 : 0;
   const value = task[sortBy];
   return typeof value === 'string' ? value : '';
 };
@@ -130,16 +124,6 @@ const mapArea = (area: AppData['areas'][number]): Area => area;
 const mapSection = (section: AppData['sections'][number]): Section => section;
 const mapPerson = (person: CloudData['people'][number]): Person => person;
 const mapTask = (task: AppData['tasks'][number]): TaskRow => task;
-
-const filterUndefined = <T extends Record<string, unknown>>(obj: T): Partial<T> => {
-  const result: Partial<T> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      (result as Record<string, unknown>)[key] = value;
-    }
-  }
-  return result;
-};
 
 const mapCloudError = (error: unknown): unknown => {
   if (error instanceof CloudHttpError) {

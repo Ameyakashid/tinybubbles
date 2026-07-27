@@ -1,10 +1,13 @@
 import {
-  DEFAULT_PROJECT_COLOR,
+  PRIORITY_RANK,
   PROJECT_SQLITE_COLUMNS,
   TASK_SQLITE_COLUMNS,
+  areaFromSqliteRow,
   mapSqliteTaskRow,
-  normalizeProjectTaskSortBy,
   parseQuickAdd as parseQuickAddCore,
+  personFromSqliteRow,
+  projectFromSqliteRow,
+  sectionFromSqliteRow,
   type Area as CoreArea,
   type Person as CorePerson,
   type Project as CoreProject,
@@ -16,7 +19,6 @@ import {
   type TimeEstimate as CoreTimeEstimate,
 } from '@mindwtr/core';
 import type { DbClient } from './db.js';
-import { parseJson } from './db.js';
 import { NotFoundError } from './errors.js';
 
 export type TaskStatus = CoreTaskStatus;
@@ -185,6 +187,14 @@ const buildTasksFtsQuery = (search: string): string | null => {
   return tokens.map((token) => `${token}*`).join(' ');
 };
 
+// `priority` is a TEXT column, so sorting it directly is lexicographic ('high' sorts after
+// 'medium' and 'urgent' descending). Rank it through a CASE built from the shared
+// PRIORITY_RANK map so this can't drift from the cloud adapter's JS sort (cloud-service.ts).
+// A task with no priority falls through to 0, matching the cloud side's `?? 0`.
+const PRIORITY_SQL_CASE = `CASE priority ${Object.entries(PRIORITY_RANK)
+  .map(([priority, rank]) => `WHEN '${priority}' THEN ${rank}`)
+  .join(' ')} ELSE 0 END`;
+
 function mapTaskRow(row: TaskSqliteRow): TaskRow {
   const task = mapSqliteTaskRow(row);
   return {
@@ -243,7 +253,10 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
   const sortOrder = input.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
   const { selectColumns } = getTaskColumns(db);
-  const sql = `SELECT ${selectColumns.join(', ')} FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY ${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
+  const orderExpr = sortBy === 'priority' ? PRIORITY_SQL_CASE : sortBy;
+  // `id ASC` is a stable tie-break for equal sort keys and, like the cloud adapter's
+  // `id.localeCompare`, never flips direction with sortOrder.
+  const sql = `SELECT ${selectColumns.join(', ')} FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY ${orderExpr} ${sortOrder}, id ASC LIMIT ? OFFSET ?`;
   const rows = db.prepare(sql).all<TaskSqliteRow>(...params, limit, offset);
   return rows.map(mapTaskRow);
 }
@@ -292,36 +305,8 @@ const getProjectColumns = (db: DbClient) => {
 export function listProjects(db: DbClient): Project[] {
   const { selectColumns } = getProjectColumns(db);
   const rows = db.prepare(`SELECT ${selectColumns.join(', ')} FROM projects WHERE deletedAt IS NULL`).all<ProjectSqliteRow>();
-  return rows.map(mapProjectRow);
+  return rows.map((row) => projectFromSqliteRow(row));
 }
-
-const mapProjectRow = (row: ProjectSqliteRow): Project => ({
-  id: row.id,
-  title: row.title,
-  status: row.status === 'someday' || row.status === 'waiting' || row.status === 'archived' ? row.status : 'active',
-  color: row.color ?? DEFAULT_PROJECT_COLOR,
-  order: row.orderNum ?? 0,
-  orderNum: row.orderNum ?? undefined,
-  tagIds: parseJson(row.tagIds, []),
-  isSequential: row.isSequential === 1,
-  sequentialScope: row.sequentialScope === 'section' || row.sequentialScope === 'project'
-    ? row.sequentialScope
-    : undefined,
-  taskSortBy: normalizeProjectTaskSortBy(row.taskSortBy),
-  isFocused: row.isFocused === 1,
-  supportNotes: row.supportNotes ?? undefined,
-  attachments: parseJson(row.attachments, []),
-  dueDate: row.dueDate ?? undefined,
-  reviewAt: row.reviewAt ?? undefined,
-  areaId: row.areaId ?? undefined,
-  areaTitle: row.areaTitle ?? undefined,
-  rev: row.rev ?? undefined,
-  revBy: row.revBy ?? undefined,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  deletedAt: row.deletedAt ?? undefined,
-  purgedAt: row.purgedAt ?? undefined,
-});
 
 export type GetProjectInput = { id: string; includeDeleted?: boolean };
 
@@ -335,7 +320,7 @@ export function getProject(db: DbClient, input: GetProjectInput): Project {
   if (!row) {
     throw new NotFoundError(`Project not found: ${input.id}`);
   }
-  return mapProjectRow(row);
+  return projectFromSqliteRow(row);
 }
 
 const BASE_SECTION_COLUMNS = [
@@ -372,20 +357,6 @@ const getSectionColumns = (db: DbClient) => {
   }
 };
 
-const mapSectionRow = (row: SectionSqliteRow): Section => ({
-  id: row.id,
-  projectId: row.projectId,
-  title: row.title,
-  description: row.description ?? undefined,
-  order: row.orderNum ?? 0,
-  isCollapsed: row.isCollapsed === null || row.isCollapsed === undefined ? undefined : row.isCollapsed === 1,
-  rev: row.rev ?? undefined,
-  revBy: row.revBy ?? undefined,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  deletedAt: row.deletedAt ?? undefined,
-});
-
 export type ListSectionsInput = {
   projectId?: string;
   includeDeleted?: boolean;
@@ -407,7 +378,7 @@ export function listSections(db: DbClient, input: ListSectionsInput = {}): Secti
   const rows = db
     .prepare(`SELECT ${selectColumns.join(', ')} FROM sections${whereSql} ORDER BY ${orderSql}`)
     .all<SectionSqliteRow>(...params);
-  return rows.map(mapSectionRow);
+  return rows.map((row) => sectionFromSqliteRow(row));
 }
 
 export type GetSectionInput = { id: string; includeDeleted?: boolean };
@@ -422,7 +393,7 @@ export function getSection(db: DbClient, input: GetSectionInput): Section {
   if (!row) {
     throw new NotFoundError(`Section not found: ${input.id}`);
   }
-  return mapSectionRow(row);
+  return sectionFromSqliteRow(row);
 }
 
 const BASE_AREA_COLUMNS = [
@@ -456,21 +427,10 @@ const getAreaColumns = (db: DbClient) => {
   }
 };
 
-const mapAreaRow = (row: AreaSqliteRow): Area => ({
-  id: row.id,
-  name: row.name,
-  color: row.color ?? undefined,
-  icon: row.icon ?? undefined,
-  order: row.orderNum ?? 0,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  deletedAt: row.deletedAt ?? undefined,
-});
-
 export function listAreas(db: DbClient): Area[] {
   const { selectColumns } = getAreaColumns(db);
   const rows = db.prepare(`SELECT ${selectColumns.join(', ')} FROM areas WHERE deletedAt IS NULL ORDER BY orderNum ASC, updatedAt DESC`).all<AreaSqliteRow>();
-  return rows.map(mapAreaRow);
+  return rows.map((row) => areaFromSqliteRow(row));
 }
 
 const BASE_PERSON_COLUMNS = [
@@ -505,18 +465,6 @@ const getPeopleColumns = (db: DbClient) => {
   }
 };
 
-const mapPersonRow = (row: PersonSqliteRow): Person => ({
-  id: row.id,
-  name: row.name,
-  note: row.note ?? undefined,
-  referenceLink: row.referenceLink ?? undefined,
-  rev: row.rev ?? undefined,
-  revBy: row.revBy ?? undefined,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-  deletedAt: row.deletedAt ?? undefined,
-});
-
 export type ListPeopleInput = {
   includeDeleted?: boolean;
 };
@@ -528,7 +476,7 @@ export function listPeople(db: DbClient, input: ListPeopleInput = {}): Person[] 
   const rows = db
     .prepare(`SELECT ${selectColumns.join(', ')} FROM people${where} ORDER BY lower(name) ASC, updatedAt DESC`)
     .all<PersonSqliteRow>();
-  return rows.map(mapPersonRow);
+  return rows.map((row) => personFromSqliteRow(row));
 }
 
 export type GetPersonInput = { id: string; includeDeleted?: boolean };
@@ -546,7 +494,7 @@ export function getPerson(db: DbClient, input: GetPersonInput): Person {
   if (!row) {
     throw new NotFoundError(`Person not found: ${input.id}`);
   }
-  return mapPersonRow(row);
+  return personFromSqliteRow(row);
 }
 
 export type UpdateTaskInput = {

@@ -11,6 +11,7 @@ import {
 
 import { closeDb, openMindwtrDb, type DbOptions } from './db.js';
 import { ValidationError } from './errors.js';
+import { filterUndefined } from './filter-undefined.js';
 import {
   MAX_AREA_NAME_LENGTH,
   MAX_TASK_QUICK_ADD_LENGTH,
@@ -45,16 +46,6 @@ import {
   type UpdateTaskInput,
 } from './queries.js';
 import { runCoreService } from './core-adapter.js';
-
-const filterUndefined = <T extends Record<string, unknown>>(obj: T): Partial<T> => {
-  const result: Partial<T> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      (result as Record<string, unknown>)[key] = value;
-    }
-  }
-  return result;
-};
 
 type ServiceDeps = {
   openMindwtrDb: typeof openMindwtrDb;
@@ -331,6 +322,21 @@ const validateSectionTitle = (title: string): string => {
 };
 
 export type MindwtrService = {
+  /**
+   * Both adapters (local SQLite in queries.ts, cloud REST in cloud-service.ts) must satisfy
+   * the same sort/filter semantics — see `service-conformance.test.ts`, which runs one
+   * fixture table against both. Stated rules:
+   * - `sortBy: 'priority'` ranks by @mindwtr/core's `PRIORITY_RANK` (urgent > high > medium >
+   *   low), never the raw text column. A task with no priority ranks as 0 (below 'low') in
+   *   both directions.
+   * - Equal sort keys break ties by `id` ascending, and that tie-break does not flip with
+   *   `sortOrder` (a stable sort shouldn't reverse just because the primary key did).
+   * - `limit`/`offset` clamp to 1..500 / >=0 identically on both adapters.
+   * - `search` is an intentional capability difference, not a bug: local matches via SQLite
+   *   FTS5 (token/prefix semantics) when available, cloud matches via a JS substring check.
+   *   A query that matches mid-word on one adapter may not match on the other — this is
+   *   pinned by tests on both sides, not unified.
+   */
   listTasks: (input: ListTasksInput) => Promise<TaskRow[]>;
   listProjects: () => Promise<Project[]>;
   listSections: (input?: ListSectionsInput) => Promise<Section[]>;
