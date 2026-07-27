@@ -506,32 +506,61 @@ struct LegacyAppConfigJson {
     sync_path: Option<String>,
 }
 
-#[derive(Debug, Default, Clone)]
+// Field order here is the on-disk key order (matches every config.toml/
+// secrets.toml written by shipped versions): `toml::to_string` emits struct
+// fields in declaration order, so reordering this struct changes file layout.
+// Add new fields at the end.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 struct AppConfigToml {
+    #[serde(skip_serializing_if = "Option::is_none")]
     sync_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     sync_path_bookmark: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     sync_backend: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     webdav_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     webdav_username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     webdav_password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     webdav_allow_insecure_http: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     webdav_allow_weak_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     cloud_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     cloud_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     cloud_allow_insecure_http: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     proxy_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dropbox_tokens: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     obsidian_config: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     external_calendars: Option<String>,
-    email_capture_config: Option<String>,
-    email_capture_password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ai_key_openai: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ai_key_anthropic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ai_key_gemini: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email_capture_config: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email_capture_password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     local_api_enabled: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     local_api_port: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     local_api_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     disable_hardware_acceleration: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     autostart_startup_flag_migrated: Option<String>,
 }
 

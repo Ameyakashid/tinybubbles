@@ -3,6 +3,7 @@ use crate::{get_config_path, get_secrets_path, read_config, write_config_files, 
 use rand::RngCore;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -503,6 +504,7 @@ fn http_response(response: &ApiResponse) -> String {
         401 => "Unauthorized",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        409 => "Conflict",
         413 => "Payload Too Large",
         500 => "Internal Server Error",
         _ => "OK",
@@ -536,13 +538,28 @@ fn handle_api_request(
     }
 }
 
+// Constant-time over fixed-length digests rather than the raw header value:
+// loopback-only with a random token keeps the real-world severity low, but a
+// bare `==` still leaks the token length and a byte-by-byte early-out, so hash
+// both sides first (like apps/cloud/src/server-auth.ts's timingSafeEqual over
+// SHA-256 digests) and compare with no short-circuit.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b.iter()).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
+}
+
 fn is_request_authorized(request: &ApiRequest, token: &str) -> bool {
-    let expected = format!("Bearer {token}");
-    request
+    let expected_digest = Sha256::digest(format!("Bearer {token}").as_bytes());
+    let actual_digest = request
         .headers
         .get("authorization")
-        .map(|value| value.trim() == expected)
-        .unwrap_or(false)
+        .map(|value| Sha256::digest(value.trim().as_bytes()));
+    match actual_digest {
+        Some(actual_digest) => constant_time_eq(&actual_digest, &expected_digest),
+        None => false,
+    }
 }
 
 fn api_error_response(error: String) -> ApiResponse {
@@ -650,6 +667,11 @@ fn route_api_request(
         }
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
         let mut data = load_data_snapshot(app)?;
+        if action == "complete" {
+            if let Some(refusal) = recurrence_completion_refusal(&data, &segments[1]) {
+                return Ok(refusal);
+            }
+        }
         let device_id = device_id_from_data(&data);
         let mut recurring_follow_up: Option<Map<String, Value>> = None;
         let task = update_task_in_data(&mut data, &segments[1], |task| {
@@ -828,6 +850,34 @@ fn find_task(data: &Value, task_id: &str) -> Option<Value> {
         .cloned()
 }
 
+/// Refuses `POST /tasks/{id}/complete` outright when the task's recurrence
+/// carries selectors this engine cannot compute (byDay/byMonthDay/rrule —
+/// see `recurrence_needs_core_engine`). A vanished recurring series is worse
+/// than a rejected request: nothing is read here except to decide, and the
+/// caller must not proceed to `update_task_in_data` when this returns `Some`,
+/// so the task is left completely untouched on disk.
+fn recurrence_completion_refusal(data: &Value, task_id: &str) -> Option<ApiResponse> {
+    let task = find_task(data, task_id)?;
+    let task_object = task.as_object()?;
+    let previous_status = task_object
+        .get("status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("inbox");
+    if !should_create_recurring_follow_up("complete", previous_status) {
+        return None;
+    }
+    if recurrence_rule(task_object).is_none() || !recurrence_needs_core_engine(task_object) {
+        return None;
+    }
+    Some(ApiResponse {
+        status: 409,
+        body: json!({
+            "error": "This task's recurrence rule requires the app to complete it correctly.",
+            "code": "recurrence_requires_app",
+        }),
+    })
+}
+
 fn update_task_in_data<F>(data: &mut Value, task_id: &str, update: F) -> Result<Value, String>
 where
     F: FnOnce(&mut Map<String, Value>) -> Result<(), String>,
@@ -885,12 +935,48 @@ fn bump_task_revision(task: &mut Map<String, Value>, device_id: &str) {
     task.insert("revBy".to_string(), Value::String(device_id.to_string()));
 }
 
+/// True when the recurrence carries selectors this fixed interval/anchor-day
+/// engine cannot compute: explicit weekdays, explicit month days, or a raw
+/// RFC 5545 fragment (which may itself encode BYSETPOS or other selectors
+/// this engine never parses). Only `packages/core/src/recurrence.ts`
+/// understands these — the local API must refuse rather than guess a date.
+fn recurrence_needs_core_engine(task: &Map<String, Value>) -> bool {
+    let Some(Value::Object(recurrence)) = recurrence_value(task) else {
+        return false;
+    };
+    let has_by_day = recurrence
+        .get("byDay")
+        .and_then(Value::as_array)
+        .is_some_and(|values| !values.is_empty());
+    let has_by_month_day = recurrence
+        .get("byMonthDay")
+        .and_then(Value::as_array)
+        .is_some_and(|values| !values.is_empty());
+    let has_rrule = recurrence
+        .get("rrule")
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty());
+    has_by_day || has_by_month_day || has_rrule
+}
+
 fn create_next_recurring_task_for_local_api(
     task: &Map<String, Value>,
     completed_at: &str,
     previous_status: &str,
 ) -> Option<Map<String, Value>> {
     let rule = recurrence_rule(task)?;
+    if recurrence_needs_core_engine(task) {
+        // Refuse what this engine cannot model instead of guessing a wrong
+        // date (e.g. an every-Mon/Wed/Fri task otherwise gets a follow-up 7
+        // days out because `next_recurring_iso` below only knows fixed
+        // day/week/month steps). The HTTP complete handler already refuses
+        // this case via `recurrence_completion_refusal` before this function
+        // is ever reached, so the task is never marked done without its
+        // follow-up — a vanished recurring series would be worse than a
+        // rejected request. This `None` is a defensive backstop for any
+        // other caller (tests call this function directly).
+        return None;
+    }
     let interval = recurrence_interval(task);
     let strategy = recurrence_strategy(task);
     let completed_occurrences = recurrence_completed_occurrences(task).unwrap_or(0);
@@ -1634,8 +1720,15 @@ mod tests {
                 .get("previousStatus")
                 .and_then(|value| value.as_str())
                 .unwrap_or_else(|| panic!("missing previousStatus for {name}"));
+            // `localApiExpected` is an optional, Rust-only override: recurrence.ts
+            // (the correct engine) and this local API deliberately diverge on
+            // byDay/byMonthDay/rrule cases — core computes the real next date,
+            // this engine refuses (None) rather than guess. `expected` still
+            // pins core's real answer via recurrence.test.ts unchanged;
+            // `localApiExpected`, when present, is what this engine must produce.
             let expected = test_case
-                .get("expected")
+                .get("localApiExpected")
+                .or_else(|| test_case.get("expected"))
                 .unwrap_or_else(|| panic!("missing expected snapshot for {name}"));
 
             let actual = comparable_local_api_recurring_task(

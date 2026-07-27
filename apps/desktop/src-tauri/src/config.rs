@@ -130,81 +130,17 @@ pub(crate) fn parse_toml_string_value(raw: &str) -> Option<String> {
     None
 }
 
-fn serialize_toml_string_value(value: &str) -> String {
-    // Use TOML basic strings with minimal escaping.
-    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{}\"", escaped)
-}
-
 pub(crate) fn read_config_toml(path: &Path) -> AppConfigToml {
     let Ok(content) = fs::read_to_string(path) else {
         return AppConfigToml::default();
     };
-
-    let mut config = AppConfigToml::default();
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let key = key.trim();
-        let value = value.trim();
-        if key == "sync_path" {
-            config.sync_path = parse_toml_string_value(value);
-        } else if key == "sync_path_bookmark" {
-            config.sync_path_bookmark = parse_toml_string_value(value);
-        } else if key == "sync_backend" {
-            config.sync_backend = parse_toml_string_value(value);
-        } else if key == "webdav_url" {
-            config.webdav_url = parse_toml_string_value(value);
-        } else if key == "webdav_username" {
-            config.webdav_username = parse_toml_string_value(value);
-        } else if key == "webdav_password" {
-            config.webdav_password = parse_toml_string_value(value);
-        } else if key == "webdav_allow_insecure_http" {
-            config.webdav_allow_insecure_http = parse_toml_string_value(value);
-        } else if key == "webdav_allow_weak_fingerprint" {
-            config.webdav_allow_weak_fingerprint = parse_toml_string_value(value);
-        } else if key == "cloud_url" {
-            config.cloud_url = parse_toml_string_value(value);
-        } else if key == "cloud_token" {
-            config.cloud_token = parse_toml_string_value(value);
-        } else if key == "cloud_allow_insecure_http" {
-            config.cloud_allow_insecure_http = parse_toml_string_value(value);
-        } else if key == "proxy_url" {
-            config.proxy_url = parse_toml_string_value(value);
-        } else if key == "dropbox_tokens" {
-            config.dropbox_tokens = parse_toml_string_value(value);
-        } else if key == "obsidian_config" {
-            config.obsidian_config = parse_toml_string_value(value);
-        } else if key == "external_calendars" {
-            config.external_calendars = parse_toml_string_value(value);
-        } else if key == "ai_key_openai" {
-            config.ai_key_openai = parse_toml_string_value(value);
-        } else if key == "ai_key_anthropic" {
-            config.ai_key_anthropic = parse_toml_string_value(value);
-        } else if key == "ai_key_gemini" {
-            config.ai_key_gemini = parse_toml_string_value(value);
-        } else if key == "email_capture_config" {
-            config.email_capture_config = parse_toml_string_value(value);
-        } else if key == "email_capture_password" {
-            config.email_capture_password = parse_toml_string_value(value);
-        } else if key == "local_api_enabled" {
-            config.local_api_enabled = parse_toml_string_value(value);
-        } else if key == "local_api_port" {
-            config.local_api_port = parse_toml_string_value(value);
-        } else if key == "local_api_token" {
-            config.local_api_token = parse_toml_string_value(value);
-        } else if key == "disable_hardware_acceleration" {
-            config.disable_hardware_acceleration = parse_toml_string_value(value);
-        } else if key == "autostart_startup_flag_migrated" {
-            config.autostart_startup_flag_migrated = parse_toml_string_value(value);
-        }
-    }
-    config
+    // A file that isn't valid TOML falls back to default() here — same as a
+    // missing file — rather than the old hand-rolled parser's per-line
+    // recovery. On its own that would be a silent-loss regression the moment
+    // a caller writes the "empty" config back over the real file; see the
+    // guard in `write_config_toml_with_header` below, which is what actually
+    // keeps that from happening.
+    toml::from_str(&content).unwrap_or_default()
 }
 
 fn write_config_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> {
@@ -220,242 +156,52 @@ fn write_config_toml_with_header(
     config: &AppConfigToml,
     header: &str,
 ) -> Result<(), String> {
+    // Refuse to overwrite a file whose current on-disk content this build
+    // cannot parse. Every read-modify-write call site reads via
+    // `read_config_toml`, which silently falls back to `default()` on a
+    // parse failure; without this guard, writing that "empty" config back
+    // would permanently erase whatever was actually on disk. A missing file
+    // (first write) is not a failure and is not blocked.
+    if let Ok(existing) = fs::read_to_string(path) {
+        if !existing.trim().is_empty() && toml::from_str::<AppConfigToml>(&existing).is_err() {
+            return Err(format!(
+                "Refusing to overwrite {}: its current contents could not be parsed. \
+                 Fix or remove the file by hand, then retry.",
+                path.display()
+            ));
+        }
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    let body = toml::to_string(config).map_err(|e| e.to_string())?;
+    fs::write(path, format!("{header}\n{body}")).map_err(|e| e.to_string())
+}
 
-    let mut lines: Vec<String> = Vec::new();
-    lines.push(header.to_string());
-    if let Some(sync_path) = &config.sync_path {
-        lines.push(format!(
-            "sync_path = {}",
-            serialize_toml_string_value(sync_path)
-        ));
+/// Converts an `AppConfigToml` to its generic JSON-object view. Both
+/// `merge_config` and `split_config_for_secrets` shuffle fields between two
+/// `AppConfigToml` values by key name instead of restating the field roster,
+/// so a new field only ever needs to be declared once, on the struct itself.
+fn config_as_object(config: &AppConfigToml) -> Map<String, Value> {
+    match serde_json::to_value(config).expect("AppConfigToml serializes infallibly") {
+        Value::Object(map) => map,
+        _ => unreachable!("AppConfigToml always serializes to a JSON object"),
     }
-    if let Some(sync_path_bookmark) = &config.sync_path_bookmark {
-        lines.push(format!(
-            "sync_path_bookmark = {}",
-            serialize_toml_string_value(sync_path_bookmark)
-        ));
-    }
-    if let Some(sync_backend) = &config.sync_backend {
-        lines.push(format!(
-            "sync_backend = {}",
-            serialize_toml_string_value(sync_backend)
-        ));
-    }
-    if let Some(webdav_url) = &config.webdav_url {
-        lines.push(format!(
-            "webdav_url = {}",
-            serialize_toml_string_value(webdav_url)
-        ));
-    }
-    if let Some(webdav_username) = &config.webdav_username {
-        lines.push(format!(
-            "webdav_username = {}",
-            serialize_toml_string_value(webdav_username)
-        ));
-    }
-    if let Some(webdav_password) = &config.webdav_password {
-        lines.push(format!(
-            "webdav_password = {}",
-            serialize_toml_string_value(webdav_password)
-        ));
-    }
-    if let Some(webdav_allow_insecure_http) = &config.webdav_allow_insecure_http {
-        lines.push(format!(
-            "webdav_allow_insecure_http = {}",
-            serialize_toml_string_value(webdav_allow_insecure_http)
-        ));
-    }
-    if let Some(webdav_allow_weak_fingerprint) = &config.webdav_allow_weak_fingerprint {
-        lines.push(format!(
-            "webdav_allow_weak_fingerprint = {}",
-            serialize_toml_string_value(webdav_allow_weak_fingerprint)
-        ));
-    }
-    if let Some(cloud_url) = &config.cloud_url {
-        lines.push(format!(
-            "cloud_url = {}",
-            serialize_toml_string_value(cloud_url)
-        ));
-    }
-    if let Some(cloud_token) = &config.cloud_token {
-        lines.push(format!(
-            "cloud_token = {}",
-            serialize_toml_string_value(cloud_token)
-        ));
-    }
-    if let Some(cloud_allow_insecure_http) = &config.cloud_allow_insecure_http {
-        lines.push(format!(
-            "cloud_allow_insecure_http = {}",
-            serialize_toml_string_value(cloud_allow_insecure_http)
-        ));
-    }
-    if let Some(proxy_url) = &config.proxy_url {
-        lines.push(format!(
-            "proxy_url = {}",
-            serialize_toml_string_value(proxy_url)
-        ));
-    }
-    if let Some(dropbox_tokens) = &config.dropbox_tokens {
-        lines.push(format!(
-            "dropbox_tokens = {}",
-            serialize_toml_string_value(dropbox_tokens)
-        ));
-    }
-    if let Some(obsidian_config) = &config.obsidian_config {
-        lines.push(format!(
-            "obsidian_config = {}",
-            serialize_toml_string_value(obsidian_config)
-        ));
-    }
-    if let Some(external_calendars) = &config.external_calendars {
-        lines.push(format!(
-            "external_calendars = {}",
-            serialize_toml_string_value(external_calendars)
-        ));
-    }
-    if let Some(ai_key_openai) = &config.ai_key_openai {
-        lines.push(format!(
-            "ai_key_openai = {}",
-            serialize_toml_string_value(ai_key_openai)
-        ));
-    }
-    if let Some(ai_key_anthropic) = &config.ai_key_anthropic {
-        lines.push(format!(
-            "ai_key_anthropic = {}",
-            serialize_toml_string_value(ai_key_anthropic)
-        ));
-    }
-    if let Some(ai_key_gemini) = &config.ai_key_gemini {
-        lines.push(format!(
-            "ai_key_gemini = {}",
-            serialize_toml_string_value(ai_key_gemini)
-        ));
-    }
-    if let Some(email_capture_config) = &config.email_capture_config {
-        lines.push(format!(
-            "email_capture_config = {}",
-            serialize_toml_string_value(email_capture_config)
-        ));
-    }
-    if let Some(email_capture_password) = &config.email_capture_password {
-        lines.push(format!(
-            "email_capture_password = {}",
-            serialize_toml_string_value(email_capture_password)
-        ));
-    }
-    if let Some(local_api_enabled) = &config.local_api_enabled {
-        lines.push(format!(
-            "local_api_enabled = {}",
-            serialize_toml_string_value(local_api_enabled)
-        ));
-    }
-    if let Some(local_api_port) = &config.local_api_port {
-        lines.push(format!(
-            "local_api_port = {}",
-            serialize_toml_string_value(local_api_port)
-        ));
-    }
-    if let Some(local_api_token) = &config.local_api_token {
-        lines.push(format!(
-            "local_api_token = {}",
-            serialize_toml_string_value(local_api_token)
-        ));
-    }
-    if let Some(disable_hardware_acceleration) = &config.disable_hardware_acceleration {
-        lines.push(format!(
-            "disable_hardware_acceleration = {}",
-            serialize_toml_string_value(disable_hardware_acceleration)
-        ));
-    }
-    if let Some(autostart_startup_flag_migrated) = &config.autostart_startup_flag_migrated {
-        lines.push(format!(
-            "autostart_startup_flag_migrated = {}",
-            serialize_toml_string_value(autostart_startup_flag_migrated)
-        ));
-    }
-    let content = format!("{}\n", lines.join("\n"));
-    fs::write(path, content).map_err(|e| e.to_string())
+}
+
+fn object_as_config(map: Map<String, Value>) -> AppConfigToml {
+    serde_json::from_value(Value::Object(map))
+        .expect("a subset of AppConfigToml's own fields always deserializes")
 }
 
 fn merge_config(base: &mut AppConfigToml, overrides: AppConfigToml) {
-    if overrides.sync_path.is_some() {
-        base.sync_path = overrides.sync_path;
+    let mut merged = config_as_object(base);
+    for (key, value) in config_as_object(&overrides) {
+        if !value.is_null() {
+            merged.insert(key, value);
+        }
     }
-    if overrides.sync_path_bookmark.is_some() {
-        base.sync_path_bookmark = overrides.sync_path_bookmark;
-    }
-    if overrides.sync_backend.is_some() {
-        base.sync_backend = overrides.sync_backend;
-    }
-    if overrides.webdav_url.is_some() {
-        base.webdav_url = overrides.webdav_url;
-    }
-    if overrides.webdav_username.is_some() {
-        base.webdav_username = overrides.webdav_username;
-    }
-    if overrides.webdav_password.is_some() {
-        base.webdav_password = overrides.webdav_password;
-    }
-    if overrides.webdav_allow_insecure_http.is_some() {
-        base.webdav_allow_insecure_http = overrides.webdav_allow_insecure_http;
-    }
-    if overrides.webdav_allow_weak_fingerprint.is_some() {
-        base.webdav_allow_weak_fingerprint = overrides.webdav_allow_weak_fingerprint;
-    }
-    if overrides.cloud_url.is_some() {
-        base.cloud_url = overrides.cloud_url;
-    }
-    if overrides.cloud_token.is_some() {
-        base.cloud_token = overrides.cloud_token;
-    }
-    if overrides.cloud_allow_insecure_http.is_some() {
-        base.cloud_allow_insecure_http = overrides.cloud_allow_insecure_http;
-    }
-    if overrides.proxy_url.is_some() {
-        base.proxy_url = overrides.proxy_url;
-    }
-    if overrides.dropbox_tokens.is_some() {
-        base.dropbox_tokens = overrides.dropbox_tokens;
-    }
-    if overrides.obsidian_config.is_some() {
-        base.obsidian_config = overrides.obsidian_config;
-    }
-    if overrides.external_calendars.is_some() {
-        base.external_calendars = overrides.external_calendars;
-    }
-    if overrides.ai_key_openai.is_some() {
-        base.ai_key_openai = overrides.ai_key_openai;
-    }
-    if overrides.ai_key_anthropic.is_some() {
-        base.ai_key_anthropic = overrides.ai_key_anthropic;
-    }
-    if overrides.ai_key_gemini.is_some() {
-        base.ai_key_gemini = overrides.ai_key_gemini;
-    }
-    if overrides.email_capture_config.is_some() {
-        base.email_capture_config = overrides.email_capture_config;
-    }
-    if overrides.email_capture_password.is_some() {
-        base.email_capture_password = overrides.email_capture_password;
-    }
-    if overrides.local_api_enabled.is_some() {
-        base.local_api_enabled = overrides.local_api_enabled;
-    }
-    if overrides.local_api_port.is_some() {
-        base.local_api_port = overrides.local_api_port;
-    }
-    if overrides.local_api_token.is_some() {
-        base.local_api_token = overrides.local_api_token;
-    }
-    if overrides.disable_hardware_acceleration.is_some() {
-        base.disable_hardware_acceleration = overrides.disable_hardware_acceleration;
-    }
-    if overrides.autostart_startup_flag_migrated.is_some() {
-        base.autostart_startup_flag_migrated = overrides.autostart_startup_flag_migrated;
-    }
+    *base = object_as_config(merged);
 }
 
 pub(crate) fn read_config(app: &tauri::AppHandle) -> AppConfigToml {
@@ -471,76 +217,36 @@ pub(crate) fn read_config(app: &tauri::AppHandle) -> AppConfigToml {
     config
 }
 
+// The one place to check when adding a credential field: list it here and
+// `split_config_for_secrets` keeps it out of the plaintext config.toml. This
+// is real policy (which fields may never touch the public file), not
+// derivable from the struct itself, so it stays its own table rather than an
+// attribute a refactor could quietly drop.
+const SECRET_FIELDS: &[&str] = &[
+    "webdav_password",
+    "cloud_token",
+    "dropbox_tokens",
+    "external_calendars",
+    "ai_key_openai",
+    "ai_key_anthropic",
+    "ai_key_gemini",
+    "email_capture_password",
+    "local_api_token",
+];
+
 fn split_config_for_secrets(config: &AppConfigToml) -> (AppConfigToml, AppConfigToml) {
-    let mut public_config = config.clone();
-    let mut secrets_config = AppConfigToml::default();
-
-    if let Some(value) = config.webdav_password.clone() {
-        secrets_config.webdav_password = Some(value);
-        public_config.webdav_password = None;
+    let mut public_map = config_as_object(config);
+    let mut secrets_map = Map::new();
+    for &field in SECRET_FIELDS {
+        if let Some(value) = public_map.remove(field).filter(|value| !value.is_null()) {
+            secrets_map.insert(field.to_string(), value);
+        }
     }
-    if let Some(value) = config.cloud_token.clone() {
-        secrets_config.cloud_token = Some(value);
-        public_config.cloud_token = None;
-    }
-    if let Some(value) = config.dropbox_tokens.clone() {
-        secrets_config.dropbox_tokens = Some(value);
-        public_config.dropbox_tokens = None;
-    }
-    if let Some(value) = config.external_calendars.clone() {
-        secrets_config.external_calendars = Some(value);
-        public_config.external_calendars = None;
-    }
-    if let Some(value) = config.ai_key_openai.clone() {
-        secrets_config.ai_key_openai = Some(value);
-        public_config.ai_key_openai = None;
-    }
-    if let Some(value) = config.ai_key_anthropic.clone() {
-        secrets_config.ai_key_anthropic = Some(value);
-        public_config.ai_key_anthropic = None;
-    }
-    if let Some(value) = config.ai_key_gemini.clone() {
-        secrets_config.ai_key_gemini = Some(value);
-        public_config.ai_key_gemini = None;
-    }
-    if let Some(value) = config.email_capture_password.clone() {
-        secrets_config.email_capture_password = Some(value);
-        public_config.email_capture_password = None;
-    }
-    if let Some(value) = config.local_api_token.clone() {
-        secrets_config.local_api_token = Some(value);
-        public_config.local_api_token = None;
-    }
-
-    (public_config, secrets_config)
+    (object_as_config(public_map), object_as_config(secrets_map))
 }
 
 fn config_has_values(config: &AppConfigToml) -> bool {
-    config.sync_path.is_some()
-        || config.sync_path_bookmark.is_some()
-        || config.sync_backend.is_some()
-        || config.webdav_url.is_some()
-        || config.webdav_username.is_some()
-        || config.webdav_password.is_some()
-        || config.webdav_allow_insecure_http.is_some()
-        || config.webdav_allow_weak_fingerprint.is_some()
-        || config.cloud_url.is_some()
-        || config.cloud_token.is_some()
-        || config.cloud_allow_insecure_http.is_some()
-        || config.proxy_url.is_some()
-        || config.dropbox_tokens.is_some()
-        || config.obsidian_config.is_some()
-        || config.external_calendars.is_some()
-        || config.ai_key_openai.is_some()
-        || config.ai_key_anthropic.is_some()
-        || config.ai_key_gemini.is_some()
-        || config.email_capture_config.is_some()
-        || config.email_capture_password.is_some()
-        || config.local_api_enabled.is_some()
-        || config.local_api_port.is_some()
-        || config.local_api_token.is_some()
-        || config.disable_hardware_acceleration.is_some()
-        || config.autostart_startup_flag_migrated.is_some()
+    *config != AppConfigToml::default()
 }
 
 pub(crate) fn write_config_files(
@@ -1275,5 +981,153 @@ mod tests {
         );
         assert!(super::parse_obsidian_vault_registry("not json").is_empty());
         assert!(super::parse_obsidian_vault_registry("{}").is_empty());
+    }
+
+    fn fully_populated_config() -> AppConfigToml {
+        AppConfigToml {
+            sync_path: Some("/home/user/Sync".to_string()),
+            sync_path_bookmark: Some("bookmark-data".to_string()),
+            sync_backend: Some("webdav".to_string()),
+            webdav_url: Some("https://dav.example.com/mindwtr".to_string()),
+            webdav_username: Some("demo".to_string()),
+            // Embedded quote and backslash exercise the escaping path.
+            webdav_password: Some("s3cr3t \"pass\" with \\backslash".to_string()),
+            webdav_allow_insecure_http: Some("false".to_string()),
+            webdav_allow_weak_fingerprint: Some("true".to_string()),
+            cloud_url: Some("https://cloud.example.com".to_string()),
+            cloud_token: Some("cloud-token-value".to_string()),
+            cloud_allow_insecure_http: Some("false".to_string()),
+            proxy_url: Some("http://proxy.example.com:8080".to_string()),
+            dropbox_tokens: Some("{\"access_token\":\"abc\"}".to_string()),
+            obsidian_config: Some("{\"vaultPath\":\"/vault\"}".to_string()),
+            external_calendars: Some("[{\"url\":\"https://cal.example.com/a.ics\"}]".to_string()),
+            ai_key_openai: Some("sk-openai".to_string()),
+            ai_key_anthropic: Some("sk-anthropic".to_string()),
+            ai_key_gemini: Some("sk-gemini".to_string()),
+            email_capture_config: Some("{\"host\":\"imap.example.com\"}".to_string()),
+            email_capture_password: Some("email-secret".to_string()),
+            local_api_enabled: Some("true".to_string()),
+            local_api_port: Some("3456".to_string()),
+            local_api_token: Some("local-api-token-value".to_string()),
+            disable_hardware_acceleration: Some("true".to_string()),
+            autostart_startup_flag_migrated: Some("true".to_string()),
+        }
+    }
+
+    #[test]
+    fn config_toml_write_then_read_is_identity_for_every_field() {
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let path = dir.path().join("config.toml");
+        let original = fully_populated_config();
+
+        write_config_toml(&path, &original).expect("should write config.toml");
+        let read_back = read_config_toml(&path);
+
+        assert_eq!(read_back, original);
+    }
+
+    #[test]
+    fn config_toml_written_by_a_shipped_version_still_parses() {
+        // Hand-written in the exact shape the pre-serde `write_config_toml_with_header`
+        // emitted: one header comment line, then `key = "value"` lines in the
+        // same order it wrote them. New code must keep reading this shape.
+        let legacy_config = concat!(
+            "# Mindwtr desktop config\n",
+            "sync_path = \"/home/user/Sync\"\n",
+            "sync_backend = \"webdav\"\n",
+            "webdav_url = \"https://dav.example.com/mindwtr\"\n",
+            "webdav_allow_insecure_http = \"false\"\n",
+            "local_api_port = \"3456\"\n",
+            "disable_hardware_acceleration = \"true\"\n",
+        );
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let path = dir.path().join("config.toml");
+        fs::write(&path, legacy_config).expect("should write legacy config.toml");
+
+        let config = read_config_toml(&path);
+
+        assert_eq!(config.sync_path.as_deref(), Some("/home/user/Sync"));
+        assert_eq!(config.sync_backend.as_deref(), Some("webdav"));
+        assert_eq!(
+            config.webdav_url.as_deref(),
+            Some("https://dav.example.com/mindwtr")
+        );
+        assert_eq!(config.webdav_allow_insecure_http.as_deref(), Some("false"));
+        assert_eq!(config.local_api_port.as_deref(), Some("3456"));
+        assert_eq!(config.disable_hardware_acceleration.as_deref(), Some("true"));
+        // Everything the legacy file didn't mention stays None, exactly as the
+        // old ad hoc parser left unmatched keys as None.
+        assert_eq!(config.cloud_url, None);
+        assert_eq!(config.local_api_token, None);
+    }
+
+    #[test]
+    fn write_config_files_never_leaks_a_secret_field_into_the_public_config() {
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let original = fully_populated_config();
+
+        write_config_files(&config_path, &secrets_path, &original)
+            .expect("should write config and secrets files");
+
+        let public_config = read_config_toml(&config_path);
+        let secrets_config = read_config_toml(&secrets_path);
+        let public_raw = fs::read_to_string(&config_path).expect("should read public config");
+
+        for &field in SECRET_FIELDS {
+            let secret_value = config_as_object(&original)
+                .remove(field)
+                .and_then(|value| value.as_str().map(str::to_string))
+                .expect("fully populated config sets every secret field");
+
+            // Structural check: the field itself is absent from the public struct...
+            assert!(
+                config_as_object(&public_config).get(field).is_none(),
+                "{field} must not be present in the public config"
+            );
+            // ...and the raw text never contains the secret value either.
+            assert!(
+                !public_raw.contains(&secret_value),
+                "{field}'s value leaked into the public config.toml text"
+            );
+            // It must have moved to secrets.toml instead.
+            assert_eq!(
+                config_as_object(&secrets_config).get(field).and_then(Value::as_str),
+                Some(secret_value.as_str()),
+                "{field} should have moved to secrets.toml"
+            );
+        }
+
+        // Non-secret fields still round-trip through the public file.
+        assert_eq!(public_config.sync_backend, original.sync_backend);
+        assert_eq!(public_config.local_api_port, original.local_api_port);
+    }
+
+    #[test]
+    fn write_config_files_refuses_to_overwrite_an_unparseable_config_toml() {
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        // Bare (unquoted) value: syntactically invalid TOML, as if the file
+        // were hand-edited or truncated mid-write.
+        let corrupt = "# Mindwtr desktop config\nsync_backend = webdav\n";
+        fs::write(&config_path, corrupt).expect("should write corrupt config.toml");
+
+        // Reproduces the real read-modify-write flow every setter uses:
+        // read (falls back to default() because the file won't parse), set
+        // one field, write back.
+        let mut config = read_config_toml(&config_path);
+        assert_eq!(config.sync_backend, None, "corrupt file reads as empty");
+        config.local_api_port = Some("3456".to_string());
+
+        let result = write_config_files(&config_path, &secrets_path, &config);
+
+        assert!(result.is_err(), "write must refuse, not silently succeed");
+        let on_disk = fs::read_to_string(&config_path).expect("config.toml should still exist");
+        assert_eq!(
+            on_disk, corrupt,
+            "the original corrupt file must survive completely untouched"
+        );
     }
 }
