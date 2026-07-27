@@ -597,6 +597,24 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         expect(queryByRole('button', { name: 'Next month' })).not.toBeInTheDocument();
     });
 
+    // The calendar glyph is a small target, so clicking the text part of the field
+    // opens the popover too (#896). Focus alone still must not — see the test above,
+    // which keeps tabbing through the editor from popping calendars open.
+    it('opens the calendar popover when the date input itself is clicked', () => {
+        const { getByLabelText, getByRole, queryByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="dueDate"
+                {...createProps({ draft: { dueDate: '2026-04-12' } })}
+            />
+        );
+
+        expect(queryByRole('dialog', { name: 'Due Date Calendar' })).not.toBeInTheDocument();
+
+        fireEvent.click(getByLabelText('Due date'));
+
+        expect(getByRole('dialog', { name: 'Due Date Calendar' })).toBeInTheDocument();
+    });
+
     it('shows the quick-date suggestions inside the calendar popover', () => {
         const { getByRole, queryByRole } = render(
             <TaskItemFieldRenderer
