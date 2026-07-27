@@ -3593,6 +3593,33 @@ describe('TaskStore', () => {
         expect(live.find((task) => task.id !== independent.id)?.contexts).toEqual(['@home']);
     });
 
+    it('keeps duplicated recurring tasks as independent series', async () => {
+        vi.setSystemTime(new Date('2026-06-09T00:00:00.000Z'));
+        const { addTask, duplicateTask, updateTask } = useTaskStore.getState();
+        const originalResult = await addTask('Timeblock', {
+            status: 'next',
+            recurrence: { rule: 'weekly', strategy: 'strict' },
+            dueDate: '2026-06-08T17:00:00.000Z',
+        });
+        const duplicateResult = await duplicateTask(originalResult.id!);
+        const originalId = originalResult.id!;
+        const duplicateId = duplicateResult.id!;
+
+        expect(useTaskStore.getState()._tasksById.get(duplicateId)?.recurrence).toEqual({
+            rule: 'weekly',
+            strategy: 'strict',
+            seriesId: duplicateId,
+        });
+
+        await updateTask(originalId, { status: 'done' });
+        await updateTask(duplicateId, { status: 'done' });
+
+        const liveSeriesIds = useTaskStore.getState().tasks
+            .filter((task) => task.status === 'next')
+            .map((task) => typeof task.recurrence === 'object' ? task.recurrence.seriesId : undefined);
+        expect(new Set(liveSeriesIds)).toEqual(new Set([originalId, duplicateId]));
+    });
+
     // Completing an occurrence and then the one it just spawned, both on the same
     // day, gives the second candidate the same due date as the first. The dedupe
     // scan sees the pre-update snapshot, where the task being completed still reads

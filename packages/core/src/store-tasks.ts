@@ -858,13 +858,17 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             const duplicatedOrder = sourceTask.projectId
                 ? projectOrderReserver(sourceTask.projectId)
                 : undefined;
-            duplicatedTaskId = uuidv4();
+            const newTaskId = uuidv4();
+            duplicatedTaskId = newTaskId;
 
             const newTask: Task = {
                 ...sourceTask,
-                id: duplicatedTaskId,
+                id: newTaskId,
                 title: sourceTask.title,
                 status: asNextAction || sourceTask.status === 'done' || sourceTask.status === 'archived' ? 'next' : sourceTask.status,
+                recurrence: typeof sourceTask.recurrence === 'object'
+                    ? { ...sourceTask.recurrence, seriesId: newTaskId }
+                    : sourceTask.recurrence,
                 checklist: duplicatedChecklist.length > 0 ? duplicatedChecklist : undefined,
                 attachments: duplicatedAttachments.length > 0 ? duplicatedAttachments : undefined,
                 completedAt: undefined,
