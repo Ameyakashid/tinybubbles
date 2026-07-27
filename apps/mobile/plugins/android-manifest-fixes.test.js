@@ -36,14 +36,14 @@ describe('android-manifest-fixes', () => {
 
     expect(application.receiver).toHaveLength(1);
     expect(application.receiver[0].$).toEqual({
-      'android:name': '.ContextAutomationReceiver',
+      'android:name': 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationReceiver',
       'android:exported': 'true',
     });
     expect(application.receiver[0]['intent-filter']).toHaveLength(2);
 
     expect(application.service).toHaveLength(1);
     expect(application.service[0].$).toEqual({
-      'android:name': '.ContextAutomationHeadlessService',
+      'android:name': 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationHeadlessService',
       'android:exported': 'false',
     });
   });

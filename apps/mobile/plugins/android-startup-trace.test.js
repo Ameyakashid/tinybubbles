@@ -1,28 +1,81 @@
+const fs = require('fs');
+const path = require('path');
 import { describe, expect, it } from 'vitest';
 
 const plugin = require('./android-startup-trace');
 
 const {
-  buildContextAutomationHeadlessServiceSource,
-  buildContextAutomationReceiverSource,
   patchMainActivity,
 } = plugin.__testables;
 
-describe('android-startup-trace', () => {
-  it('generates Android context automation broadcast receiver support', () => {
-    const receiver = buildContextAutomationReceiverSource('tech.dongdongbh.mindwtr');
-    const service = buildContextAutomationHeadlessServiceSource('tech.dongdongbh.mindwtr');
+// ContextAutomationReceiver.kt and ContextAutomationHeadlessService.kt used to be
+// generated here as template strings (see git history); they are now real .kt
+// files in the local context-automation Expo module. These tests read that
+// module's source directly to keep the 9-fallback deep-link payload parser and
+// the headless task wiring covered now that this plugin no longer builds them.
+const contextAutomationModuleDir = path.join(
+  __dirname,
+  '..',
+  'modules',
+  'context-automation',
+  'android',
+  'src',
+  'main',
+  'java',
+  'tech',
+  'dongdongbh',
+  'mindwtr',
+  'contextautomation'
+);
 
-    expect(receiver).toContain('package tech.dongdongbh.mindwtr');
+const readModuleFile = (fileName) => (
+  fs.readFileSync(path.join(contextAutomationModuleDir, fileName), 'utf8')
+);
+
+describe('android-startup-trace', () => {
+  it('keeps the context automation receiver and headless service in the local Expo module', () => {
+    const receiver = readModuleFile('ContextAutomationReceiver.kt');
+    const service = readModuleFile('ContextAutomationHeadlessService.kt');
+
+    expect(receiver).toContain('package tech.dongdongbh.mindwtr.contextautomation');
     expect(receiver).toContain('class ContextAutomationReceiver : BroadcastReceiver()');
     expect(receiver).toContain('tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT');
     expect(receiver).toContain('tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT');
     expect(receiver).toContain('ContextAutomationHeadlessService::class.java');
     expect(receiver).toContain('HeadlessJsTaskService.acquireWakeLockNow(context)');
 
+    // The 9-fallback deep-link payload parser (#819-adjacent): every branch,
+    // in order. A dropped fallback here breaks a real intent shape silently.
+    const fallbackOrder = [
+      'clean(intent.getStringExtra("context"))',
+      'clean(intent.getStringExtra("name"))',
+      'clean(intent.getStringExtra("token"))',
+      'clean(intent.getStringExtra(Intent.EXTRA_TEXT))',
+      'clean(data?.getQueryParameter("context"))',
+      'clean(data?.getQueryParameter("name"))',
+      'clean(data?.getQueryParameter("token"))',
+      'clean(pathContext)',
+      'clean(hostContext)',
+    ];
+    let lastIndex = -1;
+    fallbackOrder.forEach((fallback) => {
+      const index = receiver.indexOf(fallback);
+      expect(index, `${fallback} present`).toBeGreaterThan(-1);
+      expect(index, `${fallback} in order`).toBeGreaterThan(lastIndex);
+      lastIndex = index;
+    });
+
+    expect(service).toContain('package tech.dongdongbh.mindwtr.contextautomation');
     expect(service).toContain('class ContextAutomationHeadlessService : HeadlessJsTaskService()');
     expect(service).toContain('MindwtrContextAutomation');
+    expect(service).toContain('CONTEXT_AUTOMATION_HEADLESS_TIMEOUT_MS = 15_000L');
     expect(service).toContain('HeadlessJsTaskConfig(');
+  });
+
+  it('no longer writes the context automation classes into the app package', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'android-startup-trace.js'), 'utf8');
+    expect(source).not.toContain('buildContextAutomationReceiverSource');
+    expect(source).not.toContain('buildContextAutomationHeadlessServiceSource');
   });
 
   it('adds notification intent replay support to MainActivity', () => {

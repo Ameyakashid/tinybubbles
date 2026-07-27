@@ -2,8 +2,11 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 
 const MLKIT_ACTIVITY = 'com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity';
 const MAIN_ACTIVITY = '.MainActivity';
-const CONTEXT_AUTOMATION_HEADLESS_SERVICE = '.ContextAutomationHeadlessService';
-const CONTEXT_AUTOMATION_RECEIVER = '.ContextAutomationReceiver';
+// Fully qualified: these classes live in the local context-automation Expo
+// module (apps/mobile/modules/context-automation), not the app's own package,
+// so the manifest-relative `.ClassName` shorthand no longer resolves.
+const CONTEXT_AUTOMATION_HEADLESS_SERVICE = 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationHeadlessService';
+const CONTEXT_AUTOMATION_RECEIVER = 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationReceiver';
 const CONTEXT_INTENT_ACTIONS = [
   'tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT',
   'tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT',
