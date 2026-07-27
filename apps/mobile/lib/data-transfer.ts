@@ -12,6 +12,7 @@ import {
     serializeBackupData,
     type AppData,
     useTaskStore,
+    validateBackupJson,
 } from '@mindwtr/core';
 import {
     parseImportSource,
