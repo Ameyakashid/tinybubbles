@@ -6,6 +6,7 @@ import { useLanguage } from '../contexts/language-context';
 import { useToast } from '../contexts/toast-context';
 import { useThemeColors } from '../hooks/use-theme-colors';
 import { ProjectNextActionPromptModal } from './swipeable-task-item/ProjectNextActionPromptModal';
+import { getActionFailureMessage, getUnknownErrorMessage, isActionFailure } from './store-action-result';
 
 type ProjectNextActionPromptState = {
     candidates: Task[];
@@ -19,21 +20,6 @@ type ProjectNextActionPromptState = {
 type ProjectNextActionPromptPresenter = (completedTask: Task) => boolean;
 
 let activePresenter: ProjectNextActionPromptPresenter | null = null;
-
-const getActionFailureMessage = (result: unknown): string | null => {
-    if (!result || typeof result !== 'object') return null;
-    const actionResult = result as { error?: unknown; success?: unknown };
-    if (actionResult.success !== false) return null;
-    return typeof actionResult.error === 'string' && actionResult.error.trim().length > 0
-        ? actionResult.error.trim()
-        : 'Task update failed';
-};
-
-const getUnknownErrorMessage = (error: unknown): string | undefined => {
-    if (error instanceof Error) return error.message;
-    if (typeof error === 'string' && error.trim().length > 0) return error.trim();
-    return undefined;
-};
 
 const getAllTasksForPrompt = (completedTask: Task, allTasks: Task[]): Task[] => {
     if (allTasks.some((task) => task.id === completedTask.id)) {
@@ -130,8 +116,7 @@ export function ProjectNextActionPromptProvider({ children }: { children: React.
         setIsSubmitting(true);
         void Promise.resolve(updateTask(taskId, { status: 'next' }))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closePrompt();
             })
             .catch((error) => {
@@ -149,8 +134,7 @@ export function ProjectNextActionPromptProvider({ children }: { children: React.
         // the Archive button.
         void Promise.resolve(useTaskStore.getState().updateProject(projectId, { status: 'archived' }))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closePrompt();
             })
             .catch((error) => {
@@ -180,8 +164,7 @@ export function ProjectNextActionPromptProvider({ children }: { children: React.
         });
         void Promise.resolve(addTask(title, props))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closePrompt();
             })
             .catch((error) => {

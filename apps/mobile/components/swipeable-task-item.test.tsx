@@ -79,121 +79,21 @@ const translate = vi.hoisted(() => {
   return (key: string) => labels[key] ?? key;
 });
 
-vi.mock('@mindwtr/core', () => {
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
   storeState.addTask = addTask;
   storeState.updateTask = updateTask;
   storeState.restoreTask = restoreTask;
-  const useTaskStore = Object.assign(
-    (selector?: (state: typeof storeState) => unknown) =>
-      selector ? selector(storeState) : storeState,
-    {
-      getState: () => storeState,
-    }
-  );
-
-  return {
-    useTaskStore,
-    getFocusStarBlockedText: (_t: unknown, action: { blockedReason: string | null }, limit: number) => (
-      action.blockedReason === 'limit' ? `Max ${limit} focus items.` : action.blockedReason
-    ),
-    getProjectNextActionPromptData: (completedTask: any, tasks: any[], projects: any[]) => {
-      if (!completedTask?.projectId || completedTask.status !== 'done') return null;
-      const project = projects.find((candidate) => candidate.id === completedTask.projectId);
-      if (!project || project.deletedAt || project.status !== 'active') return null;
-      const hasNext = tasks.some((candidate) => (
-        candidate.id !== completedTask.id
-        && candidate.projectId === project.id
-        && !candidate.deletedAt
-        && candidate.status === 'next'
-      ));
-      if (hasNext) return null;
-      return {
-        project,
-        candidates: tasks.filter((candidate) => (
-          candidate.id !== completedTask.id
-          && candidate.projectId === project.id
-          && !candidate.deletedAt
-          && candidate.status !== 'next'
-          && candidate.status !== 'done'
-          && candidate.status !== 'archived'
-          && candidate.status !== 'reference'
-        )),
-      };
-    },
-    formatFocusTaskLimitText: (template: string, limit: number) => template.replace('{{count}}', String(limit)),
-    formatTimeSpentLabel: (value: unknown) => {
-      if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-      const minutes = Math.round(value);
-      if (minutes <= 0) return null;
-      const hrs = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      if (hrs <= 0) return `${mins}m`;
-      return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
-    },
-    formatRecurrenceLabel: ({ recurrence, t }: any) => {
-      const rule = typeof recurrence === 'string' ? recurrence : recurrence?.rule;
-      if (!rule) return '';
-      const intervalMatch = typeof recurrence === 'object'
-        ? /INTERVAL=(\d+)/.exec(recurrence.rrule || '')
-        : null;
-      const interval = intervalMatch ? Number(intervalMatch[1]) : 1;
-      return [
-        t(`recurrence.${rule}`),
-        rule === 'daily' && interval > 1
-          ? `${t('recurrence.repeatEvery')} ${interval} ${t('recurrence.dayUnit')}`
-          : undefined,
-      ].filter(Boolean).join(' · ');
-    },
-    shallow: (value: unknown) => value,
+  // Only display formatters are doubled, so rendered text stays deterministic.
+  // Everything else is real core on purpose: the stubs this replaced included a
+  // `getTaskDateCoherenceIssues` hardcoded to one fixture's dates.
+  return mockCore(importOriginal, () => storeState, {
     getChecklistProgress,
     getTaskAgeLabel,
-    getTaskDateCoherenceIssues: (task: any) => (
-      task?.startTime === '2026-04-25' && task?.dueDate === '2026-04-24'
-        ? [{ code: 'start_after_due', field: 'startTime', relatedField: 'dueDate' }]
-        : []
-    ),
     getTaskStaleness,
-    getTaskUrgency: (task: any) => task?.urgency ?? 'normal',
-    getStatusColor: () => ({ bg: '#111111', border: '#222222', text: '#333333' }),
-    hasTimeComponent: (value?: string | null) => Boolean(value && /[T\s]\d{2}:\d{2}/.test(value)),
-    normalizeFocusTaskLimit: (value?: number) => value ?? 3,
-    getInlineMarkdownPreview: (text: string) => {
-      const line = text.replace(/\r\n/g, '\n').split('\n').find((candidate) => candidate.trim()) ?? '';
-      return line.replace(/^\s{0,3}(?:(?:[-*+]\s+)?\[(?: |x|X)\]\s+|>\s?|#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/, '').trim();
-    },
-    parseInlineMarkdown: (text: string) => {
-      const tokens: Array<{ type: string; text: string; href?: string }> = [];
-      const regex = /(\*\*([^*]+)\*\*|__([^_]+)__|~~([^~\n]+)~~|\*([^*\n]+)\*|_([^_\n]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
-      let lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIndex) tokens.push({ type: 'text', text: text.slice(lastIndex, match.index) });
-        if (match[7]) {
-          tokens.push({ type: 'code', text: match[7] });
-        } else if (match[2] || match[3]) {
-          tokens.push({ type: 'bold', text: match[2] || match[3] });
-        } else if (match[4]) {
-          tokens.push({ type: 'strike', text: match[4] });
-        } else if (match[5] || match[6]) {
-          tokens.push({ type: 'italic', text: match[5] || match[6] });
-        } else if (match[8] && match[9]) {
-          tokens.push({ type: 'link', text: match[8], href: match[9] });
-        }
-        lastIndex = regex.lastIndex;
-      }
-      if (lastIndex < text.length) tokens.push({ type: 'text', text: text.slice(lastIndex) });
-      return tokens;
-    },
-    parseMarkdownReferenceHref: () => null,
     safeFormatDate,
     safeParseDate,
-    safeParseDueDate: (value?: string | null) => (value ? new Date(value) : null),
-    tFallback: (t: (key: string) => string, key: string, fallback: string) => {
-      const value = t(key);
-      return value && value !== key ? value : fallback;
-    },
-    resolveTaskTextDirection: () => 'ltr',
-  };
+  });
 });
 
 vi.mock('../contexts/language-context', () => ({
@@ -819,19 +719,25 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     expect(safeFormatDate).toHaveBeenCalledWith(expect.any(Date), 'Pp');
   });
 
+  // Urgency is derived by core from the due date against the clock — there is no
+  // `urgency` field on Task. This test used to set one and the core mock echoed
+  // it back, so every case shared a single past due date and the assertion only
+  // ever proved the stub returned what it was handed.
   it('colors due date metadata by urgency', () => {
     safeFormatDate.mockReturnValue('Due date');
-    const renderDueTask = (urgency: string) => {
+    const hoursFromNow = (hours: number) => (
+      new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
+    );
+    const renderDueTask = (label: string, dueDate: string) => {
       let tree!: renderer.ReactTestRenderer;
       renderer.act(() => {
         tree = renderer.create(
           <SwipeableTaskItem
             task={{
-              id: `task-${urgency}`,
+              id: `task-${label}`,
               title: 'Plan release',
               status: 'next',
-              dueDate: '2026-05-12',
-              urgency,
+              dueDate,
               createdAt: '2026-01-01T00:00:00.000Z',
               updatedAt: '2026-01-01T00:00:00.000Z',
             } as any}
@@ -854,10 +760,10 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       return tree;
     };
 
-    expect(getTextColor(renderDueTask('normal'), 'Due date')).toBe('#999999');
-    expect(getTextColor(renderDueTask('upcoming'), 'Due date')).toBe('#f59e0b');
-    expect(getTextColor(renderDueTask('urgent'), 'Due date')).toBe('#f59e0b');
-    expect(getTextColor(renderDueTask('overdue'), 'Due date')).toBe('#b91c1c');
+    expect(getTextColor(renderDueTask('normal', hoursFromNow(24 * 10)), 'Due date')).toBe('#999999');
+    expect(getTextColor(renderDueTask('upcoming', hoursFromNow(48)), 'Due date')).toBe('#f59e0b');
+    expect(getTextColor(renderDueTask('urgent', hoursFromNow(12)), 'Due date')).toBe('#f59e0b');
+    expect(getTextColor(renderDueTask('overdue', hoursFromNow(-24)), 'Due date')).toBe('#b91c1c');
   });
 
   it('navigates from project, context, and tag meta labels', () => {

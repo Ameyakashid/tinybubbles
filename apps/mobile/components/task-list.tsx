@@ -40,6 +40,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { CompactText } from './compact-text';
 import { ListEmptyState } from './list-empty-state';
 import { SwipeableTaskItem, type SwipeableTaskItemRowContext } from './swipeable-task-item';
+import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
 import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
 
@@ -125,51 +126,29 @@ type AddTaskOptions = {
   openAfterCreate?: boolean;
 };
 
-export type ReferenceGroupBy = 'none' | 'area' | 'project' | 'tag';
+export type TaskListGroupBy = 'none' | 'area' | 'project' | 'tag';
 
-export interface TaskListProps {
+/** What the list shows: which tasks, in what order, grouped how. */
+interface TaskListContentProps {
   statusFilter: TaskStatus | 'all';
   title: string;
   taskSource?: Task[];
-  showHeader?: boolean;
-  showTimeEstimateFilters?: boolean;
-  allowAdd?: boolean;
   projectId?: string;
-  staticList?: boolean;
-  staticListVirtualization?: StaticListVirtualizationWindow;
-  enableBulkActions?: boolean;
-  enableInboxBulkOrganize?: boolean;
-  enableProjectBulkOrganize?: boolean;
-  bulkBarPlacement?: 'inline' | 'external';
-  onBulkBarPropsChange?: (props: TaskListBulkBarProps | null) => void;
-  showSort?: boolean;
-  emptyText?: string;
-  emptyHint?: string;
-  emptyActionLabel?: string;
-  onEmptyAction?: () => void;
-  headerAccessory?: React.ReactNode;
-  primaryActionRow?: React.ReactNode;
-  showFilterButton?: boolean;
-  onFilterStateChange?: (state: { activeCount: number; hasActive: boolean }) => void;
-  enableCopilot?: boolean;
-  defaultEditTab?: 'task' | 'view';
-  contentPaddingBottom?: number;
-  enableProjectReorder?: boolean;
-  externalFilterOpenSignal?: number;
-  externalQuickAddFocusSignal?: number;
-  projectSortBy?: TaskSortBy;
-  onQuickAddInputFocus?: (targetInput?: number | string) => void;
-  projectReorderMode?: boolean;
-  onProjectReorderModeChange?: (active: boolean) => void;
   includeArchived?: boolean;
   includeDone?: boolean;
   groupCompletedTasksLast?: boolean;
-  referenceGroupBy?: ReferenceGroupBy;
-  onChangeReferenceGroupBy?: (value: ReferenceGroupBy) => void;
-  groupBy?: ReferenceGroupBy;
-  onChangeGroupBy?: (value: ReferenceGroupBy) => void;
+  projectSortBy?: TaskSortBy;
+  groupBy?: TaskListGroupBy;
+  onChangeGroupBy?: (value: TaskListGroupBy) => void;
   getTaskSequenceCue?: (task: Task) => ProjectSequenceTaskCue | undefined;
   sequenceCueLabels?: Record<ProjectSequenceTaskCue, string>;
+}
+
+/** The scroll container itself: which render path, its padding, refs and scroll events. */
+interface TaskListScrollProps {
+  staticList?: boolean;
+  staticListVirtualization?: StaticListVirtualizationWindow;
+  contentPaddingBottom?: number;
   /** Element rendered inside the virtualized list, scrolling away with the rows (e.g. the project sheet's details/notes header). */
   listHeaderComponent?: React.ReactElement | null;
   /** Ref to the underlying FlatList (virtualized path only). */
@@ -177,6 +156,45 @@ export interface TaskListProps {
   /** Scroll events from the virtualized list (virtualized path only). */
   onListScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }
+
+/** Everything drawn around the rows: header, empty state, filter and sort controls. */
+interface TaskListChromeProps {
+  showHeader?: boolean;
+  showSort?: boolean;
+  showFilterButton?: boolean;
+  showTimeEstimateFilters?: boolean;
+  onFilterStateChange?: (state: { activeCount: number; hasActive: boolean }) => void;
+  externalFilterOpenSignal?: number;
+  emptyText?: string;
+  emptyHint?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: () => void;
+  headerAccessory?: React.ReactNode;
+  primaryActionRow?: React.ReactNode;
+}
+
+/** Which interactions this instance is allowed to offer at all. */
+interface TaskListCapabilityProps {
+  allowAdd?: boolean;
+  enableCopilot?: boolean;
+  defaultEditTab?: 'task' | 'view';
+  onQuickAddInputFocus?: (targetInput?: number | string) => void;
+  enableBulkActions?: boolean;
+  enableInboxBulkOrganize?: boolean;
+  enableProjectBulkOrganize?: boolean;
+  bulkBarPlacement?: 'inline' | 'external';
+  onBulkBarPropsChange?: (props: TaskListBulkBarProps | null) => void;
+  enableProjectReorder?: boolean;
+  projectReorderMode?: boolean;
+  onProjectReorderModeChange?: (active: boolean) => void;
+}
+
+// Flat on the wire on purpose: TaskList is React.memo'd and sits on the app's
+// hottest render path (#766), so nesting these groups into object props would
+// break memoisation on every parent render unless all four call sites memoised
+// them by hand.
+export interface TaskListProps
+  extends TaskListContentProps, TaskListScrollProps, TaskListChromeProps, TaskListCapabilityProps {}
 
 // ... inside TaskList component
 function TaskListComponent({
@@ -208,7 +226,6 @@ function TaskListComponent({
   contentPaddingBottom,
   enableProjectReorder = false,
   externalFilterOpenSignal = 0,
-  externalQuickAddFocusSignal = 0,
   projectSortBy,
   onQuickAddInputFocus,
   projectReorderMode: projectReorderModeProp,
@@ -216,8 +233,6 @@ function TaskListComponent({
   includeArchived = false,
   includeDone = true,
   groupCompletedTasksLast = false,
-  referenceGroupBy = 'area',
-  onChangeReferenceGroupBy,
   groupBy,
   onChangeGroupBy,
   getTaskSequenceCue,
@@ -409,12 +424,8 @@ function TaskListComponent({
   });
 
   const sortBy = (projectSortBy ?? settings?.taskSortBy ?? 'default') as TaskSortBy;
-  const activeGroupBy: ReferenceGroupBy = statusFilter === 'reference' && !projectId
-    ? (referenceGroupBy ?? groupBy ?? 'area')
-    : (groupBy ?? 'none');
-  const handleChangeGroupBy = statusFilter === 'reference' && !projectId
-    ? (onChangeReferenceGroupBy ?? onChangeGroupBy)
-    : onChangeGroupBy;
+  const activeGroupBy: TaskListGroupBy = groupBy ?? 'none';
+  const handleChangeGroupBy = onChangeGroupBy;
   const canUseProjectReorder = Boolean(enableProjectReorder && projectId && sortBy === 'default');
   const shouldGroupCompletedTasks = Boolean(groupCompletedTasksLast && projectId && statusFilter === 'all');
   const projectReorderMode = projectReorderModeProp ?? internalProjectReorderMode;
@@ -482,15 +493,6 @@ function TaskListComponent({
     if (externalFilterOpenSignal <= 0) return;
     setFiltersVisible(true);
   }, [externalFilterOpenSignal]);
-
-  const lastQuickAddFocusSignalRef = useRef(externalQuickAddFocusSignal);
-  useEffect(() => {
-    if (externalQuickAddFocusSignal === lastQuickAddFocusSignalRef.current) return;
-    lastQuickAddFocusSignalRef.current = externalQuickAddFocusSignal;
-    if (externalQuickAddFocusSignal <= 0) return;
-    if (!quickAddAvailable) return;
-    quickAddInputRef.current?.focus();
-  }, [externalQuickAddFocusSignal, quickAddAvailable]);
 
   const refocusQuickAddInput = useCallback(() => {
     if (!quickAddAvailable) return;
@@ -859,8 +861,8 @@ function TaskListComponent({
     () => projectReorderFlatItems.some((item) => item.type === 'header'),
     [projectReorderFlatItems],
   );
-  const groupByOptions: ReferenceGroupBy[] = ['none', 'area', 'project', 'tag'];
-  const getReferenceGroupLabel = useCallback((groupBy: ReferenceGroupBy) => {
+  const groupByOptions: TaskListGroupBy[] = ['none', 'area', 'project', 'tag'];
+  const getGroupByLabel = useCallback((groupBy: TaskListGroupBy) => {
     switch (groupBy) {
       case 'none':
         return tFallback(t, 'list.groupByNone', 'No grouping');
@@ -874,7 +876,7 @@ function TaskListComponent({
         return groupBy;
     }
   }, [t]);
-  const groupByLabel = getReferenceGroupLabel(activeGroupBy);
+  const groupByLabel = getGroupByLabel(activeGroupBy);
   const groupLabel = tFallback(t, 'list.groupBy', 'Group');
   const showGroupControl = !projectId && Boolean(handleChangeGroupBy);
   const staticListVirtualWindow = useMemo(() => {
@@ -1456,6 +1458,9 @@ function TaskListComponent({
         visibleItemCount: listItemCountForDiagnostics,
       });
     });
+    // The editor closes above, so the save result has to reach `reportSaveResult`
+    // or a `{ success: false }` write reads as saved.
+    return result;
   }, [listItemCountForDiagnostics, performanceRoute, updateTask]);
 
   const sortOptions: TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
@@ -1930,10 +1935,9 @@ function TaskListComponent({
           contentContainerStyle={listContentStyle}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
-          windowSize={5}
-          updateCellsBatchingPeriod={50}
+          {...TASK_LIST_WINDOWING_PROPS}
+          // Clipping costs more than it saves on a short list, so this list —
+          // unlike the shared default — turns it on only once it is long.
           removeClippedSubviews={listItems.length >= REMOVE_CLIPPED_SUBVIEWS_MIN_ITEMS}
           // iOS only bounces (and thus allows pull-to-refresh) when content
           // exceeds the viewport unless bounce is forced; short lists like a
@@ -2030,7 +2034,7 @@ function TaskListComponent({
                     ]}
                   >
                     <Text style={[styles.sortItemText, { color: themeColorsMemo.text }]}>
-                      {getReferenceGroupLabel(option)}
+                      {getGroupByLabel(option)}
                     </Text>
                   </Pressable>
                 ))}

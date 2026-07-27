@@ -8,7 +8,6 @@ import {
 import {
   buildCloudKey,
   collectAttachments,
-  createAttachmentLocalMigrationLimiter,
   DEFAULT_CONTENT_TYPE,
   DROPBOX_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC,
   DROPBOX_ATTACHMENT_MAX_UPLOADS_PER_SYNC,
@@ -29,6 +28,7 @@ import {
   validateAttachmentHash,
   writeBytesSafely,
 } from '../attachment-sync-utils';
+import { migrateAttachmentsLocallyBeforeSync } from './common';
 
 export type DropboxAttachmentSyncOptions = {
   signal?: AbortSignal;
@@ -65,22 +65,16 @@ export const syncDropboxAttachments = async (
   if (!dropboxClientId) return false;
   const attachmentsDir = await getAttachmentsDir();
   const attachmentsById = collectAttachments(appData);
+  let didMutate = await migrateAttachmentsLocallyBeforeSync(attachmentsById, options.signal);
 
-  let didMutate = false;
   const downloadQueue: Attachment[] = [];
   const pendingUploadMutations: PendingDropboxUploadMutation[] = [];
-  const migrateAttachmentLocally = createAttachmentLocalMigrationLimiter();
   let uploadCount = 0;
   let uploadLimitLogged = false;
 
   for (const attachment of attachmentsById.values()) {
     if (attachment.kind !== 'file') continue;
     if (attachment.deletedAt) continue;
-    const localMigration = await migrateAttachmentLocally(attachment);
-    if (localMigration.migrated) {
-      didMutate = true;
-    }
-    if (localMigration.skipped) continue;
 
     const uri = attachment.uri || '';
     const isHttp = isHttpAttachmentUri(uri);

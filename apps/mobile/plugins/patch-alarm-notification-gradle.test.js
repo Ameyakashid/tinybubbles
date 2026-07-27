@@ -1,25 +1,39 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 const plugin = require('./patch-alarm-notification-gradle');
 
-const {
-  applyGradleCompatPatchToSource,
-  applyAlarmPendingIntentPatchToSource,
-  applyAlarmDuplicateToastPatchToSource,
-  applyAlarmTimingPatchToSource,
-  applyAlarmExactRepeatPatchToSource,
-  applyAlarmReminderBehaviorPatchToSource,
-  applyAlarmLockScreenPrivacyPatchToSource,
-  applyAlarmAudioInterfacePatchToSource,
-  applyAlarmDismissReceiverPatchToSource,
-  applyAlarmReceiverPatchToSource,
-  applyAlarmCompleteConstantsPatchToSource,
-  applyAlarmTaskOpenIntentPatchToSource,
-  applyAlarmCompleteUtilPatchToSource,
-  applyAlarmCompleteReceiverPatchToSource,
-  applyAlarmIosCompleteActionPatchToSource,
-  applyAlarmIosUniqueIdentifierPatchToSource,
-} = plugin.__testables;
+const { PATCHES, applyPatches } = plugin.__testables;
+
+// Every pure transform used to be its own named export in `__testables`; now
+// each one lives on its PATCHES entry instead. Pulling them out by id keeps
+// every test below unchanged — only the import mechanism moved.
+const transformFor = (id) => {
+  const patch = PATCHES.find((entry) => entry.id === id);
+  if (!patch) throw new Error(`No PATCHES entry with id "${id}"`);
+  return patch.transform;
+};
+
+const applyGradleCompatPatchToSource = transformFor('gradle-compat');
+const applyAlarmPendingIntentPatchToSource = transformFor('alarm-pending-intent');
+const applyAlarmDuplicateToastPatchToSource = transformFor('alarm-duplicate-toast');
+const applyAlarmTimingPatchToSource = transformFor('alarm-timing');
+// Same function as 'alarm-exact-repeat-receiver' — see PATCHES for why the
+// one transform gets two registry entries (one per file it patches).
+const applyAlarmExactRepeatPatchToSource = transformFor('alarm-exact-repeat-util');
+const applyAlarmReminderBehaviorPatchToSource = transformFor('alarm-reminder-behavior');
+const applyAlarmLockScreenPrivacyPatchToSource = transformFor('alarm-lock-screen-privacy');
+const applyAlarmAudioInterfacePatchToSource = transformFor('alarm-audio-interface');
+const applyAlarmDismissReceiverPatchToSource = transformFor('alarm-dismiss-receiver');
+const applyAlarmReceiverPatchToSource = transformFor('alarm-receiver-dismiss-guard');
+const applyAlarmCompleteConstantsPatchToSource = transformFor('alarm-complete-action-constants');
+const applyAlarmTaskOpenIntentPatchToSource = transformFor('alarm-task-open-intent');
+const applyAlarmCompleteUtilPatchToSource = transformFor('alarm-complete-action-util');
+const applyAlarmCompleteReceiverPatchToSource = transformFor('alarm-complete-action-receiver');
+const applyAlarmIosCompleteActionPatchToSource = transformFor('alarm-ios-complete-action');
+const applyAlarmIosUniqueIdentifierPatchToSource = transformFor('alarm-ios-unique-identifier');
 
 describe('patch-alarm-notification-gradle', () => {
   it('patches AlarmUtil pending intent flags for Android 12+', () => {
@@ -528,5 +542,153 @@ afterEvaluate { project ->
     expect(output).toContain("implementation project(':notification-open-intents')");
     expect(output.indexOf("classpath 'com.android.tools.build:gradle:3.4.1'")).toBeLessThan(output.indexOf("implementation project(':notification-open-intents')"));
     expect(applyGradleCompatPatchToSource(output).match(/notification-open-intents/g)).toHaveLength(2);
+  });
+});
+
+describe('PATCHES registry completeness', () => {
+  // Pinned verbatim from the original per-candidate loops this task replaced
+  // (17 (file, transform) call sites from 16 distinct transforms —
+  // applyAlarmExactRepeatPatchToSource was called against both AlarmUtil.java
+  // and AlarmReceiver.java, hence 17 sites from 16 functions). This list is
+  // NOT derived from PATCHES: a test that only iterates PATCHES would shrink
+  // in lockstep with a bug that silently drops a registry entry and never
+  // catch it. Pinning the old list independently is what makes a dropped
+  // entry visible.
+  const ORIGINAL_CALL_SITES = [
+    ['build.gradle', 'applyGradleCompatPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmPendingIntentPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmTaskOpenIntentPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmDuplicateToastPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmTimingPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmExactRepeatPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmReminderBehaviorPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmLockScreenPrivacyPatchToSource'],
+    ['AlarmUtil.java', 'applyAlarmCompleteUtilPatchToSource'],
+    ['AudioInterface.java', 'applyAlarmAudioInterfacePatchToSource'],
+    ['AlarmDismissReceiver.java', 'applyAlarmDismissReceiverPatchToSource'],
+    ['AlarmReceiver.java', 'applyAlarmReceiverPatchToSource'],
+    ['AlarmReceiver.java', 'applyAlarmExactRepeatPatchToSource'],
+    ['AlarmReceiver.java', 'applyAlarmCompleteReceiverPatchToSource'],
+    ['Constants.java', 'applyAlarmCompleteConstantsPatchToSource'],
+    ['RnAlarmNotification.m', 'applyAlarmIosCompleteActionPatchToSource'],
+    ['RnAlarmNotification.m', 'applyAlarmIosUniqueIdentifierPatchToSource'],
+  ];
+
+  it('has exactly one registry entry per original call site — none dropped in the collapse', () => {
+    const fakeRoot = '/fake-project-root';
+    const actual = PATCHES.map((patch) => {
+      const [firstCandidate] = patch.getCandidates(fakeRoot);
+      return [path.basename(firstCandidate), patch.transform.name];
+    });
+    const normalize = (pairs) => pairs.map(([file, name]) => `${file}::${name}`).sort();
+    expect(normalize(actual)).toEqual(normalize(ORIGINAL_CALL_SITES));
+  });
+
+  it('every entry declares required/firstMatchOnly explicitly', () => {
+    expect(PATCHES).toHaveLength(17);
+    for (const patch of PATCHES) {
+      expect(typeof patch.id).toBe('string');
+      expect(typeof patch.required).toBe('boolean');
+      expect(typeof patch.firstMatchOnly).toBe('boolean');
+      expect(typeof patch.transform).toBe('function');
+      expect(typeof patch.getCandidates).toBe('function');
+    }
+  });
+});
+
+describe('applyPatches (registry-driven fixture tree)', () => {
+  const androidJavaPath = (projectRoot, fileName) => path.join(
+    projectRoot,
+    'node_modules',
+    'react-native-alarm-notification',
+    'android',
+    'src',
+    'main',
+    'java',
+    'com',
+    'emekalites',
+    'react',
+    'alarm',
+    'notification',
+    fileName
+  );
+
+  const writeFixture = (filePath, content) => {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content);
+  };
+
+  it("throws naming the patch id when a required patch's anchor no longer matches upstream", () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alarm-patch-fixture-'));
+    try {
+      writeFixture(
+        androidJavaPath(projectRoot, 'AudioInterface.java'),
+        `class AudioInterface {
+    void init(Context context) {
+        uri = Settings.System.SOME_RENAMED_URI_UPSTREAM;
+    }
+}`
+      );
+
+      const audioPatch = PATCHES.find((patch) => patch.id === 'alarm-audio-interface');
+      expect(audioPatch.required).toBe(true);
+      expect(() => applyPatches(projectRoot, [audioPatch])).toThrow(/alarm-audio-interface/);
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('does not throw when a declared-optional patch fails to match (alarm-duplicate-toast)', () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alarm-patch-fixture-'));
+    try {
+      writeFixture(
+        androidJavaPath(projectRoot, 'AlarmUtil.java'),
+        'class AlarmUtil {\n    // upstream rewrote checkAlarm entirely, no Toast left to remove\n}'
+      );
+
+      const toastPatch = PATCHES.find((patch) => patch.id === 'alarm-duplicate-toast');
+      expect(toastPatch.required).toBe(false);
+      expect(() => applyPatches(projectRoot, [toastPatch])).not.toThrow();
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('running applyPatches twice against the real installed package succeeds both times and converges', () => {
+    const realPackageRoot = path.join(__dirname, '..', '..', '..', 'node_modules', 'react-native-alarm-notification');
+    if (!fs.existsSync(realPackageRoot)) {
+      // react-native-alarm-notification isn't installed in this environment
+      // (e.g. a pruned/production install) — nothing to verify against.
+      return;
+    }
+
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alarm-patch-real-'));
+    try {
+      // Mirror the real monorepo layout (apps/mobile, two levels below the
+      // repo root) so the hoisted candidate path resolves the same way it
+      // does during the actual prebuild.
+      const projectRoot = path.join(tmpRoot, 'apps', 'mobile');
+      const hoistedDest = path.join(tmpRoot, 'node_modules', 'react-native-alarm-notification');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      fs.mkdirSync(path.dirname(hoistedDest), { recursive: true });
+      fs.cpSync(realPackageRoot, hoistedDest, { recursive: true });
+
+      const snapshot = () => PATCHES
+        .flatMap((patch) => patch.getCandidates(projectRoot))
+        .filter((candidate) => fs.existsSync(candidate))
+        .sort()
+        .map((candidate) => `${candidate}\n${fs.readFileSync(candidate, 'utf8')}`)
+        .join('\n---\n');
+
+      expect(() => applyPatches(projectRoot, PATCHES)).not.toThrow();
+      const afterFirstRun = snapshot();
+
+      expect(() => applyPatches(projectRoot, PATCHES)).not.toThrow();
+      const afterSecondRun = snapshot();
+
+      expect(afterSecondRun).toBe(afterFirstRun);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });

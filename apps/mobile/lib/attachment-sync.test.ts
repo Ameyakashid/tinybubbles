@@ -72,8 +72,131 @@ const attachmentPathMocks = vi.hoisted(() => {
   };
 });
 
+// This batch adopted the shared core reconciliation loop (packages/core/src/
+// attachment-transfer.ts) for the webdav/cloudkit/file backends. Mirror its pure logic here too
+// — same rationale as attachmentPathMocks above: real, faithful copies rather than pulling in
+// the whole @mindwtr/core module graph. `globalProgressTracker`/`computeSha256Hex` are hoisted
+// alongside so reportProgress/validateAttachmentHash's mirrors can call the SAME mock instances
+// the rest of this file already asserts against.
+const coreRuntimeMocks = vi.hoisted(() => {
+  const globalProgressTracker = { updateProgress: vi.fn() };
+  const computeSha256Hex = vi.fn().mockResolvedValue(null);
+
+  const collectAttachmentsById = (appData: any) => {
+    const attachmentsById = new Map();
+    for (const task of appData.tasks) {
+      if (task.deletedAt) continue;
+      for (const attachment of task.attachments || []) attachmentsById.set(attachment.id, attachment);
+    }
+    for (const project of appData.projects) {
+      if (project.deletedAt) continue;
+      for (const attachment of project.attachments || []) attachmentsById.set(attachment.id, attachment);
+    }
+    return attachmentsById;
+  };
+
+  const reportProgress = (
+    attachmentId: string,
+    operation: 'upload' | 'download',
+    loaded: number,
+    total: number,
+    status: 'active' | 'completed' | 'failed',
+    error?: string
+  ) => {
+    const percentage = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+    globalProgressTracker.updateProgress(attachmentId, {
+      operation,
+      bytesTransferred: loaded,
+      totalBytes: total,
+      percentage,
+      status,
+      error,
+    });
+  };
+
+  const validateAttachmentHash = async (attachment: { fileHash?: string }, bytes: Uint8Array): Promise<void> => {
+    const expected = attachment.fileHash;
+    if (!expected || expected.length !== 64) return;
+    const computed = await computeSha256Hex(bytes);
+    if (!computed) return;
+    if (computed.toLowerCase() !== expected.toLowerCase()) {
+      throw new Error('Integrity validation failed');
+    }
+  };
+
+  const defaultResolveLocalPath = (uri: string): string => {
+    if (!/^file:\/\//i.test(uri)) return uri;
+    try {
+      const parsed = new URL(uri);
+      let path = decodeURIComponent(parsed.pathname);
+      if (/^\/[A-Za-z]:\//.test(path)) path = path.slice(1);
+      return path;
+    } catch {
+      return uri.replace(/^file:\/\//i, '');
+    }
+  };
+
+  const runAttachmentTransferLifecycle = async (options: any): Promise<boolean> => {
+    let didMutate = false;
+    const hasCloudCopy = options.hasCloudCopy ?? ((attachment: any) => Boolean(attachment.cloudKey));
+
+    for (const attachment of options.attachmentsById.values()) {
+      await options.beforeEachAttachment?.();
+      if (attachment.kind !== 'file') continue;
+      if (attachment.deletedAt) continue;
+      if (options.policy?.shouldSkip?.(attachment)) continue;
+
+      const rawUri = attachment.uri ? (options.resolveLocalPath ?? defaultResolveLocalPath)(attachment.uri) : '';
+      const isHttp = /^https?:\/\//i.test(rawUri);
+      const localPath = isHttp ? '' : rawUri;
+      const hasLocalPath = Boolean(localPath);
+      const existsLocally = hasLocalPath ? await options.localFileExists(localPath) : false;
+
+      const nextStatus = existsLocally ? 'available' : 'missing';
+      if (attachment.localStatus !== nextStatus) {
+        attachment.localStatus = nextStatus;
+        didMutate = true;
+      }
+
+      if (!hasCloudCopy(attachment) && existsLocally) {
+        if (!options.policy?.shouldUpload || options.policy.shouldUpload(attachment)) {
+          try {
+            if (await options.onUpload(attachment, localPath)) didMutate = true;
+          } catch (error) {
+            if (options.isFatalError?.(error)) throw error;
+            options.onUploadError(attachment, error);
+          }
+        }
+      }
+
+      if (hasCloudCopy(attachment) && !existsLocally) {
+        if (!options.policy?.shouldDownload || options.policy.shouldDownload(attachment)) {
+          try {
+            if (await options.onDownload(attachment)) didMutate = true;
+          } catch (error) {
+            if (options.isFatalError?.(error)) throw error;
+            options.onDownloadError(attachment, error);
+          }
+        }
+      }
+    }
+
+    return didMutate;
+  };
+
+  return {
+    globalProgressTracker,
+    computeSha256Hex,
+    collectAttachmentsById,
+    reportProgress,
+    validateAttachmentHash,
+    runAttachmentTransferLifecycle,
+  };
+});
+
 vi.mock('@mindwtr/core', () => ({
   ...attachmentPathMocks,
+  ...coreRuntimeMocks,
   validateAttachmentForUpload: vi.fn().mockResolvedValue({ valid: true }),
   cloudGetFile: vi.fn(),
   cloudDeleteFile: vi.fn(),
@@ -83,7 +206,6 @@ vi.mock('@mindwtr/core', () => ({
     const message = error instanceof Error ? error.message : String(error);
     return message.toLowerCase().includes('unauthorized') || message.includes('401');
   }),
-  computeSha256Hex: vi.fn().mockResolvedValue(null),
   markAttachmentUnrecoverable: vi.fn((attachment: Attachment) => {
     attachment.cloudKey = undefined;
     attachment.fileHash = undefined;
@@ -92,9 +214,6 @@ vi.mock('@mindwtr/core', () => ({
     attachment.updatedAt = new Date().toISOString();
     return true;
   }),
-  globalProgressTracker: {
-    updateProgress: vi.fn(),
-  },
   decodeUriSafe: vi.fn((value: string) => {
     try {
       return decodeURIComponent(value);

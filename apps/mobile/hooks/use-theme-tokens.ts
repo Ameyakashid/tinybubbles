@@ -1,3 +1,4 @@
+import { resolveThemeColorScheme } from '@mindwtr/core';
 import { Colors } from '../constants/theme';
 import { THEME_PRESETS } from '../constants/theme-presets';
 import { M3Colors, type M3ColorRoles } from '../constants/material3/m3-color';
@@ -38,9 +39,8 @@ export interface ThemeTokens {
 }
 
 function m3RolesFor(theme: ResolvableTheme): M3ColorRoles {
-  if (theme.themeMode === 'material3-light') return M3Colors.light;
-  if (theme.themeMode === 'material3-dark') return M3Colors.dark;
-  return theme.isDark ? M3Colors.dark : M3Colors.light;
+  const scheme = resolveThemeColorScheme(theme.themeMode, theme.isDark ? 'dark' : 'light');
+  return scheme === 'dark' ? M3Colors.dark : M3Colors.light;
 }
 
 // Generic ThemeColors mapping (preserves today's non-Material output; Materializes when M3).

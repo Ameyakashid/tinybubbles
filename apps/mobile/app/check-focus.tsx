@@ -2,10 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { generateUUID, useTaskStore } from '@mindwtr/core';
+import { generateUUID, tFallback, useTaskStore } from '@mindwtr/core';
+import type { Task } from '@mindwtr/core';
 import { Check, Trash2, Plus } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../contexts/language-context';
+import { useToast } from '../contexts/toast-context';
+import {
+    getActionFailureMessage,
+    getUnknownErrorMessage,
+    isActionFailure,
+} from '../components/store-action-result';
 
 export default function FocusChecklistPage() {
     const { id } = useLocalSearchParams();
@@ -18,9 +25,19 @@ export default function FocusChecklistPage() {
     ));
     const updateTask = useTaskStore((state) => state.updateTask);
     const [task, setTask] = useState(storeTask);
+    const { showToast } = useToast();
 
     // Local state for immediate feedback
     const [checklist, setChecklist] = useState(task?.checklist || []);
+
+    const showChecklistError = (message?: string) => {
+        showToast({
+            title: tFallback(t, 'common.error', 'Error'),
+            message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
+            tone: 'error',
+            durationMs: 4200,
+        });
+    };
 
     useEffect(() => {
         if (storeTask) {
@@ -29,45 +46,44 @@ export default function FocusChecklistPage() {
         }
     }, [storeTask]);
 
-    const handleToggle = (index: number) => {
+    // The list renders local state for immediate feedback, and the store→local
+    // effect only fires when the store actually changes. So a rejected write
+    // (which resolves `{ success: false }` rather than throwing) would otherwise
+    // leave the edit on screen forever as if it had saved: roll it back instead.
+    const commitChecklist = (newList: NonNullable<Task['checklist']>) => {
         if (!task) return;
-
-        const newList = [...checklist];
-        newList[index].isCompleted = !newList[index].isCompleted;
+        const previous = checklist;
         setChecklist(newList);
+        void Promise.resolve(updateTask(task.id, { checklist: newList }))
+            .then((result) => {
+                if (!isActionFailure(result)) return;
+                setChecklist(previous);
+                showChecklistError(getActionFailureMessage(result));
+            })
+            .catch((error) => {
+                setChecklist(previous);
+                showChecklistError(getUnknownErrorMessage(error));
+            });
+    };
 
-        // Sync with store
-        updateTask(task.id, { checklist: newList });
+    const handleToggle = (index: number) => {
+        commitChecklist(checklist.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, isCompleted: !item.isCompleted } : item
+        )));
     };
 
     const handleAddItem = () => {
-        if (!task) return;
-
-        const newItem = {
-            id: generateUUID(),
-            title: '',
-            isCompleted: false
-        };
-        const newList = [...checklist, newItem];
-        setChecklist(newList);
-        updateTask(task.id, { checklist: newList });
+        commitChecklist([...checklist, { id: generateUUID(), title: '', isCompleted: false }]);
     };
 
     const handleUpdateItem = (index: number, text: string) => {
-        if (!task) return;
-
-        const newList = [...checklist];
-        newList[index].title = text;
-        setChecklist(newList);
-        updateTask(task.id, { checklist: newList });
+        commitChecklist(checklist.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, title: text } : item
+        )));
     };
 
     const handleDeleteItem = (index: number) => {
-        if (!task) return;
-
-        const newList = checklist.filter((_, i) => i !== index);
-        setChecklist(newList);
-        updateTask(task.id, { checklist: newList });
+        commitChecklist(checklist.filter((_, i) => i !== index));
     };
 
     if (!task) return (

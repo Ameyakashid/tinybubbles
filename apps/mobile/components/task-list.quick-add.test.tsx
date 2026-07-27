@@ -112,6 +112,8 @@ vi.mock('react-native', () => ({
     );
   }),
   Modal: ({ children, visible, ...props }: any) => (visible ? React.createElement('Modal', props, children) : null),
+  // The save/add paths open a performance diagnostic, which reads Platform.OS.
+  Platform: { OS: 'android', select: (options: any) => options.android ?? options.default },
   Pressable: ({ children, onPress, ...props }: any) => React.createElement('Pressable', { ...props, onPress }, children),
   RefreshControl: () => null,
   StyleSheet: { create: (styles: unknown) => styles },
@@ -142,30 +144,13 @@ vi.mock('react-native-draggable-flatlist', () => ({
   ScaleDecorator: ({ children, ...props }: any) => React.createElement('ScaleDecorator', props, children),
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
-  const useTaskStore = Object.assign(
-    (selector: (state: typeof storeState) => unknown) => selector(storeState),
-    { getState: () => storeState },
-  );
-
-  return {
-    DEFAULT_PROJECT_COLOR: '#2563eb',
+// Spread the real module and replace only the store hook (see
+// test-support/mock-core.ts). The old hand-listed mock returned nothing else, so
+// every core export the component tree grew afterwards arrived as undefined.
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  return mockCore(importOriginal as () => Promise<Record<string, unknown>>, () => storeState, {
     createAIProvider: vi.fn(),
-    formatFocusTaskLimitText: (template: string, limit: number) => (
-      template.includes('{{count}}') ? template.replace('{{count}}', String(limit)) : `Max ${limit} focus items.`
-    ),
-    canStarNewCapture: ({ focusedCount, focusTaskLimit }: { focusedCount: number; focusTaskLimit: number }) => focusedCount < focusTaskLimit,
-    executeCaptureTransaction: actual.executeCaptureTransaction,
-    countActiveFilterCriteria: actual.countActiveFilterCriteria,
-    criteriaFromSelections: actual.criteriaFromSelections,
-    formatTimeEstimateLabel: actual.formatTimeEstimateLabel,
-    selectionsFromCriteria: actual.selectionsFromCriteria,
-    getDefaultTaskAreaMode: (settings: any) => {
-      const mode = settings?.gtd?.defaultAreaMode;
-      if (mode === 'none' || mode === 'fixed' || mode === 'active') return mode;
-      return settings?.gtd?.defaultAreaId ? 'fixed' : 'none';
-    },
     getQuickAddProjectInitialProps: vi.fn(() => ({})),
     getTranslationsSync: vi.fn(() => ({ 'trash.restoreToInbox': 'Restore' })),
     getTaskMetadataFilterVisibility: vi.fn(() => ({
@@ -176,34 +161,16 @@ vi.mock('@mindwtr/core', async () => {
     })),
     getUsedTaskTokens: vi.fn(() => []),
     hasActiveFilterCriteria: vi.fn(() => false),
-    isNaturalLanguageDatesEnabled: (settings?: { gtd?: { naturalLanguageDates?: boolean } } | null) =>
-      settings?.gtd?.naturalLanguageDates !== false,
     isSelectableProjectForTaskAssignment: (item: Project) => item.status === 'active' && !item.deletedAt,
     isTaskInActiveProject: vi.fn(() => true),
     matchesTask: vi.fn(() => true),
-    normalizeClockTimeInput: (value?: string | null) => String(value ?? '').trim(),
-    normalizeFocusTaskLimit: (value: unknown) => (typeof value === 'number' ? value : 3),
     parseQuickAdd: parseQuickAddMock,
     parseSearchQuery: vi.fn(() => ({ filters: [], text: '' })),
-    resolveDefaultNewTaskAreaId: (settings: any, areas: any[]) => {
-      const mode = settings?.gtd?.defaultAreaMode ?? (settings?.gtd?.defaultAreaId ? 'fixed' : 'none');
-      if (mode !== 'fixed') return undefined;
-      const areaId = settings?.gtd?.defaultAreaId;
-      return typeof areaId === 'string' && areas.some((area) => area.id === areaId && !area.deletedAt)
-        ? areaId
-        : undefined;
-    },
-    shallow: Object.is,
     sortTasksBy: (tasks: Task[]) => tasks,
     splitCompletedTasks: (tasks: Task[]) => ({ activeTasks: tasks, completedTasks: [] }),
     taskMatchesAreaFilter: vi.fn(() => true),
     taskMatchesFilterCriteria: vi.fn(() => true),
-    tFallback: (t: (key: string) => string, key: string, fallback: string) => {
-      const value = t(key);
-      return value && value !== key ? value : fallback;
-    },
-    useTaskStore,
-  };
+  });
 });
 
 vi.mock('./task-edit-modal', () => ({
@@ -768,6 +735,40 @@ describe('TaskList project quick add', () => {
       task: expect.objectContaining({ id: 'created-task' }),
     }));
     expect(latestQuickAddProps().newTaskTitle).toBe('');
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  // The editor closes the moment a save is handed off, so a swallowed
+  // `{ success: false }` reads to the user as a task that saved. useTaskEditActions
+  // only sees the result if the handler returns the store promise.
+  it('hands the store result back to the editor so a failed save can surface', async () => {
+    const visibleTask = makeTask('task-save', 'Review launch notes');
+    updateTaskMock.mockResolvedValue({ success: false, error: 'Task is deleted' });
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <TaskList
+          allowAdd={false}
+          showHeader={false}
+          statusFilter="next"
+          taskSource={[visibleTask]}
+          title="Next"
+        />,
+      );
+    });
+
+    const onSave = taskEditModalPropsSpy.mock.calls.at(-1)?.[0].onSave;
+    let saveResult: unknown;
+    await act(async () => {
+      saveResult = await onSave('task-save', { title: 'Review launch notes v2' });
+    });
+
+    expect(updateTaskMock).toHaveBeenCalledWith('task-save', { title: 'Review launch notes v2' });
+    expect(saveResult).toEqual({ success: false, error: 'Task is deleted' });
 
     act(() => {
       tree.unmount();

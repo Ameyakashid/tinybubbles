@@ -62,22 +62,13 @@ vi.mock('react-native', async () => {
     };
 });
 
-vi.mock('@mindwtr/core', () => ({
-    formatFocusTaskLimitText: vi.fn((value: string) => value),
-    isDueForReview: vi.fn(() => false),
-    isTaskInActiveProject: vi.fn(() => true),
-    normalizeFocusTaskLimit: vi.fn(() => 3),
-    safeFormatDate: vi.fn((value: Date | string) => String(value)),
-    safeParseDate: vi.fn((value?: string) => (value ? new Date(value) : null)),
-    safeParseDueDate: vi.fn((value?: string) => (
-        value ? new Date(`${value.slice(0, 10)}T12:00:00`) : null
-    )),
-    shallow: vi.fn((a, b) => a === b),
-    shouldShowTaskForStart: vi.fn(() => true),
-    sortTasksBy: vi.fn((tasks: unknown[]) => tasks),
-    tFallback: vi.fn((_t, _key: string, fallback: string) => fallback),
-    useTaskStore: Object.assign(() => storeState, { getState: () => storeState }),
-}));
+vi.mock('@mindwtr/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+    return {
+        ...actual,
+        useTaskStore: Object.assign(() => storeState, { getState: () => storeState }),
+    };
+});
 
 vi.mock('expo-router', () => ({
     router: { push: vi.fn() },

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Brain, ListChecks } from 'lucide-react-native';
 
 import { isTaskInActiveProject, shallow, useTaskStore } from '@mindwtr/core';
-import { TaskList, type ReferenceGroupBy } from '../../../components/task-list';
+import { TaskList, type TaskListGroupBy } from '../../../components/task-list';
 import { InboxProcessingModal } from '../../../components/inbox-processing-modal';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 
@@ -40,7 +40,7 @@ export default function InboxScreen() {
   const { openQuickCapture } = useQuickCapture();
   const router = useRouter();
   const [showProcessing, setShowProcessing] = useState(false);
-  const [groupBy, setGroupBy] = useState<ReferenceGroupBy>('none');
+  const [groupBy, setGroupBy] = useState<TaskListGroupBy>('none');
   const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
 

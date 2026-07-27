@@ -44,19 +44,14 @@ const legacyFileSystemMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@mindwtr/core', () => ({
-  getBreadcrumbs: () => breadcrumbState.value,
-  sanitizeForLog: (value: string) => value,
-  sanitizeLogContext: (value?: Record<string, unknown>) => (
-    value
-      ? Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, String(entry)]))
-      : undefined
-  ),
-  sanitizeUrl: (value: string) => value,
-  useTaskStore: {
-    getState: () => storeState,
-  },
-}));
+// Real sanitizers on purpose: identity stubs meant this suite could not catch a
+// regression in the redaction this log path exists to perform.
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  return mockCore(importOriginal, () => storeState, {
+    getBreadcrumbs: () => breadcrumbState.value,
+  });
+});
 
 vi.mock('expo-file-system', () => ({
   Directory: class Directory {

@@ -118,21 +118,20 @@ vi.mock('expo-file-system', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  DEFAULT_PROJECT_COLOR: '#3B82F6',
-  buildTaskUpdatesFromSpeechResult: (_task: unknown, result: { transcript?: string }) => ({
-    updates: { description: result.transcript },
-    suggestedProjectTitle: null,
-  }),
-  findSelectableProjectByTitleAndArea: vi.fn(),
-  generateUUID: () => 'attachment-1',
-  safeFormatDate: (_value: Date | string, format: string) => {
-    if (format === 'yyyyMMdd-HHmmss') return '20260629-090027';
-    if (format === 'Pp') return '06/29/2026, 9:00 AM';
-    return '2026-06-29';
-  },
-  useTaskStore: storeMocks.useTaskStore,
-}));
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  // Only the id and clock are pinned, so attachment names stay deterministic;
+  // `buildTaskUpdatesFromSpeechResult` runs for real.
+  return mockCore(importOriginal, () => ({}), {
+    generateUUID: () => 'attachment-1',
+    safeFormatDate: (_value: Date | string, format: string) => {
+      if (format === 'yyyyMMdd-HHmmss') return '20260629-090027';
+      if (format === 'Pp') return '06/29/2026, 9:00 AM';
+      return '2026-06-29';
+    },
+    useTaskStore: storeMocks.useTaskStore,
+  });
+});
 
 vi.mock('../lib/ai-config', () => ({
   loadAIKey: vi.fn().mockResolvedValue(''),
@@ -283,7 +282,10 @@ describe('useQuickCaptureAudio', () => {
     });
 
     expect(speechMocks.transcribeLocalWhisper).not.toHaveBeenCalled();
-    expect(storeMocks.updateTask).toHaveBeenCalledWith('task-1', { description: 'Buy milk' });
+    // Core's default 'smart' field strategy puts a short transcript (<=15 words)
+    // in the title. The stub this suite used to carry always wrote `description`,
+    // so this line asserted behaviour the app does not have.
+    expect(storeMocks.updateTask).toHaveBeenCalledWith('task-1', { title: 'Buy milk' });
     expect(handleClose).toHaveBeenCalledOnce();
   });
 

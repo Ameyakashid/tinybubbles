@@ -8,14 +8,11 @@ import {
 } from '../cloudkit-sync';
 import {
     collectAttachments,
-    createAttachmentLocalMigrationLimiter,
     extractExtension,
     fileExists,
     getAttachmentByteSize,
-    getAttachmentLocalStatus,
     getAttachmentsDir,
     isContentAttachmentUri,
-    isHttpAttachmentUri,
     logAttachmentWarn,
     readAttachmentBytesForUpload,
     readFileAsBytes,
@@ -23,7 +20,12 @@ import {
     validateAttachmentHash,
     writeBytesSafely,
 } from '../attachment-sync-utils';
-import { assertAttachmentSyncNotAborted, isAttachmentSyncAbortError } from './common';
+import {
+    assertAttachmentSyncNotAborted,
+    isAttachmentSyncAbortError,
+    migrateAttachmentsLocallyBeforeSync,
+    runMobileAttachmentLifecycle,
+} from './common';
 
 type OwnedAttachment = {
     ownerType: 'task' | 'project';
@@ -53,6 +55,9 @@ const buildTargetUri = (attachmentsDir: string, attachment: Attachment): string 
     return `${attachmentsDir}${attachment.id}${ext}`;
 };
 
+// Handles a content:// uri that reached upload despite the general migration pre-pass — e.g. one
+// capped by createAttachmentLocalMigrationLimiter in a PRIOR sync round whose cap has since
+// reset. Preserved verbatim from before this file adopted the shared lifecycle.
 const ensureCloudKitAssetFile = async (
     attachment: Attachment,
     uri: string,
@@ -91,25 +96,11 @@ const buildMetadata = (owned: OwnedAttachment, fileSize: number | null): CloudKi
     ...(owned.attachment.deletedAt ? { deletedAt: owned.attachment.deletedAt } : {}),
 });
 
-const applyFetchedMetadata = (attachment: Attachment, metadata: CloudKitAttachmentMetadata): boolean => {
-    let mutated = false;
-    if (metadata.title && attachment.title !== metadata.title) {
-        attachment.title = metadata.title;
-        mutated = true;
-    }
-    if (metadata.mimeType && attachment.mimeType !== metadata.mimeType) {
-        attachment.mimeType = metadata.mimeType;
-        mutated = true;
-    }
-    if (Number.isFinite(metadata.size ?? NaN) && attachment.size !== metadata.size) {
-        attachment.size = metadata.size;
-        mutated = true;
-    }
-    if (metadata.fileHash && attachment.fileHash !== metadata.fileHash) {
-        attachment.fileHash = metadata.fileHash;
-        mutated = true;
-    }
-    return mutated;
+const applyFetchedMetadata = (attachment: Attachment, metadata: CloudKitAttachmentMetadata): void => {
+    if (metadata.title) attachment.title = metadata.title;
+    if (metadata.mimeType) attachment.mimeType = metadata.mimeType;
+    if (Number.isFinite(metadata.size ?? NaN)) attachment.size = metadata.size;
+    if (metadata.fileHash) attachment.fileHash = metadata.fileHash;
 };
 
 const flushPendingCloudKitDeletes = async (appData: AppData, signal?: AbortSignal): Promise<boolean> => {
@@ -142,52 +133,48 @@ export const syncCloudKitAttachments = async (appData: AppData, signal?: AbortSi
     let didMutate = await flushPendingCloudKitDeletes(appData, signal);
     const attachmentsById = collectAttachments(appData);
     if (attachmentsById.size === 0) return didMutate;
-    const migrateAttachmentLocally = createAttachmentLocalMigrationLimiter();
+    didMutate = (await migrateAttachmentsLocallyBeforeSync(attachmentsById, signal)) || didMutate;
 
-    for (const owned of collectOwnedAttachments(appData)) {
-        const attachment = owned.attachment;
-        if (attachment.kind !== 'file') continue;
-        if (attachment.deletedAt) continue;
-        assertAttachmentSyncNotAborted(signal);
-        const localMigration = await migrateAttachmentLocally(attachment);
-        if (localMigration.migrated) {
-            didMutate = true;
-        }
-        if (localMigration.skipped) continue;
+    // Same task/project walk as `attachmentsById`, kept as its own owner-tagged list because
+    // CloudKit's upload metadata needs the owning task/project id, which the shared lifecycle's
+    // per-attachment callbacks don't carry.
+    const ownedByAttachmentId = new Map(
+        collectOwnedAttachments(appData).map((owned) => [owned.attachment.id, owned]),
+    );
 
-        const uri = attachment.uri || '';
-        const isHttp = isHttpAttachmentUri(uri);
-        const hasLocalPath = Boolean(uri) && !isHttp;
-        const existsLocally = hasLocalPath ? await fileExists(uri) : false;
-        const localStatus = getAttachmentLocalStatus(uri, existsLocally);
-        if (attachment.localStatus !== localStatus) {
-            attachment.localStatus = localStatus;
-            didMutate = true;
-        }
-
-        const recordName = parseCloudKitAttachmentKey(attachment.cloudKey);
-
-        if (!recordName && hasLocalPath && localStatus === 'available') {
+    const syncMutated = await runMobileAttachmentLifecycle({
+        attachmentsById,
+        localFileExists: fileExists,
+        isFatalError: (error) => isAttachmentSyncAbortError(error, signal),
+        // A cloudKey written by a different backend before a provider switch isn't a valid
+        // CloudKit record key, so CloudKit must still treat the attachment as needing upload.
+        hasCloudCopy: (attachment) => Boolean(parseCloudKitAttachmentKey(attachment.cloudKey)),
+        onUpload: async (attachment, localPath) => {
+            const owned = ownedByAttachmentId.get(attachment.id);
+            if (!owned) return false;
             try {
-                const assetFile = await ensureCloudKitAssetFile(attachment, uri, attachmentsDir, signal);
-                didMutate = assetFile.mutated || didMutate;
+                const assetFile = await ensureCloudKitAssetFile(attachment, localPath, attachmentsDir, signal);
                 const validation = await validateAttachmentForUpload(attachment, assetFile.size ?? attachment.size);
                 if (!validation.valid) {
                     reportProgress(attachment.id, 'upload', 0, attachment.size ?? 0, 'failed', validation.error);
                     logAttachmentWarn(`Attachment validation failed (${validation.error}) for ${attachment.title}`);
-                    continue;
+                    return assetFile.mutated;
                 }
 
                 const totalBytes = Math.max(0, Number(assetFile.size ?? attachment.size ?? 0));
                 reportProgress(attachment.id, 'upload', 0, totalBytes, 'active');
-                await saveCloudKitAttachmentAsset(attachment.id, assetFile.uri, buildMetadata(owned, assetFile.size), {
-                    signal,
-                });
+                await saveCloudKitAttachmentAsset(
+                    attachment.id,
+                    assetFile.uri,
+                    buildMetadata(owned, assetFile.size),
+                    { signal },
+                );
                 attachment.cloudKey = buildCloudKitAttachmentKey(attachment.id);
-                attachment.localStatus = 'available';
+                // localStatus is already 'available' here: onUpload only runs when the
+                // lifecycle's own existsLocally check just passed, which is what set it.
                 if (Number.isFinite(assetFile.size ?? NaN)) attachment.size = assetFile.size ?? undefined;
-                didMutate = true;
                 reportProgress(attachment.id, 'upload', totalBytes, totalBytes, 'completed');
+                return true;
             } catch (error) {
                 if (isAttachmentSyncAbortError(error, signal)) throw error;
                 reportProgress(
@@ -199,22 +186,27 @@ export const syncCloudKitAttachments = async (appData: AppData, signal?: AbortSi
                     error instanceof Error ? error.message : String(error),
                 );
                 logAttachmentWarn(`Failed to upload CloudKit attachment ${attachment.title}`, error);
+                return false;
             }
-        }
-
-        const nextRecordName = parseCloudKitAttachmentKey(attachment.cloudKey);
-        if (nextRecordName && (!hasLocalPath || attachment.localStatus === 'missing')) {
+        },
+        onUploadError: () => {
+            // onUpload's own catch above handles everything except the fatal (abort) case,
+            // which it rethrows — that never reaches here. Required by the lifecycle's contract.
+        },
+        onDownload: async (attachment) => {
+            const recordName = parseCloudKitAttachmentKey(attachment.cloudKey);
+            if (!recordName) return false;
             try {
                 const targetUri = buildTargetUri(attachmentsDir, attachment);
                 reportProgress(attachment.id, 'download', 0, attachment.size ?? 0, 'active');
-                const metadata = await fetchCloudKitAttachmentAsset(nextRecordName, targetUri, { signal });
+                const metadata = await fetchCloudKitAttachmentAsset(recordName, targetUri, { signal });
                 const bytes = await readFileAsBytes(targetUri);
                 await validateAttachmentHash(attachment, bytes);
                 attachment.uri = targetUri;
                 attachment.localStatus = 'available';
                 applyFetchedMetadata(attachment, metadata);
-                didMutate = true;
                 reportProgress(attachment.id, 'download', bytes.length, bytes.length, 'completed');
+                return true;
             } catch (error) {
                 if (isAttachmentSyncAbortError(error, signal)) throw error;
                 reportProgress(
@@ -226,9 +218,11 @@ export const syncCloudKitAttachments = async (appData: AppData, signal?: AbortSi
                     error instanceof Error ? error.message : String(error),
                 );
                 logAttachmentWarn(`Failed to download CloudKit attachment ${attachment.title}`, error);
+                return false;
             }
-        }
-    }
+        },
+        onDownloadError: () => {},
+    });
 
-    return didMutate;
+    return didMutate || syncMutated;
 };

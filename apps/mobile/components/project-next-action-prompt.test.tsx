@@ -47,55 +47,16 @@ const translate = vi.hoisted(() => {
     return (key: string) => labels[key] ?? key;
 });
 
-vi.mock('@mindwtr/core', () => {
+vi.mock('@mindwtr/core', async (importOriginal) => {
+    const { mockCore } = await import('../test-support/mock-core');
     storeState.addTask = addTask;
     storeState.updateTask = updateTask;
     storeState.updateProject = updateProject;
-    const useTaskStore = Object.assign(
-        (selector?: (state: typeof storeState) => unknown) =>
-            selector ? selector(storeState) : storeState,
-        {
-            getState: () => storeState,
-        },
-    );
-
-    return {
-        useTaskStore,
-        shallow: (value: unknown) => value,
-        getProjectNextActionPromptData: (completedTask: any, tasks: any[], projects: any[]) => {
-            if (!completedTask?.projectId || completedTask.status !== 'done') return null;
-            const project = projects.find((candidate) => candidate.id === completedTask.projectId);
-            if (!project || project.deletedAt || project.status !== 'active') return null;
-            const hasNext = tasks.some((candidate) => (
-                candidate.id !== completedTask.id
-                && candidate.projectId === project.id
-                && !candidate.deletedAt
-                && candidate.status === 'next'
-            ));
-            if (hasNext) return null;
-            return {
-                project,
-                candidates: tasks.filter((candidate) => (
-                    candidate.id !== completedTask.id
-                    && candidate.projectId === project.id
-                    && !candidate.deletedAt
-                    && candidate.status !== 'next'
-                    && candidate.status !== 'done'
-                    && candidate.status !== 'archived'
-                    && candidate.status !== 'reference'
-                )),
-            };
-        },
-        tFallback: (t: (key: string) => string, key: string, fallback: string) => {
-            const value = t(key);
-            return value && value !== key ? value : fallback;
-        },
-        normalizeClockTimeInput: (value?: string | null) =>
-            typeof value === 'string' && value.trim() ? value.trim() : null,
+    // Real `getProjectNextActionPromptData` on purpose: the stub this replaced
+    // dropped `scope` and the whole section-scoped branch, so #911 was untestable.
+    return mockCore(importOriginal, () => storeState, {
         parseProjectNextActionInput: parseNextActionInput,
-        isNaturalLanguageDatesEnabled: (settings?: { gtd?: { naturalLanguageDates?: boolean } } | null) =>
-            settings?.gtd?.naturalLanguageDates !== false,
-    };
+    });
 });
 
 vi.mock('../contexts/language-context', () => ({

@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Ale
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, type TaskSortBy } from '@mindwtr/core';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
+import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { useLanguage } from '@/contexts/language-context';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
@@ -142,6 +143,7 @@ export default function SavedSearchScreen() {
         renderItem={renderTask}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        {...TASK_LIST_WINDOWING_PROPS}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -168,7 +170,6 @@ export default function SavedSearchScreen() {
             )}
           </View>
         }
-        removeClippedSubviews={false}
       />
 
       <TaskEditModal
@@ -176,9 +177,10 @@ export default function SavedSearchScreen() {
         task={editingTask}
         onClose={() => setIsModalVisible(false)}
         onSave={(taskId, updates) => {
-          updateTask(taskId, updates);
+          const result = updateTask(taskId, updates);
           setIsModalVisible(false);
           setEditingTask(null);
+          return result;
         }}
         defaultTab="view"
         onProjectNavigate={openProjectScreen}

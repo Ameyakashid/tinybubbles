@@ -585,7 +585,7 @@ export function BoardView() {
   }, []);
 
   const handleSave = useCallback((taskId: string, updates: Partial<Task>) => {
-    updateTask(taskId, updates);
+    return updateTask(taskId, updates);
   }, [updateTask]);
 
   const handleDelete = useCallback((taskId: string) => {

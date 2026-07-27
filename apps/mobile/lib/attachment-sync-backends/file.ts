@@ -12,7 +12,6 @@ import {
   FILE_BACKEND_VALIDATION_CONFIG,
   fileExists,
   getAttachmentByteSize,
-  getAttachmentLocalStatus,
   getAttachmentsDir,
   isContentAttachmentUri,
   isHttpAttachmentUri,
@@ -23,7 +22,11 @@ import {
   StorageAccessFramework,
   writeBytesSafely,
 } from '../attachment-sync-utils';
-import { assertAttachmentSyncNotAborted, isAttachmentSyncAbortError } from './common';
+import {
+  assertAttachmentSyncNotAborted,
+  isAttachmentSyncAbortError,
+  runMobileAttachmentLifecycle,
+} from './common';
 
 export const syncFileAttachments = async (
   appData: AppData,
@@ -39,7 +42,9 @@ export const syncFileAttachments = async (
   if (!attachmentsDir) return false;
 
   const attachmentsById = collectAttachments(appData);
-  const migrateAttachmentLocally = createAttachmentLocalMigrationLimiter();
+
+  // Memoized across the whole pass: every attachment that needs a SAF lookup this round shares
+  // one directory listing rather than re-reading it per attachment.
   let safEntriesByName: Map<string, string> | null = null;
   const getSafEntriesByName = async (): Promise<Map<string, string>> => {
     if (!safEntriesByName) {
@@ -47,90 +52,109 @@ export const syncFileAttachments = async (
     }
     return safEntriesByName;
   };
+  const remoteFilenameFor = (cloudKey: string, attachment: { id: string; title: string }): string =>
+    cloudKey.split('/').pop() || `${attachment.id}${extractExtension(attachment.title)}`;
 
+  // File-backend-specific pre-pass, interleaving two things per attachment (matching this
+  // backend's pre-lifecycle shape exactly): the shared local-migration step, then a
+  // reconciliation check unique to this backend — unlike the other backends, an already
+  // cloudKey'd attachment isn't assumed to still be on the remote, since this backend syncs to a
+  // plain folder a user could have edited directly. So every local, existing attachment gets its
+  // remote presence checked here regardless of cloudKey state; if missing, clearing cloudKey
+  // lets the lifecycle below re-upload it through its normal hasCloudCopy-false path.
+  const migrateAttachmentLocally = createAttachmentLocalMigrationLimiter();
   let didMutate = false;
   for (const attachment of attachmentsById.values()) {
-    if (attachment.kind !== 'file') continue;
-    if (attachment.deletedAt) continue;
     assertAttachmentSyncNotAborted(signal);
+    if (attachment.kind !== 'file' || attachment.deletedAt) continue;
     const localMigration = await migrateAttachmentLocally(attachment);
-    if (localMigration.migrated) {
-      didMutate = true;
+    if (localMigration.migrated) didMutate = true;
+    if (localMigration.skipped) {
+      attachmentsById.delete(attachment.id);
+      continue;
     }
-    if (localMigration.skipped) continue;
 
     const uri = attachment.uri || '';
     const isHttp = isHttpAttachmentUri(uri);
     const hasLocal = Boolean(uri) && !isHttp;
-    const existsLocally = hasLocal ? await fileExists(uri) : false;
-    const nextStatus = getAttachmentLocalStatus(uri, existsLocally);
-    if (attachment.localStatus !== nextStatus) {
-      attachment.localStatus = nextStatus;
-      didMutate = true;
-    }
+    if (!hasLocal) continue;
+    if (!(await fileExists(uri))) continue;
 
-    if (hasLocal && existsLocally && !isHttp) {
-      const cloudKey = attachment.cloudKey || buildCloudKey(attachment);
-      const filename = cloudKey.split('/').pop() || `${attachment.id}${extractExtension(attachment.title)}`;
-      let remoteExists = false;
-      if (syncDir.type === 'file') {
-        const targetUri = `${syncDir.attachmentsDirUri}${filename}`;
-        remoteExists = await fileExists(targetUri);
-      } else {
-        const safEntries = await getSafEntriesByName();
-        remoteExists = safEntries.has(filename);
-      }
-      if (!remoteExists) {
-        try {
-          assertAttachmentSyncNotAborted(signal);
-          const size = await getAttachmentByteSize(attachment, uri);
-          if (size != null) {
-            const validation = await validateAttachmentForUpload(attachment, size, FILE_BACKEND_VALIDATION_CONFIG);
-            if (!validation.valid) {
-              logAttachmentWarn(`Attachment validation failed (${validation.error}) for ${attachment.title}`);
-              continue;
-            }
-          }
-          if (syncDir.type === 'file') {
-            const targetUri = `${syncDir.attachmentsDirUri}${filename}`;
-            if (isContentAttachmentUri(uri)) {
-              const bytes = await readFileAsBytes(uri);
-              assertAttachmentSyncNotAborted(signal);
-              await writeBytesSafely(targetUri, bytes);
-            } else {
-              assertAttachmentSyncNotAborted(signal);
-              await copyFileSafely(uri, targetUri);
-            }
-          } else {
-            const base64 = await readFileAsBytes(uri).then(bytesToBase64);
-            assertAttachmentSyncNotAborted(signal);
-            const safEntries = await getSafEntriesByName();
-            let targetUri = safEntries.get(filename) ?? null;
-            if (!targetUri && StorageAccessFramework?.createFileAsync) {
-              assertAttachmentSyncNotAborted(signal);
-              targetUri = await StorageAccessFramework.createFileAsync(syncDir.attachmentsDirUri, filename, attachment.mimeType || DEFAULT_CONTENT_TYPE);
-              if (targetUri) {
-                safEntries.set(filename, targetUri);
-              }
-            }
-            if (targetUri && StorageAccessFramework?.writeAsStringAsync) {
-              assertAttachmentSyncNotAborted(signal);
-              await StorageAccessFramework.writeAsStringAsync(targetUri, base64, { encoding: FileSystem.EncodingType.Base64 });
-            }
-          }
-        } catch (error) {
-          if (isAttachmentSyncAbortError(error, signal)) throw error;
-          logAttachmentWarn(`Failed to copy attachment ${attachment.title} to sync folder`, error);
-          continue;
-        }
-      }
-      if (!attachment.cloudKey) {
-        attachment.cloudKey = cloudKey;
-        attachment.localStatus = 'available';
-        didMutate = true;
-      }
+    const cloudKey = attachment.cloudKey || buildCloudKey(attachment);
+    const filename = remoteFilenameFor(cloudKey, attachment);
+    const remoteExists =
+      syncDir.type === 'file'
+        ? await fileExists(`${syncDir.attachmentsDirUri}${filename}`)
+        : (await getSafEntriesByName()).has(filename);
+    if (!remoteExists) {
+      attachment.cloudKey = undefined;
     }
   }
 
-  return didMutate;
+  const syncMutated = await runMobileAttachmentLifecycle({
+    attachmentsById,
+    localFileExists: fileExists,
+    isFatalError: (error) => isAttachmentSyncAbortError(error, signal),
+    // The file backend never proactively downloads during background sync — a cloudKey'd
+    // attachment missing locally is left for `ensureAttachmentAvailable`'s on-demand fetch
+    // (attachment-sync-availability.ts) to resolve when the user opens it. Preserved verbatim;
+    // desktop's file backend DOES download proactively, a pre-existing platform difference this
+    // refactor found but did not unify — see the result report.
+    onDownload: async () => false,
+    onDownloadError: () => {},
+    onUpload: async (attachment, localPath) => {
+      const cloudKey = buildCloudKey(attachment);
+      const filename = remoteFilenameFor(cloudKey, attachment);
+      const size = await getAttachmentByteSize(attachment, localPath);
+      if (size != null) {
+        const validation = await validateAttachmentForUpload(attachment, size, FILE_BACKEND_VALIDATION_CONFIG);
+        if (!validation.valid) {
+          logAttachmentWarn(`Attachment validation failed (${validation.error}) for ${attachment.title}`);
+          return false;
+        }
+      }
+      if (syncDir.type === 'file') {
+        const targetUri = `${syncDir.attachmentsDirUri}${filename}`;
+        if (isContentAttachmentUri(localPath)) {
+          const bytes = await readFileAsBytes(localPath);
+          assertAttachmentSyncNotAborted(signal);
+          await writeBytesSafely(targetUri, bytes);
+        } else {
+          assertAttachmentSyncNotAborted(signal);
+          await copyFileSafely(localPath, targetUri);
+        }
+      } else {
+        const base64 = await readFileAsBytes(localPath).then(bytesToBase64);
+        assertAttachmentSyncNotAborted(signal);
+        const safEntries = await getSafEntriesByName();
+        let targetUri = safEntries.get(filename) ?? null;
+        if (!targetUri && StorageAccessFramework?.createFileAsync) {
+          assertAttachmentSyncNotAborted(signal);
+          targetUri = await StorageAccessFramework.createFileAsync(
+            syncDir.attachmentsDirUri,
+            filename,
+            attachment.mimeType || DEFAULT_CONTENT_TYPE
+          );
+          if (targetUri) {
+            safEntries.set(filename, targetUri);
+          }
+        }
+        if (targetUri && StorageAccessFramework?.writeAsStringAsync) {
+          assertAttachmentSyncNotAborted(signal);
+          await StorageAccessFramework.writeAsStringAsync(targetUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        }
+      }
+      attachment.cloudKey = cloudKey;
+      // localStatus is already 'available' here: onUpload only runs when the lifecycle's own
+      // existsLocally check just passed, which is what set it.
+      return true;
+    },
+    onUploadError: (attachment, error) => {
+      logAttachmentWarn(`Failed to copy attachment ${attachment.title} to sync folder`, error);
+    },
+  });
+
+  return didMutate || syncMutated;
 };

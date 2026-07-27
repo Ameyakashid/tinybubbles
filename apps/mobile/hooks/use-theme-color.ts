@@ -3,6 +3,7 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
+import { resolveThemeColorScheme } from '@mindwtr/core';
 import { Colors, Material3 } from '@/constants/theme';
 import { THEME_PRESETS } from '@/constants/theme-presets';
 import { useTheme } from '@/contexts/theme-context';
@@ -15,13 +16,9 @@ export function useThemeColor(
   const colorFromProps = props[colorScheme];
 
   const defaultPalette = colorScheme === 'dark' ? Colors.dark : Colors.light;
-  const materialPalette = themeMode === 'material3-light'
-    ? Material3.light
-    : themeMode === 'material3-dark'
-      ? Material3.dark
-      : colorScheme === 'dark'
-        ? Material3.dark
-        : Material3.light;
+  const materialPalette = resolveThemeColorScheme(themeMode, colorScheme) === 'dark'
+    ? Material3.dark
+    : Material3.light;
   const presetPalette = themePreset !== 'default' ? THEME_PRESETS[themePreset] : null;
 
   const mapColors = (): Record<keyof typeof Colors.light, string> => {

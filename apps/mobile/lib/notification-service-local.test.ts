@@ -15,10 +15,6 @@ const {
   mockAlarmScheduleAlarm,
   mockEnsureReminderNotificationChannel,
   mockRestorePersistentCaptureNotification,
-  mockGetNextScheduledAt,
-  mockGetDueReminderRepeatTimes,
-  mockGetProjectReviewReminderIntent,
-  mockHasTimeComponent,
   mockLogInfo,
   mockPlatform,
   mockPermissionsAndroidCheck,
@@ -33,10 +29,13 @@ const {
     tasks: [] as Array<{
       id: string;
       title: string;
+      status?: string;
       description?: string;
       dueDate?: string;
       reviewAt?: string;
       startTime?: string;
+      repeatReminderMinutes?: number;
+      suppressMindwtrReminders?: boolean;
     }>,
     projects: [] as Array<Record<string, unknown>>,
   },
@@ -49,10 +48,6 @@ const {
   mockAlarmScheduleAlarm: vi.fn(async () => ({ id: 99 })),
   mockEnsureReminderNotificationChannel: vi.fn(async () => undefined),
   mockRestorePersistentCaptureNotification: vi.fn(),
-  mockGetNextScheduledAt: vi.fn<(...args: unknown[]) => Date | null>(() => null),
-  mockGetDueReminderRepeatTimes: vi.fn<(...args: unknown[]) => Date[]>(() => []),
-  mockGetProjectReviewReminderIntent: vi.fn(() => null),
-  mockHasTimeComponent: vi.fn(() => false),
   mockLogInfo: vi.fn(async () => undefined),
   mockPlatform: {
     OS: 'android',
@@ -99,67 +94,32 @@ vi.mock('react-native-alarm-notification', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  getTaskReminderPlan: (...args: unknown[]) => {
-    const task = args[0] as {
-      id: string;
-      dueDate?: string;
-      reviewAt?: string;
-    };
-    const next = mockGetNextScheduledAt(...args);
-    const repeatTimes = mockGetDueReminderRepeatTimes(...args);
-    const isReview = Boolean(
-      next
-      && task.reviewAt
-      && new Date(task.reviewAt).getTime() === next.getTime(),
-    );
-    return {
-      next: next
-        ? {
-          key: `task:${task.id}`,
-          dedupeKey: next.toISOString(),
-          taskId: task.id,
-          kind: isReview ? 'review' : 'due',
-          scheduledAt: next,
-        }
-        : null,
-      repeats: repeatTimes.map((scheduledAt, index) => ({
-        key: `task:${task.id}:r${index + 1}`,
-        dedupeKey: `${task.dueDate}#${index + 1}`,
-        taskId: task.id,
-        kind: 'due-repeat',
-        scheduledAt,
-        repeatIndex: index + 1,
-      })),
-    };
-  },
-  getProjectReviewReminderIntent: mockGetProjectReviewReminderIntent,
-  getSystemDefaultLanguage: vi.fn(() => 'en'),
-  getTranslations: vi.fn(async () => ({
-    'digest.morningTitle': 'Morning',
-    'digest.morningBody': 'Morning body',
-    'digest.eveningTitle': 'Evening',
-    'digest.eveningBody': 'Evening body',
-    'digest.weeklyReviewTitle': 'Weekly review',
-    'digest.weeklyReviewBody': 'Weekly review body',
-    'review.projectsStep': 'Review project',
-  })),
-  hasTimeComponent: mockHasTimeComponent,
-  loadStoredLanguage: vi.fn(async () => 'en'),
-  parseTimeOfDay: vi.fn((value: string | undefined, fallback: { hour: number; minute: number }) => {
-    if (!value) return fallback;
-    const [hour, minute] = value.split(':').map((part) => Number(part));
-    return {
-      hour: Number.isFinite(hour) ? hour : fallback.hour,
-      minute: Number.isFinite(minute) ? minute : fallback.minute,
-    };
-  }),
-  safeParseDate: vi.fn((value?: string) => (value ? new Date(value) : null)),
-  useTaskStore: {
-    getState: () => mockStoreState,
-    subscribe: mockStoreSubscribe,
-  },
-}));
+// Only the genuinely platform-specific bits are replaced: language/translation loading (which
+// otherwise pulls in the real i18n loader) and the store. `buildReminderSchedule`,
+// `getTaskReminderPlan`, `hasTimeComponent`, `safeParseDate`, etc. are the REAL core
+// implementations, so a change to core's reminder-kind selection or gating shows up here instead
+// of being invisible behind a hand-rolled stub.
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+  return {
+    ...actual,
+    getSystemDefaultLanguage: vi.fn(() => 'en'),
+    getTranslations: vi.fn(async () => ({
+      'digest.morningTitle': 'Morning',
+      'digest.morningBody': 'Morning body',
+      'digest.eveningTitle': 'Evening',
+      'digest.eveningBody': 'Evening body',
+      'digest.weeklyReviewTitle': 'Weekly review',
+      'digest.weeklyReviewBody': 'Weekly review body',
+      'review.projectsStep': 'Review project',
+    })),
+    loadStoredLanguage: vi.fn(async () => 'en'),
+    useTaskStore: {
+      getState: () => mockStoreState,
+      subscribe: mockStoreSubscribe,
+    },
+  };
+});
 
 vi.mock('./app-log', () => ({
   logInfo: mockLogInfo,
@@ -202,14 +162,6 @@ describe('notification-service-local', () => {
     mockEnsureReminderNotificationChannel.mockReset();
     mockEnsureReminderNotificationChannel.mockResolvedValue(undefined);
     mockRestorePersistentCaptureNotification.mockReset();
-    mockGetNextScheduledAt.mockReset();
-    mockGetNextScheduledAt.mockReturnValue(null);
-    mockGetDueReminderRepeatTimes.mockReset();
-    mockGetDueReminderRepeatTimes.mockReturnValue([]);
-    mockGetProjectReviewReminderIntent.mockReset();
-    mockGetProjectReviewReminderIntent.mockReturnValue(null);
-    mockHasTimeComponent.mockReset();
-    mockHasTimeComponent.mockReturnValue(false);
     mockLogInfo.mockClear();
     mockPermissionsAndroidCheck.mockReset();
     mockPermissionsAndroidRequest.mockReset();
@@ -297,15 +249,15 @@ describe('notification-service-local', () => {
     );
   });
 
-  it('schedules task reminders with a non-empty message body and snooze action', async () => {
+  it('schedules task reminders with a labelled message body and snooze action', async () => {
     mockStoreState.tasks = [
       {
         id: 'task-1',
         title: 'Pay rent',
         description: '',
+        dueDate: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       },
     ];
-    mockGetNextScheduledAt.mockReturnValue(new Date(Date.now() + 5 * 60 * 1000));
 
     await startLocalMobileNotifications();
 
@@ -316,7 +268,10 @@ describe('notification-service-local', () => {
         has_button: true,
         has_complete_action: true,
         loop_sound: false,
-        message: 'Pay rent',
+        // No description on the task: the body is the reminder-kind label alone (English
+        // fallback, since this test's translation dict has no 'settings.dueDateNotifications'
+        // key), never raw markdown or a bare repeat of the title (#reminder-schedule).
+        message: 'Due date reminder',
         play_sound: true,
         snooze_interval: 10,
         title: 'Pay rent',
@@ -332,20 +287,19 @@ describe('notification-service-local', () => {
   });
 
   it('schedules future due-time repeat occurrences as :r{i} keyed one-shots', async () => {
-    const now = Date.now();
-    mockStoreState.tasks = [{ id: 'task-1', title: 'Pay rent', description: '' }];
-    mockGetNextScheduledAt.mockReturnValue(new Date(now + 5 * 60 * 1000));
-    mockGetDueReminderRepeatTimes.mockReturnValue([
-      new Date(now + 35 * 60 * 1000),
-      new Date(now + 65 * 60 * 1000),
-      new Date(now + 95 * 60 * 1000),
-      new Date(now + 125 * 60 * 1000),
-    ]);
+    mockStoreState.tasks = [{
+      id: 'task-1',
+      title: 'Pay rent',
+      description: '',
+      dueDate: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+      repeatReminderMinutes: 30,
+    }];
 
     await startLocalMobileNotifications();
 
     const alarmKeys = (mockAlarmScheduleAlarm.mock.calls as unknown as Array<[{ data?: { alarmKey?: string } }]>)
       .map((call) => call[0]?.data?.alarmKey);
+    // 30min interval, 120min window -> 4 occurrences (r1..r4), not a 5th.
     expect(alarmKeys).toEqual(expect.arrayContaining([
       'task:task-1:r1',
       'task:task-1:r2',
@@ -360,10 +314,15 @@ describe('notification-service-local', () => {
       'task:task-1:r1': { id: 42 },
       'task:task-1:r2': { id: 43 },
     }));
-    // Task is done: no base reminder and no repeat occurrences.
-    mockStoreState.tasks = [{ id: 'task-1', title: 'Pay rent', description: '' }];
-    mockGetNextScheduledAt.mockReturnValue(null);
-    mockGetDueReminderRepeatTimes.mockReturnValue([]);
+    // Done tasks get neither a base reminder nor repeat occurrences (core's isInactiveTask gate).
+    mockStoreState.tasks = [{
+      id: 'task-1',
+      title: 'Pay rent',
+      description: '',
+      status: 'done',
+      dueDate: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      repeatReminderMinutes: 30,
+    }];
 
     await startLocalMobileNotifications();
 
@@ -415,8 +374,6 @@ describe('notification-service-local', () => {
         dueDate: fireAt.toISOString(),
       },
     ];
-    mockHasTimeComponent.mockImplementation((value?: string) => Boolean(value?.includes('T')));
-    mockGetNextScheduledAt.mockReturnValue(fireAt);
 
     await startLocalMobileNotifications();
 
@@ -449,12 +406,8 @@ describe('notification-service-local', () => {
         id: `task-${index}`,
         title: `Task ${index}`,
         description: '',
+        dueDate: new Date(baseTime.getTime() + (index + 1) * 60_000).toISOString(),
       })).reverse();
-      mockGetNextScheduledAt.mockImplementation((task) => {
-        const id = String((task as { id: string }).id);
-        const index = Number(id.replace('task-', ''));
-        return new Date(baseTime.getTime() + (index + 1) * 60_000);
-      });
 
       await startLocalMobileNotifications();
 
@@ -487,12 +440,8 @@ describe('notification-service-local', () => {
         id: `task-${index}`,
         title: `Task ${index}`,
         description: '',
+        dueDate: new Date(baseTime.getTime() + (index + 1) * 60_000).toISOString(),
       })).reverse();
-      mockGetNextScheduledAt.mockImplementation((task) => {
-        const id = String((task as { id: string }).id);
-        const index = Number(id.replace('task-', ''));
-        return new Date(baseTime.getTime() + (index + 1) * 60_000);
-      });
 
       await startLocalMobileNotifications();
 
@@ -514,7 +463,7 @@ describe('notification-service-local', () => {
     }
   });
 
-  it('passes separate start and due reminder preferences into task scheduling', async () => {
+  it('honors separate start and due reminder preferences when both dates are set', async () => {
     mockStoreState.settings = {
       notificationsEnabled: true,
       startDateNotificationsEnabled: false,
@@ -525,19 +474,18 @@ describe('notification-service-local', () => {
         id: 'task-1',
         title: 'Pay rent',
         description: '',
+        // Start reminders are off, so the earlier start time must be ignored and the due
+        // reminder (later, still in the future) must be the one that gets scheduled.
+        startTime: new Date(Date.now() + 1 * 60 * 1000).toISOString(),
+        dueDate: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       },
     ];
-    mockGetNextScheduledAt.mockReturnValue(new Date(Date.now() + 5 * 60 * 1000));
 
     await startLocalMobileNotifications();
 
-    expect(mockGetNextScheduledAt).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'task-1' }),
-      expect.any(Date),
+    expect(mockAlarmScheduleAlarm).toHaveBeenCalledWith(
       expect.objectContaining({
-        includeStartTime: false,
-        includeDueDate: true,
-        includeReviewAt: true,
+        data: expect.objectContaining({ kind: 'task-reminder', taskId: 'task-1' }),
       })
     );
   });
@@ -556,8 +504,6 @@ describe('notification-service-local', () => {
         reviewAt,
       },
     ];
-    mockHasTimeComponent.mockReturnValue(true);
-    mockGetNextScheduledAt.mockReturnValue(new Date(reviewAt));
 
     await startLocalMobileNotifications();
 
@@ -593,17 +539,9 @@ describe('notification-service-local', () => {
   });
 
   it('reschedules current task reminders when startup is requested while already running', async () => {
-    const firstFireAt = new Date(Date.now() + 5 * 60 * 1000);
-    const recurringFollowUpFireAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     mockStoreState.tasks = [
-      { id: 'recurring-original', title: 'Daily standup', description: '' },
+      { id: 'recurring-original', title: 'Daily standup', description: '', dueDate: new Date(Date.now() + 5 * 60 * 1000).toISOString() },
     ];
-    mockGetNextScheduledAt.mockImplementation((task) => {
-      const id = String((task as { id?: string }).id);
-      if (id === 'recurring-original') return firstFireAt;
-      if (id === 'recurring-follow-up') return recurringFollowUpFireAt;
-      return null;
-    });
 
     await startLocalMobileNotifications();
 
@@ -615,7 +553,7 @@ describe('notification-service-local', () => {
 
     mockAlarmScheduleAlarm.mockClear();
     mockStoreState.tasks = [
-      { id: 'recurring-follow-up', title: 'Daily standup', description: '' },
+      { id: 'recurring-follow-up', title: 'Daily standup', description: '', dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() },
     ];
 
     await startLocalMobileNotifications();

@@ -8,8 +8,6 @@ private let mindwtrWidgetPayloadKeySmall = "mindwtr-ios-widget-payload-small"
 private let mindwtrWidgetPayloadKeyMedium = "mindwtr-ios-widget-payload-medium"
 private let mindwtrWidgetPayloadKeyLarge = "mindwtr-ios-widget-payload-large"
 private let mindwtrWidgetPayloadKeyExtraLarge = "mindwtr-ios-widget-payload-extra-large"
-private let darkThemeModes: Set<String> = ["dark", "material3-dark", "nord", "oled"]
-private let lightThemeModes: Set<String> = ["light", "material3-light", "eink", "sepia"]
 
 struct MindwtrWidgetTaskItem: Decodable {
     let id: String
@@ -321,17 +319,15 @@ private struct MindwtrTasksWidgetView: View {
         return min(itemCount, max(1, fitItems))
     }
 
+    // The payload's palette is already the resolved preset/theme colors (built by
+    // apps/mobile/lib/widget-data.ts); Swift's job is to decode it, not to
+    // re-classify it. Only 'system' (or a blank/legacy payload) needs Swift's
+    // own colorScheme, since the JS side can't observe it ahead of render.
     private func resolvePalette(_ payload: MindwtrTasksWidgetPayload) -> MindwtrWidgetPalette {
         let mode = (payload.themeMode ?? "system")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
 
-        if darkThemeModes.contains(mode) {
-            return .dark
-        }
-        if lightThemeModes.contains(mode) {
-            return .light
-        }
         if mode.isEmpty || mode == "system" {
             return colorScheme == .dark ? .dark : .light
         }

@@ -1,26 +1,21 @@
 import {
-  getProjectReviewReminderIntent,
+  areDueDateRemindersEnabled,
+  areStartDateRemindersEnabled,
+  areTaskRemindersEnabled,
+  buildReminderSchedule,
   getSystemDefaultLanguage,
-  getTaskReminderPlan,
   getTranslations,
-  hasTimeComponent,
+  hasActiveMobileNotificationFeature,
+  isWeeklyReviewReminderEnabled,
   loadStoredLanguage,
-  parseTimeOfDay,
-  safeParseDate,
   type Language,
+  type ReminderScheduleRequest,
   useTaskStore,
 } from '@mindwtr/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 
 import { logInfo, logWarn } from './app-log';
-import {
-  areDueDateRemindersEnabled,
-  areStartDateRemindersEnabled,
-  areTaskRemindersEnabled,
-  hasActiveMobileNotificationFeature,
-  isWeeklyReviewReminderEnabled,
-} from './mobile-notification-settings';
 import { ensureReminderNotificationChannel, restorePersistentCaptureNotification } from '@/modules/notification-open-intents';
 import { getDuplicateAlarmRetryFireAt } from './notification-service-local-utils';
 
@@ -89,9 +84,6 @@ const LOCAL_NOTIFICATION_CHANNEL = 'mindwtr_reminders_v2';
 const LOCAL_NOTIFICATION_CHANNEL_NAME = 'Mindwtr reminders';
 const LOCAL_NOTIFICATION_COLOR = '#3b82f6';
 const LOCAL_SMALL_ICON = 'ic_launcher';
-const LOCAL_DIGEST_MORNING_KEY = 'digest:morning';
-const LOCAL_DIGEST_EVENING_KEY = 'digest:evening';
-const LOCAL_WEEKLY_REVIEW_KEY = 'digest:weekly-review';
 const MAX_DUPLICATE_ALARM_RETRIES = 59;
 const MAX_PENDING_ONE_SHOT_REMINDER_ALARMS_IOS = 60;
 const MAX_PENDING_ONE_SHOT_REMINDER_ALARMS_ANDROID = 200;
@@ -124,10 +116,6 @@ const configByKey = new Map<string, string>();
 type AlarmScheduleRequest = {
   key: string;
   config: LocalAlarmConfig;
-};
-
-type OneShotReminderRequest = AlarmScheduleRequest & {
-  fireAtMs: number;
 };
 
 const logNotificationError = (message: string, error?: unknown) => {
@@ -355,34 +343,6 @@ function isDuplicateAlarmError(error: unknown): boolean {
   return message.includes('duplicate alarm set at date');
 }
 
-function nextDailyTime(hour: number, minute: number): Date {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(hour, minute, 0, 0);
-  if (next.getTime() <= now.getTime()) {
-    next.setDate(next.getDate() + 1);
-  }
-  return next;
-}
-
-function nextWeeklyTime(dayOfWeekSundayFirst: number, hour: number, minute: number): Date {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(hour, minute, 0, 0);
-
-  const current = next.getDay(); // 0 = Sunday
-  let delta = dayOfWeekSundayFirst - current;
-  if (delta < 0) {
-    delta += 7;
-  }
-  if (delta === 0 && next.getTime() <= now.getTime()) {
-    delta = 7;
-  }
-
-  next.setDate(next.getDate() + delta);
-  return next;
-}
-
 function parseEventPayload(value: unknown): Record<string, string> | null {
   const raw = typeof value === 'string' ? value : null;
   try {
@@ -594,11 +554,11 @@ async function cancelInactiveKeys(api: AlarmNotificationsApi, activeKeys: Set<st
   }
 }
 
-function scheduleOneShotTopUp(api: AlarmNotificationsApi, reminders: OneShotReminderRequest[], nowMs: number): void {
+function scheduleOneShotTopUp(api: AlarmNotificationsApi, sortedFireAtMs: number[], nowMs: number): void {
   clearOneShotTopUpTimer();
-  if (reminders.length === 0) return;
+  if (sortedFireAtMs.length === 0) return;
 
-  const nextFireAtMs = reminders[0]?.fireAtMs;
+  const nextFireAtMs = sortedFireAtMs[0];
   if (!Number.isFinite(nextFireAtMs)) return;
 
   const rawDelayMs = Math.max(ONE_SHOT_TOP_UP_DELAY_MS, nextFireAtMs - nowMs + ONE_SHOT_TOP_UP_DELAY_MS);
@@ -607,6 +567,18 @@ function scheduleOneShotTopUp(api: AlarmNotificationsApi, reminders: OneShotRemi
     oneShotTopUpTimer = null;
     enqueueReschedule(api);
   }, delayMs);
+}
+
+function toLocalAlarmConfig(request: ReminderScheduleRequest): LocalAlarmConfig {
+  return {
+    title: request.title,
+    message: request.message,
+    fireAt: request.fireAt,
+    repeatInterval: request.repeatInterval,
+    hasSnoozeAction: request.hasSnoozeAction,
+    hasCompleteAction: request.hasCompleteAction,
+    data: request.data,
+  };
 }
 
 async function runRescheduleCycle(api: AlarmNotificationsApi): Promise<void> {
@@ -651,217 +623,58 @@ async function runRescheduleCycle(api: AlarmNotificationsApi): Promise<void> {
 
   const language: Language = await loadStoredLanguage(AsyncStorage, getSystemDefaultLanguage()).catch(() => getSystemDefaultLanguage());
   const tr = await getTranslations(language);
-
-  if (taskRemindersEnabled && settings.dailyDigestMorningEnabled === true) {
-    const { hour, minute } = parseTimeOfDay(settings.dailyDigestMorningTime, { hour: 9, minute: 0 });
-    const key = LOCAL_DIGEST_MORNING_KEY;
-    activeKeys.add(key);
-    await scheduleAlarmForKey(api, key, {
-      title: tr['digest.morningTitle'],
-      message: tr['digest.morningBody'],
-      fireAt: nextDailyTime(hour, minute),
-      repeatInterval: 'daily',
-      data: { kind: 'daily-digest' },
-    });
-  }
-
-  if (taskRemindersEnabled && settings.dailyDigestEveningEnabled === true) {
-    const { hour, minute } = parseTimeOfDay(settings.dailyDigestEveningTime, { hour: 20, minute: 0 });
-    const key = LOCAL_DIGEST_EVENING_KEY;
-    activeKeys.add(key);
-    await scheduleAlarmForKey(api, key, {
-      title: tr['digest.eveningTitle'],
-      message: tr['digest.eveningBody'],
-      fireAt: nextDailyTime(hour, minute),
-      repeatInterval: 'daily',
-      data: { kind: 'daily-digest' },
-    });
-  }
-
-  if (weeklyReviewEnabled) {
-    const { hour, minute } = parseTimeOfDay(settings.weeklyReviewTime, { hour: 18, minute: 0 });
-    const day = Number.isFinite(settings.weeklyReviewDay)
-      ? Math.max(0, Math.min(6, Math.floor(settings.weeklyReviewDay as number)))
-      : 0;
-    const key = LOCAL_WEEKLY_REVIEW_KEY;
-    activeKeys.add(key);
-    await scheduleAlarmForKey(api, key, {
-      title: tr['digest.weeklyReviewTitle'],
-      message: tr['digest.weeklyReviewBody'],
-      fireAt: nextWeeklyTime(day, hour, minute),
-      repeatInterval: 'weekly',
-      data: { kind: 'weekly-review' },
-    });
-  }
-
   const now = new Date();
-  const nowMs = now.getTime();
-  const includeReviewAt = taskRemindersEnabled && settings.reviewAtNotificationsEnabled !== false;
-  const oneShotReminders: OneShotReminderRequest[] = [];
-  let dateOnlyDueDateCount = 0;
-  let futureDueDateReminderCount = 0;
-  let pastDueDateReminderCount = 0;
-  let dateOnlyStartTimeCount = 0;
-  let futureStartTimeReminderCount = 0;
-  let pastStartTimeReminderCount = 0;
-  let futureTaskReviewReminderCount = 0;
-  let pastTaskReviewReminderCount = 0;
-  let suppressedTaskReminderCount = 0;
-  let taskReminderCount = 0;
-  let taskReviewReminderCount = 0;
-  let projectReviewReminderCount = 0;
 
-  if (taskRemindersEnabled) {
-    for (const task of tasks) {
-      const suppressTaskReminders = task.suppressMindwtrReminders === true;
-      const hasSuppressedTaskReminder = (includeDueDate && hasTimeComponent(task.dueDate))
-        || (includeStartTime && hasTimeComponent(task.startTime));
-      if (suppressTaskReminders && hasSuppressedTaskReminder) {
-        suppressedTaskReminderCount += 1;
-      }
-      if (!suppressTaskReminders && includeDueDate && task.dueDate) {
-        if (hasTimeComponent(task.dueDate)) {
-          const dueAt = safeParseDate(task.dueDate);
-          const dueAtMs = dueAt?.getTime() ?? NaN;
-          if (Number.isFinite(dueAtMs) && dueAtMs > nowMs) {
-            futureDueDateReminderCount += 1;
-          } else if (Number.isFinite(dueAtMs)) {
-            pastDueDateReminderCount += 1;
-          }
-        } else {
-          dateOnlyDueDateCount += 1;
-        }
-      }
-      if (!suppressTaskReminders && includeStartTime && task.startTime) {
-        if (hasTimeComponent(task.startTime)) {
-          const startAt = safeParseDate(task.startTime);
-          const startAtMs = startAt?.getTime() ?? NaN;
-          if (Number.isFinite(startAtMs) && startAtMs > nowMs) {
-            futureStartTimeReminderCount += 1;
-          } else if (Number.isFinite(startAtMs)) {
-            pastStartTimeReminderCount += 1;
-          }
-        } else {
-          dateOnlyStartTimeCount += 1;
-        }
-      }
-      if (includeReviewAt && task.reviewAt && hasTimeComponent(task.reviewAt)) {
-        const reviewAt = safeParseDate(task.reviewAt);
-        const reviewAtMs = reviewAt?.getTime() ?? NaN;
-        if (Number.isFinite(reviewAtMs) && reviewAtMs > nowMs) {
-          futureTaskReviewReminderCount += 1;
-        } else if (Number.isFinite(reviewAtMs)) {
-          pastTaskReviewReminderCount += 1;
-        }
-      }
+  // Derivation lives in core (`buildReminderSchedule`): digests, weekly review, every task's
+  // next reminder plus its due-time repeats, and project reviews, already sorted and capped.
+  // This effect layer only reconciles the resulting request set against AlarmManager.
+  const { requests, diagnostics } = buildReminderSchedule({
+    settings,
+    tasks,
+    projects,
+    now,
+    translations: tr,
+    maxOneShotReminders: getMaxPendingOneShotReminderAlarms(),
+  });
 
-      // Bounded due-time repeat occurrences (after the due moment). Scheduled independently of the
-      // base reminder below: a task whose due time already passed has no future `next`, but its
-      // remaining repeat occurrences must still fire. Past occurrences are reaped via activeKeys.
-      const plan = getTaskReminderPlan(task, now, {
-        includeStartTime,
-        includeDueDate,
-        includeReviewAt,
-      });
-      for (const repeat of plan.repeats) {
-        const repeatFireAtMs = repeat.scheduledAt.getTime();
-        if (repeatFireAtMs <= nowMs) continue;
-        oneShotReminders.push({
-          key: repeat.key,
-          fireAtMs: repeatFireAtMs,
-          config: {
-            title: task.title,
-            message: task.description || '',
-            fireAt: repeat.scheduledAt,
-            hasSnoozeAction: true,
-            hasCompleteAction: true,
-            data: {
-              kind: 'task-reminder',
-              taskId: task.id,
-            },
-          },
-        });
-      }
+  const recurringRequests = requests.filter((request) => request.repeatInterval);
+  const oneShotRequests = requests.filter((request) => !request.repeatInterval);
 
-      const next = plan.next;
-      const fireAtMs = next?.scheduledAt.getTime() ?? NaN;
-      if (!next || fireAtMs <= nowMs) continue;
-      const kind = next.kind === 'review' ? 'task-review' : 'task-reminder';
-      if (kind === 'task-review') {
-        taskReviewReminderCount += 1;
-      } else {
-        taskReminderCount += 1;
-      }
-      oneShotReminders.push({
-        key: next.key,
-        fireAtMs,
-        config: {
-          title: task.title,
-          message: task.description || '',
-          fireAt: next.scheduledAt,
-          hasSnoozeAction: true,
-          hasCompleteAction: kind === 'task-reminder',
-          data: {
-            kind,
-            taskId: task.id,
-          },
-        },
-      });
-    }
+  for (const request of recurringRequests) {
+    activeKeys.add(request.key);
+    await scheduleAlarmForKey(api, request.key, toLocalAlarmConfig(request));
   }
 
-  if (includeReviewAt) {
-    const reviewLabel = tr['review.projectsStep'] ?? 'Review project';
-    for (const project of projects) {
-      const reminder = getProjectReviewReminderIntent(project, now);
-      if (!reminder) continue;
-      const fireAtMs = reminder.scheduledAt.getTime();
-      projectReviewReminderCount += 1;
-      oneShotReminders.push({
-        key: reminder.key,
-        fireAtMs,
-        config: {
-          title: project.title,
-          message: reviewLabel,
-          fireAt: reminder.scheduledAt,
-          data: {
-            kind: 'project-review',
-            projectId: project.id,
-          },
-        },
-      });
-    }
+  for (const request of oneShotRequests) {
+    activeKeys.add(request.key);
   }
-
-  oneShotReminders.sort((left, right) => left.fireAtMs - right.fireAtMs);
-  const cappedOneShotReminders = oneShotReminders.slice(0, getMaxPendingOneShotReminderAlarms());
-  for (const reminder of cappedOneShotReminders) {
-    activeKeys.add(reminder.key);
-  }
-  await scheduleAlarmRequests(api, cappedOneShotReminders);
-  scheduleOneShotTopUp(api, cappedOneShotReminders, nowMs);
+  await scheduleAlarmRequests(api, oneShotRequests.map((request) => ({
+    key: request.key,
+    config: toLocalAlarmConfig(request),
+  })));
+  scheduleOneShotTopUp(api, oneShotRequests.map((request) => request.fireAt.getTime()), now.getTime());
 
   await cancelInactiveKeys(api, activeKeys);
   await saveAlarmMap();
   logNotificationInfo('Reschedule cycle complete', {
     activeFeature,
     scheduledAlarmCount: alarmMap.size,
-    oneShotReminderCount: oneShotReminders.length,
-    scheduledOneShotReminderCount: cappedOneShotReminders.length,
+    oneShotReminderCount: diagnostics.oneShotReminderCount,
+    scheduledOneShotReminderCount: oneShotRequests.length,
     maxPendingOneShotReminderAlarms: getMaxPendingOneShotReminderAlarms(),
-    nextOneShotFireAt: cappedOneShotReminders[0]?.config.fireAt.toISOString() ?? '',
-    taskReminderCount,
-    taskReviewReminderCount,
-    projectReviewReminderCount,
-    dateOnlyDueDateCount,
-    futureDueDateReminderCount,
-    pastDueDateReminderCount,
-    dateOnlyStartTimeCount,
-    futureStartTimeReminderCount,
-    pastStartTimeReminderCount,
-    futureTaskReviewReminderCount,
-    pastTaskReviewReminderCount,
-    suppressedTaskReminderCount,
+    nextOneShotFireAt: oneShotRequests[0]?.fireAt.toISOString() ?? '',
+    taskReminderCount: diagnostics.taskReminderCount,
+    taskReviewReminderCount: diagnostics.taskReviewReminderCount,
+    projectReviewReminderCount: diagnostics.projectReviewReminderCount,
+    dateOnlyDueDateCount: diagnostics.dateOnlyDueDateCount,
+    futureDueDateReminderCount: diagnostics.futureDueDateReminderCount,
+    pastDueDateReminderCount: diagnostics.pastDueDateReminderCount,
+    dateOnlyStartTimeCount: diagnostics.dateOnlyStartTimeCount,
+    futureStartTimeReminderCount: diagnostics.futureStartTimeReminderCount,
+    pastStartTimeReminderCount: diagnostics.pastStartTimeReminderCount,
+    futureTaskReviewReminderCount: diagnostics.futureTaskReviewReminderCount,
+    pastTaskReviewReminderCount: diagnostics.pastTaskReviewReminderCount,
+    suppressedTaskReminderCount: diagnostics.suppressedTaskReminderCount,
     durationMs: Date.now() - cycleStartedAtMs,
   });
 }

@@ -64,7 +64,8 @@ interface TaskEditModalProps {
     visible: boolean;
     task: Task | null;
     onClose: () => void;
-    onSave: (taskId: string, updates: Partial<Task>) => void;
+    /** Return the store write's result (e.g. `updateTask(...)`) so a failed save can be reported. */
+    onSave: (taskId: string, updates: Partial<Task>) => unknown;
     onFocusMode?: (taskId: string) => void;
     defaultTab?: 'task' | 'view';
     onProjectNavigate?: (projectId: string) => void;

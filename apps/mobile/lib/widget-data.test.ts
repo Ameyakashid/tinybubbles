@@ -138,6 +138,42 @@ describe('widget-data', () => {
         expect(payload.palette.accent).toBe('#956735');
     });
 
+    // These themes (nord/oled/eink) all classify as "dark" or "light" under
+    // resolveThemeColorScheme, but the widget must render their real preset
+    // colors, not the generic dark/light fallback (the Android/iOS parity bug).
+    it('keeps the widget palette aligned with Nord theme settings', () => {
+        const payload = buildWidgetPayload({ ...baseData, settings: { theme: 'nord' } }, 'en');
+        expect(payload.palette.background).toBe('#3B4252');
+        expect(payload.palette.text).toBe('#ECEFF4');
+        expect(payload.palette.mutedText).toBe('#D8DEE9');
+        expect(payload.palette.accent).toBe('#88C0D0');
+    });
+
+    it('keeps the widget palette aligned with OLED theme settings', () => {
+        const payload = buildWidgetPayload({ ...baseData, settings: { theme: 'oled' } }, 'en');
+        expect(payload.palette.background).toBe('#000000');
+        expect(payload.palette.text).toBe('#E5E7EB');
+        expect(payload.palette.mutedText).toBe('#9CA3AF');
+        expect(payload.palette.accent).toBe('#4F9DFF');
+    });
+
+    it('keeps the widget palette aligned with E-ink theme settings', () => {
+        const payload = buildWidgetPayload({ ...baseData, settings: { theme: 'eink' } }, 'en');
+        expect(payload.palette.background).toBe('#FFFFFF');
+        expect(payload.palette.text).toBe('#000000');
+        expect(payload.palette.accent).toBe('#000000');
+    });
+
+    it('falls back to the generic dark palette for plain dark/system themes', () => {
+        const payload = buildWidgetPayload(
+            { ...baseData, settings: { theme: 'dark' } },
+            'en',
+            { systemColorScheme: 'light' },
+        );
+        expect(payload.palette.background).toBe('#111827');
+        expect(payload.palette.text).toBe('#F9FAFB');
+    });
+
     it('includes focus-page schedule/next tasks even when none are explicitly focused', () => {
         const now = new Date().toISOString();
         const data: AppData = {

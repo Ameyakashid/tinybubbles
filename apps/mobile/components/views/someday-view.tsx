@@ -1,22 +1,22 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { getTranslationsSync, isTaskInActiveProject, shallow, useTaskStore } from '@mindwtr/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task, TaskStatus } from '@mindwtr/core';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
-import { Folder, Lightbulb } from 'lucide-react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Lightbulb } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { projectMatchesAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilter } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { TaskEditModal } from '../task-edit-modal';
 import { getBulkMoveStatusOptions } from '../task-list/TaskListBulkBar';
 import { useTaskListSelection } from '../use-task-list-selection';
 import { TaskListView } from '../task-list-view';
+import { DeferredProjectsSection, selectDeferredProjects } from './deferred-projects-section';
 
 
 
@@ -68,20 +68,10 @@ export function SomedayView() {
     .sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  const deferredProjects = useMemo(() => {
-    return [...projects]
-      .filter((project) => (
-        !project.deletedAt
-        && project.status === 'someday'
-        && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)
-      ))
-      .sort((a, b) => {
-        const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.POSITIVE_INFINITY;
-        const bOrder = Number.isFinite(b.order) ? (b.order as number) : Number.POSITIVE_INFINITY;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return a.title.localeCompare(b.title);
-      });
-  }, [projects, resolvedAreaFilter, areaById]);
+  const deferredProjects = useMemo(
+    () => selectDeferredProjects(projects, 'someday', resolvedAreaFilter, areaById),
+    [projects, resolvedAreaFilter, areaById],
+  );
 
   const selection = useTaskListSelection({
     batchDeleteTasks,
@@ -105,7 +95,7 @@ export function SomedayView() {
   };
 
   const handleSaveTask = (taskId: string, updates: Partial<Task>) => {
-    updateTask(taskId, updates);
+    return updateTask(taskId, updates);
   };
 
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,44 +141,16 @@ export function SomedayView() {
         selection={selection}
         bulkStatusOptions={bulkMoveStatusOptions}
         contentContainerStyle={taskListContentStyle}
-        ListHeaderComponent={deferredProjects.length > 0 ? (
-          <View style={[styles.projectSection, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
-            <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-              {t('projects.title') || 'Projects'}
-            </Text>
-            {deferredProjects.map((project) => {
-              const projectArea = project.areaId ? areaById.get(project.areaId) : undefined;
-              return (
-                <Swipeable
-                  key={project.id}
-                  renderLeftActions={() => (
-                    <View style={[styles.activateAction, { backgroundColor: tc.tint, borderColor: tc.border }]}>
-                      <Text style={[styles.activateActionText, { color: tc.onTint }]}>{t('projects.reactivate')}</Text>
-                    </View>
-                  )}
-                  onSwipeableLeftOpen={() => handleActivateProject(project.id)}
-                >
-                  <TouchableOpacity
-                    style={[styles.projectRow, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
-                    onPress={() => handleOpenProject(project.id)}
-                  >
-                    <Folder size={18} color={project.color || tc.secondaryText} />
-                    <View style={styles.projectText}>
-                      <Text style={[styles.projectTitle, { color: tc.text }]} numberOfLines={1}>
-                        {project.title}
-                      </Text>
-                      {projectArea && (
-                        <Text style={[styles.projectMeta, { color: tc.secondaryText }]} numberOfLines={1}>
-                          {projectArea.name}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </Swipeable>
-              );
-            })}
-          </View>
-        ) : null}
+        ListHeaderComponent={(
+          <DeferredProjectsSection
+            projects={deferredProjects}
+            areaById={areaById}
+            themeColors={tc}
+            t={t}
+            onActivateProject={handleActivateProject}
+            onOpenProject={handleOpenProject}
+          />
+        )}
         ListEmptyComponent={deferredProjects.length === 0 ? (
           <View style={styles.emptyState}>
             <Lightbulb size={48} color={tc.secondaryText} strokeWidth={1.5} style={styles.emptyIcon} />
@@ -243,50 +205,6 @@ const styles = StyleSheet.create({
   taskListContent: {
     padding: 16,
   },
-  projectSection: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    gap: 8,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  projectRow: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  projectText: {
-    flex: 1,
-  },
-  projectTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  projectMeta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  activateAction: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  activateActionText: {
-    fontWeight: '600',
-  },
-
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',

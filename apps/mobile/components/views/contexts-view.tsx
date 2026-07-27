@@ -44,6 +44,7 @@ import {
   taskMatchesContextOrTagFilter,
 } from './contexts-view-filter-utils';
 import { assertBulkActionSucceeded, useTaskListSelection } from '../use-task-list-selection';
+import { TASK_LIST_WINDOWING_PROPS } from '../task-list-windowing';
 
 type BulkTokenPickerState = {
   field: 'tags' | 'contexts';
@@ -193,7 +194,7 @@ export function ContextsView() {
   };
 
   const handleSaveTask = (taskId: string, updates: Partial<Task>) => {
-    updateTask(taskId, updates);
+    return updateTask(taskId, updates);
   };
 
   useEffect(() => {
@@ -555,11 +556,7 @@ export function ContextsView() {
             keyExtractor={(task) => task.id}
             style={[styles.taskList, { backgroundColor: tc.bg }]}
             contentContainerStyle={styles.taskListContent}
-            initialNumToRender={12}
-            maxToRenderPerBatch={12}
-            windowSize={5}
-            updateCellsBatchingPeriod={50}
-            removeClippedSubviews={false}
+            {...TASK_LIST_WINDOWING_PROPS}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={(
               <View style={styles.emptyState}>

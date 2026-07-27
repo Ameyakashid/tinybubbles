@@ -1,5 +1,11 @@
+import type { Attachment } from '@mindwtr/core';
+import { runAttachmentTransferLifecycle, type AttachmentTransferLifecycleOptions } from '@mindwtr/core';
 import * as FileSystem from '../file-system';
-import { bytesToBase64, DEFAULT_CONTENT_TYPE } from '../attachment-sync-utils';
+import {
+  bytesToBase64,
+  createAttachmentLocalMigrationLimiter,
+  DEFAULT_CONTENT_TYPE,
+} from '../attachment-sync-utils';
 
 const encodeBase64Utf8 = (value: string): string => {
   const Encoder = typeof TextEncoder === 'function' ? TextEncoder : undefined;
@@ -63,6 +69,49 @@ export const assertAttachmentSyncNotAborted = (signal?: AbortSignal): void => {
 export const isAttachmentSyncAbortError = (error: unknown, signal?: AbortSignal): boolean => (
   Boolean(signal?.aborted) || (error instanceof Error && error.name === 'AbortError')
 );
+
+/**
+ * Thin adapter over core's shared reconciliation loop (`runAttachmentTransferLifecycle`),
+ * mirroring desktop's `syncBasicRemoteAttachments` (apps/desktop/src/lib/sync-attachments.ts).
+ * The one platform-specific override: expo-file-system needs the uri verbatim (including its
+ * `file://`/`content://` scheme) — unlike Tauri's native absolute paths, there's nothing to
+ * strip, so `resolveLocalPath` is the identity function rather than the core default (which
+ * strips `file://`).
+ */
+export async function runMobileAttachmentLifecycle(
+  options: Omit<AttachmentTransferLifecycleOptions, 'resolveLocalPath'>
+): Promise<boolean> {
+  return await runAttachmentTransferLifecycle({
+    ...options,
+    resolveLocalPath: (uri) => uri,
+  });
+}
+
+/**
+ * Pre-pass run before the reconciliation loop (or a backend's own bespoke loop): migrates any
+ * attachment whose uri still points outside the managed attachments dir — legacy Android
+ * content:// / SAF references — into it, capped per call by
+ * `createAttachmentLocalMigrationLimiter`. An attachment that hits the cap is removed from the
+ * map entirely, same as the old per-backend `if (skipped) continue;` — so nothing downstream
+ * (lifecycle or bespoke loop) touches it again this round. A migration attempt that fails
+ * (rather than being capped) leaves the attachment in the map with its uri unchanged, so the
+ * caller still tries to upload/copy straight from wherever the file currently lives.
+ */
+export const migrateAttachmentsLocallyBeforeSync = async (
+  attachmentsById: Map<string, Attachment>,
+  signal?: AbortSignal
+): Promise<boolean> => {
+  const migrateAttachmentLocally = createAttachmentLocalMigrationLimiter();
+  let didMutate = false;
+  for (const attachment of attachmentsById.values()) {
+    assertAttachmentSyncNotAborted(signal);
+    if (attachment.kind !== 'file' || attachment.deletedAt) continue;
+    const result = await migrateAttachmentLocally(attachment);
+    if (result.migrated) didMutate = true;
+    if (result.skipped) attachmentsById.delete(attachment.id);
+  }
+  return didMutate;
+};
 
 export const waitForAttachmentSyncDelay = async (ms: number, signal?: AbortSignal): Promise<void> => {
   assertAttachmentSyncNotAborted(signal);

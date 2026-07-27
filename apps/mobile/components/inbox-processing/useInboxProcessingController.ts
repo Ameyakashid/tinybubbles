@@ -56,6 +56,11 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { getAssignedToSuggestions } from '../task-metadata-suggestions';
 import { buildAIConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logWarn } from '../../lib/app-log';
+import {
+  getActionFailureMessage,
+  getUnknownErrorMessage,
+  isActionFailure,
+} from '../store-action-result';
 import { styles } from '../inbox-processing-modal.styles';
 
 const MAX_TOKEN_SUGGESTIONS = 6;
@@ -499,18 +504,34 @@ export function useInboxProcessingController({
     }
   }, [activateProcessingSession, handleClose, inboxTasks, processingSession]);
 
+  const showProcessingError = useCallback((message?: string) => {
+    showToast({
+      title: tFallback(t, 'common.error', 'Error'),
+      message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
+      tone: 'error',
+      durationMs: 4200,
+    });
+  }, [showToast, t]);
+
   const applyProcessingEdits = useCallback((updates?: Partial<Task>, titleOverride?: string, fallbackTitle?: string) => {
     if (!currentTask) return false;
     const titleSource = titleOverride ?? processingTitle;
     const title = titleSource.trim() || fallbackTitle?.trim() || currentTask.title;
     const description = processingDescription.trim();
-    updateTask(currentTask.id, {
+    // Callers advance the session as soon as this returns true, so a write that
+    // resolves `{ success: false }` would silently drop the task's edits while
+    // the user watches the next item appear. Surface it.
+    void Promise.resolve(updateTask(currentTask.id, {
       title,
       description: description.length > 0 ? description : undefined,
       ...(updates ?? {}),
-    });
+    }))
+      .then((result) => {
+        if (isActionFailure(result)) showProcessingError(getActionFailureMessage(result));
+      })
+      .catch((error) => showProcessingError(getUnknownErrorMessage(error)));
     return true;
-  }, [currentTask, processingDescription, processingTitle, updateTask]);
+  }, [currentTask, processingDescription, processingTitle, showProcessingError, updateTask]);
 
   const applyWorkflowEvent = useCallback((
     event: ProcessInboxWorkflowEvent,

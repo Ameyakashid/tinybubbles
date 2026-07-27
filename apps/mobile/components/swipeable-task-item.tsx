@@ -30,6 +30,7 @@ import { CompletedAtPicker } from './completed-at-picker';
 import { styles } from './swipeable-task-item/swipeable-task-item.styles';
 import { CompactText } from '@/components/compact-text';
 import { useSwipeableChecklist } from './swipeable-task-item/useSwipeableChecklist';
+import { getActionFailureMessage, getUnknownErrorMessage, isActionFailure } from './store-action-result';
 
 export interface SwipeableTaskItemProps {
     task: Task;
@@ -97,21 +98,6 @@ export type SwipeableTaskItemRowContext = {
 const TASK_SWIPE_FRICTION = 1.25;
 const TASK_SWIPE_OPEN_THRESHOLD = 72;
 const TASK_SWIPE_DRAG_OFFSET = 28;
-
-const getActionFailureMessage = (result: unknown): string | null => {
-    if (!result || typeof result !== 'object') return null;
-    const actionResult = result as { error?: unknown; success?: unknown };
-    if (actionResult.success !== false) return null;
-    return typeof actionResult.error === 'string' && actionResult.error.trim().length > 0
-        ? actionResult.error.trim()
-        : 'Task update failed';
-};
-
-const getUnknownErrorMessage = (error: unknown): string | undefined => {
-    if (error instanceof Error) return error.message;
-    if (typeof error === 'string' && error.trim().length > 0) return error.trim();
-    return undefined;
-};
 
 type SwipeableTaskItemInnerProps = Omit<SwipeableTaskItemProps, 'rowContext'> & {
     rowContext: SwipeableTaskItemRowContext;
@@ -273,9 +259,8 @@ function SwipeableTaskItemInner({
         }
         void Promise.resolve(result)
             .then((actionResult) => {
-                const failure = getActionFailureMessage(actionResult);
-                if (failure) {
-                    showActionFailure(failure);
+                if (isActionFailure(actionResult)) {
+                    showActionFailure(getActionFailureMessage(actionResult));
                     return;
                 }
                 if (status === 'done' && previousStatus !== 'done') {
@@ -313,9 +298,8 @@ function SwipeableTaskItemInner({
         }
         void Promise.resolve(updateTask(task.id, updates))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) {
-                    showActionFailure(failure);
+                if (isActionFailure(result)) {
+                    showActionFailure(getActionFailureMessage(result));
                     return;
                 }
                 if (mode === 'complete' && task.status !== 'done') {
@@ -332,8 +316,7 @@ function SwipeableTaskItemInner({
         setIsProjectNextActionSubmitting(true);
         void Promise.resolve(updateTask(nextTaskId, { status: 'next' }))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closeProjectNextActionPrompt();
             })
             .catch((error) => {
@@ -350,8 +333,7 @@ function SwipeableTaskItemInner({
         // reversible (Reactivate); no confirmation, matching the Archive button.
         void Promise.resolve(useTaskStore.getState().updateProject(projectId, { status: 'archived' }))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closeProjectNextActionPrompt();
             })
             .catch((error) => {
@@ -371,8 +353,7 @@ function SwipeableTaskItemInner({
             sectionId: projectNextActionPrompt.sectionId,
         }))
             .then((result) => {
-                const failure = getActionFailureMessage(result);
-                if (failure) throw new Error(failure);
+                if (isActionFailure(result)) throw new Error(getActionFailureMessage(result) ?? '');
                 closeProjectNextActionPrompt();
             })
             .catch((error) => {

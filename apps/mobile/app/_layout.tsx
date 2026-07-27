@@ -37,9 +37,12 @@ import {
   shouldShowDonationPrompt,
   shouldShowUpdateReminder,
   translateWithFallback,
+  useStartupPromptQueue,
   useTaskStore,
   type AppAnnouncement,
   type AppAnnouncementAction,
+  type StartupPromptDescriptor,
+  type UserPromptState,
 } from '@mindwtr/core';
 import { mobileStorage } from '../lib/storage-adapter';
 import { keepPersistentCaptureNotificationArmed } from '../lib/persistent-capture-notification';
@@ -75,7 +78,7 @@ import {
   writeMobileOnboardingDismissed,
 } from '@/lib/mobile-onboarding-events';
 import { SYNC_BACKEND_KEY } from '@/lib/sync-constants';
-import { coerceSupportedBackend, resolveBackend } from '@/lib/sync-service-utils';
+import { coerceSupportedBackend, resolveBackend, type SyncBackend } from '@/lib/sync-service-utils';
 import { persistLastRoute } from '@/lib/session-restore';
 
 let coreLoggerBridgeInstalled = false;
@@ -147,7 +150,12 @@ const resolveMobileDonationPromptAllowed = async (options: {
   return Platform.OS === 'android' || Platform.OS === 'ios';
 };
 
+const ANNOUNCEMENT_STARTUP_DELAY_MS = 250;
 const DONATION_PROMPT_STARTUP_DELAY_MS = 2000;
+const UPDATE_REMINDER_STARTUP_DELAY_MS = 1750;
+// fetchMobileUpdateReminderInfo is a plain fetch with no timeout; cap present()
+// so a hung network never holds the single prompt slot for the whole session.
+const UPDATE_REMINDER_FETCH_TIMEOUT_MS = 15000;
 const UPDATE_REMINDER_RELEASES_API = 'https://api.github.com/repos/dongdongbh/Mindwtr/releases/latest';
 const UPDATE_REMINDER_RELEASES_URL = 'https://github.com/dongdongbh/Mindwtr/releases/latest';
 const APP_STORE_APP_ID = '6758597144';
@@ -362,24 +370,18 @@ function RootLayoutContentInner() {
   const firstRenderLogged = useRef(false);
   const [mobileOnboardingDismissed, setMobileOnboardingDismissed] = useState(false);
   const [mobileOnboardingDismissalLoaded, setMobileOnboardingDismissalLoaded] = useState(false);
-  const [mobileOnboardingOpen, setMobileOnboardingOpen] = useState(false);
   const [mobileOnboardingBusy, setMobileOnboardingBusy] = useState(false);
   const [mobileOnboardingError, setMobileOnboardingError] = useState<string | null>(null);
-  const [mobileOnboardingGateSettled, setMobileOnboardingGateSettled] = useState(false);
-  const [announcementOpen, setAnnouncementOpen] = useState(false);
-  const [announcementDismissedInSession, setAnnouncementDismissedInSession] = useState(false);
-  const [donationPromptOpen, setDonationPromptOpen] = useState(false);
-  const [donationDismissedInSession, setDonationDismissedInSession] = useState(false);
   const [donationPromptAllowed, setDonationPromptAllowed] = useState<boolean | null>(null);
-  const [updateReminderOpen, setUpdateReminderOpen] = useState(false);
-  const [updateReminderDismissedInSession, setUpdateReminderDismissedInSession] = useState(false);
   const [updateReminderAllowed, setUpdateReminderAllowed] = useState<boolean | null>(null);
   const [updateReminderInfo, setUpdateReminderInfo] = useState<MobileUpdateReminderInfo | null>(null);
   const [androidInstallerSource, setAndroidInstallerSource] = useState<AndroidInstallerSource>(
     Platform.OS === 'android' ? 'unknown' : 'play-store'
   );
   const [testAnnouncement, setTestAnnouncement] = useState<AppAnnouncement | null>(null);
-  const [promptActivitySettled, setPromptActivitySettled] = useState(false);
+  // Prompt state read once at startup so the descriptors below can answer
+  // `isEligible` synchronously; null until it lands (or if the read failed).
+  const [promptStateSnapshot, setPromptStateSnapshot] = useState<UserPromptState | null>(null);
   const activeAnnouncement = testAnnouncement ?? ACTIVE_APP_ANNOUNCEMENT;
 
   const resolveText = useCallback((key: string, fallback: string) => (
@@ -582,88 +584,188 @@ function RootLayoutContentInner() {
     };
   }, []);
 
-  useEffect(() => subscribeMobileOnboardingEvent(() => {
-    setMobileOnboardingBusy(false);
-    setMobileOnboardingError(null);
-    setMobileOnboardingOpen(true);
-  }), []);
-
-  useEffect(() => {
-    if (
-      !mobileOnboardingDismissalLoaded
-      || !dataReady
-    ) {
-      return undefined;
-    }
-    if (mobileOnboardingDismissed || visibleDataCount > 0) {
-      setMobileOnboardingGateSettled(true);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setMobileOnboardingGateSettled(false);
-    AsyncStorage.getItem(SYNC_BACKEND_KEY)
-      .then((rawBackend) => {
-        if (cancelled) return;
-        const syncBackend = coerceSupportedBackend(resolveBackend(rawBackend), isCloudKitAvailable());
-        if (shouldOpenMobileFirstRunOnboarding({
+  // Startup prompts share one gate and open one at a time. The descriptors
+  // below carry each prompt's own eligibility/present logic; the queue owns
+  // precedence (onboarding > announcement > update > donation), the startup
+  // delays, and session dismissal. See packages/core/src/startup-prompts.ts.
+  const startupPromptsEnabled = process.env.NODE_ENV !== 'test';
+  const startupPromptGateOpen = isFirstPaintReady && mobileOnboardingDismissalLoaded;
+  const startupPromptDescriptors = useMemo<StartupPromptDescriptor[]>(() => [
+    {
+      // First-run onboarding outranks everything: a brand-new user must not meet
+      // an announcement or a donation ask before the welcome flow.
+      id: 'onboarding',
+      priority: 40,
+      delayMs: 0,
+      isEligible: () => dataReady && !mobileOnboardingDismissed && visibleDataCount === 0,
+      present: async (signal) => {
+        let syncBackend: SyncBackend = 'off';
+        try {
+          const rawBackend = await AsyncStorage.getItem(SYNC_BACKEND_KEY);
+          syncBackend = coerceSupportedBackend(resolveBackend(rawBackend), isCloudKitAvailable());
+        } catch (error) {
+          void logError(error, { scope: 'onboarding', extra: { step: 'readMobileSyncBackend' } });
+        }
+        if (signal.aborted) return false;
+        return shouldOpenMobileFirstRunOnboarding({
           dataReady,
           dismissed: mobileOnboardingDismissed,
           syncBackend,
           visibleDataCount,
-        })) {
-          setMobileOnboardingOpen(true);
+        });
+      },
+    },
+    {
+      // Maintainer announcement: when one is configured it also blocks the
+      // donation and update prompts (see their isEligible).
+      id: 'announcement',
+      priority: 30,
+      delayMs: ANNOUNCEMENT_STARTUP_DELAY_MS,
+      isEligible: () => shouldShowAppAnnouncement(ACTIVE_APP_ANNOUNCEMENT, null),
+      present: async (signal) => {
+        const announcement = ACTIVE_APP_ANNOUNCEMENT;
+        if (!shouldShowAppAnnouncement(announcement, null)) return false;
+        let dismissedValue: string | null = null;
+        try {
+          dismissedValue = await AsyncStorage.getItem(getAnnouncementDismissalStorageKey(announcement.id));
+        } catch {
+          dismissedValue = null;
         }
-        setMobileOnboardingGateSettled(true);
-      })
-      .catch((error) => {
-        void logError(error, { scope: 'onboarding', extra: { step: 'readMobileSyncBackend' } });
-        if (cancelled) return;
-        if (shouldOpenMobileFirstRunOnboarding({
-          dataReady,
-          dismissed: mobileOnboardingDismissed,
-          syncBackend: 'off',
-          visibleDataCount,
+        if (signal.aborted) return false;
+        return shouldShowAppAnnouncement(announcement, dismissedValue);
+      },
+    },
+    {
+      // Update reminder: records the check on selection, then confirms an update
+      // actually exists before opening (declines otherwise).
+      id: 'update-reminder',
+      priority: 20,
+      delayMs: UPDATE_REMINDER_STARTUP_DELAY_MS,
+      presentTimeoutMs: UPDATE_REMINDER_FETCH_TIMEOUT_MS,
+      isEligible: () => {
+        if (updateReminderAllowed !== true) return false;
+        if (ACTIVE_APP_ANNOUNCEMENT) return false;
+        if (!promptStateSnapshot) return false;
+        return shouldCheckUpdateReminder({
+          nowMs: Date.now(),
+          promptState: promptStateSnapshot,
+          updateReminderAllowed: true,
+        });
+      },
+      onSelect: () => {
+        // Safe here and only here: the queue runs onSelect after this descriptor
+        // has won the slot, so the once-a-day check is never burned by a prompt
+        // that never ran.
+        void updateLocalUserPromptState((state) => recordUpdateReminderChecked(state, Date.now()))
+          .catch((error) => {
+            void logWarn('Failed to record update reminder check', {
+              scope: 'prompt-state',
+              extra: { error: error instanceof Error ? error.message : String(error) },
+            });
+          });
+      },
+      present: async (signal) => {
+        const info = await fetchMobileUpdateReminderInfo(appVersion);
+        if (signal.aborted) return false;
+        const latestPromptState = await readLocalUserPromptState();
+        if (signal.aborted) return false;
+        if (!shouldShowUpdateReminder({
+          nowMs: Date.now(),
+          promptState: latestPromptState,
+          updateReminderAllowed: true,
+          currentVersion: info.currentVersion,
+          latestVersion: info.latestVersion,
+          latestReleasedAt: info.latestReleasedAt,
         })) {
-          setMobileOnboardingOpen(true);
+          return false;
         }
-        setMobileOnboardingGateSettled(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
+        await updateLocalUserPromptState((state) => recordUpdateReminderShown(state, Date.now()));
+        if (signal.aborted) return false;
+        setUpdateReminderInfo(info);
+        return true;
+      },
+    },
+    {
+      // Donation ask: lowest precedence; suppressed whenever an announcement is
+      // configured or an update reminder is showing (via the queue).
+      id: 'donation',
+      priority: 10,
+      delayMs: DONATION_PROMPT_STARTUP_DELAY_MS,
+      isEligible: () => {
+        if (donationPromptAllowed !== true) return false;
+        if (ACTIVE_APP_ANNOUNCEMENT) return false;
+        if (!promptStateSnapshot) return false;
+        return shouldShowDonationPrompt({
+          nowMs: Date.now(),
+          promptState: promptStateSnapshot,
+          donationAllowed: true,
+        });
+      },
+      present: () => true,
+    },
+  ], [
+    appVersion,
     dataReady,
-    mobileOnboardingDismissalLoaded,
+    donationPromptAllowed,
     mobileOnboardingDismissed,
+    promptStateSnapshot,
+    updateReminderAllowed,
     visibleDataCount,
   ]);
+  // dismiss/forceOpen/closeAll are stable across renders; depending on them
+  // (rather than on the queue object) keeps the prompt callbacks stable too.
+  const {
+    openId: startupPromptOpenId,
+    dismiss: dismissStartupPrompt,
+    forceOpen: forceOpenStartupPrompt,
+    closeAll: closeStartupPrompts,
+  } = useStartupPromptQueue({
+    enabled: startupPromptsEnabled,
+    gateOpen: startupPromptGateOpen,
+    descriptors: startupPromptDescriptors,
+    signals: [donationPromptAllowed, promptStateSnapshot, updateReminderAllowed],
+    onLog: (error, context) => {
+      void logWarn('Startup prompt failed', {
+        scope: 'prompt-state',
+        extra: {
+          prompt: context.id,
+          phase: context.phase,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    },
+  });
+  // "Show onboarding again" from settings bypasses the gate entirely.
+  useEffect(() => subscribeMobileOnboardingEvent(() => {
+    setMobileOnboardingBusy(false);
+    setMobileOnboardingError(null);
+    forceOpenStartupPrompt('onboarding');
+  }), [forceOpenStartupPrompt]);
 
   const dismissMobileOnboarding = useCallback(() => {
     void writeMobileOnboardingDismissed();
     setMobileOnboardingDismissed(true);
-    setMobileOnboardingOpen(false);
+    dismissStartupPrompt('onboarding');
     setMobileOnboardingError(null);
-  }, []);
+  }, [dismissStartupPrompt]);
 
   const openOnboardingSync = useCallback(() => {
-    setMobileOnboardingOpen(false);
+    dismissStartupPrompt('onboarding');
     setMobileOnboardingError(null);
     router.push({
       pathname: '/settings',
       params: { settingsScreen: 'sync', onboardingHandoff: '1' },
     } as never);
-  }, [router]);
+  }, [dismissStartupPrompt, router]);
 
   const openOnboardingImport = useCallback(() => {
-    setMobileOnboardingOpen(false);
+    dismissStartupPrompt('onboarding');
     setMobileOnboardingError(null);
     router.push({
       pathname: '/settings',
       params: { settingsScreen: 'data', onboardingHandoff: '1' },
     } as never);
-  }, [router]);
+  }, [dismissStartupPrompt, router]);
 
   const startFreshOnboarding = useCallback(() => {
     if (mobileOnboardingBusy) return;
@@ -708,12 +810,11 @@ function RootLayoutContentInner() {
   const dismissAppAnnouncement = useCallback(() => {
     if (testAnnouncement) {
       setTestAnnouncement(null);
-      setAnnouncementOpen(false);
+      closeStartupPrompts();
       return;
     }
     const announcement = ACTIVE_APP_ANNOUNCEMENT;
-    setAnnouncementDismissedInSession(true);
-    setAnnouncementOpen(false);
+    dismissStartupPrompt('announcement');
     if (!announcement) return;
     AsyncStorage.setItem(
       getAnnouncementDismissalStorageKey(announcement.id),
@@ -724,7 +825,7 @@ function RootLayoutContentInner() {
         extra: { error: error instanceof Error ? error.message : String(error) },
       });
     });
-  }, [testAnnouncement]);
+  }, [closeStartupPrompts, dismissStartupPrompt, testAnnouncement]);
 
   const openAnnouncementUrl = useCallback((url: string) => {
     const nextUrl = url.trim();
@@ -747,9 +848,8 @@ function RootLayoutContentInner() {
   }, [dismissAppAnnouncement, openAnnouncementUrl, router]);
 
   const dismissDonationPrompt = useCallback(() => {
-    setDonationDismissedInSession(true);
-    setDonationPromptOpen(false);
-  }, []);
+    dismissStartupPrompt('donation');
+  }, [dismissStartupPrompt]);
 
   const handleDonationPromptAction = useCallback((action: AppAnnouncementAction) => {
     dismissDonationPrompt();
@@ -788,9 +888,8 @@ function RootLayoutContentInner() {
           });
         });
     }
-    setUpdateReminderDismissedInSession(true);
-    setUpdateReminderOpen(false);
-  }, [updateReminderInfo?.latestVersion, updateReminderInfo?.testOnly]);
+    dismissStartupPrompt('update-reminder');
+  }, [dismissStartupPrompt, updateReminderInfo?.latestVersion, updateReminderInfo?.testOnly]);
 
   const handleUpdateReminderAction = useCallback((action: AppAnnouncementAction) => {
     dismissUpdateReminder();
@@ -804,18 +903,16 @@ function RootLayoutContentInner() {
   useEffect(() => {
     if (!promptTestControlsEnabled) return;
     return subscribePromptTest((kind) => {
-      setAnnouncementOpen(false);
-      setDonationPromptOpen(false);
-      setUpdateReminderOpen(false);
+      closeStartupPrompts();
       setTestAnnouncement(null);
 
       if (kind === 'announcement') {
         setTestAnnouncement(PROMPT_TEST_ANNOUNCEMENT);
-        setAnnouncementOpen(true);
+        forceOpenStartupPrompt('announcement');
         return;
       }
       if (kind === 'donation') {
-        setDonationPromptOpen(true);
+        forceOpenStartupPrompt('donation');
         return;
       }
       if (kind === 'update') {
@@ -835,7 +932,7 @@ function RootLayoutContentInner() {
           actionLabel: updateTarget.label,
           testOnly: true,
         });
-        setUpdateReminderOpen(true);
+        forceOpenStartupPrompt('update-reminder');
         return;
       }
       if (isExpoGo) {
@@ -864,43 +961,15 @@ function RootLayoutContentInner() {
           });
         });
     });
-  }, [androidInstallerSource, appVersion, isExpoGo, isFossBuild, promptTestControlsEnabled, showToast]);
-
-  useEffect(() => {
-    if (
-      announcementDismissedInSession
-      || !isFirstPaintReady
-      || !mobileOnboardingGateSettled
-      || mobileOnboardingOpen
-    ) {
-      return undefined;
-    }
-
-    const announcement = ACTIVE_APP_ANNOUNCEMENT;
-    if (!shouldShowAppAnnouncement(announcement, null)) return undefined;
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const openWhenUndismissed = (dismissedValue: string | null) => {
-      if (cancelled || !shouldShowAppAnnouncement(announcement, dismissedValue)) return;
-      timer = setTimeout(() => {
-        if (!cancelled) setAnnouncementOpen(true);
-      }, 250);
-    };
-
-    AsyncStorage.getItem(getAnnouncementDismissalStorageKey(announcement.id))
-      .then(openWhenUndismissed)
-      .catch(() => openWhenUndismissed(null));
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
   }, [
-    announcementDismissedInSession,
-    isFirstPaintReady,
-    mobileOnboardingGateSettled,
-    mobileOnboardingOpen,
+    androidInstallerSource,
+    appVersion,
+    closeStartupPrompts,
+    forceOpenStartupPrompt,
+    isExpoGo,
+    isFossBuild,
+    promptTestControlsEnabled,
+    showToast,
   ]);
 
   useEffect(() => {
@@ -925,15 +994,24 @@ function RootLayoutContentInner() {
   }, [isFirstPaintReady]);
 
   useEffect(() => {
-    if (!isFirstPaintReady) return;
-    recordLocalPromptActivity().catch((error) => {
-      void logWarn('Failed to record local prompt activity', {
-        scope: 'prompt-state',
-        extra: { error: error instanceof Error ? error.message : String(error) },
+    if (!isFirstPaintReady) return undefined;
+    let cancelled = false;
+    // Today's activity is recorded first so the snapshot the donation and update
+    // descriptors read already counts this launch. A failed read leaves the
+    // snapshot null, which keeps both prompts out of the queue for the session.
+    recordLocalPromptActivity()
+      .then((promptState) => {
+        if (!cancelled) setPromptStateSnapshot(promptState);
+      })
+      .catch((error) => {
+        void logWarn('Failed to record local prompt activity', {
+          scope: 'prompt-state',
+          extra: { error: error instanceof Error ? error.message : String(error) },
+        });
       });
-    }).finally(() => {
-      setPromptActivitySettled(true);
-    });
+    return () => {
+      cancelled = true;
+    };
   }, [isFirstPaintReady]);
 
   useEffect(() => {
@@ -971,152 +1049,6 @@ function RootLayoutContentInner() {
       cancelled = true;
     };
   }, [androidInstallerSource, isExpoGo, isFossBuild]);
-
-  useEffect(() => {
-    if (
-      donationDismissedInSession
-      || donationPromptOpen
-      || updateReminderOpen
-      || donationPromptAllowed !== true
-      || ACTIVE_APP_ANNOUNCEMENT
-      || announcementOpen
-      || !isFirstPaintReady
-      || !promptActivitySettled
-      || !mobileOnboardingGateSettled
-      || mobileOnboardingOpen
-    ) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const nowMs = Date.now();
-
-    readLocalUserPromptState()
-      .then((promptState) => {
-        if (cancelled) return;
-        if (!shouldShowDonationPrompt({ nowMs, promptState, donationAllowed: true })) return;
-        timer = setTimeout(() => {
-          if (!cancelled) setDonationPromptOpen(true);
-        }, DONATION_PROMPT_STARTUP_DELAY_MS);
-      })
-      .catch((error) => {
-        if (!cancelled) setDonationDismissedInSession(true);
-        void logWarn('Failed to read donation prompt state', {
-          scope: 'prompt-state',
-          extra: { error: error instanceof Error ? error.message : String(error) },
-        });
-      });
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [
-    announcementOpen,
-    donationDismissedInSession,
-    donationPromptAllowed,
-    donationPromptOpen,
-    isFirstPaintReady,
-    mobileOnboardingGateSettled,
-    mobileOnboardingOpen,
-    promptActivitySettled,
-    updateReminderOpen,
-  ]);
-
-  useEffect(() => {
-    if (
-      updateReminderDismissedInSession
-      || updateReminderOpen
-      || updateReminderAllowed !== true
-      || ACTIVE_APP_ANNOUNCEMENT
-      || announcementOpen
-      || donationPromptOpen
-      || !isFirstPaintReady
-      || !promptActivitySettled
-      || !mobileOnboardingGateSettled
-      || mobileOnboardingOpen
-    ) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const nowMs = Date.now();
-
-    readLocalUserPromptState()
-      .then((promptState) => {
-        if (cancelled) return;
-        if (!shouldCheckUpdateReminder({ nowMs, promptState, updateReminderAllowed: true })) return;
-        updateLocalUserPromptState((state) => recordUpdateReminderChecked(state, nowMs))
-          .then(() => {
-            if (cancelled) return;
-            timer = setTimeout(() => {
-              fetchMobileUpdateReminderInfo(appVersion)
-                .then((info) => {
-                  if (cancelled) return;
-                  return readLocalUserPromptState()
-                    .then((latestPromptState) => {
-                      if (cancelled) return;
-                      if (!shouldShowUpdateReminder({
-                        nowMs: Date.now(),
-                        promptState: latestPromptState,
-                        updateReminderAllowed: true,
-                        currentVersion: info.currentVersion,
-                        latestVersion: info.latestVersion,
-                        latestReleasedAt: info.latestReleasedAt,
-                      })) {
-                        return;
-                      }
-                      return updateLocalUserPromptState((state) => recordUpdateReminderShown(state, Date.now()))
-                        .then(() => {
-                          if (cancelled) return;
-                          setUpdateReminderInfo(info);
-                          setUpdateReminderOpen(true);
-                        });
-                    });
-                })
-                .catch((error) => {
-                  if (!cancelled) setUpdateReminderDismissedInSession(true);
-                  void logWarn('Failed to check update reminder', {
-                    scope: 'prompt-state',
-                    extra: { error: error instanceof Error ? error.message : String(error) },
-                  });
-                });
-            }, 1750);
-          })
-          .catch((error) => {
-            if (!cancelled) setUpdateReminderDismissedInSession(true);
-            void logWarn('Failed to record update reminder check', {
-              scope: 'prompt-state',
-              extra: { error: error instanceof Error ? error.message : String(error) },
-            });
-          });
-      })
-      .catch((error) => {
-        if (!cancelled) setUpdateReminderDismissedInSession(true);
-        void logWarn('Failed to read update reminder state', {
-          scope: 'prompt-state',
-          extra: { error: error instanceof Error ? error.message : String(error) },
-        });
-      });
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [
-    announcementOpen,
-    appVersion,
-    donationPromptOpen,
-    isFirstPaintReady,
-    mobileOnboardingGateSettled,
-    mobileOnboardingOpen,
-    promptActivitySettled,
-    updateReminderAllowed,
-    updateReminderDismissedInSession,
-    updateReminderOpen,
-  ]);
 
   if (storageInitError) {
     return (
@@ -1212,7 +1144,7 @@ function RootLayoutContentInner() {
           <MobileOnboardingFlow
             busy={mobileOnboardingBusy}
             error={mobileOnboardingError}
-            isOpen={mobileOnboardingOpen}
+            isOpen={startupPromptOpenId === 'onboarding'}
             onOpenImport={openOnboardingImport}
             onOpenSync={openOnboardingSync}
             onSkip={dismissMobileOnboarding}
@@ -1220,25 +1152,20 @@ function RootLayoutContentInner() {
           />
           <AppAnnouncementModal
             announcement={activeAnnouncement}
-            visible={announcementOpen && !mobileOnboardingOpen}
+            visible={startupPromptOpenId === 'announcement'}
             onAction={handleAppAnnouncementAction}
             onDismiss={dismissAppAnnouncement}
           />
           <AppAnnouncementModal
             announcement={donationPromptAnnouncement}
-            visible={donationPromptOpen && !announcementOpen && !mobileOnboardingOpen}
+            visible={startupPromptOpenId === 'donation'}
             onAction={handleDonationPromptAction}
             onDismiss={dismissDonationPrompt}
             onShown={recordDonationPromptVisible}
           />
           <AppAnnouncementModal
             announcement={updateReminderInfo ? buildUpdateReminderAnnouncement(updateReminderInfo) : null}
-            visible={
-              updateReminderOpen
-              && !announcementOpen
-              && !donationPromptOpen
-              && !mobileOnboardingOpen
-            }
+            visible={startupPromptOpenId === 'update-reminder'}
             onAction={handleUpdateReminderAction}
             onDismiss={dismissUpdateReminder}
           />

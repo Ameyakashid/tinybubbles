@@ -1,7 +1,9 @@
 import {
     type AppData,
+    type AppTheme,
     type Language,
     type TaskSortBy,
+    resolveThemeColorScheme,
     safeParseDate,
     safeParseDueDate,
     SUPPORTED_LANGUAGES,
@@ -26,8 +28,6 @@ export const IOS_WIDGET_KIND = 'MindwtrTasksWidget';
 export const IOS_WIDGET_LOCK_KIND = 'MindwtrFocusLockWidget';
 export const WIDGET_FOCUS_URI = 'mindwtr:///focus';
 export const WIDGET_QUICK_CAPTURE_URI = 'mindwtr:///capture-quick?mode=text';
-const DARK_THEME_MODES = new Set(['dark', 'material3-dark', 'nord', 'oled']);
-const LIGHT_THEME_MODES = new Set(['light', 'material3-light', 'eink']);
 type ConcreteThemePresetName = Exclude<ThemePresetName, 'default'>;
 
 export type WidgetSystemColorScheme = 'light' | 'dark' | null | undefined;
@@ -143,11 +143,10 @@ const resolveWidgetPalette = (
         };
     }
 
-    const isDark = DARK_THEME_MODES.has(normalizedMode)
-        ? true
-        : LIGHT_THEME_MODES.has(normalizedMode)
-            ? false
-            : systemColorScheme === 'dark';
+    const isDark = resolveThemeColorScheme(
+        normalizedMode as AppTheme,
+        systemColorScheme === 'dark' ? 'dark' : 'light',
+    ) === 'dark';
 
     if (isDark) {
         return {

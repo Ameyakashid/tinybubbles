@@ -5,6 +5,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import {
     addBreadcrumb,
+    countActiveRecords,
     createBackupFileName,
     flushPendingSave,
     runDataTransferTransactionWithoutSnapshot,
@@ -17,6 +18,7 @@ import {
 import {
     runImport,
     type DataTransferBoundaries,
+    type ImportSourceId,
 } from '@mindwtr/core/import-runner';
 import {
     parseDgtImportSource,
@@ -61,13 +63,6 @@ type SnapshotApplyResult = {
     snapshotName: string;
 };
 
-const countActiveRecords = (data: AppData) => ({
-    tasks: data.tasks.filter((task) => !task.deletedAt).length,
-    projects: data.projects.filter((project) => !project.deletedAt).length,
-    sections: data.sections.filter((section) => !section.deletedAt).length,
-    areas: data.areas.filter((area) => !area.deletedAt).length,
-});
-
 const toCountExtra = (data: AppData): Record<string, string> => {
     const counts = countActiveRecords(data);
     return {
@@ -75,6 +70,7 @@ const toCountExtra = (data: AppData): Record<string, string> => {
         projects: String(counts.projects),
         sections: String(counts.sections),
         areas: String(counts.areas),
+        people: String(counts.people),
     };
 };
 
@@ -273,42 +269,6 @@ const runMobileDataTransferWithoutSnapshot = async (
 export const pickBackupDocument = async (): Promise<TransferDocument | null> =>
     pickDocument('application/json');
 
-export const pickTodoistDocument = async (): Promise<TransferDocument | null> =>
-    pickDocument([
-        'text/csv',
-        'text/comma-separated-values',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/octet-stream',
-    ]);
-
-export const pickTickTickDocument = async (): Promise<TransferDocument | null> =>
-    pickDocument([
-        'text/csv',
-        'text/comma-separated-values',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/octet-stream',
-    ]);
-
-export const pickDgtDocument = async (): Promise<TransferDocument | null> =>
-    pickDocument([
-        'application/json',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/octet-stream',
-    ]);
-
-export const pickOmniFocusDocument = async (): Promise<TransferDocument | null> =>
-    pickDocument([
-        'text/csv',
-        'text/comma-separated-values',
-        'application/json',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/octet-stream',
-    ]);
-
 export const inspectBackupDocument = async (
     document: TransferDocument,
     options?: { appVersion?: string | null }
@@ -321,86 +281,131 @@ export const inspectBackupDocument = async (
     });
 };
 
-export const inspectTodoistDocument = async (
-    document: TransferDocument
-): Promise<TodoistImportParseResult> => {
-    const bytes = await readBinaryFile(document.uri);
-    return parseTodoistImportSource({
-        bytes,
-        fileName: document.fileName,
-    });
+// The four non-backup import sources each need only a document-picker MIME allowlist and their
+// own parser — everything else about "pick a document, read its bytes, hand them to the right
+// parser" is identical. This table + the two generic functions below replace what used to be 4
+// near-identical pick*Document functions and 4 near-identical inspect*Document functions.
+// ImportSourceId (backup excluded) is the same key import-runner.ts's own descriptor table uses.
+type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
+
+type ImportSourceParseResultMap = {
+    dgt: DgtImportParseResult;
+    omnifocus: OmniFocusImportParseResult;
+    ticktick: TickTickImportParseResult;
+    todoist: TodoistImportParseResult;
 };
 
-export const inspectTickTickDocument = async (
-    document: TransferDocument
-): Promise<TickTickImportParseResult> => {
-    const bytes = await readBinaryFile(document.uri);
-    return parseTickTickImportSource({
-        bytes,
-        fileName: document.fileName,
-    });
+type ImportPickerDescriptor<S extends ImportPickerSourceId> = {
+    mimeTypes: string[];
+    parse: (input: { bytes?: Uint8Array; fileName: string }) => ImportSourceParseResultMap[S];
 };
 
-export const inspectDgtDocument = async (
-    document: TransferDocument
-): Promise<DgtImportParseResult> => {
-    const bytes = await readBinaryFile(document.uri);
-    return parseDgtImportSource({
-        bytes,
-        fileName: document.fileName,
-    });
+const IMPORT_PICKER_DESCRIPTORS: { [S in ImportPickerSourceId]: ImportPickerDescriptor<S> } = {
+    todoist: {
+        mimeTypes: [
+            'text/csv',
+            'text/comma-separated-values',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ],
+        parse: parseTodoistImportSource,
+    },
+    ticktick: {
+        mimeTypes: [
+            'text/csv',
+            'text/comma-separated-values',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ],
+        parse: parseTickTickImportSource,
+    },
+    dgt: {
+        mimeTypes: [
+            'application/json',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ],
+        parse: parseDgtImportSource,
+    },
+    omnifocus: {
+        mimeTypes: [
+            'text/csv',
+            'text/comma-separated-values',
+            'application/json',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ],
+        parse: parseOmniFocusImportSource,
+    },
 };
 
-export const inspectOmniFocusDocument = async (
+const pickImportDocument = (source: ImportPickerSourceId): Promise<TransferDocument | null> =>
+    pickDocument(IMPORT_PICKER_DESCRIPTORS[source].mimeTypes);
+
+const inspectImportDocument = async <S extends ImportPickerSourceId>(
+    source: S,
     document: TransferDocument
-): Promise<OmniFocusImportParseResult> => {
+): Promise<ImportSourceParseResultMap[S]> => {
     const bytes = await readBinaryFile(document.uri);
-    return parseOmniFocusImportSource({
-        bytes,
-        fileName: document.fileName,
-    });
+    return IMPORT_PICKER_DESCRIPTORS[source].parse({ bytes, fileName: document.fileName });
 };
+
+export const pickTodoistDocument = (): Promise<TransferDocument | null> => pickImportDocument('todoist');
+
+export const pickTickTickDocument = (): Promise<TransferDocument | null> => pickImportDocument('ticktick');
+
+export const pickDgtDocument = (): Promise<TransferDocument | null> => pickImportDocument('dgt');
+
+export const pickOmniFocusDocument = (): Promise<TransferDocument | null> => pickImportDocument('omnifocus');
+
+export const inspectTodoistDocument = (document: TransferDocument): Promise<TodoistImportParseResult> =>
+    inspectImportDocument('todoist', document);
+
+export const inspectTickTickDocument = (document: TransferDocument): Promise<TickTickImportParseResult> =>
+    inspectImportDocument('ticktick', document);
+
+export const inspectDgtDocument = (document: TransferDocument): Promise<DgtImportParseResult> =>
+    inspectImportDocument('dgt', document);
+
+export const inspectOmniFocusDocument = (document: TransferDocument): Promise<OmniFocusImportParseResult> =>
+    inspectImportDocument('omnifocus', document);
 
 // Mobile's snapshot writer never returns null (unlike desktop's Tauri-only snapshot), so the
 // shared `string | null` contract can be narrowed back for mobile's public result type.
 export const restoreDataFromBackup = async (backupData: AppData): Promise<SnapshotApplyResult> => {
-    const { snapshotName } = await runImport<AppData, AppData>('backup', backupData, mobileBoundaries, mobileLog);
+    const { snapshotName } = await runImport('backup', backupData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string };
 };
 
 export const importTodoistData = async (
     parsedProjects: ParsedTodoistProject[]
 ): Promise<SnapshotApplyResult & { result: TodoistImportExecutionResult }> => {
-    const { result, snapshotName } = await runImport<ParsedTodoistProject[], TodoistImportExecutionResult>(
-        'todoist', parsedProjects, mobileBoundaries, mobileLog
-    );
+    const { result, snapshotName } = await runImport('todoist', parsedProjects, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string, result };
 };
 
 export const importTickTickData = async (
     parsedData: ParsedTickTickImportData
 ): Promise<SnapshotApplyResult & { result: TickTickImportExecutionResult }> => {
-    const { result, snapshotName } = await runImport<ParsedTickTickImportData, TickTickImportExecutionResult>(
-        'ticktick', parsedData, mobileBoundaries, mobileLog
-    );
+    const { result, snapshotName } = await runImport('ticktick', parsedData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string, result };
 };
 
 export const importDgtData = async (
     parsedData: ParsedDgtImportData
 ): Promise<SnapshotApplyResult & { result: DgtImportExecutionResult }> => {
-    const { result, snapshotName } = await runImport<ParsedDgtImportData, DgtImportExecutionResult>(
-        'dgt', parsedData, mobileBoundaries, mobileLog
-    );
+    const { result, snapshotName } = await runImport('dgt', parsedData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string, result };
 };
 
 export const importOmniFocusData = async (
     parsedData: ParsedOmniFocusImportData
 ): Promise<SnapshotApplyResult & { result: OmniFocusImportExecutionResult }> => {
-    const { result, snapshotName } = await runImport<ParsedOmniFocusImportData, OmniFocusImportExecutionResult>(
-        'omnifocus', parsedData, mobileBoundaries, mobileLog
-    );
+    const { result, snapshotName } = await runImport('omnifocus', parsedData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string, result };
 };
 

@@ -51,8 +51,6 @@ ${next.slice(dependencyBlockEnd)}`;
   return next;
 };
 
-const applyGradleCompatPatch = (filePath) => patchFile(filePath, applyGradleCompatPatchToSource);
-
 const applyAlarmPendingIntentPatchToSource = (original) => {
   let next = original;
   const helperMarker = '    private NotificationManager getNotificationManager() {';
@@ -94,8 +92,6 @@ ${helperMarker}`
   return next;
 };
 
-const applyAlarmPendingIntentPatch = (filePath) => patchFile(filePath, applyAlarmPendingIntentPatchToSource);
-
 const applyAlarmDuplicateToastPatchToSource = (original) => original.replace(
   `        if (contain) {
             Toast.makeText(mContext, "You have already set this Alarm", Toast.LENGTH_SHORT).show();
@@ -105,8 +101,6 @@ const applyAlarmDuplicateToastPatchToSource = (original) => original.replace(
   `        // Duplicate alarms are reported to JS via promise rejection. Mindwtr retries silently.
 `
 );
-
-const applyAlarmDuplicateToastPatch = (filePath) => patchFile(filePath, applyAlarmDuplicateToastPatchToSource);
 
 const applyAlarmTimingPatchToSource = (original) => {
   let next = original;
@@ -198,8 +192,6 @@ const applyAlarmTimingPatchToSource = (original) => {
 
   return next;
 };
-
-const applyAlarmTimingPatch = (filePath) => patchFile(filePath, applyAlarmTimingPatchToSource);
 
 const applyAlarmExactRepeatPatchToSource = (original) => {
   let next = original;
@@ -358,8 +350,6 @@ ${indentation}}`
   return next;
 };
 
-const applyAlarmExactRepeatPatch = (filePath) => patchFile(filePath, applyAlarmExactRepeatPatchToSource);
-
 const applyAlarmReminderBehaviorPatchToSource = (original) => {
   let next = original;
 
@@ -411,8 +401,6 @@ const applyAlarmReminderBehaviorPatchToSource = (original) => {
   return next;
 };
 
-const applyAlarmReminderBehaviorPatch = (filePath) => patchFile(filePath, applyAlarmReminderBehaviorPatchToSource);
-
 const applyAlarmLockScreenPrivacyPatchToSource = (original) => {
   // Android's lock screen "hide sensitive content" setting only redacts
   // notifications marked VISIBILITY_PRIVATE; the library ships reminders as
@@ -424,16 +412,12 @@ const applyAlarmLockScreenPrivacyPatchToSource = (original) => {
   );
 };
 
-const applyAlarmLockScreenPrivacyPatch = (filePath) => patchFile(filePath, applyAlarmLockScreenPrivacyPatchToSource);
-
 const applyAlarmAudioInterfacePatchToSource = (original) => {
   return original.replace(
     '        uri = Settings.System.DEFAULT_ALARM_ALERT_URI;',
     '        uri = Settings.System.DEFAULT_NOTIFICATION_URI;'
   );
 };
-
-const applyAlarmAudioInterfacePatch = (filePath) => patchFile(filePath, applyAlarmAudioInterfacePatchToSource);
 
 const applyAlarmDismissReceiverPatchToSource = (original) => {
   let next = original;
@@ -463,8 +447,6 @@ const applyAlarmDismissReceiverPatchToSource = (original) => {
   return next;
 };
 
-const applyAlarmDismissReceiverPatch = (filePath) => patchFile(filePath, applyAlarmDismissReceiverPatchToSource);
-
 const applyAlarmReceiverPatchToSource = (original) => {
   let next = original;
 
@@ -482,8 +464,6 @@ const applyAlarmReceiverPatchToSource = (original) => {
   return next;
 };
 
-const applyAlarmReceiverPatch = (filePath) => patchFile(filePath, applyAlarmReceiverPatchToSource);
-
 const applyAlarmCompleteConstantsPatchToSource = (original) => {
   if (original.includes('NOTIFICATION_ACTION_COMPLETE')) return original;
   return original.replace(
@@ -491,8 +471,6 @@ const applyAlarmCompleteConstantsPatchToSource = (original) => {
     '    static final String NOTIFICATION_ACTION_SNOOZE = "ACTION_SNOOZE";\n    static final String NOTIFICATION_ACTION_COMPLETE = "ACTION_COMPLETE";'
   );
 };
-
-const applyAlarmCompleteConstantsPatch = (filePath) => patchFile(filePath, applyAlarmCompleteConstantsPatchToSource);
 
 const applyAlarmTaskOpenIntentPatchToSource = (original) => {
   let next = original;
@@ -525,8 +503,6 @@ const applyAlarmTaskOpenIntentPatchToSource = (original) => {
 `
   );
 };
-
-const applyAlarmTaskOpenIntentPatch = (filePath) => patchFile(filePath, applyAlarmTaskOpenIntentPatchToSource);
 
 const applyAlarmCompleteUtilPatchToSource = (original) => {
   let next = original;
@@ -586,8 +562,6 @@ const applyAlarmCompleteUtilPatchToSource = (original) => {
 `
   );
 };
-
-const applyAlarmCompleteUtilPatch = (filePath) => patchFile(filePath, applyAlarmCompleteUtilPatchToSource);
 
 const applyAlarmCompleteReceiverPatchToSource = (original) => {
   let next = original;
@@ -673,8 +647,6 @@ ${pendingPayloadCacheBlock}
 `
   );
 };
-
-const applyAlarmCompleteReceiverPatch = (filePath) => patchFile(filePath, applyAlarmCompleteReceiverPatchToSource);
 
 const getAndroidSourceCandidates = (projectRoot, fileName) => [
   path.join(projectRoot, 'node_modules', 'react-native-alarm-notification', 'android', 'src', 'main', 'java', 'com', 'emekalites', 'react', 'alarm', 'notification', fileName),
@@ -838,8 +810,6 @@ API_AVAILABLE(ios(10.0)) {
   return next;
 };
 
-const applyAlarmIosCompleteActionPatch = (filePath) => patchFile(filePath, applyAlarmIosCompleteActionPatchToSource);
-
 // The stock iOS module derives every notification identifier from the epoch
 // SECOND it was created in (`timeIntervalSince1970` cast to long), and
 // UNUserNotificationCenter replaces a pending request when a new one reuses
@@ -870,10 +840,248 @@ const applyAlarmIosUniqueIdentifierPatchToSource = (original) => {
   return next;
 };
 
-const applyAlarmIosUniqueIdentifierPatch = (filePath) => patchFile(filePath, applyAlarmIosUniqueIdentifierPatchToSource);
-
 const logPatchedCandidate = (label, candidate) => {
   console.log(`[${label}] patched ${candidate}`);
+};
+
+// --- Declarative patch registry -------------------------------------------
+//
+// Each entry fully describes one patch: which file(s) it targets, whether a
+// failure to apply is tolerable, whether to keep trying candidates after one
+// succeeds, and how to recognise "already applied" (for idempotent re-runs
+// and to tell a genuine no-op apart from an already-satisfied patch).
+//
+// `required: true` (the default — see `isRequired` below) means `applyPatches`
+// throws, naming the patch id, if the patch neither changed a candidate file
+// nor found its `appliedMarker` in one. That turns a silent no-op (upstream
+// shifted a character, the patch stopped applying, reminders quietly break)
+// into a loud prebuild failure instead. Only `alarm-duplicate-toast` is
+// declared non-required: losing it just brings back a native "already set"
+// Toast on a duplicate-schedule attempt — a cosmetic regression, not a broken
+// or dropped reminder.
+//
+// `firstMatchOnly` reproduces the exact break/no-break behaviour the old
+// per-candidate loops had (see the handoff for this task): candidates are
+// [locally-installed, hoisted-to-root] copies of the same upstream file, and
+// today's code is inconsistent about whether it stops at the first one that
+// applies or keeps going. This registry *declares* what was already
+// happening rather than changing it.
+const androidJavaCandidates = (fileName) => (projectRoot) => getAndroidSourceCandidates(projectRoot, fileName);
+
+const androidGradleCandidates = (projectRoot) => [
+  path.join(projectRoot, 'node_modules', 'react-native-alarm-notification', 'android', 'build.gradle'),
+  path.join(projectRoot, '..', '..', 'node_modules', 'react-native-alarm-notification', 'android', 'build.gradle'),
+];
+
+const iosSourceCandidates = (projectRoot) => getIosSourceCandidates(projectRoot);
+
+const PATCHES = [
+  {
+    id: 'gradle-compat',
+    platform: 'android',
+    getCandidates: androidGradleCandidates,
+    transform: applyGradleCompatPatchToSource,
+    required: true,
+    // Original loop broke after the first successful write.
+    firstMatchOnly: true,
+    appliedMarker: "implementation project(':notification-open-intents')",
+  },
+  {
+    id: 'alarm-pending-intent',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmPendingIntentPatchToSource,
+    required: true,
+    // Original AlarmUtil.java loop never broke — all 8 patches applied to every candidate.
+    firstMatchOnly: false,
+    appliedMarker: 'getUpdateCurrentImmutableFlags()',
+  },
+  {
+    id: 'alarm-task-open-intent',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmTaskOpenIntentPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: 'mindwtr:///focus',
+  },
+  {
+    id: 'alarm-duplicate-toast',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmDuplicateToastPatchToSource,
+    // Cosmetic: losing this patch brings back a native "already set" Toast on
+    // a duplicate schedule attempt. No reminder is delayed, dropped, or
+    // mis-scheduled, so this is the one patch that may silently no-op.
+    required: false,
+    firstMatchOnly: false,
+    appliedMarker: 'Duplicate alarms are reported to JS via promise rejection',
+  },
+  {
+    id: 'alarm-timing',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmTimingPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    // Same marker the exact-repeat patch below already depends on internally.
+    appliedMarker: 'private void setExactOrAllowWhileIdle(',
+  },
+  {
+    id: 'alarm-exact-repeat-util',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    // Same transform as `alarm-exact-repeat-receiver` below — it no-ops on
+    // whichever file's anchors it doesn't recognise. Declared as two
+    // registry entries (not one) because the two files can independently
+    // fail: AlarmUtil.java could patch fine while AlarmReceiver.java's rearm
+    // hook silently doesn't, which would otherwise mask a real regression
+    // (a repeating reminder that fires once and never re-arms).
+    transform: applyAlarmExactRepeatPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: 'MAX_REPEAT_SEARCH_STEPS',
+  },
+  {
+    id: 'alarm-reminder-behavior',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmReminderBehaviorPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: '"Mindwtr reminders"',
+  },
+  {
+    id: 'alarm-lock-screen-privacy',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmLockScreenPrivacyPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: '.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)',
+  },
+  {
+    id: 'alarm-complete-action-util',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmUtil.java'),
+    transform: applyAlarmCompleteUtilPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: 'notificationActionComplete',
+  },
+  {
+    id: 'alarm-audio-interface',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AudioInterface.java'),
+    transform: applyAlarmAudioInterfacePatchToSource,
+    required: true,
+    // Original AudioInterface.java loop never broke either (single patch, both candidates tried).
+    firstMatchOnly: false,
+    appliedMarker: 'Settings.System.DEFAULT_NOTIFICATION_URI',
+  },
+  {
+    id: 'alarm-dismiss-receiver',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmDismissReceiver.java'),
+    transform: applyAlarmDismissReceiverPatchToSource,
+    required: true,
+    // Original loop broke after the first successful write.
+    firstMatchOnly: true,
+    appliedMarker: 'if (ANModule.getReactAppContext() != null) {\n                ANModule.getReactAppContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("OnNotificationDismissed"',
+  },
+  {
+    id: 'alarm-receiver-dismiss-guard',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmReceiver.java'),
+    transform: applyAlarmReceiverPatchToSource,
+    required: true,
+    // Original AlarmReceiver.java loop never broke — all 3 patches applied to every candidate.
+    firstMatchOnly: false,
+    appliedMarker: 'if (ANModule.getReactAppContext() != null) {\n                                ANModule.getReactAppContext().getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit("OnNotificationDismissed"',
+  },
+  {
+    id: 'alarm-exact-repeat-receiver',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmReceiver.java'),
+    transform: applyAlarmExactRepeatPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: 'alarmUtil.rescheduleRepeatingAlarm(alarm);',
+  },
+  {
+    id: 'alarm-complete-action-receiver',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('AlarmReceiver.java'),
+    transform: applyAlarmCompleteReceiverPatchToSource,
+    required: true,
+    firstMatchOnly: false,
+    appliedMarker: 'case Constants.NOTIFICATION_ACTION_COMPLETE',
+  },
+  {
+    id: 'alarm-complete-action-constants',
+    platform: 'android',
+    getCandidates: androidJavaCandidates('Constants.java'),
+    transform: applyAlarmCompleteConstantsPatchToSource,
+    required: true,
+    // Original loop broke after the first successful write.
+    firstMatchOnly: true,
+    appliedMarker: 'NOTIFICATION_ACTION_COMPLETE',
+  },
+  {
+    id: 'alarm-ios-complete-action',
+    platform: 'ios',
+    getCandidates: iosSourceCandidates,
+    transform: applyAlarmIosCompleteActionPatchToSource,
+    required: true,
+    // Original loop broke after the first successful write.
+    firstMatchOnly: true,
+    appliedMarker: 'RCT_EXPORT_METHOD(consumePendingNotificationOpenPayload',
+  },
+  {
+    id: 'alarm-ios-unique-identifier',
+    platform: 'ios',
+    getCandidates: iosSourceCandidates,
+    transform: applyAlarmIosUniqueIdentifierPatchToSource,
+    required: true,
+    // Original loop broke after the first successful write.
+    firstMatchOnly: true,
+    appliedMarker: 'mindwtrAlarmIdCounter',
+  },
+];
+
+// A patch is required unless it explicitly opts out.
+const isRequired = (patch) => patch.required !== false;
+
+// Applies every patch in `patches` (default: the full registry) to whichever
+// candidate file(s) each one resolves against `projectRoot`. Preserves the
+// exact write/break semantics the old per-candidate loops had — the only
+// addition is `satisfied` bookkeeping used to decide whether a `required`
+// patch that never wrote anything was already applied (marker present, fine)
+// or has silently stopped matching upstream (marker absent — throw).
+const applyPatches = (projectRoot, patches = PATCHES) => {
+  for (const patch of patches) {
+    let satisfied = false;
+    for (const candidate of patch.getCandidates(projectRoot)) {
+      if (patchFile(candidate, patch.transform)) {
+        logPatchedCandidate(patch.id, candidate);
+        satisfied = true;
+        if (patch.firstMatchOnly) break;
+        continue;
+      }
+      if (!satisfied && patch.appliedMarker && fs.existsSync(candidate)) {
+        if (fs.readFileSync(candidate, 'utf8').includes(patch.appliedMarker)) {
+          satisfied = true;
+        }
+      }
+    }
+    if (isRequired(patch) && !satisfied) {
+      throw new Error(
+        `Alarm-notification patch "${patch.id}" did not apply to any candidate file and its `
+        + 'expected marker was not found either. react-native-alarm-notification likely changed '
+        + `upstream — check the "${patch.id}" transform in patch-alarm-notification-gradle.js.`
+      );
+    }
+  }
 };
 
 const ensurePermission = (manifest, name) => {
@@ -990,82 +1198,7 @@ function withAlarmNotificationGradlePatch(config) {
   const withAndroidPatches = withDangerousMod(withManifestEntries, [
     'android',
     async (cfg) => {
-      const projectRoot = cfg.modRequest.projectRoot;
-      const gradleCandidates = [
-        path.join(projectRoot, 'node_modules', 'react-native-alarm-notification', 'android', 'build.gradle'),
-        path.join(projectRoot, '..', '..', 'node_modules', 'react-native-alarm-notification', 'android', 'build.gradle'),
-      ];
-      const alarmUtilCandidates = getAndroidSourceCandidates(projectRoot, 'AlarmUtil.java');
-      const alarmAudioCandidates = getAndroidSourceCandidates(projectRoot, 'AudioInterface.java');
-      const dismissReceiverCandidates = getAndroidSourceCandidates(projectRoot, 'AlarmDismissReceiver.java');
-      const alarmReceiverCandidates = getAndroidSourceCandidates(projectRoot, 'AlarmReceiver.java');
-      const alarmConstantsCandidates = getAndroidSourceCandidates(projectRoot, 'Constants.java');
-
-      for (const candidate of gradleCandidates) {
-        if (applyGradleCompatPatch(candidate)) {
-          logPatchedCandidate('alarm-gradle-patch', candidate);
-          break;
-        }
-      }
-
-      for (const candidate of alarmUtilCandidates) {
-        if (applyAlarmPendingIntentPatch(candidate)) {
-          logPatchedCandidate('alarm-pending-intent-patch', candidate);
-        }
-        if (applyAlarmTaskOpenIntentPatch(candidate)) {
-          logPatchedCandidate('alarm-task-open-intent-patch', candidate);
-        }
-        if (applyAlarmDuplicateToastPatch(candidate)) {
-          logPatchedCandidate('alarm-duplicate-toast-patch', candidate);
-        }
-        if (applyAlarmTimingPatch(candidate)) {
-          logPatchedCandidate('alarm-timing-patch', candidate);
-        }
-        if (applyAlarmExactRepeatPatch(candidate)) {
-          logPatchedCandidate('alarm-exact-repeat-patch', candidate);
-        }
-        if (applyAlarmReminderBehaviorPatch(candidate)) {
-          logPatchedCandidate('alarm-reminder-behavior-patch', candidate);
-        }
-        if (applyAlarmLockScreenPrivacyPatch(candidate)) {
-          logPatchedCandidate('alarm-lock-screen-privacy-patch', candidate);
-        }
-        if (applyAlarmCompleteUtilPatch(candidate)) {
-          logPatchedCandidate('alarm-complete-action-util-patch', candidate);
-        }
-      }
-
-      for (const candidate of alarmAudioCandidates) {
-        if (applyAlarmAudioInterfacePatch(candidate)) {
-          logPatchedCandidate('alarm-audio-interface-patch', candidate);
-        }
-      }
-
-      for (const candidate of dismissReceiverCandidates) {
-        if (applyAlarmDismissReceiverPatch(candidate)) {
-          logPatchedCandidate('alarm-dismiss-receiver-patch', candidate);
-          break;
-        }
-      }
-
-      for (const candidate of alarmReceiverCandidates) {
-        if (applyAlarmReceiverPatch(candidate)) {
-          logPatchedCandidate('alarm-receiver-patch', candidate);
-        }
-        if (applyAlarmExactRepeatPatch(candidate)) {
-          logPatchedCandidate('alarm-exact-repeat-patch', candidate);
-        }
-        if (applyAlarmCompleteReceiverPatch(candidate)) {
-          logPatchedCandidate('alarm-complete-action-receiver-patch', candidate);
-        }
-      }
-
-      for (const candidate of alarmConstantsCandidates) {
-        if (applyAlarmCompleteConstantsPatch(candidate)) {
-          logPatchedCandidate('alarm-complete-action-constants-patch', candidate);
-          break;
-        }
-      }
+      applyPatches(cfg.modRequest.projectRoot, PATCHES.filter((patch) => patch.platform === 'android'));
       return cfg;
     },
   ]);
@@ -1073,19 +1206,7 @@ function withAlarmNotificationGradlePatch(config) {
   return withDangerousMod(withAndroidPatches, [
     'ios',
     async (cfg) => {
-      const projectRoot = cfg.modRequest.projectRoot;
-      for (const candidate of getIosSourceCandidates(projectRoot)) {
-        if (applyAlarmIosCompleteActionPatch(candidate)) {
-          logPatchedCandidate('alarm-ios-complete-action-patch', candidate);
-          break;
-        }
-      }
-      for (const candidate of getIosSourceCandidates(projectRoot)) {
-        if (applyAlarmIosUniqueIdentifierPatch(candidate)) {
-          logPatchedCandidate('alarm-ios-unique-identifier-patch', candidate);
-          break;
-        }
-      }
+      applyPatches(cfg.modRequest.projectRoot, PATCHES.filter((patch) => patch.platform === 'ios'));
       return cfg;
     },
   ]);
@@ -1093,20 +1214,9 @@ function withAlarmNotificationGradlePatch(config) {
 
 module.exports = withAlarmNotificationGradlePatch;
 module.exports.__testables = {
-  applyGradleCompatPatchToSource,
-  applyAlarmPendingIntentPatchToSource,
-  applyAlarmDuplicateToastPatchToSource,
-  applyAlarmTimingPatchToSource,
-  applyAlarmExactRepeatPatchToSource,
-  applyAlarmReminderBehaviorPatchToSource,
-  applyAlarmLockScreenPrivacyPatchToSource,
-  applyAlarmAudioInterfacePatchToSource,
-  applyAlarmDismissReceiverPatchToSource,
-  applyAlarmReceiverPatchToSource,
-  applyAlarmCompleteConstantsPatchToSource,
-  applyAlarmTaskOpenIntentPatchToSource,
-  applyAlarmCompleteUtilPatchToSource,
-  applyAlarmCompleteReceiverPatchToSource,
-  applyAlarmIosCompleteActionPatchToSource,
-  applyAlarmIosUniqueIdentifierPatchToSource,
+  patchFile,
+  getAndroidSourceCandidates,
+  getIosSourceCandidates,
+  PATCHES,
+  applyPatches,
 };

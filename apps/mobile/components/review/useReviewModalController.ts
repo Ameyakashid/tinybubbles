@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+    buildReviewSteps,
     createAIProvider,
+    getExternalCalendarDaySummaries,
     getStaleItems,
+    getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
-    isTaskInActiveProject,
     isDueForReview,
     isNaturalLanguageDatesEnabled,
     normalizeClockTimeInput,
     parseProjectNextActionInput,
-    partitionByReviewDate,
-    safeParseDate,
-    safeParseDueDate,
     type AIProviderId,
     type ExternalCalendarEvent,
     type Project,
@@ -60,22 +59,14 @@ export type ReviewStepDefinition = {
     title: string;
 };
 
-export type ExternalCalendarDaySummary = {
-    dayStart: Date;
-    events: ExternalCalendarEvent[];
-    totalCount: number;
-};
-
-export type ContextReviewGroup = {
-    context: string;
-    tasks: Task[];
-};
-
-export type CalendarTaskReviewEntry = {
-    task: Task;
-    date: Date;
-    kind: 'due' | 'start';
-};
+// Weekly Review's per-step candidate lists live in core (ADR 0021); these
+// three types are re-exported under their historical local names so callers
+// of this controller don't need to change their imports.
+export type {
+    CalendarReviewEntry as CalendarTaskReviewEntry,
+    ContextReviewGroup,
+    ExternalCalendarDaySummary,
+} from '@mindwtr/core';
 
 export type ReviewProjectEntry = {
     areaColor: string;
@@ -95,7 +86,6 @@ export function useReviewModalController({
 }: UseReviewModalControllerParams) {
     const { tasks, projects, areas, updateTask, deleteTask, settings, batchUpdateTasks, addTask } = useTaskStore();
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const { isDark } = useTheme();
     const { t } = useLanguage();
     const { openQuickCapture } = useQuickCapture();
@@ -149,7 +139,7 @@ export function useReviewModalController({
     }, [deleteTask]);
 
     const handleSaveTask = useCallback((taskId: string, updates: Partial<Task>) => {
-        updateTask(taskId, updates);
+        return updateTask(taskId, updates);
     }, [updateTask]);
 
     const openReviewQuickAdd = useCallback((initialProps?: Partial<Task>) => {
@@ -360,135 +350,42 @@ export function useReviewModalController({
         await batchUpdateTasks(updates);
     }, [aiSelectedIds, aiSuggestions, batchUpdateTasks, isActionableSuggestion]);
 
-    const inboxTasks = useMemo(
-        () => tasks.filter((task) => (
-            task.status === 'inbox'
-            && !task.deletedAt
-            && isTaskInActiveProject(task, projectById)
-        )),
-        [projectById, tasks],
+    // Single source of Weekly Review's per-step candidate lists (ADR 0021):
+    // shared with desktop so these six filters can't drift apart.
+    const weeklyBuckets = useMemo(
+        () => getWeeklyReviewBuckets(tasks, projects),
+        [tasks, projects],
     );
-    const waitingTasks = useMemo(
-        () => tasks.filter((task) => (
-            task.status === 'waiting'
-            && !task.deletedAt
-            && isTaskInActiveProject(task, projectById)
-        )),
-        [projectById, tasks],
-    );
-    const somedayTasks = useMemo(
-        () => tasks.filter((task) => (
-            task.status === 'someday'
-            && !task.deletedAt
-            && isTaskInActiveProject(task, projectById)
-        )),
-        [projectById, tasks],
-    );
-    const waitingGroups = useMemo(() => partitionByReviewDate(waitingTasks), [waitingTasks]);
+    const inboxTasks = weeklyBuckets.inbox;
+    const waitingGroups = weeklyBuckets.waitingGroups;
     const visibleWaitingTasks = useMemo(
         () => [...waitingGroups.due, ...waitingGroups.unscheduled],
         [waitingGroups],
     );
     const scheduledWaitingTasks = waitingGroups.scheduled;
-    const somedayGroups = useMemo(() => partitionByReviewDate(somedayTasks), [somedayTasks]);
+    const somedayGroups = weeklyBuckets.somedayGroups;
     const visibleSomedayTasks = useMemo(
         () => [...somedayGroups.due, ...somedayGroups.unscheduled],
         [somedayGroups],
     );
     const scheduledSomedayTasks = somedayGroups.scheduled;
-    const activeProjects = useMemo(
-        () => projects.filter((project) => project.status === 'active' && !project.deletedAt),
-        [projects],
+    // Only used for the "nothing waiting/someday at all" length checks below;
+    // the visible/scheduled slices above are what actually render.
+    const waitingTasks = useMemo(
+        () => [...waitingGroups.due, ...waitingGroups.scheduled, ...waitingGroups.unscheduled],
+        [waitingGroups],
     );
-    const dueProjects = useMemo(
-        () => activeProjects.filter((project) => isDueForReview(project.reviewAt)),
-        [activeProjects],
+    const somedayTasks = useMemo(
+        () => [...somedayGroups.due, ...somedayGroups.scheduled, ...somedayGroups.unscheduled],
+        [somedayGroups],
     );
-    const futureProjects = useMemo(
-        () => activeProjects.filter((project) => !isDueForReview(project.reviewAt)),
-        [activeProjects],
+    const orderedProjects = weeklyBuckets.orderedProjects;
+    const calendarReviewItems = weeklyBuckets.calendarItems;
+    const externalCalendarReviewItems = useMemo(
+        () => getExternalCalendarDaySummaries(externalCalendarEvents),
+        [externalCalendarEvents],
     );
-    const orderedProjects = useMemo(
-        () => [...dueProjects, ...futureProjects],
-        [dueProjects, futureProjects],
-    );
-    const calendarReviewItems = useMemo<CalendarTaskReviewEntry[]>(() => {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const upcomingEnd = new Date(startOfToday);
-        upcomingEnd.setDate(upcomingEnd.getDate() + 7);
-        const entries: CalendarTaskReviewEntry[] = [];
-
-        tasks.forEach((task) => {
-            if (task.deletedAt) return;
-            if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
-            if (!isTaskInActiveProject(task, projectById)) return;
-            const dueDate = safeParseDueDate(task.dueDate);
-            if (dueDate) entries.push({ task, date: dueDate, kind: 'due' });
-            const startTime = safeParseDate(task.startTime);
-            if (startTime) entries.push({ task, date: startTime, kind: 'start' });
-        });
-
-        return entries
-            .filter((entry) => entry.date >= startOfToday && entry.date < upcomingEnd)
-            .sort((a, b) => a.date.getTime() - b.date.getTime());
-    }, [projectById, tasks]);
-
-    const externalCalendarReviewItems = useMemo<ExternalCalendarDaySummary[]>(() => {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const summaries: ExternalCalendarDaySummary[] = [];
-
-        for (let offset = 0; offset < 7; offset += 1) {
-            const dayStart = new Date(startOfToday);
-            dayStart.setDate(dayStart.getDate() + offset);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
-            const dayEvents = externalCalendarEvents
-                .filter((event) => {
-                    const start = safeParseDate(event.start);
-                    const end = safeParseDate(event.end);
-                    if (!start || !end) return false;
-                    return start.getTime() < dayEnd.getTime() && end.getTime() > dayStart.getTime();
-                })
-                .sort((a, b) => {
-                    const aStart = safeParseDate(a.start)?.getTime() ?? Number.POSITIVE_INFINITY;
-                    const bStart = safeParseDate(b.start)?.getTime() ?? Number.POSITIVE_INFINITY;
-                    return aStart - bStart;
-                });
-            if (dayEvents.length > 0) {
-                summaries.push({
-                    dayStart,
-                    events: dayEvents,
-                    totalCount: dayEvents.length,
-                });
-            }
-        }
-
-        return summaries;
-    }, [externalCalendarEvents]);
-
-    const contextReviewGroups = useMemo<ContextReviewGroup[]>(() => {
-        const groups = new Map<string, Task[]>();
-        tasks.forEach((task) => {
-            if (task.deletedAt) return;
-            if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
-            if (!isTaskInActiveProject(task, projectById)) return;
-            (task.contexts ?? []).forEach((contextValue) => {
-                const normalized = contextValue.trim();
-                if (!normalized) return;
-                const existing = groups.get(normalized) ?? [];
-                existing.push(task);
-                groups.set(normalized, existing);
-            });
-        });
-        return Array.from(groups.entries())
-            .map(([context, contextTasks]) => ({
-                context,
-                tasks: contextTasks.sort((a, b) => a.title.localeCompare(b.title)),
-            }))
-            .sort((a, b) => (b.tasks.length - a.tasks.length) || a.context.localeCompare(b.context));
-    }, [projectById, tasks]);
+    const contextReviewGroups = weeklyBuckets.contextGroups;
 
     const projectReviewEntries = useMemo<ReviewProjectEntry[]>(() => orderedProjects.map((project) => {
         const projectTasks = tasks.filter(
@@ -506,40 +403,33 @@ export function useReviewModalController({
         };
     }), [areaById, orderedProjects, tasks, tc.tint]);
 
+    const stepFlags = useMemo(() => buildReviewSteps(weeklyBuckets, {
+        kind: 'weekly',
+        includeContextStep,
+        staleItemCount: staleItems.length,
+        externalCalendarDayCount: externalCalendarReviewItems.length,
+        externalCalendarHasError: Boolean(externalCalendarError),
+    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, staleItems.length, weeklyBuckets]);
+    const stepHasWork = useMemo(() => new Map(stepFlags.map((flag) => [flag.id, flag.hasWork])), [stepFlags]);
     const steps = useMemo<ReviewStepDefinition[]>(() => {
-        const calendarHasWork = calendarReviewItems.length > 0
-            || externalCalendarReviewItems.length > 0
-            || Boolean(externalCalendarError);
         const list: ReviewStepDefinition[] = [
-            { id: 'inbox', title: labels.inbox, Icon: Inbox, hasWork: inboxTasks.length > 0 },
-            { id: 'stale', title: labels.stale, Icon: History, hasWork: staleItems.length > 0 },
+            { id: 'inbox', title: labels.inbox, Icon: Inbox, hasWork: stepHasWork.get('inbox') ?? false },
+            { id: 'stale', title: labels.stale, Icon: History, hasWork: stepHasWork.get('stale') ?? false },
         ];
         list.push(
-            { id: 'calendar', title: labels.calendar, Icon: CalendarIcon, hasWork: calendarHasWork },
-            { id: 'waiting', title: labels.waiting, Icon: Clock, hasWork: visibleWaitingTasks.length > 0 },
+            { id: 'calendar', title: labels.calendar, Icon: CalendarIcon, hasWork: stepHasWork.get('calendar') ?? false },
+            { id: 'waiting', title: labels.waiting, Icon: Clock, hasWork: stepHasWork.get('waiting') ?? false },
         );
         if (includeContextStep) {
-            list.push({ id: 'contexts', title: labels.contexts, Icon: Tag, hasWork: contextReviewGroups.length > 0 });
+            list.push({ id: 'contexts', title: labels.contexts, Icon: Tag, hasWork: stepHasWork.get('contexts') ?? false });
         }
         list.push(
-            { id: 'projects', title: labels.projects, Icon: FolderOpen, hasWork: projectReviewEntries.length > 0 },
-            { id: 'someday', title: labels.someday, Icon: Lightbulb, hasWork: visibleSomedayTasks.length > 0 },
+            { id: 'projects', title: labels.projects, Icon: FolderOpen, hasWork: stepHasWork.get('projects') ?? false },
+            { id: 'someday', title: labels.someday, Icon: Lightbulb, hasWork: stepHasWork.get('someday') ?? false },
             { id: 'completed', title: labels.done, Icon: CheckCircle2, hasWork: true },
         );
         return list;
-    }, [
-        calendarReviewItems.length,
-        contextReviewGroups.length,
-        externalCalendarError,
-        externalCalendarReviewItems.length,
-        inboxTasks.length,
-        includeContextStep,
-        labels,
-        projectReviewEntries.length,
-        staleItems.length,
-        visibleSomedayTasks.length,
-        visibleWaitingTasks.length,
-    ]);
+    }, [includeContextStep, labels, stepHasWork]);
     const activeSteps = useMemo(
         () => steps.filter((step) => step.hasWork || step.id === 'completed'),
         [steps],

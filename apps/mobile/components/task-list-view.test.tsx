@@ -6,9 +6,9 @@ import type { Task } from '@mindwtr/core';
 import { TaskListView, type TaskListViewProps } from './task-list-view';
 
 vi.mock('react-native', () => ({
-  FlatList: ({ data, ListEmptyComponent, ListHeaderComponent, ListFooterComponent, renderItem }: any) => React.createElement(
+  FlatList: ({ data, ListEmptyComponent, ListHeaderComponent, ListFooterComponent, renderItem, ...props }: any) => React.createElement(
     'FlatList',
-    null,
+    props,
     typeof ListHeaderComponent === 'function' ? React.createElement(ListHeaderComponent) : ListHeaderComponent,
     data?.length
       ? data.map((item: unknown, index: number) => renderItem?.({ item, index }))
@@ -155,6 +155,21 @@ describe('TaskListView', () => {
     expect(renderer.root.findAllByType('SwipeableTaskItem' as never)).toHaveLength(0);
     const texts = renderer.root.findAllByType('Text' as never);
     expect(texts.some((node) => node.props.children === 'Nothing here')).toBe(true);
+  });
+
+  // Pinned literals, not a read of TASK_LIST_WINDOWING_PROPS: these numbers are
+  // #766 device tuning, and a test that echoes the constant would follow it down
+  // if an entry were dropped. Changing them is a perf decision — re-check
+  // docs/performance-budgets.md on hardware, not here.
+  it('applies the shared list windowing tuning', () => {
+    const renderer = renderView();
+    const list = renderer.root.findByType('FlatList' as never);
+
+    expect(list.props.initialNumToRender).toBe(12);
+    expect(list.props.maxToRenderPerBatch).toBe(12);
+    expect(list.props.windowSize).toBe(5);
+    expect(list.props.updateCellsBatchingPeriod).toBe(50);
+    expect(list.props.removeClippedSubviews).toBe(false);
   });
 
   it('renders the header and footer slots', () => {

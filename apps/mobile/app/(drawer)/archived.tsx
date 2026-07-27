@@ -12,6 +12,7 @@ import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigatio
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { CompletedAtPicker } from '@/components/completed-at-picker';
 import { assertBulkActionSucceeded, useTaskListSelection } from '@/components/use-task-list-selection';
+import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Archive } from 'lucide-react-native';
 
@@ -358,8 +359,9 @@ export default function ArchivedScreen() {
     }, []);
 
     const handleSaveTask = useCallback((taskId: string, updates: Partial<Task>) => {
-        updateTask(taskId, updates);
+        const result = updateTask(taskId, updates);
         setSelectedTaskId(null);
+        return result;
     }, [updateTask]);
 
     const handleRestore = useCallback((taskId: string) => {
@@ -595,11 +597,7 @@ export default function ArchivedScreen() {
                             styles.taskListContent,
                             archivedProjects.length === 0 && styles.emptyContent,
                         ]}
-                        initialNumToRender={12}
-                        maxToRenderPerBatch={12}
-                        windowSize={5}
-                        updateCellsBatchingPeriod={50}
-                        removeClippedSubviews={false}
+                        {...TASK_LIST_WINDOWING_PROPS}
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
@@ -624,11 +622,7 @@ export default function ArchivedScreen() {
                         styles.taskListContent,
                         archivedTasks.length === 0 && styles.emptyContent,
                     ]}
-                    initialNumToRender={12}
-                    maxToRenderPerBatch={12}
-                    windowSize={5}
-                    updateCellsBatchingPeriod={50}
-                    removeClippedSubviews={false}
+                    {...TASK_LIST_WINDOWING_PROPS}
                     showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                         <View style={styles.emptyState}>

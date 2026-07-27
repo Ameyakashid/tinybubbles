@@ -19,6 +19,11 @@ import { logTaskError, logTaskWarn } from './task-edit-modal.utils';
 import { parseTokenList } from './task-edit-token-utils';
 import { openProjectScreen, openTaskScreen } from '../../lib/task-meta-navigation';
 import {
+    getActionFailureMessage,
+    getUnknownErrorMessage,
+    isActionFailure,
+} from '../store-action-result';
+import {
     setTaskDraftField,
     type TaskDraftSetter,
 } from '@mindwtr/core/task-draft';
@@ -64,7 +69,12 @@ type TaskEditActionsParams = {
     isContextInputFocused: boolean;
     isTagInputFocused: boolean;
     onClose: () => void;
-    onSave: (taskId: string, updates: Partial<Task>) => void;
+    /**
+     * Returns whatever the store write resolves to (callers wire this straight to
+     * `updateTask`), so a `{ success: false }` save can surface instead of the
+     * modal closing over a write that never landed.
+     */
+    onSave: (taskId: string, updates: Partial<Task>) => unknown;
     prioritiesEnabled: boolean;
     projectContext?: Record<string, unknown> | null;
     resetTaskChecklist: (taskId: string) => Promise<unknown>;
@@ -127,6 +137,22 @@ export function useTaskEditActions({
     titleDebounceRef,
     titleDraftRef,
 }: TaskEditActionsParams) {
+    // The modal closes as soon as a save is handed off, so a store write that
+    // resolves to `{ success: false }` would otherwise read as a saved task.
+    const reportSaveResult = useCallback((result: unknown) => {
+        const showSaveError = (message?: string) => showToast({
+            title: tFallback(t, 'common.error', 'Error'),
+            message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
+            tone: 'error',
+            durationMs: 4200,
+        });
+        void Promise.resolve(result)
+            .then((settled) => {
+                if (isActionFailure(settled)) showSaveError(getActionFailureMessage(settled));
+            })
+            .catch((error) => showSaveError(getUnknownErrorMessage(error)));
+    }, [showToast, t]);
+
     const applyChecklistUpdate = useCallback((nextChecklist: NonNullable<Task['checklist']>) => {
         const currentStatus = taskEditDraft?.draft.status ?? task?.status ?? 'inbox';
         let nextStatus = currentStatus;
@@ -187,7 +213,7 @@ export function useTaskEditActions({
             return;
         }
 
-        onSave(task.id, updates);
+        reportSaveResult(onSave(task.id, updates));
         onClose();
     }, [
         baseTaskRef,
@@ -195,6 +221,7 @@ export function useTaskEditActions({
         descriptionDraftRef,
         onClose,
         onSave,
+        reportSaveResult,
         sections,
         task,
         taskEditDraft,
@@ -414,7 +441,7 @@ export function useTaskEditActions({
             isFocusedToday: false,
             pushCount: 0,
         };
-        onSave(task.id, referenceUpdate);
+        reportSaveResult(onSave(task.id, referenceUpdate));
         setDraftField('status', 'reference');
         setDraftField('startTime', '');
         setDraftField('dueDate', '');
@@ -425,7 +452,7 @@ export function useTaskEditActions({
         setDraftField('priority', '');
         setDraftField('timeEstimate', '');
         setDraftField('focusedToday', false);
-    }, [onSave, setDraftField, task]);
+    }, [onSave, reportSaveResult, setDraftField, task]);
 
     const getAIProvider = useCallback(async () => {
         if (!aiEnabled) {

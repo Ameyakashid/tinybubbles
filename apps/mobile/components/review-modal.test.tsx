@@ -122,6 +122,67 @@ vi.mock('@mindwtr/core', () => ({
     safeFormatDate: vi.fn(() => '2026-03-15'),
     safeParseDate: vi.fn((value?: string) => (value ? new Date(value) : null)),
     safeParseDueDate: vi.fn(() => null),
+    // Weekly Review candidate/bucket derivation moved to core (review-buckets
+    // refactor); these fakes mirror the real functions closely enough for
+    // this file's fixtures, composed from the primitives already mocked above.
+    getWeeklyReviewBuckets: vi.fn((tasks: any[], projects: any[]) => {
+        const inbox = tasks.filter((task: any) => task.status === 'inbox' && !task.deletedAt);
+        const waiting = tasks.filter((task: any) => task.status === 'waiting' && !task.deletedAt);
+        const someday = tasks.filter((task: any) => task.status === 'someday' && !task.deletedAt);
+        const activeProjects = projects.filter((project: any) => project.status === 'active' && !project.deletedAt);
+        const contextGroupsByName = new Map<string, any[]>();
+        tasks.forEach((task: any) => {
+            if (task.deletedAt || ['done', 'archived', 'reference'].includes(task.status)) return;
+            (task.contexts ?? []).forEach((context: string) => {
+                const list = contextGroupsByName.get(context) ?? [];
+                list.push(task);
+                contextGroupsByName.set(context, list);
+            });
+        });
+        return {
+            inbox,
+            waitingGroups: { due: [], scheduled: [], unscheduled: waiting },
+            somedayGroups: { due: [], scheduled: [], unscheduled: someday },
+            orderedProjects: activeProjects,
+            contextGroups: Array.from(contextGroupsByName.entries()).map(([context, contextTasks]) => ({ context, tasks: contextTasks })),
+            calendarItems: [],
+        };
+    }),
+    getExternalCalendarDaySummaries: vi.fn(() => []),
+    buildReviewSteps: vi.fn((buckets: any, opts: any) => {
+        if (opts?.kind === 'daily') {
+            const dailySteps: Array<{ id: string; hasWork: boolean }> = [
+                { id: 'today', hasWork: false },
+                { id: 'inbox', hasWork: buckets.inbox.length > 0 },
+                { id: 'waiting', hasWork: buckets.waiting.length > 0 },
+            ];
+            if (opts.includeFocusStep !== false) {
+                dailySteps.push({ id: 'focus', hasWork: buckets.focusCandidates.length > 0 });
+            }
+            dailySteps.push({ id: 'completed', hasWork: true });
+            return dailySteps;
+        }
+        const weeklySteps: Array<{ id: string; hasWork: boolean }> = [
+            { id: 'inbox', hasWork: buckets.inbox.length > 0 },
+            { id: 'stale', hasWork: (opts.staleItemCount ?? 0) > 0 },
+            {
+                id: 'calendar',
+                hasWork: buckets.calendarItems.length > 0
+                    || (opts.externalCalendarDayCount ?? 0) > 0
+                    || Boolean(opts.externalCalendarHasError),
+            },
+            { id: 'waiting', hasWork: buckets.waitingGroups.due.length + buckets.waitingGroups.unscheduled.length > 0 },
+        ];
+        if (opts.includeContextStep !== false) {
+            weeklySteps.push({ id: 'contexts', hasWork: buckets.contextGroups.length > 0 });
+        }
+        weeklySteps.push(
+            { id: 'projects', hasWork: buckets.orderedProjects.length > 0 },
+            { id: 'someday', hasWork: buckets.somedayGroups.due.length + buckets.somedayGroups.unscheduled.length > 0 },
+            { id: 'completed', hasWork: true },
+        );
+        return weeklySteps;
+    }),
 }));
 
 vi.mock('../contexts/theme-context', () => ({

@@ -1,5 +1,11 @@
 import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@mindwtr/core/whisper-models';
-import { LOCALES } from '@mindwtr/core';
+import {
+    LOCALES,
+    resolveSettingsSearchI18nKey,
+    SETTINGS_SEARCH_MOBILE_EXCLUSIONS,
+    SETTINGS_SEARCH_PAGE_KEYS,
+    type SettingsSearchPageId,
+} from '@mindwtr/core';
 
 import type { Language } from '@/contexts/language-context';
 
@@ -58,53 +64,91 @@ export type SettingsMenuRowId =
     | 'advanced'
     | 'about';
 
-// Every key here must be a REAL i18n key that the row's sub-screen actually
-// renders — verified against packages/core/src/i18n/locales/en.ts and the
-// screen source. Mobile namespaces mobile-only labels under settings.mobile.*,
-// settings.gtdMobile.*, settings.syncMobile.*, settings.calendarMobile.*, and
-// some settings live on non-"settings" screens (areas.manage, contexts.title,
-// tags.title). settings.search.test.ts asserts every key resolves, so a wrong
-// or invented key fails CI rather than silently contributing nothing.
-export const SETTINGS_MENU_KEYWORD_KEYS: Record<SettingsMenuRowId, readonly string[]> = {
-    general: [
-        'settings.appearance', 'settings.theme', 'settings.language', 'settings.weekStart',
-        'settings.dateFormat', 'settings.timeFormat', 'settings.calendarSystem',
-        'settings.mobile.showTaskAge', 'settings.mobile.appLock', 'settings.privacy',
-    ],
-    gtd: [
-        'settings.features', 'settings.featurePomodoro', 'settings.gtdMobile.pomodoroSettings',
-        'settings.timeEstimatePresets', 'settings.autoArchive', 'settings.taskEditorLayout',
-        'settings.captureDefault', 'settings.inboxProcessing', 'settings.gtdMobile.defaultScheduleTime',
-        'settings.focusTaskLimit', 'settings.defaultProjectFlowMode', 'settings.defaultArea',
-        'settings.weeklyReviewConfig', 'settings.dailyReviewConfig',
-        'settings.naturalLanguageDates',
-    ],
+// Which desktop settings page(s) (see packages/core/src/settings-search-keys.ts)
+// feed each mobile row's derived keywords below. Mobile has 8 rows to
+// desktop's 10 pages: 'ai' folds into 'advanced', and 'integrations' (Obsidian
+// + local calendar-file import) has no mobile row at all — mobile has neither
+// feature, and both keys are on core's SETTINGS_SEARCH_MOBILE_EXCLUSIONS list.
+const DESKTOP_PAGES_FOR_ROW: Record<SettingsMenuRowId, readonly SettingsSearchPageId[]> = {
+    general: ['main'],
+    gtd: ['gtd'],
+    manage: ['manage'],
+    notifications: ['notifications'],
+    sync: ['sync'],
+    data: ['data'],
+    advanced: ['ai', 'advanced'],
+    about: ['about'],
+};
+
+// Desktop search keys mobile renders under a DIFFERENT i18n key. Mobile
+// namespaces mobile-only labels under settings.mobile.*, settings.gtdMobile.*
+// and settings.syncMobile.* — same English text as the desktop default, a
+// separate key so each platform's translation can diverge. Falls back to
+// core's default resolution (`settings.<key>`) when a key isn't listed here.
+const MOBILE_SEARCH_KEY_OVERRIDES: Partial<Record<string, string>> = {
+    showTaskAge: 'settings.mobile.showTaskAge',
+    defaultScheduleTime: 'settings.gtdMobile.defaultScheduleTime',
+    backgroundSync: 'settings.syncMobile.backgroundSync',
+    restoreBackup: 'settings.syncMobile.restoreBackup',
+    importTodoist: 'settings.syncMobile.importFromTodoist',
+    importTickTick: 'settings.syncMobile.importFromTicktick',
+    importDgt: 'settings.syncMobile.importFromDgtGtd',
+    importOmniFocus: 'settings.syncMobile.importFromOmnifocus',
+};
+
+function derivedRowKeys(row: SettingsMenuRowId): string[] {
+    return DESKTOP_PAGES_FOR_ROW[row].flatMap((pageId) =>
+        SETTINGS_SEARCH_PAGE_KEYS[pageId]
+            .filter((key) => !(key in SETTINGS_SEARCH_MOBILE_EXCLUSIONS))
+            .map((key) => MOBILE_SEARCH_KEY_OVERRIDES[key] ?? resolveSettingsSearchI18nKey(key)),
+    );
+}
+
+// Settings that only exist on mobile, or aren't part of desktop's curated
+// page-search roster at all — layered on top of the derived desktop baseline
+// above. Every key here must be a REAL i18n key that the row's sub-screen
+// actually renders — verified against packages/core/src/i18n/locales/en.ts
+// and the screen source. settings.search.test.ts asserts every key in the
+// combined roster resolves, so a wrong or invented key fails CI rather than
+// silently contributing nothing.
+const MOBILE_ROW_EXTRA_KEYS: Record<SettingsMenuRowId, readonly string[]> = {
+    general: ['settings.theme', 'settings.mobile.appLock', 'settings.privacy'],
+    gtd: ['settings.gtdMobile.pomodoroSettings', 'settings.dailyReviewConfig'],
     // manage-settings-screen renders areas/contexts/tags via non-settings keys.
     // People has no dedicated title key in en.ts, so it is intentionally omitted.
-    manage: ['settings.manage', 'areas.manage', 'contexts.title', 'tags.title', 'settings.unassignedAreaColor'],
+    manage: ['areas.manage', 'contexts.title', 'tags.title', 'settings.unassignedAreaColor'],
     notifications: [
-        'settings.notifications', 'settings.dailyDigest', 'settings.weeklyReview',
+        'settings.dailyDigest', 'settings.weeklyReview',
         'settings.dueDateNotifications', 'settings.startDateNotifications', 'settings.persistentCaptureLabel',
     ],
     // Sync screen (mode === 'sync'): backends + recovery snapshots.
     sync: [
-        'settings.sync', 'settings.syncBackend', 'settings.syncBackendWebdav',
+        'settings.syncBackend', 'settings.syncBackendWebdav',
         'settings.cloudProviderDropbox', 'settings.syncHistory', 'settings.recoverySnapshots',
     ],
-    // Data screen (mode === 'data'): backup/export/restore, per-source imports, diagnostics.
-    data: [
-        'settings.data', 'settings.backup', 'settings.exportBackup', 'settings.syncMobile.restoreBackup',
-        'settings.syncMobile.importFromTodoist', 'settings.syncMobile.importFromTicktick',
-        'settings.syncMobile.importFromDgtGtd', 'settings.syncMobile.importFromOmnifocus',
-        'settings.diagnostics', 'settings.debugLogging',
-    ],
-    // Advanced is a two-level menu; index the real AI + Calendar leaf settings.
+    // Data screen (mode === 'data'): backup/export, diagnostics (imports/restore are derived above).
+    // No desktop bare key resolves to 'settings.data' itself (the data page's
+    // roster starts at 'dataTransfer'), so it's listed here rather than derived.
+    data: ['settings.data', 'settings.backup', 'settings.exportBackup', 'settings.diagnostics', 'settings.debugLogging'],
+    // Advanced is a two-level menu; index the real AI + Calendar leaf settings
+    // (the row's own title + 'ai' page title are derived above).
     advanced: [
-        'settings.advanced', 'settings.ai', 'settings.aiProvider', 'settings.aiModel', 'settings.aiApiKey',
+        'settings.aiProvider', 'settings.aiModel', 'settings.aiApiKey',
         'settings.aiProviderOpenAI', 'settings.aiProviderAnthropic', 'settings.aiProviderGemini',
         'settings.calendar', 'settings.calendarMobile.icsSubscriptions',
     ],
-    about: ['settings.about', 'settings.changelog', 'settings.checkForUpdates', 'settings.documentation'],
+    about: ['settings.changelog', 'settings.checkForUpdates', 'settings.documentation'],
+};
+
+export const SETTINGS_MENU_KEYWORD_KEYS: Record<SettingsMenuRowId, readonly string[]> = {
+    general: [...derivedRowKeys('general'), ...MOBILE_ROW_EXTRA_KEYS.general],
+    gtd: [...derivedRowKeys('gtd'), ...MOBILE_ROW_EXTRA_KEYS.gtd],
+    manage: [...derivedRowKeys('manage'), ...MOBILE_ROW_EXTRA_KEYS.manage],
+    notifications: [...derivedRowKeys('notifications'), ...MOBILE_ROW_EXTRA_KEYS.notifications],
+    sync: [...derivedRowKeys('sync'), ...MOBILE_ROW_EXTRA_KEYS.sync],
+    data: [...derivedRowKeys('data'), ...MOBILE_ROW_EXTRA_KEYS.data],
+    advanced: [...derivedRowKeys('advanced'), ...MOBILE_ROW_EXTRA_KEYS.advanced],
+    about: [...derivedRowKeys('about'), ...MOBILE_ROW_EXTRA_KEYS.about],
 };
 
 // Build the searchable haystack for a menu row: its title, description, and the

@@ -1,0 +1,151 @@
+import React from 'react';
+import { Text } from 'react-native';
+import renderer, { act } from 'react-test-renderer';
+import { describe, expect, it, vi } from 'vitest';
+import type { Task } from '@mindwtr/core';
+
+import { createTaskEditDraft } from './task-edit-draft-adapter';
+import { useTaskEditActions } from './use-task-edit-actions';
+
+vi.mock('expo-router', () => ({
+    router: { push: vi.fn() },
+}));
+
+/**
+ * Store writes resolve `{ success: false, error }` WITHOUT throwing. The editor
+ * closes the moment a save is handed off, so an unchecked result means the user
+ * watches the modal close over a task that never saved.
+ */
+
+const baseTask: Task = {
+    id: 'task-1',
+    title: 'Plan launch',
+    status: 'next',
+    tags: [],
+    contexts: [],
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+};
+
+const t = (key: string) => key;
+
+type Harness = {
+    onSave: (taskId: string, updates: Partial<Task>) => unknown;
+    onClose: () => void;
+    showToast: ReturnType<typeof vi.fn>;
+};
+
+let saveHandle: () => Promise<void>;
+
+function SaveProbe({ onSave, onClose, showToast }: Harness) {
+    const draft = createTaskEditDraft(baseTask);
+    const { handleSave } = useTaskEditActions({
+        aiEnabled: false,
+        baseTaskRef: { current: baseTask },
+        closeAIModal: vi.fn(),
+        contextInputDraft: '',
+        deleteTask: vi.fn(),
+        descriptionDebounceRef: { current: null },
+        descriptionDraft: '',
+        descriptionDraftRef: { current: '' },
+        duplicateTask: vi.fn(),
+        mergedTask: baseTask,
+        taskEditDraft: draft,
+        formatDate: () => '',
+        formatDueDate: () => '',
+        formatTimeEstimateLabel: () => '',
+        isAIWorking: false,
+        isContextInputFocused: false,
+        isTagInputFocused: false,
+        onClose,
+        onSave,
+        prioritiesEnabled: true,
+        resetTaskChecklist: vi.fn(),
+        restoreTask: vi.fn(),
+        sections: [],
+        setAiModal: vi.fn(),
+        setChecklist: vi.fn(),
+        setDraftField: vi.fn(),
+        setIsAIWorking: vi.fn(),
+        setTitleImmediate: vi.fn(),
+        settings: {},
+        showToast,
+        t,
+        tagInputDraft: '',
+        task: baseTask,
+        tasks: [baseTask],
+        timeEstimatesEnabled: true,
+        titleDebounceRef: { current: null },
+        // A changed title is what makes the save patch non-empty.
+        titleDraftRef: { current: 'Plan launch v2' },
+    } as unknown as Parameters<typeof useTaskEditActions>[0]);
+
+    saveHandle = handleSave;
+    return <Text>probe</Text>;
+}
+
+async function runSave(onSave: Harness['onSave']) {
+    const showToast = vi.fn();
+    const onClose = vi.fn();
+    await act(async () => {
+        renderer.create(<SaveProbe onSave={onSave} onClose={onClose} showToast={showToast} />);
+    });
+    await act(async () => {
+        await saveHandle();
+        await Promise.resolve();
+    });
+    return { onClose, showToast };
+}
+
+describe('task editor save results', () => {
+    it('shows an error when the store write resolves to a failure', async () => {
+        const onSave = vi.fn(() => Promise.resolve({ success: false, error: 'Task is deleted' }));
+
+        const { showToast } = await runSave(onSave);
+
+        expect(onSave).toHaveBeenCalledWith('task-1', expect.objectContaining({ title: 'Plan launch v2' }));
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+            tone: 'error',
+            message: 'Task is deleted',
+        }));
+    });
+
+    // Regression guard for the old hardcoded 'Task update failed' literal, which
+    // was a non-empty string and therefore pre-empted the `task.updateFailed`
+    // lookup it was supposed to be a fallback for.
+    it('routes a message-less failure through the translated copy', async () => {
+        const onSave = vi.fn(() => Promise.resolve({ success: false }));
+
+        const { showToast } = await runSave(onSave);
+
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+            tone: 'error',
+            message: 'Could not update task.',
+        }));
+    });
+
+    it('reports a thrown write too', async () => {
+        const onSave = vi.fn(() => Promise.reject(new Error('offline')));
+
+        const { showToast } = await runSave(onSave);
+
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'error', message: 'offline' }));
+    });
+
+    it('stays quiet on a successful save', async () => {
+        const onSave = vi.fn(() => Promise.resolve({ success: true }));
+
+        const { onClose, showToast } = await runSave(onSave);
+
+        expect(showToast).not.toHaveBeenCalled();
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    it('does not mistake a void-returning save handler for a failure', async () => {
+        const onSave = vi.fn(() => undefined);
+
+        const { showToast } = await runSave(onSave);
+
+        expect(showToast).not.toHaveBeenCalled();
+    });
+});

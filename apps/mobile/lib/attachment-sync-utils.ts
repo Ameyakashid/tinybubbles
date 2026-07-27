@@ -4,16 +4,17 @@ import type { AppData, Attachment } from '@mindwtr/core';
 import {
   ATTACHMENTS_DIR_NAME,
   buildCloudKey,
-  computeSha256Hex,
+  collectAttachmentsById,
   createWebdavDownloadBackoff,
   decodeUriSafe,
   extractExtension,
   getBaseSyncUrl,
   getCloudBaseUrl,
-  globalProgressTracker,
   isDropboxUnauthorizedError,
   markAttachmentUnrecoverable,
+  reportProgress,
   sleep,
+  validateAttachmentHash,
 } from '@mindwtr/core';
 import {
   CLOUD_TOKEN_KEY,
@@ -28,7 +29,11 @@ import { getSecureConfigValue } from './secure-config';
 import { logInfo, logWarn, sanitizeLogMessage } from './app-log';
 import { isLikelyFilePath } from './sync-service-utils';
 
-export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension, getBaseSyncUrl, getCloudBaseUrl };
+export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension, getBaseSyncUrl, getCloudBaseUrl, reportProgress, validateAttachmentHash };
+// `collectAttachments` predates `collectAttachmentsById` moving into core (packages/core/src/
+// attachment-transfer.ts) — kept under its original name here so none of the 5 backend files
+// need a call-site rename.
+export const collectAttachments = collectAttachmentsById;
 export const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
 export const StorageAccessFramework = FileSystem.StorageAccessFramework;
 export const WEBDAV_ATTACHMENT_RETRY_OPTIONS = { maxAttempts: 5, baseDelayMs: 2000, maxDelayMs: 60_000 };
@@ -98,25 +103,6 @@ export const readAttachmentBytesForUpload = async (
   } catch (error) {
     return { data: null, readFailed: true, error };
   }
-};
-
-export const reportProgress = (
-  attachmentId: string,
-  operation: 'upload' | 'download',
-  loaded: number,
-  total: number,
-  status: 'active' | 'completed' | 'failed',
-  error?: string
-) => {
-  const percentage = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
-  globalProgressTracker.updateProgress(attachmentId, {
-    operation,
-    bytesTransferred: loaded,
-    totalBytes: total,
-    percentage,
-    status,
-    error,
-  });
 };
 
 export const bytesToBase64 = (bytes: Uint8Array): string => {
@@ -232,16 +218,6 @@ export const copyFileSafely = async (sourceUri: string, targetUri: string): Prom
         // Ignore cleanup errors for temp file.
       }
     }
-  }
-};
-
-export const validateAttachmentHash = async (attachment: Attachment, bytes: Uint8Array): Promise<void> => {
-  const expected = attachment.fileHash;
-  if (!expected || expected.length !== 64) return;
-  const computed = await computeSha256Hex(bytes);
-  if (!computed) return;
-  if (computed.toLowerCase() !== expected.toLowerCase()) {
-    throw new Error('Integrity validation failed');
   }
 };
 
@@ -694,19 +670,3 @@ export const hasPendingAttachmentSyncWork = async (appData: AppData): Promise<bo
   return false;
 };
 
-export const collectAttachments = (appData: AppData): Map<string, Attachment> => {
-  const attachmentsById = new Map<string, Attachment>();
-  for (const task of appData.tasks) {
-    if (task.deletedAt) continue;
-    for (const attachment of task.attachments || []) {
-      attachmentsById.set(attachment.id, attachment);
-    }
-  }
-  for (const project of appData.projects) {
-    if (project.deletedAt) continue;
-    for (const attachment of project.attachments || []) {
-      attachmentsById.set(attachment.id, attachment);
-    }
-  }
-  return attachmentsById;
-};

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
-import { useTaskStore } from '@mindwtr/core';
+import { resolveThemeColorScheme, useTaskStore } from '@mindwtr/core';
 import { logError } from '../lib/app-log';
 import { markStartupPhase, measureStartupPhase } from '../lib/startup-profiler';
 
@@ -48,19 +48,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         themeMode === 'oled' ? 'oled' :
         'default';
 
-    const resolvedMode: ColorScheme | 'system' =
-        themeMode === 'material3-light'
-            ? 'light'
-            : themeMode === 'material3-dark'
-                ? 'dark'
-                : themeMode === 'nord' || themeMode === 'oled'
-                    ? 'dark'
-                    : themeMode === 'eink' || themeMode === 'sepia'
-                        ? 'light'
-                        : themeMode;
-
     // Determine actual color scheme based on mode and system
-    const colorScheme: ColorScheme = resolvedMode === 'system' ? systemColorScheme : resolvedMode;
+    const colorScheme: ColorScheme = resolveThemeColorScheme(themeMode, systemColorScheme);
     const isDark = colorScheme === 'dark';
 
     useEffect(() => {

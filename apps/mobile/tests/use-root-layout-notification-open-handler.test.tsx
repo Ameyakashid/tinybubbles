@@ -27,16 +27,15 @@ const {
   consumePendingNotificationOpenPayload: vi.fn<() => Promise<PendingNotificationOpenPayload>>(async () => null),
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  useTaskStore: {
-    getState: () => ({
-      _tasksById: storeTasksById,
-      tasks: Array.from(storeTasksById.values()),
-      setHighlightTask,
-      updateTask,
-    }),
-  },
-}));
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  return mockCore(importOriginal, () => ({
+    _tasksById: storeTasksById,
+    tasks: Array.from(storeTasksById.values()),
+    setHighlightTask,
+    updateTask,
+  }));
+});
 
 vi.mock('@/lib/notification-service', () => ({
   setNotificationOpenHandler,

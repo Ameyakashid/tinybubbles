@@ -5,6 +5,7 @@ import type { Task, TaskStatus } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { SwipeableTaskItem, type SwipeableTaskItemRowContext } from './swipeable-task-item';
+import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
 import { TaskListBulkBar } from './task-list/TaskListBulkBar';
 import { TaskListTagModal } from './task-list/TaskListTagModal';
 import type { useTaskListSelection } from './use-task-list-selection';
@@ -53,8 +54,8 @@ export interface TaskListViewProps {
  * genuinely its own.
  *
  * Presentational only: it subscribes to no store, so it is testable with plain
- * fixtures. The FlatList perf tuning matches the hand-rolled screens exactly
- * (see #766) — do not change it without re-checking the perf budgets.
+ * fixtures. The FlatList windowing comes from the shared #766 tuning in
+ * {@link TASK_LIST_WINDOWING_PROPS}.
  */
 export function TaskListView({
   tasks,
@@ -154,11 +155,7 @@ export function TaskListView({
         keyExtractor={(task) => task.id}
         style={listStyle ?? styles.list}
         contentContainerStyle={contentContainerStyle}
-        initialNumToRender={12}
-        maxToRenderPerBatch={12}
-        windowSize={5}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={false}
+        {...TASK_LIST_WINDOWING_PROPS}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={ListHeaderComponent}
         ListFooterComponent={ListFooterComponent}

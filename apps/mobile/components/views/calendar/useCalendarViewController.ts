@@ -72,6 +72,7 @@ import { taskMatchesAreaFilter } from '@mindwtr/core';
 import { useLanguage } from '../../../contexts/language-context';
 import { canOpenExternalCalendarEvent, fetchExternalCalendarEvents, openExternalCalendarEvent } from '../../../lib/external-calendar';
 import { logError } from '../../../lib/app-log';
+import { getActionFailureMessage, isActionFailure } from '../../store-action-result';
 import {
   coerceCalendarWeekVisibleDays,
   coerceCalendarViewMode,
@@ -666,7 +667,13 @@ export function useCalendarViewController() {
     const start = calendarComposer.startAt;
     try {
       if (intent.kind === 'update') {
-        await updateTask(intent.taskId, intent.updates);
+        // Mirrors the create branch below: a `{ success: false }` write must not
+        // fall through to closing the composer as if it had saved.
+        const updated = await updateTask(intent.taskId, intent.updates);
+        if (isActionFailure(updated)) {
+          failCalendarComposer({ code: 'save_failed', detail: getActionFailureMessage(updated) });
+          return;
+        }
       } else {
         let draft = intent.draft;
         if (intent.projectToCreate) {

@@ -74,6 +74,14 @@ vi.mock('@mindwtr/core', () => ({
     LOCALES: {},
     normalizeCloudUrl: mocked.normalizeCloudUrl,
     normalizeWebdavUrl: mocked.normalizeWebdavUrl,
+    // ./settings.constants also derives SETTINGS_MENU_KEYWORD_KEYS from these at module load
+    // time; this test doesn't exercise settings search, so empty/pass-through stubs are enough.
+    resolveSettingsSearchI18nKey: (key: string) => `settings.${key}`,
+    SETTINGS_SEARCH_MOBILE_EXCLUSIONS: {},
+    SETTINGS_SEARCH_PAGE_KEYS: {
+        main: [], gtd: [], manage: [], notifications: [], sync: [],
+        data: [], integrations: [], ai: [], advanced: [], about: [],
+    },
     SYNC_LOCAL_INSECURE_URL_OPTIONS: { allowLocalHostnames: true, allowPrivateIpRanges: true },
     webdavGetJson: mocked.webdavGetJson,
 }));

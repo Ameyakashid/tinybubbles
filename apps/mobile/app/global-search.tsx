@@ -698,8 +698,9 @@ export default function SearchScreen() {
                 task={editingTask}
                 onClose={() => setEditingTaskId(null)}
                 onSave={(taskId, updates) => {
-                    updateTask(taskId, updates);
+                    const result = updateTask(taskId, updates);
                     setEditingTaskId(null);
+                    return result;
                 }}
                 defaultTab="view"
                 onProjectNavigate={openProjectScreen}

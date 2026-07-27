@@ -99,18 +99,11 @@ vi.mock('@react-navigation/elements', () => ({
   getHeaderTitle: (_options: unknown, fallback: string) => fallback,
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  getDefaultTaskAreaMode: (settings: any) => {
-    const mode = settings?.gtd?.defaultAreaMode;
-    if (mode === 'none' || mode === 'fixed' || mode === 'active') return mode;
-    return settings?.gtd?.defaultAreaId ? 'fixed' : 'none';
-  },
-  tFallback: (t: (key: string) => string, key: string, fallback: string) => {
-    const translated = t(key);
-    return translated && translated !== key ? translated : fallback;
-  },
-  useTaskStore: mockUseTaskStore,
-}));
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  // This suite drives the store hook itself, so it supplies its own.
+  return mockCore(importOriginal, () => ({}), { useTaskStore: mockUseTaskStore });
+});
 
 vi.mock('@/components/haptic-tab', () => ({
   HapticTab: (props: any) => React.createElement('HapticTab', props, props.children),

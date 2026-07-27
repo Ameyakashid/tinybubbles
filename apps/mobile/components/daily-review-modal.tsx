@@ -6,17 +6,15 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X, Calendar as CalendarIcon, Clock, Sparkles, Star, CheckCircle2, Play, ChevronDown, ChevronUp } from 'lucide-react-native';
 
 import {
+    buildReviewSteps,
     formatFocusTaskLimitText,
+    getDailyReviewBuckets,
     useTaskStore,
     shallow,
-    isTaskInActiveProject,
     isDueForReview,
     normalizeFocusTaskLimit,
     safeFormatDate,
     safeParseDate,
-    safeParseDueDate,
-    shouldShowTaskForStart,
-    sortTasksBy,
     tFallback,
     type ExternalCalendarEvent,
     type Task,
@@ -36,7 +34,7 @@ import { InboxProcessingModal } from './inbox-processing-modal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { fetchExternalCalendarEvents } from '../lib/external-calendar';
 
-type DailyReviewStep = 'today' | 'focus' | 'inbox' | 'waiting' | 'complete';
+type DailyReviewStep = 'today' | 'focus' | 'inbox' | 'waiting' | 'completed';
 type DailyReviewStepDefinition = {
     hasWork: boolean;
     id: DailyReviewStep;
@@ -56,10 +54,6 @@ type RenderTaskListOptions = {
 interface DailyReviewModalProps {
     visible: boolean;
     onClose: () => void;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 function DailyReviewFlow({ onClose }: { onClose: () => void }) {
@@ -88,7 +82,6 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
     const sortBy = (settings?.taskSortBy ?? 'default') as TaskSortBy;
     const includeFocusStep = settings.gtd?.dailyReview?.includeFocusStep !== false;
     const focusTaskLimit = normalizeFocusTaskLimit(settings.gtd?.focusTaskLimit);
-    const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
 
     const today = useMemo(() => new Date(), []);
     const followUpTodayReviewAt = useMemo(
@@ -154,134 +147,64 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
     const todayEvents = useMemo(() => getExternalEventsForDate(today), [getExternalEventsForDate, today]);
     const tomorrowEvents = useMemo(() => getExternalEventsForDate(tomorrow), [getExternalEventsForDate, tomorrow]);
 
-    const activeTasks = useMemo(
-        () => tasks.filter((task) => (
-            !task.deletedAt
-            && task.status !== 'done'
-            && task.status !== 'reference'
-            && isTaskInActiveProject(task, projectById)
-        )),
-        [projectById, tasks],
+    // Single source of "what needs reviewing today" (#867): shared with
+    // desktop via core so a raw startTime-vs-now check can't drift back in.
+    const dailyBuckets = useMemo(
+        () => getDailyReviewBuckets(tasks, projects, { now: today, sortBy }),
+        [tasks, projects, today, sortBy],
     );
+    const inboxTasks = dailyBuckets.inbox;
+    const focusedTasks = dailyBuckets.focused;
+    const waitingTasks = dailyBuckets.waiting;
+    const dueTodayTasks = dailyBuckets.dueToday;
+    const overdueTasks = dailyBuckets.overdue;
+    const focusCandidates = dailyBuckets.focusCandidates;
 
-    const inboxTasks = useMemo(
-        () => activeTasks.filter((task) => task.status === 'inbox'),
-        [activeTasks],
-    );
-
-    const focusedTasks = useMemo(
-        () => activeTasks.filter((task) => (
-            task.isFocusedToday
-            && task.status !== 'done'
-            && shouldShowTaskForStart(task)
-        )),
-        [activeTasks],
-    );
-
-    const focusCandidates = useMemo(() => {
-        const now = new Date();
-        const todayStr = now.toDateString();
-        const byId = new Map<string, Task>();
-        const addCandidate = (task: Task) => {
-            if (!byId.has(task.id)) byId.set(task.id, task);
-        };
-        activeTasks.forEach((task) => {
-            if (task.isFocusedToday && shouldShowTaskForStart(task, { now })) addCandidate(task);
-            const due = safeParseDueDate(task.dueDate);
-            if (due && (due < now || due.toDateString() === todayStr)) {
-                addCandidate(task);
-                return;
-            }
-            if (task.status === 'next') {
-                // Same deferral rule as Focus: a recurring chore carrying only a
-                // due date is not reviewable until it starts (#843, #867).
-                if (!shouldShowTaskForStart(task, { now })) return;
-                addCandidate(task);
-                return;
-            }
-            if ((task.status === 'waiting' || task.status === 'someday') && isDueForReview(task.reviewAt, now)) {
-                addCandidate(task);
-            }
-        });
-        return sortTasksBy(Array.from(byId.values()), sortBy);
-    }, [activeTasks, sortBy]);
-
-    const dueTodayTasks = useMemo(() => {
-        const dueToday = activeTasks.filter((task) => {
-            if (task.status === 'done') return false;
-            const due = safeParseDueDate(task.dueDate);
-            return due ? isSameDay(due, today) : false;
-        });
-        return sortTasksBy(dueToday, sortBy);
-    }, [activeTasks, sortBy, today]);
-
-    const overdueTasks = useMemo(() => {
-        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const overdue = activeTasks.filter((task) => {
-            if (task.status === 'done') return false;
-            const due = safeParseDueDate(task.dueDate);
-            return due ? due < startOfToday : false;
-        });
-        return sortTasksBy(overdue, sortBy);
-    }, [activeTasks, sortBy, today]);
-
-    const waitingTasks = useMemo(() => {
-        const waiting = activeTasks.filter((task) => task.status === 'waiting');
-        return sortTasksBy(waiting, sortBy);
-    }, [activeTasks, sortBy]);
+    const stepFlags = useMemo(() => buildReviewSteps(dailyBuckets, {
+        kind: 'daily',
+        includeFocusStep,
+        todayCalendarEventCount: todayEvents.length,
+        tomorrowCalendarEventCount: tomorrowEvents.length,
+        externalCalendarHasError: Boolean(externalError),
+    }), [dailyBuckets, externalError, includeFocusStep, todayEvents.length, tomorrowEvents.length]);
+    const stepHasWork = useMemo(() => new Map(stepFlags.map((flag) => [flag.id, flag.hasWork])), [stepFlags]);
 
     const steps: DailyReviewStepDefinition[] = useMemo(() => {
-        const todayHasWork = overdueTasks.length > 0
-            || dueTodayTasks.length > 0
-            || todayEvents.length > 0
-            || tomorrowEvents.length > 0
-            || Boolean(externalError);
         const list: DailyReviewStepDefinition[] = [
-            { id: 'today', title: t('dailyReview.todayStep'), description: t('dailyReview.todayDesc'), hasWork: todayHasWork },
-            { id: 'inbox', title: t('dailyReview.inboxStep'), description: t('dailyReview.inboxDesc'), hasWork: inboxTasks.length > 0 },
+            { id: 'today', title: t('dailyReview.todayStep'), description: t('dailyReview.todayDesc'), hasWork: stepHasWork.get('today') ?? false },
+            { id: 'inbox', title: t('dailyReview.inboxStep'), description: t('dailyReview.inboxDesc'), hasWork: stepHasWork.get('inbox') ?? false },
             // Waiting For comes before focus selection: items unblocked today can be
             // switched to Next here and then picked up in the focus step.
-            { id: 'waiting', title: t('dailyReview.waitingStep'), description: t('dailyReview.waitingDesc'), hasWork: waitingTasks.length > 0 },
+            { id: 'waiting', title: t('dailyReview.waitingStep'), description: t('dailyReview.waitingDesc'), hasWork: stepHasWork.get('waiting') ?? false },
         ];
         if (includeFocusStep) {
-            list.push({ id: 'focus', title: t('dailyReview.focusStep'), description: t('dailyReview.focusDesc'), hasWork: focusCandidates.length > 0 });
+            list.push({ id: 'focus', title: t('dailyReview.focusStep'), description: t('dailyReview.focusDesc'), hasWork: stepHasWork.get('focus') ?? false });
         }
         list.push(
-            { id: 'complete', title: t('dailyReview.completeTitle'), description: t('dailyReview.completeDesc'), hasWork: true },
+            { id: 'completed', title: t('dailyReview.completeTitle'), description: t('dailyReview.completeDesc'), hasWork: true },
         );
         return list;
-    }, [
-        dueTodayTasks.length,
-        externalError,
-        focusCandidates.length,
-        inboxTasks.length,
-        includeFocusStep,
-        overdueTasks.length,
-        t,
-        todayEvents.length,
-        tomorrowEvents.length,
-        waitingTasks.length,
-    ]);
+    }, [includeFocusStep, stepHasWork, t]);
     const activeSteps = useMemo(
-        () => steps.filter((step) => step.hasWork || step.id === 'complete'),
+        () => steps.filter((step) => step.hasWork || step.id === 'completed'),
         [steps],
     );
 
     const displayedStep = activeSteps.some((step) => step.id === currentStep)
         ? currentStep
-        : activeSteps[0]?.id ?? 'complete';
+        : activeSteps[0]?.id ?? 'completed';
     const activeStepIndex = activeSteps.findIndex((step) => step.id === displayedStep);
     const safeActiveStepIndex = Math.max(0, activeStepIndex);
     const displayedStepDefinition = activeSteps[safeActiveStepIndex];
 
     useEffect(() => {
         if (activeSteps.some((step) => step.id === currentStep)) return;
-        setCurrentStep(activeSteps[0]?.id ?? 'complete');
+        setCurrentStep(activeSteps[0]?.id ?? 'completed');
     }, [activeSteps, currentStep]);
 
     const next = () => {
         if (activeStepIndex < 0) {
-            setCurrentStep(activeSteps[0]?.id ?? 'complete');
+            setCurrentStep(activeSteps[0]?.id ?? 'completed');
             return;
         }
         if (activeStepIndex < activeSteps.length - 1) setCurrentStep(activeSteps[activeStepIndex + 1].id);
@@ -550,7 +473,7 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
                         </View>
                     ),
                 });
-            case 'complete':
+            case 'completed':
                 return (
                     <View style={styles.centerContent}>
                         <CheckCircle2 size={56} color={tc.tint} strokeWidth={1.5} style={styles.bigIcon} />
@@ -596,7 +519,7 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
 
                 <View style={styles.content}>{renderStep()}</View>
 
-                {displayedStep !== 'complete' && (
+                {displayedStep !== 'completed' && (
                     <View
                         testID="daily-review-footer"
                         style={[
@@ -633,8 +556,9 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
                         task={editingTask}
                         onClose={closeTask}
                         onSave={(taskId, updates) => {
-                            updateTask(taskId, updates);
+                            const result = updateTask(taskId, updates);
                             closeTask();
+                            return result;
                         }}
                         defaultTab="view"
                         onProjectNavigate={handleNavigateToProject}

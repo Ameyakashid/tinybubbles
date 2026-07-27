@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getChecklistProgress, Task, useTaskStore } from '@mindwtr/core';
+import { logError } from '../../lib/app-log';
+import { getActionFailureMessage, isActionFailure } from '../store-action-result';
 
 type UpdateTask = ReturnType<typeof useTaskStore.getState>['updateTask'];
 
@@ -41,7 +43,18 @@ export function useSwipeableChecklist(task: Task, updateTask: UpdateTask) {
                     ? 'next'
                     : undefined
             : undefined;
-        updateTask(taskId, { checklist, ...(nextStatus ? { status: nextStatus } : {}) });
+        // Deliberately not toasted: this also flushes from the unmount cleanup, and
+        // a toast fired during teardown lands on whatever screen the user moved to.
+        // Logged so a dropped checklist tick is at least diagnosable.
+        void Promise.resolve(updateTask(taskId, { checklist, ...(nextStatus ? { status: nextStatus } : {}) }))
+            .then((result) => {
+                if (isActionFailure(result)) {
+                    void logError(getActionFailureMessage(result) ?? 'checklist update failed', {
+                        scope: 'swipeable-checklist',
+                    });
+                }
+            })
+            .catch((error) => void logError(error, { scope: 'swipeable-checklist' }));
         pendingChecklist.current = null;
     }, [updateTask]);
 

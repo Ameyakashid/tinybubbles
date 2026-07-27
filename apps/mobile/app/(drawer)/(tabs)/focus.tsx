@@ -62,6 +62,11 @@ import {
   type ProjectDeadlineBoost,
 } from '@mindwtr/core';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
+import {
+  getActionFailureMessage,
+  getUnknownErrorMessage,
+  isActionFailure,
+} from '@/components/store-action-result';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { useAndroidKeyboardInset } from '@/lib/use-android-keyboard-inset';
@@ -162,21 +167,6 @@ const getStartDateOffset = (days: number): Date => {
 };
 
 const formatDateOnly = (date: Date): string => safeFormatDate(date, 'yyyy-MM-dd');
-
-const getActionFailureMessage = (result: unknown): string | null => {
-  if (!result || typeof result !== 'object') return null;
-  const actionResult = result as { error?: unknown; success?: unknown };
-  if (actionResult.success !== false) return null;
-  return typeof actionResult.error === 'string' && actionResult.error.trim().length > 0
-    ? actionResult.error.trim()
-    : 'Task update failed';
-};
-
-const getUnknownErrorMessage = (error: unknown): string | undefined => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string' && error.trim().length > 0) return error.trim();
-  return undefined;
-};
 
 function normalizeFocusGroupBy(value: unknown): FocusGroupBy {
   return FOCUS_GROUP_BY_OPTIONS.includes(value as FocusGroupBy) ? value as FocusGroupBy : 'none';
@@ -443,9 +433,8 @@ export default function FocusScreen() {
 
     void Promise.resolve(updateTask(task.id, deferUpdates))
       .then((result: TaskActionResult) => {
-        const failure = getActionFailureMessage(result);
-        if (failure) {
-          showTaskUpdateError(failure);
+        if (isActionFailure(result)) {
+          showTaskUpdateError(getActionFailureMessage(result));
           return;
         }
         showToast({
@@ -459,8 +448,7 @@ export default function FocusScreen() {
               ...(previousFocused ? { isFocusedToday: true } : {}),
             };
             const undoResult = await updateTask(task.id, undoUpdates);
-            const undoFailure = getActionFailureMessage(undoResult);
-            if (undoFailure) throw new Error(undoFailure);
+            if (isActionFailure(undoResult)) throw new Error(getActionFailureMessage(undoResult) ?? '');
           },
           durationMs: 5200,
         });
@@ -472,9 +460,8 @@ export default function FocusScreen() {
 
     void Promise.resolve(updateTask(task.id, { reviewAt: undefined }))
       .then((result: TaskActionResult) => {
-        const failure = getActionFailureMessage(result);
-        if (failure) {
-          showTaskUpdateError(failure);
+        if (isActionFailure(result)) {
+          showTaskUpdateError(getActionFailureMessage(result));
           return;
         }
         showToast({
@@ -484,8 +471,7 @@ export default function FocusScreen() {
           actionLabel: resolveText('common.undo', 'Undo'),
           onAction: async () => {
             const undoResult = await updateTask(task.id, { reviewAt: previousReviewAt });
-            const undoFailure = getActionFailureMessage(undoResult);
-            if (undoFailure) throw new Error(undoFailure);
+            if (isActionFailure(undoResult)) throw new Error(getActionFailureMessage(undoResult) ?? '');
           },
           durationMs: 5200,
         });
@@ -497,9 +483,8 @@ export default function FocusScreen() {
 
     void Promise.resolve(updateTask(task.id, { reviewAt: getAdvancedReviewDate(task.reviewAt) }))
       .then((result: TaskActionResult) => {
-        const failure = getActionFailureMessage(result);
-        if (failure) {
-          showTaskUpdateError(failure);
+        if (isActionFailure(result)) {
+          showTaskUpdateError(getActionFailureMessage(result));
           return;
         }
         showToast({
@@ -509,8 +494,7 @@ export default function FocusScreen() {
           actionLabel: resolveText('common.undo', 'Undo'),
           onAction: async () => {
             const undoResult = await updateTask(task.id, { reviewAt: previousReviewAt });
-            const undoFailure = getActionFailureMessage(undoResult);
-            if (undoFailure) throw new Error(undoFailure);
+            if (isActionFailure(undoResult)) throw new Error(getActionFailureMessage(undoResult) ?? '');
           },
           durationMs: 5200,
         });
@@ -1166,7 +1150,8 @@ export default function FocusScreen() {
   }, []);
 
   const onSaveTask = useCallback((taskId: string, updates: Partial<Task>) => {
-    updateTask(taskId, updates);
+    // Returned, not swallowed: the editor reports a failed save from this result.
+    return updateTask(taskId, updates);
   }, [updateTask]);
 
   const toggleSection = useCallback((sectionType: FocusSectionType) => {
