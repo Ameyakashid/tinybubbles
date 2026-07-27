@@ -41,4 +41,14 @@ describe('attachment-paths', () => {
         expect(getCloudBaseUrl('https://cloud.example.com/v1/data')).toBe('https://cloud.example.com/v1');
         expect(getCloudBaseUrl('https://cloud.example.com/v1/data/')).toBe('https://cloud.example.com/v1');
     });
+
+    // #781: a bare host URL syncs data fine (normalizeCloudUrl adds /v1/data) but
+    // used to send attachments to /attachments/..., which the server 404s.
+    it('getCloudBaseUrl keeps the API version the data endpoint uses', () => {
+        expect(getCloudBaseUrl('https://cloud.example.com')).toBe('https://cloud.example.com/v1');
+        expect(getCloudBaseUrl('https://cloud.example.com/')).toBe('https://cloud.example.com/v1');
+        expect(getCloudBaseUrl('https://cloud.example.com/v1')).toBe('https://cloud.example.com/v1');
+        expect(getCloudBaseUrl('https://cloud.example.com/v2')).toBe('https://cloud.example.com/v2');
+        expect(getCloudBaseUrl('https://cloud.example.com/mindwtr/')).toBe('https://cloud.example.com/mindwtr/v1');
+    });
 });

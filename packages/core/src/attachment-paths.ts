@@ -1,3 +1,4 @@
+import { normalizeCloudUrl } from './sync-helpers';
 import type { Attachment } from './types';
 
 /** Remote folder name for synced attachment bytes, under every backend. */
@@ -30,11 +31,10 @@ export const getBaseSyncUrl = (fullUrl: string): string => {
     return trimmed;
 };
 
-/** Base folder URL from a self-hosted cloud sync URL that points at the /data endpoint. */
-export const getCloudBaseUrl = (fullUrl: string): string => {
-    const trimmed = fullUrl.replace(/\/+$/, '');
-    if (trimmed.toLowerCase().endsWith('/data')) {
-        return trimmed.slice(0, -'/data'.length);
-    }
-    return trimmed;
-};
+/** Versioned base URL for a self-hosted cloud's attachment routes.
+ *  The stored cloud URL is whatever the user typed (`https://host`,
+ *  `https://host/v1`, `https://host/v1/data`); data requests run it through
+ *  `normalizeCloudUrl` first, so attachments must too or a bare host URL
+ *  targets `/attachments/...` instead of `/v1/attachments/...` (#781). */
+export const getCloudBaseUrl = (fullUrl: string): string =>
+    normalizeCloudUrl(fullUrl).slice(0, -'/data'.length);
