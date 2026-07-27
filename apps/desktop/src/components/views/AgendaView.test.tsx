@@ -423,6 +423,75 @@ describe('AgendaView', () => {
         expect(queryByRole('button', { name: /^(show|hide)$/i })).not.toBeInTheDocument();
     });
 
+    it('refreshes date-sensitive sections at local midnight', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 2, 2, 23, 59, 59, 900));
+        const futureStartTask: Task = {
+            id: 'starts-tomorrow',
+            title: 'Starts tomorrow',
+            status: 'next',
+            startTime: '2026-03-03',
+            tags: [],
+            contexts: [],
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        };
+        useTaskStore.setState({
+            tasks: [futureStartTask],
+            _allTasks: [futureStartTask],
+            projects: [],
+            _allProjects: [],
+            areas: [],
+            _allAreas: [],
+            settings: {},
+            highlightTaskId: null,
+        });
+
+        const { getByText, queryByText } = renderAgenda();
+        expect(queryByText('Starts tomorrow')).not.toBeInTheDocument();
+
+        act(() => {
+            vi.advanceTimersByTime(200);
+        });
+
+        expect(getByText('Starts tomorrow')).toBeInTheDocument();
+    });
+
+    it('refreshes date-sensitive sections when the desktop becomes visible on a new day', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 2, 2, 10, 0, 0));
+        const futureStartTask: Task = {
+            id: 'starts-tomorrow',
+            title: 'Starts tomorrow',
+            status: 'next',
+            startTime: '2026-03-03',
+            tags: [],
+            contexts: [],
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        };
+        useTaskStore.setState({
+            tasks: [futureStartTask],
+            _allTasks: [futureStartTask],
+            projects: [],
+            _allProjects: [],
+            areas: [],
+            _allAreas: [],
+            settings: {},
+            highlightTaskId: null,
+        });
+
+        const { getByText, queryByText } = renderAgenda();
+        expect(queryByText('Starts tomorrow')).not.toBeInTheDocument();
+
+        vi.setSystemTime(new Date(2026, 2, 3, 10, 0, 0));
+        act(() => {
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+
+        expect(getByText('Starts tomorrow')).toBeInTheDocument();
+    });
+
     it('removes focused tasks immediately when a local edit makes them ineligible', async () => {
         useTaskStore.setState({
             tasks: [focusedTask],

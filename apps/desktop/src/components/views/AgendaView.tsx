@@ -117,6 +117,41 @@ function getSavedFilterDefaultName(chips: AgendaActiveFilterChip[], fallback: st
     return label || fallback;
 }
 
+function getLocalDayKey(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+}
+
+function useLocalDayKey(): string {
+    const [dayKey, setDayKey] = useState(getLocalDayKey);
+
+    useEffect(() => {
+        let timer: number | undefined;
+        const scheduleNextDay = () => {
+            if (timer) window.clearTimeout(timer);
+            const now = new Date();
+            const nextDay = new Date(now);
+            nextDay.setHours(24, 0, 0, 0);
+            timer = window.setTimeout(refresh, Math.max(1, nextDay.getTime() - now.getTime() + 50));
+        };
+        const refresh = () => {
+            setDayKey(getLocalDayKey());
+            scheduleNextDay();
+        };
+
+        scheduleNextDay();
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        return () => {
+            if (timer) window.clearTimeout(timer);
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+        };
+    }, []);
+
+    return dayKey;
+}
+
 function AgendaTaskList({
     tasks,
     buildFocusToggle,
@@ -254,6 +289,7 @@ export function AgendaView() {
     const getDerivedState = useTaskStore((state) => state.getDerivedState);
     const { activeTasksByStatus, projectMap, sequentialProjectIds, sequentialWithinSectionProjectIds, tasksById } = getDerivedState();
     const { t } = useLanguage();
+    const localDayKey = useLocalDayKey();
     const { showListDetails, nextGroupBy, top3Only, setListOptions, collapseAllTaskDetails, setProjectView, showToast } = useUiStore((state) => ({
         showListDetails: state.listOptions.showDetails,
         nextGroupBy: state.listOptions.nextGroupBy,
@@ -313,13 +349,14 @@ export function AgendaView() {
     ), [derivedActiveTasks, projectMap, resolvedAreaFilter, areaById]);
 
     const { activeTasks, allTokens } = useMemo(() => {
+        void localDayKey;
         const now = new Date();
         const active = baseActiveTasks.filter((task) => shouldShowTaskForStart(task, { now }));
         return {
             activeTasks: active,
             allTokens: getUsedTaskTokens(active, (task) => [...(task.contexts || []), ...(task.tags || [])]),
         };
-    }, [baseActiveTasks]);
+    }, [baseActiveTasks, localDayKey]);
     const priorityOptions: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
     const energyLevelOptions: TaskEnergyLevel[] = ['low', 'medium', 'high'];
     const timeEstimateOptions: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
@@ -502,6 +539,7 @@ export function AgendaView() {
     const saveFilterDefaultName = getSavedFilterDefaultName(activeFilterChips, resolveText('savedFilters.defaultName', 'Focus filter'));
 
     const { filteredActiveTasks, reviewDueCandidates } = useMemo(() => {
+        void localDayKey;
         const now = new Date();
         const filtered = applyFilter(activeTasks, effectiveFilterCriteria, { projects, now, tokenMatchMode: 'all' })
             .filter((task) => matchesSearchQuery(task.title));
@@ -514,9 +552,10 @@ export function AgendaView() {
             });
         const reviewDue = applyFilter(reviewDueBase, effectiveFilterCriteria, { projects, now, tokenMatchMode: 'all' });
         return { filteredActiveTasks: filtered, reviewDueCandidates: reviewDue };
-    }, [activeTasks, baseActiveTasks, effectiveFilterCriteria, matchesSearchQuery, projects]);
+    }, [activeTasks, baseActiveTasks, effectiveFilterCriteria, localDayKey, matchesSearchQuery, projects]);
 
     const reviewDueProjects = useMemo(() => {
+        void localDayKey;
         const now = new Date();
         return projects
             .filter((project) => {
@@ -532,7 +571,7 @@ export function AgendaView() {
                 if (aReview !== bReview) return aReview - bReview;
                 return a.title.localeCompare(b.title);
             });
-    }, [projects, matchesSearchQuery, resolvedAreaFilter, areaById]);
+    }, [projects, localDayKey, matchesSearchQuery, resolvedAreaFilter, areaById]);
     const handleOpenReviewProject = useCallback((projectId: string) => {
         setProjectView({ selectedProjectId: projectId });
         dispatchNavigateEvent('projects');
@@ -724,6 +763,7 @@ export function AgendaView() {
 
     // Categorize tasks
     const sections = useMemo(() => {
+        void localDayKey;
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -818,6 +858,7 @@ export function AgendaView() {
         baseActiveTasks,
         effectiveFocusSortBy,
         filteredActiveTasks,
+        localDayKey,
         prioritiesEnabled,
         projects,
         reviewDueCandidates,
