@@ -340,7 +340,11 @@ describe('CaptureScreen', () => {
     });
   });
 
-  it('confirms multiline capture before creating one task per line', async () => {
+  // This route is presented modally, so an Alert raised over it is a second
+  // native presentation on the first. On iOS it never showed: saving a
+  // multi-line paste did nothing and left the screen blocked (#941). The
+  // confirmation is drawn on the screen itself now, and no Alert is raised.
+  it('confirms multiline capture on screen before creating one task per line', async () => {
     routeParams.current = {
       initialValue: encodeURIComponent('Email Bob\n\nCall Alice /next'),
     };
@@ -364,18 +368,13 @@ describe('CaptureScreen', () => {
     });
 
     expect(storeState.addTask).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Create 2 tasks?',
-      expect.stringContaining('Email Bob'),
-      expect.any(Array),
-    );
+    expect(alertSpy).not.toHaveBeenCalled();
 
-    const buttons = alertSpy.mock.calls[0]?.[2] as Array<{ text?: string; onPress?: () => void | Promise<void> }>;
-    const confirm = buttons.find((button) => button.text === 'Create tasks');
-    if (!confirm?.onPress) throw new Error('Confirm button not found');
+    // The confirmation is on screen, reachable as ordinary rendered content.
+    const confirmButton = findTouchableByText(tree, 'Create tasks');
 
     await act(async () => {
-      await confirm.onPress?.();
+      await confirmButton.props.onPress();
     });
 
     expect(storeState.addTask).not.toHaveBeenCalled();

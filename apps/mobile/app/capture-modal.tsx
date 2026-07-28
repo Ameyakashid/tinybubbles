@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -226,6 +226,7 @@ export default function CaptureScreen() {
   const initialDescription = String(initialProps.description ?? '');
   const initialProjectTitle = decodeSearchParam(params.project).trim();
   const [value, setValue] = useState(initialText);
+  const [pendingBulkLines, setPendingBulkLines] = useState<string[] | null>(null);
   const [descriptionValue, setDescriptionValue] = useState(initialDescription);
   const [copilotSuggestion, setCopilotSuggestion] = useState<{ context?: string; timeEstimate?: TimeEstimate; tags?: string[] } | null>(null);
   const [copilotApplied, setCopilotApplied] = useState(false);
@@ -527,23 +528,15 @@ export default function CaptureScreen() {
     closeCapture();
   };
 
+  // Confirm on this screen rather than through Alert. This route is presented
+  // modally, and an alert raised over it is a second native presentation on top
+  // of the first — on iOS it never became visible, so saving a multi-line paste
+  // did nothing and left the screen blocked by an invisible dialog (#941).
   const handleSave = async ({ openAfterSave = false }: { openAfterSave?: boolean } = {}) => {
     if (!value.trim()) return;
     const bulkLines = splitQuickAddBulkLines(value);
     if (bulkLines.length > 1) {
-      Alert.alert(
-        formatBulkConfirmTitle(bulkLines.length),
-        formatBulkConfirmMessage(bulkLines),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: tFallback(t, 'quickAdd.bulkConfirmCreate', 'Create tasks'),
-            onPress: () => {
-              void createBulkTasks(bulkLines);
-            },
-          },
-        ],
-      );
+      setPendingBulkLines(bulkLines);
       return;
     }
     const shouldClose = await createTaskFromInput(value, { openAfterSave });
@@ -684,6 +677,48 @@ export default function CaptureScreen() {
           </View>
         </View>
       </ScrollView>
+      {pendingBulkLines ? (
+        <View style={styles.bulkConfirmOverlay} accessibilityViewIsModal>
+          <Pressable
+            style={styles.bulkConfirmBackdrop}
+            onPress={() => setPendingBulkLines(null)}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.cancel')}
+          />
+          <View style={[styles.bulkConfirmCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
+            <Text style={[styles.bulkConfirmTitle, { color: tc.text }]} accessibilityRole="header">
+              {formatBulkConfirmTitle(pendingBulkLines.length)}
+            </Text>
+            <Text style={[styles.bulkConfirmMessage, { color: tc.secondaryText }]}>
+              {formatBulkConfirmMessage(pendingBulkLines)}
+            </Text>
+            <View style={styles.bulkConfirmActions}>
+              <TouchableOpacity
+                onPress={() => setPendingBulkLines(null)}
+                style={styles.bulkConfirmButton}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.bulkConfirmButtonText, { color: tc.secondaryText }]}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const lines = pendingBulkLines;
+                  setPendingBulkLines(null);
+                  void createBulkTasks(lines);
+                }}
+                style={styles.bulkConfirmButton}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.bulkConfirmButtonText, { color: tc.tint }]}>
+                  {tFallback(t, 'quickAdd.bulkConfirmCreate', 'Create tasks')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -796,6 +831,47 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   cancel: {},
+  bulkConfirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    zIndex: 2,
+    elevation: 2,
+  },
+  bulkConfirmBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bulkConfirmCard: {
+    width: '100%',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  bulkConfirmTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  bulkConfirmMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  bulkConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  bulkConfirmButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bulkConfirmButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   save: {
     backgroundColor: '#3B82F6',
   },
