@@ -947,14 +947,16 @@ describe('ListView', () => {
     ['done', 'Completed'],
     ['waiting', 'Waiting'],
     ['someday', 'Someday'],
+    // The shared criteria narrow the Inbox too, so it must expose them (#956).
+    ['inbox', 'Inbox'],
   ] as const)('offers a Filters toggle in the %s toolbar', (statusFilter, title) => {
     const { getByRole } = renderListView(statusFilter, title);
 
     expect(getByRole('button', { name: 'Filters' })).toBeInTheDocument();
   });
 
+  // Reference deliberately stays off the toolbar for now (#863: no blanket pass).
   it.each([
-    ['inbox', 'Inbox'],
     ['reference', 'Reference'],
   ] as const)('does not offer a Filters toggle in the %s toolbar', (statusFilter, title) => {
     const { queryByRole } = renderListView(statusFilter, title);

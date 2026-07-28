@@ -839,7 +839,12 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         }
     };
 
-    const showFilters = ['next', 'all', 'done', 'waiting', 'someday'].includes(statusFilter);
+    // Inbox added per #956: the filter criteria are shared across views, so a
+    // selection made in Someday kept narrowing the Inbox with nothing in the
+    // toolbar to show what was active or clear it. Deliberately not a blanket
+    // pass over every surface (#863) — Reference is still on the old list and
+    // has the same gap.
+    const showFilters = ['next', 'all', 'done', 'waiting', 'someday', 'inbox'].includes(statusFilter);
     const isInbox = statusFilter === 'inbox';
     const isNextView = statusFilter === 'next';
     const isWaitingView = statusFilter === 'waiting';
