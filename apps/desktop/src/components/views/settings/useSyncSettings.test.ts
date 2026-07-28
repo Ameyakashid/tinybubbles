@@ -128,6 +128,29 @@ describe('useSyncSettings cloud token validation', () => {
         requestConfirmation: vi.fn().mockResolvedValue(true),
     }));
 
+    // Saving here is an explicit button press that changes nothing on screen, so
+    // silence read as failure — and on an HTTP URL the only toast was the
+    // cleartext caution, which looks like a rejection (#920).
+    it('confirms an explicit self-hosted save with a success toast', async () => {
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+
+        const { result } = setup();
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+
+        act(() => {
+            result.current.syncPageProps.onCloudUrlChange('https://example.com');
+            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+        });
+
+        await act(async () => {
+            await result.current.syncPageProps.onSaveCloud();
+        });
+
+        expect(SyncService.setCloudConfig).toHaveBeenCalled();
+        expect(showToast).toHaveBeenCalledWith(expect.stringContaining('saved'), 'success');
+    });
+
     it('rejects a short cloud token and does not save', async () => {
         const { result } = setup();
         await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());

@@ -364,10 +364,11 @@ export const useSyncSettings = ({
                 setWebdavHasPassword(true);
             }
             showSaved();
+            showToast('WebDAV sync settings saved.', 'success');
         } finally {
             setIsSavingWebDav(false);
         }
-    }, [showSaved, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavPassword, webdavUrl, webdavUsername]);
+    }, [showSaved, showToast, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavPassword, webdavUrl, webdavUsername]);
 
     const handleTestWebDavConnection = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
@@ -414,7 +415,12 @@ export const useSyncSettings = ({
             allowInsecureHttp: cloudAllowInsecureHttp,
         });
         showSaved();
-    }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, validateCloudToken, validateSyncHttpUrl]);
+        // Saving here is an explicit button press with no visible change to
+        // confirm it, unlike the toggles elsewhere in settings that apply live.
+        // Without this the only feedback on an HTTP URL was the cleartext
+        // caution, which reads as a rejection rather than a save (#920).
+        showToast('Self-hosted sync settings saved.', 'success');
+    }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, showToast, validateCloudToken, validateSyncHttpUrl]);
 
     const handleSetCloudProvider = useCallback(async (provider: CloudProvider) => {
         setCloudProvider(provider);
