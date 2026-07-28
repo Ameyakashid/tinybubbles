@@ -1160,7 +1160,7 @@ export const koOverrides: Record<string, string> = {
         'settings.captureSaveAudio': '음성 첨부 파일 저장',
         'settings.captureSaveAudioDesc': '녹음 후 음성 파일을 첨부된 상태로 유지합니다.',
         'settings.quickAddAutoClean': '빠른 추가 텍스트 정리',
-        'settings.quickAddAutoCleanDesc': '적용 후 인식된 날짜, 태그, 상황을 제목에서 제거합니다. 끄면 입력한 텍스트가 그대로 유지됩니다.',
+        'settings.quickAddAutoCleanDesc': '문장으로 쓴 날짜를 적용한 뒤 제목에서 지웁니다. /next나 @심부름처럼 직접 입력한 명령은 이 설정과 상관없이 항상 제목에서 빠집니다.',
         'settings.naturalLanguageDates': '자연어 날짜 감지',
         'settings.naturalLanguageDatesDesc': '빠른 추가에서 "tomorrow"나 "next week" 같은 문구(현재 영어만 지원)를 인식해 날짜로 적용합니다. 끄면 해당 문구가 제목에 그대로 유지되며, /due: 같은 명시적 구문은 계속 작동합니다.',
         'settings.markdownEditorAssist': '편집기 입력 도우미',

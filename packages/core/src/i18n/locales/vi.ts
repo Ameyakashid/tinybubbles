@@ -1146,7 +1146,7 @@ export const viOverrides: Record<string, string> = {
         'settings.captureSaveAudio': 'Lưu tệp đính kèm âm thanh',
         'settings.captureSaveAudioDesc': 'Giữ tệp âm thanh đính kèm sau khi phiên âm.',
         'settings.quickAddAutoClean': 'Dọn văn bản thêm nhanh',
-        'settings.quickAddAutoCleanDesc': 'Xóa ngày, thẻ và ngữ cảnh đã nhận diện khỏi tiêu đề sau khi áp dụng. Tắt để giữ nguyên văn bản như bạn đã nhập.',
+        'settings.quickAddAutoCleanDesc': 'Xóa khỏi tiêu đề những ngày viết bằng chữ sau khi áp dụng. Các lệnh bạn gõ, như /next hay @việc vặt, luôn rời khỏi tiêu đề dù bật hay tắt.',
         'settings.naturalLanguageDates': 'Phát hiện ngày bằng ngôn ngữ tự nhiên',
         'settings.naturalLanguageDatesDesc': 'Nhận diện các cụm từ như "tuần tới" hoặc "ngày mai" khi thêm nhanh và áp dụng chúng làm ngày. Tắt sẽ giữ nguyên cụm từ đó như văn bản tiêu đề; cú pháp rõ ràng như /due: vẫn hoạt động bình thường.',
         'settings.markdownEditorAssist': 'Trợ giúp gõ trong trình soạn thảo',

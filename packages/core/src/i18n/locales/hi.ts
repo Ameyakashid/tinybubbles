@@ -909,7 +909,7 @@ export const hiOverrides: Record<string, string> = {
         'settings.captureSaveAudio': 'ऑडियो अनुलग्नक सहेजें',
         'settings.captureSaveAudioDesc': 'ट्रांसक्रिप्शन के बाद ऑडियो फ़ाइल को संलग्न रखें।',
         'settings.quickAddAutoClean': 'त्वरित जोड़ पाठ साफ करें',
-        'settings.quickAddAutoCleanDesc': 'लागू करने के बाद पहचानी गई तारीखें, टैग और संदर्भ शीर्षक से हटाएँ। बंद होने पर आपका पाठ बिल्कुल वैसा ही रहता है जैसा आपने लिखा है।',
+        'settings.quickAddAutoCleanDesc': 'शब्दों में लिखी तारीखें लागू करने के बाद शीर्षक से हटाता है। आपके टाइप किए आदेश, जैसे /next या @काम, शीर्षक से हमेशा हट जाते हैं, यह चालू हो या बंद।',
         'settings.naturalLanguageDates': 'प्राकृतिक भाषा में तारीखें पहचानें',
         'settings.naturalLanguageDatesDesc': 'त्वरित जोड़ में "अगले सप्ताह" या "कल" जैसे वाक्यांशों को पहचानकर उन्हें तारीख के रूप में लागू करता है। बंद होने पर वाक्यांश शीर्षक में शब्दशः पाठ के रूप में बना रहता है; /due: जैसा स्पष्ट सिंटैक्स फिर भी काम करता है।',
         'settings.markdownEditorAssist': 'संपादक टाइपिंग सहायता',

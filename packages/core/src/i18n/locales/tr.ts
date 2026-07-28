@@ -921,7 +921,7 @@ export const trOverrides: Record<string, string> = {
         'settings.captureSaveAudio': 'Ses eklerini kaydet',
         'settings.captureSaveAudioDesc': 'Transkripsiyondan sonra ses dosyasını ekte tutun.',
         'settings.quickAddAutoClean': 'Hızlı ekleme metnini temizle',
-        'settings.quickAddAutoCleanDesc': 'Uyguladıktan sonra algılanan tarihleri, etiketleri ve bağlamları başlıktan kaldırır. Kapalıyken metninizi yazdığınız gibi bırakır.',
+        'settings.quickAddAutoCleanDesc': 'Uygulandıktan sonra kelimelerle yazılmış tarihleri başlıktan kaldırır. /next veya @işler gibi yazdığınız komutlar bu ayar açık da olsa kapalı da olsa başlıktan her zaman çıkar.',
         'settings.naturalLanguageDates': 'Doğal dil tarihlerini algıla',
         'settings.naturalLanguageDatesDesc': 'Hızlı eklemede "gelecek hafta" veya "yarın" gibi ifadeleri algılayıp tarih olarak uygular. Kapalıyken ifade başlıkta düz metin olarak kalır; /due: gibi açık söz dizimi çalışmaya devam eder.',
         'settings.markdownEditorAssist': 'Düzenleyici yazma yardımı',

@@ -848,7 +848,7 @@ export const esOverrides: Record<string, string> = {
         'settings.inboxScheduleEnabled': 'Permitir programar durante el procesamiento',
         'settings.captureSaveAudio': 'Guardar audio attachments',
         'settings.quickAddAutoClean': 'Limpiar texto de añadido rápido',
-        'settings.quickAddAutoCleanDesc': 'Elimina del título las fechas, etiquetas y contextos reconocidos después de aplicarlos. Desactivado conserva el texto exactamente como lo escribiste.',
+        'settings.quickAddAutoCleanDesc': 'Elimina del título las fechas escritas con palabras después de aplicarlas. Los comandos que escribes, como /next o @recados, siempre salen del título, esté activado o no.',
         'settings.naturalLanguageDates': 'Detectar fechas en lenguaje natural',
         'settings.naturalLanguageDatesDesc': 'Reconoce frases como "la próxima semana" o "mañana" en el añadido rápido y las aplica como fecha. Desactivado conserva la frase como texto literal del título; la sintaxis explícita como /due: sigue funcionando.',
         'settings.markdownEditorAssist': 'Ayuda de escritura en el editor',

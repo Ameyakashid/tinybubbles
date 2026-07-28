@@ -956,7 +956,7 @@ export const arOverrides: Record<string, string> = {
         'settings.captureSaveAudio': 'حفظ المرفقات الصوتية',
         'settings.captureSaveAudioDesc': 'احتفظ بالملف الصوتي مرفقًا بعد النسخ.',
         'settings.quickAddAutoClean': 'تنظيف نص الإضافة السريعة',
-        'settings.quickAddAutoCleanDesc': 'إزالة التواريخ والوسوم والسياقات التي تم التعرف عليها من العنوان بعد تطبيقها. عند الإيقاف يبقى النص كما كتبته تمامًا.',
+        'settings.quickAddAutoCleanDesc': 'يزيل من العنوان التواريخ المكتوبة بالكلمات بعد تطبيقها. أما الأوامر التي تكتبها مثل /next أو @مشاوير فتُحذف من العنوان دائمًا، سواء كان هذا مفعّلاً أم لا.',
         'settings.naturalLanguageDates': 'اكتشاف التواريخ باللغة الطبيعية',
         'settings.naturalLanguageDatesDesc': 'التعرف على عبارات مثل "الأسبوع القادم" أو "غدًا" في الإضافة السريعة وتطبيقها كتاريخ. عند الإيقاف تبقى العبارة كنص حرفي في العنوان؛ الصيغة الصريحة مثل /due: تظل تعمل.',
         'settings.markdownEditorAssist': 'مساعدة الكتابة في المحرر',

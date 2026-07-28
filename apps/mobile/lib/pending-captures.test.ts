@@ -160,7 +160,7 @@ describe('ingestPendingCaptures', () => {
         expect(props.tags).toContain('#personal');
     });
 
-    it('keeps the raw syntax in the title when cleanup is OFF (default)', async () => {
+    it('still consumes applied syntax with cleanup OFF (default)', async () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk /due:2026-07-24 @errands #personal' });
         const addTask = addTaskMock();
 
@@ -168,7 +168,9 @@ describe('ingestPendingCaptures', () => {
 
         expect(ingested).toBe(1);
         const [title, props] = addTask.mock.calls[0] as [string, Partial<Task>];
-        expect(title).toBe('Buy milk /due:2026-07-24 @errands #personal');
+        // Cleanup off keeps ordinary text as typed; it never keeps a token the
+        // parser already turned into a field.
+        expect(title).toBe('Buy milk');
         expect(props.dueDate).toBe('2026-07-24');
         expect(props.contexts).toContain('@errands');
         expect(props.tags).toContain('#personal');

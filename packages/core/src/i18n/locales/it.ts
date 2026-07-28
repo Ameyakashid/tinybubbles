@@ -1041,7 +1041,7 @@ export const itOverrides: Record<string, string> = {
         'settings.appleRemindersImport.skippedCount': '{{taskCount}} promemoria già importati, completati o senza titolo ignorati.',
         'settings.gtdMobile.captureDefaults': 'Predefiniti di acquisizione',
         'settings.quickAddAutoClean': 'Ripulisci testo di aggiunta rapida',
-        'settings.quickAddAutoCleanDesc': 'Rimuove dal titolo date, tag e contesti riconosciuti dopo averli applicati. Disattivato mantiene il testo esattamente come digitato.',
+        'settings.quickAddAutoCleanDesc': 'Rimuove dal titolo le date scritte a parole dopo averle applicate. I comandi che digiti, come /next o @commissioni, escono sempre dal titolo, che sia attivo o no.',
         'settings.naturalLanguageDates': 'Rileva date in linguaggio naturale',
         'settings.naturalLanguageDatesDesc': 'Riconosce frasi come "la prossima settimana" o "domani" nell’aggiunta rapida e le applica come data. Disattivato mantiene la frase come testo letterale del titolo; la sintassi esplicita come /due: continua a funzionare.',
         'settings.markdownEditorAssist': 'Aiuto alla digitazione nell’editor',

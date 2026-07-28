@@ -811,18 +811,20 @@ describe('quick-add', () => {
         expect(result.props.status).toBe('next');
     });
 
-    it('preserveText keeps the original title but still applies detected metadata (#742)', () => {
+    it('preserveText still drops the tokens it applied, whatever the cleanup setting says', () => {
         const now = new Date('2025-01-01T10:00:00Z');
         const input = 'Call mom @phone #family /due:tomorrow';
         const result = parseQuickAdd(input, undefined, now, undefined, { preserveText: true });
 
-        expect(result.title).toBe(input);
+        // Was 'Call mom @phone #family /due:tomorrow' until a reporter asked why
+        // '/next' stayed in the title of the task it had already set to Next.
+        expect(result.title).toBe('Call mom');
         expect(result.props.contexts).toEqual(['@phone']);
         expect(result.props.tags).toEqual(['#family']);
         expect(result.props.dueDate).toBeTruthy();
     });
 
-    it('preserveText leaves a pasted URL untouched while a trailing date still applies', () => {
+    it('leaves a pasted URL untouched while a trailing date still applies', () => {
         // The URL-integrity guarantee of preserve mode is the verbatim title;
         // a trailing date phrase outside the URL still becomes the due date
         // (same stance as shortcut captures, which resolve relative dates at
@@ -836,6 +838,64 @@ describe('quick-add', () => {
         expect(result.detectedDate?.matchedText).toBe('tomorrow');
         expect(result.detectedDate?.titleWithoutDate).toBe(input);
         expect(result.props.dueDate).toBeUndefined();
+    });
+
+    describe('applied tokens leave the title whatever quickAddAutoClean says', () => {
+        const now = new Date('2025-01-01T10:00:00Z');
+
+        it('drops /next with cleanup off and on alike', () => {
+            for (const preserveText of [true, false]) {
+                const result = parseQuickAdd('Appeler maman /next', undefined, now, undefined, { preserveText });
+                expect(result.title).toBe('Appeler maman');
+                expect(result.props.status).toBe('next');
+            }
+        });
+
+        it('drops several commands from the middle and end of a sentence', () => {
+            const result = parseQuickAdd(
+                'Call the plumber @phone about the leak /waiting /due:tomorrow',
+                undefined,
+                now,
+                undefined,
+                { preserveText: true },
+            );
+            expect(result.title).toBe('Call the plumber about the leak');
+            expect(result.props.contexts).toEqual(['@phone']);
+            expect(result.props.status).toBe('waiting');
+            expect(result.props.dueDate).toBeTruthy();
+        });
+
+        it('leaves slash text it does not recognise alone', () => {
+            const result = parseQuickAdd('Read the TCP/IP chapter /someday-maybe', undefined, now, undefined, {
+                preserveText: true,
+            });
+            expect(result.title).toBe('Read the TCP/IP chapter /someday-maybe');
+            expect(result.props.status).toBeUndefined();
+        });
+
+        it('leaves a slash-prefixed path inside a URL alone', () => {
+            // Only whole tokens count: a substring match would cut the path out
+            // of the link now that stripping is unconditional.
+            const result = parseQuickAdd(
+                'Read https://example.com/next and https://example.com/area:5',
+                undefined,
+                now,
+                undefined,
+                { preserveText: true },
+            );
+            expect(result.title).toBe('Read https://example.com/next and https://example.com/area:5');
+            expect(result.props.status).toBeUndefined();
+        });
+
+        it('keeps a prose date in the title with cleanup off and removes it with cleanup on', () => {
+            const input = 'Book the dentist tomorrow';
+            const preserved = parseQuickAdd(input, undefined, now, undefined, { preserveText: true });
+            expect(preserved.title).toBe(input);
+            expect(preserved.detectedDate?.titleWithoutDate).toBe(input);
+
+            const cleaned = parseQuickAdd(input, undefined, now, undefined, { preserveText: false });
+            expect(cleaned.detectedDate?.titleWithoutDate).toBe('Book the dentist');
+        });
     });
 
     it('default mode still strips recognized tokens (preserve is opt-in)', () => {
@@ -853,8 +913,9 @@ describe('quick-add', () => {
         expect(stripped.title).toBe('Submit report');
         expect(stripped.props.dueDate).toBeTruthy();
 
+        // /due: is explicit syntax, so preserve mode has nothing ambiguous to keep.
         const preserved = parseQuickAddDateCommands('Submit report /due:tomorrow', now, { preserveText: true });
-        expect(preserved.title).toBe('Submit report /due:tomorrow');
+        expect(preserved.title).toBe('Submit report');
         expect(preserved.props.dueDate).toBeTruthy();
     });
 
@@ -937,14 +998,14 @@ describe('quick-add', () => {
             expect(result.props.projectId).toBe('p1');
         });
 
-        it('preserve-text mode keeps the typed title while still applying tokens', () => {
+        it('preserve-text mode still consumes the tokens it applied', () => {
             const result = parseProjectNextActionInput('Chase reply /waiting', {
                 projectId: 'p1',
                 projects,
                 now,
                 parseOptions: { preserveText: true },
             });
-            expect(result.title).toBe('Chase reply /waiting');
+            expect(result.title).toBe('Chase reply');
             expect(result.props.status).toBe('waiting');
         });
 

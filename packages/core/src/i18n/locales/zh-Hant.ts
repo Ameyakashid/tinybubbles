@@ -1071,7 +1071,7 @@ export const zhHant: Record<string, string> = {
         'settings.captureSaveAudio': '保留語音附件',
         'settings.captureSaveAudioDesc': '轉錄完成後保留語音文件。',
         'settings.quickAddAutoClean': '整理快速新增文字',
-        'settings.quickAddAutoCleanDesc': '套用後從標題中移除識別到的日期、標籤和情境。關閉則完整保留你輸入的文字。',
+        'settings.quickAddAutoCleanDesc': '辨識到用文字寫的日期並套用後，將其從標題中移除。你輸入的指令，例如 /next 或 @採買，無論此項開關都會從標題中消失。',
         'settings.naturalLanguageDates': '識別自然語言日期',
         'settings.naturalLanguageDatesDesc': '在快速新增中識別「下週」「明天」等短語並套用為日期。關閉後該短語將保留為標題原文；/due: 等明確語法仍然有效。',
         'settings.markdownEditorAssist': '編輯器輸入輔助',

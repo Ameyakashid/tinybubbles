@@ -83,7 +83,9 @@ export function parseProjectNextActionInput(
     const parsed = parseQuickAdd(input, projects, now, areas, parseOptions);
     const props: Partial<Task> = { ...parsed.props };
     let title = parsed.title;
-    if (parsed.projectTitle && parseOptions?.preserveText !== true) {
+    // Not applied — the prompt never creates projects — so the token goes back
+    // into the title as the text it now is.
+    if (parsed.projectTitle) {
         const token = /\s/.test(parsed.projectTitle) ? `+"${parsed.projectTitle}"` : `+${parsed.projectTitle}`;
         title = `${title} ${token}`.trim();
     }
@@ -132,6 +134,11 @@ const ENERGY_TOKENS: Record<string, TaskEnergyLevel> = {
 const ESCAPE_SENTINEL = '__MW_ESC__';
 const QUICK_ADD_ESCAPE_CHARS = new Set(['@', '#', '+', '/', '!', '%']);
 const QUICK_ADD_FOCUS_COMMAND_PATTERN = String.raw`\*(?:\s+focus\b)?`;
+// A command only counts at the start of a word. Applied tokens are now cut
+// from the title whatever `quickAddAutoClean` says, so a substring match
+// would corrupt real text — `https://example.com/next-steps` is a link, not
+// a status.
+const QUICK_ADD_COMMAND_START = String.raw`(?:^|\s)`;
 const QUICK_ADD_COMMAND_BOUNDARY = String.raw`(?=\s\/(?:${QUICK_ADD_FOCUS_COMMAND_PATTERN}|link:|note:|start:|due:|review:|project:|area:|energy:|inbox\b|next\b|in-progress\b|waiting\b|someday\b|done\b|archived\b)|$)`;
 const QUICK_ADD_INLINE_CONTROL_BOUNDARY = String.raw`(?=\s(?:[@#+!%]|\/(?:${QUICK_ADD_FOCUS_COMMAND_PATTERN}|link:|note:|start:|due:|review:|project:|area:|energy:|inbox\b|next\b|in-progress\b|waiting\b|someday\b|done\b|archived\b))|$)`;
 const SIMPLE_TASK_TOKEN_RE = /[@#][\p{L}\p{N}_-]+/gu;
@@ -486,7 +493,7 @@ function parseDateCommand(
     now: Date,
     options: DateCommandParseOptions = {},
 ): { value?: string; working: string; invalidCommand?: string } {
-    const match = working.match(new RegExp(`\\/${command}:([\\s\\S]+?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i'));
+    const match = working.match(new RegExp(`${QUICK_ADD_COMMAND_START}\\/${command}:([\\s\\S]+?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i'));
     if (!match) return { working };
 
     const dateText = match[1].trim();
@@ -564,7 +571,7 @@ function parseLinkCommandsFromWorking(
     now: Date,
 ): { attachments?: Attachment[]; working: string } {
     const attachments: Attachment[] = [];
-    const linkCommandRe = new RegExp(`\\/link:([\\s\\S]*?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i');
+    const linkCommandRe = new RegExp(`${QUICK_ADD_COMMAND_START}\\/link:([\\s\\S]*?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i');
 
     let nextWorking = working;
     while (true) {
@@ -601,9 +608,9 @@ export function parseQuickAddDateCommands(
     } = parseDateCommandsFromWorking(protectedInput, now, options);
 
     return {
-        title: options.preserveText === true
-            ? input.trim()
-            : restoreEscapes(working.replace(/\s{2,}/g, ' ').trim()),
+        // /due:, /start: and /review: are explicit commands, so they leave the
+        // title even with cleanup off (#feedback 884b0fe0).
+        title: restoreEscapes(working.replace(/\s{2,}/g, ' ').trim()),
         props: {
             ...(startTime ? { startTime } : {}),
             ...(dueDate ? { dueDate } : {}),
@@ -670,7 +677,7 @@ export function parseQuickAdd(
     }
 
     let energyLevel: TaskEnergyLevel | undefined;
-    const energyMatch = working.match(/\/energy:([^\s/]+)/i);
+    const energyMatch = working.match(/(?:^|\s)\/energy:([^\s/]+)/i);
     if (energyMatch) {
         const token = restoreEscapes(energyMatch[1] ?? '').trim().toLowerCase();
         energyLevel = ENERGY_TOKENS[token];
@@ -681,7 +688,7 @@ export function parseQuickAdd(
 
     // Area: /area:<id|name> or !Area Name
     let areaId: string | undefined;
-    const areaIdMatch = working.match(/\/area:([^\s/]+)/i);
+    const areaIdMatch = working.match(/(?:^|\s)\/area:([^\s/]+)/i);
     if (areaIdMatch) {
         const token = restoreEscapes(areaIdMatch[1] ?? '').trim();
         if (token) {
@@ -736,7 +743,7 @@ export function parseQuickAdd(
 
     // Note: /note:...
     let description: string | undefined;
-    const noteMatch = working.match(new RegExp(`\\/note:([\\s\\S]+?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i'));
+    const noteMatch = working.match(new RegExp(`${QUICK_ADD_COMMAND_START}\\/note:([\\s\\S]+?)${QUICK_ADD_COMMAND_BOUNDARY}`, 'i'));
     if (noteMatch) {
         description = restoreEscapes(noteMatch[1].trim());
         working = stripToken(working, noteMatch[0]);
@@ -754,7 +761,10 @@ export function parseQuickAdd(
 
     // Status tokens like /next, /waiting, etc.
     let status: TaskStatus | undefined;
-    const statusMatch = working.match(/\/(inbox|next|in-progress|waiting|someday|done|archived)\b/i);
+    // `\b` would also match inside `/someday-maybe`, which used to be harmless
+    // when preserve mode handed the title back verbatim and is not now: the
+    // token has to be the whole word.
+    const statusMatch = working.match(/(?:^|\s)\/(inbox|next|in-progress|waiting|someday|done|archived)(?=\s|$)/i);
     if (statusMatch) {
         const token = statusMatch[1].toLowerCase();
         status = STATUS_TOKENS[token] ?? normalizeTaskStatus(token);
@@ -772,7 +782,7 @@ export function parseQuickAdd(
     // Project: +ProjectName or /project:<id>
     let projectId: string | undefined;
     let projectTitle: string | undefined;
-    const projectIdMatch = working.match(/\/project:([^\s/]+)/i);
+    const projectIdMatch = working.match(/(?:^|\s)\/project:([^\s/]+)/i);
     if (projectIdMatch) {
         const token = projectIdMatch[1];
         if (token) {
@@ -808,7 +818,7 @@ export function parseQuickAdd(
                     if (!rawProject) {
                         working = stripToken(working, plusMatch[0]);
                         const strippedTitle = restoreEscapes(working.replace(/\s{2,}/g, ' ').trim());
-                        return { title: preserveText ? input.trim() : strippedTitle, props: {} };
+                        return { title: strippedTitle, props: {} };
                     }
                     if ((!projects || projects.length === 0) && /^[0-9a-f-]{8,}$/i.test(rawProject)) {
                         projectId = rawProject;
@@ -822,16 +832,16 @@ export function parseQuickAdd(
         }
     }
 
-    const cleanedTitle = restoreEscapes(working.replace(/\s{2,}/g, ' ').trim());
-    // Preserve mode keeps the original text verbatim, but recognized metadata
-    // still applies (copy-out) — including a detected trailing date, per the
-    // "Clean up quick add text" setting's contract ("after applying them").
-    // Only the stripping is gated on clean mode: titleWithoutDate falls back
-    // to the verbatim input so consumers keep the text as typed.
-    const title = preserveText ? input.trim() : cleanedTitle;
+    // A token the parser recognised and applied has already left `working`, and
+    // it stays gone: nobody wants a task called "Call mum /next" when the status
+    // is on the task. `quickAddAutoClean` decides only the ambiguous half —
+    // whether a date read out of ordinary prose is also cut from the title —
+    // which is why preserve mode still hands back a titleWithoutDate that keeps
+    // the prose intact.
+    const title = restoreEscapes(working.replace(/\s{2,}/g, ' ').trim());
     const rawDetectedDate = dueDate || hadExplicitDueCommand || options.naturalLanguageDates === false
         ? undefined
-        : detectTrailingDate(cleanedTitle, now);
+        : detectTrailingDate(title, now);
     const detectedDate = rawDetectedDate && preserveText
         ? { ...rawDetectedDate, titleWithoutDate: title }
         : rawDetectedDate;
