@@ -133,6 +133,26 @@ type ProjectTaskVirtualRow = {
     start: number;
 };
 
+/**
+ * Where to draw a row the virtualizer is not currently rendering — the task
+ * being edited, or the one a new-task highlight wants scrolled into view.
+ *
+ * It has to be the offset the virtualizer itself holds for that index, never
+ * `index * estimate`. Once rows have been measured they come out shorter than
+ * the estimate, so the list is far shorter than `index * estimate` suggests;
+ * placing the row there puts it past the end of the list, and scrolling it into
+ * view leaves the viewport in empty space with nothing rendered (#916).
+ * The estimate is only a fallback for the first render, before any measuring,
+ * where the two agree anyway.
+ */
+export function resolvePinnedRowStart(
+    measuredStart: number | undefined,
+    index: number,
+    scrollMargin: number,
+): number {
+    return measuredStart ?? scrollMargin + index * PROJECT_TASK_ROW_ESTIMATE;
+}
+
 function ProjectTaskRows({ tasks, renderTask, scrollRef, pinnedTaskId }: ProjectTaskRowsProps) {
     const shouldVirtualize = tasks.length > PROJECT_TASK_VIRTUALIZATION_THRESHOLD;
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -220,7 +240,11 @@ function ProjectTaskRows({ tasks, renderTask, scrollRef, pinnedTaskId }: Project
             {
                 index: pinnedTaskIndex,
                 key: tasks[pinnedTaskIndex]?.id ?? pinnedTaskIndex,
-                start: pinnedTaskIndex * PROJECT_TASK_ROW_ESTIMATE,
+                start: resolvePinnedRowStart(
+                    rowVirtualizer.measurementsCache[pinnedTaskIndex]?.start,
+                    pinnedTaskIndex,
+                    scrollMargin,
+                ),
             },
         ].sort((a, b) => a.index - b.index);
     }
