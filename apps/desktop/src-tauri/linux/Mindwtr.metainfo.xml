@@ -88,6 +88,25 @@
   <url type="bugtracker">https://github.com/dongdongbh/Mindwtr/issues</url>
   <url type="vcs-browser">https://github.com/dongdongbh/Mindwtr</url>
   <releases>
+    <release version="1.1.5" date="2026-07-27">
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.1.5</url>
+      <description>
+        <p>Mindwtr 1.1.5 adds Linux system calendars, faster task workflows, stronger storage and sync recovery, and broader keyboard and drag-and-drop support.</p>
+        <p xml:lang="de">Mindwtr 1.1.5 bringt Linux-Systemkalender, schnellere Aufgabenabläufe, robustere Speicher- und Sync-Wiederherstellung sowie mehr Tastatur- und Drag-and-drop-Unterstützung.</p>
+        <ul>
+          <li>Added system-calendar reading and writing through Evolution Data Server, including Flatpak permissions and graceful startup without EDS.</li>
+          <li xml:lang="de">Lesen und Schreiben von Systemkalendern über Evolution Data Server hinzugefügt, einschließlich Flatpak-Berechtigungen und Start ohne EDS.</li>
+          <li>Added task drops onto calendar and sidebar destinations, file drops into task editors, and completion-date sorting and grouping.</li>
+          <li xml:lang="de">Aufgaben können auf Kalender- und Seitenleistenziele, Dateien in Aufgabeneditoren gezogen sowie Erledigungen nach Abschlussdatum sortiert und gruppiert werden.</li>
+          <li>Remembered task sorting per project and expanded filters, Focus ordering, list controls, and keyboard shortcuts.</li>
+          <li xml:lang="de">Aufgabensortierung pro Projekt gespeichert sowie Filter, Fokus-Reihenfolge, Listensteuerung und Tastaturkürzel erweitert.</li>
+          <li>Restored window geometry across restarts, started login launches in the tray, and virtualized grouped task lists.</li>
+          <li xml:lang="de">Fenstergeometrie über Neustarts erhalten, Autostart im Tray begonnen und gruppierte Aufgabenlisten virtualisiert.</li>
+          <li>Strengthened backup restore, concurrent writes, search-index repair, proxy handling, and WebDAV diagnostics.</li>
+          <li xml:lang="de">Backup-Wiederherstellung, gleichzeitige Schreibvorgänge, Suchindex-Reparatur, Proxy-Verarbeitung und WebDAV-Diagnosen verbessert.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-07-12">
       <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.1.0</url>
       <description>

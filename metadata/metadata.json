@@ -30,7 +30,7 @@
           "列表、日历与看板视图，支持提醒与重复任务",
           "免费开源、无广告"
         ],
-        "ReleaseNotes": "• 通过关联的番茄钟专注会话按任务记录耗时（可选启用），显示在时间估计旁。\n• 删除、完成和归档改用“撤销”而非确认弹窗——并支持 Ctrl+Z、Standard 键盘方案和完全可键盘操作的右键菜单。\n• 商店版本的“开机自启动”现已可用；日历每周起始日跟随系统区域。\n• 附件保存为真实副本，清单与备注彼此独立，同步冲突逐项列出，并新增防止数据丢失的保护。",
+        "ReleaseNotes": "• 项目会记住任务排序，专注顺序、筛选、完成日期分组和批量移除标签让规划更顺手。\n• 可把任务拖到日历或侧栏，把文件拖入编辑器；窗口位置和安静启动会保留。\n• 退出前会完成待处理写入，备份恢复可覆盖同步数据，WebDAV 与代理错误更清楚。\n• 邮件捕捉和自托管语音转文字扩展了收件箱捕捉，并保留 WebView2 默认设置。",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -82,7 +82,7 @@
           "List, calendar, and kanban views with reminders and repeating tasks",
           "Free and open source, no ads"
         ],
-        "ReleaseNotes": "• Track time spent per task with linked Pomodoro focus sessions (opt-in), shown beside the time estimate.\n• Delete, complete, and archive now use Undo instead of confirmations — including Ctrl+Z, a Standard keyboard preset, and fully keyboard-operable context menus.\n• Launch at startup now works in the Store build, and the calendar week follows your locale.\n• Attachments are stored as real copies, checklists are independent from notes, sync conflicts are listed clearly, and new safeguards prevent data loss.",
+        "ReleaseNotes": "• Projects remember task sorting; Focus ordering, filters, completion groups, and bulk tag removal improve planning.\n• Drag tasks to the calendar or sidebar and files into the editor; window geometry and quiet startup persist.\n• Pending writes flush on exit, backup restore wins after sync, and WebDAV and proxy errors are clearer.\n• Email capture and self-hosted speech to text expand Inbox capture while WebView2 defaults stay intact.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -131,7 +131,7 @@
           "Listen-, Kalender- und Kanban-Ansichten mit Erinnerungen und Wiederholungen",
           "Kostenlos und Open Source, ohne Werbung"
         ],
-        "ReleaseNotes": "• Zeiterfassung pro Aufgabe ueber verknuepfte Pomodoro-Fokussitzungen (optional), angezeigt neben der Zeitschaetzung.\n• Loeschen, Erledigen und Archivieren nutzen jetzt Undo statt Bestaetigungen — inklusive Strg+Z, Standard-Tastaturprofil und komplett tastaturbedienbaren Kontextmenues.\n• Der Autostart funktioniert jetzt im Store-Build, und die Kalenderwoche folgt deiner Region.\n• Anhaenge werden als echte Kopien gespeichert, Checklisten sind von Notizen unabhaengig, Sync-Konflikte klar aufgelistet und neue Schutzmechanismen verhindern Datenverlust.",
+        "ReleaseNotes": "• Projekte merken sich die Sortierung; Fokus-Reihenfolge, Filter, Abschlussgruppen und das Entfernen von Tags verbessern die Planung.\n• Aufgaben lassen sich auf Kalender oder Seitenleiste und Dateien in den Editor ziehen; Fensterposition und ruhiger Autostart bleiben erhalten.\n• Offene Schreibvorgänge enden vor dem Beenden, Backup-Wiederherstellung gewinnt nach der Synchronisierung, WebDAV- und Proxy-Fehler sind klarer.\n• E-Mail-Erfassung und selbst gehostete Spracherkennung erweitern den Posteingang; WebView2-Standards bleiben erhalten.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -161,7 +161,7 @@
           "Vues liste, calendrier et kanban, rappels et tâches répétées",
           "Gratuit et open source, sans publicité"
         ],
-        "ReleaseNotes": "• Suivez le temps passe par tache avec les sessions Pomodoro liees (optionnel), affiche a cote de l'estimation.\n• Supprimer, terminer et archiver utilisent desormais Annuler au lieu de confirmations — avec Ctrl+Z, un profil clavier Standard et des menus contextuels entierement utilisables au clavier.\n• Le lancement au demarrage fonctionne desormais dans la version Store, et la semaine du calendrier suit votre region.\n• Les pieces jointes sont de vraies copies, les checklists sont independantes des notes, les conflits de synchronisation sont listes clairement et de nouvelles protections evitent la perte de donnees.",
+        "ReleaseNotes": "• Les projets mémorisent le tri; ordre Focus, filtres, groupes par date de fin et suppression d’étiquettes améliorent la planification.\n• Glissez les tâches vers le calendrier ou la barre latérale et les fichiers dans l’éditeur; position de fenêtre et démarrage discret persistent.\n• Les écritures se terminent avant la fermeture, la restauration prévaut après synchronisation, et les erreurs WebDAV et proxy sont plus claires.\n• Capture d’e-mails et transcription auto-hébergée enrichissent la boîte de réception sans perdre les réglages WebView2.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -190,7 +190,7 @@
           "Vistas de lista, calendario y kanban, con recordatorios y tareas repetidas",
           "Gratis y de código abierto, sin anuncios"
         ],
-        "ReleaseNotes": "• Registra el tiempo por tarea con sesiones Pomodoro vinculadas (opcional), junto a la estimacion de tiempo.\n• Eliminar, completar y archivar usan Deshacer en lugar de confirmaciones — con Ctrl+Z, un perfil de teclado Estandar y menus contextuales manejables por teclado.\n• El inicio automatico ya funciona en la version de la Store, y la semana del calendario sigue tu region.\n• Los adjuntos se guardan como copias reales, las listas de verificacion son independientes de las notas, los conflictos de sincronizacion se listan con claridad y nuevas protecciones evitan perdida de datos.",
+        "ReleaseNotes": "• Los proyectos recuerdan el orden; Enfoque, filtros, grupos por finalización y quitar etiquetas mejoran la planificación.\n• Arrastra tareas al calendario o la barra lateral y archivos al editor; la posición de ventana y el inicio discreto se conservan.\n• Las escrituras terminan antes de salir, la restauración prevalece tras sincronizar y los errores WebDAV y proxy son más claros.\n• La captura por correo y la voz a texto autoalojada amplían la bandeja sin perder los valores de WebView2.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",

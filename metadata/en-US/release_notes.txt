@@ -1,4 +1,4 @@
-- Project task sorting now persists and syncs across devices.
-- Large mobile libraries save and sync faster, with clearer failure feedback.
-- Focus grouping, bulk actions, checklist entry, and section next-action prompts are more consistent.
-- iCloud now preserves Focus stars and other on/off task and project settings from iPhone and iPad on Mac.
+- Projects remember their task sorting, and Focus ordering and filters sync across devices.
+- Large task libraries save and sync faster, with safer backups and restores.
+- Quick capture recognizes more date formats, and Shortcuts apply the same capture commands as the app.
+- iCloud preserves Focus stars and project settings, while recurrence and completion-date workflows are more reliable.

@@ -1,4 +1,4 @@
-- Le tri des tâches est enregistré par projet et synchronisé entre les appareils.
-- Les grandes bibliothèques mobiles s'enregistrent et se synchronisent plus vite, avec des erreurs plus claires.
-- Les groupes Focus, actions groupées, listes et invites d'action suivante sont plus cohérents.
-- iCloud conserve sur Mac les étoiles Focus et les autres réglages activés depuis l'iPhone ou l'iPad.
+- Chaque projet mémorise son tri; l'ordre Focus et les filtres se synchronisent.
+- Les grandes bibliothèques s'enregistrent et se synchronisent plus vite, avec des sauvegardes plus sûres.
+- La capture rapide reconnaît plus de formats de date; Raccourcis utilise les mêmes commandes que l'app.
+- iCloud conserve les étoiles Focus et les réglages de projet; récurrences et dates de fin sont plus fiables.

@@ -57,6 +57,7 @@
                 "tagIds",
                 "isSequential",
                 "sequentialScope",
+                "taskSortBy",
                 "isFocused",
                 "supportNotes",
                 "attachments",
@@ -71,9 +72,7 @@
                 "deletedAt",
                 "purgedAt"
             ],
-            "pendingProduction": [
-                "taskSortBy"
-            ]
+            "pendingProduction": []
         },
         "MindwtrSection": {
             "deployed": [

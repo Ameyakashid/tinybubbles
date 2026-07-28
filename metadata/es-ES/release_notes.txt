@@ -1,4 +1,4 @@
-- El orden de tareas se guarda por proyecto y se sincroniza entre dispositivos.
-- Las bibliotecas móviles grandes guardan y sincronizan más rápido, con errores más claros.
-- Los grupos de Enfoque, las acciones masivas, las listas y los avisos de siguiente acción son más coherentes.
-- iCloud conserva en el Mac las estrellas de Enfoque y otros ajustes activados desde iPhone o iPad.
+- Cada proyecto recuerda su orden de tareas; el orden de Enfoque y los filtros se sincronizan.
+- Las bibliotecas grandes guardan y sincronizan más rápido, con copias y restauraciones más seguras.
+- La captura rápida reconoce más formatos de fecha y Atajos usa los mismos comandos que la app.
+- iCloud conserva las estrellas de Enfoque y los ajustes de proyecto; mejoran las repeticiones y fechas de finalización.

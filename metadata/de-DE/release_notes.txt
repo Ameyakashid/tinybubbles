@@ -1,4 +1,4 @@
-- Die Sortierung der Aufgaben wird pro Projekt gespeichert und geräteübergreifend synchronisiert.
-- Große mobile Bibliotheken speichern und synchronisieren schneller; Fehler werden klarer gemeldet.
-- Fokus-Gruppen, Sammelaktionen, Checklisten und Abschnitts-Folgeaktionen sind einheitlicher.
-- iCloud behält Fokus-Sterne und weitere Ein/Aus-Einstellungen von iPhone und iPad auf dem Mac bei.
+- Projekte merken sich ihre Aufgabensortierung; Fokus-Reihenfolge und Filter werden synchronisiert.
+- Große Aufgabenbibliotheken speichern und synchronisieren schneller, mit sichereren Backups und Wiederherstellungen.
+- Schnellerfassung erkennt mehr Datumsformate; Kurzbefehle nutzen dieselben Erfassungsbefehle wie die App.
+- iCloud behält Fokus-Sterne und Projekteinstellungen; Wiederholungen und Abschlussdaten sind zuverlässiger.
