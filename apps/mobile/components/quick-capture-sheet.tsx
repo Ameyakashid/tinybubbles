@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Keyboard,
   Platform,
+  Pressable,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
   useWindowDimensions,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -56,6 +59,7 @@ import {
   normalizeContextToken,
   parseContextQueryTokens,
 } from './quick-capture-sheet.utils';
+import { styles } from './quick-capture-sheet/quick-capture-sheet.styles';
 import { QuickCaptureSheetBody } from './quick-capture-sheet/QuickCaptureSheetBody';
 import { QuickCaptureSheetPickers } from './quick-capture-sheet/QuickCaptureSheetPickers';
 import { useQuickCaptureAudio } from './use-quick-capture-audio';
@@ -83,6 +87,50 @@ const resolveInitialContextTokens = (contexts?: string[]): string[] => (
     )
   )
 );
+
+// Rendered in the sheet's own overlay layer, alongside the pickers, so the
+// confirm is plain React inside the already-presented modal rather than a
+// second native presentation stacked on top of it (#940).
+function BulkQuickAddConfirm({
+  cancelLabel,
+  confirmLabel,
+  message,
+  onCancel,
+  onConfirm,
+  tc,
+  title,
+}: {
+  cancelLabel: string;
+  confirmLabel: string;
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  tc: { border: string; cardBg: string; secondaryText: string; text: string; tint: string };
+  title: string;
+}) {
+  return (
+    <View style={styles.overlay} accessibilityViewIsModal>
+      <Pressable
+        style={styles.overlayBackdrop}
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel={cancelLabel}
+      />
+      <View style={[styles.pickerCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
+        <Text style={[styles.pickerTitle, { color: tc.text }]} accessibilityRole="header">{title}</Text>
+        <Text style={[styles.bulkConfirmMessage, { color: tc.secondaryText }]}>{message}</Text>
+        <View style={styles.bulkConfirmActions}>
+          <TouchableOpacity onPress={onCancel} style={styles.bulkConfirmButton} accessibilityRole="button">
+            <Text style={[styles.pickerRowText, { color: tc.secondaryText }]}>{cancelLabel}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onConfirm} style={styles.bulkConfirmButton} accessibilityRole="button">
+            <Text style={[styles.pickerRowText, { color: tc.tint }]}>{confirmLabel}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export function QuickCaptureSheet({
   visible,
@@ -152,6 +200,7 @@ export function QuickCaptureSheet({
   );
 
   const [value, setValue] = useState('');
+  const [pendingBulkLines, setPendingBulkLines] = useState<string[] | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [dueDateHasTime, setDueDateHasTime] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
@@ -184,7 +233,6 @@ export function QuickCaptureSheet({
   const contextOptionsLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contextOptionsRequestRef = useRef(0);
   const initialFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const importConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
   const canFocusNewTask = focusNewTask || canStarNewCapture({ focusedCount: getDerivedState().focusedCount, focusTaskLimit });
   const focusNewTaskDisabledReason = formatFocusTaskLimitText(
@@ -212,12 +260,6 @@ export function QuickCaptureSheet({
     if (!initialFocusTimerRef.current) return;
     clearTimeout(initialFocusTimerRef.current);
     initialFocusTimerRef.current = null;
-  }, []);
-
-  const clearImportConfirmTimer = useCallback(() => {
-    if (!importConfirmTimerRef.current) return;
-    clearTimeout(importConfirmTimerRef.current);
-    importConfirmTimerRef.current = null;
   }, []);
 
   const {
@@ -397,10 +439,9 @@ export function QuickCaptureSheet({
   useEffect(() => () => {
     clearAndroidOptionsExpand();
     clearInitialFocusTimer();
-    clearImportConfirmTimer();
     clearContextOptionsLoad();
     contextOptionsRequestRef.current += 1;
-  }, [clearAndroidOptionsExpand, clearContextOptionsLoad, clearImportConfirmTimer, clearInitialFocusTimer]);
+  }, [clearAndroidOptionsExpand, clearContextOptionsLoad, clearInitialFocusTimer]);
 
   useEffect(() => {
     if (!visible) return;
@@ -638,21 +679,25 @@ export function QuickCaptureSheet({
     }
   }, [addProject, addTasks, buildCaptureRequestForInput, finalizeClose, projects, showToast, t]);
 
+  // Confirm inside this sheet rather than through Alert. The sheet is a native
+  // Modal, and an alert raised while it is presented is a second native
+  // presentation stacked on the first — on iOS the confirm never became
+  // visible, so a .txt import looked like it silently did nothing (#940).
+  // Rendering it in the sheet's own overlay layer, next to the pickers, removes
+  // the second presentation entirely instead of trying to time around it.
   const confirmBulkQuickAdd = useCallback((lines: string[]) => {
-    Alert.alert(
-      formatBulkConfirmTitle(lines.length),
-      formatBulkConfirmMessage(lines),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: tFallback(t, 'quickAdd.bulkConfirmCreate', 'Create tasks'),
-          onPress: () => {
-            void createBulkTasks(lines);
-          },
-        },
-      ],
-    );
-  }, [createBulkTasks, formatBulkConfirmMessage, formatBulkConfirmTitle, t]);
+    setPendingBulkLines(lines);
+  }, []);
+
+  const cancelBulkQuickAdd = useCallback(() => {
+    setPendingBulkLines(null);
+  }, []);
+
+  const acceptBulkQuickAdd = useCallback(() => {
+    const lines = pendingBulkLines;
+    setPendingBulkLines(null);
+    if (lines && lines.length > 0) void createBulkTasks(lines);
+  }, [createBulkTasks, pendingBulkLines]);
 
   const handleSave = useCallback(async ({ openAfterSave = false }: { openAfterSave?: boolean } = {}) => {
     if (!value.trim()) return;
@@ -922,19 +967,7 @@ export function QuickCaptureSheet({
       const text = await FileSystem.readAsStringAsync(asset.uri);
       const lines = splitQuickAddBulkLines(text);
       if (lines.length > 1) {
-        // iOS swallows an Alert fired while the document-picker sheet is still
-        // dismissing, so defer the bulk-create confirm until dismissal settles.
-        // Track the timer so closing/unmounting the sheet mid-wait cancels it
-        // instead of firing the Alert against stale state.
-        if (Platform.OS === 'ios') {
-          clearImportConfirmTimer();
-          importConfirmTimerRef.current = setTimeout(() => {
-            importConfirmTimerRef.current = null;
-            confirmBulkQuickAdd(lines);
-          }, 500);
-        } else {
-          confirmBulkQuickAdd(lines);
-        }
+        confirmBulkQuickAdd(lines);
       } else if (lines.length === 1) {
         setValue(lines[0]);
       }
@@ -947,7 +980,7 @@ export function QuickCaptureSheet({
         durationMs: 4200,
       });
     }
-  }, [clearImportConfirmTimer, confirmBulkQuickAdd, showToast, t]);
+  }, [confirmBulkQuickAdd, showToast, t]);
 
   const pickerProps = {
     areaQuery,
@@ -1085,6 +1118,17 @@ export function QuickCaptureSheet({
         visible={visible}
       >
         <QuickCaptureSheetPickers {...pickerProps} pickerLayer="overlay" overlayKeyboardInset={overlayKeyboardInset} />
+        {pendingBulkLines ? (
+          <BulkQuickAddConfirm
+            cancelLabel={t('common.cancel')}
+            confirmLabel={tFallback(t, 'quickAdd.bulkConfirmCreate', 'Create tasks')}
+            message={formatBulkConfirmMessage(pendingBulkLines)}
+            onCancel={cancelBulkQuickAdd}
+            onConfirm={acceptBulkQuickAdd}
+            tc={tc}
+            title={formatBulkConfirmTitle(pendingBulkLines.length)}
+          />
+        ) : null}
       </QuickCaptureSheetBody>
       <QuickCaptureSheetPickers {...pickerProps} pickerLayer="date" />
     </>

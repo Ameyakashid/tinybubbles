@@ -332,6 +332,20 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  bulkConfirmMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  bulkConfirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  bulkConfirmButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   selectedContextWrap: {
     marginTop: 8,
     flexDirection: 'row',

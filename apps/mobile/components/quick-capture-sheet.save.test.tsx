@@ -603,6 +603,15 @@ describe('QuickCaptureSheet save handling', () => {
     }));
   });
 
+  // The confirm is rendered inside the capture sheet's own modal. It used to go
+  // through Alert.alert, which on iOS stacked a second native presentation on
+  // the sheet and never became visible — a .txt import looked like it silently
+  // did nothing (#940). These tests pin the in-sheet confirm and that no Alert
+  // is raised from the sheet at all.
+  const findBulkConfirm = (tree: ReturnType<typeof create>) => (
+    tree.root.findAll((node) => (node.type as { name?: string })?.name === 'BulkQuickAddConfirm')[0]
+  );
+
   it('confirms multiline capture before creating one task per line', async () => {
     const alertSpy = vi.spyOn(Alert, 'alert').mockImplementation(vi.fn());
     addTask.mockResolvedValue({ success: true, id: 'task-1' });
@@ -634,18 +643,15 @@ describe('QuickCaptureSheet save handling', () => {
     });
 
     expect(addTask).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Create 2 tasks?',
-      expect.stringContaining('Email Bob'),
-      expect.any(Array),
-    );
+    expect(alertSpy).not.toHaveBeenCalled();
 
-    const buttons = alertSpy.mock.calls[0]?.[2] as Array<{ text?: string; onPress?: () => void | Promise<void> }>;
-    const confirm = buttons.find((button) => button.text === 'Create tasks');
-    if (!confirm?.onPress) throw new Error('Confirm button not found');
+    const confirm = findBulkConfirm(tree);
+    if (!confirm) throw new Error('Bulk confirm not rendered in the sheet');
+    expect(confirm.props.title).toBe('Create 2 tasks?');
+    expect(confirm.props.message).toContain('Email Bob');
 
     await act(async () => {
-      await confirm.onPress?.();
+      confirm.props.onConfirm();
       await Promise.resolve();
     });
 
@@ -660,7 +666,7 @@ describe('QuickCaptureSheet save handling', () => {
     ]);
   });
 
-  it('imports a text file through the bulk capture confirmation', async () => {
+  it('imports a text file through the in-sheet bulk confirmation', async () => {
     const alertSpy = vi.spyOn(Alert, 'alert').mockImplementation(vi.fn());
     addTask.mockResolvedValue({ success: true, id: 'task-1' });
     documentPickerGetDocumentAsync.mockResolvedValue({
@@ -695,34 +701,26 @@ describe('QuickCaptureSheet save handling', () => {
       type: 'text/plain',
     }));
     expect(fileSystemReadAsStringAsync).toHaveBeenCalledWith('file://tasks.txt');
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Create 2 tasks?',
-      expect.stringContaining('First imported task'),
-      expect.any(Array),
-    );
 
-    const buttons = alertSpy.mock.calls[0]?.[2] as Array<{ text?: string; onPress?: () => void | Promise<void> }>;
-    const confirm = buttons.find((button) => button.text === 'Create tasks');
-    if (!confirm?.onPress) throw new Error('Confirm button not found');
+    const confirm = findBulkConfirm(tree);
+    if (!confirm) throw new Error('Bulk confirm not rendered in the sheet');
+    expect(confirm.props.title).toBe('Create 2 tasks?');
+    expect(confirm.props.message).toContain('First imported task');
 
     await act(async () => {
-      await confirm.onPress?.();
+      confirm.props.onConfirm();
       await Promise.resolve();
     });
 
     expect(addTask).not.toHaveBeenCalled();
     expect(addTasks).toHaveBeenCalledTimes(1);
-    expect(createMobileRecoverySnapshot).toHaveBeenCalledOnce();
-    expect(createMobileRecoverySnapshot.mock.invocationCallOrder[0])
-      .toBeLessThan(addTasks.mock.invocationCallOrder[0]);
     expect(addTasks).toHaveBeenCalledWith([
       { title: 'First imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },
       { title: 'Second imported task', initialProps: expect.objectContaining({ status: 'inbox' }) },
     ]);
   });
 
-  it('defers the import confirmation on iOS until the document picker settles', async () => {
-    vi.useFakeTimers();
+  it('never raises a native Alert for an iOS import confirmation', async () => {
     const alertSpy = vi.spyOn(Alert, 'alert').mockImplementation(vi.fn());
     documentPickerGetDocumentAsync.mockResolvedValue({
       canceled: false,
@@ -752,77 +750,51 @@ describe('QuickCaptureSheet save handling', () => {
         await Promise.resolve();
       });
 
-      // The file is read, but the confirm alert must not fire synchronously
-      // while the picker sheet is still dismissing (iOS swallows it otherwise).
-      expect(fileSystemReadAsStringAsync).toHaveBeenCalledWith('file://tasks.txt');
+      // No delay, no Alert: the confirm is already on screen inside the sheet.
       expect(alertSpy).not.toHaveBeenCalled();
-
-      // Just under the dismissal delay it must still be pending — a near-zero
-      // delay (or a reintroduced synchronous call) would have fired by now.
-      await act(async () => {
-        vi.advanceTimersByTime(499);
-        await Promise.resolve();
-      });
-      expect(alertSpy).not.toHaveBeenCalled();
-
-      // Once the ~500ms dismissal window elapses, the confirm fires.
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-        await Promise.resolve();
-      });
-      expect(alertSpy).toHaveBeenCalledWith(
-        'Create 2 tasks?',
-        expect.stringContaining('First imported task'),
-        expect.any(Array),
-      );
+      expect(findBulkConfirm(tree)?.props.title).toBe('Create 2 tasks?');
     });
   });
 
-  it('cancels the deferred iOS import confirmation if the sheet closes first', async () => {
-    vi.useFakeTimers();
-    const alertSpy = vi.spyOn(Alert, 'alert').mockImplementation(vi.fn());
+  it('creates nothing when the bulk confirmation is dismissed', async () => {
     documentPickerGetDocumentAsync.mockResolvedValue({
       canceled: false,
       assets: [{ name: 'tasks.txt', uri: 'file://tasks.txt', mimeType: 'text/plain' }],
     });
     fileSystemReadAsStringAsync.mockResolvedValue('First imported task\nSecond imported task\n');
 
-    await withPlatform('ios', async () => {
-      let tree!: ReturnType<typeof create>;
-      await act(async () => {
-        tree = create(
-          <QuickCaptureSheet
-            visible
-            openRequestId={1}
-            initialValue=""
-            onClose={vi.fn()}
-          />
-        );
-        await Promise.resolve();
-      });
-
-      const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
-      if (!body) throw new Error('QuickCaptureSheetBody not found');
-
-      await act(async () => {
-        await body.props.handleImportTextFile();
-        await Promise.resolve();
-      });
-
-      // Sheet unmounts before the dismissal delay elapses; the pending confirm
-      // timer must be cleared so no stale Alert fires against the closed sheet.
-      await act(async () => {
-        tree.unmount();
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        vi.advanceTimersByTime(500);
-        await Promise.resolve();
-      });
-
-      expect(alertSpy).not.toHaveBeenCalled();
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <QuickCaptureSheet
+          visible
+          openRequestId={1}
+          initialValue=""
+          onClose={vi.fn()}
+        />
+      );
+      await Promise.resolve();
     });
+
+    const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+    if (!body) throw new Error('QuickCaptureSheetBody not found');
+
+    await act(async () => {
+      await body.props.handleImportTextFile();
+      await Promise.resolve();
+    });
+
+    const confirm = findBulkConfirm(tree);
+    if (!confirm) throw new Error('Bulk confirm not rendered in the sheet');
+
+    await act(async () => {
+      confirm.props.onCancel();
+      await Promise.resolve();
+    });
+
+    expect(findBulkConfirm(tree)).toBeUndefined();
+    expect(addTasks).not.toHaveBeenCalled();
+    expect(addTask).not.toHaveBeenCalled();
   });
 
   it('opens the created task when save and edit is requested', async () => {
