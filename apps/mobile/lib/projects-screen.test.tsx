@@ -11,6 +11,10 @@ const asyncStorageMock = vi.hoisted(() => ({
   setItem: vi.fn(),
 }));
 
+const routeParams = vi.hoisted(() => ({ current: {} as Record<string, string> }));
+const detailModal = vi.hoisted(() => ({ props: null as Record<string, any> | null }));
+const focusEffect = vi.hoisted(() => ({ callback: null as null | (() => void | (() => void)) }));
+
 const createDeferred = <T,>() => {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
@@ -89,6 +93,9 @@ const storeState: {
 };
 
 beforeEach(() => {
+  routeParams.current = {};
+  detailModal.props = null;
+  focusEffect.callback = null;
   asyncStorageMock.getItem.mockReset();
   asyncStorageMock.getItem.mockResolvedValue(null);
   asyncStorageMock.setItem.mockReset();
@@ -113,11 +120,20 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
   };
 });
 
-vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({}),
-  usePathname: () => '/projects-screen',
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
+vi.mock('expo-router', async () => {
+  const react = await import('react');
+  return {
+    useLocalSearchParams: () => routeParams.current,
+    usePathname: () => '/projects-screen',
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+    // Captured so a test can fire it to stand in for the screen regaining
+    // focus; also run on mount the way a focused screen would.
+    useFocusEffect: (callback: () => void | (() => void)) => {
+      focusEffect.callback = callback;
+      react.useEffect(callback, [callback]);
+    },
+  };
+});
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -242,7 +258,12 @@ vi.mock('@/components/projects-screen/use-project-attachments', () => ({
 }));
 
 vi.mock('@/components/projects-screen/ProjectAreaModals', () => ({ ProjectAreaModals: () => null }));
-vi.mock('@/components/projects-screen/ProjectDetailModal', () => ({ ProjectDetailModal: () => null }));
+vi.mock('@/components/projects-screen/ProjectDetailModal', () => ({
+  ProjectDetailModal: (props: Record<string, any>) => {
+    detailModal.props = props;
+    return null;
+  },
+}));
 vi.mock('@/components/projects-screen/ProjectOverlayModals', () => ({
   ProjectImagePreviewModal: () => null,
   ProjectLinkModal: () => null,
@@ -266,6 +287,44 @@ vi.mock('../lib/app-log', () => ({
   logError: vi.fn(),
   logWarn: vi.fn(),
 }));
+
+describe('ProjectsScreen project quick add', () => {
+  // The detail sheet is a native modal driven by selectedProject. Leaving it set
+  // while quick add pushes a route desyncs state from the native sheet, and
+  // re-tapping the project then sets identical state — no transition, so the
+  // sheet never comes back and the row reads as dead (#938).
+  it('closes the open project on the way to quick add and restores it on focus', async () => {
+    routeParams.current = { projectId: testProject.id, openToken: 'token-1' };
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<ProjectsScreen />);
+      await Promise.resolve();
+    });
+
+    expect(detailModal.props?.project?.id).toBe(testProject.id);
+
+    await act(async () => {
+      detailModal.props?.onOpenQuickAdd?.(testProject);
+      await Promise.resolve();
+    });
+
+    expect(detailModal.props?.project).toBeNull();
+
+    // Returning to the screen re-runs the focus callback, which re-opens it and
+    // gives the native modal a real false -> true transition.
+    await act(async () => {
+      focusEffect.callback?.();
+      await Promise.resolve();
+    });
+
+    expect(detailModal.props?.project?.id).toBe(testProject.id);
+
+    await act(async () => {
+      tree.unmount();
+    });
+  });
+});
 
 describe('ProjectsScreen view state hydration', () => {
   it('does not render project rows before persisted collapsed areas are loaded', async () => {

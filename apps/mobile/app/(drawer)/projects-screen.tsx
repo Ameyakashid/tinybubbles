@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Dimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AREA_PRESET_COLORS, Attachment, DEFAULT_PROJECT_COLOR, Project, shallow, Task, type Section, type TaskSortBy, useTaskStore } from '@mindwtr/core';
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 
 import {
@@ -345,15 +345,7 @@ export default function ProjectsScreen() {
     }
   }, [selectedProject, updateProject]);
 
-  const openProjectQuickAdd = useCallback((projectToAddTo: Project) => {
-    openQuickCapture({
-      initialProps: {
-        projectId: projectToAddTo.id,
-        status: 'next',
-      },
-      returnTo: buildProjectQuickCaptureReturnTo(projectToAddTo.id),
-    });
-  }, [openQuickCapture]);
+  const reopenProjectIdAfterCaptureRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!projectId || typeof projectId !== 'string') return;
@@ -643,6 +635,50 @@ export default function ProjectsScreen() {
       updateProject(project.id, updates);
     }
   };
+
+  // Quick add is a pushed route, but the project detail is a native modal
+  // (pageSheet on iOS) whose visibility is derived from selectedProject.
+  // Moving the route while that stays set desyncs the two: coming back, the
+  // state still says "open" so the sheet never re-presents, and tapping the
+  // same project sets identical state — no transition, so the row reads as
+  // dead until the screen is remounted (#938). Dismiss on the way out and
+  // restore on the way back, so re-opening is always a real false -> true
+  // transition. Edits are committed first, exactly as closing by hand does.
+  const openProjectQuickAdd = useCallback((projectToAddTo: Project) => {
+    commitSelectedProjectNotes();
+    persistSelectedProjectEdits(selectedProject);
+    reopenProjectIdAfterCaptureRef.current = projectToAddTo.id;
+    setSelectedProject(null);
+    openQuickCapture({
+      initialProps: {
+        projectId: projectToAddTo.id,
+        status: 'next',
+      },
+      returnTo: buildProjectQuickCaptureReturnTo(projectToAddTo.id),
+    });
+    // commitSelectedProjectNotes/persistSelectedProjectEdits are re-created every
+    // render; listing them would rebuild this callback on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openQuickCapture, selectedProject, projects, updateProject]);
+
+  // Read through refs so this callback's identity never changes: useFocusEffect
+  // re-runs whenever the callback it is given changes, and openProject is
+  // rebuilt every render, which would re-open the project on every render and
+  // undo the dismissal above.
+  const openProjectRef = useRef(openProject);
+  openProjectRef.current = openProject;
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+
+  useFocusEffect(
+    useCallback(() => {
+      const pendingId = reopenProjectIdAfterCaptureRef.current;
+      if (!pendingId) return;
+      reopenProjectIdAfterCaptureRef.current = null;
+      const project = projectsRef.current.find((item) => item.id === pendingId && !item.deletedAt);
+      if (project) openProjectRef.current(project);
+    }, [])
+  );
 
   const closeProjectDetail = () => {
     commitSelectedProjectNotes();

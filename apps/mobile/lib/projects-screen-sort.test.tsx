@@ -104,11 +104,15 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
   };
 });
 
-vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ projectId: 'project-1' }),
-  usePathname: () => '/projects-screen',
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
+vi.mock('expo-router', async () => {
+  const react = await import('react');
+  return {
+    useLocalSearchParams: () => ({ projectId: 'project-1' }),
+    usePathname: () => '/projects-screen',
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+    useFocusEffect: (callback: () => void | (() => void)) => react.useEffect(callback, [callback]),
+  };
+});
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
