@@ -70,11 +70,21 @@ export const resolveSyncFailureCooldownMs = ({
     baseMs,
     maxMs,
 }: SyncFailureCooldownOptions): number => {
-    const requestedMs = parseCloudKitRetryAfterMs(error);
-    if (requestedMs !== null) return requestedMs;
     const attempt = Math.max(1, Math.floor(consecutiveFailures));
-    const exponentialMs = baseMs * (2 ** (attempt - 1));
-    return Math.min(maxMs, Math.max(baseMs, exponentialMs));
+    const requestedMs = parseCloudKitRetryAfterMs(error);
+    if (requestedMs === null) {
+        const exponentialMs = baseMs * (2 ** (attempt - 1));
+        return Math.min(maxMs, Math.max(baseMs, exponentialMs));
+    }
+    // The first wait is exactly what CloudKit asked for. When it throttles again
+    // it tends to repeat the same number, so honouring it verbatim every time is
+    // a fixed-interval retry that never escapes — two devices stayed wedged for
+    // 10+ minutes re-tripping the same limit every 23s (#948). Treat the
+    // server's delay as a floor and keep growing it while it keeps refusing.
+    // A delay longer than maxMs still wins outright: never retry sooner than
+    // CloudKit asked.
+    const ceilingMs = Math.max(maxMs, requestedMs);
+    return Math.min(ceilingMs, requestedMs * (2 ** (attempt - 1)));
 };
 
 type WebdavDownloadBackoffOptions = {

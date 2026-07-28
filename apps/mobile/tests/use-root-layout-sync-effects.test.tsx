@@ -27,7 +27,7 @@ const {
   getInMemorySyncChangeFingerprint: vi.fn(() => 'sync-change:initial'),
   getCalendarPushEnabled: vi.fn(async () => false),
   hasActiveMobileNotificationFeature: vi.fn(() => false),
-  performMobileSync: vi.fn(async () => ({ success: true })),
+  performMobileSync: vi.fn(async (): Promise<{ success: boolean; error?: string }> => ({ success: true })),
   storeSubscribe: vi.fn((..._args: unknown[]) => vi.fn()),
   syncMobileBackgroundSyncRegistration: vi.fn(async () => undefined),
   subscribeToCloudKitChanges: vi.fn(() => vi.fn()),
@@ -62,14 +62,20 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  flushPendingSave,
-  getInMemorySyncChangeFingerprint,
-  useTaskStore: {
-    getState: () => ({ settings: {} }),
-    subscribe: storeSubscribe,
-  },
-}));
+vi.mock('@mindwtr/core', async () => {
+  // The real cooldown maths, not a stub: leaving it off the mock meant every
+  // failed-sync path threw here, so no test could reach the cooldown at all.
+  const { resolveSyncFailureCooldownMs } = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  return {
+    flushPendingSave,
+    getInMemorySyncChangeFingerprint,
+    resolveSyncFailureCooldownMs,
+    useTaskStore: {
+      getState: () => ({ settings: {} }),
+      subscribe: storeSubscribe,
+    },
+  };
+});
 
 vi.mock('@/lib/notification-service', () => ({
   getNotificationPermissionStatus: vi.fn(async () => ({ granted: true })),
@@ -309,6 +315,49 @@ describe('useRootLayoutSyncEffects', () => {
     });
 
     expect(performMobileSync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      tree.unmount();
+    });
+    vi.useRealTimers();
+  });
+
+  // A throttled device used to fire again on the very next foreground/background
+  // switch, because those call requestSync(0) and explicit-0 skipped the failure
+  // cooldown. That is what kept re-tripping CloudKit's limit (#948).
+  it('holds off app-state sync triggers while a failure cooldown is active', async () => {
+    vi.useFakeTimers();
+    performMobileSync.mockResolvedValue({
+      success: false,
+      error: 'CloudKit error: Request Rate Limited [retryAfter=300]',
+    });
+
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<TestHarness />);
+      await flushMicrotasks();
+    });
+    const listener = Array.from(appStateListeners)[0];
+    expect(listener).toBeTypeOf('function');
+
+    await act(async () => {
+      listener('background');
+      await flushMicrotasks();
+    });
+    const attemptsAfterFailure = performMobileSync.mock.calls.length;
+    expect(attemptsAfterFailure).toBeGreaterThan(0);
+
+    // Past the app-state dedupe window, but far inside the 300s CloudKit asked for.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+      listener('active');
+      await flushMicrotasks();
+      await vi.advanceTimersByTimeAsync(5_000);
+      listener('background');
+      await flushMicrotasks();
+    });
+
+    expect(performMobileSync).toHaveBeenCalledTimes(attemptsAfterFailure);
 
     await act(async () => {
       tree.unmount();

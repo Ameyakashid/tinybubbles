@@ -219,9 +219,15 @@ export function useRootLayoutSyncEffects({
         // A failed cycle parks the automatic triggers until its cooldown expires,
         // so a CloudKit throttle is not met with another request on the next
         // debounce. Pending edits stay queued and the timer below retries once.
-        // Explicit 0 (manual sync, app-state transitions, this retry itself) is
-        // deliberate and still goes through, matching the desktop controller.
-        if (requestedMinIntervalMs > 0 && Date.now() < autoSyncRetryAfter.current) {
+        // Every trigger here is automatic — app-state changes, CloudKit change
+        // notifications, startup — so every one of them waits. Exempting the
+        // explicit-0 callers let a throttled device fire again on the very next
+        // foreground/background switch, which is how testing across two devices
+        // stayed stuck (#948). The user-facing Sync now button does not come
+        // through here; it calls performMobileSync directly and still forces a
+        // run. This matches the desktop controller, where only `manual` sets
+        // bypassFailureCooldown.
+        if (Date.now() < autoSyncRetryAfter.current) {
             if (!syncThrottleTimer.current) {
                 const waitMs = Math.max(0, autoSyncRetryAfter.current - Date.now());
                 syncThrottleTimer.current = setTimeout(() => {
