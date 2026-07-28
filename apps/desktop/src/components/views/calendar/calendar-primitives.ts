@@ -15,6 +15,45 @@ export const DESKTOP_DAY_END_HOUR = 24;
 export const DESKTOP_HOUR_HEIGHT = 56;
 export const DESKTOP_GRID_SNAP_MINUTES = 15;
 
+export const CALENDAR_DAYS_IN_WEEK = 7;
+
+/**
+ * How many days the week timeline shows at once (#951).
+ *
+ * The range and the clamp mirror mobile's `coerceCalendarWeekVisibleDays`
+ * (`apps/mobile/components/views/calendar/calendar-view-mode.ts`) on purpose, so
+ * the two platforms agree on what a day count means. Only the default differs:
+ * mobile opens on 2 because a phone column has to stay readable, a desktop
+ * window is wide enough to start on the whole week.
+ */
+export const CALENDAR_TIMELINE_DAY_COUNT_MIN = 2;
+export const CALENDAR_TIMELINE_DAY_COUNT_MAX = CALENDAR_DAYS_IN_WEEK;
+export const CALENDAR_TIMELINE_DAY_COUNT_DEFAULT = CALENDAR_DAYS_IN_WEEK;
+
+export const coerceCalendarTimelineDayCount = (value?: number | null): number => {
+    if (!Number.isFinite(value)) return CALENDAR_TIMELINE_DAY_COUNT_DEFAULT;
+    return Math.max(
+        CALENDAR_TIMELINE_DAY_COUNT_MIN,
+        Math.min(CALENDAR_TIMELINE_DAY_COUNT_MAX, Math.round(value as number))
+    );
+};
+
+/**
+ * Where a shorter timeline starts inside the week it belongs to.
+ *
+ * Mobile keeps the full week mounted and scrolls a window of `dayCount` columns
+ * over it, clamping the scroll so the anchor day stays on screen and the window
+ * never runs past the week. Desktop has no horizontal scroll, so the same clamp
+ * decides which days get rendered instead — same window, different mechanism.
+ * Because the offset is derived from the anchor's weekday, stepping a whole week
+ * lands on the same columns again: 5 days anchored on a Monday stays Mon–Fri.
+ */
+export const getCalendarTimelineStartOffset = (anchorWeekdayIndex: number, dayCount: number): number => {
+    if (!Number.isFinite(anchorWeekdayIndex)) return 0;
+    const lastStart = CALENDAR_DAYS_IN_WEEK - coerceCalendarTimelineDayCount(dayCount);
+    return Math.max(0, Math.min(Math.round(anchorWeekdayIndex), lastStart));
+};
+
 export type CalendarCellItem = CalendarDayItem;
 
 export type CalendarViewMode = 'day' | 'week' | 'month' | 'schedule';

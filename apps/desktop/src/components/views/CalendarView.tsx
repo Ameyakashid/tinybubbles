@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { isSameDay, isToday } from 'date-fns';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react';
 import {
+    formatI18nTemplate,
     getCalendarDayOfMonth,
     getCalendarMonthIndex,
     getShortWeekdayLabels,
@@ -33,6 +34,8 @@ import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
 import { CalendarSelectedDayPanel } from './calendar/CalendarSelectedDayPanel';
 import { TaskQuickActionMenuHost } from '../Task/useTaskQuickActionMenuProps';
 import {
+    CALENDAR_TIMELINE_DAY_COUNT_MAX,
+    CALENDAR_TIMELINE_DAY_COUNT_MIN,
     DESKTOP_DAY_END_HOUR,
     DESKTOP_DAY_START_HOUR,
     DESKTOP_GRID_SNAP_MINUTES,
@@ -99,6 +102,8 @@ export function CalendarView() {
         scheduleDays,
         selectCalendarDate,
         selectedDate,
+        setTimelineDayCount,
+        timelineDayCount,
         timelineDays,
         t,
         toggleExternalCalendar,
@@ -285,6 +290,40 @@ export function CalendarView() {
                             </button>
                         ))}
                     </div>
+                    {/* Only the week timeline splits its width across days, so the
+                        count is meaningless in Day (always one), Month and Schedule. */}
+                    {viewMode === 'week' && (
+                        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+                            <button
+                                type="button"
+                                onClick={() => setTimelineDayCount(timelineDayCount - 1)}
+                                disabled={timelineDayCount <= CALENDAR_TIMELINE_DAY_COUNT_MIN}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:pointer-events-none disabled:opacity-40"
+                                aria-label={resolveText('calendar.mobile.showFewerDays', 'Show fewer days')}
+                                title={resolveText('calendar.mobile.showFewerDays', 'Show fewer days')}
+                            >
+                                <Minus className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <span className="min-w-[4.5rem] text-center text-sm font-medium tabular-nums" aria-live="polite">
+                                {formatI18nTemplate(
+                                    // Same string mobile shows for the same setting — one
+                                    // translation, one meaning, on both platforms (#951).
+                                    resolveText('calendar.mobile.visibleDayCount', '{{dayCount}} days'),
+                                    { dayCount: timelineDayCount }
+                                )}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setTimelineDayCount(timelineDayCount + 1)}
+                                disabled={timelineDayCount >= CALENDAR_TIMELINE_DAY_COUNT_MAX}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:pointer-events-none disabled:opacity-40"
+                                aria-label={resolveText('calendar.mobile.showMoreDays', 'Show more days')}
+                                title={resolveText('calendar.mobile.showMoreDays', 'Show more days')}
+                            >
+                                <Plus className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                    )}
                     <div className="flex w-full items-center gap-1 rounded-md border border-border bg-card p-1 sm:w-auto">
                         <button
                             type="button"

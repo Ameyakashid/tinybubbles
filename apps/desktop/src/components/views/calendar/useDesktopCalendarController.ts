@@ -621,6 +621,8 @@ export function useDesktopCalendarController() {
         taskComposerCandidates: composer.taskComposerCandidates,
         taskComposerError: composer.taskComposerError,
         timeEstimateToMinutes,
+        setTimelineDayCount: nav.setTimelineDayCount,
+        timelineDayCount: nav.timelineDayCount,
         timelineDays: nav.timelineDays,
         toggleExternalCalendar: external.toggleExternalCalendar,
         toggleMonthPicker: nav.toggleMonthPicker,

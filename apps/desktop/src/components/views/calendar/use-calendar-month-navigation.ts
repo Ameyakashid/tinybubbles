@@ -35,7 +35,21 @@ import {
     CALENDAR_VIEW_PARAM,
 } from '../../../lib/calendar-view-params';
 import { getCalendarMonthNames, getCalendarWeekdayHeaders } from '../calendar-locale';
-import { dayKey, type CalendarViewMode } from './calendar-primitives';
+import {
+    CALENDAR_DAYS_IN_WEEK,
+    CALENDAR_TIMELINE_DAY_COUNT_DEFAULT,
+    coerceCalendarTimelineDayCount,
+    getCalendarTimelineStartOffset,
+    dayKey,
+    type CalendarViewMode,
+} from './calendar-primitives';
+
+/**
+ * How many days the week timeline shows. A layout choice about this screen, so
+ * it lives beside the other device-local calendar preferences instead of in
+ * synced settings — a wide desktop and a laptop should not fight over it.
+ */
+const CALENDAR_TIMELINE_DAY_COUNT_STORAGE_KEY = 'mindwtr.calendar.timelineDayCount';
 
 export type CalendarMonthNavigationOptions = {
     calendarLocale: string;
@@ -71,6 +85,19 @@ const needsCalendarSelectedDate = (viewMode: CalendarViewMode): boolean => (
     viewMode === 'day' || viewMode === 'week' || viewMode === 'schedule'
 );
 
+const readStoredTimelineDayCount = (): number => {
+    if (typeof window === 'undefined') return CALENDAR_TIMELINE_DAY_COUNT_DEFAULT;
+    try {
+        const stored = window.localStorage.getItem(CALENDAR_TIMELINE_DAY_COUNT_STORAGE_KEY);
+        if (stored === null) return CALENDAR_TIMELINE_DAY_COUNT_DEFAULT;
+        // Anything unparseable — a hand-edited value, an older format — coerces
+        // back to a whole week rather than leaving the timeline with no columns.
+        return coerceCalendarTimelineDayCount(Number.parseInt(stored, 10));
+    } catch {
+        return CALENDAR_TIMELINE_DAY_COUNT_DEFAULT;
+    }
+};
+
 const getInitialCalendarState = (fallback: Date): { currentMonth: Date; selectedDate: Date | null; viewMode: CalendarViewMode } => {
     if (typeof window === 'undefined') {
         return { currentMonth: fallback, selectedDate: null, viewMode: 'month' };
@@ -98,6 +125,18 @@ export function useCalendarMonthNavigation({
     const [selectedDate, setSelectedDate] = useState<Date | null>(initialCalendarState.selectedDate);
     const [viewMode, setViewMode] = useState<CalendarViewMode>(initialCalendarState.viewMode);
     const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+    const [timelineDayCount, setTimelineDayCountState] = useState(readStoredTimelineDayCount);
+
+    const setTimelineDayCount = useCallback((value: number) => {
+        const next = coerceCalendarTimelineDayCount(value);
+        setTimelineDayCountState(next);
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(CALENDAR_TIMELINE_DAY_COUNT_STORAGE_KEY, String(next));
+        } catch {
+            // A blocked or full store only costs the preference on next launch.
+        }
+    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -122,13 +161,21 @@ export function useCalendarMonthNavigation({
         start: calendarStart,
         end: calendarEnd,
     });
+    // The week timeline's window: `timelineDayCount` days inside the week holding
+    // `currentMonth`, positioned so that day is always one of them. Every week-mode
+    // consumer below — the range, the header label, the columns — reads it, so the
+    // three can never disagree about which days are on screen.
+    const timelineStart = useMemo(() => {
+        const weekStart = startOfWeek(currentMonth, { weekStartsOn });
+        const anchorWeekdayIndex = (currentMonth.getDay() - weekStartsOn + CALENDAR_DAYS_IN_WEEK) % CALENDAR_DAYS_IN_WEEK;
+        return addDays(weekStart, getCalendarTimelineStartOffset(anchorWeekdayIndex, timelineDayCount));
+    }, [currentMonth, timelineDayCount, weekStartsOn]);
     const visibleRange = useMemo(() => {
         if (viewMode === 'day') {
             return { start: currentMonth, end: currentMonth };
         }
         if (viewMode === 'week') {
-            const start = startOfWeek(currentMonth, { weekStartsOn });
-            return { start, end: addDays(start, 6) };
+            return { start: timelineStart, end: addDays(timelineStart, timelineDayCount - 1) };
         }
         if (viewMode === 'schedule') {
             return { start: currentMonth, end: addDays(currentMonth, 60) };
@@ -137,15 +184,12 @@ export function useCalendarMonthNavigation({
             start: currentCalendarMonth,
             end: endOfCalendarMonth(currentCalendarMonth, calendarSystem),
         };
-    }, [calendarSystem, currentCalendarMonth, currentMonth, viewMode, weekStartsOn]);
+    }, [calendarSystem, currentCalendarMonth, currentMonth, timelineDayCount, timelineStart, viewMode]);
     const timelineDays = useMemo(
         () => viewMode === 'day'
             ? [currentMonth]
-            : eachDayOfInterval({
-                start: startOfWeek(currentMonth, { weekStartsOn }),
-                end: addDays(startOfWeek(currentMonth, { weekStartsOn }), 6),
-            }),
-        [currentMonth, viewMode, weekStartsOn]
+            : Array.from({ length: timelineDayCount }, (_, index) => addDays(timelineStart, index)),
+        [currentMonth, timelineDayCount, timelineStart, viewMode]
     );
     const scheduleDays = useMemo(
         () => eachDayOfInterval({ start: visibleRange.start, end: visibleRange.end }),
@@ -166,9 +210,8 @@ export function useCalendarMonthNavigation({
             year: 'numeric',
         });
         if (viewMode === 'week') {
-            const start = startOfWeek(currentMonth, { weekStartsOn });
-            const end = addDays(start, 6);
-            return `${start.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            const end = addDays(timelineStart, timelineDayCount - 1);
+            return `${timelineStart.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
         }
         if (viewMode === 'schedule') {
             return `${visibleRange.start.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric' })} - ${visibleRange.end.toLocaleDateString(calendarLocale, { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -275,6 +318,8 @@ export function useCalendarMonthNavigation({
         scheduleDays,
         selectCalendarDate,
         selectedDate,
+        setTimelineDayCount,
+        timelineDayCount,
         timelineDays,
         toggleMonthPicker,
         viewMode,

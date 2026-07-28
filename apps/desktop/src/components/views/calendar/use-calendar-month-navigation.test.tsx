@@ -22,11 +22,13 @@ describe('useCalendarMonthNavigation', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 3, 3, 14, 48));
         window.history.replaceState(null, '', '/');
+        window.localStorage.clear();
     });
 
     afterEach(() => {
         vi.useRealTimers();
         window.history.replaceState(null, '', '/');
+        window.localStorage.clear();
     });
 
     it('restores the view mode and dates from the URL, defaulting a schedule view to today', () => {
@@ -144,6 +146,84 @@ describe('useCalendarMonthNavigation', () => {
 
         act(() => result.current.handleViewModeChange('day'));
         expect(result.current.timelineDays).toHaveLength(1);
+    });
+
+    // 2026-04-03 is a Friday; with a Sunday week start its week runs Mar 29 – Apr 4.
+    describe('timeline day count (#951)', () => {
+        it('shortens the timeline around the current day without leaving its week', () => {
+            const { result } = renderNavigation();
+
+            act(() => result.current.handleViewModeChange('week'));
+            act(() => result.current.setTimelineDayCount(5));
+
+            // Anchored on Friday, a 5-day window can only start on Tuesday if it
+            // is to hold Friday and still end inside the week.
+            expect(result.current.timelineDays.map(dayKey)).toEqual([
+                '2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-04',
+            ]);
+            expect(dayKey(result.current.visibleRange.start)).toBe('2026-03-31');
+            expect(dayKey(result.current.visibleRange.end)).toBe('2026-04-04');
+            expect(result.current.currentMonthLabel).toBe('Mar 31 - Apr 4, 2026');
+        });
+
+        it('keeps the same weekdays when stepping a week, so a work week stays a work week', () => {
+            const { result } = renderNavigation({ weekStartsOn: 1 });
+
+            act(() => result.current.handleViewModeChange('week'));
+            act(() => result.current.revealDate(new Date(2026, 3, 6)));
+            act(() => result.current.setTimelineDayCount(5));
+
+            // Monday anchor, Monday week start: exactly the Mon–Fri the report asked for.
+            expect(result.current.timelineDays.map(dayKey)).toEqual([
+                '2026-04-06', '2026-04-07', '2026-04-08', '2026-04-09', '2026-04-10',
+            ]);
+
+            act(() => result.current.handleNextMonth());
+            expect(result.current.timelineDays.map(dayKey)).toEqual([
+                '2026-04-13', '2026-04-14', '2026-04-15', '2026-04-16', '2026-04-17',
+            ]);
+
+            act(() => result.current.handlePrevMonth());
+            act(() => result.current.handlePrevMonth());
+            expect(result.current.timelineDays.map(dayKey)).toEqual([
+                '2026-03-30', '2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03',
+            ]);
+        });
+
+        it('leaves the day view on one day whatever the count is', () => {
+            const { result } = renderNavigation();
+
+            act(() => result.current.setTimelineDayCount(3));
+            act(() => result.current.handleViewModeChange('day'));
+
+            expect(result.current.timelineDays).toHaveLength(1);
+        });
+
+        it('clamps out-of-range counts instead of rendering an empty or overlong week', () => {
+            const { result } = renderNavigation();
+
+            act(() => result.current.setTimelineDayCount(0));
+            expect(result.current.timelineDayCount).toBe(2);
+
+            act(() => result.current.setTimelineDayCount(99));
+            expect(result.current.timelineDayCount).toBe(7);
+        });
+
+        it('remembers the count on this device only, and falls back to a whole week when the stored value is unusable', () => {
+            const { result, unmount } = renderNavigation();
+
+            act(() => result.current.setTimelineDayCount(4));
+            expect(window.localStorage.getItem('mindwtr.calendar.timelineDayCount')).toBe('4');
+            // Device-local by design: nothing about the count reaches the URL the
+            // way the view mode and date do, so it cannot ride along to another screen.
+            expect(window.location.search).not.toMatch(/day|count/i);
+            unmount();
+
+            expect(renderNavigation().result.current.timelineDayCount).toBe(4);
+
+            window.localStorage.setItem('mindwtr.calendar.timelineDayCount', 'not-a-number');
+            expect(renderNavigation().result.current.timelineDayCount).toBe(7);
+        });
     });
 
     it('keeps the schedule view range at 61 days', () => {
