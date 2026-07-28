@@ -151,6 +151,13 @@ mod imp {
 
     const CALENDAR_EXTENSION: &[u8] = b"Calendar\0";
     const LOCAL_BACKEND: &[u8] = b"local\0";
+    /// Evolution Data Server only reports read-only state after a full backend
+    /// connect, and connecting to every enabled calendar stalled the settings
+    /// page and every push sync for as long as the slowest remote account took
+    /// to come up (#575). The backend name is already in the registry.
+    // ponytail: name check, not a live probe. A share-only CalDAV calendar
+    // still appears and reports `calendar-read-only` when the write is tried.
+    const READ_ONLY_BACKENDS: &[&str] = &["birthdays", "contacts", "weather", "webcal"];
     const SOURCE_TYPE_EVENTS: c_int = 0;
     const OBJ_MOD_ALL: c_int = 0x07;
     const OPERATION_FLAGS_NONE: c_int = 0;
@@ -257,6 +264,7 @@ mod imp {
         source_set_display_name: SourceSetDisplayName,
         source_get_extension: SourceGetExtension,
         source_backend_set_name: SourceBackendSetName,
+        source_backend_get_name: SourceGetString,
         source_selectable_get_color: SourceSelectableGetColor,
         cal_client_connect_sync: CalClientConnectSync,
         client_is_readonly: ClientIsReadonly,
@@ -300,6 +308,10 @@ mod imp {
                     source_backend_set_name: load_symbol(
                         &eds,
                         b"e_source_backend_set_backend_name\0",
+                    )?,
+                    source_backend_get_name: load_symbol(
+                        &eds,
+                        b"e_source_backend_get_backend_name\0",
                     )?,
                     source_selectable_get_color: load_symbol(
                         &eds,
@@ -518,15 +530,34 @@ mod imp {
         unsafe { borrowed_string((api.source_selectable_get_color)(extension)) }
     }
 
-    fn push_target_from_source<'a>(
-        session: &'a Session<'a>,
-        source: ObjectRef<'a>,
+    fn source_backend_name(api: &EdsApi, source: *mut c_void) -> Option<String> {
+        let extension =
+            unsafe { (api.source_get_extension)(source, CALENDAR_EXTENSION.as_ptr().cast()) };
+        if extension.is_null() {
+            return None;
+        }
+        unsafe { borrowed_string((api.source_backend_get_name)(extension)) }
+    }
+
+    fn is_writable_backend(backend_name: Option<&str>) -> bool {
+        let Some(backend_name) = backend_name else {
+            return true;
+        };
+        let backend_name = backend_name.trim().to_ascii_lowercase();
+        !READ_ONLY_BACKENDS.contains(&backend_name.as_str())
+    }
+
+    fn push_target_from_source(
+        session: &Session<'_>,
+        source: &ObjectRef<'_>,
     ) -> Option<MacOsCalendarPushTarget> {
+        if !is_writable_backend(source_backend_name(session.api, source.ptr).as_deref()) {
+            return None;
+        }
         let id = source_uid(session.api, source.ptr)?;
         let name = source_name(session.api, source.ptr);
         let source_name = source_parent_name(session, source.ptr);
         let color = source_color(session.api, source.ptr);
-        connect_calendar(session, source, true).ok()?;
         Some(MacOsCalendarPushTarget {
             id,
             is_mindwtr_dedicated: name.eq_ignore_ascii_case("mindwtr"),
@@ -550,11 +581,12 @@ mod imp {
     pub(super) fn get_writable_calendars() -> Result<Vec<MacOsCalendarPushTarget>, String> {
         let api = EdsApi::load()?;
         let session = Session::new(&api)?;
-        Ok(session
-            .list_sources()
-            .into_iter()
+        let sources = session.list_sources();
+        let targets = sources
+            .iter()
             .filter_map(|source| push_target_from_source(&session, source))
-            .collect())
+            .collect();
+        Ok(targets)
     }
 
     pub(super) fn ensure_mindwtr_calendar(
@@ -568,7 +600,7 @@ mod imp {
             .filter(|id| !id.is_empty())
         {
             if let Some(source) = session.ref_source(stored_id) {
-                if let Some(target) = push_target_from_source(&session, source) {
+                if let Some(target) = push_target_from_source(&session, &source) {
                     return Ok(Some(target));
                 }
             }
@@ -576,7 +608,7 @@ mod imp {
 
         for source in session.list_sources() {
             if source_name(session.api, source.ptr).eq_ignore_ascii_case("mindwtr") {
-                if let Some(target) = push_target_from_source(&session, source) {
+                if let Some(target) = push_target_from_source(&session, &source) {
                     return Ok(Some(target));
                 }
             }
@@ -634,8 +666,13 @@ mod imp {
 
         for _ in 0..20 {
             if let Some(source) = session.ref_source(&uid) {
-                if let Some(target) = push_target_from_source(session, source) {
-                    return Ok(target);
+                let target = push_target_from_source(session, &source);
+                // A freshly committed source only accepts writes once its own
+                // backend is up, so this one calendar is still probed live.
+                if connect_calendar(session, source, true).is_ok() {
+                    if let Some(target) = target {
+                        return Ok(target);
+                    }
                 }
             }
             thread::sleep(Duration::from_millis(50));
@@ -678,7 +715,10 @@ mod imp {
             };
             let name = source_name(session.api, source.ptr);
             let color = source_color(session.api, source.ptr);
-            let calendar = connect_calendar(&session, source, false)?;
+            // One unreachable account must not blank out every other calendar.
+            let Ok(calendar) = connect_calendar(&session, source, false) else {
+                continue;
+            };
             let source_id = format!("system:{uid}");
             calendars.push(ExternalCalendarSubscription {
                 id: source_id.clone(),
@@ -687,7 +727,9 @@ mod imp {
                 enabled: true,
                 color,
             });
-            let ics = read_calendar_components(session.api, calendar.client.ptr, &query)?;
+            let Ok(ics) = read_calendar_components(session.api, calendar.client.ptr, &query) else {
+                continue;
+            };
             if !ics.is_empty() {
                 ics_sources.push(LinuxCalendarIcsSource { source_id, ics });
             }
@@ -1172,6 +1214,21 @@ mod imp {
             let event = build_event_component(&details(true), "event@example").unwrap();
             assert!(event.contains("DTSTART;VALUE=DATE:20260721"));
             assert!(event.contains("DTEND;VALUE=DATE:20260722"));
+        }
+
+        #[test]
+        fn keeps_writable_backends_and_drops_feed_only_ones() {
+            assert!(is_writable_backend(Some("local")));
+            assert!(is_writable_backend(Some("caldav")));
+            assert!(is_writable_backend(Some("ews")));
+            assert!(is_writable_backend(Some("google")));
+            assert!(is_writable_backend(None));
+
+            assert!(!is_writable_backend(Some("webcal")));
+            assert!(!is_writable_backend(Some(" WebCal ")));
+            assert!(!is_writable_backend(Some("weather")));
+            assert!(!is_writable_backend(Some("contacts")));
+            assert!(!is_writable_backend(Some("birthdays")));
         }
 
         #[test]

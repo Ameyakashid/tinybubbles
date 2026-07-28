@@ -97,14 +97,11 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             setCalendarPushTargets([]);
             return;
         }
-        setCalendarPushLoading(true);
         try {
             setCalendarPushTargets(await getDesktopCalendarPushTargetCalendars());
         } catch (error) {
             reportError('Failed to load system calendar push targets', error);
             setCalendarError(String(error));
-        } finally {
-            setCalendarPushLoading(false);
         }
     }, [supportsSystemCalendar]);
 
@@ -280,8 +277,15 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
         }
     }, [calendarPushEnabled, showSaved, supportsSystemCalendar]);
 
+    // Only user-initiated work blocks the controls; loading the target list in
+    // the background must never leave the push toggle stuck greyed out (#575).
     const handleRefreshCalendarPushTargets = useCallback(async () => {
-        await refreshCalendarPushTargets();
+        setCalendarPushLoading(true);
+        try {
+            await refreshCalendarPushTargets();
+        } finally {
+            setCalendarPushLoading(false);
+        }
     }, [refreshCalendarPushTargets]);
 
     return {
