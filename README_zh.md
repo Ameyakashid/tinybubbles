@@ -15,9 +15,9 @@
 [![CI](https://github.com/dongdongbh/Mindwtr/actions/workflows/ci.yml/badge.svg)](https://github.com/dongdongbh/Mindwtr/actions/workflows/ci.yml)
 [![GitHub license](https://img.shields.io/github/license/dongdongbh/Mindwtr?color=brightgreen)](LICENSE)
 [![GitHub downloads](https://img.shields.io/github/downloads/dongdongbh/Mindwtr/total)](https://github.com/dongdongbh/Mindwtr/releases)
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/gc4h5t58PR)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ff5f5f?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/dongdongbh)
-[![Ko-fi](https://img.shields.io/badge/Sponsor-Ko--fi-29abe0?logo=kofi&logoColor=white)](https://ko-fi.com/D1D01T20WK)
 
 <p align="center" style="text-align: center;">
   <a href="https://apps.microsoft.com/detail/9n0v5b0b6frx?ocid=webpdpshare" target="_blank">
@@ -178,8 +178,6 @@ Mindwtr 默认简单，需要时也足够强大：
 - 🌐 **REST API** - 桌面端本地 API，使用设置中生成的 bearer token 进行脚本化访问
 - 🌍 **网页应用** - 在浏览器中运行，支持离线使用（PWA）
 - 🧠 **MCP 服务器** - 让 AI 助手读取和管理你的任务（本地 Model Context Protocol 服务），可通过 [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) 或 [MCP Registry](https://registry.modelcontextprotocol.io/) 获取
-
-[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
 
 桌面端可在 **设置 -> 高级** 启动本地 REST API，默认监听 `127.0.0.1:3456` 并使用生成的 bearer token。CLI 仍是仓库辅助工具；stdio MCP 服务器可用 `npm install -g mindwtr-mcp` 安装，或由 MCP 客户端通过 `npx -y mindwtr-mcp` 启动。
 
