@@ -396,6 +396,58 @@ pub(crate) fn set_tray_tooltip(app: tauri::AppHandle, tooltip: Option<String>) -
     }
 }
 
+/// How long the first reveal waits for the UI before showing the window anyway.
+/// A frontend that throws before it can call notify_ui_ready must never leave
+/// the user with no window (#936).
+const MAIN_WINDOW_REVEAL_TIMEOUT_SECONDS: u64 = 4;
+
+/// Gates the first show of the main window, which is built hidden so the
+/// restored geometry and the first paint land off screen (#936).
+#[derive(Default)]
+pub(crate) struct MainWindowReveal {
+    /// This launch is meant to stay hidden — start in tray (#928), or a global
+    /// quick-add hotkey launch. The UI still signals ready; it just must not
+    /// pull the main window up.
+    suppressed: AtomicBool,
+    shown: AtomicBool,
+}
+
+impl MainWindowReveal {
+    pub(crate) fn suppress(&self) {
+        self.suppressed.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Shows the main window once. Later calls are no-ops, so the UI-ready signal
+/// and the timeout backstop can both fire without fighting each other, and
+/// neither can re-show a window the user has since closed to the tray.
+pub(crate) fn reveal_main_window(app: &tauri::AppHandle) {
+    let state = app.state::<MainWindowReveal>();
+    if state.suppressed.load(Ordering::SeqCst) {
+        return;
+    }
+    if state.shown.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    show_main(app);
+}
+
+/// Called by the main window's frontend once React has painted its first frame.
+#[tauri::command]
+pub(crate) fn notify_ui_ready(app: tauri::AppHandle) {
+    reveal_main_window(&app);
+}
+
+pub(crate) fn reveal_main_window_after_timeout(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(MAIN_WINDOW_REVEAL_TIMEOUT_SECONDS));
+        let _ = handle
+            .clone()
+            .run_on_main_thread(move || reveal_main_window(&handle));
+    });
+}
+
 pub(crate) fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_skip_taskbar(false);

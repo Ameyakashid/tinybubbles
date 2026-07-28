@@ -226,6 +226,26 @@ function installFileDropNavigationGuard() {
     });
 }
 
+// The main window is built hidden so the restored geometry and the first paint
+// stay off screen (#936). Two animation frames after the first render is the
+// cheapest "has painted" signal the webview gives us; Rust reveals the window
+// anyway after a few seconds if this never arrives.
+async function signalUiReady() {
+    if (!isTauriRuntime()) return;
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        await invoke('notify_ui_ready');
+    } catch (error) {
+        void logWarn('Failed to signal UI ready', {
+            scope: 'window',
+            extra: { error: error instanceof Error ? error.message : String(error) },
+        });
+    }
+}
+
 async function bootstrap() {
     installFileDropNavigationGuard();
     await initStorage();
@@ -266,6 +286,7 @@ async function bootstrap() {
     );
 
     if (!isQuickAddWindow) {
+        void signalUiReady();
         void sendDesktopDailyHeartbeat().catch((error) => {
             void logWarn('Desktop analytics heartbeat failed', {
                 scope: 'analytics',

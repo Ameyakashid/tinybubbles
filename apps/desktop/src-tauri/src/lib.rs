@@ -122,7 +122,8 @@ use ui::{
     acknowledge_close_request, apply_global_quick_add_shortcut, consume_quick_add_pending,
     create_quick_add_window, get_system_theme_preference, hide_quick_add_window,
     hide_quick_add_window_for_app, quit_app, set_global_quick_add_shortcut, set_tray_tooltip,
-    set_tray_visible, show_main, show_quick_add_window,
+    notify_ui_ready, reveal_main_window_after_timeout, set_tray_visible, show_main,
+    show_quick_add_window, MainWindowReveal,
 };
 
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
@@ -1363,6 +1364,7 @@ pub fn run() {
         .manage(CloseRequestHandled(AtomicBool::new(false)))
         .manage(GlobalQuickAddShortcutState(Mutex::new(None)))
         .manage(QuickAddFocusState::default())
+        .manage(MainWindowReveal::default())
         .manage(LocalApiServerState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -1485,6 +1487,14 @@ pub fn run() {
             let tray_icon_available = resolve_tray_icon(&app.handle()).is_some();
             let start_hidden =
                 should_start_hidden(initial_launch_requests_startup, tray_icon_available);
+            if start_hidden || initial_launch_requests_quick_add {
+                // Nothing to reveal: the autostart entry launched us with "start
+                // in tray" on and a tray icon to recover through (#928), or the
+                // global hotkey wants only the quick-add window. If tray
+                // construction fails further down despite the icon being
+                // available, that branch forces the window back.
+                app.state::<MainWindowReveal>().suppress();
+            }
 
             // The main window is declared create:false so portable mode can pin
             // the webview's browsing profile inside the portable dir (#855).
@@ -1503,26 +1513,21 @@ pub fn run() {
                     let _ = std::fs::create_dir_all(&webview_dir);
                     main_window_builder = main_window_builder.data_directory(webview_dir);
                 }
-                // Always built hidden. The window-state plugin restores geometry
+                // Always built hidden, and revealed only once the webview has
+                // painted (notify_ui_ready, with reveal_main_window_after_timeout
+                // as the backstop). The window-state plugin restores geometry
                 // from its own on_window_ready, which Tauri dispatches through
                 // run_on_main_thread — so it only lands once the event loop is
-                // pumping, and a window built visible is on screen at the
-                // config's 1200x800 until then, then jumps (#936). Restoring
-                // here and showing afterwards keeps that entirely off screen.
-                // For start_hidden (#928) there is nothing to show: the
-                // autostart entry launched us with "start in tray" on and a
-                // tray icon to recover through. If tray construction fails
-                // further down despite the icon being available, that branch
-                // forces the window back.
+                // pumping, and a window built visible sits on screen at the
+                // config's 1200x800, blank, until then and then jumps (#936).
+                // Restoring here keeps all of that off screen.
                 main_window_builder = main_window_builder.visible(false);
                 let main_window = main_window_builder.build()?;
                 {
                     use tauri_plugin_window_state::WindowExt;
                     let _ = main_window.restore_state(window_state_flags());
                 }
-                if !start_hidden {
-                    let _ = main_window.show();
-                }
+                reveal_main_window_after_timeout(&app.handle());
             }
 
             // Portable mode stores webview-managed files (attachments, logs,
@@ -1678,7 +1683,9 @@ pub fn run() {
                     // The icon decoded fine but tray construction itself
                     // errored (menu items, tray builder) — never leave a
                     // hidden window with no tray to recover it through (#928,
-                    // the failure mode #913 was about).
+                    // the failure mode #913 was about). Bypasses the reveal
+                    // gate deliberately: it was suppressed for a tray start
+                    // that no longer has a tray.
                     if let Some(window) = handle.get_webview_window("main") {
                         let _ = window.show();
                     }
@@ -1725,6 +1732,7 @@ pub fn run() {
         })
         .manage(ObsidianWatcherState::default())
         .invoke_handler(tauri::generate_handler![
+            notify_ui_ready,
             check_microsoft_store_update,
             get_data,
             read_data_json,
