@@ -124,6 +124,8 @@ Mindwtr is simple by default and powerful when you need it:
 - Apps for Windows, macOS, Linux, iPhone, and Android, plus a web app that works offline.
 - For developers: a local REST API, a CLI, and the [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) server so AI assistants can manage your tasks.
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
+
 <details>
 <summary>See all features</summary>
 
@@ -183,8 +185,6 @@ Mindwtr is simple by default and powerful when you need it:
 - 🌐 **REST API** - Optional desktop localhost API server for token-authenticated scripting
 - 🌍 **Web App** - Runs in your browser, works offline (PWA)
 - 🧠 **MCP Server** - Lets AI assistants read and manage your tasks (a local Model Context Protocol server), available as [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) and in the [MCP Registry](https://registry.modelcontextprotocol.io/)
-
-[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
 
 Desktop builds can start the local REST API from **Settings -> Advanced** on `127.0.0.1` with default port `3456` and a generated bearer token. The CLI remains a repo helper; the stdio MCP server can be installed from npm with `npm install -g mindwtr-mcp` or launched by MCP clients with `npx -y mindwtr-mcp`.
 

@@ -124,6 +124,8 @@ Mindwtr 默认简单，需要时也足够强大：
 - 提供 Windows、macOS、Linux、iPhone、Android 应用，另有可离线使用的网页版。
 - 面向开发者：本地 REST API、CLI，以及让 AI 助手管理任务的 [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) 服务器。
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
+
 <details>
 <summary>查看完整功能列表</summary>
 
@@ -178,8 +180,6 @@ Mindwtr 默认简单，需要时也足够强大：
 - 🌐 **REST API** - 桌面端本地 API，使用设置中生成的 bearer token 进行脚本化访问
 - 🌍 **网页应用** - 在浏览器中运行，支持离线使用（PWA）
 - 🧠 **MCP 服务器** - 让 AI 助手读取和管理你的任务（本地 Model Context Protocol 服务），可通过 [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) 或 [MCP Registry](https://registry.modelcontextprotocol.io/) 获取
-
-[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
 
 桌面端可在 **设置 -> 高级** 启动本地 REST API，默认监听 `127.0.0.1:3456` 并使用生成的 bearer token。CLI 仍是仓库辅助工具；stdio MCP 服务器可用 `npm install -g mindwtr-mcp` 安装，或由 MCP 客户端通过 `npx -y mindwtr-mcp` 启动。
 
