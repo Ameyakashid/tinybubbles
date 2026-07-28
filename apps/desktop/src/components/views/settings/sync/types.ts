@@ -78,6 +78,14 @@ export type SettingsSyncLabels = {
     cloudProviderDropbox: string;
     cloudProviderCloudkit: string;
     cloudkitDesc: string;
+    calendarFeed: string;
+    calendarFeedDesc: string;
+    calendarFeedWarning: string;
+    calendarFeedNone: string;
+    calendarFeedCopy: string;
+    calendarFeedGenerate: string;
+    calendarFeedRegenerate: string;
+    calendarFeedRevoke: string;
     dropboxAppKey: string;
     dropboxAppKeyHint: string;
     dropboxRedirectUri: string;
@@ -177,6 +185,12 @@ export type SyncConfigurationProps = {
     onCloudAllowInsecureHttpChange: (value: boolean) => void;
     onCloudProviderChange: (provider: CloudProvider) => void;
     onSaveCloud: () => Promise<void> | void;
+    /** Null until the self-hosted server reports a published iCalendar feed (#952). */
+    calendarFeedUrl: string | null;
+    calendarFeedBusy: boolean;
+    onCopyCalendarFeedUrl: () => Promise<void> | void;
+    onGenerateCalendarFeed: () => Promise<void> | void;
+    onRevokeCalendarFeed: () => Promise<void> | void;
     onConnectDropbox: () => Promise<void> | void;
     onDisconnectDropbox: () => Promise<void> | void;
     onTestDropboxConnection: () => Promise<void> | void;

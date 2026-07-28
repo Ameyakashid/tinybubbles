@@ -135,6 +135,7 @@ export * from './import-runner';
 export * from './global-search-filter';
 export * from './calendar-composer';
 export * from './calendar-day-items';
+export * from './calendar-feed';
 export * from './calendar-push-scheduler';
 export * from './date-draft';
 export * from './i18n/i18n-locales';

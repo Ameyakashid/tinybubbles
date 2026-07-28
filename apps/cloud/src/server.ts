@@ -27,6 +27,7 @@ import {
     parseBoolEnv,
     parseTrustedProxyIps,
     resolveAllowedAuthTokensFromEnv,
+    tokenToKey,
     type AllowedAuthTokenInput,
 } from './server-auth';
 import {
@@ -84,6 +85,16 @@ import {
 } from './server-data-cache';
 import { createRateLimiter } from './server-rate-limit';
 import { ensureNamespaceWriteAllowed, normalizeRequestPathname, withNamespace, type ServerConfig } from './server-request';
+import {
+    CALENDAR_FEED_PATH_PREFIX,
+    calendarFeedResponse,
+    findCalendarFeedNamespace,
+    parseCalendarFeedPathToken,
+    readCalendarFeed,
+    revokeCalendarFeed,
+    rotateCalendarFeed,
+    type CalendarFeedRecord,
+} from './server-calendar-feed';
 
 const ANY_TOKEN_NAMESPACE_LIMIT_DEFAULT = 32;
 
@@ -751,6 +762,12 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
     },
 ];
 
+const describeCalendarFeed = (record: CalendarFeedRecord | null) => (
+    record
+        ? { createdAt: record.createdAt, path: `${CALENDAR_FEED_PATH_PREFIX}${record.token}.ics`, token: record.token }
+        : null
+);
+
 export function resolveServerMergeTimestamp(..._dataSets: AppData[]): string {
     return new Date().toISOString();
 }
@@ -1153,6 +1170,53 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     return null;
                     });
                     if (dataResponse) return dataResponse;
+                }
+
+                if (pathname === '/v1/calendar/feed') {
+                    const feedResponse = await withNamespace(req, url, baseServerConfig, async (ctx) => {
+                        if (req.method === 'GET') {
+                            return jsonResponse({ feed: describeCalendarFeed(readCalendarFeed(dataDir, ctx.key)) });
+                        }
+                        if (req.method === 'POST') {
+                            // A feed for a namespace that has never synced would publish
+                            // nothing, and letting one be created would let unknown tokens
+                            // plant sidecar files past the namespace cap.
+                            if (!existsSync(ctx.filePath)) return errorResponse('No synced data to publish', 404);
+                            return await withWriteLock(ctx.key, async () => {
+                                throwIfRequestAborted(requestAbortController.signal);
+                                return jsonResponse(
+                                    { feed: describeCalendarFeed(rotateCalendarFeed(dataDir, ctx.key)) },
+                                    { status: 201 },
+                                );
+                            });
+                        }
+                        if (req.method === 'DELETE') {
+                            return await withWriteLock(ctx.key, async () => {
+                                throwIfRequestAborted(requestAbortController.signal);
+                                revokeCalendarFeed(dataDir, ctx.key);
+                                return jsonResponse({ feed: null });
+                            });
+                        }
+                        return errorResponse('Method not allowed', 405);
+                    });
+                    if (feedResponse) return feedResponse;
+                }
+
+                // The published feed authenticates with the token in its own URL, so it
+                // never reaches withNamespace. An unknown token is a 404, not a 401: the
+                // URL is the only credential, and 401 would invite an Authorization
+                // header that this route does not read.
+                const calendarFeedToken = parseCalendarFeedPathToken(pathname);
+                if (calendarFeedToken) {
+                    if (req.method !== 'GET') return errorResponse('Method not allowed', 405);
+                    const feedRateLimitResponse = rateLimiter.check(
+                        `ics:${tokenToKey(calendarFeedToken)}`,
+                        maxPerWindow,
+                    );
+                    if (feedRateLimitResponse) return feedRateLimitResponse;
+                    const feedNamespaceKey = findCalendarFeedNamespace(dataDir, calendarFeedToken);
+                    if (!feedNamespaceKey) return errorResponse('Not found', 404);
+                    return calendarFeedResponse(dataDir, feedNamespaceKey);
                 }
 
                 if (pathname === '/v1/attachments/orphans') {

@@ -86,6 +86,9 @@ export const useSyncSettings = ({
     const [cloudRememberToken, setCloudRememberToken] = useState(false);
     const [cloudAllowInsecureHttp, setCloudAllowInsecureHttp] = useState(false);
     const [cloudProvider, setCloudProvider] = useState<CloudProvider>('selfhosted');
+    const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
+    const [calendarFeedBusy, setCalendarFeedBusy] = useState(false);
+    const [calendarFeedReloadToken, setCalendarFeedReloadToken] = useState(0);
     const [dropboxAppKey, setDropboxAppKey] = useState('');
     const [dropboxConfigured, setDropboxConfigured] = useState(false);
     const [dropboxConnected, setDropboxConnected] = useState(false);
@@ -292,6 +295,59 @@ export const useSyncSettings = ({
         setWebdavTestState('idle');
     }, [webdavUrl, webdavUsername, webdavPassword]);
 
+    // Only the self-hosted server publishes a feed, so this stays off the wire
+    // for every other backend. It reads the saved config (not the typed URL), so
+    // it must not re-run per keystroke — handleSaveCloud refreshes it instead.
+    useEffect(() => {
+        if (syncBackend !== 'cloud' || cloudProvider !== 'selfhosted') {
+            setCalendarFeedUrl(null);
+            return;
+        }
+        let cancelled = false;
+        void SyncService.requestCalendarFeed('read')
+            .then((result) => {
+                if (!cancelled) setCalendarFeedUrl(result.url);
+            })
+            .catch((error) => {
+                // An unreachable or pre-feed server just means "nothing published yet";
+                // the explicit Generate action is where a real failure surfaces.
+                if (!cancelled) setCalendarFeedUrl(null);
+                void logError(error, { scope: 'sync', step: 'loadCalendarFeed' });
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [cloudProvider, syncBackend, calendarFeedReloadToken]);
+
+    const handleCalendarFeedAction = useCallback(async (action: 'rotate' | 'revoke') => {
+        setCalendarFeedBusy(true);
+        try {
+            const result = await SyncService.requestCalendarFeed(action);
+            setCalendarFeedUrl(result.url);
+            setSyncError(null);
+            showToast(
+                action === 'rotate' ? 'Calendar feed URL generated.' : 'Calendar feed revoked.',
+                'success',
+            );
+        } catch (error) {
+            const message = toErrorMessage(error, 'Calendar feed request failed.');
+            setSyncError(message);
+            showToast(message, 'error');
+        } finally {
+            setCalendarFeedBusy(false);
+        }
+    }, [showToast, toErrorMessage]);
+
+    const handleCopyCalendarFeedUrl = useCallback(async () => {
+        if (!calendarFeedUrl) return;
+        try {
+            await navigator.clipboard.writeText(calendarFeedUrl);
+            showToast('Subscription URL copied.', 'success');
+        } catch {
+            showToast('Could not copy the subscription URL.', 'error');
+        }
+    }, [calendarFeedUrl, showToast]);
+
     const handleSaveSyncPath = useCallback(async () => {
         if (!syncPath.trim()) return;
         const result = await SyncService.setSyncPath(syncPath.trim());
@@ -420,6 +476,7 @@ export const useSyncSettings = ({
         // Without this the only feedback on an HTTP URL was the cleartext
         // caution, which reads as a rejection rather than a save (#920).
         showToast('Self-hosted sync settings saved.', 'success');
+        setCalendarFeedReloadToken((token) => token + 1);
     }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, showToast, validateCloudToken, validateSyncHttpUrl]);
 
     const handleSetCloudProvider = useCallback(async (provider: CloudProvider) => {
@@ -1017,6 +1074,11 @@ export const useSyncSettings = ({
             onCloudAllowInsecureHttpChange: setCloudAllowInsecureHttp,
             onCloudProviderChange: handleSetCloudProvider,
             onSaveCloud: handleSaveCloud,
+            calendarFeedUrl,
+            calendarFeedBusy,
+            onCopyCalendarFeedUrl: handleCopyCalendarFeedUrl,
+            onGenerateCalendarFeed: () => handleCalendarFeedAction('rotate'),
+            onRevokeCalendarFeed: () => handleCalendarFeedAction('revoke'),
             onConnectDropbox: handleConnectDropbox,
             onDisconnectDropbox: handleDisconnectDropbox,
             onTestDropboxConnection: handleTestDropboxConnection,

@@ -1139,6 +1139,8 @@ describe('cloud server namespace mode', () => {
             path: '/v1/data',
             body: { tasks: [], projects: [], sections: [], areas: [], settings: {} },
         },
+        { name: 'POST /v1/calendar/feed', method: 'POST', path: '/v1/calendar/feed' },
+        { name: 'DELETE /v1/calendar/feed', method: 'DELETE', path: '/v1/calendar/feed' },
         { name: 'POST /v1/attachments/orphans', method: 'POST', path: '/v1/attachments/orphans' },
         { name: 'DELETE /v1/attachments/orphans', method: 'DELETE', path: '/v1/attachments/orphans' },
         { name: 'PUT /v1/attachments/:path', method: 'PUT', path: '/v1/attachments/probe.bin', body: 'raw-bytes' },
@@ -3367,5 +3369,123 @@ describe('cloud server api', () => {
         expect(mergedTask).toBeTruthy();
         expect(mergedTask?.deletedAt).toBe('2026-01-01T00:00:00.100Z');
         expect(mergedTask?.updatedAt).toBe('2026-01-01T00:00:00.100Z');
+    });
+});
+
+describe('cloud server calendar feed', () => {
+    const FEED_TOKEN = 'calendar-feed-test-token-1234567890';
+    const authHeaders = { Authorization: `Bearer ${FEED_TOKEN}` };
+
+    const startFeedServer = async () => {
+        const dataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-calendar-feed-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir,
+            allowedAuthTokens: [FEED_TOKEN],
+        });
+        return { dataDir, server, url: `http://127.0.0.1:${server.port}` };
+    };
+
+    const seedData = async (url: string, tasks: unknown[]) => {
+        const response = await fetch(`${url}/v1/data`, {
+            method: 'PUT',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify({ tasks, projects: [], sections: [], areas: [], settings: {} }),
+        });
+        expect(response.status).toBe(200);
+    };
+
+    const scheduledTask = makeTestTask({
+        id: '11111111-1111-4111-8111-111111111111',
+        title: 'Publish the feed',
+        status: 'next',
+        startTime: '2026-05-06T09:00:00.000Z',
+        description: 'private note',
+    });
+
+    test('publishes, rotates and revokes an unauthenticated .ics feed', async () => {
+        const { dataDir, server, url } = await startFeedServer();
+        try {
+            await seedData(url, [scheduledTask]);
+
+            expect(await (await fetch(`${url}/v1/calendar/feed`, { headers: authHeaders })).json())
+                .toEqual({ feed: null });
+
+            const created = await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });
+            expect(created.status).toBe(201);
+            const feed = (await created.json()).feed as { path: string; token: string };
+            expect(feed.token).toMatch(/^[a-f0-9]{64}$/);
+            expect(feed.path).toBe(`/v1/calendar/${feed.token}.ics`);
+
+            // The stored token round-trips, so the URL survives a client reinstall.
+            expect(((await (await fetch(`${url}/v1/calendar/feed`, { headers: authHeaders })).json()).feed as { token: string }).token)
+                .toBe(feed.token);
+
+            // No Authorization header: the URL is the only credential.
+            const feedResponse = await fetch(`${url}${feed.path}`);
+            expect(feedResponse.status).toBe(200);
+            expect(feedResponse.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+            const ics = await feedResponse.text();
+            expect(ics).toContain('BEGIN:VCALENDAR');
+            expect(ics).toContain('SUMMARY:Publish the feed');
+            expect(ics).toContain(`UID:${scheduledTask.id}-start@mindwtr.app`);
+            expect(ics).not.toContain('private note');
+
+            const rotated = await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });
+            const rotatedFeed = (await rotated.json()).feed as { path: string; token: string };
+            expect(rotatedFeed.token).not.toBe(feed.token);
+            expect((await fetch(`${url}${feed.path}`)).status).toBe(404);
+            expect((await fetch(`${url}${rotatedFeed.path}`)).status).toBe(200);
+
+            const revoked = await fetch(`${url}/v1/calendar/feed`, { method: 'DELETE', headers: authHeaders });
+            expect(revoked.status).toBe(200);
+            expect((await fetch(`${url}${rotatedFeed.path}`)).status).toBe(404);
+            expect(await (await fetch(`${url}/v1/calendar/feed`, { headers: authHeaders })).json())
+                .toEqual({ feed: null });
+        } finally {
+            server.stop();
+            rmSync(dataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('rejects an unknown feed token and a feed for a namespace that never synced', async () => {
+        const { dataDir, server, url } = await startFeedServer();
+        try {
+            expect((await fetch(`${url}/v1/calendar/${'a'.repeat(64)}.ics`)).status).toBe(404);
+            expect((await fetch(`${url}/v1/calendar/not-a-token.ics`)).status).toBe(404);
+
+            const tooEarly = await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });
+            expect(tooEarly.status).toBe(404);
+        } finally {
+            server.stop();
+            rmSync(dataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('requires authorization to read or change the feed token', async () => {
+        const { dataDir, server, url } = await startFeedServer();
+        try {
+            await seedData(url, []);
+            expect((await fetch(`${url}/v1/calendar/feed`)).status).toBe(401);
+            expect((await fetch(`${url}/v1/calendar/feed`, { method: 'POST' })).status).toBe(401);
+            expect((await fetch(`${url}/v1/calendar/feed`, { method: 'PATCH', headers: authHeaders })).status).toBe(405);
+        } finally {
+            server.stop();
+            rmSync(dataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('keeps the feed sidecar out of the namespace count', async () => {
+        const { dataDir, server, url } = await startFeedServer();
+        try {
+            await seedData(url, [scheduledTask]);
+            await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });
+            const namespaceFiles = readdirSync(dataDir).filter((entry) => /^[a-f0-9]{64}\.json$/.test(entry));
+            expect(namespaceFiles).toHaveLength(1);
+        } finally {
+            server.stop();
+            rmSync(dataDir, { recursive: true, force: true });
+        }
     });
 });

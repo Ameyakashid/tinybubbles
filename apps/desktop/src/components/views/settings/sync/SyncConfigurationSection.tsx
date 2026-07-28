@@ -47,6 +47,11 @@ type SyncConfigurationSectionProps = Pick<
     | 'onCloudAllowInsecureHttpChange'
     | 'onCloudProviderChange'
     | 'onSaveCloud'
+    | 'calendarFeedUrl'
+    | 'calendarFeedBusy'
+    | 'onCopyCalendarFeedUrl'
+    | 'onGenerateCalendarFeed'
+    | 'onRevokeCalendarFeed'
     | 'onConnectDropbox'
     | 'onDisconnectDropbox'
     | 'onTestDropboxConnection'
@@ -200,7 +205,69 @@ const renderDropboxPanel = ({
     </div>
 );
 
+const renderCalendarFeedPanel = ({
+    calendarFeedBusy,
+    calendarFeedUrl,
+    onCopyCalendarFeedUrl,
+    onGenerateCalendarFeed,
+    onRevokeCalendarFeed,
+    t,
+}: Pick<
+    SyncConfigurationSectionProps,
+    | 'calendarFeedBusy'
+    | 'calendarFeedUrl'
+    | 'onCopyCalendarFeedUrl'
+    | 'onGenerateCalendarFeed'
+    | 'onRevokeCalendarFeed'
+    | 't'
+>) => (
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+        <label className="text-sm font-medium">{t.calendarFeed}</label>
+        <p className="text-xs text-muted-foreground">{t.calendarFeedDesc}</p>
+        {calendarFeedUrl ? (
+            <input
+                type="text"
+                readOnly
+                value={calendarFeedUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+        ) : (
+            <p className="text-xs text-muted-foreground">{t.calendarFeedNone}</p>
+        )}
+        <p className="text-xs text-muted-foreground">{t.calendarFeedWarning}</p>
+        <div className="flex flex-wrap justify-end gap-2">
+            {calendarFeedUrl && (
+                <>
+                    <button
+                        onClick={onCopyCalendarFeedUrl}
+                        className="px-3 py-2 border border-border rounded-md text-sm font-medium hover:bg-muted whitespace-nowrap"
+                    >
+                        {t.calendarFeedCopy}
+                    </button>
+                    <button
+                        onClick={onRevokeCalendarFeed}
+                        disabled={calendarFeedBusy}
+                        className="px-3 py-2 border border-border rounded-md text-sm font-medium text-destructive hover:bg-muted whitespace-nowrap disabled:text-muted-foreground disabled:cursor-not-allowed"
+                    >
+                        {t.calendarFeedRevoke}
+                    </button>
+                </>
+            )}
+            <button
+                onClick={onGenerateCalendarFeed}
+                disabled={calendarFeedBusy}
+                className="px-3 py-2 border border-border rounded-md text-sm font-medium hover:bg-muted whitespace-nowrap disabled:text-muted-foreground disabled:cursor-not-allowed"
+            >
+                {calendarFeedUrl ? t.calendarFeedRegenerate : t.calendarFeedGenerate}
+            </button>
+        </div>
+    </div>
+);
+
 const renderSelfHostedCloudPanel = ({
+    calendarFeedBusy,
+    calendarFeedUrl,
     cloudAllowInsecureHttp,
     cloudRememberToken,
     cloudToken,
@@ -211,10 +278,15 @@ const renderSelfHostedCloudPanel = ({
     onCloudRememberTokenChange,
     onCloudTokenChange,
     onCloudUrlChange,
+    onCopyCalendarFeedUrl,
+    onGenerateCalendarFeed,
+    onRevokeCalendarFeed,
     onSaveCloud,
     t,
 }: Pick<
     SyncConfigurationSectionProps,
+    | 'calendarFeedBusy'
+    | 'calendarFeedUrl'
     | 'cloudAllowInsecureHttp'
     | 'cloudRememberToken'
     | 'cloudToken'
@@ -224,6 +296,9 @@ const renderSelfHostedCloudPanel = ({
     | 'onCloudRememberTokenChange'
     | 'onCloudTokenChange'
     | 'onCloudUrlChange'
+    | 'onCopyCalendarFeedUrl'
+    | 'onGenerateCalendarFeed'
+    | 'onRevokeCalendarFeed'
     | 'onSaveCloud'
     | 't'
 > & { cloudUrlError: boolean }) => (
@@ -281,6 +356,15 @@ const renderSelfHostedCloudPanel = ({
                 {t.cloudSave}
             </button>
         </div>
+
+        {renderCalendarFeedPanel({
+            calendarFeedBusy,
+            calendarFeedUrl,
+            onCopyCalendarFeedUrl,
+            onGenerateCalendarFeed,
+            onRevokeCalendarFeed,
+            t,
+        })}
     </div>
 );
 
@@ -402,6 +486,8 @@ const renderWebDavPanel = ({
 );
 
 export function SyncConfigurationSection({
+    calendarFeedBusy,
+    calendarFeedUrl,
     cloudAllowInsecureHttp,
     cloudRememberToken,
     cloudProvider,
@@ -425,7 +511,10 @@ export function SyncConfigurationSection({
     onCloudTokenChange,
     onCloudUrlChange,
     onConnectDropbox,
+    onCopyCalendarFeedUrl,
     onDisconnectDropbox,
+    onGenerateCalendarFeed,
+    onRevokeCalendarFeed,
     onSaveCloud,
     onSaveSyncPath,
     onSaveWebDav,
@@ -621,6 +710,8 @@ export function SyncConfigurationSection({
                 })}
 
                 {isSelfHostedSelected && renderSelfHostedCloudPanel({
+                    calendarFeedBusy,
+                    calendarFeedUrl,
                     cloudAllowInsecureHttp,
                     cloudRememberToken,
                     cloudToken,
@@ -631,6 +722,9 @@ export function SyncConfigurationSection({
                     onCloudRememberTokenChange,
                     onCloudTokenChange,
                     onCloudUrlChange,
+                    onCopyCalendarFeedUrl,
+                    onGenerateCalendarFeed,
+                    onRevokeCalendarFeed,
                     onSaveCloud,
                     t,
                 })}

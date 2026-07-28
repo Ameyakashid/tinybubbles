@@ -8,8 +8,27 @@ import {
     toArrayBuffer,
     toUint8Array,
 } from './http-utils';
+import { getCloudBaseUrl } from './attachment-paths';
 import type { ClockSkewWarning, MergeStats } from './sync-types';
 import { buildHttpRemoteFileFingerprint, type RemoteFileMetadata, type RemoteJsonWriteResult } from './webdav';
+
+/** The self-hosted server's published iCalendar feed (#952). */
+export type CloudCalendarFeed = {
+    createdAt: string;
+    path: string;
+    token: string;
+};
+
+/** Authenticated endpoint that reads, rotates and revokes the feed token. */
+export const getCloudCalendarFeedEndpoint = (cloudUrl: string): string => (
+    `${getCloudBaseUrl(cloudUrl)}/calendar/feed`
+);
+
+/** The subscription URL itself. Derived from the configured sync URL rather than
+ *  the server's root so a server behind a path-prefixed reverse proxy still works. */
+export const buildCloudCalendarFeedUrl = (cloudUrl: string, token: string): string => (
+    `${getCloudBaseUrl(cloudUrl)}/calendar/${token}.ics`
+);
 
 // Single source of truth for the cloud sync bearer-token shape, shared by the
 // cloud server (apps/cloud/src/server-config.ts re-exports it as

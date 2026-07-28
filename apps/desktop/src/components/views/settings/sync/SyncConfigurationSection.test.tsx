@@ -55,6 +55,14 @@ const baseProps: Parameters<typeof SyncConfigurationSection>[0] = {
         dropboxTest: 'Test connection',
         dropboxTestReachable: 'Reachable',
         dropboxTestFailed: 'Failed',
+        calendarFeed: 'Calendar subscription',
+        calendarFeedDesc: 'Publish a read-only feed.',
+        calendarFeedWarning: 'Anyone with this URL can read the feed.',
+        calendarFeedNone: 'No feed published yet.',
+        calendarFeedCopy: 'Copy URL',
+        calendarFeedGenerate: 'Generate URL',
+        calendarFeedRegenerate: 'Regenerate',
+        calendarFeedRevoke: 'Revoke',
     } as any,
     isTauri: true,
     syncBackend: 'cloud',
@@ -94,6 +102,11 @@ const baseProps: Parameters<typeof SyncConfigurationSection>[0] = {
     onCloudAllowInsecureHttpChange: vi.fn(),
     onCloudProviderChange: vi.fn(),
     onSaveCloud: vi.fn(),
+    calendarFeedUrl: null,
+    calendarFeedBusy: false,
+    onCopyCalendarFeedUrl: vi.fn(),
+    onGenerateCalendarFeed: vi.fn(),
+    onRevokeCalendarFeed: vi.fn(),
     onConnectDropbox: vi.fn(),
     onDisconnectDropbox: vi.fn(),
     onTestDropboxConnection: vi.fn(),
@@ -207,6 +220,57 @@ describe('SyncConfigurationSection', () => {
 
         expect(onCloudProviderChange).toHaveBeenCalledWith('dropbox');
         expect(onSetSyncBackend).toHaveBeenCalledWith('cloud');
+    });
+
+    it('offers the calendar subscription controls only for self-hosted sync', () => {
+        const onGenerateCalendarFeed = vi.fn();
+        const { getByRole, queryByRole, queryByText, rerender } = render(
+            <SyncConfigurationSection {...baseProps} cloudProvider="dropbox" />
+        );
+
+        expect(queryByText('Calendar subscription')).not.toBeInTheDocument();
+
+        rerender(
+            <SyncConfigurationSection
+                {...baseProps}
+                cloudProvider="selfhosted"
+                onGenerateCalendarFeed={onGenerateCalendarFeed}
+            />
+        );
+
+        expect(queryByText('Calendar subscription')).toBeInTheDocument();
+        expect(queryByText('Anyone with this URL can read the feed.')).toBeInTheDocument();
+        expect(queryByText('No feed published yet.')).toBeInTheDocument();
+        // Nothing to copy or revoke until a feed exists.
+        expect(queryByRole('button', { name: 'Copy URL' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
+
+        fireEvent.click(getByRole('button', { name: 'Generate URL' }));
+        expect(onGenerateCalendarFeed).toHaveBeenCalled();
+    });
+
+    it('shows the published subscription URL with copy, regenerate and revoke', () => {
+        const onCopyCalendarFeedUrl = vi.fn();
+        const onRevokeCalendarFeed = vi.fn();
+        const { getByDisplayValue, getByRole, queryByRole } = render(
+            <SyncConfigurationSection
+                {...baseProps}
+                cloudProvider="selfhosted"
+                calendarFeedUrl="https://example.com/v1/calendar/abc.ics"
+                onCopyCalendarFeedUrl={onCopyCalendarFeedUrl}
+                onRevokeCalendarFeed={onRevokeCalendarFeed}
+            />
+        );
+
+        expect(getByDisplayValue('https://example.com/v1/calendar/abc.ics')).toHaveAttribute('readonly');
+        expect(queryByRole('button', { name: 'Generate URL' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+
+        fireEvent.click(getByRole('button', { name: 'Copy URL' }));
+        fireEvent.click(getByRole('button', { name: 'Revoke' }));
+
+        expect(onCopyCalendarFeedUrl).toHaveBeenCalled();
+        expect(onRevokeCalendarFeed).toHaveBeenCalled();
     });
 
     it('hides the Dropbox redirect URI when OAuth is not in progress', () => {

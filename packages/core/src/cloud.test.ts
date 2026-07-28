@@ -8,6 +8,8 @@ import {
     cloudHeadJson,
     cloudPutJson,
     cloudRequestJson,
+    buildCloudCalendarFeedUrl,
+    getCloudCalendarFeedEndpoint,
     isValidCloudSyncToken,
 } from './cloud';
 
@@ -286,5 +288,24 @@ describe('isValidCloudSyncToken', () => {
     it('matches the exported pattern directly', () => {
         expect(CLOUD_SYNC_TOKEN_PATTERN.test('a'.repeat(20))).toBe(true);
         expect(CLOUD_SYNC_TOKEN_PATTERN.test('a'.repeat(19))).toBe(false);
+    });
+});
+
+describe('calendar feed URLs', () => {
+    it('derives the feed endpoints from whatever sync URL shape the user saved', () => {
+        for (const saved of [
+            'https://example.com',
+            'https://example.com/',
+            'https://example.com/v1',
+            'https://example.com/v1/data',
+        ]) {
+            expect(getCloudCalendarFeedEndpoint(saved)).toBe('https://example.com/v1/calendar/feed');
+            expect(buildCloudCalendarFeedUrl(saved, 'abc')).toBe('https://example.com/v1/calendar/abc.ics');
+        }
+    });
+
+    it('keeps a reverse-proxy path prefix', () => {
+        expect(buildCloudCalendarFeedUrl('https://example.com/mindwtr/v1/data', 'abc'))
+            .toBe('https://example.com/mindwtr/v1/calendar/abc.ics');
     });
 });

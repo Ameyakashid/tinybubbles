@@ -8,9 +8,12 @@ import {
     webdavGetJson,
     webdavHeadFile,
     webdavPutJson,
+    buildCloudCalendarFeedUrl,
     cloudGetJson,
     cloudHeadJson,
     cloudPutJson,
+    cloudRequestJson,
+    getCloudCalendarFeedEndpoint,
     flushPendingSave,
     performSyncCycle,
     normalizeAppData,
@@ -41,6 +44,7 @@ import {
     isSupportedLanguage,
     LEGACY_SYNC_FILE_NAME,
     SYNC_FILE_NAME,
+    type CloudCalendarFeed,
     type CloudJsonWriteResult,
     type CloudProvider,
     type RemoteJsonWriteResult,
@@ -935,6 +939,31 @@ export class SyncService {
 
     static async setCloudConfig(config: { url: string; token?: string; allowInsecureHttp?: boolean; rememberToken?: boolean }): Promise<void> {
         return writeCloudConfig(config, getSyncConfigDeps());
+    }
+
+    /** Read, rotate or revoke the self-hosted server's iCalendar feed token (#952).
+     *  `null` means no feed is published; the subscription URL is derived from the
+     *  configured sync URL, not from whatever the server reports. */
+    static async requestCalendarFeed(action: 'read' | 'rotate' | 'revoke'): Promise<{ feed: CloudCalendarFeed | null; url: string | null }> {
+        const config = await SyncService.getCloudConfig();
+        const url = config.url?.trim();
+        if (!url) throw new Error('Self-hosted server URL is not configured.');
+        const endpoint = getCloudCalendarFeedEndpoint(url);
+        const options = {
+            allowInsecureHttp: config.allowInsecureHttp,
+            token: config.token,
+            fetcher: (await getTauriFetch()) ?? fetch,
+        };
+        const body = action === 'read'
+            ? await cloudGetJson<{ feed: CloudCalendarFeed | null }>(endpoint, options)
+            : await cloudRequestJson<{ feed: CloudCalendarFeed | null }>(
+                action === 'rotate' ? 'POST' : 'DELETE',
+                endpoint,
+                undefined,
+                options,
+            );
+        const feed = body?.feed ?? null;
+        return { feed, url: feed ? buildCloudCalendarFeedUrl(url, feed.token) : null };
     }
 
     static async getCloudProvider(): Promise<CloudProvider> {
