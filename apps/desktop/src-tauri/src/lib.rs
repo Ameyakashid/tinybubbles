@@ -933,12 +933,15 @@ fn should_start_hidden(launched_via_startup: bool, tray_icon_available: bool) ->
 /// leave every later manual launch invisible, with no window to bring back.
 /// DECORATIONS is excluded because it is a runtime decision for niri sessions,
 /// not a saved user preference.
-fn build_window_state_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+fn window_state_flags() -> tauri_plugin_window_state::StateFlags {
     use tauri_plugin_window_state::StateFlags;
 
-    let mut builder = tauri_plugin_window_state::Builder::default().with_state_flags(
-        StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN,
-    );
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
+}
+
+fn build_window_state_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    let mut builder =
+        tauri_plugin_window_state::Builder::default().with_state_flags(window_state_flags());
     if let Some(path) = crate::storage::portable_window_state_path() {
         // The plugin only creates the OS app-config dir it thinks it is writing
         // to, and it discards save errors, so a portable profile that has never
@@ -1500,16 +1503,26 @@ pub fn run() {
                     let _ = std::fs::create_dir_all(&webview_dir);
                     main_window_builder = main_window_builder.data_directory(webview_dir);
                 }
-                if start_hidden {
-                    // Launched by the autostart entry with "start in tray" on
-                    // and a tray icon to recover through — skip the flash of
-                    // a window that would just immediately hide. A manual
-                    // launch (no --startup flag) always builds visible; if
-                    // tray construction fails further down despite the icon
-                    // being available, that branch forces the window back.
-                    main_window_builder = main_window_builder.visible(false);
+                // Always built hidden. The window-state plugin restores geometry
+                // from its own on_window_ready, which Tauri dispatches through
+                // run_on_main_thread — so it only lands once the event loop is
+                // pumping, and a window built visible is on screen at the
+                // config's 1200x800 until then, then jumps (#936). Restoring
+                // here and showing afterwards keeps that entirely off screen.
+                // For start_hidden (#928) there is nothing to show: the
+                // autostart entry launched us with "start in tray" on and a
+                // tray icon to recover through. If tray construction fails
+                // further down despite the icon being available, that branch
+                // forces the window back.
+                main_window_builder = main_window_builder.visible(false);
+                let main_window = main_window_builder.build()?;
+                {
+                    use tauri_plugin_window_state::WindowExt;
+                    let _ = main_window.restore_state(window_state_flags());
                 }
-                main_window_builder.build()?;
+                if !start_hidden {
+                    let _ = main_window.show();
+                }
             }
 
             // Portable mode stores webview-managed files (attachments, logs,
