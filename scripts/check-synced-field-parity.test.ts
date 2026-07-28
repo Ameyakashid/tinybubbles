@@ -84,10 +84,10 @@ describe('CloudKit production schema gate', () => {
         expect(result.stdout + result.stderr).toContain('missing record type MindwtrArea');
     });
 
-    test('keeps unverified project taskSortBy pending Production deployment', () => {
+    test('records project taskSortBy as deployed in Production', () => {
         const schema = parseSchema();
-        expect(schema.records.MindwtrProject.deployed).not.toContain('taskSortBy');
-        expect(schema.records.MindwtrProject.pendingProduction).toContain('taskSortBy');
+        expect(schema.records.MindwtrProject.deployed).toContain('taskSortBy');
+        expect(schema.records.MindwtrProject.pendingProduction).not.toContain('taskSortBy');
     });
 
     test('--release-gate fails while pendingProduction is non-empty', () => {
