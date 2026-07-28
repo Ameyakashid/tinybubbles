@@ -61,6 +61,7 @@ mod platform;
 mod storage;
 mod sync;
 mod ui;
+mod window_state;
 
 use audio::{
     download_parakeet_model, download_whisper_model, start_audio_recording, stop_audio_recording,
@@ -926,35 +927,6 @@ fn should_start_hidden(launched_via_startup: bool, tray_icon_available: bool) ->
     launched_via_startup && tray_icon_available
 }
 
-/// Remembers the main window's geometry across restarts (#936).
-///
-/// Only the geometry the user deliberately set is persisted. VISIBLE is
-/// excluded because whether the window opens hidden is decided per launch by
-/// should_start_hidden (#928) — persisting it would let a single tray start
-/// leave every later manual launch invisible, with no window to bring back.
-/// DECORATIONS is excluded because it is a runtime decision for niri sessions,
-/// not a saved user preference.
-fn window_state_flags() -> tauri_plugin_window_state::StateFlags {
-    use tauri_plugin_window_state::StateFlags;
-
-    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN
-}
-
-fn build_window_state_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    let mut builder =
-        tauri_plugin_window_state::Builder::default().with_state_flags(window_state_flags());
-    if let Some(path) = crate::storage::portable_window_state_path() {
-        // The plugin only creates the OS app-config dir it thinks it is writing
-        // to, and it discards save errors, so a portable profile that has never
-        // written config would drop window state silently.
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        builder = builder.with_filename(path.to_string_lossy().into_owned());
-    }
-    builder.build()
-}
-
 // Shared by the pre-window-build availability check and the real tray
 // construction below, so both agree on whether a tray icon exists (#928).
 fn resolve_tray_icon(handle: &tauri::AppHandle) -> Option<Image<'_>> {
@@ -1377,7 +1349,6 @@ pub fn run() {
                 .args([STARTUP_LAUNCH_CLI_FLAG])
                 .build(),
         )
-        .plugin(build_window_state_plugin())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
     #[cfg(target_os = "macos")]
     let builder = builder
@@ -1427,6 +1398,11 @@ pub fn run() {
                     window.app_handle(),
                     "Close trace: native main-window close request received",
                 );
+                // Captured here as well as on exit: this is the last moment the
+                // window is certainly on screen with the geometry the user left
+                // it at, and a close-to-tray followed by a kill never reaches
+                // RunEvent::Exit (#936).
+                crate::window_state::save(window.app_handle());
                 window
                     .app_handle()
                     .state::<CloseRequestHandled>()
@@ -1523,10 +1499,7 @@ pub fn run() {
                 // Restoring here keeps all of that off screen.
                 main_window_builder = main_window_builder.visible(false);
                 let main_window = main_window_builder.build()?;
-                {
-                    use tauri_plugin_window_state::WindowExt;
-                    let _ = main_window.restore_state(window_state_flags());
-                }
+                crate::window_state::restore(&main_window);
                 reveal_main_window_after_timeout(&app.handle());
             }
 
@@ -1852,12 +1825,12 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        // Runs after the plugins have handled the same event — Tauri dispatches to
-        // the plugin store first and calls this callback with the returned event —
-        // so the window-state plugin has already written its file and recreated the
-        // OS config directory by the time this clears the empty leftover (#936).
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
+                crate::window_state::save(app);
+                // Other plugins can still create the OS config dir a portable
+                // install is meant to stay out of; clearing it here runs after
+                // they have handled the same event (#936).
                 crate::storage::cleanup_portable_os_config_dir(app);
             }
         });

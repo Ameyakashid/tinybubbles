@@ -60,7 +60,6 @@ tauri-plugin-autostart = "2.5.1"
 # window correctly is mostly edge cases — a monitor that is no longer attached,
 # a saved position now off-screen, per-monitor DPI — so this uses the official
 # plugin rather than a hand-rolled save/restore that would get those wrong.
-tauri-plugin-window-state = "2"
 tar = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
