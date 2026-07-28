@@ -139,3 +139,68 @@ describe('useTaskListSelection handleBatchDelete', () => {
     expect(toasts.some((toast) => toast.tone === 'warning')).toBe(true);
   });
 });
+
+describe('useTaskListSelection handleBatchRemoveTags', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const taggedTasks = {
+    a: { ...makeTask('a'), tags: ['#ops', '#urgent', '#keep'] },
+    b: { ...makeTask('b'), tags: ['#urgent'] },
+    c: { ...makeTask('c'), tags: ['#keep'] },
+  };
+
+  it('offers only the tags the selection actually carries', () => {
+    renderer.act(() => {
+      renderer.create(<Harness {...baseParams({ tasksById: taggedTasks })} />);
+    });
+    renderer.act(() => {
+      hookRef.toggleMultiSelect('b');
+    });
+
+    expect(hookRef.removableTagOptions).toEqual(['#urgent']);
+  });
+
+  it('strips every picked tag in one write and skips tasks carrying none of them', async () => {
+    const batchUpdateTasks = vi.fn(async () => ({ success: true } as StoreActionResult));
+    renderer.act(() => {
+      renderer.create(<Harness {...baseParams({ batchUpdateTasks, tasksById: taggedTasks })} />);
+    });
+    renderer.act(() => {
+      hookRef.toggleMultiSelect('a');
+      hookRef.toggleMultiSelect('b');
+      hookRef.toggleMultiSelect('c');
+    });
+
+    await renderer.act(async () => {
+      await hookRef.handleBatchRemoveTags(['#ops', '#urgent']);
+    });
+
+    // Task c keeps only #keep, so it is left out of the write entirely.
+    expect(batchUpdateTasks).toHaveBeenCalledWith([
+      { id: 'a', updates: { tags: ['#keep'] } },
+      { id: 'b', updates: { tags: [] } },
+    ]);
+    expect(hookRef.selectionMode).toBe(false);
+  });
+
+  it('keeps the selection and warns when the write reports a failure', async () => {
+    const batchUpdateTasks = vi.fn(async () => ({ success: false, error: 'nope' } as StoreActionResult));
+    renderer.act(() => {
+      renderer.create(<Harness {...baseParams({ batchUpdateTasks, tasksById: taggedTasks })} />);
+    });
+    renderer.act(() => {
+      hookRef.toggleMultiSelect('a');
+    });
+
+    await renderer.act(async () => {
+      await hookRef.handleBatchRemoveTags(['#ops']);
+    });
+
+    const toasts = mocks.showToast.mock.calls.map((call) => call[0]);
+    expect(toasts.some((toast) => toast.tone === 'success')).toBe(false);
+    expect(toasts.some((toast) => toast.tone === 'warning')).toBe(true);
+    expect(hookRef.hasSelection).toBe(true);
+  });
+});
