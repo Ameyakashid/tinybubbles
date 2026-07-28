@@ -47,6 +47,19 @@ describe('bulk-task-tokens', () => {
         ]);
     });
 
+    // A selected id the lookup cannot resolve must be skipped, never written
+    // back as `tags: [newToken]` — that would drop every other tag on it.
+    it('skips selected ids the lookup does not know rather than replacing their tokens', () => {
+        const tasksById = new Map<string, Task>([
+            ['a', createTask('a', { tags: ['#urgent', '#ops'] })],
+        ]);
+
+        expect(buildBulkTaskTokenUpdates(['a', 'missing'], tasksById, 'tags', 'new', 'add')).toEqual([
+            { id: 'a', updates: { tags: ['#new', '#ops', '#urgent'] } },
+        ]);
+        expect(buildBulkTaskTokenUpdates(['missing'], tasksById, 'tags', 'new', 'add')).toEqual([]);
+    });
+
     it('only updates selected tasks that actually contain a removed token', () => {
         const tasksById = new Map<string, Task>([
             ['a', createTask('a', { contexts: ['@desk', '@home'] })],

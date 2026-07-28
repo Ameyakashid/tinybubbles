@@ -156,23 +156,22 @@ export function useTaskListSelection({
     );
   }, [batchDeleteTasks, bulkActionLoading, exitSelectionMode, hasSelection, restoreActionLabel, restoreTask, runBulkAction, selectedIdsArray, showToast, t]);
 
+  // Both directions go through the same core builder desktop uses. Hand-rolling
+  // the merge here meant a task the lookup missed was written back as
+  // `tags: [newTag]` — every other tag on it silently gone.
   const handleBatchAddTag = useCallback(async () => {
     const input = tagInput.trim();
     if (!hasSelection || !input || bulkActionLoading) return;
-    const tag = input.startsWith('#') ? input : `#${input}`;
     await runBulkAction(t('bulk.addTag'), async () => {
-      assertBulkActionSucceeded(await batchUpdateTasks(selectedIdsArray.map((id) => {
-        const task = tasksById[id];
-        const existingTags = task?.tags || [];
-        const nextTags = Array.from(new Set([...existingTags, tag]));
-        return { id, updates: { tags: nextTags } };
-      })));
+      const updates = buildBulkTaskTokenUpdates(selectedIdsArray, tasksById, 'tags', input, 'add');
       setTagInput('');
       setTagModalVisible(false);
+      if (updates.length === 0) return;
+      assertBulkActionSucceeded(await batchUpdateTasks(updates));
       exitSelectionMode();
       showToast({
         title: t('common.done'),
-        message: `${selectedIdsArray.length} ${t('common.tasks')}`,
+        message: `${updates.length} ${t('common.tasks')}`,
         tone: 'success',
       });
     });
