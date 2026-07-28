@@ -12,6 +12,7 @@
 use crate::*;
 
 const WINDOW_LAYOUTS_FILE_NAME: &str = "window-layouts.json";
+const LEGACY_WINDOW_STATE_FILE_NAME: &str = "window-state.json";
 
 /// Layouts kept before the least recently used ones are dropped. Someone who
 /// changes remote-desktop resolution often would otherwise accumulate an entry
@@ -177,6 +178,43 @@ fn remember(
     }
 }
 
+/// v1.1.5 kept a single rectangle in the window-state plugin's file. Reading it
+/// once means upgrading does not look like the reset this issue was about
+/// (#936); it is only ever a starting point for the layout in front of the user,
+/// and the file is left where it is.
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct LegacyWindowState {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    #[serde(default)]
+    maximized: bool,
+    #[serde(default)]
+    fullscreen: bool,
+}
+
+fn parse_legacy_state(raw: &str) -> Option<WindowGeometry> {
+    let states: HashMap<String, LegacyWindowState> = serde_json::from_str(raw).ok()?;
+    let state = states.get("main")?;
+    let geometry = WindowGeometry {
+        x: state.x,
+        y: state.y,
+        width: state.width,
+        height: state.height,
+        maximized: state.maximized,
+        fullscreen: state.fullscreen,
+    };
+    is_usable(&geometry).then_some(geometry)
+}
+
+fn legacy_geometry(candidates: &[PathBuf]) -> Option<WindowGeometry> {
+    candidates
+        .iter()
+        .filter_map(|path| std::fs::read_to_string(path).ok())
+        .find_map(|raw| parse_legacy_state(&raw))
+}
+
 fn layouts_path() -> PathBuf {
     crate::storage::get_config_dir_for_startup().join(WINDOW_LAYOUTS_FILE_NAME)
 }
@@ -252,7 +290,19 @@ fn current_work_area<R: tauri::Runtime>(
 pub(crate) fn restore<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     let layouts = read_layouts();
     let signature = layout_signature(&screens_of(window));
-    let Some(geometry) = resolve_geometry(&layouts, &signature, current_work_area(window)) else {
+    let legacy_candidates = [
+        // Portable installs redirected the plugin's file into their own profile.
+        crate::storage::get_config_dir_for_startup().join(LEGACY_WINDOW_STATE_FILE_NAME),
+        window
+            .app_handle()
+            .path()
+            .app_config_dir()
+            .unwrap_or_default()
+            .join(LEGACY_WINDOW_STATE_FILE_NAME),
+    ];
+    let Some(geometry) = resolve_geometry(&layouts, &signature, current_work_area(window))
+        .or_else(|| legacy_geometry(&legacy_candidates))
+    else {
         return;
     };
 
@@ -599,6 +649,30 @@ mod tests {
     fn unusably_small_saved_geometry_is_ignored() {
         let layouts = layouts(&[("desk", geometry(0, 0, 40, 30), 10)]);
         assert_eq!(resolve_geometry(&layouts, "desk", None), None);
+    }
+
+    #[test]
+    fn the_single_rectangle_from_1_1_5_is_read_once() {
+        let raw = r#"{"main":{"width":1500,"height":950,"x":40,"y":60,"prev_x":0,"prev_y":0,
+            "maximized":true,"visible":true,"decorated":true,"fullscreen":false}}"#;
+        assert_eq!(
+            parse_legacy_state(raw),
+            Some(WindowGeometry {
+                maximized: true,
+                ..geometry(40, 60, 1500, 950)
+            })
+        );
+    }
+
+    #[test]
+    fn a_legacy_file_that_no_longer_parses_is_simply_ignored() {
+        assert_eq!(parse_legacy_state("not json"), None);
+        assert_eq!(parse_legacy_state(r#"{"quick-add":{}}"#), None);
+        assert_eq!(
+            parse_legacy_state(r#"{"main":{"width":10,"height":10,"x":0,"y":0}}"#),
+            None,
+            "an unusable rectangle must not survive the migration either",
+        );
     }
 
     #[test]
