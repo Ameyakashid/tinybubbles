@@ -195,6 +195,7 @@ vi.mock('./list-empty-state', () => ({
 
 vi.mock('./swipeable-task-item', () => ({
   SwipeableTaskItem: (props: any) => React.createElement('SwipeableTaskItem', props),
+  readTaskRowRenderCount: () => 0,
 }));
 
 vi.mock('../contexts/theme-context', () => ({

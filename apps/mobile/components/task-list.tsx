@@ -42,7 +42,7 @@ import { TaskEditModal } from './task-edit-modal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CompactText } from './compact-text';
 import { ListEmptyState } from './list-empty-state';
-import { SwipeableTaskItem, type SwipeableTaskItemRowContext } from './swipeable-task-item';
+import { SwipeableTaskItem, readTaskRowRenderCount, type SwipeableTaskItemRowContext } from './swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
 import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
@@ -251,6 +251,7 @@ function TaskListComponent({
   onListScroll,
 }: TaskListProps) {
   const taskListRenderStartedAt = Date.now();
+  const rowRenderCountAtRenderStart = readTaskRowRenderCount();
   // rc.5 logs showed two overlapping commits per task action on the same route:
   // either one list rendering twice or two mounted lists doing the same work.
   // The mount ordinal tells them apart in a shared log (#766).
@@ -854,11 +855,13 @@ function TaskListComponent({
         listItemCount: listItemCountForDiagnostics,
         filterCount: totalFilterActiveCount,
         instanceId: instanceIdRef.current,
+        rowRenderCount: readTaskRowRenderCount() - rowRenderCountAtRenderStart,
       });
     }
   }, [
     listItemCountForDiagnostics,
     performanceRoute,
+    rowRenderCountAtRenderStart,
     settings?.diagnostics?.loggingEnabled,
     taskListDeriveMs,
     taskListRenderStartedAt,

@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { enableFreeze } from 'react-native-screens';
 import { AppState, BackHandler, Platform, SafeAreaView, StatusBar, Text, View } from 'react-native';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { QuickCaptureProvider, type QuickCaptureOptions } from '../contexts/quick-capture-context';
@@ -80,6 +81,13 @@ import {
 import { SYNC_BACKEND_KEY } from '@/lib/sync-constants';
 import { coerceSupportedBackend, resolveBackend, type SyncBackend } from '@/lib/sync-service-utils';
 import { persistLastRoute } from '@/lib/session-restore';
+
+// Blurred screens stay mounted, so every store change re-rendered every list in
+// the stack: a #766 log showed three project task lists (tab route + two pushed
+// stack entries) each spending ~1s on the same 133 rows per tap. Freezing
+// non-focused screens skips those renders; state, scroll position and native
+// views are retained, and the screen re-renders with current data on focus.
+enableFreeze(true);
 
 let coreLoggerBridgeInstalled = false;
 

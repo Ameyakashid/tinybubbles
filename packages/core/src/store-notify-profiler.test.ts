@@ -8,6 +8,7 @@ import {
     beginNotifyProfile,
     endNotifyProfile,
     instrumentStoreSubscribe,
+    recordDerivedRebuildMs,
 } from './store-notify-profiler';
 
 type TestState = {
@@ -48,9 +49,19 @@ describe('store notify profiler', () => {
             timedTotalMs: 12,
             maxMs: 8,
             top5Ms: [8, 4],
+            derivedRebuildMs: 0,
         });
         unsubscribeFirst();
         unsubscribeSecond();
+    });
+
+    it('accumulates derived rebuilds only while profiling', () => {
+        recordDerivedRebuildMs(5);
+        beginNotifyProfile();
+        recordDerivedRebuildMs(7);
+        recordDerivedRebuildMs(3);
+
+        expect(endNotifyProfile()?.derivedRebuildMs).toBe(10);
     });
 
     it('decrements the listener count exactly once on double unsubscribe', () => {
@@ -168,6 +179,7 @@ describe('fetchData notify profiling log fields', () => {
             notifyTimedMs: expect.any(String),
             notifyMaxMs: expect.any(String),
             notifyTop5Ms: expect.any(String),
+            notifyDerivedRebuildMs: expect.any(String),
         });
     });
 
@@ -227,6 +239,7 @@ describe('fetchData notify profiling log fields', () => {
             notifyTimedMs: expect.any(String),
             notifyMaxMs: expect.any(String),
             notifyTop5Ms: expect.any(String),
+            notifyDerivedRebuildMs: expect.any(String),
         });
         expect(context).not.toHaveProperty('taskId');
         expect(context).not.toHaveProperty('title');

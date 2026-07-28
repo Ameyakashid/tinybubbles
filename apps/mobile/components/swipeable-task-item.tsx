@@ -103,7 +103,16 @@ type SwipeableTaskItemInnerProps = Omit<SwipeableTaskItemProps, 'rowContext'> & 
     rowContext: SwipeableTaskItemRowContext;
 };
 
+// Renders of task rows, read by TaskList to report how many rows a commit
+// actually re-rendered (#766). Shared across lists on purpose: it is a diff
+// taken around one list's render, and a second list rendering in the same pass
+// is itself the thing worth seeing.
+let taskRowRenderCount = 0;
+
+export const readTaskRowRenderCount = (): number => taskRowRenderCount;
+
 export function SwipeableTaskItem(props: SwipeableTaskItemProps) {
+    taskRowRenderCount += 1;
     if (props.rowContext) {
         return <SwipeableTaskItemInner {...props} rowContext={props.rowContext} />;
     }

@@ -38,6 +38,7 @@ describe('performance diagnostic log builder', () => {
             visibleItemCount: 14,
             filterCount: 2,
             instanceId: 3,
+            rowRenderCount: 27,
             platform: 'android',
             appVersion: '1.0.0',
         });
@@ -54,6 +55,7 @@ describe('performance diagnostic log builder', () => {
             visibleItemCount: '14',
             filterCount: '2',
             instanceId: '3',
+            rowRenderCount: '27',
             platform: 'android',
             appVersion: '1.0.0',
         });

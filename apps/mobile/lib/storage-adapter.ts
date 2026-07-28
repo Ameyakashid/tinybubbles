@@ -1055,13 +1055,23 @@ const createStorage = (): StorageAdapter => {
             });
         },
         saveTask: async (task: Task, snapshot?: AppData): Promise<void> => {
+            const enqueuedAtMs = Date.now();
             return enqueueSave(async () => {
+                const queueWaitMs = Date.now() - enqueuedAtMs;
                 const queuedWriteStartedAtMs = markQueuedWriteStarted();
                 try {
                     if (!shouldUseSqlite) {
                         throw new Error(sqliteUnavailableReason ?? 'SQLite unavailable');
                     }
                     const { adapter } = await measureStartupPhase('mobile.storage.save_task.sqlite_get_state', async () => getSqliteState());
+                    // Same unawaited probe as saveData: a single-row write taking
+                    // seconds is either queued behind another save or starved by the
+                    // JS thread, and writeMs alone cannot tell those apart (#766).
+                    let eventLoopLagMs = -1;
+                    const lagProbeStartedAt = Date.now();
+                    setTimeout(() => {
+                        eventLoopLagMs = Date.now() - lagProbeStartedAt;
+                    }, 0);
                     const writeStartedAt = Date.now();
                     await measureStartupPhase('mobile.storage.save_task.sqlite_write', async () => adapter.saveTask(task));
                     const writeMs = Date.now() - writeStartedAt;
@@ -1072,6 +1082,8 @@ const createStorage = (): StorageAdapter => {
                     if (writeMs >= SQLITE_SLOW_WRITE_LOG_THRESHOLD_MS) {
                         logStorageInfo('[Storage] Slow task save', {
                             writeMs: String(writeMs),
+                            queueWaitMs: String(queueWaitMs),
+                            eventLoopLagMs: String(eventLoopLagMs),
                         });
                     }
                 } catch (error) {
