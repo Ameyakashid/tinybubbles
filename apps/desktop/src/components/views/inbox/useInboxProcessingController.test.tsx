@@ -118,4 +118,29 @@ describe('useInboxProcessingController not-actionable destinations', () => {
             projectId: 'p1',
         }));
     });
+
+    it('keeps picked organization fields when delegated to Waiting', async () => {
+        const updateTask = vi.fn(async () => ({ success: true }));
+        const { result } = renderController(updateTask);
+
+        await waitFor(() => {
+            expect(result.current.wizardProps.processingTask?.id).toBe('one');
+        });
+
+        act(() => {
+            result.current.wizardProps.setSelectedProjectId('p1');
+            result.current.wizardProps.toggleContext('@work');
+            result.current.wizardProps.toggleTag('#follow-up');
+        });
+        await act(async () => {
+            await result.current.wizardProps.handleConfirmWaiting();
+        });
+
+        expect(updateTask).toHaveBeenCalledWith('one', expect.objectContaining({
+            status: 'waiting',
+            projectId: 'p1',
+            contexts: ['@work'],
+            tags: ['#follow-up'],
+        }));
+    });
 });

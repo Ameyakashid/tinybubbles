@@ -487,6 +487,7 @@ export function useInboxProcessingController({
         const applied = await applyWorkflowEvent({
             type: 'waiting',
             fields: {
+                ...buildSelectionFields(),
                 energyLevel: selectedEnergyLevel ?? undefined,
                 assignedTo: who || undefined,
                 timeEstimate: selectedTimeEstimate ?? undefined,
@@ -504,6 +505,7 @@ export function useInboxProcessingController({
         }
     }, [
         applyWorkflowEvent,
+        buildSelectionFields,
         buildScheduleUpdates,
         delegateFollowUp,
         delegateWho,
