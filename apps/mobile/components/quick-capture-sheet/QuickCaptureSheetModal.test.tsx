@@ -915,10 +915,11 @@ describe('Quick capture modal composition', () => {
       const scroll = tree.root.findByType(ScrollView);
       expect(scroll.props.testID).toBe('quick-capture-scroll');
       expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
-      // The title input must live inside the scroll container so the user can swipe
-      // back to it once the More panel is expanded (#887).
-      const scrolledInput = scroll.findByType(TextInput);
-      expect(scrolledInput.props.accessibilityLabel).toBe('quickAdd.inputLabel');
+      // The More panel scrolls, but the title input must stay OUTSIDE it: a focused
+      // TextInput inside an iOS ScrollView gets auto-scrolled above the keyboard and
+      // flies off the top of the sheet on every refocus (#887).
+      expect(scroll.findAllByType(TextInput)).toHaveLength(0);
+      expect(tree.root.findByType(TextInput).props.accessibilityLabel).toBe('quickAdd.inputLabel');
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOs });
     }

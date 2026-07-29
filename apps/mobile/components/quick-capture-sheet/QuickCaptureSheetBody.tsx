@@ -16,10 +16,12 @@ const QUICK_CAPTURE_DATE_PRESETS = ['today', 'tomorrow', 'next_week'] as const;
 
 // iOS keeps the keyboard up while the sheet grows (padding behavior), so an expanded
 // "More" panel can push the title input above the top of the visible area with no way
-// back (#887). Wrap the growing middle section in a ScrollView on iOS so both the title
-// input and the More fields stay reachable. Android dismisses the keyboard before
-// expanding (see useAndroidQuickCaptureExpand) and drives its own measured layout, so it
-// keeps the plain flow untouched to avoid regressing that phase machine.
+// back (#887). Only the More panel scrolls: the title input must stay OUTSIDE this
+// container, because UIKit auto-scrolls a focused TextInput inside a UIScrollView above
+// the keyboard, which double-counts against KeyboardAvoidingView and flings the title off
+// the top on every refocus (the regression the first #887 fix shipped). Android dismisses
+// the keyboard before expanding (see useAndroidQuickCaptureExpand) and drives its own
+// measured layout, so it keeps the plain flow untouched.
 function SheetScrollArea({ children }: { children: React.ReactNode }) {
   if (Platform.OS !== 'ios') {
     return <>{children}</>;
@@ -258,7 +260,6 @@ export function QuickCaptureSheetBody({
               </TouchableOpacity>
             </View>
 
-            <SheetScrollArea>
             <View style={styles.inputRow}>
               <CompactTextInput
                 ref={inputRef}
@@ -379,6 +380,7 @@ export function QuickCaptureSheetBody({
               </TouchableOpacity>
             </View>
 
+            <SheetScrollArea>
             {optionsExpanded && (
               <>
                 <View style={styles.optionsRow}>
