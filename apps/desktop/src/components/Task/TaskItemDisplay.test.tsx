@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render } from '@testing-library/react';
 import type { Project, Task } from '@mindwtr/core';
-import { safeFormatDate, useTaskStore } from '@mindwtr/core';
+import { hasTimeComponent, safeFormatDate, useTaskStore } from '@mindwtr/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { TaskItemDisplay } from './TaskItemDisplay';
@@ -1268,5 +1268,55 @@ describe('TaskItemDisplay', () => {
         fireEvent.click(getByLabelText('Edit completion time'));
 
         expect(onEditCompletedAt).toHaveBeenCalled();
+    });
+
+    it('paints a due date red only once it has passed (#640)', () => {
+        const dueColorFor = (dueDate: string) => {
+            const { getByText, unmount } = render(
+                <LanguageProvider>
+                    <TaskItemDisplay
+                        task={{ ...baseTask, status: 'next', dueDate }}
+                        language="en"
+                        selectionMode={false}
+                        isViewOpen={false}
+                        actions={{
+                            onToggleView: vi.fn(),
+                            onEdit: vi.fn(),
+                            onDelete: vi.fn(),
+                            onDuplicate: vi.fn(),
+                            onStatusChange: vi.fn(),
+                            openAttachment: vi.fn(),
+                        }}
+                        visibleAttachments={[]}
+                        recurrenceRule=""
+                        recurrenceStrategy="strict"
+                        prioritiesEnabled={false}
+                        timeEstimatesEnabled={false}
+                        isStagnant={false}
+                        showQuickDone={false}
+                        readOnly={false}
+                        t={(key: string) => key}
+                    />
+                </LanguageProvider>
+            );
+            const label = safeFormatDate(dueDate, hasTimeComponent(dueDate) ? 'Pp' : 'P');
+            // The urgency class lands on the badge wrapper, not the label span.
+            const className = getByText(label).closest('.metadata-badge')?.className ?? '';
+            unmount();
+            return className;
+        };
+
+        const hour = 60 * 60 * 1000;
+        const overdue = dueColorFor(new Date(Date.now() - hour).toISOString());
+        // Urgent: inside 24h, which used to be destructive and read as overdue.
+        const urgent = dueColorFor(new Date(Date.now() + (6 * hour)).toISOString());
+        const upcoming = dueColorFor(new Date(Date.now() + (48 * hour)).toISOString());
+        const later = dueColorFor(new Date(Date.now() + (30 * 24 * hour)).toISOString());
+
+        expect(overdue).toContain('text-destructive');
+        expect(urgent).toContain('text-warning');
+        expect(urgent).not.toContain('text-destructive');
+        expect(upcoming).toContain('text-warning');
+        expect(later).toContain('text-muted-foreground');
     });
 });

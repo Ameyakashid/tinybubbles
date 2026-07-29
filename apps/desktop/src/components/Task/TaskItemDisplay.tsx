@@ -76,11 +76,15 @@ interface TaskItemDisplayProps {
     t: (key: string) => string;
 }
 
+// Red is reserved for a date that has passed. A due date coming up is a
+// warning, not a failure — and mobile already reads that way, so painting
+// "due within 24h" destructive here made the same task look overdue on one
+// device and not the other (#640).
 const getUrgencyColor = (task: Task) => {
     const urgency = getTaskUrgency(task);
     switch (urgency) {
         case 'overdue': return 'text-destructive font-bold';
-        case 'urgent': return 'text-destructive font-medium';
+        case 'urgent': return 'text-warning font-medium';
         case 'upcoming': return 'text-warning';
         default: return 'text-muted-foreground';
     }

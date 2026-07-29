@@ -45,6 +45,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Linux calendar settings list writable targets without opening every remote calendar, so slow or offline accounts no longer stall task edits or hide other calendars. (#575)
 - Self-hosted and WebDAV settings confirm successful saves. Native configuration failures now appear as errors instead of leaving a false success state. (#920)
 - Desktop uses the cleaned sidebar artwork, and Windows now ships a 32x32-first ICO so the taskbar selects a crisp native-size icon instead of upscaling 16x16. (#937)
+- Desktop due dates turn red only once they have passed. A due date inside the next three days uses the warning color, as it already did on mobile. (#640)
 
 ## Sync & Automation
 
