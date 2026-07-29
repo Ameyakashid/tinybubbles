@@ -392,6 +392,22 @@ describe('ArchiveView', () => {
             expect(rowTitles()).toEqual(['Archived task']);
         });
 
+        it('leaves a collapsed group out of Select all', async () => {
+            renderWithBoth();
+
+            pickOption('Group', 'Project');
+            fireEvent.click(screen.getByRole('button', { name: /House\s*1/i }));
+            fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+            fireEvent.click(screen.getByRole('button', { name: /Select all/i }));
+            fireEvent.click(screen.getByRole('button', { name: 'Restore to Inbox' }));
+
+            // Rows the list is not showing must not be acted on.
+            await waitFor(() => {
+                expect(useTaskStore.getState()._tasksById.get(archivedTask.id)?.status).toBe('inbox');
+            });
+            expect(useTaskStore.getState()._tasksById.get(homeTask.id)?.status).toBe('archived');
+        });
+
         it('virtualizes about 5k grouped tasks without changing the Projects segment', () => {
             const manyArchivedTasks = Array.from({ length: 5_000 }, (_, index): Task => ({
                 ...archivedTask,

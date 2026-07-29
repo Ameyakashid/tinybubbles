@@ -589,11 +589,19 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             };
         });
     }, [activeCollapseKey, setListViewState]);
+    // What the keyboard, "Select all" and the selection indices walk. Grouping
+    // reorders rows, and a collapsed group renders none — acting on rows the
+    // list is not showing would be worse than not folding them at all (#963).
+    const visibleTasks = useMemo(() => (
+        isListGrouping
+            ? groupedTasks.flatMap((group) => (collapsedGroupIds.has(group.id) ? [] : group.tasks))
+            : filteredTasks
+    ), [collapsedGroupIds, filteredTasks, groupedTasks, isListGrouping]);
     const taskIndexById = useMemo(() => {
         const map = new Map<string, number>();
-        filteredTasks.forEach((task, index) => map.set(task.id, index));
+        visibleTasks.forEach((task, index) => map.set(task.id, index));
         return map;
-    }, [filteredTasks]);
+    }, [visibleTasks]);
 
     const showDeferredProjects = statusFilter === 'someday' || statusFilter === 'waiting';
     const deferredProjects = showDeferredProjects
@@ -679,13 +687,13 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         batchDeleteTasks,
         batchMoveTasks,
         batchUpdateTasks,
-        filteredTasks,
+        filteredTasks: visibleTasks,
         highlightTaskId,
         isProcessing,
         registerTaskListScope,
         restoreTask,
         scrollToVirtualIndex: (index, align) => {
-            const taskId = filteredTasks[index]?.id;
+            const taskId = visibleTasks[index]?.id;
             const virtualIndex = isListGrouping && taskId
                 ? firstGroupedRowIndexByTaskId.get(taskId) ?? index
                 : index;
