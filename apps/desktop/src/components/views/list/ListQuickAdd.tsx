@@ -37,7 +37,13 @@ export function ListQuickAdd({
 }: ListQuickAddProps) {
     const iconButtonClass = "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
     return (
-        <form onSubmit={onSubmit} className="relative">
+        <form
+            onSubmit={onSubmit}
+            // The mic and add buttons sit inside the field, so the border and
+            // focus ring belong to the bar rather than the input — drawn on the
+            // input, the ring ran straight through both buttons (#959).
+            className="relative rounded-lg border border-border bg-card shadow-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30"
+        >
             <TaskInput
                 inputRef={inputRef}
                 value={value}
@@ -59,7 +65,7 @@ export function ListQuickAdd({
                 placeholder={`${t('nav.addTask')}... ${t('quickAdd.example')}`}
                 ariaLabel={t('nav.addTask')}
                 className={cn(
-                    "w-full rounded-lg border border-border bg-card shadow-sm transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30",
+                    "w-full rounded-lg border-0 bg-transparent focus:outline-none focus:ring-0",
                     dense ? "py-2 pl-3 pr-24 text-sm" : "py-3 pl-4 pr-24"
                 )}
             />
