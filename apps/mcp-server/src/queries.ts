@@ -245,9 +245,13 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
     where.push('date(dueDate) <= date(?)');
     params.push(input.dueDateTo);
   }
+  // A database predating this column cannot contain a focused row. Keep `true`
+  // narrow while treating every pre-column row as not focused for `false`.
+  if (input.isFocusedToday === true && !selectColumns.includes('isFocusedToday')) {
+    return [];
+  }
   // COALESCE, not `= ?`: the column is nullable, and rows written before the field existed
   // store NULL rather than 0, which `isFocusedToday = 0` would drop from the false case.
-  // Guarded on the column existing, like orderNum, so an older DB degrades to no filter.
   if (input.isFocusedToday !== undefined && selectColumns.includes('isFocusedToday')) {
     where.push('COALESCE(isFocusedToday, 0) = ?');
     params.push(input.isFocusedToday ? 1 : 0);

@@ -169,13 +169,13 @@ describe('mcp queries', () => {
         expect(queryCall?.params).toContain(0);
     });
 
-    test('listTasks skips the isFocusedToday filter when the column is missing', () => {
+    test('listTasks keeps isFocusedToday filters narrow when the column is missing', () => {
         const now = '2026-02-01T00:00:00.000Z';
         const { db, calls } = createMockDb([
             { id: 't1', title: 'Task', status: 'inbox', createdAt: now, updatedAt: now },
         ]);
         // A database old enough to predate the migration has no such column at all;
-        // referencing it would throw and take the whole tool down, so degrade to no filter.
+        // referencing it would throw and take the whole tool down.
         const originalPrepare = db.prepare.bind(db);
         db.prepare = (sql: string) => {
             if (sql.startsWith('PRAGMA table_info(tasks)')) {
@@ -184,7 +184,8 @@ describe('mcp queries', () => {
             return originalPrepare(sql);
         };
 
-        listTasks(db, { isFocusedToday: true, includeDeleted: false });
+        expect(listTasks(db, { isFocusedToday: true, includeDeleted: false })).toEqual([]);
+        expect(listTasks(db, { isFocusedToday: false, includeDeleted: false })).toHaveLength(1);
         const queryCall = calls.find((call) => call.sql.startsWith('SELECT') && call.sql.includes('FROM tasks '));
         expect(queryCall?.sql.includes('isFocusedToday')).toBe(false);
     });
