@@ -18,7 +18,6 @@ import {
     getDefaultTaskAreaMode,
     getPersonOptionNames,
     resolveDefaultNewTaskAreaId,
-    selectionsFromCriteria,
     shallow,
     shouldShowTaskForStart,
     sortTasksBy,
@@ -68,6 +67,11 @@ import {
     type TaskListGroupBy,
 } from './list/next-grouping';
 import { GroupedTaskSectionHeader, GroupedTaskSections } from './list/GroupedTaskSections';
+import {
+    PRIORITY_FILTER_OPTIONS,
+    TIME_ESTIMATE_FILTER_OPTIONS,
+    useListFilterControls,
+} from './list/list-filter-controls';
 import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { LIST_VIRTUALIZATION_THRESHOLD, LIST_VIRTUAL_ROW_ESTIMATE, LIST_VIRTUAL_OVERSCAN } from './list/useVirtualList';
@@ -142,20 +146,6 @@ type ShowToast = (
     durationMs?: number,
     action?: { label: string; onClick: () => void }
 ) => void;
-
-function withListFilterValue<K extends keyof Pick<FilterCriteria, 'contexts' | 'tags' | 'priority' | 'timeEstimates'>>(
-    criteria: FilterCriteria,
-    key: K,
-    values: NonNullable<FilterCriteria[K]>,
-): FilterCriteria {
-    const next = { ...criteria };
-    if (values.length > 0) {
-        next[key] = values;
-    } else {
-        delete next[key];
-    }
-    return next;
-}
 
 function sanitizeReferenceViewState(value: unknown, fallback: ReferencePersistedViewState): ReferencePersistedViewState {
     const parsed = value && typeof value === 'object' && !Array.isArray(value)
@@ -232,9 +222,19 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [quickAddSyntaxOpen, setQuickAddSyntaxOpen] = useState(false);
     const [mindSweepOpen, setMindSweepOpen] = useState(false);
-    const listFilters = useUiStore((state) => state.listFilters);
-    const setListFilters = useUiStore((state) => state.setListFilters);
-    const resetListFilters = useUiStore((state) => state.resetListFilters);
+    const {
+        criteria: listFilterCriteria,
+        filtersOpen,
+        selectedTokens,
+        selectedPriorities,
+        selectedTimeEstimates,
+        toggleToken: toggleTokenFilter,
+        togglePriority: togglePriorityFilter,
+        toggleEstimate: toggleTimeFilter,
+        clearFilters,
+        setFiltersOpen,
+        setListFilters,
+    } = useListFilterControls();
     const showToast = useUiStore((state) => state.showToast);
     const translateWithFallback = useCallback((key: string, fallback: string) => {
         return translateTextWithFallback(t, key, fallback);
@@ -252,12 +252,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const setProjectView = useUiStore((state) => state.setProjectView);
     const [baseTasks, setBaseTasks] = useState<Task[]>(() => (statusFilter === 'archived' ? [] : tasks));
     const queryCacheRef = useRef<Map<string, Task[]>>(new Map());
-    const listFilterCriteria = listFilters.criteria;
-    const listFilterSelections = useMemo(() => selectionsFromCriteria(listFilterCriteria), [listFilterCriteria]);
-    const selectedTokens = listFilterSelections.tokens;
-    const selectedPriorities = listFilterSelections.priorities;
-    const selectedTimeEstimates = listFilterCriteria.timeEstimates ?? EMPTY_ESTIMATES;
-    const filtersOpen = listFilters.open;
     const [selectedWaitingPerson, setSelectedWaitingPerson] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const addInputRef = useRef<HTMLInputElement>(null);
@@ -849,8 +843,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const isNextView = statusFilter === 'next';
     const isWaitingView = statusFilter === 'waiting';
     const showQuickAdd = isInbox;
-    const priorityOptions: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
-    const timeEstimateOptions: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
+    const priorityOptions = PRIORITY_FILTER_OPTIONS;
+    const timeEstimateOptions = TIME_ESTIMATE_FILTER_OPTIONS;
     const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
     const filterSummary = [
         ...(normalizedSearchQuery ? [`${t('common.search')}: ${searchQuery.trim()}`] : []),
@@ -863,29 +857,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const filterSummaryLabel = filterSummary.slice(0, 3).join(', ');
     const filterSummarySuffix = filterSummary.length > 3 ? ` +${filterSummary.length - 3}` : '';
     const showFiltersPanel = filtersOpen;
-    const toggleTokenFilter = useCallback((token: string) => {
-        const key = token.trim().startsWith('#') ? 'tags' : 'contexts';
-        const current = listFilterCriteria[key] ?? [];
-        const nextValues = current.includes(token)
-            ? current.filter((item) => item !== token)
-            : [...current, token];
-        setListFilters({ criteria: withListFilterValue(listFilterCriteria, key, nextValues) });
-    }, [listFilterCriteria, setListFilters]);
-    const togglePriorityFilter = useCallback((priority: TaskPriority) => {
-        const nextPriorities = selectedPriorities.includes(priority)
-            ? selectedPriorities.filter((item) => item !== priority)
-            : [...selectedPriorities, priority];
-        setListFilters({ criteria: withListFilterValue(listFilterCriteria, 'priority', nextPriorities) });
-    }, [listFilterCriteria, selectedPriorities, setListFilters]);
-    const toggleTimeFilter = useCallback((estimate: TimeEstimate) => {
-        const nextEstimates = selectedTimeEstimates.includes(estimate)
-            ? selectedTimeEstimates.filter((item) => item !== estimate)
-            : [...selectedTimeEstimates, estimate];
-        setListFilters({ criteria: withListFilterValue(listFilterCriteria, 'timeEstimates', nextEstimates) });
-    }, [listFilterCriteria, selectedTimeEstimates, setListFilters]);
-    const clearFilters = () => {
-        resetListFilters();
-    };
 
     useEffect(() => {
         let nextCriteria: FilterCriteria | null = null;
@@ -1058,7 +1029,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     showFilters={showFilters}
                     showFiltersPanel={showFiltersPanel}
                     onClearFilters={clearFilters}
-                    onToggleFiltersOpen={() => setListFilters({ open: !filtersOpen })}
+                    onToggleFiltersOpen={() => setFiltersOpen(!filtersOpen)}
                     allTokens={allTokens}
                     selectedTokens={selectedTokens}
                     tokenCounts={tokenCounts}

@@ -4,9 +4,11 @@ import { safeFormatDate, useTaskStore } from '@mindwtr/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
+import { useUiStore } from '../../store/ui-store';
 import { ArchiveView } from './ArchiveView';
 
 const initialTaskState = useTaskStore.getState();
+const initialUiState = useUiStore.getState();
 
 const archivedTask: Task = {
     id: 'task-1',
@@ -32,6 +34,9 @@ const archivedProject: Project = {
 
 describe('ArchiveView', () => {
     beforeEach(() => {
+        // The list filter criteria and the group/sort axes live in the shared UI
+        // store, so a test that picks one would otherwise narrow every test after it.
+        useUiStore.setState(initialUiState, true);
         useTaskStore.setState(initialTaskState, true);
         useTaskStore.setState({
             tasks: [],
@@ -278,6 +283,107 @@ describe('ArchiveView', () => {
             fireEvent.keyDown(window, { key: 'j' });
 
             expect(focusedTaskId()).toBeUndefined();
+        });
+    });
+
+    describe('filter, sort and grouping toolbar', () => {
+        const homeTask: Task = {
+            ...archivedTask,
+            id: 'task-2',
+            title: 'Tidy the garage',
+            contexts: ['@home'],
+            projectId: 'project-9',
+            completedAt: '2026-05-14T08:30:00.000Z',
+            updatedAt: '2026-05-14T08:30:00.000Z',
+        };
+        const activeProject: Project = {
+            ...archivedProject,
+            id: 'project-9',
+            title: 'House',
+            status: 'active',
+        };
+
+        const renderWithBoth = () => {
+            useTaskStore.setState({
+                _allTasks: [archivedTask, homeTask],
+                _tasksById: new Map([
+                    [archivedTask.id, archivedTask],
+                    [homeTask.id, homeTask],
+                ]),
+                projects: [activeProject],
+                _allProjects: [activeProject],
+            });
+            return render(
+                <LanguageProvider>
+                    <ArchiveView />
+                </LanguageProvider>
+            );
+        };
+
+        const rowTitles = () => Array.from(document.querySelectorAll('[data-task-id] h3')).map((el) => el.textContent);
+
+        const pickOption = (selectName: string, optionName: string) => {
+            fireEvent.click(screen.getByRole('combobox', { name: selectName }));
+            fireEvent.click(screen.getByRole('option', { name: optionName }));
+        };
+
+        it('narrows the archive to a context picked in the Filters panel', () => {
+            renderWithBoth();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            fireEvent.click(screen.getByRole('button', { name: /@home/ }));
+
+            expect(screen.getByText('Tidy the garage')).toBeInTheDocument();
+            expect(screen.queryByText('Archived task')).not.toBeInTheDocument();
+            expect(screen.getByText('1 tasks')).toBeInTheDocument();
+        });
+
+        // The criteria are one selection shared by every desktop list (#956), so
+        // a token picked in Next can be active here while matching nothing
+        // archived. Without the union the panel would list no chip to switch it
+        // back off and the archive would look empty for no visible reason.
+        it('offers a token set in another view even when nothing archived matches it', () => {
+            useUiStore.setState((state) => ({
+                listFilters: { ...state.listFilters, criteria: { contexts: ['@office'] } },
+            }));
+            renderWithBoth();
+
+            expect(rowTitles()).toEqual([]);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            fireEvent.click(screen.getByRole('button', { name: /@office/ }));
+
+            expect(rowTitles()).toHaveLength(2);
+        });
+
+        it('defaults to newest completion first and re-sorts by title on request', () => {
+            renderWithBoth();
+
+            expect(rowTitles()).toEqual(['Tidy the garage', 'Archived task']);
+
+            pickOption('Sort', 'Title');
+
+            expect(rowTitles()).toEqual(['Archived task', 'Tidy the garage']);
+        });
+
+        it('groups archived tasks by the chosen axis', () => {
+            renderWithBoth();
+
+            expect(screen.queryByText('House')).not.toBeInTheDocument();
+
+            pickOption('Group', 'Project');
+
+            expect(screen.getByText('House')).toBeInTheDocument();
+            expect(screen.getByText('No Project')).toBeInTheDocument();
+        });
+
+        it('keeps the toolbar out of the Projects segment', () => {
+            renderWithBoth();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+
+            expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
+            expect(screen.queryByRole('combobox', { name: 'Group' })).not.toBeInTheDocument();
         });
     });
 

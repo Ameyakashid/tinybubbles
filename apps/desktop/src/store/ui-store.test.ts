@@ -52,8 +52,10 @@ describe('useUiStore list options', () => {
             showDetails: true,
             nextGroupBy: 'project',
             referenceGroupBy: 'context',
-            // Written by a build that predates the Done axis: defaulted, not undefined.
+            // Written by a build that predates the Done and Archive axes:
+            // defaulted, not undefined.
             doneGroupBy: 'none',
+            archivedGroupBy: 'none',
             focusTop3Only: true,
         });
     });
@@ -67,6 +69,8 @@ describe('useUiStore list options', () => {
             referenceGroupBy: 'tag',
             doneGroupBy: 'completedDate',
             doneSortBy: 'completed',
+            archivedGroupBy: 'project',
+            archivedSortBy: 'completed',
             focusTop3Only: true,
         });
 
@@ -76,6 +80,8 @@ describe('useUiStore list options', () => {
             referenceGroupBy: 'tag',
             doneGroupBy: 'completedDate',
             doneSortBy: 'completed',
+            archivedGroupBy: 'project',
+            archivedSortBy: 'completed',
             focusTop3Only: true,
         });
     });

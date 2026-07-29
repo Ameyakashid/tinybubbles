@@ -1,9 +1,20 @@
 import { memo, useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, sortTasksBy, safeFormatDate, tFallback } from '@mindwtr/core';
-import type { Task, Project } from '@mindwtr/core';
+import {
+    createTaskFilterPredicate,
+    formatTimeEstimateLabel,
+    getTaskMetadataFilterVisibility,
+    hasActiveFilterCriteria,
+    safeFormatDate,
+    shallow,
+    sortDoneTasksForListView,
+    sortTasksBy,
+    tFallback,
+    useTaskStore,
+} from '@mindwtr/core';
+import type { FilterCriteria, Task, Project, TimeEstimate } from '@mindwtr/core';
 
-import { CheckCircle2, Undo2, Trash2 } from 'lucide-react';
+import { CheckCircle2, CheckSquare, Filter, SlidersHorizontal, Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
@@ -18,10 +29,21 @@ import {
     useVirtualList,
 } from './list/useVirtualList';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
+import { GroupBySelect } from './list/GroupBySelect';
+import { GroupedTaskSections } from './list/GroupedTaskSections';
+import { ListFiltersPanel } from './list/ListFiltersPanel';
+import { DONE_SORT_OPTIONS, SortBySelect, ToolbarButton } from './list/list-toolbar';
+import {
+    PRIORITY_FILTER_OPTIONS,
+    TIME_ESTIMATE_FILTER_OPTIONS,
+    useListFilterControls,
+} from './list/list-filter-controls';
+import { DONE_AXES, groupTasks, type DoneGroupBy, type TaskGroup } from './list/next-grouping';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
-import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
+import { useLocalDayKey } from '../../hooks/useLocalDayKey';
+import { resolveDoneTaskSortBy } from '../../lib/task-list-sort';
 
 type ArchiveTaskRowInnerProps = {
     task: Task;
@@ -250,7 +272,26 @@ export function ArchiveView() {
     const [measureVersion, setMeasureVersion] = useState(0);
     const [listScrollTop, setListScrollTop] = useState(0);
     const [listHeight, setListHeight] = useState(0);
-    const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
+    const {
+        criteria: listFilterCriteria,
+        filtersOpen,
+        selectedTokens,
+        selectedPriorities,
+        selectedTimeEstimates,
+        toggleToken,
+        togglePriority,
+        toggleEstimate,
+        clearFilters,
+        setFiltersOpen,
+    } = useListFilterControls();
+    const archivedGroupBy = useUiStore((state) => state.listOptions.archivedGroupBy);
+    const archivedSortBy = useUiStore((state) => state.listOptions.archivedSortBy);
+    const setListOptions = useUiStore((state) => state.setListOptions);
+    // Archive is completed work, so it reads Done's sort roster (which is the
+    // only one carrying 'completed') and lands on Done's completion-recency
+    // default rather than the global task sort, which orders by due date and
+    // priority — neither of which means anything once a task is finished.
+    const sortBy = resolveDoneTaskSortBy(settings?.taskSortBy, archivedSortBy);
 
     useEffect(() => {
         if (!perf.enabled) return;
@@ -279,18 +320,57 @@ export function ArchiveView() {
         };
     }, []);
 
+    // Everything in the archive, before the toolbar narrows it. The filter
+    // chips, their counts and the priority/estimate section visibility all read
+    // this, so a selection never hides the control that would undo it.
+    const archivedBaseTasks = useMemo(
+        () => _allTasks.filter((task) => task.status === 'archived' && !task.deletedAt),
+        [_allTasks]
+    );
+
+    const prioritiesEnabled = settings?.features?.priorities !== false;
+    const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
+    const metadataFilterVisibility = useMemo(
+        () => getTaskMetadataFilterVisibility(archivedBaseTasks, { prioritiesEnabled, timeEstimatesEnabled }),
+        [archivedBaseTasks, prioritiesEnabled, timeEstimatesEnabled]
+    );
+    const showPriorityFilters = metadataFilterVisibility.priority;
+    const showTimeEstimateFilters = metadataFilterVisibility.timeEstimate;
+    const activeFilterCriteria = useMemo<FilterCriteria>(() => ({
+        ...listFilterCriteria,
+        priority: showPriorityFilters ? selectedPriorities : undefined,
+        timeEstimates: showTimeEstimateFilters ? selectedTimeEstimates : undefined,
+        timeEstimateRange: showTimeEstimateFilters ? listFilterCriteria.timeEstimateRange : undefined,
+    }), [listFilterCriteria, selectedPriorities, selectedTimeEstimates, showPriorityFilters, showTimeEstimateFilters]);
+
+    const { allTokens, tokenCounts } = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const task of archivedBaseTasks) {
+            for (const token of new Set([...(task.contexts ?? []), ...(task.tags ?? [])])) {
+                counts[token] = (counts[token] ?? 0) + 1;
+            }
+        }
+        // Criteria are shared across every desktop list (#956), so a token
+        // picked in Next can be active here while matching nothing archived.
+        // Union it in or the panel would offer no way to switch it back off.
+        return {
+            allTokens: [...new Set([...Object.keys(counts), ...selectedTokens])].sort(),
+            tokenCounts: counts,
+        };
+    }, [archivedBaseTasks, selectedTokens]);
+
     const archivedTasks = useMemo(() => {
-        const filtered = _allTasks.filter((t) => t.status === 'archived' && !t.deletedAt);
-
-        // Use standard sort
-        const sorted = sortTasksBy(filtered, sortBy);
-
-        if (!searchQuery) return sorted;
-
-        return sorted.filter(t =>
-            t.title.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [_allTasks, searchQuery, sortBy]);
+        const criteriaPredicate = hasActiveFilterCriteria(activeFilterCriteria)
+            ? createTaskFilterPredicate(activeFilterCriteria, { projects, tokenMatchMode: 'all' })
+            : null;
+        const query = searchQuery.trim().toLowerCase();
+        const filtered = archivedBaseTasks.filter((task) => {
+            if (criteriaPredicate && !criteriaPredicate(task)) return false;
+            if (query && !task.title.toLowerCase().includes(query)) return false;
+            return true;
+        });
+        return sortBy === 'default' ? sortDoneTasksForListView(filtered) : sortTasksBy(filtered, sortBy);
+    }, [activeFilterCriteria, archivedBaseTasks, projects, searchQuery, sortBy]);
 
     const areaNameById = useMemo(
         () => new Map(areas.filter((area) => !area.deletedAt).map((area) => [area.id, area.name])),
@@ -305,7 +385,20 @@ export function ArchiveView() {
         const query = searchQuery.toLowerCase();
         return filtered.filter((project) => project.title.toLowerCase().includes(query));
     }, [projects, searchQuery]);
-    const archivedTaskIds = useMemo(() => archivedTasks.map((task) => task.id), [archivedTasks]);
+    const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+    const isGrouping = archivedGroupBy !== 'none';
+    const localDayKey = useLocalDayKey(archivedGroupBy === 'completedDate');
+    const groupedTasks = useMemo<TaskGroup[]>(
+        () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t }) : []),
+        [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, t]
+    );
+    // Grouped rows render in section order, so keyboard navigation and
+    // "select all" have to walk that order rather than the flat sorted one.
+    const orderedTasks = useMemo(
+        () => (isGrouping ? groupedTasks.flatMap((group) => group.tasks) : archivedTasks),
+        [archivedTasks, groupedTasks, isGrouping]
+    );
+    const archivedTaskIds = useMemo(() => orderedTasks.map((task) => task.id), [orderedTasks]);
     const {
         allVisibleTasksSelected: allVisibleSelected,
         clearTaskSelection: clearSelection,
@@ -325,7 +418,11 @@ export function ArchiveView() {
         t,
         undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
     });
-    const shouldVirtualize = archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
+    // Grouping turns virtualization off, matching ContextsView: the grouped
+    // sections are collapsible and measured as ordinary flow content.
+    // ponytail: a grouped archive of many thousands renders every row — swap in
+    // ListView's grouped virtual rows if that ever shows up in the budget.
+    const shouldVirtualize = !isGrouping && archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
         rowHeightsRef.current.set(id, height);
@@ -353,7 +450,7 @@ export function ArchiveView() {
     useTaskListScope({
         // The projects segment renders no task rows, so the keyboard must not
         // act on archived tasks the user cannot see.
-        getTasks: () => (segment === 'tasks' ? archivedTasks : []),
+        getTasks: () => (segment === 'tasks' ? orderedTasks : []),
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
         t,
@@ -420,6 +517,34 @@ export function ArchiveView() {
         await deleteProject(project.id);
     }, [deleteProject, requestConfirmation, t]);
 
+    const renderArchiveRow = useCallback((task: Task) => (
+        <ArchiveTaskRowInner
+            key={task.id}
+            task={task}
+            onRestore={handleRestore}
+            onDelete={handleDelete}
+            onEditCompletedAt={handleEditCompletedAt}
+            onToggleSelect={toggleTaskSelection}
+            selectionMode={selectionMode}
+            isSelected={selectedIds.has(task.id)}
+            t={t}
+        />
+    ), [handleDelete, handleEditCompletedAt, handleRestore, selectedIds, selectionMode, t, toggleTaskSelection]);
+
+    const formatEstimate = useCallback(
+        (value: TimeEstimate) => formatTimeEstimateLabel(value, { t }),
+        [t]
+    );
+    const filterSummary = [
+        ...(searchQuery.trim() ? [`${t('common.search')}: ${searchQuery.trim()}`] : []),
+        ...selectedTokens,
+        ...(showPriorityFilters ? selectedPriorities.map((priority) => t(`priority.${priority}`)) : []),
+        ...(showTimeEstimateFilters ? selectedTimeEstimates.map(formatEstimate) : []),
+    ];
+    const hasFilters = filterSummary.length > 0;
+    const filterSummaryLabel = filterSummary.slice(0, 3).join(', ');
+    const filterSummarySuffix = filterSummary.length > 3 ? ` +${filterSummary.length - 3}` : '';
+
     const handleSegmentChange = useCallback((next: ArchiveSegment) => {
         setSegment((current) => {
             if (current === next) return current;
@@ -431,7 +556,8 @@ export function ArchiveView() {
     return (
         <ErrorBoundary>
             <div className={shouldVirtualize ? "flex h-full min-h-0 flex-col gap-6" : "flex flex-col gap-6"}>
-            <header className="flex flex-wrap items-center justify-between gap-3">
+            <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div className="space-y-1">
                 <div className="flex items-center gap-3">
                     <h2 className="text-3xl font-bold tracking-tight">{t('archived.title')}</h2>
                     <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
@@ -461,23 +587,79 @@ export function ArchiveView() {
                         </button>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+                    <span>
                         {segment === 'tasks'
                             ? `${archivedTasks.length} ${t('common.tasks')}`
                             : `${archivedProjects.length} ${t('projects.title')}`}
-                    </div>
-                    {segment === 'tasks' && archivedTasks.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={toggleSelectionMode}
-                            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                        >
-                            {selectionMode ? t('common.done') : t('bulk.select')}
-                        </button>
+                    </span>
+                    {segment === 'tasks' && hasFilters && (
+                        <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary sm:max-w-[420px]">
+                            <SlidersHorizontal className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{filterSummaryLabel}{filterSummarySuffix}</span>
+                        </span>
                     )}
                 </div>
+                </div>
+
+                {segment === 'tasks' && (
+                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                        <ToolbarButton
+                            active={filtersOpen}
+                            onClick={() => setFiltersOpen(!filtersOpen)}
+                            aria-expanded={filtersOpen}
+                            aria-controls="list-filters-panel"
+                            icon={<Filter className="h-3.5 w-3.5" aria-hidden="true" />}
+                        >
+                            {t('filters.label')}
+                        </ToolbarButton>
+                        {archivedTasks.length > 0 && (
+                            <ToolbarButton
+                                active={selectionMode}
+                                onClick={toggleSelectionMode}
+                                aria-pressed={selectionMode}
+                                icon={<CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />}
+                            >
+                                {selectionMode ? t('common.done') : t('bulk.select')}
+                            </ToolbarButton>
+                        )}
+                        <SortBySelect
+                            options={DONE_SORT_OPTIONS}
+                            value={sortBy}
+                            onChange={(value) => setListOptions({ archivedSortBy: value })}
+                            t={t}
+                            iconTestId="archive-sort-icon"
+                        />
+                        <GroupBySelect
+                            value={archivedGroupBy}
+                            axes={DONE_AXES}
+                            onChange={(value) => setListOptions({ archivedGroupBy: value as DoneGroupBy })}
+                            t={t}
+                        />
+                    </div>
+                )}
             </header>
+
+            {segment === 'tasks' && filtersOpen && (
+                <ListFiltersPanel
+                    t={t}
+                    hasFilters={hasFilters}
+                    onClearFilters={clearFilters}
+                    allTokens={allTokens}
+                    selectedTokens={selectedTokens}
+                    tokenCounts={tokenCounts}
+                    onToggleToken={toggleToken}
+                    showPriorityFilters={showPriorityFilters}
+                    priorityOptions={PRIORITY_FILTER_OPTIONS}
+                    selectedPriorities={selectedPriorities}
+                    onTogglePriority={togglePriority}
+                    showTimeEstimateFilters={showTimeEstimateFilters}
+                    timeEstimateOptions={TIME_ESTIMATE_FILTER_OPTIONS}
+                    selectedTimeEstimates={selectedTimeEstimates}
+                    onToggleEstimate={toggleEstimate}
+                    formatEstimate={formatEstimate}
+                />
+            )}
 
             {segment === 'tasks' && selectionMode && (
                 <div className="space-y-2">
@@ -588,21 +770,11 @@ export function ArchiveView() {
                             );
                         })}
                     </div>
+                ) : isGrouping ? (
+                    <GroupedTaskSections groups={groupedTasks} renderTask={renderArchiveRow} />
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {archivedTasks.map(task => (
-                            <ArchiveTaskRowInner
-                                key={task.id}
-                                task={task}
-                                onRestore={handleRestore}
-                                onDelete={handleDelete}
-                                onEditCompletedAt={handleEditCompletedAt}
-                                onToggleSelect={toggleTaskSelection}
-                                selectionMode={selectionMode}
-                                isSelected={selectedIds.has(task.id)}
-                                t={t}
-                            />
-                        ))}
+                        {archivedTasks.map(renderArchiveRow)}
                     </div>
                 )}
             </div>

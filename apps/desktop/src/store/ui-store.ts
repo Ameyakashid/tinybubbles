@@ -19,6 +19,11 @@ type ListOptions = {
     // is not in FOCUS_AXES, so that sanitizer would reset it on every launch.
     doneGroupBy: ListDoneGroupBy;
     doneSortBy?: TaskSortBy;
+    // Archive is completed work too, so it reads the same rosters as Done — but
+    // keeps its own values, because "group my archive by project" and "group my
+    // Done list by completion date" are different questions (#959).
+    archivedGroupBy: ListDoneGroupBy;
+    archivedSortBy?: TaskSortBy;
     focusTop3Only: boolean;
 };
 
@@ -29,6 +34,7 @@ const DEFAULT_LIST_OPTIONS: ListOptions = {
     nextGroupBy: 'none',
     referenceGroupBy: 'area',
     doneGroupBy: 'none',
+    archivedGroupBy: 'none',
     focusTop3Only: false,
 };
 
@@ -51,12 +57,17 @@ function readStoredListOptions(): ListOptions {
         const doneSortBy = DONE_SORT_OPTIONS.includes(parsed?.doneSortBy as TaskSortBy)
             ? parsed?.doneSortBy as TaskSortBy
             : undefined;
+        const archivedSortBy = DONE_SORT_OPTIONS.includes(parsed?.archivedSortBy as TaskSortBy)
+            ? parsed?.archivedSortBy as TaskSortBy
+            : undefined;
         return {
             showDetails: typeof parsed?.showDetails === 'boolean' ? parsed.showDetails : DEFAULT_LIST_OPTIONS.showDetails,
             nextGroupBy: sanitizeAxis(FOCUS_AXES, parsed?.nextGroupBy, DEFAULT_LIST_OPTIONS.nextGroupBy),
             referenceGroupBy: sanitizeAxis(REFERENCE_AXES, parsed?.referenceGroupBy, DEFAULT_LIST_OPTIONS.referenceGroupBy),
             doneGroupBy: sanitizeAxis(DONE_AXES, parsed?.doneGroupBy, DEFAULT_LIST_OPTIONS.doneGroupBy),
             ...(doneSortBy ? { doneSortBy } : {}),
+            archivedGroupBy: sanitizeAxis(DONE_AXES, parsed?.archivedGroupBy, DEFAULT_LIST_OPTIONS.archivedGroupBy),
+            ...(archivedSortBy ? { archivedSortBy } : {}),
             focusTop3Only: typeof parsed?.focusTop3Only === 'boolean' ? parsed.focusTop3Only : DEFAULT_LIST_OPTIONS.focusTop3Only,
         };
     } catch {

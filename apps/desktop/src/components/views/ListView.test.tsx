@@ -74,7 +74,7 @@ describe('ListView', () => {
       listOptions: {
         showDetails: false,
         nextGroupBy: 'none',
-        referenceGroupBy: 'area', doneGroupBy: 'none',
+        referenceGroupBy: 'area', doneGroupBy: 'none', archivedGroupBy: 'none',
         focusTop3Only: false,
       },
       projectView: {
