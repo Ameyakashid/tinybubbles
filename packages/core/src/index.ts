@@ -47,6 +47,7 @@ export * from './sync-run-ports';
 export * from './sync-backend-io';
 export * from './sync-fast-sync';
 export * from './task-utils';
+export * from './completion-grouping';
 export * from './filter-criteria';
 export * from './task-draft';
 export * from './task-token-usage';

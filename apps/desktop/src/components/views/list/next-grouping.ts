@@ -1,11 +1,9 @@
 import {
+    buildCompletionDateSections,
     compareProjectsByOrder,
-    COMPLETION_DATE_GROUPS,
     DEFAULT_AREA_COLOR,
-    getCompletionDateGroup,
     getContextColor,
     tFallback,
-    type CompletionDateGroup,
 } from '@mindwtr/core';
 import type { Area, Project, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from '@mindwtr/core';
 
@@ -454,48 +452,6 @@ export type GroupTasksInputs = {
  * included. Views declare which axes they offer and where the choice
  * persists — nothing else.
  */
-const COMPLETION_GROUP_FALLBACKS: Record<CompletionDateGroup, string> = {
-    today: 'Today',
-    yesterday: 'Yesterday',
-    previous7Days: 'Previous 7 days',
-    earlier: 'Earlier',
-    notCompleted: 'Not completed',
-};
-
-/**
- * Newest bucket first, and a bucket with nothing in it is not shown — an
- * Archive list of old work should not open on four empty headings (#945).
- */
-export function groupTasksByCompletionDate({
-    tasks,
-    getGroupLabel,
-    now,
-}: {
-    tasks: Task[];
-    getGroupLabel: (group: CompletionDateGroup) => string;
-    now?: Date;
-}): TaskGroup[] {
-    const reference = now ?? new Date();
-    const buckets = new Map<CompletionDateGroup, Task[]>();
-    tasks.forEach((task) => {
-        const group = getCompletionDateGroup(task, reference);
-        const items = buckets.get(group) ?? [];
-        items.push(task);
-        buckets.set(group, items);
-    });
-
-    return COMPLETION_DATE_GROUPS.flatMap((group) => {
-        const items = buckets.get(group) ?? [];
-        if (items.length === 0) return [];
-        return [{
-            id: `completedDate:${group}`,
-            title: getGroupLabel(group),
-            tasks: items,
-            muted: group === 'notCompleted',
-        }];
-    });
-}
-
 export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }: GroupTasksInputs): TaskGroup[] {
     switch (axis) {
         case 'none':
@@ -517,10 +473,9 @@ export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }:
         case 'context':
             return groupTasksByContext({ tasks, noContextLabel: tFallback(t, 'contexts.none', 'No context') });
         case 'completedDate':
-            return groupTasksByCompletionDate({
-                tasks,
-                getGroupLabel: (group) => tFallback(t, `list.completedGroup.${group}`, COMPLETION_GROUP_FALLBACKS[group]),
-            });
+            // Bucketing and labels live in core so Done/Archive read the same
+            // on both platforms (#959).
+            return buildCompletionDateSections({ tasks, t });
     }
 }
 

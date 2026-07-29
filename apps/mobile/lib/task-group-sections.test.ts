@@ -138,7 +138,9 @@ describe('buildTaskGroupSections', () => {
     const sections = layout(items);
     expect(sections.map((section) => section.section)).toContain('Today');
     expect(sections.find((section) => section.section === 'Today')?.ids).toEqual(['today']);
-    expect(sections.find((section) => section.section === 'Earlier')?.ids).toEqual(['old']);
+    // Older than a week is bucketed by month, not one shared Earlier heading (#959).
+    expect(sections.find((section) => section.section === 'January 2026')?.ids).toEqual(['old']);
+    expect(sections.some((section) => section.section === 'Earlier')).toBe(false);
     expect(sections.find((section) => section.section === 'Not completed')?.ids).toEqual(['never']);
   });
 

@@ -1,9 +1,7 @@
 import {
-  COMPLETION_DATE_GROUPS,
-  getCompletionDateGroup,
+  buildCompletionDateSections,
   tFallback,
   type Area,
-  type CompletionDateGroup,
   type Project,
   type Task,
 } from '@mindwtr/core';
@@ -37,14 +35,6 @@ export type TaskGroupTaskItem = {
 };
 
 export type TaskGroupItem = TaskGroupSectionItem | TaskGroupTaskItem;
-
-const COMPLETION_GROUP_FALLBACKS: Record<CompletionDateGroup, string> = {
-  today: 'Today',
-  yesterday: 'Yesterday',
-  previous7Days: 'Previous 7 days',
-  earlier: 'Earlier',
-  notCompleted: 'Not completed',
-};
 
 /** Label for a grouping axis. Lives with the axis logic so the two cannot drift apart. */
 export function getTaskGroupByLabel(groupBy: TaskGroupBy, t: (key: string) => string): string {
@@ -138,23 +128,11 @@ export function buildTaskGroupSections({
   }
 
   if (groupBy === 'completedDate') {
+    // Buckets and labels live in core so Done/Archive read the same on both
+    // platforms (#959).
     const items: TaskGroupItem[] = [];
-    const buckets = new Map<CompletionDateGroup, Task[]>();
-    const reference = now ?? new Date();
-    tasks.forEach((task) => {
-      const group = getCompletionDateGroup(task, reference);
-      const bucket = buckets.get(group) ?? [];
-      bucket.push(task);
-      buckets.set(group, bucket);
-    });
-    COMPLETION_DATE_GROUPS.forEach((group) => {
-      appendSection(
-        items,
-        `completedDate:${group}`,
-        tFallback(t, `list.completedGroup.${group}`, COMPLETION_GROUP_FALLBACKS[group]),
-        buckets.get(group) ?? [],
-        group === 'notCompleted',
-      );
+    buildCompletionDateSections({ tasks, t, now }).forEach((section) => {
+      appendSection(items, section.id, section.title, section.tasks, section.muted);
     });
     return items;
   }
