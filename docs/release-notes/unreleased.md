@@ -39,6 +39,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Desktop Inbox now exposes the shared Filters panel, so filters chosen in another list remain visible and removable. (#956)
 - Saving a task in a large desktop project no longer scrolls the pinned project row past the list and leaves a blank screen. (#916)
 - Mobile stops re-rendering project screens behind the current route, reducing multi-second updates in large libraries while preserving each screen's state. (#766)
+- iOS no longer draws duplicated rows or crashes when a long list shrinks, which happened when filtering Done by a tag or context or removing a tag in bulk. (#949, #969)
 
 ## Desktop
 

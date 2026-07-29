@@ -39,7 +39,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { CompactText } from './compact-text';
 import { ListEmptyState } from './list-empty-state';
 import { SwipeableTaskItem, readTaskRowRenderCount, type SwipeableTaskItemRowContext } from './swipeable-task-item';
-import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
+import { TASK_LIST_WINDOWING_PROPS, shouldRemoveClippedSubviews } from './task-list-windowing';
 import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
 
@@ -106,7 +106,6 @@ import {
 } from '@/lib/task-list-sort';
 import { DONE_LIST_GROUP_OPTIONS } from '@/lib/view-state/done-list-view-state';
 
-const REMOVE_CLIPPED_SUBVIEWS_MIN_ITEMS = 15;
 const PROJECT_REORDER_ITEM_HEIGHT = 80;
 const PROJECT_REORDER_ANIMATION_CONFIG = {
   damping: 28,
@@ -1778,8 +1777,9 @@ function TaskListComponent({
           keyboardShouldPersistTaps="handled"
           {...TASK_LIST_WINDOWING_PROPS}
           // Clipping costs more than it saves on a short list, so this list —
-          // unlike the shared default — turns it on only once it is long.
-          removeClippedSubviews={listItems.length >= REMOVE_CLIPPED_SUBVIEWS_MIN_ITEMS}
+          // unlike the shared default — turns it on only once it is long, and
+          // only where flipping the prop is safe. See shouldRemoveClippedSubviews.
+          removeClippedSubviews={shouldRemoveClippedSubviews(listItems.length)}
           // iOS only bounces (and thus allows pull-to-refresh) when content
           // exceeds the viewport unless bounce is forced; short lists like a
           // freshly processed Inbox must still be able to pull to sync.
