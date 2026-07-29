@@ -152,6 +152,43 @@ describe('mcp queries', () => {
         expect(queryCall?.params[1]).toBe('%100\\%\\_done\\\\now%');
     });
 
+    test('listTasks filters isFocusedToday with a NULL-safe predicate', () => {
+        const now = '2026-02-01T00:00:00.000Z';
+        const { db, calls } = createMockDb([
+            { id: 't1', title: 'Task', status: 'inbox', createdAt: now, updatedAt: now, isFocusedToday: 1 },
+        ]);
+
+        listTasks(db, { isFocusedToday: false, includeDeleted: false });
+        const queryCall = calls.find((call) => call.sql.startsWith('SELECT') && call.sql.includes('FROM tasks '));
+        // isFocusedToday reaches existing databases via ALTER TABLE ADD COLUMN
+        // (TASK_SQLITE_MIGRATION_COLUMNS), and SQLite backfills already-stored rows with
+        // NULL rather than 0. A bare `isFocusedToday = 0` therefore returns nothing for
+        // every task written before the column existed, so pin the NULL-safe form.
+        expect(queryCall?.sql.includes('COALESCE(isFocusedToday, 0) = ?')).toBe(true);
+        expect(queryCall?.sql.includes('WHERE isFocusedToday = ?')).toBe(false);
+        expect(queryCall?.params).toContain(0);
+    });
+
+    test('listTasks skips the isFocusedToday filter when the column is missing', () => {
+        const now = '2026-02-01T00:00:00.000Z';
+        const { db, calls } = createMockDb([
+            { id: 't1', title: 'Task', status: 'inbox', createdAt: now, updatedAt: now },
+        ]);
+        // A database old enough to predate the migration has no such column at all;
+        // referencing it would throw and take the whole tool down, so degrade to no filter.
+        const originalPrepare = db.prepare.bind(db);
+        db.prepare = (sql: string) => {
+            if (sql.startsWith('PRAGMA table_info(tasks)')) {
+                return { all: () => [{ name: 'id' }, { name: 'title' }, { name: 'status' }, { name: 'createdAt' }, { name: 'updatedAt' }] } as never;
+            }
+            return originalPrepare(sql);
+        };
+
+        listTasks(db, { isFocusedToday: true, includeDeleted: false });
+        const queryCall = calls.find((call) => call.sql.startsWith('SELECT') && call.sql.includes('FROM tasks '));
+        expect(queryCall?.sql.includes('isFocusedToday')).toBe(false);
+    });
+
     test('listTasks uses FTS search when tasks_fts is available', () => {
         const now = '2026-02-01T00:00:00.000Z';
         const { db, calls } = createMockDb(

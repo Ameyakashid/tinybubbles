@@ -19,10 +19,13 @@ const iso = (day: string): string => `2026-03-${day}T00:00:00.000Z`;
 
 // Ids are deliberately NOT in title/priority/updatedAt order, so a test that passes by
 // accident (adapter happens to return rows in id/insertion order) would be caught.
+// t-05 stores the focus flag as numeric 1 rather than `true` on purpose: synced payloads
+// round-trip booleans as 1/0 (core's toBool), so an adapter that filters with `=== true`
+// drops it. Both adapters must still return it for `isFocusedToday: true`.
 const fixtureTasks: Task[] = [
   { id: 't-06', title: 'Alpha', status: 'next', priority: 'urgent', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('03') },
-  { id: 't-01', title: 'Bravo', status: 'next', priority: 'urgent', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('07') }, // ties t-06 on priority
-  { id: 't-05', title: 'Charlie', status: 'next', priority: 'high', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('01') },
+  { id: 't-01', title: 'Bravo', status: 'next', priority: 'urgent', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('07'), isFocusedToday: true }, // ties t-06 on priority
+  { id: 't-05', title: 'Charlie', status: 'next', priority: 'high', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('01'), isFocusedToday: 1 as unknown as boolean },
   { id: 't-02', title: 'Delta', status: 'next', priority: 'medium', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('05') },
   { id: 't-04', title: 'Echo', status: 'next', priority: 'low', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('02') },
   { id: 't-03', title: 'Foxtrot', status: 'next', tags: [], contexts: [], createdAt: iso('01'), updatedAt: iso('06') }, // no priority
@@ -87,6 +90,29 @@ const sharedCases: ConformanceCase[] = [
     name: 'offset + limit paginate identically',
     input: { sortBy: 'title', sortOrder: 'asc', offset: 3, limit: 10 },
     expected: allIdsByTitleAsc.slice(3),
+  },
+  {
+    // t-05 stores the flag as 1, not true — a `=== true` filter returns only t-01 here.
+    name: 'isFocusedToday true returns starred tasks, including ones stored as 1',
+    input: { isFocusedToday: true, sortBy: 'title', sortOrder: 'asc' },
+    expected: ['t-01', 't-05'],
+  },
+  {
+    // The unstarred rows carry no isFocusedToday key at all, so this also pins that a
+    // missing/NULL flag counts as false rather than being dropped from both sides.
+    name: 'isFocusedToday false returns everything not starred',
+    input: { isFocusedToday: false, sortBy: 'title', sortOrder: 'asc' },
+    expected: ['t-06', 't-02', 't-04', 't-03', 't-report'],
+  },
+  {
+    name: 'isFocusedToday omitted leaves the list unfiltered',
+    input: { sortBy: 'title', sortOrder: 'asc' },
+    expected: allIdsByTitleAsc,
+  },
+  {
+    name: 'isFocusedToday composes with other filters rather than replacing them',
+    input: { isFocusedToday: true, search: 'Bravo', sortBy: 'title', sortOrder: 'asc' },
+    expected: ['t-01'],
   },
 ];
 

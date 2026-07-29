@@ -217,6 +217,8 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
         const due = dateKey(task.dueDate);
         if (dueDateFrom && (!due || due < dueDateFrom)) return false;
         if (dueDateTo && (!due || due > dueDateTo)) return false;
+        // Coerce: synced payloads carry booleans as true or 1, so `=== true` would drop rows.
+        if (input.isFocusedToday !== undefined && Boolean(task.isFocusedToday) !== input.isFocusedToday) return false;
         return matchesSearch(task, input.search);
       });
       const offset = normalizeOffset(input.offset);

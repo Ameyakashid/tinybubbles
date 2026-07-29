@@ -153,12 +153,20 @@ async function main() {
                 if (rawStatus && !status) {
                     return errorResponse(`Invalid status: ${rawStatus}`);
                 }
+                const rawFocused = url.searchParams.get('isFocusedToday');
+                const normalizedFocused = rawFocused?.trim().toLowerCase();
+                if (normalizedFocused !== undefined && !['1', 'true', '0', 'false'].includes(normalizedFocused)) {
+                    return errorResponse(`Invalid isFocusedToday: ${rawFocused}`);
+                }
                 return jsonResponse({
                     tasks: await service.listTasks({
                         includeAll,
                         includeDeleted,
                         status,
                         query,
+                        isFocusedToday: normalizedFocused === undefined
+                            ? undefined
+                            : normalizedFocused === '1' || normalizedFocused === 'true',
                     }),
                 });
             }

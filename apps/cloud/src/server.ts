@@ -223,6 +223,20 @@ function parseSearchPaginationValue(searchParams: URLSearchParams, name: string,
     return name.toLowerCase().includes('limit') ? Math.min(LIST_MAX_LIMIT, value) : value;
 }
 
+/**
+ * Parses an optional boolean query param. Accepts `1`/`0` (the convention `all` and `deleted`
+ * already use) and `true`/`false`, and reports anything else as an error rather than silently
+ * treating it as false — `?isFocusedToday=yes` should not quietly return the whole list.
+ */
+function parseBooleanQueryParam(searchParams: URLSearchParams, name: string): boolean | undefined | { error: string } {
+    const raw = searchParams.get(name);
+    if (raw == null) return undefined;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === '1' || normalized === 'true') return true;
+    if (normalized === '0' || normalized === 'false') return false;
+    return { error: `Invalid ${name}` };
+}
+
 type FinalizeCloudDataForWriteOptions = {
     rejectInvalidBeforeRepair?: boolean;
 };
@@ -441,7 +455,11 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
             if (rawStatus !== null && status === null) {
                 return errorResponse('Invalid task status');
             }
-            return pickTaskList(data, { includeDeleted, includeCompleted: includeAll, status, query });
+            const isFocusedToday = parseBooleanQueryParam(url.searchParams, 'isFocusedToday');
+            if (isFocusedToday !== undefined && typeof isFocusedToday === 'object') {
+                return errorResponse(isFocusedToday.error);
+            }
+            return pickTaskList(data, { includeDeleted, includeCompleted: includeAll, status, query, isFocusedToday });
         },
         createEntity: (bodyRecord, data, nowIso): Task | Response => {
             const input = typeof bodyRecord.input === 'string' ? bodyRecord.input : '';

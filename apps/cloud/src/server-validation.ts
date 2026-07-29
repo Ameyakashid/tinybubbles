@@ -452,12 +452,17 @@ export function validateEntityProps<K extends EntityPropsKind>(
 
 export function pickTaskList(
     data: AppData,
-    opts: { includeDeleted: boolean; includeCompleted: boolean; status?: TaskStatus | null; query?: string }
+    opts: { includeDeleted: boolean; includeCompleted: boolean; status?: TaskStatus | null; query?: string; isFocusedToday?: boolean }
 ): Task[] {
     let tasks = data.tasks;
     if (!opts.includeDeleted) tasks = tasks.filter((t) => !t.deletedAt);
     if (!opts.includeCompleted) tasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'archived');
     if (opts.status) tasks = tasks.filter((t) => t.status === opts.status);
+    // Coerce rather than compare `=== true`: synced payloads carry booleans as true or 1
+    // (core's toBool writes 1/0), so a strict check silently drops CloudKit-round-tripped rows.
+    if (opts.isFocusedToday !== undefined) {
+        tasks = tasks.filter((t) => Boolean(t.isFocusedToday) === opts.isFocusedToday);
+    }
     if (opts.query && opts.query.trim()) {
         const matchingTaskIds = new Set(searchAll(tasks, filterNotDeleted(data.projects), opts.query).tasks.map((task) => task.id));
         tasks = tasks.filter((task) => matchingTaskIds.has(task.id));

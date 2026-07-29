@@ -1821,6 +1821,41 @@ describe('cloud server api', () => {
         expect(patchJson.task.isFocusedToday).toBe(true);
     });
 
+    test('filters GET /v1/tasks by isFocusedToday and rejects a non-boolean value', async () => {
+        const create = async (title: string, isFocusedToday: boolean) => {
+            const response = await fetch(`${baseUrl}/v1/tasks`, {
+                method: 'POST',
+                headers: { ...authHeaders, 'content-type': 'application/json' },
+                body: JSON.stringify({ title, props: { status: 'next', isFocusedToday } }),
+            });
+            return (await response.json()).task.id as string;
+        };
+        const starredId = await create('Starred task', true);
+        const plainId = await create('Plain task', false);
+
+        const listTitles = async (queryString: string): Promise<string[]> => {
+            const response = await fetch(`${baseUrl}/v1/tasks${queryString}`, { headers: authHeaders });
+            expect(response.status).toBe(200);
+            return ((await response.json()).tasks as Array<{ id: string }>).map((task) => task.id);
+        };
+
+        expect(await listTitles('?isFocusedToday=true')).toContain(starredId);
+        expect(await listTitles('?isFocusedToday=true')).not.toContain(plainId);
+        // `1` is the convention `all` and `deleted` already use, so both spellings must work.
+        expect(await listTitles('?isFocusedToday=1')).toContain(starredId);
+        expect(await listTitles('?isFocusedToday=false')).toContain(plainId);
+        expect(await listTitles('?isFocusedToday=false')).not.toContain(starredId);
+        // Omitting the param must not filter anything out.
+        const unfiltered = await listTitles('');
+        expect(unfiltered).toContain(starredId);
+        expect(unfiltered).toContain(plainId);
+
+        // A garbage value is rejected rather than silently treated as false, which would
+        // return the whole list and read as "no tasks are focused".
+        const invalid = await fetch(`${baseUrl}/v1/tasks?isFocusedToday=yes`, { headers: authHeaders });
+        expect(invalid.status).toBe(400);
+    });
+
     test('unstars and clears focusOrder on PATCH demoting a starred task to inbox', async () => {
         const createResponse = await fetch(`${baseUrl}/v1/tasks`, {
             method: 'POST',

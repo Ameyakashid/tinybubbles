@@ -198,6 +198,7 @@ const listTasksSchema = z.object({
   search: z.string().max(512).optional(),
   dueDateFrom: isoDateLikeSchema.optional(),
   dueDateTo: isoDateLikeSchema.optional(),
+  isFocusedToday: z.boolean().optional(),
   sortBy: z.enum(['updatedAt', 'createdAt', 'dueDate', 'title', 'priority']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
 });
@@ -403,7 +404,7 @@ export const registerMindwtrTools = (
   server.registerTool(
     'mindwtr_list_tasks',
     {
-      description: 'List tasks from the configured Mindwtr backend. Supports filtering by status, project, date range, and search. Supports sorting by various fields.',
+      description: "List tasks from the configured Mindwtr backend. Supports filtering by status, project, date range, search, and today's focus (isFocusedToday). Supports sorting by various fields.",
       inputSchema: listTasksSchema,
     },
     withMcpErrorHandling('mindwtr_list_tasks', async (input) => {

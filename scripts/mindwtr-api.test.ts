@@ -145,6 +145,59 @@ describe('mindwtr-api', () => {
     }
   });
 
+  test('filters tasks by isFocusedToday from the Local API', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const now = '2026-04-27T12:00:00.000Z';
+
+    writeFileSync(
+      dataPath,
+      JSON.stringify(
+        {
+          // 'starred-numeric' stores the flag as 1 rather than true: synced payloads
+          // round-trip booleans that way, so a `=== true` filter would drop it.
+          tasks: [
+            { id: 'starred', title: 'Starred', status: 'next', isFocusedToday: true, createdAt: now, updatedAt: now },
+            { id: 'starred-numeric', title: 'Starred numeric', status: 'next', isFocusedToday: 1, createdAt: now, updatedAt: now },
+            { id: 'plain', title: 'Plain', status: 'next', createdAt: now, updatedAt: now },
+          ],
+          projects: [],
+          sections: [],
+          areas: [],
+          settings: {},
+        },
+        null,
+        2
+      )
+    );
+
+    const server = spawnApi(port, dataPath);
+
+    try {
+      await waitForHealth(baseUrl);
+
+      const ids = async (queryString: string): Promise<string[]> => {
+        const response = await fetch(`${baseUrl}/tasks${queryString}`);
+        expect(response.status).toBe(200);
+        return ((await response.json()) as { tasks: Array<{ id: string }> }).tasks.map((task) => task.id);
+      };
+
+      expect((await ids('?isFocusedToday=true')).sort()).toEqual(['starred', 'starred-numeric']);
+      expect((await ids('?isFocusedToday=1')).sort()).toEqual(['starred', 'starred-numeric']);
+      expect(await ids('?isFocusedToday=false')).toEqual(['plain']);
+      expect((await ids('')).sort()).toEqual(['plain', 'starred', 'starred-numeric']);
+
+      // Garbage is rejected rather than read as false, which would return everything.
+      const invalid = await fetch(`${baseUrl}/tasks?isFocusedToday=yes`);
+      expect(invalid.status).toBe(400);
+    } finally {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+  });
+
   test('manages project sections and task sectionId from the Local API', async () => {
     const dir = makeTempDir();
     const dataPath = join(dir, 'data.json');

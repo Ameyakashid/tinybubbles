@@ -46,6 +46,7 @@ export type ListTasksInput = {
   search?: string;
   dueDateFrom?: string;
   dueDateTo?: string;
+  isFocusedToday?: boolean;
   sortBy?: 'updatedAt' | 'createdAt' | 'dueDate' | 'title' | 'priority';
   sortOrder?: 'asc' | 'desc';
 };
@@ -210,6 +211,7 @@ function mapTaskRow(row: TaskSqliteRow): TaskRow {
 export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
   const where: string[] = [];
   const params: unknown[] = [];
+  const { selectColumns } = getTaskColumns(db);
 
   if (!input.includeDeleted) {
     where.push('deletedAt IS NULL');
@@ -243,6 +245,13 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
     where.push('date(dueDate) <= date(?)');
     params.push(input.dueDateTo);
   }
+  // COALESCE, not `= ?`: the column is nullable, and rows written before the field existed
+  // store NULL rather than 0, which `isFocusedToday = 0` would drop from the false case.
+  // Guarded on the column existing, like orderNum, so an older DB degrades to no filter.
+  if (input.isFocusedToday !== undefined && selectColumns.includes('isFocusedToday')) {
+    where.push('COALESCE(isFocusedToday, 0) = ?');
+    params.push(input.isFocusedToday ? 1 : 0);
+  }
 
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(500, input.limit as number)) : 200;
   const offset = Number.isFinite(input.offset) ? Math.max(0, input.offset as number) : 0;
@@ -252,7 +261,6 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
   const sortBy = validSortColumns.includes(input.sortBy ?? '') ? input.sortBy : 'updatedAt';
   const sortOrder = input.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
-  const { selectColumns } = getTaskColumns(db);
   const orderExpr = sortBy === 'priority' ? PRIORITY_SQL_CASE : sortBy;
   // `id ASC` is a stable tie-break for equal sort keys and, like the cloud adapter's
   // `id.localeCompare`, never flips direction with sortOrder.

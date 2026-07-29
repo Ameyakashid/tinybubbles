@@ -32,6 +32,7 @@ type ListTasksOptions = {
     includeDeleted?: boolean;
     status?: TaskStatus | null;
     query?: string;
+    isFocusedToday?: boolean;
 };
 
 type CreateTaskInput = {
@@ -145,7 +146,7 @@ export async function createMindwtrAutomationService(options: AutomationServiceO
             }
             return created;
         },
-        listTasks: async ({ includeAll, includeDeleted, status, query }: ListTasksOptions = {}): Promise<Task[]> => {
+        listTasks: async ({ includeAll, includeDeleted, status, query, isFocusedToday }: ListTasksOptions = {}): Promise<Task[]> => {
             const state = await refreshState();
             let tasks = state._allTasks.filter((task) => includeDeleted || !task.deletedAt);
             if (!includeAll) {
@@ -153,6 +154,13 @@ export async function createMindwtrAutomationService(options: AutomationServiceO
             }
             if (status) {
                 tasks = tasks.filter((task) => task.status === status);
+            }
+            // Unlike the cloud and MCP read paths, this one goes through the store, so core
+            // has already run the flag through normalizeSyncedBoolean and it is a real
+            // boolean here. Coerce anyway to stay identical to the other two filters — the
+            // cost is nil and it does not depend on that normalization staying in place.
+            if (isFocusedToday !== undefined) {
+                tasks = tasks.filter((task) => Boolean(task.isFocusedToday) === isFocusedToday);
             }
             if (typeof query === 'string' && query.trim().length > 0) {
                 const results = searchAll(tasks, filterProjectsForSearch(state._allProjects, includeDeleted), query);
