@@ -338,6 +338,7 @@ const prepareTaskUpdatesForStore = ({
     allProjects,
     allSections,
     allAreas,
+    settings,
     reserveProjectOrder,
     projectOrderReserver,
 }: {
@@ -346,6 +347,8 @@ const prepareTaskUpdatesForStore = ({
     allProjects: AppData['projects'];
     allSections: AppData['sections'];
     allAreas: AppData['areas'];
+    /** Enables the settings-driven update rules (auto-archive on a completion edit). */
+    settings?: AppData['settings'];
     reserveProjectOrder?: boolean;
     projectOrderReserver?: ProjectOrderReserver;
 }): { ok: true; updates: Partial<Task> } | { ok: false; error: string } => {
@@ -363,7 +366,7 @@ const prepareTaskUpdatesForStore = ({
     const adjustedUpdates = normalizeTaskUpdate(task, {
         ...updates,
         ...containerPatch.updates,
-    });
+    }, { settings });
 
     return {
         ok: true,
@@ -566,6 +569,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             allProjects: currentState._allProjects,
             allSections: currentState._allSections,
             allAreas: currentState._allAreas,
+            settings: currentState.settings,
         });
         if (!preparedUpdates.ok) {
             set({ error: preparedUpdates.error });
@@ -1106,6 +1110,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 allProjects: state._allProjects,
                 allSections: state._allSections,
                 allAreas: state._allAreas,
+                settings: state.settings,
                 reserveProjectOrder: false,
             });
             if (!preparedUpdates.ok) {

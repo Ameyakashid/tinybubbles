@@ -2398,6 +2398,53 @@ describe('TaskStore', () => {
         expect(mockStorage.saveData).toHaveBeenCalled();
     });
 
+    it('archives a done task when its completion time is corrected past the window (#959)', async () => {
+        vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
+        const doneTask = createStoreTask('task-done', {
+            status: 'done',
+            completedAt: '2026-04-09T12:00:00.000Z',
+            updatedAt: '2026-04-09T12:00:00.000Z',
+        });
+        useTaskStore.setState({
+            tasks: [doneTask],
+            _allTasks: [doneTask],
+            _tasksById: new Map([[doneTask.id, doneTask]]),
+            settings: { deviceId: 'device-a', gtd: { autoArchiveDays: 7 } },
+            lastDataChangeAt: 0,
+        });
+
+        // The load-time sweep is throttled to twice a day, so without this rule
+        // the correction appears to do nothing at all.
+        await useTaskStore.getState().updateTask('task-done', { completedAt: '2025-06-01T17:45:00.000Z' });
+
+        expect(useTaskStore.getState()._tasksById.get('task-done')?.status).toBe('archived');
+    });
+
+    it('keeps a task in Done when the same patch sets the status (#959)', async () => {
+        vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
+        const archivedTask = createStoreTask('task-archived', {
+            status: 'archived',
+            completedAt: '2025-06-01T17:45:00.000Z',
+            updatedAt: '2025-06-01T17:45:00.000Z',
+        });
+        useTaskStore.setState({
+            tasks: [],
+            _allTasks: [archivedTask],
+            _tasksById: new Map([[archivedTask.id, archivedTask]]),
+            settings: { deviceId: 'device-a', gtd: { autoArchiveDays: 7 } },
+            lastDataChangeAt: 0,
+        });
+
+        // Archive's "move back to Done" deliberately keeps the old completion
+        // time; re-archiving it in the same write would make it a no-op.
+        await useTaskStore.getState().updateTask('task-archived', {
+            status: 'done',
+            completedAt: '2025-06-01T17:45:00.000Z',
+        });
+
+        expect(useTaskStore.getState()._tasksById.get('task-archived')?.status).toBe('done');
+    });
+
     it('auto-archives stale completed tasks when archive days change', async () => {
         vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
         const staleTask = createStoreTask('task-stale', {

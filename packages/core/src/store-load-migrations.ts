@@ -11,6 +11,7 @@ import {
     ensureDeviceId,
     nextRevision,
 } from './store-helpers';
+import { getAutoArchiveDays, shouldAutoArchiveCompletedTask } from './task-utils';
 import { generateUUID as uuidv4 } from './uuid';
 import type { AppData, Area, Project, Task, TaskEditorFieldId } from './types';
 
@@ -288,33 +289,21 @@ const promoteScheduledTasksMigration: LoadMigration = {
     },
 };
 
-const getAutoArchiveDays = (settings: AppData['settings']): number => {
-    const configuredArchiveDays = settings.gtd?.autoArchiveDays;
-    return Number.isFinite(configuredArchiveDays)
-        ? Math.max(0, Math.floor(configuredArchiveDays as number))
-        : 7;
-};
-
 const autoArchiveStaleCompletedTasks = (
     tasks: Task[],
     settings: AppData['settings'],
     context: { nowIso: string; nowMs: number; deviceId?: string; enabled?: boolean }
 ): { tasks: Task[]; didAutoArchive: boolean } => {
-    const archiveDays = getAutoArchiveDays(settings);
-    if (context.enabled === false || archiveDays <= 0) {
+    if (context.enabled === false || getAutoArchiveDays(settings) <= 0) {
         return { tasks, didAutoArchive: false };
     }
 
-    const cutoffMs = context.nowMs - archiveDays * 24 * 60 * 60 * 1000;
     let didAutoArchive = false;
     const archivedTasks = tasks.map((task): Task => {
-        if (task.deletedAt) return task;
-        if (task.status !== 'done') return task;
+        // One rule, two clocks: the update path applies the same predicate the
+        // moment a completion time is edited (#959).
+        if (!shouldAutoArchiveCompletedTask(task, settings, context.nowMs)) return task;
         const completedAt = safeParseDate(task.completedAt)?.getTime() ?? NaN;
-        const updatedAt = safeParseDate(task.updatedAt)?.getTime() ?? NaN;
-        const resolvedCompletedAt = Number.isFinite(completedAt) ? completedAt : updatedAt;
-        if (!Number.isFinite(resolvedCompletedAt) || resolvedCompletedAt <= 0) return task;
-        if (resolvedCompletedAt >= cutoffMs) return task;
         didAutoArchive = true;
         return {
             ...task,

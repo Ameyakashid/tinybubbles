@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCompletionDateGroup, sortTasksBy } from './task-utils';
+import { getCompletionDateGroup, shouldAutoArchiveCompletedTask, sortTasksBy } from './task-utils';
 import type { Task } from './types';
 
 const task = (id: string, overrides: Partial<Task> = {}): Task => ({
@@ -88,5 +88,42 @@ describe('sortTasksBy case coverage', () => {
 
     it('sorts created-desc newest first', () => {
         expect(sortTasksBy(tasks, 'created-desc').map((item) => item.id)).toEqual(['newest', 'mid', 'oldest']);
+    });
+});
+
+describe('shouldAutoArchiveCompletedTask (#959)', () => {
+    const settings = { gtd: { autoArchiveDays: 7 } } as never;
+    const nowMs = new Date('2026-07-29T12:00:00.000Z').getTime();
+    const task = (overrides: Record<string, unknown>) => ({
+        status: 'done',
+        completedAt: '2026-07-29T09:00:00.000Z',
+        updatedAt: '2026-07-29T09:00:00.000Z',
+        ...overrides,
+    } as never);
+
+    it('files a completion older than the window', () => {
+        expect(shouldAutoArchiveCompletedTask(task({ completedAt: '2025-06-01T00:00:00.000Z' }), settings, nowMs)).toBe(true);
+    });
+
+    it('leaves a recent completion, a live task and a deleted one alone', () => {
+        expect(shouldAutoArchiveCompletedTask(task({}), settings, nowMs)).toBe(false);
+        expect(shouldAutoArchiveCompletedTask(task({ status: 'next', completedAt: '2025-01-01T00:00:00.000Z' }), settings, nowMs)).toBe(false);
+        expect(shouldAutoArchiveCompletedTask(task({ completedAt: '2025-01-01T00:00:00.000Z', deletedAt: '2026-07-01T00:00:00.000Z' }), settings, nowMs)).toBe(false);
+    });
+
+    it('never fires when auto-archiving is switched off', () => {
+        expect(shouldAutoArchiveCompletedTask(
+            task({ completedAt: '2020-01-01T00:00:00.000Z' }),
+            { gtd: { autoArchiveDays: 0 } } as never,
+            nowMs,
+        )).toBe(false);
+    });
+
+    it('falls back to updatedAt for rows completed before completedAt existed', () => {
+        expect(shouldAutoArchiveCompletedTask(
+            task({ completedAt: undefined, updatedAt: '2025-06-01T00:00:00.000Z' }),
+            settings,
+            nowMs,
+        )).toBe(true);
     });
 });

@@ -5,7 +5,7 @@ import {
     getUsedTaskTokensFromUsage,
 } from './task-token-usage';
 import { resolveRelativeStartUpdates } from './task-relative-start';
-import { compareTasksByProjectOrder, isTaskFutureStart, rescheduleTask } from './task-utils';
+import { compareTasksByProjectOrder, isTaskFutureStart, rescheduleTask, shouldAutoArchiveCompletedTask } from './task-utils';
 import { safeParseDate } from './date';
 import { filterNotDeleted } from './sync-helpers';
 import { nextRevision, normalizeRevision } from './sync-revision';
@@ -148,7 +148,15 @@ export function applyTaskUpdates(oldTask: Task, updates: Partial<Task>, now: str
  * side-effect free so both the desktop/mobile store and the cloud REST API can
  * share the exact same write-path rules (P9, single write path).
  */
-export const normalizeTaskUpdate = (task: Task, updates: Partial<Task>): Partial<Task> => {
+export const normalizeTaskUpdate = (
+    task: Task,
+    updates: Partial<Task>,
+    /**
+     * Settings enable the rules that depend on them; without them the update is
+     * normalized exactly as before (the cloud PATCH path passes none).
+     */
+    context?: { settings?: AppData['settings']; nowMs?: number },
+): Partial<Task> => {
     let adjustedUpdates = updates;
     if (hasOwnField(updates, 'recurrence')) {
         const recurrence = normalizeRecurrenceForLoad(updates.recurrence);
@@ -254,6 +262,29 @@ export const normalizeTaskUpdate = (task: Task, updates: Partial<Task>): Partial
         adjustedUpdates = {
             ...adjustedUpdates,
             focusOrder: undefined,
+        };
+    }
+    // Correcting a completion time to something older than the auto-archive
+    // window files the task away now, instead of leaving it in Done until the
+    // twice-daily sweep runs — which read as the setting being broken (#959).
+    // Only an edit that carries no status of its own: moving a task back to
+    // Done deliberately keeps its old completion time, and re-archiving it in
+    // the same write would make that action a no-op.
+    if (
+        context?.settings
+        && hasOwnField(updates, 'completedAt')
+        && !hasOwnField(updates, 'status')
+        && task.status === 'done'
+        && shouldAutoArchiveCompletedTask(
+            { ...task, ...adjustedUpdates },
+            context.settings,
+            context.nowMs ?? Date.now(),
+        )
+    ) {
+        adjustedUpdates = {
+            ...adjustedUpdates,
+            status: 'archived',
+            isFocusedToday: false,
         };
     }
     return adjustedUpdates;

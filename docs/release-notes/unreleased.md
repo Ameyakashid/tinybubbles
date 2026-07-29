@@ -49,6 +49,10 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Desktop uses the cleaned sidebar artwork, and Windows now ships a 32x32-first ICO so the taskbar selects a crisp native-size icon instead of upscaling 16x16. (#937)
 - Desktop due dates turn red only once they have passed. A due date inside the next three days uses the warning color, as it already did on mobile. (#640)
 
+## Settings
+
+- Correcting a completed task's completion time to something older than the auto-archive limit now files it away immediately, instead of leaving it in Done until the twice-daily check runs. (#959)
+
 ## Sync & Automation
 
 - Mobile no longer loses changes when the local database refuses writes. Saves that fall back to the JSON copy are now merged back on the next launch, and a database that still cannot take them is bypassed for reads instead of serving its older contents. (#964)

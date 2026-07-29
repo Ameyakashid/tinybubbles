@@ -1274,6 +1274,40 @@ export function summarizeTaskLifecycleCounts(
     return { total: tasks.length, live, trashed, tombstones, createdLast7d };
 }
 
+export const DEFAULT_AUTO_ARCHIVE_DAYS = 7;
+
+export const getAutoArchiveDays = (settings: AppData['settings']): number => {
+    const configured = settings.gtd?.autoArchiveDays;
+    return Number.isFinite(configured)
+        ? Math.max(0, Math.floor(configured as number))
+        : DEFAULT_AUTO_ARCHIVE_DAYS;
+};
+
+/**
+ * Whether one finished task is old enough to file itself away.
+ *
+ * Shared by the load-time sweep and the update path, because those run on
+ * different clocks: the sweep is throttled to twice a day, so a completion time
+ * edited to last year sat in Done until the next window and read as a bug
+ * (#959). Keyed on completedAt, falling back to updatedAt for rows that predate
+ * the field.
+ */
+export function shouldAutoArchiveCompletedTask(
+    task: Pick<Task, 'status' | 'completedAt' | 'updatedAt' | 'deletedAt'>,
+    settings: AppData['settings'],
+    nowMs: number,
+): boolean {
+    if (task.deletedAt) return false;
+    if (task.status !== 'done') return false;
+    const archiveDays = getAutoArchiveDays(settings);
+    if (archiveDays <= 0) return false;
+    const completedAtMs = safeParseDate(task.completedAt)?.getTime() ?? Number.NaN;
+    const updatedAtMs = safeParseDate(task.updatedAt)?.getTime() ?? Number.NaN;
+    const resolvedMs = Number.isFinite(completedAtMs) ? completedAtMs : updatedAtMs;
+    if (!Number.isFinite(resolvedMs) || resolvedMs <= 0) return false;
+    return resolvedMs < nowMs - archiveDays * 24 * 60 * 60 * 1000;
+}
+
 /**
  * Buckets for grouping a completed list by when the work was finished (#945).
  * Ordered oldest-last, which is the order the groups are shown in.
