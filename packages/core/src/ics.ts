@@ -28,7 +28,23 @@ export interface ParseIcsOptions {
     rangeEnd: Date;
     maxOccurrencesPerEvent?: number;
     maxTotalOccurrences?: number;
+    /**
+     * Treat each `CATEGORIES` value as its own calendar, so one subscribed .ics
+     * holding several logical calendars gets a colour and a toggle per calendar
+     * (#966). Only for URL subscriptions: an OS calendar already carries its own
+     * identity, and splitting it would fragment it.
+     */
+    splitByCategory?: boolean;
 }
+
+/**
+ * How many calendars one .ics may split into. Feeds that use `CATEGORIES` as
+ * free-form tags would otherwise turn a single subscription into a wall of
+ * chips, so past this many distinct categories the file stays one calendar.
+ */
+const MAX_CATEGORY_CALENDARS = 8;
+
+const categoryCalendarPrefix = (sourceId: string): string => `${sourceId}#`;
 
 type IcsParams = Record<string, string>;
 
@@ -54,6 +70,8 @@ type ParsedVEvent = {
     end: Date;
     allDay: boolean;
     rrule?: ParsedRRule;
+    /** First `CATEGORIES` value, if any. An event lands on one calendar only. */
+    category?: string;
 };
 
 function unfoldIcsLines(input: string): string[] {
@@ -79,6 +97,33 @@ function unescapeIcsText(value: string): string {
         .replace(/\\n/gi, '\n')
         .replace(/\\,/g, ',')
         .replace(/\\;/g, ';');
+}
+
+/**
+ * Split an RFC 5545 comma-separated TEXT list, honouring `\,` escapes.
+ *
+ * Hand-rolled rather than a lookbehind regex: this runs in the desktop webview,
+ * and WKWebView on older macOS throws on lookbehind at parse time.
+ */
+function splitIcsTextList(value: string): string[] {
+    const out: string[] = [];
+    let current = '';
+    for (let index = 0; index < value.length; index += 1) {
+        const char = value[index];
+        if (char === '\\' && index + 1 < value.length) {
+            current += char + value[index + 1];
+            index += 1;
+            continue;
+        }
+        if (char === ',') {
+            out.push(current);
+            current = '';
+            continue;
+        }
+        current += char;
+    }
+    out.push(current);
+    return out;
 }
 
 function parseIcsLine(line: string): { name: string; params: IcsParams; value: string } | null {
@@ -671,6 +716,7 @@ export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalen
                 end,
                 allDay,
                 rrule: current.rrule,
+                category: current.category,
             });
             current = null;
             currentDurationMs = null;
@@ -706,14 +752,32 @@ export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalen
         } else if (name === 'RRULE') {
             const rule = parseRRule(value);
             if (rule) current.rrule = rule;
+        } else if (name === 'CATEGORIES' && !current.category) {
+            current.category = splitIcsTextList(value)
+                .map((entry) => unescapeIcsText(entry).trim())
+                .find((entry) => entry.length > 0);
         }
     }
+
+    // Decided over the whole file, not the requested range, so paging months
+    // cannot make a calendar split in January and merge again in February.
+    const categories = new Set(
+        options.splitByCategory
+            ? events.map((event) => event.category).filter((category): category is string => Boolean(category))
+            : [],
+    );
+    const splitByCategory = categories.size > 0 && categories.size <= MAX_CATEGORY_CALENDARS;
 
     const occurrences: ExternalCalendarEvent[] = [];
     const maxTotal = options.maxTotalOccurrences ?? 5000;
     for (const event of events) {
         if (occurrences.length >= maxTotal) break;
-        const expanded = expandRecurringEvent(event, options);
+        const expanded = expandRecurringEvent(
+            event,
+            splitByCategory && event.category
+                ? { ...options, sourceId: `${categoryCalendarPrefix(options.sourceId)}${event.category}` }
+                : options,
+        );
         for (const occ of expanded) {
             occurrences.push(occ);
             if (occurrences.length >= maxTotal) break;
@@ -723,4 +787,47 @@ export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalen
     // Stable ordering
     occurrences.sort((a, b) => a.start.localeCompare(b.start));
     return occurrences;
+}
+
+/**
+ * The calendars one subscription contributes, given the events `parseIcs`
+ * produced for it.
+ *
+ * When the feed split by `CATEGORIES` the subscription is replaced by one
+ * calendar per category — each picks up its own palette colour and its own
+ * show/hide toggle, since both key off the calendar id. The subscription itself
+ * stays in the list only while some of its events carry no category: a chip
+ * that toggles nothing is worse than no chip. Its own row in Calendar settings,
+ * which owns the URL and the Remove button, is unaffected.
+ */
+export function expandCategoryCalendars(
+    subscription: ExternalCalendarSubscription,
+    events: readonly ExternalCalendarEvent[],
+): ExternalCalendarSubscription[] {
+    const prefix = categoryCalendarPrefix(subscription.id);
+    const categories: string[] = [];
+    const seen = new Set<string>();
+    let hasUncategorized = false;
+
+    for (const event of events) {
+        if (!event.sourceId.startsWith(prefix)) {
+            if (event.sourceId === subscription.id) hasUncategorized = true;
+            continue;
+        }
+        const category = event.sourceId.slice(prefix.length);
+        if (!category || seen.has(category)) continue;
+        seen.add(category);
+        categories.push(category);
+    }
+
+    if (categories.length === 0) return [subscription];
+
+    categories.sort((left, right) => left.localeCompare(right));
+    const calendars = categories.map((category) => ({
+        id: `${prefix}${category}`,
+        name: category,
+        url: subscription.url,
+        enabled: subscription.enabled,
+    }));
+    return hasUncategorized ? [subscription, ...calendars] : calendars;
 }

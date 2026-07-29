@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseIcs } from './ics';
+import { expandCategoryCalendars, parseIcs } from './ics';
 
 describe('ics', () => {
     it('parses a simple timed event', () => {
@@ -233,5 +233,99 @@ describe('ics', () => {
             '2026-01-19',
             '2027-01-18',
         ]);
+    });
+});
+
+describe('ics categories', () => {
+    const subscription = { id: 'cal', name: 'Shared feed', url: 'https://example.test/f.ics', enabled: true };
+    const range = {
+        rangeStart: new Date('2025-01-01T00:00:00Z'),
+        rangeEnd: new Date('2025-01-02T00:00:00Z'),
+    };
+
+    const buildIcs = (events: string[][]) => [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        ...events.flatMap((lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT']),
+        'END:VCALENDAR',
+    ].join('\n');
+
+    const timedEvent = (uid: string, categories?: string) => [
+        `UID:${uid}`,
+        `SUMMARY:${uid}`,
+        'DTSTART:20250101T090000Z',
+        'DTEND:20250101T100000Z',
+        ...(categories ? [`CATEGORIES:${categories}`] : []),
+    ];
+
+    it('leaves categories alone unless the caller asks to split', () => {
+        const events = parseIcs(buildIcs([timedEvent('a', 'Work')]), { sourceId: 'cal', ...range });
+
+        expect(events.map((event) => event.sourceId)).toEqual(['cal']);
+        expect(expandCategoryCalendars(subscription, events)).toEqual([subscription]);
+    });
+
+    it('gives each category its own calendar, and keeps the feed for uncategorized events', () => {
+        const ics = buildIcs([
+            timedEvent('a', 'Work'),
+            timedEvent('b', 'Personal'),
+            timedEvent('c'),
+        ]);
+
+        const events = parseIcs(ics, { sourceId: 'cal', ...range, splitByCategory: true });
+        expect(events.map((event) => event.sourceId).sort()).toEqual(['cal', 'cal#Personal', 'cal#Work']);
+
+        const calendars = expandCategoryCalendars(subscription, events);
+        expect(calendars.map((calendar) => [calendar.id, calendar.name])).toEqual([
+            ['cal', 'Shared feed'],
+            ['cal#Personal', 'Personal'],
+            ['cal#Work', 'Work'],
+        ]);
+        // Colour and visibility both key off the id, so nothing else has to change.
+        expect(calendars.every((calendar) => calendar.color === undefined)).toBe(true);
+    });
+
+    it('drops the feed itself once every event carries a category', () => {
+        const events = parseIcs(buildIcs([timedEvent('a', 'Work'), timedEvent('b', 'Work')]), {
+            sourceId: 'cal',
+            ...range,
+            splitByCategory: true,
+        });
+
+        expect(expandCategoryCalendars(subscription, events).map((calendar) => calendar.id)).toEqual(['cal#Work']);
+    });
+
+    it('takes the first category only, and honours escaped commas', () => {
+        const events = parseIcs(buildIcs([timedEvent('a', 'Berlin\\, DE,Travel')]), {
+            sourceId: 'cal',
+            ...range,
+            splitByCategory: true,
+        });
+
+        expect(events[0].sourceId).toBe('cal#Berlin, DE');
+    });
+
+    it('stays one calendar when a feed uses categories as free-form tags', () => {
+        const tagged = Array.from({ length: 9 }, (_, index) => timedEvent(`e${index}`, `tag-${index}`));
+        const events = parseIcs(buildIcs(tagged), { sourceId: 'cal', ...range, splitByCategory: true });
+
+        expect(new Set(events.map((event) => event.sourceId))).toEqual(new Set(['cal']));
+        expect(expandCategoryCalendars(subscription, events)).toEqual([subscription]);
+    });
+
+    it('splits on the whole file, so paging months cannot change the calendar list', () => {
+        const ics = buildIcs([
+            timedEvent('january', 'Work'),
+            ['UID:february', 'SUMMARY:february', 'DTSTART:20250205T090000Z', 'DTEND:20250205T100000Z', 'CATEGORIES:Personal'],
+        ]);
+
+        const january = parseIcs(ics, {
+            sourceId: 'cal',
+            rangeStart: new Date('2025-01-01T00:00:00Z'),
+            rangeEnd: new Date('2025-02-01T00:00:00Z'),
+            splitByCategory: true,
+        });
+
+        expect(january.map((event) => event.sourceId)).toEqual(['cal#Work']);
     });
 });

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import {
+    expandCategoryCalendars,
     generateUUID,
     isMindwtrMirrorCalendar,
     mergeExternalCalendarSources,
@@ -337,17 +338,29 @@ async function fetchIcsCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?:
     const results = await Promise.allSettled(
         enabled.map(async (calendar) => {
             const text = await fetchTextWithTimeout(calendar.url, 15_000, signal);
-            return parseIcs(text, { sourceId: calendar.id, rangeStart, rangeEnd });
+            return parseIcs(text, { sourceId: calendar.id, rangeStart, rangeEnd, splitByCategory: true });
         })
     );
 
     const events: ExternalCalendarEvent[] = [];
-    for (const result of results) {
+    // A feed split by CATEGORIES is represented by its category calendars, so
+    // the subscription itself drops out of the visible list once nothing is
+    // left on it.
+    const splitCalendarIds = new Set<string>();
+    const categoryCalendars: ExternalCalendarSubscription[] = [];
+    for (const [index, result] of results.entries()) {
         if (result.status !== 'fulfilled') continue;
+        const calendar = enabled[index];
+        const contributed = expandCategoryCalendars(calendar, result.value);
+        if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
+        categoryCalendars.push(...contributed.filter((entry) => entry.id !== calendar.id));
         events.push(...result.value);
     }
 
-    return { calendars, events };
+    return {
+        calendars: [...calendars.filter((calendar) => !splitCalendarIds.has(calendar.id)), ...categoryCalendars],
+        events,
+    };
 }
 
 async function fetchSystemCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?: AbortSignal): Promise<{

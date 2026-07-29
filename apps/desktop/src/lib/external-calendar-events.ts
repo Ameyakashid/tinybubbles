@@ -1,4 +1,5 @@
 import {
+    expandCategoryCalendars,
     isMindwtrMirrorCalendar,
     mergeExternalCalendarSources,
     parseIcs,
@@ -113,6 +114,7 @@ async function loadCachedIcsEventsForCalendar(
             sourceId: calendar.id,
             rangeStart: monthRange.start,
             rangeEnd: monthRange.end,
+            splitByCategory: true,
         });
         icsMonthCache.set(getIcsCacheKey(calendar, monthRange.key), {
             events: parsed,
@@ -184,24 +186,33 @@ export async function fetchExternalCalendarEvents(
         fetchSystemCalendarEvents(rangeStart, rangeEnd),
     ]);
 
-    const sources: ExternalCalendarSourceResult[] = [
-        { calendars, events: [] },
-        {
-            calendars: systemResults.calendars,
-            events: systemResults.events,
-        },
-    ];
+    const icsSources: ExternalCalendarSourceResult[] = [];
+    // A feed split by CATEGORIES is represented by its category calendars, so
+    // the subscription itself drops out of the visible list once nothing is
+    // left on it.
+    const splitCalendarIds = new Set<string>();
     const warnings: string[] = [];
     for (const [index, result] of icsResults.entries()) {
+        const calendar = enabled[index];
         if (result.status !== 'fulfilled') {
-            const calendar = enabled[index];
             const label = (calendar?.name || calendar?.url || 'Unnamed calendar').trim();
             const detail = result.reason instanceof Error ? result.reason.message : String(result.reason ?? 'Unknown error');
             warnings.push(`Failed to load "${label}": ${detail}`);
             continue;
         }
-        sources.push({ calendars: [], events: result.value });
+        const contributed = expandCategoryCalendars(calendar, result.value);
+        if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
+        icsSources.push({ calendars: contributed, events: result.value });
     }
+
+    const sources: ExternalCalendarSourceResult[] = [
+        { calendars: calendars.filter((calendar) => !splitCalendarIds.has(calendar.id)), events: [] },
+        {
+            calendars: systemResults.calendars,
+            events: systemResults.events,
+        },
+        ...icsSources,
+    ];
 
     return { ...mergeExternalCalendarSources(sources), warnings };
 }
