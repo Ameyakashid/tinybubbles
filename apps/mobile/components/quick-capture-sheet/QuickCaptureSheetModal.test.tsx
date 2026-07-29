@@ -3,11 +3,19 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, Text
 import { act, create } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ToastViewport } from '@/contexts/toast-context';
 import { QuickCaptureSheetBody } from './QuickCaptureSheetBody';
 import { QuickCaptureSheetPickers } from './QuickCaptureSheetPickers';
 
 vi.mock('@react-native-community/datetimepicker', () => ({
   default: (props: Record<string, unknown>) => React.createElement('DateTimePicker', props),
+}));
+
+// Stubbed only to keep react-native-safe-area-context out of this render test; the
+// assertions below still match on the real component identity.
+vi.mock('@/contexts/toast-context', () => ({
+  ToastViewport: () => null,
+  useToast: () => ({ showToast: () => {}, dismissToast: () => {} }),
 }));
 
 const tc: any = {
@@ -982,6 +990,10 @@ describe('Quick capture modal composition', () => {
       expect(tree.root.findAllByType(ScrollView)).toHaveLength(0);
       // The title input still renders in the plain flow on Android.
       expect(tree.root.findByType(TextInput).props.accessibilityLabel).toBe('quickAdd.inputLabel');
+      // Without a viewport inside the native modal, toasts fired from the sheet (the
+      // speech-not-configured notice) only appear after the sheet closes (#886). It has
+      // to live inside the keyboard-avoiding view or the keyboard covers it.
+      expect(tree.root.findByType(KeyboardAvoidingView).findAllByType(ToastViewport)).toHaveLength(1);
     } finally {
       Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOs });
     }

@@ -23,6 +23,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Guided and Quick Inbox processing preserve the chosen project or area when an item moves to Reference, Someday, Done, or Waiting through delegation. (#958)
 - Mobile bulk **Add tag** leaves existing tags untouched and uses the same tag ordering as desktop. (#949)
 - The iOS Add task sheet keeps the title field pinned in place while the **More** panel scrolls, so returning to the title no longer jumps it off the top of the screen. (#887)
+- The "enable a speech-to-text model in Settings" notice now appears over the mobile Add task sheet the moment you tap the mic, instead of waiting until the sheet is closed. (#886)
 
 ## Calendar
 

@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, T
 import type { StyleProp, ViewStyle } from 'react-native';
 import { AtSign, CalendarDays, ChevronDown, ChevronUp, Clock, FileText, Flag, Folder, Mic, SlidersHorizontal, Square, X } from 'lucide-react-native';
 import { tFallback } from '@mindwtr/core';
+import { ToastViewport } from '@/contexts/toast-context';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText, CompactTextInput } from '@/components/compact-text';
 import { QuickDateChips } from '../QuickDateChips';
@@ -586,6 +587,12 @@ export function QuickCaptureSheetBody({
               </View>
             </View>
           </View>
+          {/* Toasts fired from inside the sheet (e.g. the speech-not-configured notice)
+              render behind the native modal window without a viewport here, so the user
+              only saw them after closing the sheet (#886, #834). It sits inside the
+              keyboard-avoiding view on purpose: that container's bottom padding is the
+              keyboard, so the toast lands above it instead of behind it. */}
+          <ToastViewport />
         </KeyboardAvoidingView>
         {children}
       </View>
