@@ -119,10 +119,10 @@ describe('useSyncSettings cloud token validation', () => {
         vi.restoreAllMocks();
     });
 
-    const setup = () => renderHook(() => useSyncSettings({
+    const setup = (showSaved = vi.fn()) => renderHook(() => useSyncSettings({
         appVersion: '1.0.0',
         isTauri: false,
-        showSaved: vi.fn(),
+        showSaved,
         selectSyncFolderTitle: 'Select folder',
         lastSyncNeverLabel: 'Never',
         requestConfirmation: vi.fn().mockResolvedValue(true),
@@ -149,6 +149,29 @@ describe('useSyncSettings cloud token validation', () => {
 
         expect(SyncService.setCloudConfig).toHaveBeenCalled();
         expect(showToast).toHaveBeenCalledWith(expect.stringContaining('saved'), 'success');
+    });
+
+    it('does not confirm a self-hosted save when persistence fails', async () => {
+        const showSaved = vi.fn();
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        vi.mocked(SyncService.setCloudConfig).mockRejectedValueOnce(new Error('native config write failed'));
+
+        const { result } = setup(showSaved);
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+
+        act(() => {
+            result.current.syncPageProps.onCloudUrlChange('https://example.com');
+            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+        });
+
+        await act(async () => {
+            await result.current.syncPageProps.onSaveCloud();
+        });
+
+        expect(showSaved).not.toHaveBeenCalled();
+        expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('saved'), 'success');
+        expect(result.current.syncPageProps.syncError).toBe('native config write failed');
     });
 
     it('rejects a short cloud token and does not save', async () => {

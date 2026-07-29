@@ -131,6 +131,7 @@ export async function writeSyncBackend(backend: SyncBackend, deps: ConfigWriteDe
         await deps.startFileWatcher();
     } catch (error) {
         deps.reportError('Failed to set sync backend', error);
+        throw error;
     }
 }
 
@@ -168,6 +169,7 @@ export async function writeWebDavConfig(
         });
     } catch (error) {
         deps.reportError('Failed to set WebDAV config', error);
+        throw error;
     }
 }
 
@@ -203,6 +205,7 @@ export async function writeCloudConfig(
         });
     } catch (error) {
         deps.reportError('Failed to set Self-Hosted config', error);
+        throw error;
     }
 }
 

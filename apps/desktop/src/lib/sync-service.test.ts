@@ -160,6 +160,36 @@ describe('SyncService testability hooks', () => {
         expect(invoke).toHaveBeenCalledWith('get_sync_backend', undefined);
     });
 
+    it.each([
+        {
+            name: 'sync backend',
+            label: 'Failed to set sync backend',
+            save: () => SyncService.setSyncBackend('webdav'),
+        },
+        {
+            name: 'WebDAV config',
+            label: 'Failed to set WebDAV config',
+            save: () => SyncService.setWebDavConfig({ url: 'https://dav.example.com' }),
+        },
+        {
+            name: 'self-hosted config',
+            label: 'Failed to set Self-Hosted config',
+            save: () => SyncService.setCloudConfig({ url: 'https://sync.example.com' }),
+        },
+    ])('rejects when native $name persistence fails', async ({ label, save }) => {
+        const persistenceError = new Error('native config write failed');
+        const invoke = vi.fn().mockRejectedValue(persistenceError);
+        const reportError = vi.fn();
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            reportError,
+        });
+
+        await expect(save()).rejects.toBe(persistenceError);
+        expect(reportError).toHaveBeenCalledWith(label, persistenceError);
+    });
+
     it('marks direct sync save_data writes as local writes', async () => {
         const invoke = vi.fn(async () => undefined);
         const data: AppData = {

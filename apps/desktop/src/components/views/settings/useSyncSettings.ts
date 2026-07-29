@@ -392,14 +392,20 @@ export const useSyncSettings = ({
 
     const handleSetSyncBackend = useCallback(async (backend: SyncBackend) => {
         addBreadcrumb(`settings:syncBackend:${backend}`);
-        setSyncBackend(backend);
-        setSyncError(null);
         if (backend === 'cloudkit') {
+            setSyncBackend(backend);
+            setSyncError(null);
             return;
         }
-        await SyncService.setSyncBackend(backend);
-        showSaved();
-    }, [showSaved]);
+        try {
+            await SyncService.setSyncBackend(backend);
+            setSyncBackend(backend);
+            setSyncError(null);
+            showSaved();
+        } catch (error) {
+            setSyncError(toErrorMessage(error, 'Failed to save sync backend.'));
+        }
+    }, [showSaved, toErrorMessage]);
 
     const handleSaveWebDav = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
@@ -419,12 +425,15 @@ export const useSyncSettings = ({
             } else if (trimmedPassword) {
                 setWebdavHasPassword(true);
             }
+            setSyncError(null);
             showSaved();
             showToast('WebDAV sync settings saved.', 'success');
+        } catch (error) {
+            setSyncError(toErrorMessage(error, 'Failed to save WebDAV sync settings.'));
         } finally {
             setIsSavingWebDav(false);
         }
-    }, [showSaved, showToast, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavPassword, webdavUrl, webdavUsername]);
+    }, [showSaved, showToast, toErrorMessage, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavPassword, webdavUrl, webdavUsername]);
 
     const handleTestWebDavConnection = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
@@ -464,20 +473,25 @@ export const useSyncSettings = ({
         const trimmedToken = cloudToken.trim();
         if (trimmedUrl && !validateSyncHttpUrl(trimmedUrl, cloudAllowInsecureHttp)) return;
         if (!validateCloudToken(trimmedToken)) return;
-        await SyncService.setCloudConfig({
-            url: trimmedUrl,
-            token: trimmedToken,
-            rememberToken: !isTauri && cloudRememberToken,
-            allowInsecureHttp: cloudAllowInsecureHttp,
-        });
-        showSaved();
-        // Saving here is an explicit button press with no visible change to
-        // confirm it, unlike the toggles elsewhere in settings that apply live.
-        // Without this the only feedback on an HTTP URL was the cleartext
-        // caution, which reads as a rejection rather than a save (#920).
-        showToast('Self-hosted sync settings saved.', 'success');
-        setCalendarFeedReloadToken((token) => token + 1);
-    }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, showToast, validateCloudToken, validateSyncHttpUrl]);
+        try {
+            await SyncService.setCloudConfig({
+                url: trimmedUrl,
+                token: trimmedToken,
+                rememberToken: !isTauri && cloudRememberToken,
+                allowInsecureHttp: cloudAllowInsecureHttp,
+            });
+            setSyncError(null);
+            showSaved();
+            // Saving here is an explicit button press with no visible change to
+            // confirm it, unlike the toggles elsewhere in settings that apply live.
+            // Without this the only feedback on an HTTP URL was the cleartext
+            // caution, which reads as a rejection rather than a save (#920).
+            showToast('Self-hosted sync settings saved.', 'success');
+            setCalendarFeedReloadToken((token) => token + 1);
+        } catch (error) {
+            setSyncError(toErrorMessage(error, 'Failed to save self-hosted sync settings.'));
+        }
+    }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, showToast, toErrorMessage, validateCloudToken, validateSyncHttpUrl]);
 
     const handleSetCloudProvider = useCallback(async (provider: CloudProvider) => {
         setCloudProvider(provider);
