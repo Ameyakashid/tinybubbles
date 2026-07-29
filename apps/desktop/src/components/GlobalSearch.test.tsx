@@ -100,6 +100,37 @@ describe('GlobalSearch', () => {
         useUiStore.setState(initialUiState, true);
     });
 
+    // Tripwire for #957: the panel ran past the bottom of a short window with the
+    // filter panel open and nothing to scroll. jsdom cannot measure layout, so pin
+    // the three declarations the fix depends on instead.
+    it('bounds the dialog height and keeps the filter and result regions scrollable', async () => {
+        render(
+            <LanguageProvider>
+                <GlobalSearch onNavigate={vi.fn()} />
+            </LanguageProvider>
+        );
+
+        await act(async () => {
+            window.dispatchEvent(new Event('mindwtr:open-search'));
+            await vi.advanceTimersByTimeAsync(50);
+        });
+
+        const panel = screen.getByRole('dialog').firstElementChild as HTMLElement;
+        expect(panel.className).toContain('max-h-[76vh]');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            await vi.advanceTimersByTimeAsync(50);
+        });
+
+        const scrollRegions = Array.from(panel.querySelectorAll<HTMLElement>(':scope > div'))
+            .filter((region) => region.className.includes('overflow-y-auto'));
+        expect(scrollRegions).toHaveLength(2);
+        for (const region of scrollRegions) {
+            expect(region.className).toContain('min-h-0');
+        }
+    });
+
     it('searches all areas when opened from an active area filter', async () => {
         render(
             <LanguageProvider>

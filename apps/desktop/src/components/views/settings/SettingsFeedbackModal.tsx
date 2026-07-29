@@ -194,13 +194,16 @@ export function SettingsFeedbackModal({
         >
             <div
                 ref={modalRef}
-                className="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+                // Capped to fit under the 12vh offset: the form is taller than a
+                // short window, and without this the Send button sat off-screen
+                // with nothing to scroll (#957).
+                className="flex max-h-[84vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
                     if (event.key === 'Escape') onClose();
                 }}
             >
-                <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+                <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
                     <div>
                         <h3 id={titleId} className="text-base font-semibold">{t.feedback}</h3>
                         <p id={descriptionId} className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -218,7 +221,7 @@ export function SettingsFeedbackModal({
                 </div>
 
                 {status === 'sent' ? (
-                    <div className="space-y-4 p-4">
+                    <div className="min-h-0 space-y-4 overflow-y-auto p-4">
                         <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
                             {t.feedbackSent}
                         </div>
@@ -227,7 +230,7 @@ export function SettingsFeedbackModal({
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 p-4">
+                    <div className="min-h-0 space-y-4 overflow-y-auto p-4">
                         <div className="space-y-2">
                             <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 {t.feedbackCategory}

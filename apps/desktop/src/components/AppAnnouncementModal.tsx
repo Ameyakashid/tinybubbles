@@ -66,7 +66,9 @@ export function AppAnnouncementModal({
                 aria-modal="true"
                 aria-labelledby={titleId}
                 aria-describedby={bodyId}
-                className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-2xl"
+                // Capped so a long announcement body can never push the dismiss
+                // and action buttons off a short window (#957).
+                className="flex max-h-[78vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-2xl"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
                     if (event.key === 'Escape') {
@@ -88,7 +90,7 @@ export function AppAnnouncementModal({
                     }
                 }}
             >
-                <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+                <div className="flex min-h-0 items-start justify-between gap-4 overflow-y-auto border-b border-border px-4 py-3">
                     <div className="flex min-w-0 items-start gap-3">
                         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                             <Megaphone className="h-4 w-4" aria-hidden="true" />
@@ -112,7 +114,7 @@ export function AppAnnouncementModal({
                     </button>
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-2 px-4 py-3">
+                <div className="flex shrink-0 flex-wrap justify-end gap-2 px-4 py-3">
                     <Button ref={dismissButtonRef} variant="secondary" onClick={onDismiss}>
                         {dismissLabel}
                     </Button>

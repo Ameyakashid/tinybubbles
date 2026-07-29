@@ -435,11 +435,15 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
             onKeyDown={handleDialogKeyDown}
         >
             <div
-                className="w-full max-w-lg bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-100"
+                // Capped so the panel always fits under the 20vh offset above it;
+                // without it an expanded filter panel ran off the bottom of a short
+                // window with nothing to scroll (#957). Every region below the search
+                // input shrinks and scrolls instead of pushing the panel past the cap.
+                className="w-full max-w-lg max-h-[76vh] bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-100"
                 onClick={(e) => e.stopPropagation()}
             >
                 <h2 id={dialogTitleId} className="sr-only">{t('search.title')}</h2>
-                <div className="flex items-center border-b px-4 py-3 gap-3">
+                <div className="shrink-0 flex items-center border-b px-4 py-3 gap-3">
                     <Search className="w-5 h-5 text-muted-foreground" />
                     <input
                         ref={inputRef}
@@ -480,7 +484,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                     </button>
                 </div>
                 {activeChips.length > 0 && (
-                    <div className="px-4 py-2 border-b flex flex-wrap gap-2">
+                    <div className="shrink-0 px-4 py-2 border-b flex flex-wrap gap-2">
                         {activeChips.map((chip) => (
                             <button
                                 key={chip.key}
@@ -495,7 +499,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                     </div>
                 )}
                 {filtersOpen && (
-                    <div className="px-4 py-3 border-b space-y-3 text-xs">
+                    <div className="min-h-0 overflow-y-auto px-4 py-3 border-b space-y-3 text-xs">
                         <div className="space-y-2">
                             <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">State</div>
                             <div className="flex flex-wrap gap-2">
@@ -669,7 +673,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                     </div>
                 )}
 
-                <div ref={resultsRef} className="max-h-[60vh] overflow-y-auto p-2">
+                <div ref={resultsRef} className="min-h-0 max-h-[60vh] overflow-y-auto p-2">
                     {isTruncated && (
                         <div className="px-3 pb-2 text-xs text-muted-foreground">
                             {t('search.showingFirst')
