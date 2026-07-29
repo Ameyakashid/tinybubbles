@@ -470,6 +470,8 @@ export const zhHant: Record<string, string> = {
         'calendar.events': '日程',
         'calendar.allDay': '全天',
         'calendar.deadline': '截止',
+        'calendar.showCompleted': '已完成',
+        'calendar.showCompletedHint': '在任務完成的那天顯示已完成與已封存的任務',
         'calendar.projectedRecurrence': '預覽',
         'calendar.projectedRecurrenceDescription': '僅用於規劃預覽。完成目前重複任務後，才會建立真正的下一個任務。',
         'calendar.unschedule': '從日曆移除',

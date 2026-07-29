@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { isSameDay, isToday } from 'date-fns';
-import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react';
 import {
     formatI18nTemplate,
     getCalendarDayOfMonth,
@@ -106,6 +106,8 @@ export function CalendarView() {
         timelineDayCount,
         timelineDays,
         t,
+        showCompleted,
+        toggleShowCompleted,
         toggleExternalCalendar,
         toggleMonthPicker,
         updateViewFilterQuery,
@@ -130,6 +132,9 @@ export function CalendarView() {
     });
     const handleCalendarTaskDragStart = useCallback((event: DragEvent<HTMLElement>, task: Task, itemKind: CalendarCellItem['kind']) => {
         if (itemKind === 'event') return;
+        // A completed task is a record of what happened, not a plan that can be
+        // moved to another day (#955).
+        if (itemKind === 'completed') return;
         if (isProjectedRecurringTask(task)) return;
         event.stopPropagation();
         setCalendarTaskDragData(event.dataTransfer, task.id, {
@@ -403,6 +408,21 @@ export function CalendarView() {
                             className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                     </div>
+                    <button
+                        type="button"
+                        onClick={toggleShowCompleted}
+                        aria-pressed={showCompleted}
+                        className={cn(
+                            'inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40',
+                            showCompleted
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                        title={resolveText('calendar.showCompletedHint', 'Show done and archived tasks on the day they were completed')}
+                    >
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        {resolveText('calendar.showCompleted', 'Completed')}
+                    </button>
                 </div>
                 {visibleSearchMatchCount !== null && (
                     <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">
@@ -516,7 +536,7 @@ export function CalendarView() {
 
                                 <div className="space-y-1">
                                     {visibleItems.map((item) => {
-                                        const timeLabel = item.start && (item.kind === 'scheduled' || (item.kind === 'event' && !item.event.allDay))
+                                        const timeLabel = item.start && (item.kind === 'scheduled' || item.kind === 'completed' || (item.kind === 'event' && !item.event.allDay))
                                             ? safeFormatDate(item.start, 'p')
                                             : item.kind === 'event' && item.event.allDay
                                                 ? t('calendar.allDay')
@@ -542,6 +562,7 @@ export function CalendarView() {
                                         }
 
                                         const task = item.task;
+                                        const completed = item.kind === 'completed';
                                         const projected = isProjectedRecurringTask(task);
                                         const projectedLabel = projected
                                             ? getProjectedRecurrenceDisplayLabel(task, resolveText('calendar.projectedRecurrence', 'Projected'))
@@ -549,7 +570,7 @@ export function CalendarView() {
                                         const content = (
                                             <>
                                                 {timeLabel && <span className="mr-1 text-[10px] opacity-75">{timeLabel}</span>}
-                                                <span>{item.title}</span>
+                                                <span className={cn(completed && 'line-through')}>{item.title}</span>
                                                 {projected && <span className="ml-1 text-[10px] opacity-75">{projectedLabel}</span>}
                                             </>
                                         );
@@ -559,12 +580,14 @@ export function CalendarView() {
                                                 type="button"
                                                 data-task-id={task.id}
                                                 {...(!projected ? { 'data-task-edit-trigger': true } : {})}
-                                                draggable={!projected}
+                                                draggable={!projected && !completed}
                                                 disabled={projected}
                                                 className={cn(
                                                     "block w-full truncate rounded px-1.5 py-1 text-left text-xs focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                     projected
                                                         ? "border border-dashed border-primary/50 bg-primary/5 text-primary/80"
+                                                        : completed
+                                                        ? "bg-muted/60 text-muted-foreground"
                                                         : item.kind === 'scheduled'
                                                         ? "bg-primary/10 text-primary"
                                                         : "border-l-[3px] border-destructive/70 bg-background/60 text-foreground"
@@ -577,7 +600,7 @@ export function CalendarView() {
                                                     openTaskFromCalendar(task);
                                                 }}
                                                 onContextMenu={(event) => {
-                                                    if (projected) return;
+                                                    if (projected || completed) return;
                                                     handleCalendarTaskContextMenu(event, task, item.kind);
                                                 }}
                                             >
@@ -664,6 +687,7 @@ export function CalendarView() {
                                                     </div>
                                                 );
                                             }
+                                            const completed = item.kind === 'completed';
                                             const projected = isProjectedRecurringTask(item.task);
                                             const projectedLabel = projected
                                                 ? getProjectedRecurrenceDisplayLabel(item.task, resolveText('calendar.projectedRecurrence', 'Projected'))
@@ -674,20 +698,22 @@ export function CalendarView() {
                                                     type="button"
                                                     data-task-id={item.task.id}
                                                     {...(!projected ? { 'data-task-edit-trigger': true } : {})}
-                                                    draggable={!projected}
+                                                    draggable={!projected && !completed}
                                                     disabled={projected}
                                                     onDragStart={(event) => handleCalendarTaskDragStart(event, item.task, item.kind)}
                                                     onClick={() => {
                                                         if (!projected) openTaskFromCalendar(item.task);
                                                     }}
                                                     onContextMenu={(event) => {
-                                                        if (projected) return;
+                                                        if (projected || completed) return;
                                                         handleCalendarTaskContextMenu(event, item.task, item.kind);
                                                     }}
                                                     className={cn(
                                                         "block w-full truncate rounded border-l-[3px] px-2 py-1 text-left text-xs hover:bg-muted",
                                                         projected
                                                             ? "border-primary/50 border-dashed bg-primary/5 text-primary/80"
+                                                            : completed
+                                                            ? "border-transparent bg-muted/60 text-muted-foreground line-through"
                                                             : item.kind === 'scheduled'
                                                             ? "border-primary/70 bg-primary/5"
                                                             : "border-destructive/70 bg-background/70"
@@ -855,7 +881,7 @@ export function CalendarView() {
                                                 const isAllDayScheduled = item.kind === 'scheduled' && !hasTimeComponent(item.task.startTime);
                                                 const timeLabel = isAllDayScheduled
                                                     ? t('calendar.allDay')
-                                                    : item.start && (item.kind === 'scheduled' || (item.kind === 'event' && !item.event.allDay))
+                                                    : item.start && (item.kind === 'scheduled' || item.kind === 'completed' || (item.kind === 'event' && !item.event.allDay))
                                                     ? safeFormatDate(item.start, 'p')
                                                     : item.kind === 'event' && item.event.allDay
                                                         ? t('calendar.allDay')
@@ -882,6 +908,7 @@ export function CalendarView() {
                                                         </div>
                                                     );
                                                 }
+                                                const completed = item.kind === 'completed';
                                                 const projected = isProjectedRecurringTask(item.task);
                                                 const projectedLabel = projected
                                                     ? getProjectedRecurrenceDisplayLabel(item.task, resolveText('calendar.projectedRecurrence', 'Projected'))
@@ -892,25 +919,27 @@ export function CalendarView() {
                                                         type="button"
                                                         data-task-id={item.task.id}
                                                         {...(!projected ? { 'data-task-edit-trigger': true } : {})}
-                                                        draggable={!projected}
+                                                        draggable={!projected && !completed}
                                                         disabled={projected}
                                                         onDragStart={(event) => handleCalendarTaskDragStart(event, item.task, item.kind)}
                                                         onClick={() => {
                                                             if (!projected) openTaskFromCalendar(item.task);
                                                         }}
                                                         onContextMenu={(event) => {
-                                                            if (projected) return;
+                                                            if (projected || completed) return;
                                                             handleCalendarTaskContextMenu(event, item.task, item.kind);
                                                         }}
                                                         className={cn(
                                                             "flex w-full items-center gap-3 rounded px-3 py-2 text-left text-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                             projected
                                                                 ? "border border-dashed border-primary/50 bg-primary/5 text-primary"
+                                                                : completed
+                                                                ? "bg-muted/50 text-muted-foreground"
                                                                 : item.kind === 'scheduled' ? "bg-primary/10 text-primary" : "border-l-[3px] border-destructive/70 bg-background"
                                                         )}
                                                     >
                                                         <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">{timeLabel}</span>
-                                                        <span className="min-w-0 flex-1 truncate text-foreground">{item.title}</span>
+                                                        <span className={cn('min-w-0 flex-1 truncate text-foreground', completed && 'text-muted-foreground line-through')}>{item.title}</span>
                                                         {projected && (
                                                             <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                                                                 {projectedLabel}

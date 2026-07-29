@@ -394,6 +394,10 @@ export interface AppearanceSettings {
 export interface CalendarSettings {
     viewMode?: 'month' | 'day' | 'week' | 'schedule';
     weekVisibleDays?: number;
+    /** Reveals done/archived tasks on their completion date (#955). Device-local
+     *  like the rest of this group: which window you are looking back from is not
+     *  a property of the data. */
+    showCompleted?: boolean;
 }
 
 export interface WindowSettings {

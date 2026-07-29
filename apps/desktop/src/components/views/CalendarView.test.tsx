@@ -38,6 +38,10 @@ const storeMocks = vi.hoisted(() => {
             weekStart: 'sunday',
         },
         tasks: [] as Task[],
+        // Mirrors the real store's split: `tasks` is the visible projection
+        // (store-helpers' isTaskVisible drops archived), `_allTasks` is
+        // everything. Tests that need archived tasks set this one explicitly.
+        _allTasks: null as Task[] | null,
         // Real updateTask always resolves a StoreActionResult; the quick-action
         // menu's "Remove from calendar" reads `.success` off it.
         updateTask: vi.fn<(id: string, updates: Partial<Task>) => Promise<{ success: boolean }>>(
@@ -51,7 +55,10 @@ const storeMocks = vi.hoisted(() => {
 vi.mock('@mindwtr/core', async () => {
     const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
     const useTaskStore = Object.assign(
-        (selector: (state: typeof storeMocks.taskStoreState) => unknown) => selector(storeMocks.taskStoreState),
+        (selector: (state: typeof storeMocks.taskStoreState) => unknown) => selector({
+            ...storeMocks.taskStoreState,
+            _allTasks: storeMocks.taskStoreState._allTasks ?? storeMocks.taskStoreState.tasks,
+        } as typeof storeMocks.taskStoreState),
         {
             getState: () => storeMocks.taskStoreState,
             subscribe: vi.fn(),
@@ -177,6 +184,7 @@ describe('CalendarView', () => {
         window.history.replaceState(null, '', '/');
         window.localStorage.clear();
         storeMocks.taskStoreState.tasks = [];
+        storeMocks.taskStoreState._allTasks = null;
         storeMocks.taskStoreState.projects = [];
         storeMocks.taskStoreState.areas = [];
         storeMocks.taskStoreState.addProject.mockClear();
@@ -669,6 +677,59 @@ describe('CalendarView', () => {
 
         expect(screen.getByText('Date-only start')).toBeInTheDocument();
         expect(screen.getByText('Timed start')).toBeInTheDocument();
+    });
+
+    it('reveals done and archived tasks on their completion date only while the toggle is on (#955)', async () => {
+        const openTask = makeTask({
+            id: 'task-open',
+            title: 'Still open',
+            startTime: '2026-04-04T09:00:00',
+        });
+        const doneTask = makeTask({
+            id: 'task-done',
+            title: 'Finished thing',
+            status: 'done',
+            // Scheduled for one day, finished on another: the look-back must
+            // file it under the completion date, not the old start date.
+            startTime: '2026-04-02T09:00:00',
+            completedAt: '2026-04-08T15:30:00',
+        });
+        const archivedTask = makeTask({
+            id: 'task-archived',
+            title: 'Archived thing',
+            status: 'archived',
+            completedAt: '2026-04-09T11:00:00',
+        });
+        // Archived tasks never reach the visible `tasks` projection, so the
+        // look-back has to read them from _allTasks like the Archive view does.
+        storeMocks.taskStoreState.tasks = [openTask, doneTask];
+        storeMocks.taskStoreState._allTasks = [openTask, doneTask, archivedTask];
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        expect(screen.queryByText('Finished thing')).not.toBeInTheDocument();
+        expect(screen.queryByText('Archived thing')).not.toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+            await Promise.resolve();
+        });
+
+        const completedItem = screen.getAllByText('Finished thing')[0];
+        expect(completedItem).toBeInTheDocument();
+        expect(screen.getAllByText('Archived thing').length).toBeGreaterThan(0);
+        // A record of what happened, not a plan that can be dragged elsewhere.
+        expect(completedItem.closest('button')).toHaveAttribute('draggable', 'false');
+        expect(window.localStorage.getItem('mindwtr.calendar.showCompleted')).toBe('true');
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+            await Promise.resolve();
+        });
+
+        expect(screen.queryByText('Finished thing')).not.toBeInTheDocument();
+        expect(screen.getByText('Still open')).toBeInTheDocument();
     });
 
     it('sets a task due date when dropped on a month day', async () => {

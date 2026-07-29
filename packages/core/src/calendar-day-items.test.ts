@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCalendarDayItems, buildTimedCalendarLayouts } from './calendar-day-items';
+import {
+    buildCalendarDayItems,
+    buildTimedCalendarLayouts,
+    getTaskCompletionInstant,
+    isCompletedCalendarTask,
+    isSchedulableCalendarTask,
+} from './calendar-day-items';
 import type { ExternalCalendarEvent, Task } from './index';
 
 const task = (overrides: Partial<Task>): Task => ({
@@ -22,6 +28,62 @@ const event = (overrides: Partial<ExternalCalendarEvent>): ExternalCalendarEvent
     end: '2026-05-04T10:00:00',
     allDay: false,
     ...overrides,
+});
+
+describe('completed look-back (#955)', () => {
+    it('files a completed task under its completion instant, falling back to updatedAt', () => {
+        expect(getTaskCompletionInstant({ completedAt: '2026-05-04T09:00:00.000Z', updatedAt: '2026-05-06T00:00:00.000Z' })?.toISOString())
+            .toBe('2026-05-04T09:00:00.000Z');
+        // Archived before completion timestamps existed: the Archive list shows
+        // updatedAt as the completion time, so the calendar must agree.
+        expect(getTaskCompletionInstant({ updatedAt: '2026-05-06T00:00:00.000Z' })?.toISOString())
+            .toBe('2026-05-06T00:00:00.000Z');
+    });
+
+    it('splits the calendar cleanly: a task is schedulable or completed, never both', () => {
+        // The two platforms had drifted here — mobile kept done tasks in its
+        // scheduled buckets while desktop dropped them (#955). Pin the split.
+        for (const status of ['inbox', 'next', 'waiting', 'someday'] as const) {
+            expect(isSchedulableCalendarTask(task({ status }))).toBe(true);
+            expect(isCompletedCalendarTask(task({ status }))).toBe(false);
+        }
+        for (const status of ['done', 'archived'] as const) {
+            expect(isSchedulableCalendarTask(task({ status }))).toBe(false);
+            expect(isCompletedCalendarTask(task({ status }))).toBe(true);
+        }
+        // Reference is in neither: it is not scheduled work and was never completed.
+        expect(isSchedulableCalendarTask(task({ status: 'reference' }))).toBe(false);
+        expect(isCompletedCalendarTask(task({ status: 'reference' }))).toBe(false);
+    });
+
+    it('accepts done and archived tasks only, and never a deleted one', () => {
+        expect(isCompletedCalendarTask(task({ status: 'done' }))).toBe(true);
+        expect(isCompletedCalendarTask(task({ status: 'archived' }))).toBe(true);
+        expect(isCompletedCalendarTask(task({ status: 'next' }))).toBe(false);
+        expect(isCompletedCalendarTask(task({ status: 'reference' }))).toBe(false);
+        expect(isCompletedCalendarTask(task({ status: 'done', deletedAt: '2026-05-05T00:00:00.000Z' }))).toBe(false);
+    });
+
+    it('orders completed items by completion time among the day\'s other items', () => {
+        const items = buildCalendarDayItems({
+            completed: [task({ id: 'shipped', title: 'Shipped it', status: 'done', completedAt: '2026-05-04T09:00:00' })],
+            deadlines: [],
+            events: [event({ id: 'standup', title: 'Standup', start: '2026-05-04T09:30:00' })],
+            scheduled: [task({ id: 'timed', title: 'Timed', startTime: '2026-05-04T08:00:00' })],
+        });
+
+        expect(items.map((item) => item.id)).toEqual(['scheduled-timed', 'completed-shipped', 'event-standup']);
+    });
+
+    it('omits completed items entirely when the toggle is off', () => {
+        const items = buildCalendarDayItems({
+            deadlines: [],
+            events: [],
+            scheduled: [task({ id: 'timed', startTime: '2026-05-04T08:00:00' })],
+        });
+
+        expect(items.map((item) => item.kind)).toEqual(['scheduled']);
+    });
 });
 
 describe('buildCalendarDayItems', () => {

@@ -1,12 +1,16 @@
 /**
  * The read-only iCalendar feed the self-hosted server publishes.
  *
- * Inclusion and date mapping deliberately mirror the Calendar view
- * (useDesktopCalendarController / useCalendarViewController): the same
+ * Inclusion and date mapping deliberately mirror the Calendar view's *default*
+ * state (useDesktopCalendarController / useCalendarViewController): the same
  * schedulable-task filter, the same recurrence projections, `startTime` as the
  * scheduled block and `dueDate` as the deadline, and the same
- * one-item-per-task-per-day collapse. A task visible in the app's calendar is
- * an event in the feed; anything else is not.
+ * one-item-per-task-per-day collapse.
+ *
+ * Deliberately excluded: the calendar's completed look-back (#955). That toggle
+ * is a per-device review affordance, and a published subscription URL has no
+ * business republishing finished work to whoever holds it — do not "fix" this
+ * by mirroring the toggle.
  */
 import { hasTimeComponent, safeFormatDate, safeParseDate, safeParseDueDate } from './date';
 import { isTaskInActiveProject } from './project-utils';

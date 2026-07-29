@@ -35,6 +35,9 @@ import {
 import {
     buildCalendarDayItems,
     buildTimedCalendarLayouts,
+    getTaskCompletionInstant,
+    isCompletedCalendarTask,
+    isSchedulableCalendarTask,
 } from '@mindwtr/core/calendar-day-items';
 
 import { checkBudget } from '../../../config/performanceBudgets';
@@ -56,13 +59,30 @@ import { useCalendarExternalEvents } from './use-calendar-external-events';
 import { useCalendarMonthNavigation } from './use-calendar-month-navigation';
 import { useCalendarScheduleFeedback, useCalendarSelectedDay } from './use-calendar-selected-day';
 
+/** Per-device like the planning panel and the timeline day count: revealing the
+ *  look-back is a property of this window, not of the user's data. */
+const CALENDAR_SHOW_COMPLETED_KEY = 'mindwtr.calendar.showCompleted';
+
+const readShowCompletedPreference = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+        return window.localStorage.getItem(CALENDAR_SHOW_COMPLETED_KEY) === 'true';
+    } catch {
+        return false;
+    }
+};
+
 export function useDesktopCalendarController() {
     const perf = usePerformanceMonitor('CalendarView');
-    const { tasks, projects, areas, addTask, addProject, updateTask, settings, getDerivedState } = useTaskStore(
+    const { tasks, allTasks, projects, areas, addTask, addProject, updateTask, settings, getDerivedState } = useTaskStore(
         (state) => ({
             addProject: state.addProject,
             addTask: state.addTask,
             tasks: state.tasks,
+            // The completed look-back needs archived tasks, and the visible
+            // `tasks` projection drops those (store-helpers' isTaskVisible) —
+            // the Archive view reads `_allTasks` for the same reason (#955).
+            allTasks: state._allTasks,
             projects: state.projects,
             areas: state.areas,
             updateTask: state.updateTask,
@@ -107,6 +127,18 @@ export function useDesktopCalendarController() {
         }),
         [language, settings?.calendarSystem, settings?.dateFormat, systemLocale]
     );
+    const [showCompleted, setShowCompleted] = useState(readShowCompletedPreference);
+    const toggleShowCompleted = useCallback(() => {
+        setShowCompleted((previous) => {
+            const next = !previous;
+            try {
+                window.localStorage.setItem(CALENDAR_SHOW_COMPLETED_KEY, String(next));
+            } catch {
+                // A blocked storage quota must not stop the toggle from working.
+            }
+            return next;
+        });
+    }, []);
     const [viewFilterQuery, setViewFilterQuery] = useState('');
     const updateViewFilterQuery = useCallback((query: string) => setViewFilterQuery(query), []);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -142,9 +174,17 @@ export function useDesktopCalendarController() {
     });
     const { getExternalEventsForDay } = external;
 
+    // The project/area half of calendar visibility, split out because the
+    // completed look-back (#955) obeys it too and must not inherit the status
+    // rule that hides done and archived tasks from the schedulable buckets.
+    const isCalendarTaskInScope = useCallback((task: Task) => {
+        if (!isTaskInActiveProject(task, projectMap)) return false;
+        if (normalizedViewFilterQuery && !task.title.toLowerCase().includes(normalizedViewFilterQuery)) return false;
+        return taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById);
+    }, [projectMap, resolvedAreaFilter, areaById, normalizedViewFilterQuery]);
+
     const isSchedulableTask = useCallback((task: Task) => {
-        if (task.deletedAt) return false;
-        if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return false;
+        if (!isSchedulableCalendarTask(task)) return false;
         if (!isTaskInActiveProject(task, projectMap)) return false;
         if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)) return false;
         return true;
@@ -160,6 +200,21 @@ export function useDesktopCalendarController() {
         const visibleTasks: Task[] = [];
         const deadlinesByDay = new Map<string, Task[]>();
         const scheduledByDay = new Map<string, Task[]>();
+        const completedByDay = new Map<string, Task[]>();
+        // Completed tasks are filed by when they were finished, not by the
+        // start/due dates they may still carry, and never expand into recurrence
+        // projections — a finished occurrence is one event (#955).
+        if (showCompleted) {
+            for (const task of allTasks) {
+                if (!isCompletedCalendarTask(task) || !isCalendarTaskInScope(task)) continue;
+                const completedAt = getTaskCompletionInstant(task);
+                if (!completedAt) continue;
+                const completedKey = dayKey(completedAt);
+                const existingCompleted = completedByDay.get(completedKey);
+                if (existingCompleted) existingCompleted.push(task);
+                else completedByDay.set(completedKey, [task]);
+            }
+        }
         for (const task of tasks) {
             for (const calendarTask of expandCalendarRecurringTasks(task)) {
                 if (!isCalendarTaskVisible(calendarTask)) continue;
@@ -184,8 +239,8 @@ export function useDesktopCalendarController() {
                 }
             }
         }
-        return { visibleTasks, deadlinesByDay, scheduledByDay };
-    }, [tasks, isCalendarTaskVisible]);
+        return { visibleTasks, deadlinesByDay, scheduledByDay, completedByDay };
+    }, [tasks, allTasks, isCalendarTaskVisible, isCalendarTaskInScope, showCompleted]);
 
     const schedulableTasks = useMemo(
         () => tasks
@@ -214,6 +269,7 @@ export function useDesktopCalendarController() {
 
     const getDeadlinesForDay = (date: Date) => calendarTaskData.deadlinesByDay.get(dayKey(date)) ?? [];
     const getScheduledForDay = (date: Date) => calendarTaskData.scheduledByDay.get(dayKey(date)) ?? [];
+    const getCompletedForDay = (date: Date) => calendarTaskData.completedByDay.get(dayKey(date)) ?? [];
     const openTask = openTaskId ? tasks.find((task) => task.id === openTaskId) ?? null : null;
     const openProject = openTask?.projectId ? projectMap.get(openTask.projectId) : undefined;
     const openTaskFromCalendar = useCallback((task: Task) => {
@@ -278,6 +334,16 @@ export function useDesktopCalendarController() {
             }
         }
 
+        // Completed items are matches too whenever the look-back is on, or the
+        // count would contradict what the grid is showing (#955).
+        for (const [, dayTasks] of calendarTaskData.completedByDay) {
+            for (const task of dayTasks) {
+                const completedAt = getTaskCompletionInstant(task);
+                if (!completedAt) continue;
+                if (completedAt.getTime() >= startMs && completedAt.getTime() <= endMs) taskIds.add(task.id);
+            }
+        }
+
         const eventCount = external.visibleExternalEvents.filter((event) => {
             const start = safeParseDate(event.start);
             const end = safeParseDate(event.end);
@@ -286,7 +352,7 @@ export function useDesktopCalendarController() {
         }).length;
 
         return taskIds.size + eventCount;
-    }, [calendarTaskData.visibleTasks, normalizedViewFilterQuery, external.visibleExternalEvents, visibleRange]);
+    }, [calendarTaskData.visibleTasks, calendarTaskData.completedByDay, normalizedViewFilterQuery, external.visibleExternalEvents, visibleRange]);
 
     const timeEstimateToMinutes = (estimate: Task['timeEstimate']): number => (
         resolveTimeEstimateToMinutes(estimate, { enabled: timeEstimatesEnabled })
@@ -410,6 +476,7 @@ export function useDesktopCalendarController() {
     }, [feedback.showScheduleError, nav.revealDate, tasks, updateTask]);
 
     const getCalendarItemsForDate = (date: Date): CalendarCellItem[] => buildCalendarDayItems({
+        completed: getCompletedForDay(date),
         deadlines: getDeadlinesForDay(date),
         events: getExternalEventsForDay(date),
         scheduled: getScheduledForDay(date),
@@ -418,6 +485,8 @@ export function useDesktopCalendarController() {
         const scheduled = getScheduledForDay(date);
         const scheduledIds = new Set(scheduled.map((task) => task.id));
         return [
+            ...getCompletedForDay(date)
+                .map((task) => ({ id: `completed-${task.id}`, kind: 'completed' as const, task, title: task.title })),
             ...scheduled
                 .filter((task) => !hasTimeComponent(task.startTime))
                 .map((task) => ({ id: `scheduled-${task.id}`, kind: 'scheduled' as const, task, title: task.title })),
@@ -624,6 +693,8 @@ export function useDesktopCalendarController() {
         setTimelineDayCount: nav.setTimelineDayCount,
         timelineDayCount: nav.timelineDayCount,
         timelineDays: nav.timelineDays,
+        showCompleted,
+        toggleShowCompleted,
         toggleExternalCalendar: external.toggleExternalCalendar,
         toggleMonthPicker: nav.toggleMonthPicker,
         updateEditingTimeValue: selectedDay.updateEditingTimeValue,

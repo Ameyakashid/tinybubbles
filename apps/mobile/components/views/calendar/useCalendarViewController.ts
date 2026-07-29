@@ -62,7 +62,12 @@ import {
   type CalendarComposerMode,
   type CalendarComposerState,
 } from '@mindwtr/core/calendar-composer';
-import { buildCalendarDayItems } from '@mindwtr/core/calendar-day-items';
+import {
+  buildCalendarDayItems,
+  getTaskCompletionInstant,
+  isCompletedCalendarTask,
+  isSchedulableCalendarTask,
+} from '@mindwtr/core/calendar-day-items';
 
 import { useTheme } from '../../../contexts/theme-context';
 import { useToast } from '../../../contexts/toast-context';
@@ -152,8 +157,11 @@ const formatTimeInputValue = formatCalendarTimeInputValue;
 const parseTimeOnDate = parseCalendarTimeOnDate;
 
 export function useCalendarViewController() {
-  const { tasks, projects, areas, addTask, addProject, updateTask, deleteTask, updateSettings, settings } = useTaskStore((state) => ({
+  const { tasks, allTasks, projects, areas, addTask, addProject, updateTask, deleteTask, updateSettings, settings } = useTaskStore((state) => ({
     tasks: state.tasks,
+    // Archived tasks are absent from the visible `tasks` projection, so the
+    // completed look-back reads the full list like the Archive screen (#955).
+    allTasks: state._allTasks,
     projects: state.projects,
     areas: state.areas,
     addProject: state.addProject,
@@ -202,6 +210,7 @@ export function useCalendarViewController() {
   const calendarSystem = resolveCalendarSystemSetting(settings?.calendarSystem, { language, systemLocale });
   const initialViewMode = coerceCalendarViewMode(calendarSettings?.viewMode);
   const calendarWeekVisibleDays = coerceCalendarWeekVisibleDays(calendarSettings?.weekVisibleDays);
+  const showCompleted = calendarSettings?.showCompleted === true;
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => getInitialCalendarSelectedDate(initialViewMode, today));
@@ -252,6 +261,11 @@ export function useCalendarViewController() {
     pendingViewModeSaveRef.current = nextMode;
     setViewModeState(nextMode);
     updateSettings({ calendar: { ...calendarSettings, viewMode: nextMode } })
+      .catch(logCalendarError);
+  };
+
+  const toggleShowCompleted = () => {
+    updateSettings({ calendar: { ...calendarSettings, showCompleted: !showCompleted } })
       .catch(logCalendarError);
   };
 
@@ -336,12 +350,31 @@ export function useCalendarViewController() {
 
   const visibleTasks = useMemo(() => {
     const projectedAtIso = new Date(nowTick).toISOString();
-    return areaVisibleTasks.flatMap((task) => expandCalendarRecurringTasks(task, projectedAtIso));
+    // Done, archived and reference tasks are deliberately excluded here: they
+    // belong to the completed look-back below, filed by completion date, not to
+    // the scheduled/deadline buckets. Before #955 mobile left them in and showed
+    // finished work on its old start/due date while desktop hid it entirely.
+    return areaVisibleTasks
+      .filter(isSchedulableCalendarTask)
+      .flatMap((task) => expandCalendarRecurringTasks(task, projectedAtIso));
   }, [areaVisibleTasks, nowTick]);
+
+  const completedTasksByDate = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    if (!showCompleted) return map;
+    for (const task of allTasks) {
+      if (!isCompletedCalendarTask(task)) continue;
+      if (!isTaskInActiveProject(task, projectById)) continue;
+      if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)) continue;
+      const completedAt = getTaskCompletionInstant(task);
+      if (completedAt) addCalendarMapItem(map, completedAt, task);
+    }
+    return map;
+  }, [allTasks, showCompleted, projectById, resolvedAreaFilter, areaById]);
 
   const schedulableTasks = useMemo(() => (
     areaVisibleTasks
-      .filter((task) => !task.deletedAt && task.status !== 'done' && task.status !== 'archived' && task.status !== 'reference')
+      .filter(isSchedulableCalendarTask)
       .sort((a, b) => a.title.localeCompare(b.title))
   ), [areaVisibleTasks]);
 
@@ -386,22 +419,28 @@ export function useCalendarViewController() {
     scheduledTasksByDate.get(calendarDateKey(date)) ?? []
   ), [scheduledTasksByDate]);
 
+  const getCompletedForDate = useCallback((date: Date): Task[] => (
+    completedTasksByDate.get(calendarDateKey(date)) ?? []
+  ), [completedTasksByDate]);
+
   const getTaskCountForDate = useCallback((date: Date) => {
     const ids = new Set<string>();
     for (const task of getDeadlinesForDate(date)) ids.add(task.id);
     for (const task of getScheduledForDate(date)) ids.add(task.id);
+    for (const task of getCompletedForDate(date)) ids.add(task.id);
     return ids.size;
-  }, [getDeadlinesForDate, getScheduledForDate]);
+  }, [getCompletedForDate, getDeadlinesForDate, getScheduledForDate]);
 
   const getExternalEventsForDate = useCallback((date: Date) => {
     return externalEventsByDate.get(calendarDateKey(date)) ?? [];
   }, [externalEventsByDate]);
 
   const getCalendarItemsForDate = useCallback((date: Date) => buildCalendarDayItems({
+    completed: getCompletedForDate(date),
     deadlines: getDeadlinesForDate(date),
     events: getExternalEventsForDate(date),
     scheduled: getScheduledForDate(date),
-  }), [getDeadlinesForDate, getExternalEventsForDate, getScheduledForDate]);
+  }), [getCompletedForDate, getDeadlinesForDate, getExternalEventsForDate, getScheduledForDate]);
 
   const timeEstimateToMinutes = (estimate: Task['timeEstimate']): number => (
     resolveTimeEstimateToMinutes(estimate, { enabled: timeEstimatesEnabled })
@@ -1191,6 +1230,8 @@ export function useCalendarViewController() {
     setCalendarComposerStartTime,
     setCalendarComposerTitle,
     setCalendarWeekVisibleDays,
+    showCompleted,
+    toggleShowCompleted,
     setCurrentMonth,
     setCurrentYear,
     setEditingTask,

@@ -7,25 +7,77 @@ import { safeParseDate, safeParseDueDate } from './date';
 import type { ExternalCalendarEvent } from './ics';
 import type { Task } from './types';
 
+/**
+ * The instant a done/archived task is filed under in the calendar's look-back
+ * (#955). Falls back to `updatedAt` for tasks archived before completion
+ * timestamps were recorded, which is the same thing the Archive list shows as
+ * their completion time — without it those tasks would silently never appear.
+ */
+export const getTaskCompletionInstant = (task: Pick<Task, 'completedAt' | 'updatedAt'>): Date | null => (
+    safeParseDate(task.completedAt ?? task.updatedAt)
+);
+
+/**
+ * Whether a task belongs in the calendar's completed look-back. Callers still
+ * apply the calendar's project/area visibility on top; this is only the
+ * status half, kept here so desktop and mobile cannot drift apart.
+ */
+export const isCompletedCalendarTask = (task: Task): boolean => (
+    !task.deletedAt
+    && (task.status === 'done' || task.status === 'archived')
+    && getTaskCompletionInstant(task) !== null
+);
+
+/**
+ * Whether a task belongs in the scheduled/deadline buckets — the status half of
+ * calendar visibility, and the exact complement of the look-back above.
+ *
+ * This lives here because the two platforms had drifted: desktop filtered these
+ * statuses out of its day maps while mobile did not, so finished work still sat
+ * on its old start date on a phone and nowhere on a desktop (#955).
+ */
+export const isSchedulableCalendarTask = (task: Task): boolean => (
+    !task.deletedAt
+    && task.status !== 'done'
+    && task.status !== 'archived'
+    && task.status !== 'reference'
+);
+
 export type CalendarDayItem =
     | { id: string; kind: 'scheduled'; start: Date | null; task: Task; title: string }
     | { id: string; kind: 'deadline'; start: Date | null; task: Task; title: string }
+    | { id: string; kind: 'completed'; start: Date | null; task: Task; title: string }
     | { event: ExternalCalendarEvent; id: string; kind: 'event'; start: Date | null; title: string };
 
 export type CalendarDayItemsInput = {
+    /** Done/archived tasks placed on the day they were completed (#955). Empty
+     *  unless the calendar's "show completed" toggle is on. */
+    completed?: readonly Task[];
     deadlines: readonly Task[];
     events: readonly ExternalCalendarEvent[];
     scheduled: readonly Task[];
 };
 
 /**
- * Merges a day's scheduled tasks, deadline-only tasks and external events into
- * one time-ordered list. A task that is both scheduled and due that day appears
- * once, as its scheduled block. Undated items sort last, then by title.
+ * Merges a day's scheduled tasks, deadline-only tasks, completed tasks and
+ * external events into one time-ordered list. A task that is both scheduled and
+ * due that day appears once, as its scheduled block. Undated items sort last,
+ * then by title.
+ *
+ * Completed tasks need no such de-duplication: a done or archived task is
+ * excluded from the scheduled and deadline buckets by the caller's visibility
+ * rule, so it can only ever appear here as its completion.
  */
-export function buildCalendarDayItems({ deadlines, events, scheduled }: CalendarDayItemsInput): CalendarDayItem[] {
+export function buildCalendarDayItems({ completed = [], deadlines, events, scheduled }: CalendarDayItemsInput): CalendarDayItem[] {
     const scheduledIds = new Set(scheduled.map((task) => task.id));
     return [
+        ...completed.map((task): CalendarDayItem => ({
+            id: `completed-${task.id}`,
+            kind: 'completed',
+            start: task.completedAt ? safeParseDate(task.completedAt) : null,
+            task,
+            title: task.title,
+        })),
         ...scheduled.map((task): CalendarDayItem => ({
             id: `scheduled-${task.id}`,
             kind: 'scheduled',

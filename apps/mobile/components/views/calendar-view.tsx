@@ -380,6 +380,8 @@ export function CalendarView() {
     setTimelineScrollEnabled,
     setViewMode,
     shiftSelectedDate,
+    showCompleted,
+    toggleShowCompleted,
     sourceColorForId,
     t,
     tc,
@@ -708,6 +710,28 @@ export function CalendarView() {
     </View>
   );
 
+  // Sits under the view-mode switcher in every calendar mode so the look-back
+  // can be turned on from wherever you are (#955).
+  const renderShowCompletedToggle = () => (
+    <Pressable
+      onPress={toggleShowCompleted}
+      accessibilityRole="button"
+      accessibilityLabel={tr('calendar.showCompletedHint')}
+      accessibilityState={{ selected: showCompleted }}
+      style={[
+        styles.showCompletedToggle,
+        {
+          backgroundColor: showCompleted ? toRgba(tc.tint, isDark ? 0.24 : 0.14) : tc.inputBg,
+          borderColor: showCompleted ? tc.tint : tc.border,
+        },
+      ]}
+    >
+      <Text style={[styles.showCompletedToggleText, { color: showCompleted ? tc.tint : tc.secondaryText }]}>
+        {tr('calendar.showCompleted')}
+      </Text>
+    </Pressable>
+  );
+
   const renderCalendarComposer = () => (
     <Modal
       visible={Boolean(calendarComposer)}
@@ -950,6 +974,7 @@ export function CalendarView() {
             </Pressable>
           </View>
           {renderModeToggle()}
+          {renderShowCompletedToggle()}
         </View>
 
         <View style={styles.daySwipeArea} {...dayNavigationResponder.panHandlers}>
@@ -1190,6 +1215,7 @@ export function CalendarView() {
             </Pressable>
           </View>
           {renderModeToggle()}
+          {renderShowCompletedToggle()}
         </View>
 
         <ScrollView
@@ -1229,6 +1255,7 @@ export function CalendarView() {
                 const allDayItems = getCalendarItemsForDate(day)
                   .filter((item) =>
                     item.kind === 'deadline'
+                    || item.kind === 'completed'
                     || (item.kind === 'scheduled' && isAllDayScheduledTask(item.task))
                     || (item.kind === 'event' && item.event.allDay)
                   )
@@ -1554,6 +1581,7 @@ export function CalendarView() {
             </View>
           </View>
           {renderModeToggle()}
+          {renderShowCompletedToggle()}
         </View>
 
         <FlatList
@@ -1624,8 +1652,11 @@ export function CalendarView() {
                   }
 
                   const projected = isProjectedRecurringTask(item.task);
+                  const completed = item.kind === 'completed';
                   const start = item.task.startTime ? safeParseDate(item.task.startTime) : null;
-                  const timeLabel = start
+                  const timeLabel = completed
+                    ? (item.start ? safeFormatDate(item.start, 'p') : t('status.done'))
+                    : start
                     ? formatTimeRange(start, timeEstimateToMinutes(item.task.timeEstimate))
                     : t('calendar.deadline');
                   const projectedDisplayLabel = projected
@@ -1642,8 +1673,9 @@ export function CalendarView() {
                         styles.scheduleItem,
                         {
                           backgroundColor: item.kind === 'scheduled' || projected ? toRgba(tc.tint, isDark ? 0.2 : 0.12) : tc.inputBg,
-                          borderLeftColor: item.kind === 'scheduled' ? tc.tint : tc.danger,
+                          borderLeftColor: completed ? tc.secondaryText : item.kind === 'scheduled' ? tc.tint : tc.danger,
                           borderStyle: projected ? 'dashed' : 'solid',
+                          opacity: completed ? 0.7 : 1,
                         },
                       ]}
                       onPress={() => {
@@ -1651,7 +1683,14 @@ export function CalendarView() {
                       }}
                     >
                       <View style={styles.taskItemMain}>
-                        <Text style={[styles.taskItemTitle, { color: tc.text }]} numberOfLines={1}>
+                        <Text
+                          style={[
+                            styles.taskItemTitle,
+                            { color: completed ? tc.secondaryText : tc.text },
+                            completed && { textDecorationLine: 'line-through' as const },
+                          ]}
+                          numberOfLines={1}
+                        >
                           {item.title}
                         </Text>
                         <Text style={[styles.taskItemTime, { color: tc.secondaryText }]}>
@@ -1716,6 +1755,7 @@ export function CalendarView() {
           </Pressable>
         </View>
         {renderModeToggle()}
+        {renderShowCompletedToggle()}
       </View>
 
       <View style={styles.monthCalendar} {...monthNavigationResponder.panHandlers}>
@@ -1809,13 +1849,19 @@ export function CalendarView() {
                                     ? tc.tint
                                     : item.kind === 'deadline'
                                     ? tc.danger
+                                    : item.kind === 'completed'
+                                    ? tc.secondaryText
                                     : tc.tint,
                                 borderStyle: projected ? 'dashed' : 'solid',
                               },
                             ]}
                           >
                             <Text
-                              style={[styles.monthPreviewText, { color: item.kind === 'scheduled' || projected ? tc.tint : tc.text }]}
+                              style={[
+                                styles.monthPreviewText,
+                                { color: item.kind === 'scheduled' || projected ? tc.tint : item.kind === 'completed' ? tc.secondaryText : tc.text },
+                                item.kind === 'completed' && { textDecorationLine: 'line-through' as const },
+                              ]}
                               numberOfLines={1}
                             >
                               {projected ? `${item.title} · ${projectedDisplayLabel}` : item.title}

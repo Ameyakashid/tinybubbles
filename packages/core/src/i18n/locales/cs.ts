@@ -508,6 +508,8 @@ export const csOverrides: Record<string, string> = {
         'calendar.events': 'Události',
         'calendar.allDay': 'Celý den',
         'calendar.deadline': 'Uzávěrka',
+        'calendar.showCompleted': 'Dokončené',
+        'calendar.showCompletedHint': 'Zobrazit dokončené a archivované úkoly v den, kdy byly dokončeny',
         'calendar.projectedRecurrence': 'Předpokládané',
         'calendar.projectedRecurrenceDescription': 'Pouze plánovací náhled. Skutečný další úkol vznikne dokončením aktuálního opakovaného úkolu.',
         'calendar.unschedule': 'Odebrat z kalendáře',

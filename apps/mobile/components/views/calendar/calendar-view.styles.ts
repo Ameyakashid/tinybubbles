@@ -58,6 +58,18 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  showCompletedToggle: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  showCompletedToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
   navButton: {
     paddingVertical: 4,
     paddingHorizontal: 10,
