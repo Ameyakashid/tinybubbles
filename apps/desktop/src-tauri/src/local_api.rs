@@ -753,6 +753,28 @@ fn has_string_field(value: &Value, key: &str) -> bool {
         .is_some_and(|field| !field.trim().is_empty())
 }
 
+fn parse_boolean_query_param(
+    query: &HashMap<String, String>,
+    name: &str,
+) -> Result<Option<bool>, String> {
+    let Some(raw) = query.get(name) else {
+        return Ok(None);
+    };
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" => Ok(Some(true)),
+        "0" | "false" => Ok(Some(false)),
+        _ => Err(format!("Invalid {name}")),
+    }
+}
+
+fn task_is_focused_today(task: &Value) -> bool {
+    match task.get("isFocusedToday") {
+        Some(Value::Bool(value)) => *value,
+        Some(Value::Number(value)) => value.as_f64().is_some_and(|value| value != 0.0),
+        _ => false,
+    }
+}
+
 fn filter_tasks(tasks: Vec<Value>, query: &HashMap<String, String>) -> Result<Vec<Value>, String> {
     let include_all = query.get("all").map(|value| value == "1").unwrap_or(false);
     let include_deleted = query
@@ -770,6 +792,7 @@ fn filter_tasks(tasks: Vec<Value>, query: &HashMap<String, String>) -> Result<Ve
         .get("query")
         .map(|value| value.trim().to_ascii_lowercase())
         .filter(|value| !value.is_empty());
+    let is_focused_today = parse_boolean_query_param(query, "isFocusedToday")?;
 
     let filtered = tasks
         .into_iter()
@@ -787,6 +810,11 @@ fn filter_tasks(tasks: Vec<Value>, query: &HashMap<String, String>) -> Result<Ve
         .filter(|task| {
             status
                 .map(|target| task.get("status").and_then(|value| value.as_str()) == Some(target))
+                .unwrap_or(true)
+        })
+        .filter(|task| {
+            is_focused_today
+                .map(|target| task_is_focused_today(task) == target)
                 .unwrap_or(true)
         })
         .filter(|task| {
@@ -1679,6 +1707,55 @@ mod tests {
             filtered[0].get("id").and_then(|value| value.as_str()),
             Some("1")
         );
+    }
+
+    #[test]
+    fn filters_tasks_by_focused_today_boolean_query() {
+        let tasks = vec![
+            json!({ "id": "focused-bool", "status": "next", "isFocusedToday": true }),
+            json!({ "id": "focused-number", "status": "next", "isFocusedToday": 1 }),
+            json!({ "id": "not-focused-bool", "status": "next", "isFocusedToday": false }),
+            json!({ "id": "not-focused-number", "status": "next", "isFocusedToday": 0 }),
+            json!({ "id": "not-focused-missing", "status": "next" }),
+        ];
+
+        for raw in ["true", "1", " TRUE "] {
+            let query = HashMap::from([("isFocusedToday".to_string(), raw.to_string())]);
+            let filtered = filter_tasks(tasks.clone(), &query).unwrap();
+            let ids = filtered
+                .iter()
+                .filter_map(|task| task.get("id").and_then(Value::as_str))
+                .collect::<Vec<_>>();
+            assert_eq!(ids, vec!["focused-bool", "focused-number"], "{raw}");
+        }
+
+        for raw in ["false", "0", " FALSE "] {
+            let query = HashMap::from([("isFocusedToday".to_string(), raw.to_string())]);
+            let filtered = filter_tasks(tasks.clone(), &query).unwrap();
+            let ids = filtered
+                .iter()
+                .filter_map(|task| task.get("id").and_then(Value::as_str))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                ids,
+                vec![
+                    "not-focused-bool",
+                    "not-focused-number",
+                    "not-focused-missing"
+                ],
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_focused_today_query_as_bad_request() {
+        for raw in ["", "yes", "2"] {
+            let query = HashMap::from([("isFocusedToday".to_string(), raw.to_string())]);
+            let error = filter_tasks(Vec::new(), &query).unwrap_err();
+            assert_eq!(error, "Invalid isFocusedToday");
+            assert_eq!(api_error_response(error).status, 400, "{raw}");
+        }
     }
 
     #[test]
