@@ -38,6 +38,12 @@ describe('completed look-back (#955)', () => {
         // updatedAt as the completion time, so the calendar must agree.
         expect(getTaskCompletionInstant({ updatedAt: '2026-05-06T00:00:00.000Z' })?.toISOString())
             .toBe('2026-05-06T00:00:00.000Z');
+        expect(buildCalendarDayItems({
+            completed: [task({ status: 'archived', updatedAt: '2026-05-06T09:00:00.000Z' })],
+            deadlines: [],
+            events: [],
+            scheduled: [],
+        })[0]?.start?.toISOString()).toBe('2026-05-06T09:00:00.000Z');
     });
 
     it('splits the calendar cleanly: a task is schedulable or completed, never both', () => {

@@ -74,7 +74,7 @@ export function buildCalendarDayItems({ completed = [], deadlines, events, sched
         ...completed.map((task): CalendarDayItem => ({
             id: `completed-${task.id}`,
             kind: 'completed',
-            start: task.completedAt ? safeParseDate(task.completedAt) : null,
+            start: getTaskCompletionInstant(task),
             task,
             title: task.title,
         })),
