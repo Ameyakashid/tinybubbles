@@ -12,9 +12,6 @@ import {
   sortTasksBy,
   splitCompletedTasks,
   sortDoneTasksForListView,
-  COMPLETION_DATE_GROUPS,
-  getCompletionDateGroup,
-  type CompletionDateGroup,
   isNaturalLanguageDatesEnabled,
   parseQuickAdd,
   formatFocusTaskLimitText,
@@ -26,7 +23,6 @@ import {
   createAIProvider,
   type AIProviderId,
   type TaskSortBy,
-  type Project,
   type ProjectSequenceTaskCue,
   DEFAULT_PROJECT_COLOR,
   getTranslationsSync,
@@ -47,6 +43,7 @@ import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
 import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
 
+import { buildTaskGroupSections, getTaskGroupByLabel, type TaskGroupBy } from '@/lib/task-group-sections';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
@@ -127,15 +124,7 @@ type AddTaskOptions = {
   openAfterCreate?: boolean;
 };
 
-export type TaskListGroupBy = 'none' | 'area' | 'project' | 'tag' | 'completedDate';
-
-const COMPLETION_GROUP_FALLBACKS: Record<CompletionDateGroup, string> = {
-  today: 'Today',
-  yesterday: 'Yesterday',
-  previous7Days: 'Previous 7 days',
-  earlier: 'Earlier',
-  notCompleted: 'Not completed',
-};
+export type TaskListGroupBy = TaskGroupBy;
 
 /** What the list shows: which tasks, in what order, grouped how. */
 interface TaskListContentProps {
@@ -647,127 +636,16 @@ function TaskListComponent({
 
   const listItems = useMemo<ListItem[]>(() => {
     if (!projectId && activeGroupBy !== 'none') {
-      const appendSection = (items: ListItem[], id: string, title: string, tasksForGroup: Task[], muted = false) => {
-        if (tasksForGroup.length === 0) return;
-        items.push({
-          type: 'section',
-          id,
-          title,
-          count: tasksForGroup.length,
-          muted,
-        });
-        tasksForGroup.forEach((task) => items.push({ type: 'task', task, groupId: id }));
-      };
-      if (activeGroupBy === 'project') {
-        const grouped = new Map<string, Task[]>();
-        const noProjectTasks: Task[] = [];
-
-        orderedActiveTasks.forEach((task) => {
-          if (!task.projectId) {
-            noProjectTasks.push(task);
-            return;
-          }
-          const project = projectById.get(task.projectId);
-          if (!project) {
-            noProjectTasks.push(task);
-            return;
-          }
-          const items = grouped.get(project.id) ?? [];
-          items.push(task);
-          grouped.set(project.id, items);
-        });
-
-        const items: ListItem[] = [];
-        appendSection(items, 'project:none', tFallback(t, 'taskEdit.noProjectOption', 'No project'), noProjectTasks, true);
-        const sortedProjects = [...grouped.keys()]
-          .map((itemProjectId) => projectById.get(itemProjectId))
-          .filter((project): project is Project => Boolean(project))
-          .sort((a, b) => {
-            const aOrder = Number.isFinite(a.order) ? a.order : Number.POSITIVE_INFINITY;
-            const bOrder = Number.isFinite(b.order) ? b.order : Number.POSITIVE_INFINITY;
-            if (aOrder !== bOrder) return aOrder - bOrder;
-            return a.title.localeCompare(b.title);
-          });
-        sortedProjects.forEach((project) => appendSection(items, `project:${project.id}`, project.title, grouped.get(project.id) ?? []));
-        return items;
-      }
-      if (activeGroupBy === 'completedDate') {
-        void localDayKey;
-        const items: ListItem[] = [];
-        const buckets = new Map<CompletionDateGroup, Task[]>();
-        const now = new Date();
-        orderedActiveTasks.forEach((task) => {
-          const group = getCompletionDateGroup(task, now);
-          const bucket = buckets.get(group) ?? [];
-          bucket.push(task);
-          buckets.set(group, bucket);
-        });
-        COMPLETION_DATE_GROUPS.forEach((group) => {
-          appendSection(
-            items,
-            `completedDate:${group}`,
-            tFallback(t, `list.completedGroup.${group}`, COMPLETION_GROUP_FALLBACKS[group]),
-            buckets.get(group) ?? [],
-            group === 'notCompleted',
-          );
-        });
-        return items;
-      }
-      if (activeGroupBy === 'tag') {
-        const grouped = new Map<string, Task[]>();
-        const noTagTasks: Task[] = [];
-
-        orderedActiveTasks.forEach((task) => {
-          const tags = (task.tags ?? [])
-            .map((tag) => tag.trim())
-            .filter((tag) => tag.length > 0);
-          if (tags.length === 0) {
-            noTagTasks.push(task);
-            return;
-          }
-          Array.from(new Set(tags)).forEach((tag) => {
-            const items = grouped.get(tag) ?? [];
-            items.push(task);
-            grouped.set(tag, items);
-          });
-        });
-
-        const items: ListItem[] = [];
-        appendSection(items, 'tag:none', tFallback(t, 'taskEdit.noTags', 'No tags'), noTagTasks, true);
-        [...grouped.keys()]
-          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-          .forEach((tag) => appendSection(items, `tag:${tag}`, tag, grouped.get(tag) ?? []));
-        return items;
-      }
-
-      const activeAreas = [...areas].filter((area) => !area.deletedAt).sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
-        return a.name.localeCompare(b.name);
+      // localDayKey is not read here; it is in the dependency list so crossing
+      // midnight re-buckets the completedDate axis.
+      void localDayKey;
+      return buildTaskGroupSections({
+        groupBy: activeGroupBy,
+        tasks: orderedActiveTasks,
+        areas,
+        projectById,
+        t,
       });
-      const areaIds = new Set(activeAreas.map((area) => area.id));
-      const grouped = new Map<string, Task[]>();
-      const generalTasks: Task[] = [];
-
-      orderedActiveTasks.forEach((task) => {
-        const projectAreaId = task.projectId ? projectById.get(task.projectId)?.areaId : undefined;
-        const resolvedAreaId = task.areaId || projectAreaId;
-        if (resolvedAreaId && areaIds.has(resolvedAreaId)) {
-          const items = grouped.get(resolvedAreaId) ?? [];
-          items.push(task);
-          grouped.set(resolvedAreaId, items);
-        } else {
-          generalTasks.push(task);
-        }
-      });
-
-      const items: ListItem[] = [];
-      appendSection(items, 'general', tFallback(t, 'settings.general', 'General'), generalTasks, true);
-
-      activeAreas.forEach((area) => {
-        const tasksForArea = grouped.get(area.id) ?? [];
-        appendSection(items, area.id, area.name, tasksForArea);
-      });
-      return items;
     }
 
     const appendCompletedTasks = (items: ListItem[]) => {
@@ -900,22 +778,7 @@ function TaskListComponent({
   const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'done'
     ? DONE_LIST_GROUP_OPTIONS
     : ['none', 'area', 'project', 'tag'];
-  const getGroupByLabel = useCallback((groupBy: TaskListGroupBy) => {
-    switch (groupBy) {
-      case 'none':
-        return tFallback(t, 'list.groupByNone', 'No grouping');
-      case 'area':
-        return tFallback(t, 'list.groupByArea', 'Area');
-      case 'project':
-        return tFallback(t, 'taskEdit.projectLabel', 'Project');
-      case 'tag':
-        return tFallback(t, 'taskEdit.tagsLabel', 'Tags');
-      case 'completedDate':
-        return tFallback(t, 'list.groupByCompletedDate', 'Completion date');
-      default:
-        return groupBy;
-    }
-  }, [t]);
+  const getGroupByLabel = useCallback((groupBy: TaskListGroupBy) => getTaskGroupByLabel(groupBy, t), [t]);
   const groupByLabel = getGroupByLabel(activeGroupBy);
   const groupLabel = tFallback(t, 'list.groupBy', 'Group');
   const showGroupControl = !projectId && Boolean(handleChangeGroupBy);

@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => {
     storeState: {
       _allTasks: [] as any[],
       projects: [] as any[],
+      areas: [] as any[],
+      settings: {} as any,
       batchDeleteTasks,
       batchMoveTasks,
       batchUpdateTasks,
@@ -181,6 +183,22 @@ vi.mock('react-native-gesture-handler', () => ({
 
 vi.mock('lucide-react-native', () => ({
   Archive: (props: any) => React.createElement('Archive', props),
+  SlidersHorizontal: (props: any) => React.createElement('SlidersHorizontal', props),
+}));
+
+// The sheet's own rendering is covered by task-filter-sheet.test.tsx; here it is
+// only a destination, so stub it rather than pull its whole icon/Modal tree in.
+vi.mock('@/components/task-filter-sheet', () => ({
+  TaskFilterSheet: (props: any) => React.createElement('TaskFilterSheet', props),
+  FilterChip: (props: any) => React.createElement('FilterChip', props),
+}));
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => undefined),
+  },
 }));
 
 describe('ArchivedScreen', () => {
@@ -196,6 +214,8 @@ describe('ArchivedScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.storeState.projects = [];
+    mocks.storeState.areas = [];
+    mocks.storeState.settings = {};
     mocks.storeState.highlightTaskId = null;
     mocks.storeState._allTasks = [
       {
@@ -379,6 +399,79 @@ describe('ArchivedScreen', () => {
       tree.root.find((node) => node.props.accessibilityLabel === 'Projects').props.onPress();
     });
   };
+
+  // findAll matches the composite element and the host element it renders, so a
+  // plain count double-counts. Keep host nodes only.
+  const countByLabel = (tree: renderer.ReactTestRenderer, label: string) => tree.root.findAll(
+    (node) => typeof node.type === 'string' && node.props.accessibilityLabel === label,
+  ).length;
+
+  const typeSearch = (tree: renderer.ReactTestRenderer, value: string) => {
+    renderer.act(() => {
+      tree.root.find((node) => node.props.accessibilityLabel === 'Search').props.onChangeText(value);
+    });
+  };
+
+  it('narrows the archived list by search and restores it when cleared', () => {
+    mocks.storeState._allTasks = [
+      { ...mocks.storeState._allTasks[0], id: 'task-1', title: 'Quarterly report' },
+      { ...mocks.storeState._allTasks[0], id: 'task-2', title: 'Fix the printer' },
+    ];
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    expect(hasText(tree, 'Quarterly report')).toBe(true);
+    expect(hasText(tree, 'Fix the printer')).toBe(true);
+
+    typeSearch(tree, 'printer');
+    expect(hasText(tree, 'Quarterly report')).toBe(false);
+    expect(hasText(tree, 'Fix the printer')).toBe(true);
+
+    typeSearch(tree, '');
+    expect(hasText(tree, 'Quarterly report')).toBe(true);
+  });
+
+  it('counts only the tasks left after filtering, so bulk actions cannot reach a hidden row', () => {
+    mocks.storeState._allTasks = [
+      { ...mocks.storeState._allTasks[0], id: 'task-1', title: 'Quarterly report' },
+      { ...mocks.storeState._allTasks[0], id: 'task-2', title: 'Fix the printer' },
+    ];
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    expect(hasText(tree, '2 tasks')).toBe(true);
+    typeSearch(tree, 'printer');
+    expect(hasText(tree, '1 tasks')).toBe(true);
+  });
+
+  it('offers the search box while a filter is active even though nothing matches', () => {
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    typeSearch(tree, 'nothing matches this');
+    // The empty state must not take the search box down with it, or the only way
+    // back is to leave the screen.
+    expect(countByLabel(tree, 'Search')).toBe(1);
+    expect(hasText(tree, 'No tasks match these filters.')).toBe(true);
+  });
+
+  it('keeps the Filters button out of the Projects segment, which it does not apply to', () => {
+    mocks.storeState.projects = [archivedProject];
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    expect(countByLabel(tree, 'Filters')).toBe(1);
+    switchToProjects(tree);
+    expect(countByLabel(tree, 'Filters')).toBe(0);
+  });
 
   it('renders archived projects when the Projects segment is selected', () => {
     mocks.storeState.projects = [archivedProject];

@@ -1,7 +1,34 @@
 import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
-import { getInlineMarkdownPreview, projectMatchesAreaFilter, safeFormatDate, shallow, taskMatchesAreaFilter, tFallback, useTaskStore } from '@mindwtr/core';
-import type { Project, Task } from '@mindwtr/core';
+import { View, Text, FlatList, Pressable, StyleSheet, Alert, TextInput } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    getInlineMarkdownPreview,
+    getTaskMetadataFilterVisibility,
+    getUsedTaskTokens,
+    projectMatchesAreaFilter,
+    safeFormatDate,
+    shallow,
+    sortDoneTasksForListView,
+    sortTasksBy,
+    taskMatchesAreaFilter,
+    tFallback,
+    useTaskStore,
+} from '@mindwtr/core';
+import type { Project, Task, TaskSortBy } from '@mindwtr/core';
+import { FilterChip, TaskFilterSheet } from '@/components/task-filter-sheet';
+import { resolveTimeEstimateFilterOptions } from '@/components/time-estimate-filter-utils';
+import { taskMatchesFilterSelections, useTaskFilterSelections } from '@/hooks/use-task-filter-selections';
+import { useLocalDayKey } from '@/hooks/use-local-day-key';
+import { buildTaskGroupSections, getTaskGroupByLabel, type TaskGroupItem } from '@/lib/task-group-sections';
+import { DONE_TASK_LIST_SORT_OPTIONS } from '@/lib/task-list-sort';
+import {
+    ARCHIVED_LIST_GROUP_OPTIONS,
+    ARCHIVED_LIST_VIEW_STATE_STORAGE_KEY,
+    DEFAULT_ARCHIVED_LIST_VIEW_STATE,
+    readArchivedListViewState,
+    serializeArchivedListViewState,
+    type ArchivedListViewState,
+} from '@/lib/view-state/archived-list-view-state';
 import { MarkdownInlineText } from '@/components/markdown-text';
 import { useLanguage } from '../../contexts/language-context';
 
@@ -14,7 +41,7 @@ import { CompletedAtPicker } from '@/components/completed-at-picker';
 import { assertBulkActionSucceeded, useTaskListSelection } from '@/components/use-task-list-selection';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Archive } from 'lucide-react-native';
+import { Archive, SlidersHorizontal } from 'lucide-react-native';
 
 function ArchivedTaskItem({
     task,
@@ -235,6 +262,8 @@ export default function ArchivedScreen() {
     const {
         _allTasks,
         projects,
+        areas,
+        settings,
         updateTask,
         deleteTask,
         updateProject,
@@ -248,6 +277,8 @@ export default function ArchivedScreen() {
     } = useTaskStore((state) => ({
         _allTasks: state._allTasks,
         projects: state.projects,
+        areas: state.areas,
+        settings: state.settings,
         updateTask: state.updateTask,
         deleteTask: state.deleteTask,
         updateProject: state.updateProject,
@@ -270,14 +301,105 @@ export default function ArchivedScreen() {
         [projects],
     );
 
-    const archivedTasks = useMemo(
-        () => _allTasks.filter((task) => (
-            task.status === 'archived'
-            && !task.deletedAt
-            && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
-        )),
-        [_allTasks, resolvedAreaFilter, projectById, areaById],
+    const [viewState, setViewState] = useState<ArchivedListViewState>(DEFAULT_ARCHIVED_LIST_VIEW_STATE);
+    const viewStateTouchedRef = useRef(false);
+    const [filtersVisible, setFiltersVisible] = useState(false);
+    useEffect(() => {
+        let active = true;
+        void AsyncStorage.getItem(ARCHIVED_LIST_VIEW_STATE_STORAGE_KEY).then((raw) => {
+            if (active && !viewStateTouchedRef.current) {
+                setViewState(readArchivedListViewState(raw));
+            }
+        }).catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, []);
+    const updateViewState = useCallback((updates: Partial<ArchivedListViewState>) => {
+        viewStateTouchedRef.current = true;
+        setViewState((current) => {
+            const next = { ...current, ...updates };
+            void AsyncStorage.setItem(ARCHIVED_LIST_VIEW_STATE_STORAGE_KEY, serializeArchivedListViewState(next))
+                .catch(() => undefined);
+            return next;
+        });
+    }, []);
+
+    const sortBy: TaskSortBy = viewState.sortBy ?? 'default';
+    // Sorted once, then narrowed in stages. Every stage below only filters, and
+    // filtering preserves relative order, so the visible order is the same as
+    // sorting last would give — but the O(n log n) sort now hangs off _allTasks and
+    // the chosen order alone. Hung off anything that churns per render (the area
+    // maps, the filter criteria), it re-sorts the whole archive several times per
+    // interaction and blows the large-store select-all budget: 5000 archived tasks
+    // measured ~360ms against a 150ms budget, from 5 sorts where 1 was needed.
+    const archivedByStatus = useMemo(
+        () => _allTasks.filter((task) => task.status === 'archived' && !task.deletedAt),
+        [_allTasks],
     );
+    const sortedArchivedTasks = useMemo(() => (
+        // Archive is a log like Done: with no explicit sort, newest completion first
+        // beats the global task sort, which ranks by due date and priority — neither
+        // of which means anything once a task is filed away.
+        sortBy === 'default' ? sortDoneTasksForListView(archivedByStatus) : sortTasksBy(archivedByStatus, sortBy)
+    ), [archivedByStatus, sortBy]);
+    // Everything archived in the current area, before the filter sheet and search
+    // narrow it. The bulk "select all" and the counts work off the narrowed list
+    // below, so acting on a filtered view never reaches a row that is not on screen.
+    const allArchivedTasks = useMemo(
+        () => sortedArchivedTasks.filter((task) => taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)),
+        [sortedArchivedTasks, resolvedAreaFilter, projectById, areaById],
+    );
+
+    const metadataFilterVisibility = useMemo(
+        () => getTaskMetadataFilterVisibility(allArchivedTasks, {
+            prioritiesEnabled: settings?.features?.priorities !== false,
+            timeEstimatesEnabled: settings?.features?.timeEstimates !== false,
+        }),
+        [allArchivedTasks, settings?.features?.priorities, settings?.features?.timeEstimates],
+    );
+    // view: 'list' on purpose — Archive shares its filter selections with the other
+    // task lists, the same way desktop does, so a context picked in Next narrows
+    // Archive too rather than each list holding a private set.
+    const selections = useTaskFilterSelections({
+        view: 'list',
+        t,
+        visibility: metadataFilterVisibility,
+    });
+    const timeEstimateFilterOptions = useMemo(
+        () => resolveTimeEstimateFilterOptions(settings?.gtd?.timeEstimatePresets),
+        [settings?.gtd?.timeEstimatePresets],
+    );
+    // Only worth scanning every row for its tokens once the sheet is open; until
+    // then the selected ones are the only chips anybody can see.
+    const tokenFilterOptions = useMemo(() => {
+        if (!filtersVisible) return Array.from(new Set([...selections.tokens, ...selections.excludedTokens]));
+        return getUsedTaskTokens(allArchivedTasks, (task) => [...(task.contexts ?? []), ...(task.tags ?? [])]);
+    }, [allArchivedTasks, filtersVisible, selections.tokens, selections.excludedTokens]);
+
+    const archivedTasks = useMemo(() => allArchivedTasks.filter((task) => taskMatchesFilterSelections(task, {
+        criteria: selections.criteria,
+        searchQuery: selections.searchQuery,
+    })), [allArchivedTasks, selections.criteria, selections.searchQuery]);
+
+    const groupBy = viewState.groupBy;
+    const localDayKey = useLocalDayKey(groupBy === 'completedDate');
+    // Always the grouped row shape, even ungrouped: one list type keeps the FlatList
+    // monomorphic instead of switching its data/renderItem/keyExtractor together.
+    const listItems = useMemo<TaskGroupItem[]>(() => {
+        if (groupBy === 'none') {
+            return archivedTasks.map((task) => ({ type: 'task', task }));
+        }
+        // localDayKey is not read; it is a dependency so crossing midnight re-buckets.
+        void localDayKey;
+        return buildTaskGroupSections({
+            groupBy,
+            tasks: archivedTasks,
+            areas,
+            projectById,
+            t,
+        });
+    }, [archivedTasks, areas, groupBy, localDayKey, projectById, t]);
     const archivedProjects = useMemo(
         () => projects
             .filter((project) => (
@@ -481,6 +603,30 @@ export default function ArchivedScreen() {
         />
     ), [tc, handleDelete, handleOpenTask, handleRestore, highlightTaskId, selectedIds, selectionMode, t, toggleMultiSelect]);
 
+    const renderGroupedItem = useCallback(({ item }: { item: TaskGroupItem }) => {
+        if (item.type === 'section') {
+            return (
+                <View style={styles.groupHeader}>
+                    <Text
+                        style={[styles.groupHeaderText, { color: item.muted ? tc.secondaryText : tc.text }]}
+                        numberOfLines={1}
+                    >
+                        {item.title}
+                    </Text>
+                    <Text style={[styles.groupHeaderCount, { color: tc.secondaryText }]}>{item.count}</Text>
+                </View>
+            );
+        }
+        return renderArchivedTask({ item: item.task });
+    }, [renderArchivedTask, tc.secondaryText, tc.text]);
+
+    // Section ids and task ids share one list, so prefix the section keys: a group
+    // titled with a task's id would otherwise collide and drop a row.
+    const groupedKeyExtractor = useCallback(
+        (item: TaskGroupItem) => (item.type === 'section' ? `section:${item.id}` : item.task.id),
+        [],
+    );
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <View style={[styles.container, { backgroundColor: tc.bg }]}>
@@ -507,6 +653,43 @@ export default function ArchivedScreen() {
                         );
                     })}
                 </View>
+                {segment === 'tasks' && (allArchivedTasks.length > 0 || selections.hasActive) && (
+                    <View style={styles.searchRow}>
+                        <TextInput
+                            value={selections.searchQuery}
+                            onChangeText={selections.setSearchQuery}
+                            placeholder={tFallback(t, 'common.search', 'Search')}
+                            placeholderTextColor={tc.secondaryText}
+                            accessibilityLabel={tFallback(t, 'common.search', 'Search')}
+                            autoCorrect={false}
+                            returnKeyType="search"
+                            style={[styles.searchInput, { borderColor: tc.border, backgroundColor: tc.inputBg, color: tc.text }]}
+                        />
+                        <Pressable
+                            onPress={() => setFiltersVisible(true)}
+                            accessibilityRole="button"
+                            accessibilityLabel={tFallback(t, 'filters.title', 'Filters')}
+                            style={[
+                                styles.filtersButton,
+                                {
+                                    borderColor: selections.hasActive ? tc.tint : tc.border,
+                                    backgroundColor: selections.hasActive ? tc.tint : tc.cardBg,
+                                },
+                            ]}
+                        >
+                            <SlidersHorizontal
+                                size={16}
+                                color={selections.hasActive ? tc.onTint : tc.text}
+                                strokeWidth={1.75}
+                            />
+                            {selections.activeCount > 0 ? (
+                                <Text style={[styles.filtersButtonText, { color: tc.onTint }]}>
+                                    {selections.activeCount}
+                                </Text>
+                            ) : null}
+                        </Pressable>
+                    </View>
+                )}
                 {segment === 'tasks' && archivedTasks.length > 0 && (
                     <View style={styles.summaryRow}>
                         <Text style={[styles.summaryText, { color: tc.secondaryText }]}>
@@ -613,9 +796,9 @@ export default function ArchivedScreen() {
                     />
                 ) : (
                 <FlatList
-                    data={archivedTasks}
-                    renderItem={renderArchivedTask}
-                    keyExtractor={(item) => item.id}
+                    data={listItems}
+                    renderItem={renderGroupedItem}
+                    keyExtractor={groupedKeyExtractor}
                     extraData={listExtraData}
                     style={styles.taskList}
                     contentContainerStyle={[
@@ -628,15 +811,76 @@ export default function ArchivedScreen() {
                         <View style={styles.emptyState}>
                             <Archive size={48} color={tc.secondaryText} strokeWidth={1.5} style={styles.emptyIcon} />
                             <Text style={[styles.emptyTitle, { color: tc.text }]}>
-                                {t('archived.empty') || 'No archived tasks'}
+                                {selections.hasActive
+                                    ? tFallback(t, 'filters.noMatch', 'No tasks match these filters.')
+                                    : (t('archived.empty') || 'No archived tasks')}
                             </Text>
                             <Text style={[styles.emptyText, { color: tc.secondaryText }]}>
-                                {t('archived.emptyHint') || 'Tasks you archive will appear here'}
+                                {selections.hasActive
+                                    ? selections.chips.slice(0, 3).map((chip) => chip.label).join(', ')
+                                    : (t('archived.emptyHint') || 'Tasks you archive will appear here')}
                             </Text>
+                            {selections.hasActive ? (
+                                <Pressable
+                                    onPress={selections.clear}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={tFallback(t, 'filters.clear', 'Clear')}
+                                    style={[styles.selectButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
+                                >
+                                    <Text style={[styles.selectButtonText, { color: tc.text }]}>
+                                        {tFallback(t, 'filters.clear', 'Clear')}
+                                    </Text>
+                                </Pressable>
+                            ) : null}
                         </View>
                     }
                 />
                 )}
+                <TaskFilterSheet
+                    visible={filtersVisible}
+                    onClose={() => setFiltersVisible(false)}
+                    selections={selections}
+                    options={{
+                        tokens: tokenFilterOptions,
+                        timeEstimates: timeEstimateFilterOptions,
+                        visibility: metadataFilterVisibility,
+                    }}
+                    themeColors={tc}
+                    t={t}
+                    topContent={(
+                        <>
+                            <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
+                                {tFallback(t, 'sort.label', 'Sort')}
+                            </Text>
+                            <View style={styles.sheetChipRow}>
+                                {DONE_TASK_LIST_SORT_OPTIONS.map((option) => (
+                                    <FilterChip
+                                        key={`sort:${option}`}
+                                        label={t(`sort.${option}`)}
+                                        selected={sortBy === option}
+                                        themeColors={tc}
+                                        onPress={() => updateViewState({ sortBy: option })}
+                                    />
+                                ))}
+                            </View>
+
+                            <Text style={[styles.sheetSectionLabel, { color: tc.secondaryText }]}>
+                                {tFallback(t, 'list.groupBy', 'Group')}
+                            </Text>
+                            <View style={styles.sheetChipRow}>
+                                {ARCHIVED_LIST_GROUP_OPTIONS.map((option) => (
+                                    <FilterChip
+                                        key={`group:${option}`}
+                                        label={getTaskGroupByLabel(option, t)}
+                                        selected={groupBy === option}
+                                        themeColors={tc}
+                                        onPress={() => updateViewState({ groupBy: option })}
+                                    />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                />
                 <TaskEditModal
                     visible={Boolean(selectedTask)}
                     task={selectedTask}
@@ -664,6 +908,64 @@ export default function ArchivedScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+    },
+    searchInput: {
+        flex: 1,
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: 15,
+    },
+    filtersButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    filtersButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    groupHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        paddingHorizontal: 4,
+        paddingTop: 14,
+        paddingBottom: 6,
+    },
+    groupHeaderText: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    groupHeaderCount: {
+        fontSize: 12,
+    },
+    sheetSectionLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 12,
+        marginBottom: 6,
+    },
+    sheetChipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
     },
     segmentRow: {
         paddingHorizontal: 16,
