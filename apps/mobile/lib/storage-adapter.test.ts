@@ -1442,4 +1442,77 @@ describe('mobile storage adapter', () => {
 
     expect(snapshot?.people).toEqual(backup.people);
   }, 10_000);
+
+  // #964: SQLite kept reading fine while every write failed, so the JSON copy
+  // took the writes and nothing ever read it back — each restart looked like the
+  // app had rolled back to the last state SQLite accepted.
+  describe('when SQLite refuses writes but still reads (#964)', () => {
+    const backupTask: Task = {
+      id: 'task-new',
+      title: 'Written while SQLite was down',
+      status: 'inbox',
+      tags: [],
+      contexts: [],
+      createdAt: '2026-07-29T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+    };
+    const staleSqliteData: AppData = {
+      tasks: [],
+      projects: [],
+      sections: [],
+      areas: [],
+      people: [],
+      settings: {},
+    };
+    const jsonBackup: AppData = { ...staleSqliteData, tasks: [backupTask] };
+
+    const stubStoredKeys = (keys: Record<string, string | null>) => {
+      asyncStorageMock.getItem.mockImplementation((key: string) => Promise.resolve(keys[key] ?? null));
+    };
+
+    it('marks the JSON backup as ahead when it takes a write SQLite rejected', async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+
+      await mobileStorage.saveData(jsonBackup);
+
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite', '1');
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data', JSON.stringify(jsonBackup));
+    }, 10_000);
+
+    it('merges those writes back into SQLite on the next launch and clears the marker', async () => {
+      stubStoredKeys({
+        'mindwtr-data:json-ahead-of-sqlite': '1',
+        'mindwtr-data': JSON.stringify(jsonBackup),
+      });
+      const saveData = vi.fn().mockResolvedValue(undefined);
+      const adapter = { getData: vi.fn().mockResolvedValue(staleSqliteData), saveData } as any;
+      const client = { get: vi.fn().mockResolvedValue({ count: 0 }) } as any;
+      const { __mobileStorageTestUtils } = await import('./storage-adapter');
+
+      await __mobileStorageTestUtils.prepareSqliteDataForTests(adapter, client);
+
+      expect(saveData).toHaveBeenCalled();
+      expect(saveData.mock.calls[0][0].tasks.map((task: Task) => task.id)).toEqual(['task-new']);
+      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+    }, 10_000);
+
+    it('fails initialization when SQLite still refuses the recovered writes, so reads use the JSON copy', async () => {
+      stubStoredKeys({
+        'mindwtr-data:json-ahead-of-sqlite': '1',
+        'mindwtr-data': JSON.stringify(jsonBackup),
+      });
+      const adapter = {
+        getData: vi.fn().mockResolvedValue(staleSqliteData),
+        saveData: vi.fn().mockRejectedValue(new Error('disk I/O error')),
+      } as any;
+      const client = { get: vi.fn().mockResolvedValue({ count: 0 }) } as any;
+      const { __mobileStorageTestUtils } = await import('./storage-adapter');
+
+      await expect(__mobileStorageTestUtils.prepareSqliteDataForTests(adapter, client))
+        .rejects.toThrow('disk I/O error');
+      // Still ahead: the writes are only in the backup, so the marker must stay.
+      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+    }, 10_000);
+  });
 });

@@ -11,6 +11,11 @@ import { markStartupPhase, measureStartupPhase } from './startup-profiler';
 const DATA_KEY = WIDGET_DATA_KEY;
 const STARTUP_BACKUP_VERSION_KEY = `${DATA_KEY}:startup-backup-version`;
 const STARTUP_BACKUP_UPDATED_AT_KEY = `${DATA_KEY}:startup-backup-updated-at`;
+// Set while the JSON backup holds writes SQLite refused. Survives the process,
+// because the loss it prevents only shows up on the NEXT launch: SQLite reads
+// keep succeeding, so without this marker the app happily serves the stale
+// database and every change taken by the fallback is silently dropped (#964).
+const JSON_AHEAD_OF_SQLITE_KEY = `${DATA_KEY}:json-ahead-of-sqlite`;
 const STARTUP_BACKUP_VERSION = '2';
 const LEGACY_DATA_KEYS = ['focus-gtd-data', 'gtd-todo-data', 'gtd-data'];
 const EMPTY_APP_DATA: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
@@ -142,6 +147,40 @@ const awaitQueuedSqliteWrites = async (phase: string): Promise<void> => {
 };
 
 const shouldUseJsonBackupFastPath = () => preferJsonBackup && Date.now() < preferJsonBackupUntil;
+
+// Mirrors JSON_AHEAD_OF_SQLITE_KEY so the common path (SQLite healthy) never
+// pays an AsyncStorage write per save.
+let jsonAheadOfSqlite = false;
+
+const markJsonAheadOfSqlite = async (): Promise<void> => {
+    if (jsonAheadOfSqlite) return;
+    jsonAheadOfSqlite = true;
+    try {
+        await AsyncStorage.setItem(JSON_AHEAD_OF_SQLITE_KEY, '1');
+    } catch (error) {
+        jsonAheadOfSqlite = false;
+        logStorageWarn('[Storage] Failed to mark the JSON backup as ahead of SQLite', error);
+    }
+};
+
+const clearJsonAheadOfSqlite = async (): Promise<void> => {
+    if (!jsonAheadOfSqlite) return;
+    jsonAheadOfSqlite = false;
+    try {
+        await AsyncStorage.removeItem(JSON_AHEAD_OF_SQLITE_KEY);
+    } catch (error) {
+        logStorageWarn('[Storage] Failed to clear the JSON-ahead marker', error);
+    }
+};
+
+const readJsonAheadOfSqlite = async (): Promise<boolean> => {
+    try {
+        jsonAheadOfSqlite = await AsyncStorage.getItem(JSON_AHEAD_OF_SQLITE_KEY) != null;
+    } catch (error) {
+        logStorageWarn('[Storage] Failed to read the JSON-ahead marker', error);
+    }
+    return jsonAheadOfSqlite;
+};
 
 const markPreferJsonBackup = () => {
     preferJsonBackup = true;
@@ -706,7 +745,50 @@ const reconcileJsonBackupIntoSqlite = async (
     await AsyncStorage.setItem(SQLITE_JSON_RECONCILE_KEY, '1');
 };
 
+/**
+ * Merge writes the JSON backup took while SQLite was refusing them (#964).
+ *
+ * Unlike the one-time reconcile above this runs whenever the marker is set, and
+ * a failed write is NOT swallowed: it fails init on purpose, so this session
+ * reads the JSON copy instead of the database that is missing those writes.
+ * Without that, SQLite keeps reading fine, the fallback keeps taking writes
+ * nothing reads back, and every restart looks like the app rolled back to the
+ * last state SQLite accepted.
+ */
+const recoverJsonAheadWrites = async (adapter: SqliteAdapter, currentSnapshot?: AppData): Promise<void> => {
+    let backup: AppData;
+    try {
+        const jsonValue = await getLegacyJson(AsyncStorage);
+        if (jsonValue == null) {
+            await clearJsonAheadOfSqlite();
+            return;
+        }
+        backup = parseStoredAppDataJson(jsonValue);
+    } catch (error) {
+        // Unreadable or corrupt: there is nothing to recover, and keeping the
+        // marker would fail init on every launch from here on.
+        logStorageWarn('[Storage] Could not read the JSON backup to recover pending writes', error);
+        await clearJsonAheadOfSqlite();
+        return;
+    }
+    const current = currentSnapshot ?? await adapter.getData();
+    const { data: merged, stats } = mergeAppDataWithStats(current, backup);
+    await adapter.saveData(merged);
+    await clearJsonAheadOfSqlite();
+    logStorageInfo('[Storage] Recovered JSON-only writes into SQLite', {
+        backupTasks: String(backup.tasks.length),
+        sqliteTasks: String(current.tasks.length),
+        mergedTasks: String(merged.tasks.length),
+        tasksFromBackup: String((stats.tasks?.incomingOnly ?? 0) + (stats.tasks?.resolvedUsingIncoming ?? 0)),
+    });
+};
+
 const prepareSqliteData = async (adapter: SqliteAdapter, client: SqliteClient): Promise<void> => {
+    if (await readJsonAheadOfSqlite()) {
+        await measureStartupPhase('mobile.storage.sqlite_init.recover_json_ahead', async () =>
+            recoverJsonAheadWrites(adapter)
+        );
+    }
     let readableSnapshot: AppData | undefined;
     let hasData: boolean;
     try {
@@ -1027,6 +1109,10 @@ const createStorage = (): StorageAdapter => {
                         });
                     }
                     clearPreferJsonBackup();
+                    // A full snapshot just landed, so SQLite is no longer behind the
+                    // JSON copy. Only saveData may clear this — saveTask writes one
+                    // row and cannot vouch for earlier JSON-only writes (#964).
+                    await clearJsonAheadOfSqlite();
                     // SQLite is the durable copy; the JSON backup and widget render
                     // land coalesced off the save queue so reads and following taps
                     // never wait on them (#766).
@@ -1045,6 +1131,9 @@ const createStorage = (): StorageAdapter => {
                         scheduleStartupJsonBackup(data, 'mobile.storage.save_data.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
                         assertJsonFallbackLanded();
+                        // The backup now holds writes SQLite does not; the next
+                        // launch has to merge them back before reading (#964).
+                        await markJsonAheadOfSqlite();
                         markStartupPhase('mobile.storage.save_data.end');
                     } catch (e) {
                         markStartupPhase('mobile.storage.save_data.error');
@@ -1099,6 +1188,7 @@ const createStorage = (): StorageAdapter => {
                         scheduleStartupJsonBackup(snapshot, 'mobile.storage.save_task.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
                         assertJsonFallbackLanded();
+                        await markJsonAheadOfSqlite();
                     } catch (fallbackError) {
                         logStorageError('Failed to save task fallback data', fallbackError);
                         throw new Error('Failed to save task: ' + (fallbackError as Error).message);
@@ -1212,6 +1302,8 @@ export const __mobileStorageTestUtils = {
     flushPendingWidgetRefresh,
     prepareSqliteDataForTests: prepareSqliteData,
     reconcileJsonBackupIntoSqliteForTests: reconcileJsonBackupIntoSqlite,
+    recoverJsonAheadWritesForTests: recoverJsonAheadWrites,
+    jsonAheadOfSqliteKeyForTests: JSON_AHEAD_OF_SQLITE_KEY,
     sqliteHasAnyDataForTests: sqliteHasAnyData,
     reset: () => {
         saveQueue = Promise.resolve();
@@ -1222,6 +1314,7 @@ export const __mobileStorageTestUtils = {
         jsonBackupSkippedOversize = false;
         widgetRefreshCoalescer.reset();
         initializeSqliteState = initSqliteState;
+        jsonAheadOfSqlite = false;
         clearPreferJsonBackup();
     },
     setSqliteInitializerForTests: (initializer: () => Promise<SqliteState>) => {
