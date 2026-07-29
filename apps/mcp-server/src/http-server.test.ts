@@ -267,7 +267,7 @@ describe('HTTP MCP transport (integration, real listening server)', () => {
     expect(res.status).toBe(413);
   });
 
-  test('initialize + tools/list round-trip with a valid token includes mindwtr_add_task', async () => {
+  test('initialize + tools/list exposes recurrence on both task write schemas', async () => {
     const client = new Client({ name: 'test-client', version: '1.0.0' });
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { Authorization: `Bearer ${VALID_TOKEN}` } },
@@ -275,7 +275,11 @@ describe('HTTP MCP transport (integration, real listening server)', () => {
     await client.connect(transport);
     try {
       const { tools } = await client.listTools();
-      expect(tools.some((tool) => tool.name === 'mindwtr_add_task')).toBe(true);
+      for (const name of ['mindwtr_add_task', 'mindwtr_update_task']) {
+        const tool = tools.find((candidate) => candidate.name === name);
+        const properties = (tool?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties;
+        expect(Boolean(properties?.recurrence)).toBe(true);
+      }
     } finally {
       await client.close();
     }

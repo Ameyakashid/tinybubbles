@@ -5,7 +5,9 @@ import { filterUndefined } from './filter-undefined.js';
 import {
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  normalizeNullableTaskRecurrence,
   normalizeNullableTaskTokens,
+  normalizeOptionalTaskRecurrence,
   normalizeOptionalTaskTokens,
 } from './input-validation.js';
 import type {
@@ -274,6 +276,7 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
         sectionId: input.sectionId,
         dueDate: input.dueDate,
         startTime: input.startTime,
+        recurrence: normalizeOptionalTaskRecurrence(input.recurrence),
         contexts: normalizeOptionalTaskTokens('contexts', input.contexts),
         tags: normalizeOptionalTaskTokens('tags', input.tags),
         description: input.description,
@@ -295,6 +298,9 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
       if (input.sectionId !== undefined) patch.sectionId = input.sectionId;
       if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
       if (input.startTime !== undefined) patch.startTime = input.startTime;
+      if (input.recurrence !== undefined) {
+        patch.recurrence = normalizeNullableTaskRecurrence(input.recurrence);
+      }
       if (input.contexts !== undefined) patch.contexts = normalizeNullableTaskTokens('contexts', input.contexts) ?? [];
       if (input.tags !== undefined) patch.tags = normalizeNullableTaskTokens('tags', input.tags) ?? [];
       if (input.description !== undefined) patch.description = input.description;

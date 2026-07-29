@@ -407,9 +407,10 @@ Any MCP-compatible client can work as long as it can launch a **stdio** server w
 - `mindwtr_get_task`
   - Input: `{ id, includeDeleted? }`
 - `mindwtr_add_task` **(requires `--write`)**
-  - Input: `{ title? | quickAdd?, status?, projectId?, sectionId?, dueDate?, startTime?, contexts?, tags?, description?, priority?, timeEstimate? }`
+  - Input: `{ title? | quickAdd?, status?, projectId?, sectionId?, dueDate?, startTime?, recurrence?, contexts?, tags?, description?, priority?, timeEstimate? }`
 - `mindwtr_update_task` **(requires `--write`)**
-  - Input: `{ id, title?, status?, projectId?, sectionId?, dueDate?, startTime?, contexts?, tags?, description?, priority?, timeEstimate?, reviewAt?, isFocusedToday? }`
+  - Input: `{ id, title?, status?, projectId?, sectionId?, dueDate?, startTime?, recurrence?, contexts?, tags?, description?, priority?, timeEstimate?, reviewAt?, isFocusedToday? }`
+  - `recurrence` accepts a recurrence object or an RFC 5545 RRULE string. Pass `null` to clear it.
 - `mindwtr_complete_task` **(requires `--write`)**
   - Input: `{ id }`
 - `mindwtr_delete_task` **(requires `--write`)**

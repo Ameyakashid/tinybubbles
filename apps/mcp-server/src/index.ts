@@ -17,10 +17,14 @@ import {
   type HttpServerConfig,
 } from './http-server.js';
 import {
+  ISO_DATE_LIKE_PATTERN,
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  normalizeNullableTaskRecurrence,
   normalizeNullableTaskTokens,
+  normalizeOptionalTaskRecurrence,
   normalizeOptionalTaskTokens,
+  taskRecurrenceInputSchema,
 } from './input-validation.js';
 import { createService, type MindwtrService } from './service.js';
 
@@ -185,7 +189,7 @@ const taskTokenSchema = z.string().trim().min(1).max(MAX_TASK_TITLE_LENGTH);
 const isoDateLikeSchema = z
   .string()
   .regex(
-    /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2}))?$/,
+    ISO_DATE_LIKE_PATTERN,
     'Expected ISO date (YYYY-MM-DD) or ISO datetime'
   );
 
@@ -212,6 +216,7 @@ const addTaskSchema = z.object({
   sectionId: z.string().optional().describe('Project section ID to assign the task to'),
   dueDate: isoDateLikeSchema.optional().describe('Due date in ISO format'),
   startTime: isoDateLikeSchema.optional().describe('Start time in ISO format'),
+  recurrence: taskRecurrenceInputSchema.optional().describe('Recurrence object or RFC 5545 RRULE string'),
   contexts: z.array(taskTokenSchema).optional().describe('Context tags (e.g. ["@home", "@work"])'),
   tags: z.array(taskTokenSchema).optional().describe('Tags (e.g. ["#urgent", "#personal"])'),
   description: z.string().optional().describe('Task description/notes'),
@@ -237,6 +242,7 @@ const normalizeAddTaskInput = (data: z.infer<typeof addTaskSchema>) => {
   }
   return {
     ...data,
+    recurrence: normalizeOptionalTaskRecurrence(data.recurrence),
     contexts: normalizeOptionalTaskTokens('contexts', data.contexts),
     tags: normalizeOptionalTaskTokens('tags', data.tags),
   };
@@ -253,6 +259,7 @@ const updateTaskSchema = z.object({
   sectionId: z.string().nullable().optional(),
   dueDate: isoDateLikeSchema.nullable().optional(),
   startTime: isoDateLikeSchema.nullable().optional(),
+  recurrence: taskRecurrenceInputSchema.nullable().optional().describe('Recurrence object or RFC 5545 RRULE string; null clears it'),
   contexts: z.array(taskTokenSchema).nullable().optional(),
   tags: z.array(taskTokenSchema).nullable().optional(),
   description: z.string().nullable().optional(),
@@ -266,6 +273,7 @@ const updateTaskSchema = z.object({
 
 const normalizeUpdateTaskInput = (data: z.infer<typeof updateTaskSchema>) => ({
   ...data,
+  recurrence: normalizeNullableTaskRecurrence(data.recurrence),
   contexts: normalizeNullableTaskTokens('contexts', data.contexts),
   tags: normalizeNullableTaskTokens('tags', data.tags),
 });

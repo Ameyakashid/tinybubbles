@@ -20,6 +20,7 @@ import {
 } from '@mindwtr/core';
 import type { DbClient } from './db.js';
 import { NotFoundError } from './errors.js';
+import type { TaskRecurrenceInput } from './input-validation.js';
 
 export type TaskStatus = CoreTaskStatus;
 export type Task = CoreTask;
@@ -59,6 +60,7 @@ export type AddTaskInput = {
   sectionId?: string;
   dueDate?: string;
   startTime?: string;
+  recurrence?: TaskRecurrenceInput;
   contexts?: string[];
   tags?: string[];
   description?: string;
@@ -517,6 +519,7 @@ export type UpdateTaskInput = {
   sectionId?: string | null;
   dueDate?: string | null;
   startTime?: string | null;
+  recurrence?: TaskRecurrenceInput | null;
   contexts?: string[] | null;
   tags?: string[] | null;
   description?: string | null;

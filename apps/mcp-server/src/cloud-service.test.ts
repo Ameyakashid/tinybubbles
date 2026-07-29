@@ -190,20 +190,37 @@ describe('cloud-backed MCP service', () => {
       fetcher,
     });
 
-    const created = await service.addTask({ quickAdd: 'Buy milk @errands' });
+    const created = await service.addTask({
+      quickAdd: 'Buy milk @errands',
+      recurrence: 'FREQ=WEEKLY;BYDAY=MO',
+    });
     expect(created.id).toBe('task-new');
     expect(requests[0]).toMatchObject({
       method: 'POST',
       url: 'https://mindwtr.example.com/v1/tasks',
-      body: { input: 'Buy milk @errands' },
+      body: {
+        input: 'Buy milk @errands',
+        props: {
+          recurrence: {
+            rule: 'weekly',
+            byDay: ['MO'],
+            rrule: 'FREQ=WEEKLY;BYDAY=MO',
+          },
+        },
+      },
     });
 
-    const patched = await service.updateTask({ id: 'task-next', title: 'Patched', dueDate: null });
+    const patched = await service.updateTask({
+      id: 'task-next',
+      title: 'Patched',
+      dueDate: null,
+      recurrence: null,
+    });
     expect(patched.title).toBe('Patched');
     expect(requests[1]).toMatchObject({
       method: 'PATCH',
       url: 'https://mindwtr.example.com/v1/tasks/task-next',
-      body: { title: 'Patched', dueDate: null },
+      body: { title: 'Patched', dueDate: null, recurrence: null },
     });
 
     const completed = await service.completeTask('task-next');

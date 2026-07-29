@@ -292,6 +292,7 @@ describe('mcp service', () => {
       title: 'Plain task',
       projectId: 'p1',
       sectionId: 's1',
+      recurrence: 'FREQ=MONTHLY;BYMONTHDAY=10',
       energyLevel: 'medium',
       assignedTo: 'Taylor',
     });
@@ -299,6 +300,11 @@ describe('mcp service', () => {
     expect(receivedAddTaskInput.title).toBe('Plain task');
     expect(receivedAddTaskInput.props.projectId).toBe('p1');
     expect(receivedAddTaskInput.props.sectionId).toBe('s1');
+    expect(receivedAddTaskInput.props.recurrence).toEqual({
+      rule: 'monthly',
+      byMonthDay: [10],
+      rrule: 'FREQ=MONTHLY;BYMONTHDAY=10',
+    });
     expect(receivedAddTaskInput.props.energyLevel).toBe('medium');
     expect(receivedAddTaskInput.props.assignedTo).toBe('Taylor');
   });
@@ -353,6 +359,7 @@ describe('mcp service', () => {
       projectId: null,
       dueDate: null,
       startTime: null,
+      recurrence: null,
       energyLevel: 'low',
       assignedTo: null,
     } as any);
@@ -364,6 +371,8 @@ describe('mcp service', () => {
     expect(receivedUpdateInput.updates.contexts).toEqual(['@desk']);
     expect(receivedUpdateInput.updates.tags).toEqual(['#weekly']);
     expect(receivedUpdateInput.updates.projectId).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(receivedUpdateInput.updates, 'recurrence')).toBe(true);
+    expect(receivedUpdateInput.updates.recurrence).toBeUndefined();
     expect(receivedUpdateInput.updates.energyLevel).toBe('low');
     expect(receivedUpdateInput.updates.assignedTo).toBeUndefined();
     expect(closedDbCount).toBe(1);
@@ -632,11 +641,16 @@ describe('mcp service', () => {
 
       const task = await service.addTask({
         quickAdd: 'Buy milk +Home @errands #weekly /due:2026-04-20 /next',
+        recurrence: 'FREQ=WEEKLY;BYDAY=MO',
       });
       const updatedTask = await service.updateTask({
         id: task.id,
         status: 'waiting',
         contexts: ['@desk'],
+        recurrence: {
+          rule: 'monthly',
+          byMonthDay: [10],
+        },
       });
       const person = await service.addPerson({
         name: 'Alex',
@@ -687,6 +701,11 @@ describe('mcp service', () => {
 
       expect(updatedTask.status).toBe('waiting');
       expect(updatedTask.contexts).toEqual(['@desk']);
+      expect(updatedTask.recurrence).toMatchObject({
+        rule: 'monthly',
+        seriesId: task.id,
+        byMonthDay: [10],
+      });
       expect(updatedProject.title).toBe('Household');
       expect(updatedProject.status).toBe('waiting');
       expect(updatedProject.supportNotes).toBe('Track home-related work here.');
@@ -706,6 +725,18 @@ describe('mcp service', () => {
       expect(persistedTask?.tags).toEqual(['#weekly']);
       expect(persistedUpdatedTask.status).toBe('waiting');
       expect(persistedUpdatedTask.contexts).toEqual(['@desk']);
+      expect(persistedUpdatedTask.recurrence).toMatchObject({
+        rule: 'monthly',
+        seriesId: task.id,
+        byMonthDay: [10],
+      });
+      expect(
+        typeof persistedUpdatedTask.recurrence === 'object'
+          ? persistedUpdatedTask.recurrence.rrule
+          : undefined
+      ).toContain(`X-MINDWTR-SERIES-ID=${task.id}`);
+      await service.updateTask({ id: task.id, recurrence: null });
+      expect((await service.getTask({ id: task.id })).recurrence).toBeUndefined();
       expect(persistedWaitingTask.assignedTo).toBe('Alexandra');
 
       expect(persistedProject).toBeTruthy();

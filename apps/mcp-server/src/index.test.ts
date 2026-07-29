@@ -391,6 +391,33 @@ describe('mcp server index', () => {
     expect(result?.content[0]?.text).toContain('Tag values must be at most 500 characters');
   });
 
+  test('validates task recurrence inputs', async () => {
+    const { server, tools } = createMockServer();
+    registerMindwtrTools(server, createMockService(), false);
+    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    expect(addHandler).toBeTruthy();
+
+    for (const recurrence of [
+      'FREQ=HOURLY',
+      'FREQ=DAILY;COUNT=nope',
+      'FREQ=WEEKLY;BYDAY=MON',
+      'FREQ=WEEKLY;BYDAY=1MO',
+      'FREQ=DAILY;BYMONTHDAY=31',
+      'FREQ=DAILY;UNTIL=20261340',
+      'FREQ=DAILY;UNTIL=20260230',
+      'FREQ=DAILY;UNTIL=20260230T100000Z',
+      { rule: 'daily', until: '2026-13-40' },
+      { rule: 'daily', rrule: 'FREQ=WEEKLY' },
+      { rule: 'monthly', byMonthDay: [10], rrule: 'FREQ=MONTHLY;BYMONTHDAY=20' },
+      { rule: 'weekly', byDay: ['MO'], rrule: 'FREQ=WEEKLY;BYDAY=TU' },
+      { rule: 'daily', count: 2, rrule: 'FREQ=DAILY;COUNT=5' },
+    ]) {
+      const result = await addHandler?.({ title: 'Task', recurrence });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0]?.text).toContain('Invalid task recurrence');
+    }
+  });
+
   test('normalizes task token values before delegating to the service', async () => {
     const { server, tools } = createMockServer();
     let receivedInput: any = null;
@@ -417,6 +444,7 @@ describe('mcp server index', () => {
       sectionId: 's1',
       contexts: [' @home '],
       tags: [' #urgent '],
+      recurrence: 'FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20260810T100000',
       energyLevel: 'high',
       assignedTo: 'Dana',
     });
@@ -425,15 +453,40 @@ describe('mcp server index', () => {
       sectionId: 's1',
       contexts: ['@home'],
       tags: ['#urgent'],
+      recurrence: {
+        rule: 'weekly',
+        byDay: ['MO', 'WE'],
+        until: '2026-08-10T10:00:00',
+        rrule: 'FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20260810T100000',
+      },
       energyLevel: 'high',
       assignedTo: 'Dana',
     });
+
+    const roundTripRecurrence = receivedInput.recurrence;
+    await updateHandler?.({ id: 't1', recurrence: roundTripRecurrence });
+    expect(receivedInput.recurrence).toEqual(roundTripRecurrence);
+
+    await updateHandler?.({
+      id: 't1',
+      recurrence: {
+        rule: 'daily',
+        until: '2026-08-10T10:00:00+09:00',
+        rrule: 'FREQ=DAILY;UNTIL=20260810T010000Z',
+      },
+    });
+    expect(receivedInput.recurrence.until).toBe('2026-08-10T10:00:00+09:00');
 
     await updateHandler?.({
       id: 't1',
       sectionId: null,
       contexts: [' @desk '],
       tags: [' #ops '],
+      recurrence: {
+        rule: 'monthly',
+        strategy: 'fluid',
+        byMonthDay: [10],
+      },
       energyLevel: 'low',
       assignedTo: null,
     });
@@ -442,6 +495,11 @@ describe('mcp server index', () => {
       sectionId: null,
       contexts: ['@desk'],
       tags: ['#ops'],
+      recurrence: {
+        rule: 'monthly',
+        strategy: 'fluid',
+        byMonthDay: [10],
+      },
       energyLevel: 'low',
       assignedTo: null,
     });

@@ -8,6 +8,7 @@ import {
     applyTaskUpdates,
     getNextProjectOrder,
     hasSameEntityIdentity,
+    normalizeTaskUpdate,
     reconcileEntityCollection,
     replaceEntitiesInArray,
     replaceEntitiesInMap,
@@ -71,6 +72,36 @@ const createSection = (
     ...overrides,
 });
 
+describe('recurrence updates', () => {
+    it('preserves finite-series progress only when editing the same series', () => {
+        const task = createTask('t1', undefined, undefined, {
+            recurrence: {
+                rule: 'daily',
+                seriesId: 'series-1',
+                count: 8,
+                completedOccurrences: 3,
+            },
+        });
+
+        expect(normalizeTaskUpdate(task, {
+            recurrence: { rule: 'weekly', count: 10 },
+        }).recurrence).toEqual({
+            rule: 'weekly',
+            seriesId: 'series-1',
+            count: 10,
+            completedOccurrences: 3,
+        });
+        const newSeries = normalizeTaskUpdate(task, {
+            recurrence: { rule: 'weekly', seriesId: 'series-2', count: 10 },
+        }).recurrence;
+        expect(newSeries).toMatchObject({
+            rule: 'weekly',
+            seriesId: 'series-2',
+            count: 10,
+        });
+        expect(newSeries).not.toHaveProperty('completedOccurrences');
+    });
+});
 
 describe('relative start updates', () => {
     it('recomputes startTime from the stored due-date offset when dueDate changes', () => {

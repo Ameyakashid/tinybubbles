@@ -17,7 +17,9 @@ import {
   MAX_AREA_NAME_LENGTH,
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
+  normalizeNullableTaskRecurrence,
   normalizeNullableTaskTokens,
+  normalizeOptionalTaskRecurrence,
   normalizeOptionalTaskTokens,
 } from './input-validation.js';
 import {
@@ -193,6 +195,9 @@ const buildTaskUpdates = (input: UpdateTaskInput): Partial<Task> => {
   if (input.sectionId !== undefined) updates.sectionId = input.sectionId ?? undefined;
   if (input.dueDate !== undefined) updates.dueDate = input.dueDate ?? undefined;
   if (input.startTime !== undefined) updates.startTime = input.startTime ?? undefined;
+  if (input.recurrence !== undefined) {
+    updates.recurrence = normalizeNullableTaskRecurrence(input.recurrence) ?? undefined;
+  }
   if (input.contexts !== undefined) updates.contexts = normalizeNullableTaskTokens('contexts', input.contexts) ?? [];
   if (input.tags !== undefined) updates.tags = normalizeNullableTaskTokens('tags', input.tags) ?? [];
   if (input.description !== undefined) updates.description = input.description ?? undefined;
@@ -382,6 +387,7 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
     getPerson: async (input) => withDb((db) => deps.getPerson(db, input)),
     addTask: async (input) => {
       const normalizedInput = validateAddTaskInput(input);
+      const recurrence = normalizeOptionalTaskRecurrence(normalizedInput.recurrence);
       return await runCoreWriteWithRetries(options, deps, async (core) => {
         if (normalizedInput.quickAdd) {
           const projects = await withDb((db) => deps.listProjects(db));
@@ -400,6 +406,7 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
               sectionId: normalizedInput.sectionId,
               dueDate: normalizedInput.dueDate,
               startTime: normalizedInput.startTime,
+              recurrence,
               contexts: normalizedInput.contexts,
               tags: normalizedInput.tags,
               description: normalizedInput.description,
@@ -437,6 +444,7 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
             sectionId: normalizedInput.sectionId,
             dueDate: normalizedInput.dueDate,
             startTime: normalizedInput.startTime,
+            recurrence,
             contexts: normalizedInput.contexts,
             tags: normalizedInput.tags,
             description: normalizedInput.description,

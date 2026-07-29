@@ -160,13 +160,21 @@ export const normalizeTaskUpdate = (
     let adjustedUpdates = updates;
     if (hasOwnField(updates, 'recurrence')) {
         const recurrence = normalizeRecurrenceForLoad(updates.recurrence);
-        const existingSeriesId = typeof task.recurrence === 'object'
-            ? task.recurrence.seriesId
-            : undefined;
+        const existingRecurrence = normalizeRecurrenceForLoad(task.recurrence);
+        const existingSeriesId = existingRecurrence?.seriesId ?? task.id;
+        const seriesId = recurrence?.seriesId ?? existingSeriesId;
+        const completedOccurrences = recurrence?.completedOccurrences
+            ?? (recurrence?.count && seriesId === existingSeriesId
+                ? existingRecurrence?.completedOccurrences
+                : undefined);
         adjustedUpdates = {
             ...adjustedUpdates,
             recurrence: recurrence
-                ? { ...recurrence, seriesId: recurrence.seriesId ?? existingSeriesId ?? task.id }
+                ? {
+                    ...recurrence,
+                    seriesId,
+                    ...(completedOccurrences !== undefined ? { completedOccurrences } : {}),
+                }
                 : undefined,
         };
     }
