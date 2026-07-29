@@ -10,6 +10,7 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { createTaskListScope } from './list/task-list-scope';
+import { VIEW_FILTER_INPUT } from './list/list-toolbar';
 
 export function TrashView() {
     const perf = usePerformanceMonitor('TrashView');
@@ -340,10 +341,13 @@ export function TrashView() {
             <div className="relative">
                 <input
                     type="text"
+                    // Same shape and Escape-back-to-the-list behaviour as every
+                    // other view's filter input (#959).
+                    data-view-filter-input
                     placeholder={t('trash.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-card border border-border rounded-lg py-2 pl-4 pr-4 shadow-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className={VIEW_FILTER_INPUT}
                 />
             </div>
 

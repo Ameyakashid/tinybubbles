@@ -14,6 +14,7 @@ import { ListBulkActions } from './ListBulkActions';
 import { BulkSelectionToolbar } from './BulkSelectionToolbar';
 import { ListFiltersPanel } from './ListFiltersPanel';
 import { ListHeader } from './ListHeader';
+import { VIEW_FILTER_INPUT } from './list-toolbar';
 import { ListQuickAdd } from './ListQuickAdd';
 import type { TaskListGroupBy } from './next-grouping';
 
@@ -321,7 +322,7 @@ export function ListControlsPanel({
                     aria-label={t('common.search')}
                     value={searchQuery}
                     onChange={(event) => onChangeSearch(event.target.value)}
-                    className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    className={VIEW_FILTER_INPUT}
                 />
             )}
 

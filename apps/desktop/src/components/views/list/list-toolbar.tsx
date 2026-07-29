@@ -12,6 +12,12 @@ export const TOOLBAR_CONTROL_BASE = 'h-9 text-xs border transition-colors focus:
 export const TOOLBAR_CONTROL_MUTED = 'bg-card text-muted-foreground border-border hover:bg-muted/70 hover:text-foreground';
 export const TOOLBAR_CONTROL_ACTIVE = 'bg-primary/10 text-primary border-primary';
 
+// Same story for the search box each view puts above its list: Archive and
+// Trash had grown a card-and-shadow variant of their own, so the app showed
+// three different search fields depending on where you were (#959). Views that
+// need an icon or a clear button add padding on top of this, nothing else.
+export const VIEW_FILTER_INPUT = 'w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30';
+
 export { DONE_SORT_OPTIONS, SORT_OPTIONS };
 
 type ToolbarButtonProps = {

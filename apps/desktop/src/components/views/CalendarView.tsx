@@ -28,6 +28,7 @@ import {
     setCalendarTaskDragData,
 } from '../../lib/calendar-task-drag';
 import { useTaskListScope } from './list/task-list-scope';
+import { VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { collectCalendarKeyboardTasks } from './calendar/calendar-keyboard-tasks';
 import { CalendarOpenTaskModal, CalendarTaskComposerModal } from './calendar/CalendarModals';
 import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
@@ -405,7 +406,7 @@ export function CalendarView() {
                             aria-label={t('common.search')}
                             value={viewFilterQuery}
                             onChange={(event) => updateViewFilterQuery(event.target.value)}
-                            className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            className={cn(VIEW_FILTER_INPUT, 'pl-9')}
                         />
                     </div>
                     <button

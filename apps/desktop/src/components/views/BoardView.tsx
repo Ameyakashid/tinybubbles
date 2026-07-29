@@ -30,6 +30,7 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
+import { VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 const BOARD_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:board:v1';
@@ -522,7 +523,7 @@ export function BoardView() {
                             aria-label={t('common.search')}
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            className="w-full text-sm px-3 py-2 rounded border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            className={VIEW_FILTER_INPUT}
                         />
                     </div>
                     {sortBy !== 'default' && (

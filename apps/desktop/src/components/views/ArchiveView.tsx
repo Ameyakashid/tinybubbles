@@ -37,7 +37,7 @@ import {
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
-import { DONE_SORT_OPTIONS, SortBySelect, ToolbarButton } from './list/list-toolbar';
+import { DONE_SORT_OPTIONS, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
     PRIORITY_FILTER_OPTIONS,
     TIME_ESTIMATE_FILTER_OPTIONS,
@@ -739,12 +739,15 @@ export function ArchiveView() {
             <div className="relative">
                 <input
                     type="text"
+                    // Same shape and Escape-back-to-the-list behaviour as every
+                    // other view's filter input (#959).
+                    data-view-filter-input
                     placeholder={segment === 'projects'
                         ? tFallback(t, 'archived.searchProjectsPlaceholder', 'Search archived projects...')
                         : t('archived.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-card border border-border rounded-lg py-2 pl-4 pr-4 shadow-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className={VIEW_FILTER_INPUT}
                 />
             </div>
 

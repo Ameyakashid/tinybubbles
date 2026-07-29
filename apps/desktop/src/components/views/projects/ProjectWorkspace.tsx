@@ -26,7 +26,7 @@ import { TokenPickerModal } from '../../TokenPickerModal';
 import { TaskItem } from '../../TaskItem';
 import { useUiStore } from '../../../store/ui-store';
 import { BulkSelectionToolbar } from '../list/BulkSelectionToolbar';
-import { SortBySelect } from '../list/list-toolbar';
+import { SortBySelect, VIEW_FILTER_INPUT } from '../list/list-toolbar';
 import { sortDoneTasksForListView } from '../list/done-sort';
 import { useTaskListScope } from '../list/task-list-scope';
 import { useTaskSelection } from '../list/useTaskSelection';
@@ -1425,7 +1425,8 @@ export function ProjectWorkspace({
                                     value={searchQuery}
                                     onChange={(event) => setSearchQuery(event.target.value)}
                                     className={cn(
-                                        'w-full min-w-0 rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30',
+                                        VIEW_FILTER_INPUT,
+                                        'min-w-0',
                                         searchQuery && 'pr-9',
                                     )}
                                 />

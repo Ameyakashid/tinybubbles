@@ -3,6 +3,7 @@ import type { MultiValueFilterMatchMode, SortField, TaskEnergyLevel, TaskPriorit
 import { Filter, Save, X } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
+import { VIEW_FILTER_INPUT } from '../list/list-toolbar';
 
 export type AgendaProjectFilterOption = {
     id: string;
@@ -175,7 +176,7 @@ export function AgendaFiltersPanel({
                 aria-label={t('common.search')}
                 value={searchQuery}
                 onChange={(event) => onSearchChange(event.target.value)}
-                className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className={VIEW_FILTER_INPUT}
             />
             {activeFilterChips.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -386,7 +387,7 @@ export function AgendaFiltersPanel({
                                 value={locationFilter}
                                 onChange={(event) => onLocationChange(event.target.value)}
                                 placeholder={t('taskEdit.locationPlaceholder')}
-                                className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className={VIEW_FILTER_INPUT}
                             />
                         </div>
                     ) : null}

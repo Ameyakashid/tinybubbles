@@ -32,6 +32,8 @@ Changes collected after `v1.1.5` and before the next version tag.
 ## Lists & Performance
 
 - Desktop Archive now offers Filters, Sort, and Group controls, including completion-date options, and keeps grouped archives virtualized at large sizes. Mobile Archive adds search plus the same filtering, sorting, and grouping model inside its filter sheet. (#959, #961)
+- Grouping by completion date splits anything older than a week into calendar months instead of one **Earlier** heading, so archives spanning years read as a timeline. (#959)
+- The Archive and Trash search boxes match the search field used by every other list. (#959)
 - Desktop Inbox now exposes the shared Filters panel, so filters chosen in another list remain visible and removable. (#956)
 - Saving a task in a large desktop project no longer scrolls the pinned project row past the list and leaves a blank screen. (#916)
 - Mobile stops re-rendering project screens behind the current route, reducing multi-second updates in large libraries while preserving each screen's state. (#766)
