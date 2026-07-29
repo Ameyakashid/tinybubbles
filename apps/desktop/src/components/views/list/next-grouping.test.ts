@@ -10,6 +10,8 @@ import {
     groupTasksByPerson,
     groupTasksByProject,
     groupTasksByTag,
+    groupTasks,
+    DONE_AXES,
     REFERENCE_AXES,
     sanitizeAxis,
     sanitizeCollapsedGroups,
@@ -74,10 +76,10 @@ describe('groupTasksByArea', () => {
             noAreaLabel: 'No area',
         });
 
-        expect(groups.map((group) => group.title)).toEqual(['No area', 'Work', 'Home']);
-        expect(groups[0]?.muted).toBe(true);
-        expect(groups[1]?.tasks.map((task) => task.id)).toEqual(['t3']);
-        expect(groups[2]?.tasks.map((task) => task.id)).toEqual(['t2']);
+        expect(groups.map((group) => group.title)).toEqual(['Work', 'Home', 'No area']);
+        expect(groups[2]?.muted).toBe(true);
+        expect(groups[0]?.tasks.map((task) => task.id)).toEqual(['t3']);
+        expect(groups[1]?.tasks.map((task) => task.id)).toEqual(['t2']);
     });
 });
 
@@ -109,8 +111,8 @@ describe('groupTasksByContext', () => {
             noContextLabel: 'No context',
         });
 
-        expect(groups.map((group) => group.title)).toEqual(['No context', '@deep', '@home', '@work']);
-        expect(groups[0]?.tasks.map((task) => task.id)).toEqual(['t1']);
+        expect(groups.map((group) => group.title)).toEqual(['@deep', '@home', '@work', 'No context']);
+        expect(groups[3]?.tasks.map((task) => task.id)).toEqual(['t1']);
         expect(groups.find((group) => group.id === 'context:@deep')?.tasks.map((task) => task.id)).toEqual(['t2']);
         expect(groups.find((group) => group.id === 'context:@work')?.tasks.map((task) => task.id)).toEqual(['t2']);
     });
@@ -129,8 +131,8 @@ describe('groupTasksByTag', () => {
             noTagLabel: 'No tags',
         });
 
-        expect(groups.map((group) => group.title)).toEqual(['No tags', '#deep', '#home', '#work']);
-        expect(groups[0]?.muted).toBe(true);
+        expect(groups.map((group) => group.title)).toEqual(['#deep', '#home', '#work', 'No tags']);
+        expect(groups[3]?.muted).toBe(true);
         expect(groups.find((group) => group.id === 'tag:#deep')?.tasks.map((task) => task.id)).toEqual(['t2']);
         expect(groups.find((group) => group.id === 'tag:#work')?.tasks.map((task) => task.id)).toEqual(['t2']);
     });
@@ -172,10 +174,65 @@ describe('groupTasksByProject', () => {
             noProjectLabel: 'No project',
         });
 
-        expect(groups.map((group) => group.title)).toEqual(['No project', 'Beta', 'Alpha']);
-        expect(groups[0]?.muted).toBe(true);
-        expect(groups[1]?.tasks.map((task) => task.id)).toEqual(['t3']);
-        expect(groups[2]?.tasks.map((task) => task.id)).toEqual(['t2']);
+        expect(groups.map((group) => group.title)).toEqual(['Beta', 'Alpha', 'No project']);
+        expect(groups[2]?.muted).toBe(true);
+        expect(groups[0]?.tasks.map((task) => task.id)).toEqual(['t3']);
+        expect(groups[1]?.tasks.map((task) => task.id)).toEqual(['t2']);
+    });
+});
+
+// #963: grouping is for finding a group, so the ungrouped pile goes last. This
+// walks every axis any view offers rather than the four that were wrong, so an
+// axis added later cannot quietly reintroduce a leading catch-all.
+describe('every grouping axis', () => {
+    const EVERY_AXIS: TaskGroupAxis[] = Array.from(new Set<TaskGroupAxis>([
+        ...FOCUS_AXES, ...REFERENCE_AXES, ...DONE_AXES, ...CONTEXTS_AXES,
+    ])).filter((axis) => axis !== 'none');
+
+    const areas: Area[] = [{
+        id: 'a1',
+        name: 'Work',
+        color: '#111111',
+        order: 0,
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+    }];
+    const project: Project = {
+        id: 'p1',
+        title: 'Alpha',
+        color: '#222222',
+        order: 0,
+        status: 'active',
+        tagIds: [],
+        areaId: 'a1',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+    };
+    const tasks = [
+        baseTask({
+            id: 'filled',
+            areaId: 'a1',
+            projectId: 'p1',
+            tags: ['#tag'],
+            contexts: ['@ctx'],
+            priority: 'high',
+            energyLevel: 'high',
+            assignedTo: 'Ana',
+            completedAt: '2026-02-01T00:00:00.000Z',
+        }),
+        baseTask({ id: 'bare' }),
+    ];
+
+    it.each(EVERY_AXIS)('puts the muted catch-all group last: %s', (axis) => {
+        const groups = groupTasks(axis, {
+            tasks,
+            areas,
+            projectMap: new Map([[project.id, project]]),
+            t: (key: string) => key,
+        });
+        const mutedIndex = groups.findIndex((group) => group.muted);
+        if (mutedIndex === -1) return;
+        expect(mutedIndex).toBe(groups.length - 1);
     });
 });
 

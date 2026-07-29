@@ -49,7 +49,7 @@ const layout = (items: TaskGroupItem[]) => {
 };
 
 describe('buildTaskGroupSections', () => {
-  it('groups by project, ordering projects by order then title, unassigned first', () => {
+  it('groups by project, ordering projects by order then title, unassigned last', () => {
     const items = buildTaskGroupSections({
       groupBy: 'project',
       tasks: [task('a', { projectId: 'p2' }), task('b'), task('c', { projectId: 'p1' })],
@@ -61,10 +61,11 @@ describe('buildTaskGroupSections', () => {
       t,
     });
 
+    // The ungrouped pile goes last on both platforms (#963).
     expect(layout(items)).toEqual([
-      { section: 'No project', count: 1, ids: ['b'] },
       { section: 'Zebra', count: 1, ids: ['c'] },
       { section: 'Alpha', count: 1, ids: ['a'] },
+      { section: 'No project', count: 1, ids: ['b'] },
     ]);
   });
 
@@ -92,9 +93,9 @@ describe('buildTaskGroupSections', () => {
     });
 
     expect(layout(items)).toEqual([
-      { section: 'No tags', count: 1, ids: ['none'] },
       { section: 'alpha', count: 1, ids: ['both'] },
       { section: 'beta', count: 1, ids: ['both'] },
+      { section: 'No tags', count: 1, ids: ['none'] },
     ]);
   });
 
@@ -115,8 +116,8 @@ describe('buildTaskGroupSections', () => {
     // A task pointing at an area that no longer exists lands in General rather
     // than creating a phantom section or vanishing.
     expect(layout(items)).toEqual([
-      { section: 'General', count: 2, ids: ['loose', 'staleArea'] },
       { section: 'Work', count: 2, ids: ['direct', 'viaProject'] },
+      { section: 'General', count: 2, ids: ['loose', 'staleArea'] },
     ]);
   });
 

@@ -71,7 +71,9 @@ export type BuildTaskGroupSectionsParams = {
 /**
  * Flattens tasks into an alternating section-header / task-row list for a
  * FlatList. Empty groups are dropped, so a section header always has rows
- * under it.
+ * under it, and the muted catch-all section ("No project", "General", …) is
+ * always last — leading with the ungrouped pile pushed every real group below
+ * a scroll (#963).
  */
 export function buildTaskGroupSections({
   groupBy,
@@ -113,7 +115,6 @@ export function buildTaskGroupSections({
     });
 
     const items: TaskGroupItem[] = [];
-    appendSection(items, 'project:none', tFallback(t, 'taskEdit.noProjectOption', 'No project'), noProjectTasks, true);
     const sortedProjects = [...grouped.keys()]
       .map((itemProjectId) => projectById.get(itemProjectId))
       .filter((project): project is Project => Boolean(project))
@@ -124,6 +125,7 @@ export function buildTaskGroupSections({
         return a.title.localeCompare(b.title);
       });
     sortedProjects.forEach((project) => appendSection(items, `project:${project.id}`, project.title, grouped.get(project.id) ?? []));
+    appendSection(items, 'project:none', tFallback(t, 'taskEdit.noProjectOption', 'No project'), noProjectTasks, true);
     return items;
   }
 
@@ -159,10 +161,10 @@ export function buildTaskGroupSections({
     });
 
     const items: TaskGroupItem[] = [];
-    appendSection(items, 'tag:none', tFallback(t, 'taskEdit.noTags', 'No tags'), noTagTasks, true);
     [...grouped.keys()]
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .forEach((tag) => appendSection(items, `tag:${tag}`, tag, grouped.get(tag) ?? []));
+    appendSection(items, 'tag:none', tFallback(t, 'taskEdit.noTags', 'No tags'), noTagTasks, true);
     return items;
   }
 
@@ -187,11 +189,10 @@ export function buildTaskGroupSections({
   });
 
   const items: TaskGroupItem[] = [];
-  appendSection(items, 'general', tFallback(t, 'settings.general', 'General'), generalTasks, true);
-
   activeAreas.forEach((area) => {
     const tasksForArea = grouped.get(area.id) ?? [];
     appendSection(items, area.id, area.name, tasksForArea);
   });
+  appendSection(items, 'general', tFallback(t, 'settings.general', 'General'), generalTasks, true);
   return items;
 }

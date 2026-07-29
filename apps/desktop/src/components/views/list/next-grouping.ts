@@ -33,6 +33,11 @@ export type TaskListGroupBy = NextGroupBy | ReferenceGroupBy | DoneGroupBy;
 export const CONTEXTS_AXES = ['none', 'status', 'tag', 'context', 'area', 'project'] as const;
 export type ContextsGroupBy = typeof CONTEXTS_AXES[number];
 
+// The muted catch-all ("No project", "General", "No context", …) always sorts
+// LAST. Grouping is for finding a group, and the ungrouped pile is the least
+// specific thing in the list — leading with it pushed every real group below a
+// scroll. Priority, energy and person already ended this way; the rest matched
+// them (#963).
 export interface TaskGroup {
     id: string;
     title: string;
@@ -110,16 +115,6 @@ export function groupTasksByArea({
     });
 
     const groups: TaskGroup[] = [];
-    if (noAreaTasks.length > 0) {
-        groups.push({
-            // id stays 'general' so persisted collapse state survives the label rename
-            id: 'general',
-            title: noAreaLabel,
-            tasks: noAreaTasks,
-            muted: true,
-        });
-    }
-
     activeAreas.forEach((area) => {
         const areaTasks = grouped.get(area.id) ?? [];
         if (areaTasks.length === 0) return;
@@ -130,6 +125,16 @@ export function groupTasksByArea({
             dotColor: area.color || DEFAULT_AREA_COLOR,
         });
     });
+
+    if (noAreaTasks.length > 0) {
+        groups.push({
+            // id stays 'general' so persisted collapse state survives the label rename
+            id: 'general',
+            title: noAreaLabel,
+            tasks: noAreaTasks,
+            muted: true,
+        });
+    }
     return groups;
 }
 
@@ -156,15 +161,6 @@ export function groupTasksByContext({
     });
 
     const groups: TaskGroup[] = [];
-    if (noContextTasks.length > 0) {
-        groups.push({
-            id: 'context:none',
-            title: noContextLabel,
-            tasks: noContextTasks,
-            muted: true,
-        });
-    }
-
     const sortedContexts = [...grouped.keys()].sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: 'base' })
     );
@@ -177,6 +173,15 @@ export function groupTasksByContext({
             dotColor: getContextColor(context),
         });
     });
+
+    if (noContextTasks.length > 0) {
+        groups.push({
+            id: 'context:none',
+            title: noContextLabel,
+            tasks: noContextTasks,
+            muted: true,
+        });
+    }
     return groups;
 }
 
@@ -286,15 +291,6 @@ export function groupTasksByProject({
     });
 
     const groups: TaskGroup[] = [];
-    if (noProjectTasks.length > 0) {
-        groups.push({
-            id: 'project:none',
-            title: noProjectLabel,
-            tasks: noProjectTasks,
-            muted: true,
-        });
-    }
-
     const sortedProjects = [...grouped.keys()]
         .map((projectId) => projectMap.get(projectId))
         .filter((project): project is Project => Boolean(project))
@@ -310,6 +306,14 @@ export function groupTasksByProject({
         });
     });
 
+    if (noProjectTasks.length > 0) {
+        groups.push({
+            id: 'project:none',
+            title: noProjectLabel,
+            tasks: noProjectTasks,
+            muted: true,
+        });
+    }
     return groups;
 }
 
@@ -409,15 +413,6 @@ export function groupTasksByTag({
     });
 
     const groups: TaskGroup[] = [];
-    if (noTagTasks.length > 0) {
-        groups.push({
-            id: 'tag:none',
-            title: noTagLabel,
-            tasks: noTagTasks,
-            muted: true,
-        });
-    }
-
     const sortedTags = [...grouped.keys()].sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: 'base' })
     );
@@ -430,6 +425,15 @@ export function groupTasksByTag({
             dotColor: getContextColor(tag),
         });
     });
+
+    if (noTagTasks.length > 0) {
+        groups.push({
+            id: 'tag:none',
+            title: noTagLabel,
+            tasks: noTagTasks,
+            muted: true,
+        });
+    }
     return groups;
 }
 
