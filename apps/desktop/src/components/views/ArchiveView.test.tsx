@@ -377,6 +377,41 @@ describe('ArchiveView', () => {
             expect(screen.getByText('No Project')).toBeInTheDocument();
         });
 
+        it('virtualizes about 5k grouped tasks without changing the Projects segment', () => {
+            const manyArchivedTasks = Array.from({ length: 5_000 }, (_, index): Task => ({
+                ...archivedTask,
+                id: `task-${index}`,
+                title: `Archived task ${index}`,
+                projectId: activeProject.id,
+            }));
+            useTaskStore.setState({
+                _allTasks: manyArchivedTasks,
+                _tasksById: new Map(manyArchivedTasks.map((task) => [task.id, task])),
+                projects: [activeProject, archivedProject],
+                _allProjects: [activeProject, archivedProject],
+            });
+            useUiStore.setState((state) => ({
+                listOptions: {
+                    ...state.listOptions,
+                    archivedGroupBy: 'project',
+                },
+            }));
+
+            render(
+                <LanguageProvider>
+                    <ArchiveView />
+                </LanguageProvider>
+            );
+
+            expect(screen.getByTestId('virtualized-task-list')).toHaveAttribute('data-grouped', 'true');
+            expect(document.querySelectorAll('[data-task-id]').length).toBeLessThan(100);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+
+            expect(screen.getByText('Archived project')).toBeInTheDocument();
+            expect(screen.queryByTestId('virtualized-task-list')).not.toBeInTheDocument();
+        });
+
         it('keeps the toolbar out of the Projects segment', () => {
             renderWithBoth();
 

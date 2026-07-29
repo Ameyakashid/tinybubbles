@@ -66,7 +66,11 @@ import {
     type TaskGroup,
     type TaskListGroupBy,
 } from './list/next-grouping';
-import { GroupedTaskSectionHeader, GroupedTaskSections } from './list/GroupedTaskSections';
+import {
+    buildGroupedVirtualRows,
+    GroupedTaskSectionHeader,
+    GroupedTaskSections,
+} from './list/GroupedTaskSections';
 import {
     PRIORITY_FILTER_OPTIONS,
     TIME_ESTIMATE_FILTER_OPTIONS,
@@ -83,51 +87,6 @@ import { resolveDoneTaskSortBy, resolveNonDoneTaskSortBy } from '../../lib/task-
 interface ListViewProps {
     title: string;
     statusFilter: TaskStatus | 'all';
-}
-
-type GroupedVirtualRow =
-    | {
-        kind: 'header';
-        group: TaskGroup;
-        collapsed: boolean;
-        controlsId?: string;
-    }
-    | {
-        kind: 'task';
-        group: TaskGroup;
-        task: Task;
-        isFirst: boolean;
-        isLast: boolean;
-        controlsId?: string;
-    };
-
-function buildGroupedVirtualRows(
-    groups: TaskGroup[],
-    collapsedGroupIds: Set<string>,
-    getSectionDomId?: (group: TaskGroup, index: number) => string | undefined,
-): GroupedVirtualRow[] {
-    return groups.flatMap((group, groupIndex) => {
-        const collapsed = collapsedGroupIds.has(group.id);
-        const controlsId = getSectionDomId?.(group, groupIndex);
-        const header: GroupedVirtualRow = {
-            kind: 'header',
-            group,
-            collapsed,
-            controlsId,
-        };
-        if (collapsed) return [header];
-        return [
-            header,
-            ...group.tasks.map((task, index): GroupedVirtualRow => ({
-                kind: 'task',
-                group,
-                task,
-                isFirst: index === 0,
-                isLast: index === group.tasks.length - 1,
-                controlsId,
-            })),
-        ];
-    });
 }
 
 const EMPTY_PRIORITIES: TaskPriority[] = [];

@@ -13,6 +13,51 @@ type GroupedTaskSectionsProps = {
     getSectionDomId?: (group: TaskGroup, index: number) => string | undefined;
 };
 
+export type GroupedVirtualRow =
+    | {
+        kind: 'header';
+        group: TaskGroup;
+        collapsed: boolean;
+        controlsId?: string;
+    }
+    | {
+        kind: 'task';
+        group: TaskGroup;
+        task: Task;
+        isFirst: boolean;
+        isLast: boolean;
+        controlsId?: string;
+    };
+
+export function buildGroupedVirtualRows(
+    groups: TaskGroup[],
+    collapsedGroupIds: ReadonlySet<string>,
+    getSectionDomId?: (group: TaskGroup, index: number) => string | undefined,
+): GroupedVirtualRow[] {
+    return groups.flatMap((group, groupIndex) => {
+        const collapsed = collapsedGroupIds.has(group.id);
+        const controlsId = getSectionDomId?.(group, groupIndex);
+        const header: GroupedVirtualRow = {
+            kind: 'header',
+            group,
+            collapsed,
+            controlsId,
+        };
+        if (collapsed) return [header];
+        return [
+            header,
+            ...group.tasks.map((task, index): GroupedVirtualRow => ({
+                kind: 'task',
+                group,
+                task,
+                isFirst: index === 0,
+                isLast: index === group.tasks.length - 1,
+                controlsId,
+            })),
+        ];
+    });
+}
+
 type GroupedTaskSectionHeaderProps = {
     group: TaskGroup;
     collapsed: boolean;
@@ -76,8 +121,8 @@ export function GroupedTaskSectionHeader({
 
 /**
  * The one grouped-list section renderer: header card with dot, title, and
- * count, then the group's tasks. Shared by every grouped list view so the
- * grouping presentation cannot drift per view.
+ * count, then the group's tasks. The virtual row builder above preserves the
+ * same section order and collapse semantics for large grouped lists.
  */
 export function GroupedTaskSections({
     groups,

@@ -1,4 +1,5 @@
 import { memo, useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef, type UIEvent } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ErrorBoundary } from '../ErrorBoundary';
 import {
     createTaskFilterPredicate,
@@ -30,7 +31,11 @@ import {
 } from './list/useVirtualList';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
-import { GroupedTaskSections } from './list/GroupedTaskSections';
+import {
+    buildGroupedVirtualRows,
+    GroupedTaskSectionHeader,
+    GroupedTaskSections,
+} from './list/GroupedTaskSections';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
 import { DONE_SORT_OPTIONS, SortBySelect, ToolbarButton } from './list/list-toolbar';
 import {
@@ -230,6 +235,7 @@ const ArchiveProjectRow = memo(function ArchiveProjectRow({
 });
 
 type ArchiveSegment = 'tasks' | 'projects';
+const NO_COLLAPSED_ARCHIVE_GROUPS = new Set<string>();
 
 export function ArchiveView() {
     const perf = usePerformanceMonitor('ArchiveView');
@@ -392,6 +398,10 @@ export function ArchiveView() {
         () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t }) : []),
         [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, t]
     );
+    const groupedVirtualRows = useMemo(
+        () => buildGroupedVirtualRows(groupedTasks, NO_COLLAPSED_ARCHIVE_GROUPS),
+        [groupedTasks]
+    );
     // Grouped rows render in section order, so keyboard navigation and
     // "select all" have to walk that order rather than the flat sorted one.
     const orderedTasks = useMemo(
@@ -418,11 +428,12 @@ export function ArchiveView() {
         t,
         undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
     });
-    // Grouping turns virtualization off, matching ContextsView: the grouped
-    // sections are collapsible and measured as ordinary flow content.
-    // ponytail: a grouped archive of many thousands renders every row — swap in
-    // ListView's grouped virtual rows if that ever shows up in the budget.
-    const shouldVirtualize = !isGrouping && archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
+    const virtualRowCount = isGrouping ? groupedVirtualRows.length : archivedTasks.length;
+    const shouldVirtualize = virtualRowCount > LIST_VIRTUALIZATION_THRESHOLD;
+    // Keep the Projects segment's layout behavior tied to the old flat-task
+    // condition. Grouping only changes how the task segment renders.
+    const shouldVirtualizeFlatTasks = !isGrouping && archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
+    const shouldFillAvailableHeight = segment === 'tasks' ? shouldVirtualize : shouldVirtualizeFlatTasks;
     const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
         if (rowHeightsRef.current.get(id) === height) return;
         rowHeightsRef.current.set(id, height);
@@ -433,7 +444,7 @@ export function ArchiveView() {
     }, []);
     const { rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
         tasks: archivedTasks,
-        shouldVirtualize,
+        shouldVirtualize: shouldVirtualizeFlatTasks,
         rowHeightsRef,
         measureVersion,
         listScrollTop,
@@ -441,6 +452,27 @@ export function ArchiveView() {
         rowEstimate: LIST_VIRTUAL_ROW_ESTIMATE,
         overscan: LIST_VIRTUAL_OVERSCAN,
     });
+    const groupedRowVirtualizer = useVirtualizer({
+        count: isGrouping && shouldVirtualize ? groupedVirtualRows.length : 0,
+        getScrollElement: () => listScrollRef.current,
+        estimateSize: (index) => groupedVirtualRows[index]?.kind === 'header'
+            ? 42
+            : LIST_VIRTUAL_ROW_ESTIMATE,
+        overscan: Math.max(2, Math.ceil(LIST_VIRTUAL_OVERSCAN / LIST_VIRTUAL_ROW_ESTIMATE)),
+        getItemKey: (index) => {
+            const row = groupedVirtualRows[index];
+            if (!row) return index;
+            return row.kind === 'header'
+                ? `group:${row.group.id}`
+                : `task:${row.group.id}:${row.task.id}`;
+        },
+    });
+    const groupedVirtualItems = isGrouping && shouldVirtualize
+        ? groupedRowVirtualizer.getVirtualItems()
+        : [];
+    const groupedTotalHeight = isGrouping && shouldVirtualize
+        ? groupedRowVirtualizer.getTotalSize()
+        : 0;
 
     const handleRestore = useCallback((taskId: string) => {
         updateTask(taskId, { status: 'inbox' }); // Restore to inbox? Or previous status? Inbox is safest.
@@ -555,7 +587,7 @@ export function ArchiveView() {
 
     return (
         <ErrorBoundary>
-            <div className={shouldVirtualize ? "flex h-full min-h-0 flex-col gap-6" : "flex flex-col gap-6"}>
+            <div className={shouldFillAvailableHeight ? "flex h-full min-h-0 flex-col gap-6" : "flex flex-col gap-6"}>
             <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                 <div className="space-y-1">
                 <div className="flex items-center gap-3">
@@ -717,7 +749,7 @@ export function ArchiveView() {
             </div>
 
             {segment === 'projects' ? (
-                <div className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}>
+                <div className={shouldVirtualizeFlatTasks ? "flex-1 min-h-0 overflow-y-auto" : undefined}>
                     {archivedProjects.length === 0 ? (
                         <div className="px-1 py-8 text-left text-sm text-muted-foreground">
                             <p>{tFallback(t, 'archived.emptyProjects', 'No archived projects')}</p>
@@ -741,7 +773,7 @@ export function ArchiveView() {
             ) : (
             <div
                 ref={listScrollRef}
-                onScroll={handleVirtualScroll}
+                onScroll={isGrouping ? undefined : handleVirtualScroll}
                 className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}
             >
                 {archivedTasks.length === 0 ? (
@@ -750,8 +782,67 @@ export function ArchiveView() {
                         <p className="text-xs mt-2">{t('archived.emptyHint')}</p>
                     </div>
                 ) : shouldVirtualize ? (
-                    <div style={{ height: totalHeight, position: 'relative' }}>
-                        {visibleTasks.map((task, visibleIndex) => {
+                    <div
+                        data-testid="virtualized-task-list"
+                        data-grouped={isGrouping ? 'true' : 'false'}
+                        style={{ height: isGrouping ? groupedTotalHeight : totalHeight, position: 'relative' }}
+                    >
+                        {isGrouping ? groupedVirtualItems.map((virtualRow) => {
+                            const groupedRow = groupedVirtualRows[virtualRow.index];
+                            if (!groupedRow) return null;
+                            if (groupedRow.kind === 'header') {
+                                return (
+                                    <div
+                                        key={virtualRow.key}
+                                        ref={groupedRowVirtualizer.measureElement}
+                                        data-index={virtualRow.index}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            paddingTop: virtualRow.index > 0 ? 8 : 0,
+                                            transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                    >
+                                        <GroupedTaskSectionHeader
+                                            group={groupedRow.group}
+                                            collapsed={groupedRow.collapsed}
+                                            controlsId={groupedRow.controlsId}
+                                            className={cn(
+                                                'border border-border/40 bg-card/30',
+                                                groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
+                                            )}
+                                        />
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div
+                                    key={virtualRow.key}
+                                    ref={groupedRowVirtualizer.measureElement}
+                                    data-index={virtualRow.index}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                >
+                                    <div
+                                        id={groupedRow.isFirst ? groupedRow.controlsId : undefined}
+                                        className={cn(
+                                            'border-x border-border/40 bg-card/30',
+                                            !groupedRow.isLast && 'border-b border-border/30',
+                                            groupedRow.isLast && 'rounded-b-md border-b border-border/40',
+                                        )}
+                                    >
+                                        {renderArchiveRow(groupedRow.task)}
+                                    </div>
+                                </div>
+                            );
+                        }) : visibleTasks.map((task, visibleIndex) => {
                             const taskIndex = startIndex + visibleIndex;
                             return (
                                 <VirtualArchiveTaskRow
