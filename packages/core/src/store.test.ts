@@ -1726,9 +1726,9 @@ describe('TaskStore', () => {
         expect(visibleIds).toEqual(expectedVisibleIds);
     });
 
-    it('should increment revision metadata when purging a task', () => {
+    it('should compact content and increment revision metadata when purging a task', () => {
         const { addTask, deleteTask, purgeTask } = useTaskStore.getState();
-        addTask('Task to Purge');
+        addTask('Task to Purge', { description: 'Private task notes' });
 
         const task = useTaskStore.getState()._allTasks[0];
         deleteTask(task.id);
@@ -1741,6 +1741,8 @@ describe('TaskStore', () => {
         expect((purged.rev ?? 0)).toBeGreaterThan(deletedRev);
         expect(typeof purged.revBy).toBe('string');
         expect((purged.revBy ?? '').length).toBeGreaterThan(0);
+        expect(purged.title).toBe('(deleted)');
+        expect(purged.description).toBeUndefined();
     });
 
     it('clears attachment remote metadata when purging tasks', () => {
@@ -1766,10 +1768,16 @@ describe('TaskStore', () => {
 
         const purged = useTaskStore.getState()._allTasks.find((item) => item.id === task.id)!;
         expect(purged.purgedAt).toBeTruthy();
-        expect(purged.attachments?.[0]?.cloudKey).toBeUndefined();
-        expect(purged.attachments?.[0]?.localStatus).toBeUndefined();
+        expect(purged.attachments).toEqual([{
+            id: 'a1',
+            kind: 'file',
+            title: '',
+            uri: '/tmp/doc.txt',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        }]);
         expect(useTaskStore.getState().settings.attachments?.pendingRemoteDeletes).toEqual([
-            { cloudKey: 'attachments/doc.txt', title: 'doc.txt' },
+            { cloudKey: 'attachments/doc.txt' },
         ]);
     });
 
@@ -1865,8 +1873,8 @@ describe('TaskStore', () => {
 
         expect(useTaskStore.getState()._allTasks.every((task) => task.purgedAt)).toBe(true);
         expect(useTaskStore.getState().settings.attachments?.pendingRemoteDeletes).toEqual([
-            { cloudKey: 'attachments/first.txt', title: 'first.txt' },
-            { cloudKey: 'attachments/second.txt', title: 'second.txt' },
+            { cloudKey: 'attachments/first.txt' },
+            { cloudKey: 'attachments/second.txt' },
         ]);
     });
 
@@ -4155,6 +4163,7 @@ describe('TaskStore', () => {
         it('purges deleted projects while keeping detached tasks live', async () => {
             const { addProject, addSection, addTask, deleteProject, purgeProject } = useTaskStore.getState();
             const project = await addProject('Purge Project', '#444444', {
+                supportNotes: 'Private project notes',
                 attachments: [{
                     id: 'project-file-1',
                     kind: 'file',
@@ -4184,15 +4193,25 @@ describe('TaskStore', () => {
 
             expect(purgedProject.deletedAt).toBeTruthy();
             expect(purgedProject.purgedAt).toBeTruthy();
-            expect(purgedProject.attachments?.[0]?.cloudKey).toBeUndefined();
+            expect(purgedProject.title).toBe('(deleted)');
+            expect(purgedProject.supportNotes).toBeUndefined();
+            expect(purgedProject.attachments).toEqual([{
+                id: 'project-file-1',
+                kind: 'file',
+                title: '',
+                uri: '/tmp/project-plan.pdf',
+                createdAt: '2026-06-29T00:00:00.000Z',
+                updatedAt: '2026-06-29T00:00:00.000Z',
+            }]);
             expect(purgedSection.deletedAt).toBeTruthy();
+            expect(purgedSection.title).toBe('');
+            expect(purgedSection.description).toBeUndefined();
             expect(detachedTask.deletedAt).toBeUndefined();
             expect(detachedTask.projectId).toBeUndefined();
             expect(detachedTask.sectionId).toBeUndefined();
             expect(state.projects.find((item) => item.id === project.id)).toBeUndefined();
             expect(state.settings.attachments?.pendingRemoteDeletes).toEqual([{
                 cloudKey: 'attachments/project-plan.pdf',
-                title: 'Project plan',
             }]);
         });
 

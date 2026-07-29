@@ -3,6 +3,11 @@ import { normalizeSavedFilters } from './saved-filters';
 import { GTD_SYNCED_FIELD_KEYS, type GtdSyncedFieldKey } from './settings-options';
 import { normalizeRevision } from './sync-revision';
 import { SYNC_FILE_NAME } from './sync-service-utils';
+import {
+    compactPurgedProjectTombstone,
+    compactPurgedTaskTombstone,
+    compactSectionsForPurgedProjects,
+} from './tombstone-compaction';
 
 const MISSING_ATTACHMENT_TIMESTAMP_SENTINEL = '1970-01-01T00:00:00.000Z';
 
@@ -246,14 +251,19 @@ export const sanitizeAppDataForRemote = (data: AppData): AppData => {
 
     return {
         ...data,
-        tasks: data.tasks.map((task) => ({
-            ...task,
-            attachments: sanitizeAttachments(task.attachments, Boolean(task.deletedAt)),
-        })),
-        projects: data.projects.map((project) => ({
-            ...project,
-            attachments: sanitizeAttachments(project.attachments, Boolean(project.deletedAt)),
-        })),
+        tasks: data.tasks.map((task) => task.purgedAt
+            ? compactPurgedTaskTombstone(task)
+            : {
+                ...task,
+                attachments: sanitizeAttachments(task.attachments, Boolean(task.deletedAt)),
+            }),
+        projects: data.projects.map((project) => project.purgedAt
+            ? compactPurgedProjectTombstone(project)
+            : {
+                ...project,
+                attachments: sanitizeAttachments(project.attachments, Boolean(project.deletedAt)),
+            }),
+        sections: compactSectionsForPurgedProjects(data.sections, data.projects),
         settings: sanitizeSettingsForRemote(data.settings),
     };
 };

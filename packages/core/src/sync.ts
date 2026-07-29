@@ -46,6 +46,10 @@ import { nextRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
 import { normalizeRecurrenceForLoad, parseRRuleString } from './recurrence';
 import { summarizeMergeStats } from './sync-log-utils';
 import { executeSyncCycle } from './sync-cycle';
+import {
+    compactAttachmentCleanupMetadata,
+    compactSectionsForPurgedProjects,
+} from './tombstone-compaction';
 
 export type {
     ClockSkewDirection,
@@ -773,11 +777,13 @@ const getClockSkewWarning = (stats: MergeResult['stats']): ClockSkewWarning | un
 export function mergeAppDataWithStats(local: AppData, incoming: AppData, options: MergeAppDataOptions = {}): MergeResult {
     const nowIso = isValidTimestamp(options.nowIso) ? options.nowIso : new Date().toISOString();
     const signatureMemo = createSyncSignatureMemo();
+    const localSections = compactSectionsForPurgedProjects(local.sections || [], local.projects || []);
+    const incomingSections = compactSectionsForPurgedProjects(incoming.sections || [], incoming.projects || []);
     const localNormalized = {
         ...local,
-        tasks: (local.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso))),
-        projects: (local.projects || []).map((project) => normalizeRevisionMetadata(normalizeProjectForSyncMerge(project))),
-        sections: (local.sections || []).map((section) => normalizeRevisionMetadata(section)),
+        tasks: (local.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso, true))),
+        projects: (local.projects || []).map((project) => normalizeRevisionMetadata(normalizeProjectForSyncMerge(project, true))),
+        sections: localSections.map((section) => normalizeRevisionMetadata(section)),
         areas: (local.areas || []).map((area) => normalizeRevisionMetadata(normalizeAreaForSyncMerge(area, nowIso))),
         people: (local.people || []).map((person) => normalizeRevisionMetadata(normalizePersonForSyncMerge(person, nowIso))),
     };
@@ -785,7 +791,7 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         ...incoming,
         tasks: (incoming.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso))),
         projects: (incoming.projects || []).map((project) => normalizeRevisionMetadata(normalizeProjectForSyncMerge(project))),
-        sections: (incoming.sections || []).map((section) => normalizeRevisionMetadata(section)),
+        sections: incomingSections.map((section) => normalizeRevisionMetadata(section)),
         areas: (incoming.areas || []).map((area) => normalizeRevisionMetadata(normalizeAreaForSyncMerge(area, nowIso))),
         people: (incoming.people || []).map((person) => normalizeRevisionMetadata(normalizePersonForSyncMerge(person, nowIso))),
     };
@@ -893,7 +899,12 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         localNormalized.tasks,
         incomingNormalized.tasks,
         (localTask: Task, incomingTask: Task, winner: Task) => {
-            const attachments = mergeAttachments(localTask.attachments, incomingTask.attachments);
+            const attachments = winner.purgedAt
+                ? compactAttachmentCleanupMetadata(localTask.attachments)
+                : mergeAttachments(
+                    localTask.purgedAt ? undefined : localTask.attachments,
+                    incomingTask.purgedAt ? undefined : incomingTask.attachments,
+                );
             return repairTaskRecurrenceSeriesIdentity(
                 localTask,
                 incomingTask,
@@ -910,7 +921,12 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         localNormalized.projects,
         incomingNormalized.projects,
         (localProject: Project, incomingProject: Project, winner: Project) => {
-            const attachments = mergeAttachments(localProject.attachments, incomingProject.attachments);
+            const attachments = winner.purgedAt
+                ? compactAttachmentCleanupMetadata(localProject.attachments)
+                : mergeAttachments(
+                    localProject.purgedAt ? undefined : localProject.attachments,
+                    incomingProject.purgedAt ? undefined : incomingProject.attachments,
+                );
             return { ...winner, attachments };
         },
         normalizeProjectForContentComparison,
@@ -948,15 +964,18 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         people: peopleResult.stats,
     };
 
+    const data = repairMergedSyncReferences({
+        tasks: tasksResult.merged,
+        projects: projectsResult.merged,
+        sections: sectionsResult.merged,
+        areas: areasResult.merged,
+        people: peopleResult.merged as Person[],
+        settings: mergeSettingsForSync(localNormalized.settings, incomingNormalized.settings),
+    }, nowIso);
+    data.sections = compactSectionsForPurgedProjects(data.sections, data.projects);
+
     return {
-        data: repairMergedSyncReferences({
-            tasks: tasksResult.merged,
-            projects: projectsResult.merged,
-            sections: sectionsResult.merged,
-            areas: areasResult.merged,
-            people: peopleResult.merged as Person[],
-            settings: mergeSettingsForSync(localNormalized.settings, incomingNormalized.settings),
-        }, nowIso),
+        data,
         stats,
         clockSkewWarning: getClockSkewWarning(stats),
     };

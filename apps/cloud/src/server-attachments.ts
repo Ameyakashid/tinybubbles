@@ -26,18 +26,6 @@ import { validateAppData } from './server-validation';
 // Relies on POSIX mtime; do not lower below 1 minute without auditing filesystem timestamp resolution and batching.
 const ORPHAN_ATTACHMENT_GC_GRACE_MS = 5 * 60 * 1000;
 
-export const stripProjectAttachmentRemoteMetadata = (attachments: Project['attachments']): Project['attachments'] => (
-    attachments?.map((attachment) => (
-        attachment.kind === 'file'
-            ? {
-                ...attachment,
-                cloudKey: undefined,
-                localStatus: undefined,
-            }
-            : attachment
-    ))
-);
-
 export const getAttachmentCloudKey = (attachment: Attachment): string | null => {
     if (attachment.kind !== 'file' || !attachment.cloudKey) return null;
     return normalizeAttachmentRelativePath(attachment.cloudKey);
@@ -73,7 +61,6 @@ export const collectPendingRemoteDeletesForProjectPurge = (
         if (!cloudKey || retainedCloudKeys.has(cloudKey) || byCloudKey.has(cloudKey)) continue;
         byCloudKey.set(cloudKey, {
             cloudKey,
-            title: attachment.title || cloudKey,
         });
     }
     return Array.from(byCloudKey.values());

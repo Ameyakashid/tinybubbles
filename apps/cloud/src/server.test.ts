@@ -2238,6 +2238,7 @@ describe('cloud server api', () => {
                 createdAt: iso,
                 updatedAt: iso,
                 deletedAt: iso,
+                supportNotes: 'Private project notes',
                 attachments: [
                     {
                         ...attachmentBase,
@@ -2253,7 +2254,16 @@ describe('cloud server api', () => {
                     },
                 ],
             }],
-            sections: [],
+            sections: [{
+                id: 'section-purged',
+                projectId: 'project-purged',
+                title: 'Private section',
+                description: 'Private section notes',
+                order: 0,
+                createdAt: iso,
+                updatedAt: iso,
+                deletedAt: iso,
+            }],
             areas: [],
             people: [],
             settings: {},
@@ -2278,18 +2288,25 @@ describe('cloud server api', () => {
         });
         expect(purgeResponse.status).toBe(200);
         const purgeBody = await purgeResponse.json();
+        expect(purgeBody.project.title).toBe('(deleted)');
         expect(purgeBody.project.purgedAt).toBe(purgeIso);
-        expect(purgeBody.project.attachments[0].cloudKey).toBeUndefined();
-        expect(purgeBody.project.attachments[0].localStatus).toBeUndefined();
+        expect(purgeBody.project.supportNotes).toBeUndefined();
+        expect(purgeBody.project.attachments).toBeUndefined();
 
         const dataResponse = await fetch(`${baseUrl}/v1/data`, { headers: authHeaders });
         expect(dataResponse.status).toBe(200);
         const storedData = await dataResponse.json() as AppData;
         const storedProject = storedData.projects.find((project) => project.id === 'project-purged');
-        expect(storedProject?.attachments?.map((attachment) => attachment.cloudKey)).toEqual([undefined, undefined]);
+        expect(storedProject?.title).toBe('(deleted)');
+        expect(storedProject?.purgedAt).toBe(purgeIso);
+        expect(storedProject?.supportNotes).toBeUndefined();
+        expect(storedProject?.attachments).toBeUndefined();
+        const storedSection = storedData.sections.find((section) => section.id === 'section-purged');
+        expect(storedSection?.title).toBe('');
+        expect(storedSection?.deletedAt).toBe(purgeIso);
+        expect(storedSection?.description).toBeUndefined();
         expect(storedData.settings.attachments?.pendingRemoteDeletes).toEqual([{
             cloudKey: projectOnlyCloudKey,
-            title: 'project-only.bin',
         }]);
     });
 

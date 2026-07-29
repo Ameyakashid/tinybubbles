@@ -152,7 +152,7 @@ describe('Task sync schema contract', () => {
 
     it('keeps sync normalization exhaustive', () => {
         const normalized = normalizeTaskForSyncMerge(
-            TASK_SYNC_SCHEMA_FIXTURE,
+            { ...TASK_SYNC_SCHEMA_FIXTURE, purgedAt: undefined },
             '2026-07-14T12:00:00.000Z',
         );
 

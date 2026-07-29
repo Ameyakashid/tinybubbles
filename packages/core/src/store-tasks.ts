@@ -39,19 +39,11 @@ import {
 import { resolveDefaultNewTaskAreaId } from './area-utils';
 import { findSelectableProjectByTitleAndArea } from './project-utils';
 import { buildNewProject } from './store-projects/project-actions';
+import {
+    compactPurgedTaskForLocalStorage,
+} from './tombstone-compaction';
 
 const SLOW_TASK_UPDATE_LOG_THRESHOLD_MS = 500;
-
-const stripAttachmentRemoteMetadata = (attachments: Task['attachments']): Task['attachments'] =>
-    attachments?.map((attachment) => (
-        attachment.kind === 'file'
-            ? {
-                ...attachment,
-                cloudKey: undefined,
-                localStatus: undefined,
-            }
-            : attachment
-    ));
 
 const collectAttachmentCloudKeysForTasks = (tasks: readonly Task[]): Set<string> => {
     const cloudKeys = new Set<string>();
@@ -79,7 +71,6 @@ const collectPendingRemoteDeletesForTasks = (
             if (byCloudKey.has(attachment.cloudKey)) continue;
             byCloudKey.set(attachment.cloudKey, {
                 cloudKey: attachment.cloudKey,
-                title: attachment.title || attachment.cloudKey,
             });
         }
     }
@@ -257,7 +248,7 @@ export const mutateTasks = async (
                 rev: nextRevision(task.rev),
                 revBy: deviceState.deviceId,
             };
-            return updatedTask;
+            return compactPurgedTaskForLocalStorage(updatedTask);
         });
         const nextVisibleTasks = options.updateVisible !== false
             ? applyVisibleTaskChanges(state.tasks, changedTasks)
@@ -742,7 +733,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             buildUpdates: (task, { now }) => ({
                 deletedAt: task.deletedAt ?? now,
                 purgedAt: now,
-                attachments: stripAttachmentRemoteMetadata(task.attachments),
             }),
             buildSettings: (state, selectedTasks, { settings }) => {
                 const selectedIds = new Set(selectedTasks.map((task) => task.id));
@@ -780,9 +770,8 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
         const idSet = new Set(ids);
         return mutateTasks({ set, debouncedSave }, {
             selectTasks: (state) => state._allTasks.filter((task) => idSet.has(task.id) && task.deletedAt && !task.purgedAt),
-            buildUpdates: (task, { now }) => ({
+            buildUpdates: (_task, { now }) => ({
                 purgedAt: now,
-                attachments: stripAttachmentRemoteMetadata(task.attachments),
             }),
             buildSettings: (state, selectedTasks, { settings }) => {
                 const selectedIds = new Set(selectedTasks.map((task) => task.id));
@@ -803,9 +792,8 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
     purgeDeletedTasks: async () => {
         return mutateTasks({ set, debouncedSave }, {
             selectTasks: (state) => state._allTasks.filter((task) => task.deletedAt && !task.purgedAt),
-            buildUpdates: (task, { now }) => ({
+            buildUpdates: (_task, { now }) => ({
                 purgedAt: now,
-                attachments: stripAttachmentRemoteMetadata(task.attachments),
             }),
             buildSettings: (state, selectedTasks, { settings }) => {
                 const selectedIds = new Set(selectedTasks.map((task) => task.id));

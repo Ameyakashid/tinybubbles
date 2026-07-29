@@ -36,6 +36,7 @@ import { cloneAppData } from './sync-runtime-utils';
 import { buildMergeSummaryLog, buildPendingAttachmentUploadLogExtra } from './sync-log-utils';
 import { CLOCK_SKEW_THRESHOLD_MS } from './sync-types';
 import { appendSyncHistory, mergeAppData, performSyncCycle } from './sync';
+import { hasUncompactedPurgedTombstones } from './tombstone-compaction';
 
 /**
  * ADR 0014 — the platform-independent sync cycle state machine.
@@ -349,7 +350,10 @@ class SharedSyncRunMachine {
         const remoteSanitized = state.remoteDataForCompare
             ? sanitizeAppDataForRemote(state.remoteDataForCompare)
             : null;
-        if (remoteSanitized && areSyncPayloadsEqual(remoteSanitized, sanitized)) {
+        const remoteNeedsTombstoneCompaction = state.remoteDataForCompare
+            ? hasUncompactedPurgedTombstones(state.remoteDataForCompare)
+            : false;
+        if (remoteSanitized && !remoteNeedsTombstoneCompaction && areSyncPayloadsEqual(remoteSanitized, sanitized)) {
             if (this.backend !== 'cloudkit') {
                 this.notifier.tracePayload?.('remote-write-skipped-unchanged', sanitized, { backend: this.backend });
             }
@@ -456,6 +460,7 @@ class SharedSyncRunMachine {
         this.ensureLocalSnapshotFresh();
         if (!remoteData) return null;
         this.state.readCheckRemoteData = remoteData;
+        if (hasUncompactedPurgedTombstones(remoteData)) return null;
 
         const localSanitized = sanitizeAppDataForRemote(localData);
         const remoteSanitized = sanitizeAppDataForRemote(remoteData);

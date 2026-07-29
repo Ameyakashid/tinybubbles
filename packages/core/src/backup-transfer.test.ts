@@ -59,6 +59,203 @@ describe('backup transfer', () => {
         expect(result.warnings).toEqual([]);
     });
 
+    it('removes permanently deleted content from backup tombstones', () => {
+        const purgedAt = '2026-03-31T12:00:00.000Z';
+        const data = buildAppData();
+        data.tasks.push({
+            ...data.tasks[0],
+            id: 'purged-task',
+            title: 'Private task',
+            description: 'Private task notes',
+            tags: ['private-tag'],
+            contexts: ['@private'],
+            checklist: [{ id: 'private-item', title: 'Private checklist item', isCompleted: false }],
+            location: 'Private location',
+            attachments: [{
+                id: 'private-task-file',
+                kind: 'file',
+                title: 'Private task file',
+                uri: '/managed/private-task.pdf',
+                createdAt: purgedAt,
+                updatedAt: purgedAt,
+            }],
+            deletedAt: '2026-03-31T11:00:00.000Z',
+            purgedAt,
+            updatedAt: purgedAt,
+            rev: 7,
+            revBy: 'delete-device',
+        });
+        data.tasks.push({
+            ...data.tasks[0],
+            id: 'trashed-task',
+            title: 'Recoverable task',
+            deletedAt: '2026-03-31T11:00:00.000Z',
+            updatedAt: '2026-03-31T11:00:00.000Z',
+        });
+        data.projects.push({
+            ...data.projects[0],
+            id: 'purged-project',
+            title: 'Private project',
+            supportNotes: 'Private project notes',
+            areaTitle: 'Private area',
+            attachments: [{
+                id: 'private-project-file',
+                kind: 'file',
+                title: 'Private project file',
+                uri: '/managed/private-project.pdf',
+                createdAt: purgedAt,
+                updatedAt: purgedAt,
+            }],
+            deletedAt: '2026-03-31T11:00:00.000Z',
+            purgedAt,
+            updatedAt: purgedAt,
+            rev: 8,
+            revBy: 'delete-device',
+        });
+        data.sections.push({
+            id: 'purged-section',
+            projectId: 'purged-project',
+            title: 'Private section',
+            description: 'Private section notes',
+            order: 3,
+            createdAt: '2026-03-30T12:00:00.000Z',
+            updatedAt: purgedAt,
+            deletedAt: '2026-03-31T11:00:00.000Z',
+            rev: 9,
+            revBy: 'delete-device',
+        });
+        data.settings.attachments = {
+            pendingRemoteDeletes: [{
+                cloudKey: 'attachments/private.pdf',
+                title: 'Private attachment',
+                attempts: 2,
+                lastErrorAt: purgedAt,
+            }],
+        };
+
+        const restoredAt = '2026-04-01T00:00:00.000Z';
+        const serialized = serializeBackupData(data);
+        const parsed = JSON.parse(serialized) as AppData;
+
+        expect(parsed.tasks.find((task) => task.id === 'purged-task')).toEqual({
+            id: 'purged-task',
+            title: '(deleted)',
+            status: 'inbox',
+            tags: [],
+            contexts: [],
+            rev: 7,
+            revBy: 'delete-device',
+            createdAt: purgedAt,
+            updatedAt: purgedAt,
+            deletedAt: purgedAt,
+            purgedAt,
+        });
+        expect(parsed.projects.find((project) => project.id === 'purged-project')).toEqual({
+            id: 'purged-project',
+            title: '(deleted)',
+            status: 'active',
+            color: '#6B7280',
+            order: 0,
+            tagIds: [],
+            rev: 8,
+            revBy: 'delete-device',
+            createdAt: purgedAt,
+            updatedAt: purgedAt,
+            deletedAt: purgedAt,
+            purgedAt,
+        });
+        expect(parsed.sections.find((section) => section.id === 'purged-section')).toEqual({
+            id: 'purged-section',
+            projectId: 'purged-project',
+            title: '',
+            order: 0,
+            rev: 9,
+            revBy: 'delete-device',
+            createdAt: purgedAt,
+            updatedAt: purgedAt,
+            deletedAt: purgedAt,
+        });
+        expect(parsed.settings.attachments?.pendingRemoteDeletes).toEqual([{
+            cloudKey: 'attachments/private.pdf',
+            attempts: 2,
+            lastErrorAt: purgedAt,
+        }]);
+        expect(parsed.tasks.find((task) => task.id === 'trashed-task')?.title).toBe('Recoverable task');
+        expect(serialized).not.toContain('Private');
+        const validation = validateBackupJson(serialized);
+        expect(validation.valid).toBe(true);
+        const restoredLegacy = prepareRestoredBackupDataForSync(data, { previousData: data, restoredAt });
+        expect(restoredLegacy.sections.find((section) => section.id === 'purged-section')).toMatchObject({
+            title: '',
+            deletedAt: restoredAt,
+        });
+        expect(restoredLegacy.sections.find((section) => section.id === 'purged-section')?.description).toBeUndefined();
+
+        const staleRemote: AppData = {
+            ...buildAppData(),
+            tasks: [{
+                ...data.tasks.find((task) => task.id === 'purged-task')!,
+                deletedAt: undefined,
+                purgedAt: undefined,
+                rev: 20,
+                revBy: 'stale-device',
+            }],
+            projects: [{
+                ...data.projects.find((project) => project.id === 'purged-project')!,
+                deletedAt: undefined,
+                purgedAt: undefined,
+                rev: 20,
+                revBy: 'stale-device',
+            }],
+            sections: [{
+                ...data.sections[0],
+                deletedAt: undefined,
+                rev: 20,
+                revBy: 'stale-device',
+            }],
+        };
+        const restored = prepareRestoredBackupDataForSync(validation.data!, {
+            previousData: staleRemote,
+            restoredAt,
+        });
+        expect(restored.tasks.find((task) => task.id === 'purged-task')?.attachments).toEqual([{
+            id: 'private-task-file',
+            kind: 'file',
+            title: '',
+            uri: '/managed/private-task.pdf',
+            createdAt: purgedAt,
+            updatedAt: purgedAt,
+        }]);
+        expect(restored.projects.find((project) => project.id === 'purged-project')?.attachments).toEqual([{
+            id: 'private-project-file',
+            kind: 'file',
+            title: '',
+            uri: '/managed/private-project.pdf',
+            createdAt: purgedAt,
+            updatedAt: purgedAt,
+        }]);
+
+        for (const merged of [
+            mergeAppData(restored, staleRemote, { nowIso: restoredAt }),
+            mergeAppData(staleRemote, restored, { nowIso: restoredAt }),
+        ]) {
+            expect(merged.tasks.find((task) => task.id === 'purged-task')).toMatchObject({
+                title: '(deleted)',
+                deletedAt: restoredAt,
+                purgedAt: restoredAt,
+            });
+            expect(merged.projects.find((project) => project.id === 'purged-project')).toMatchObject({
+                title: '(deleted)',
+                deletedAt: restoredAt,
+                purgedAt: restoredAt,
+            });
+            expect(merged.sections.find((section) => section.id === 'purged-section')).toMatchObject({
+                title: '',
+                deletedAt: restoredAt,
+            });
+        }
+    });
+
     it('rejects non-Mindwtr JSON payloads', () => {
         const result = validateBackupJson(JSON.stringify({
             tasks: {},
@@ -278,7 +475,7 @@ describe('backup transfer', () => {
         const refreshed = purgeExpiredTombstones(restored, restoredAt, 90);
 
         expect(restored.tasks.find((task) => task.id === 'purged-task')).toMatchObject({
-            deletedAt: '2025-01-01T00:00:00.000Z',
+            deletedAt: restoredAt,
             purgedAt: restoredAt,
             rev: 8,
             revBy: SYNC_BACKUP_RESTORE_REV_BY,
@@ -292,7 +489,7 @@ describe('backup transfer', () => {
         });
         expect(refreshed.removedTaskTombstones).toBe(0);
         expect(refreshed.data.tasks.find((task) => task.id === 'purged-task')).toMatchObject({
-            deletedAt: '2025-01-01T00:00:00.000Z',
+            deletedAt: restoredAt,
             purgedAt: restoredAt,
         });
         expect(refreshed.data.tasks.find((task) => task.id === 'backup-deleted-task')).toMatchObject({

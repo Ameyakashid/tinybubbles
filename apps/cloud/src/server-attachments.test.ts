@@ -10,7 +10,6 @@ import {
     collectRetainedAttachmentCloudKeysForProjectPurge,
     garbageCollectOrphanAttachments,
     getAttachmentCloudKey,
-    stripProjectAttachmentRemoteMetadata,
 } from './server-attachments';
 
 const iso = '2026-01-01T00:00:00.000Z';
@@ -57,21 +56,6 @@ describe('getAttachmentCloudKey', () => {
         expect(getAttachmentCloudKey(makeFileAttachment({ id: 'a2', cloudKey: undefined }))).toBeNull();
         expect(getAttachmentCloudKey(makeFileAttachment({ id: 'a3', kind: 'link', uri: 'https://example.com', cloudKey: 'ignored' }))).toBeNull();
         expect(getAttachmentCloudKey(makeFileAttachment({ id: 'a4', cloudKey: '../escape' }))).toBeNull();
-    });
-});
-
-describe('stripProjectAttachmentRemoteMetadata', () => {
-    test('clears cloudKey/localStatus only on file attachments and leaves other kinds untouched', () => {
-        const fileAttachment = makeFileAttachment({ id: 'f1', cloudKey: 'folder/file.bin', localStatus: 'available' });
-        const linkAttachment: Attachment = { id: 'l1', kind: 'link', title: 'link', uri: 'https://example.com', createdAt: iso, updatedAt: iso };
-        const stripped = stripProjectAttachmentRemoteMetadata([fileAttachment, linkAttachment]);
-
-        expect(stripped?.[0]).toEqual({ ...fileAttachment, cloudKey: undefined, localStatus: undefined });
-        expect(stripped?.[1]).toBe(linkAttachment);
-    });
-
-    test('passes through undefined unchanged', () => {
-        expect(stripProjectAttachmentRemoteMetadata(undefined)).toBeUndefined();
     });
 });
 
@@ -157,17 +141,7 @@ describe('collectPendingRemoteDeletesForProjectPurge', () => {
         ];
 
         const pending = collectPendingRemoteDeletesForProjectPurge(purgingProject, data);
-        expect(pending).toEqual([{ cloudKey: 'orphan.bin', title: 'Orphan' }]);
-    });
-
-    test('falls back to the cloud key as the title when the attachment has none', () => {
-        const purgingProject = makeProject({
-            id: 'purging',
-            title: 'Purging',
-            attachments: [{ ...makeFileAttachment({ id: 'a1', cloudKey: 'orphan.bin' }), title: '' }],
-        });
-        const pending = collectPendingRemoteDeletesForProjectPurge(purgingProject, emptyAppData());
-        expect(pending).toEqual([{ cloudKey: 'orphan.bin', title: 'orphan.bin' }]);
+        expect(pending).toEqual([{ cloudKey: 'orphan.bin' }]);
     });
 });
 

@@ -12,7 +12,7 @@ import {
 } from './sync-normalization';
 import { normalizeTaskForContentComparison, toComparableSignature } from './sync-signatures';
 import { createMockArea, createMockProject, createMockSection, createMockTask, mockAppData } from './sync-test-utils';
-import type { AppData, Area, Project, Section, Task } from './types';
+import type { AppData, Area, Project, Task } from './types';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
@@ -61,6 +61,83 @@ const normalizeForMerge = (data: AppData, nowIso = NOW): AppData => {
 };
 
 describe('sync normalization', () => {
+    it('compacts purged content before resolving same-revision conflicts', () => {
+        const purgedAt = '2025-12-31T23:00:00.000Z';
+        const full = mockAppData(
+            [{
+                ...createMockTask('task-1', purgedAt, purgedAt),
+                title: 'Private task',
+                description: 'Private task notes',
+                purgedAt,
+                rev: 7,
+                revBy: 'device-a',
+            }],
+            [{
+                ...createMockProject('project-1', purgedAt, purgedAt),
+                title: 'Private project',
+                supportNotes: 'Private project notes',
+                purgedAt,
+                rev: 8,
+                revBy: 'device-a',
+            }],
+            [{
+                ...createMockSection('section-1', 'project-1', purgedAt, purgedAt),
+                title: 'Private section',
+                description: 'Private section notes',
+                rev: 9,
+                revBy: 'device-a',
+            }],
+        );
+        const compact = mergeAppData(full, mockAppData(), { nowIso: NOW });
+
+        expect(compact.tasks[0]).toMatchObject({ title: '(deleted)', purgedAt });
+        expect(compact.tasks[0].description).toBeUndefined();
+        expect(compact.projects[0]).toMatchObject({ title: '(deleted)', purgedAt });
+        expect(compact.projects[0].supportNotes).toBeUndefined();
+        expect(compact.sections[0]).toMatchObject({ title: '', deletedAt: purgedAt });
+        expect(compact.sections[0].description).toBeUndefined();
+
+        for (const merged of [
+            mergeAppData(full, compact, { nowIso: NOW }),
+            mergeAppData(compact, full, { nowIso: NOW }),
+            mergeAppData(compact, compact, { nowIso: NOW }),
+        ]) {
+            expect(merged.tasks).toEqual(compact.tasks);
+            expect(merged.projects).toEqual(compact.projects);
+            expect(merged.sections).toEqual(compact.sections);
+        }
+    });
+
+    it('compacts a retained section when its project is purged on the other side', () => {
+        const purgedAt = '2025-12-31T23:00:00.000Z';
+        const project = {
+            ...createMockProject('project-1', '2025-12-30T23:00:00.000Z'),
+            rev: 1,
+            revBy: 'device-a',
+        };
+        const merged = mergeAppData(
+            mockAppData([], [project], [{
+                ...createMockSection('section-1', project.id, '2025-12-30T23:00:00.000Z'),
+                title: 'Private section',
+                description: 'Private section notes',
+                rev: 1,
+                revBy: 'device-a',
+            }]),
+            mockAppData([], [{
+                ...project,
+                deletedAt: purgedAt,
+                purgedAt,
+                updatedAt: purgedAt,
+                rev: 2,
+                revBy: 'device-b',
+            }]),
+            { nowIso: NOW },
+        );
+
+        expect(merged.sections[0]).toMatchObject({ title: '', deletedAt: purgedAt });
+        expect(merged.sections[0].description).toBeUndefined();
+    });
+
     it('normalizes malformed entity fields idempotently before merge', () => {
         const task = {
             ...createMockTask('task-1', '2025-12-31T23:00:00.000Z'),

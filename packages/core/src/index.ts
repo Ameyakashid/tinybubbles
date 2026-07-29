@@ -33,6 +33,7 @@ export * from './store';
 export * from './store-types';
 export * from './store-helpers';
 export * from './sync';
+export * from './tombstone-compaction';
 export * from './task-date-coherence';
 export * from './sync-normalization';
 export * from './sync-helpers';

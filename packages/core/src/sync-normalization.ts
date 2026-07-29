@@ -6,6 +6,12 @@ import { SYNC_REPAIR_REV_BY } from './sync-types';
 import { isValidRevision, nextRevision, normalizeRevision } from './sync-revision';
 import { resolveTaskContainerHierarchy } from './task-container-rules';
 import { dedupeLiveAreasByName } from './area-utils';
+import {
+    compactPurgedProjectForLocalStorage,
+    compactPurgedProjectTombstone,
+    compactPurgedTaskForLocalStorage,
+    compactPurgedTaskTombstone,
+} from './tombstone-compaction';
 
 export const normalizeAppData = (data: AppData): AppData => ({
     tasks: Array.isArray(data.tasks) ? data.tasks : [],
@@ -148,7 +154,16 @@ const normalizeProjectStatusForMerge = (value: unknown): Project['status'] => {
     return 'active';
 };
 
-export const normalizeTaskForSyncMerge = (task: Task, nowIso: string): Task => {
+export const normalizeTaskForSyncMerge = (
+    task: Task,
+    nowIso: string,
+    preserveLocalCleanupMetadata = false,
+): Task => {
+    if (task.purgedAt) {
+        return preserveLocalCleanupMetadata
+            ? compactPurgedTaskForLocalStorage(task)
+            : compactPurgedTaskTombstone(task);
+    }
     const normalized = normalizeTaskForLoad(task, nowIso);
     const hasRecurrence = normalized.recurrence !== undefined && normalized.recurrence !== null;
     return {
@@ -201,7 +216,15 @@ export const normalizeTaskForSyncMerge = (task: Task, nowIso: string): Task => {
     } satisfies Record<keyof Task, unknown>;
 };
 
-export const normalizeProjectForSyncMerge = (project: Project): Project => {
+export const normalizeProjectForSyncMerge = (
+    project: Project,
+    preserveLocalCleanupMetadata = false,
+): Project => {
+    if (project.purgedAt) {
+        return preserveLocalCleanupMetadata
+            ? compactPurgedProjectForLocalStorage(project)
+            : compactPurgedProjectTombstone(project);
+    }
     return {
         ...project,
         status: normalizeProjectStatusForMerge(project.status),

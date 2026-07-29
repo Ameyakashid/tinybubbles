@@ -450,6 +450,51 @@ describe('sync-helpers sanitizeAppDataForRemote', () => {
         expect(attachment?.localStatus).toBeUndefined();
     });
 
+    it('omits permanently deleted content from remote payloads', () => {
+        const data = createData([fileAttachment({ id: 'private-attachment' })]);
+        data.tasks[0] = {
+            ...data.tasks[0],
+            title: 'Private task',
+            description: 'Private task notes',
+            deletedAt: now,
+            purgedAt: now,
+        };
+        data.projects = [{
+            id: 'private-project',
+            title: 'Private project',
+            status: 'active',
+            color: '#000000',
+            order: 0,
+            tagIds: [],
+            supportNotes: 'Private project notes',
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: now,
+            purgedAt: now,
+        }];
+        data.sections = [{
+            id: 'private-section',
+            projectId: 'private-project',
+            title: 'Private section',
+            description: 'Private section notes',
+            order: 0,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: now,
+        }];
+
+        const sanitized = sanitizeAppDataForRemote(data);
+
+        expect(sanitized.tasks[0].title).toBe('(deleted)');
+        expect(sanitized.tasks[0].description).toBeUndefined();
+        expect(sanitized.tasks[0].attachments).toBeUndefined();
+        expect(sanitized.projects[0].title).toBe('(deleted)');
+        expect(sanitized.projects[0].supportNotes).toBeUndefined();
+        expect(sanitized.sections[0].title).toBe('');
+        expect(sanitized.sections[0].description).toBeUndefined();
+        expect(JSON.stringify(sanitized)).not.toContain('Private');
+    });
+
     it('keeps live file attachments that have neither uri nor cloudKey unless marked missing', () => {
         const data = createData([
             fileAttachment({

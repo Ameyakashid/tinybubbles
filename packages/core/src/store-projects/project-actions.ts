@@ -18,6 +18,10 @@ import { findSelectableProjectByTitleAndArea } from '../project-utils';
 import type { Project, ProjectCoreActions, ProjectActionContext, Task, TaskStatus } from './shared';
 import type { TaskStore } from '../store-types';
 import type { PendingRemoteAttachmentDelete } from '../types';
+import {
+    compactPurgedProjectForLocalStorage,
+    compactPurgedProjectSectionTombstone,
+} from '../tombstone-compaction';
 import { actionFail, actionOk, mutateEntities } from './shared';
 
 const duplicateProjectAttachmentCopy = (attachment: NonNullable<Project['attachments']>[number], now: string) => ({
@@ -30,17 +34,6 @@ const duplicateProjectAttachmentCopy = (attachment: NonNullable<Project['attachm
     fileHash: undefined,
     localStatus: undefined,
 });
-
-const stripProjectAttachmentRemoteMetadata = (attachments: Project['attachments']): Project['attachments'] =>
-    attachments?.map((attachment) => (
-        attachment.kind === 'file'
-            ? {
-                ...attachment,
-                cloudKey: undefined,
-                localStatus: undefined,
-            }
-            : attachment
-    ));
 
 const collectRetainedAttachmentCloudKeys = (
     projects: readonly Project[],
@@ -80,7 +73,6 @@ const collectPendingRemoteDeletesForProjects = (
             if (byCloudKey.has(attachment.cloudKey)) continue;
             byCloudKey.set(attachment.cloudKey, {
                 cloudKey: attachment.cloudKey,
-                title: attachment.title || attachment.cloudKey,
             });
         }
     }
@@ -540,26 +532,25 @@ export const createProjectCoreActions = ({
 
             const newAllProjects = state._allProjects.map((project) =>
                 project.id === id
-                    ? {
+                    ? compactPurgedProjectForLocalStorage({
                         ...project,
                         deletedAt: project.deletedAt ?? now,
                         purgedAt: now,
-                        attachments: stripProjectAttachmentRemoteMetadata(project.attachments),
                         updatedAt: now,
                         rev: nextRevision(project.rev),
                         revBy: deviceState.deviceId,
-                    }
+                    })
                     : project
             );
             const newAllSections = state._allSections.map((section) =>
-                sectionIdsForProject.has(section.id) && !section.deletedAt
-                    ? {
+                sectionIdsForProject.has(section.id)
+                    ? compactPurgedProjectSectionTombstone({
                         ...section,
                         deletedAt: now,
                         updatedAt: now,
                         rev: nextRevision(section.rev),
                         revBy: deviceState.deviceId,
-                    }
+                    }, now)
                     : section
             );
             const newAllTasks = state._allTasks.map(task =>
@@ -634,26 +625,25 @@ export const createProjectCoreActions = ({
 
             const newAllProjects = state._allProjects.map((project) =>
                 selectedIds.has(project.id)
-                    ? {
+                    ? compactPurgedProjectForLocalStorage({
                         ...project,
                         deletedAt: project.deletedAt ?? now,
                         purgedAt: now,
-                        attachments: stripProjectAttachmentRemoteMetadata(project.attachments),
                         updatedAt: now,
                         rev: nextRevision(project.rev),
                         revBy: deviceState.deviceId,
-                    }
+                    })
                     : project
             );
             const newAllSections = state._allSections.map((section) =>
-                sectionIdsForProjects.has(section.id) && !section.deletedAt
-                    ? {
+                sectionIdsForProjects.has(section.id)
+                    ? compactPurgedProjectSectionTombstone({
                         ...section,
                         deletedAt: now,
                         updatedAt: now,
                         rev: nextRevision(section.rev),
                         revBy: deviceState.deviceId,
-                    }
+                    }, now)
                     : section
             );
             const newAllTasks = state._allTasks.map(task =>

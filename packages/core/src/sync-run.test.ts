@@ -246,6 +246,44 @@ describe('runSharedSyncCycle', () => {
         expect(vi.mocked(io.writeRemote).mock.calls.length).toBe(writesAfterFirst);
     });
 
+    it('rewrites legacy full tombstones once before treating sync as unchanged', async () => {
+        const local = createData([{
+            id: 'purged-task',
+            title: '(deleted)',
+            status: 'inbox',
+            tags: [],
+            contexts: [],
+            rev: 2,
+            revBy: 'device-a',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+            deletedAt: STAMP,
+            purgedAt: STAMP,
+        }]);
+        const remote = createData([{
+            ...local.tasks[0],
+            title: 'Private task',
+            description: 'Private task notes',
+        }]);
+        const { harness, io, run } = createHarness({
+            local,
+            remote,
+            fastSyncScope: null,
+            policy: { enableReadCheckSkip: true },
+        });
+
+        const first = await run();
+
+        expect(first.skipped).toBeUndefined();
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+        expect(harness.remote?.tasks[0]?.title).toBe('(deleted)');
+        expect(harness.remote?.tasks[0]?.description).toBeUndefined();
+
+        const second = await run();
+        expect(second).toMatchObject({ success: true, skipped: 'unchanged' });
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+    });
+
     it('reuses the read-check remote payload in the merge phase instead of reading twice', async () => {
         const local = createData([createTask('t-local', 'Local task')]);
         const remote = createData([createTask('t-remote', 'Remote task')]);
@@ -690,6 +728,51 @@ describe('runSharedSyncCycle', () => {
         expect(harness.persisted.settings.attachments?.lastCleanupAt).toBe(NOW.toISOString());
         // invalidateFastSyncState suppressed the fast-state record.
         expect(harness.fastStates.size).toBe(0);
+    });
+
+    it('keeps local purge metadata through merge until attachment cleanup removes it', async () => {
+        const local = createData([{
+            id: 'purged-task',
+            title: '(deleted)',
+            status: 'inbox',
+            tags: [],
+            contexts: [],
+            attachments: [{
+                id: 'attachment-1',
+                kind: 'file',
+                title: '',
+                uri: '/tmp/private.pdf',
+                createdAt: STAMP,
+                updatedAt: STAMP,
+            }],
+            createdAt: STAMP,
+            updatedAt: STAMP,
+            deletedAt: STAMP,
+            purgedAt: STAMP,
+        }], {
+            attachments: { lastCleanupAt: '2026-01-01T00:00:00.000Z' },
+        });
+        const remote = createData([{
+            ...local.tasks[0],
+            attachments: undefined,
+        }]);
+        const runAttachmentCleanup = vi.fn(async (data: AppData) => {
+            expect(data.tasks[0].attachments?.[0]?.uri).toBe('/tmp/private.pdf');
+            const cleaned = cloneAppData(data);
+            cleaned.tasks[0].attachments = undefined;
+            return { data: cleaned, invalidateFastSyncState: true };
+        });
+        const { harness, run } = createHarness({
+            local,
+            remote,
+            hooks: { runAttachmentCleanup },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(runAttachmentCleanup).toHaveBeenCalledTimes(1);
+        expect(harness.persisted.tasks[0].attachments).toBeUndefined();
     });
 
     it('requeues instead of persisting a cleanup snapshot when local data changes inside the hook', async () => {

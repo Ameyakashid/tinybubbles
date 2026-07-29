@@ -1,6 +1,13 @@
 import type { AppData } from './types';
 import { nextRevision, normalizeRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
 import {
+    compactPurgedProjectForLocalStorage,
+    compactPurgedProjectTombstone,
+    compactPurgedTaskForLocalStorage,
+    compactPurgedTaskTombstone,
+    compactSectionsForPurgedProjects,
+} from './tombstone-compaction';
+import {
     isObjectRecord,
     normalizeAppData,
     validateMergedSyncData,
@@ -141,7 +148,29 @@ export const createBackupFileName = (date: Date = new Date()): string => {
     return `${BACKUP_FILE_PREFIX}${timestamp}.json`;
 };
 
-export const serializeBackupData = (data: AppData): string => JSON.stringify(data, null, 2);
+const compactBackupSettings = (settings: AppData['settings']): AppData['settings'] => {
+    const pendingRemoteDeletes = settings.attachments?.pendingRemoteDeletes;
+    if (!pendingRemoteDeletes?.length) return settings;
+    return {
+        ...settings,
+        attachments: {
+            ...settings.attachments,
+            pendingRemoteDeletes: pendingRemoteDeletes.map(({ cloudKey, attempts, lastErrorAt }) => ({
+                cloudKey,
+                attempts,
+                lastErrorAt,
+            })),
+        },
+    };
+};
+
+export const serializeBackupData = (data: AppData): string => JSON.stringify({
+    ...data,
+    tasks: data.tasks.map(compactPurgedTaskTombstone),
+    projects: data.projects.map(compactPurgedProjectTombstone),
+    sections: compactSectionsForPurgedProjects(data.sections, data.projects),
+    settings: compactBackupSettings(data.settings),
+}, null, 2);
 
 const prepareRestoredEntityForSync = <T extends RestorableEntity>(
     item: T,
@@ -222,11 +251,33 @@ export const prepareRestoredBackupDataForSync = (
         return carryForwardEntitiesMissingFromBackup(restored, before, restoredAt)
             .map((item) => prepareRestoredEntityForSync(item, restoredAt, beforeById.get(item.id)));
     };
+    const previousTasksById = new Map((previous?.tasks ?? []).map((task) => [task.id, task]));
+    const previousProjectsById = new Map((previous?.projects ?? []).map((project) => [project.id, project]));
+    const tasks = prepare(data.tasks, previous?.tasks).map((task) => (
+        task.purgedAt
+            ? compactPurgedTaskForLocalStorage({
+                ...task,
+                attachments: previousTasksById.get(task.id)?.attachments,
+            })
+            : task
+    ));
+    const projects = prepare(data.projects, previous?.projects).map((project) => (
+        project.purgedAt
+            ? compactPurgedProjectForLocalStorage({
+                ...project,
+                attachments: previousProjectsById.get(project.id)?.attachments,
+            })
+            : project
+    ));
+    const sections = compactSectionsForPurgedProjects(
+        prepare(data.sections, previous?.sections),
+        projects,
+    );
     return {
         ...data,
-        tasks: prepare(data.tasks, previous?.tasks),
-        projects: prepare(data.projects, previous?.projects),
-        sections: prepare(data.sections, previous?.sections),
+        tasks,
+        projects,
+        sections,
         areas: prepare(data.areas, previous?.areas),
         people: prepare(data.people ?? [], previous?.people),
         settings: {

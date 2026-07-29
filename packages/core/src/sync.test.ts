@@ -1231,7 +1231,7 @@ describe('Sync Logic', () => {
             expect(result.stats.tasks.conflictIds).toContain('1');
         });
 
-        it('does not count conflict when only purgedAt differs', () => {
+        it('treats purgedAt as permanent deletion when legacy deletedAt is missing', () => {
             const localTask = {
                 ...createMockTask('1', '2023-01-02T00:05:00.000Z'),
                 rev: 7,
@@ -1247,8 +1247,13 @@ describe('Sync Logic', () => {
             const result = mergeAppDataWithStats(mockAppData([localTask]), mockAppData([incomingTask]));
 
             expect(result.data.tasks).toHaveLength(1);
-            expect(result.stats.tasks.conflicts).toBe(0);
-            expect(result.stats.tasks.conflictIds).toHaveLength(0);
+            expect(result.data.tasks[0]).toMatchObject({
+                title: '(deleted)',
+                deletedAt: localTask.purgedAt,
+                purgedAt: localTask.purgedAt,
+            });
+            expect(result.stats.tasks.conflicts).toBe(1);
+            expect(result.stats.tasks.conflictIds).toEqual(['1']);
         });
 
         it('does not count conflict when stale recurrence preview flag differs on non-recurring task', () => {

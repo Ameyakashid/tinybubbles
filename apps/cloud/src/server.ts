@@ -5,6 +5,8 @@ import {
     applyTaskUpdates,
     areSyncPayloadsEqual,
     buildHttpRemoteFileFingerprint,
+    compactPurgedProjectSectionTombstone,
+    compactPurgedProjectTombstone,
     filterNotDeleted,
     generateUUID,
     mergeAppDataWithStats,
@@ -66,7 +68,6 @@ import {
     collectPendingRemoteDeletesForProjectPurge,
     handleAttachmentPathRequest,
     handleOrphanAttachmentGcRequest,
-    stripProjectAttachmentRemoteMetadata,
 } from './server-attachments';
 import {
     asStatus,
@@ -648,12 +649,21 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
 
             const pendingDeletes = collectPendingRemoteDeletesForProjectPurge(updatedProject, data);
             data.settings = appendPendingRemoteAttachmentDeletes(data.settings, pendingDeletes);
-            return {
+            const purgedAt = updates.purgedAt as string;
+            data.sections = data.sections.map((section) => (
+                section.projectId === updatedProject.id
+                    ? compactPurgedProjectSectionTombstone({
+                        ...section,
+                        rev: normalizeRevision(section.rev) + 1,
+                        revBy: CLOUD_API_REV_BY,
+                    }, purgedAt)
+                    : section
+            ));
+            return compactPurgedProjectTombstone({
                 ...updatedProject,
                 deletedAt: typeof updatedProject.deletedAt === 'string' ? updatedProject.deletedAt : nowIso,
-                purgedAt: typeof updates.purgedAt === 'string' ? updates.purgedAt : updatedProject.purgedAt,
-                attachments: stripProjectAttachmentRemoteMetadata(updatedProject.attachments),
-            };
+                purgedAt,
+            });
         },
     },
     {
