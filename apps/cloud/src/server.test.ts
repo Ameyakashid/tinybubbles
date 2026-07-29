@@ -3411,13 +3411,14 @@ describe('cloud server calendar feed', () => {
     const FEED_TOKEN = 'calendar-feed-test-token-1234567890';
     const authHeaders = { Authorization: `Bearer ${FEED_TOKEN}` };
 
-    const startFeedServer = async () => {
+    const startFeedServer = async (options: { maxPerWindow?: number } = {}) => {
         const dataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-calendar-feed-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
             dataDir,
             allowedAuthTokens: [FEED_TOKEN],
+            maxPerWindow: options.maxPerWindow,
         });
         return { dataDir, server, url: `http://127.0.0.1:${server.port}` };
     };
@@ -3492,6 +3493,18 @@ describe('cloud server calendar feed', () => {
 
             const tooEarly = await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });
             expect(tooEarly.status).toBe(404);
+        } finally {
+            server.stop();
+            rmSync(dataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('rate limits rotating unknown feed tokens by client before lookup', async () => {
+        const { dataDir, server, url } = await startFeedServer({ maxPerWindow: 2 });
+        try {
+            expect((await fetch(`${url}/v1/calendar/${'a'.repeat(64)}.ics`)).status).toBe(404);
+            expect((await fetch(`${url}/v1/calendar/${'b'.repeat(64)}.ics`)).status).toBe(404);
+            expect((await fetch(`${url}/v1/calendar/${'c'.repeat(64)}.ics`)).status).toBe(429);
         } finally {
             server.stop();
             rmSync(dataDir, { recursive: true, force: true });

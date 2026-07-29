@@ -850,16 +850,17 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const requestTimeoutMs = Number(options.requestTimeoutMs ?? process.env.MINDWTR_CLOUD_REQUEST_TIMEOUT_MS ?? 30_000);
     const rateLimiter = createRateLimiter({ windowMs, maxKeys: RATE_LIMIT_MAX_KEYS });
 
+    const getRequestIpAddress = (req: Request): string | null => {
+        const bunServer = server as { requestIP?: (request: Request) => { address?: string | null } | null };
+        if (typeof bunServer.requestIP !== 'function') return null;
+        return bunServer.requestIP(req)?.address ?? null;
+    };
+
     const unauthorizedResponse = (req: Request, token?: string | null): Response => {
-        const requestIp = (() => {
-            const bunServer = server as { requestIP?: (request: Request) => { address?: string | null } | null };
-            if (typeof bunServer.requestIP !== 'function') return null;
-            return bunServer.requestIP(req)?.address ?? null;
-        })();
         const authRateKey = getAuthFailureRateKey(req, {
             trustProxyHeaders,
             trustedProxyIps,
-            requestIpAddress: requestIp,
+            requestIpAddress: getRequestIpAddress(req),
         });
         const authRateLimitKeys = [
             authRateKey,
@@ -1227,13 +1228,27 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                 const calendarFeedToken = parseCalendarFeedPathToken(pathname);
                 if (calendarFeedToken) {
                     if (req.method !== 'GET') return errorResponse('Method not allowed', 405);
+                    const feedClientRateKey = getAuthFailureRateKey(req, {
+                        trustProxyHeaders,
+                        trustedProxyIps,
+                        requestIpAddress: getRequestIpAddress(req),
+                    });
+                    const feedClientRateLimitResponse = rateLimiter.check(
+                        `ics-client:${feedClientRateKey}`,
+                        maxPerWindow,
+                    );
+                    if (feedClientRateLimitResponse) return feedClientRateLimitResponse;
+
+                    // Unknown tokens share only the stable client bucket above, so
+                    // rotating token strings cannot allocate limiter keys while
+                    // forcing namespace sidecar scans.
+                    const feedNamespaceKey = findCalendarFeedNamespace(dataDir, calendarFeedToken);
+                    if (!feedNamespaceKey) return errorResponse('Not found', 404);
                     const feedRateLimitResponse = rateLimiter.check(
                         `ics:${tokenToKey(calendarFeedToken)}`,
                         maxPerWindow,
                     );
                     if (feedRateLimitResponse) return feedRateLimitResponse;
-                    const feedNamespaceKey = findCalendarFeedNamespace(dataDir, calendarFeedToken);
-                    if (!feedNamespaceKey) return errorResponse('Not found', 404);
                     return calendarFeedResponse(dataDir, feedNamespaceKey);
                 }
 
