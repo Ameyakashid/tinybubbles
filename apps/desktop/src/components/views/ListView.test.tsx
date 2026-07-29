@@ -54,6 +54,7 @@ describe('ListView', () => {
   beforeEach(() => {
     reportErrorMock.mockReset();
     window.localStorage.removeItem(referenceViewStateStorageKey);
+    window.localStorage.removeItem('mindwtr:view:list:next:v1');
 
     useTaskStore.setState(initialTaskState, true);
     useUiStore.setState(initialUiState, true);
@@ -520,6 +521,40 @@ describe('ListView', () => {
     expect(secondRender.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'false');
     expect(secondRender.queryByText('Work reference')).not.toBeInTheDocument();
     expect(secondRender.getByText('Home reference')).toBeInTheDocument();
+  });
+
+  it('collapses groups on any status list, not just Reference (#963)', () => {
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('1', { title: 'Work next', status: 'next', contexts: ['@work'] }),
+        makeTask('2', { title: 'Home next', status: 'next', contexts: ['@home'] }),
+      ],
+      lastDataChangeAt: 1,
+    });
+    useUiStore.setState((state) => ({
+      ...state,
+      listOptions: {
+        ...state.listOptions,
+        nextGroupBy: 'context',
+      },
+    }));
+
+    const firstRender = renderListView('next', 'Next');
+    fireEvent.click(firstRender.getByRole('button', { name: /@work\s*1/i }));
+
+    expect(firstRender.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(firstRender.queryByText('Work next')).not.toBeInTheDocument();
+    expect(firstRender.getByText('Home next')).toBeInTheDocument();
+
+    // Per status, so folding Next cannot fold another list.
+    const persisted = JSON.parse(window.localStorage.getItem('mindwtr:view:list:next:v1') ?? '{}') as {
+      collapsedGroups?: Record<string, string[]>;
+    };
+    expect(persisted.collapsedGroups?.context).toEqual(['context:@work']);
+
+    firstRender.unmount();
+    const secondRender = renderListView('next', 'Next');
+    expect(secondRender.queryByText('Work next')).not.toBeInTheDocument();
   });
 
   it('collapses expanded task details when page details are turned off', async () => {

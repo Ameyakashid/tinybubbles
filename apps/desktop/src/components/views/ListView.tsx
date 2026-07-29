@@ -57,6 +57,7 @@ import {
     emptyCollapsedGroups,
     FOCUS_AXES,
     groupTasks,
+    LIST_AXES,
     REFERENCE_AXES,
     sanitizeCollapsedGroups,
     type CollapsedGroups,
@@ -91,13 +92,17 @@ interface ListViewProps {
 
 const EMPTY_PRIORITIES: TaskPriority[] = [];
 const EMPTY_ESTIMATES: TimeEstimate[] = [];
-const REFERENCE_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:reference:v1';
-type ReferenceGroupCollapseKey = Exclude<ReferenceGroupBy, 'none'>;
-type ReferencePersistedViewState = {
-    collapsedGroups: CollapsedGroups<ReferenceGroupBy>;
+// Reference kept its own key from when it was the only collapsible list (#734);
+// every other status gets its own, so collapsing Someday does not fold Next.
+const getListViewStateStorageKey = (statusFilter: string) => (
+    statusFilter === 'reference' ? 'mindwtr:view:reference:v1' : `mindwtr:view:list:${statusFilter}:v1`
+);
+type ListGroupCollapseKey = Exclude<TaskListGroupBy, 'none'>;
+type ListPersistedViewState = {
+    collapsedGroups: CollapsedGroups<TaskListGroupBy>;
 };
-const DEFAULT_REFERENCE_VIEW_STATE: ReferencePersistedViewState = {
-    collapsedGroups: emptyCollapsedGroups(REFERENCE_AXES),
+const DEFAULT_LIST_VIEW_STATE: ListPersistedViewState = {
+    collapsedGroups: emptyCollapsedGroups(LIST_AXES),
 };
 type ShowToast = (
     message: string,
@@ -106,12 +111,12 @@ type ShowToast = (
     action?: { label: string; onClick: () => void }
 ) => void;
 
-function sanitizeReferenceViewState(value: unknown, fallback: ReferencePersistedViewState): ReferencePersistedViewState {
+function sanitizeListViewState(value: unknown, fallback: ListPersistedViewState): ListPersistedViewState {
     const parsed = value && typeof value === 'object' && !Array.isArray(value)
-        ? value as Partial<ReferencePersistedViewState>
+        ? value as Partial<ListPersistedViewState>
         : {};
     return {
-        collapsedGroups: sanitizeCollapsedGroups(REFERENCE_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
+        collapsedGroups: sanitizeCollapsedGroups(LIST_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
     };
 }
 
@@ -215,10 +220,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const [searchQuery, setSearchQuery] = useState('');
     const addInputRef = useRef<HTMLInputElement>(null);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const [referenceViewState, setReferenceViewState] = usePersistedViewState(
-        REFERENCE_VIEW_STATE_STORAGE_KEY,
-        DEFAULT_REFERENCE_VIEW_STATE,
-        sanitizeReferenceViewState,
+    const [listViewState, setListViewState] = usePersistedViewState(
+        getListViewStateStorageKey(statusFilter),
+        DEFAULT_LIST_VIEW_STATE,
+        sanitizeListViewState,
     );
     const prioritiesEnabled = settings?.features?.priorities !== false;
     const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
@@ -536,28 +541,27 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         : statusFilter === 'done'
             ? DONE_AXES
             : FOCUS_AXES;
-    const isReferenceGrouping = statusFilter === 'reference' && activeReferenceGroupBy !== 'none';
     const isListGrouping = activeGroupBy !== 'none';
     const groupedTasks = useMemo(() => (
         isListGrouping
             ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t })
             : [] as TaskGroup[]
     ), [activeGroupBy, areas, filteredTasks, isListGrouping, localDayKey, projectMap, t]);
-    const activeReferenceCollapseKey: ReferenceGroupCollapseKey | null = isReferenceGrouping
-        ? activeReferenceGroupBy as ReferenceGroupCollapseKey
+    const activeCollapseKey: ListGroupCollapseKey | null = isListGrouping
+        ? activeGroupBy as ListGroupCollapseKey
         : null;
-    const collapsedReferenceGroupIds = useMemo(() => {
-        if (!activeReferenceCollapseKey) return new Set<string>();
-        return new Set(referenceViewState.collapsedGroups[activeReferenceCollapseKey] ?? []);
-    }, [activeReferenceCollapseKey, referenceViewState.collapsedGroups]);
-    const getReferenceSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
-        `reference-group-${getListDomIdSegment(activeReferenceGroupBy)}-${groupIndex}-${getListDomIdSegment(group.id)}`
-    ), [activeReferenceGroupBy]);
+    const collapsedGroupIds = useMemo(() => {
+        if (!activeCollapseKey) return new Set<string>();
+        return new Set(listViewState.collapsedGroups[activeCollapseKey] ?? []);
+    }, [activeCollapseKey, listViewState.collapsedGroups]);
+    const getSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
+        `${statusFilter}-group-${getListDomIdSegment(activeGroupBy)}-${groupIndex}-${getListDomIdSegment(group.id)}`
+    ), [activeGroupBy, statusFilter]);
     const groupedVirtualRows = useMemo(() => buildGroupedVirtualRows(
         groupedTasks,
-        collapsedReferenceGroupIds,
-        isReferenceGrouping ? getReferenceSectionDomId : undefined,
-    ), [collapsedReferenceGroupIds, getReferenceSectionDomId, groupedTasks, isReferenceGrouping]);
+        collapsedGroupIds,
+        isListGrouping ? getSectionDomId : undefined,
+    ), [collapsedGroupIds, getSectionDomId, groupedTasks, isListGrouping]);
     const firstGroupedRowIndexByTaskId = useMemo(() => {
         const indices = new Map<string, number>();
         groupedVirtualRows.forEach((row, index) => {
@@ -567,10 +571,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         });
         return indices;
     }, [groupedVirtualRows]);
-    const toggleReferenceGroup = useCallback((groupId: string) => {
-        if (!activeReferenceCollapseKey) return;
-        setReferenceViewState((current) => {
-            const currentIds = current.collapsedGroups[activeReferenceCollapseKey] ?? [];
+    const toggleGroup = useCallback((groupId: string) => {
+        if (!activeCollapseKey) return;
+        setListViewState((current) => {
+            const currentIds = current.collapsedGroups[activeCollapseKey] ?? [];
             const nextIds = new Set(currentIds);
             if (nextIds.has(groupId)) {
                 nextIds.delete(groupId);
@@ -580,11 +584,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             return {
                 collapsedGroups: {
                     ...current.collapsedGroups,
-                    [activeReferenceCollapseKey]: Array.from(nextIds),
+                    [activeCollapseKey]: Array.from(nextIds),
                 },
             };
         });
-    }, [activeReferenceCollapseKey, setReferenceViewState]);
+    }, [activeCollapseKey, setListViewState]);
     const taskIndexById = useMemo(() => {
         const map = new Map<string, number>();
         filteredTasks.forEach((task, index) => map.set(task.id, index));
@@ -1116,7 +1120,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                                             group={groupedRow.group}
                                             collapsed={groupedRow.collapsed}
                                             controlsId={groupedRow.controlsId}
-                                            onToggleGroup={isReferenceGrouping ? toggleReferenceGroup : undefined}
+                                            onToggleGroup={isListGrouping ? toggleGroup : undefined}
                                             className={cn(
                                                 'border border-border/40 bg-card/30',
                                                 groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
@@ -1181,9 +1185,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 ) : isListGrouping ? (
                     <GroupedTaskSections
                         groups={groupedTasks}
-                        onToggleGroup={isReferenceGrouping ? toggleReferenceGroup : undefined}
-                        collapsedGroupIds={collapsedReferenceGroupIds}
-                        getSectionDomId={getReferenceSectionDomId}
+                        onToggleGroup={isListGrouping ? toggleGroup : undefined}
+                        collapsedGroupIds={collapsedGroupIds}
+                        getSectionDomId={getSectionDomId}
                         renderTask={(task) => {
                             const index = taskIndexById.get(task.id) ?? 0;
                             return (

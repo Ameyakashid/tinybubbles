@@ -28,6 +28,13 @@ export type DoneGroupBy = typeof DONE_AXES[number];
 
 export type TaskListGroupBy = NextGroupBy | ReferenceGroupBy | DoneGroupBy;
 
+// Every axis any status list can offer. Collapse state is sanitized against
+// this one roster instead of the per-status one, so a list keeps the collapsed
+// groups of an axis it no longer shows rather than dropping them silently.
+export const LIST_AXES: readonly TaskListGroupBy[] = Array.from(
+    new Set<TaskListGroupBy>([...FOCUS_AXES, ...REFERENCE_AXES, ...DONE_AXES]),
+);
+
 // Contexts and Review both span every status, so status itself is a useful axis
 // there (see one #topic across Next / Waiting / Someday / Reference at a glance).
 export const CONTEXTS_AXES = ['none', 'status', 'tag', 'context', 'area', 'project'] as const;

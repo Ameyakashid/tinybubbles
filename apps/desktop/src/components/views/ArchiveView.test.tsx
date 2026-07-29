@@ -38,6 +38,7 @@ describe('ArchiveView', () => {
         // store, so a test that picks one would otherwise narrow every test after it.
         useUiStore.setState(initialUiState, true);
         useTaskStore.setState(initialTaskState, true);
+        window.localStorage.removeItem('mindwtr:view:archive:v1');
         useTaskStore.setState({
             tasks: [],
             _allTasks: [archivedTask],
@@ -375,6 +376,20 @@ describe('ArchiveView', () => {
 
             expect(screen.getByText('House')).toBeInTheDocument();
             expect(screen.getByText('No Project')).toBeInTheDocument();
+        });
+
+        it('collapses a group and leaves it collapsed on the next visit (#963)', () => {
+            const firstRender = renderWithBoth();
+
+            pickOption('Group', 'Project');
+            fireEvent.click(screen.getByRole('button', { name: /House\s*1/i }));
+
+            expect(screen.getByRole('button', { name: /House\s*1/i })).toHaveAttribute('aria-expanded', 'false');
+            expect(rowTitles()).toEqual(['Archived task']);
+
+            firstRender.unmount();
+            renderWithBoth();
+            expect(rowTitles()).toEqual(['Archived task']);
         });
 
         it('virtualizes about 5k grouped tasks without changing the Projects segment', () => {

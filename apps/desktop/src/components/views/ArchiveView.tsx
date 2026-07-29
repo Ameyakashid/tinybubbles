@@ -43,7 +43,16 @@ import {
     TIME_ESTIMATE_FILTER_OPTIONS,
     useListFilterControls,
 } from './list/list-filter-controls';
-import { DONE_AXES, groupTasks, type DoneGroupBy, type TaskGroup } from './list/next-grouping';
+import {
+    DONE_AXES,
+    emptyCollapsedGroups,
+    groupTasks,
+    sanitizeCollapsedGroups,
+    type CollapsedGroups,
+    type DoneGroupBy,
+    type TaskGroup,
+} from './list/next-grouping';
+import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
@@ -235,7 +244,29 @@ const ArchiveProjectRow = memo(function ArchiveProjectRow({
 });
 
 type ArchiveSegment = 'tasks' | 'projects';
-const NO_COLLAPSED_ARCHIVE_GROUPS = new Set<string>();
+
+// Same shape ListView uses, device-local: the collapsed set per axis (#963).
+const ARCHIVE_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:archive:v1';
+type ArchiveGroupCollapseKey = Exclude<DoneGroupBy, 'none'>;
+type ArchivePersistedViewState = {
+    collapsedGroups: CollapsedGroups<DoneGroupBy>;
+};
+const DEFAULT_ARCHIVE_VIEW_STATE: ArchivePersistedViewState = {
+    collapsedGroups: emptyCollapsedGroups(DONE_AXES),
+};
+
+function sanitizeArchiveViewState(value: unknown, fallback: ArchivePersistedViewState): ArchivePersistedViewState {
+    const parsed = value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Partial<ArchivePersistedViewState>
+        : {};
+    return {
+        collapsedGroups: sanitizeCollapsedGroups(DONE_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
+    };
+}
+
+function getArchiveDomIdSegment(value: string): string {
+    return value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'group';
+}
 
 export function ArchiveView() {
     const perf = usePerformanceMonitor('ArchiveView');
@@ -272,6 +303,11 @@ export function ArchiveView() {
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const [segment, setSegment] = useState<ArchiveSegment>('tasks');
     const [searchQuery, setSearchQuery] = useState('');
+    const [archiveViewState, setArchiveViewState] = usePersistedViewState(
+        ARCHIVE_VIEW_STATE_STORAGE_KEY,
+        DEFAULT_ARCHIVE_VIEW_STATE,
+        sanitizeArchiveViewState,
+    );
     const [completedAtTaskId, setCompletedAtTaskId] = useState<string | null>(null);
     const listScrollRef = useRef<HTMLDivElement>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
@@ -398,15 +434,46 @@ export function ArchiveView() {
         () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t }) : []),
         [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, t]
     );
+    const activeCollapseKey: ArchiveGroupCollapseKey | null = isGrouping
+        ? archivedGroupBy as ArchiveGroupCollapseKey
+        : null;
+    const collapsedGroupIds = useMemo(() => {
+        if (!activeCollapseKey) return new Set<string>();
+        return new Set(archiveViewState.collapsedGroups[activeCollapseKey] ?? []);
+    }, [activeCollapseKey, archiveViewState.collapsedGroups]);
+    const getSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
+        `archived-group-${getArchiveDomIdSegment(archivedGroupBy)}-${groupIndex}-${getArchiveDomIdSegment(group.id)}`
+    ), [archivedGroupBy]);
+    const toggleGroup = useCallback((groupId: string) => {
+        if (!activeCollapseKey) return;
+        setArchiveViewState((current) => {
+            const nextIds = new Set(current.collapsedGroups[activeCollapseKey] ?? []);
+            if (nextIds.has(groupId)) {
+                nextIds.delete(groupId);
+            } else {
+                nextIds.add(groupId);
+            }
+            return {
+                collapsedGroups: {
+                    ...current.collapsedGroups,
+                    [activeCollapseKey]: Array.from(nextIds),
+                },
+            };
+        });
+    }, [activeCollapseKey, setArchiveViewState]);
     const groupedVirtualRows = useMemo(
-        () => buildGroupedVirtualRows(groupedTasks, NO_COLLAPSED_ARCHIVE_GROUPS),
-        [groupedTasks]
+        () => buildGroupedVirtualRows(groupedTasks, collapsedGroupIds, isGrouping ? getSectionDomId : undefined),
+        [collapsedGroupIds, getSectionDomId, groupedTasks, isGrouping]
     );
     // Grouped rows render in section order, so keyboard navigation and
     // "select all" have to walk that order rather than the flat sorted one.
+    // A collapsed group contributes no rows, so it must not contribute
+    // selectable tasks either.
     const orderedTasks = useMemo(
-        () => (isGrouping ? groupedTasks.flatMap((group) => group.tasks) : archivedTasks),
-        [archivedTasks, groupedTasks, isGrouping]
+        () => (isGrouping
+            ? groupedTasks.flatMap((group) => (collapsedGroupIds.has(group.id) ? [] : group.tasks))
+            : archivedTasks),
+        [archivedTasks, collapsedGroupIds, groupedTasks, isGrouping]
     );
     const archivedTaskIds = useMemo(() => orderedTasks.map((task) => task.id), [orderedTasks]);
     const {
@@ -812,6 +879,7 @@ export function ArchiveView() {
                                             group={groupedRow.group}
                                             collapsed={groupedRow.collapsed}
                                             controlsId={groupedRow.controlsId}
+                                            onToggleGroup={toggleGroup}
                                             className={cn(
                                                 'border border-border/40 bg-card/30',
                                                 groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
@@ -865,7 +933,13 @@ export function ArchiveView() {
                         })}
                     </div>
                 ) : isGrouping ? (
-                    <GroupedTaskSections groups={groupedTasks} renderTask={renderArchiveRow} />
+                    <GroupedTaskSections
+                        groups={groupedTasks}
+                        renderTask={renderArchiveRow}
+                        onToggleGroup={toggleGroup}
+                        collapsedGroupIds={collapsedGroupIds}
+                        getSectionDomId={getSectionDomId}
+                    />
                 ) : (
                     <div className="divide-y divide-border/30">
                         {archivedTasks.map(renderArchiveRow)}
