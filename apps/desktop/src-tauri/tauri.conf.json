@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "homepage": "https://dongdongbh.tech",
+    "homepage": "https://mindwtr.app",
     "targets": [
       "nsis",
       "appimage",
