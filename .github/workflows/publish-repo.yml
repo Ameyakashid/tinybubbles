@@ -257,17 +257,25 @@ jobs:
             stage_repo
             git -C "$pages_dir" add -A
 
-            if ! git -C "$pages_dir" diff --cached --quiet; then
-              git -C "$pages_dir" commit -m "Publish Linux ${REPO_CHANNEL} repos for ${RELEASE_TAG:-${GITHUB_REF_NAME}}"
-            fi
+            tree="$(git -C "$pages_dir" write-tree)"
 
             if git -C "$pages_dir" rev-parse --verify --quiet refs/remotes/origin/gh-pages >/dev/null \
-              && [ "$(git -C "$pages_dir" rev-parse HEAD)" = "$(git -C "$pages_dir" rev-parse refs/remotes/origin/gh-pages)" ]; then
+              && [ "$tree" = "$(git -C "$pages_dir" rev-parse "refs/remotes/origin/gh-pages^{tree}")" ]; then
               echo "gh-pages already up to date."
               exit 0
             fi
 
-            if git -C "$pages_dir" push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages; then
+            # gh-pages holds generated output only, so it is published as a
+            # single parentless commit and force-pushed. Keeping history would
+            # retain every superseded .deb/.rpm forever (~35 MB per release,
+            # 1.5 GB by v1.1.5) in a branch every `git clone` fetches. The
+            # concurrency group serializes publishes, and the retry below
+            # re-fetches before restaging, so the force-push cannot clobber a
+            # concurrent one.
+            commit="$(git -C "$pages_dir" commit-tree "$tree" \
+              -m "Publish Linux ${REPO_CHANNEL} repos for ${RELEASE_TAG:-${GITHUB_REF_NAME}}")"
+
+            if git -C "$pages_dir" push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$commit:refs/heads/gh-pages"; then
               exit 0
             fi
           done
