@@ -178,6 +178,24 @@ fn remember(
     }
 }
 
+fn seed_layout(
+    layouts: &mut WindowLayouts,
+    signature: &str,
+    geometry: WindowGeometry,
+    now_ms: i64,
+) -> bool {
+    if !is_usable(&geometry)
+        || layouts
+            .profiles
+            .get(signature)
+            .is_some_and(|profile| is_usable(&profile.geometry))
+    {
+        return false;
+    }
+    remember(layouts, signature, geometry, now_ms, MAX_REMEMBERED_LAYOUTS);
+    true
+}
+
 /// v1.1.5 kept a single rectangle in the window-state plugin's file. Reading it
 /// once means upgrading does not look like the reset this issue was about
 /// (#936); it is only ever a starting point for the layout in front of the user,
@@ -285,10 +303,25 @@ fn current_work_area<R: tauri::Runtime>(
     })
 }
 
+fn measured_normal_geometry<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Option<WindowGeometry> {
+    let size = window.inner_size().ok()?;
+    let position = window.outer_position().ok()?;
+    Some(WindowGeometry {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+        maximized: false,
+        fullscreen: false,
+    })
+}
+
 /// Applies the geometry saved for the screens attached right now. Called while
 /// the window is still hidden, so nothing here is ever seen moving.
 pub(crate) fn restore<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    let layouts = read_layouts();
+    let mut layouts = read_layouts();
     let signature = layout_signature(&screens_of(window));
     let legacy_candidates = [
         // Portable installs redirected the plugin's file into their own profile.
@@ -300,9 +333,16 @@ pub(crate) fn restore<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
             .unwrap_or_default()
             .join(LEGACY_WINDOW_STATE_FILE_NAME),
     ];
-    let Some(geometry) = resolve_geometry(&layouts, &signature, current_work_area(window))
-        .or_else(|| legacy_geometry(&legacy_candidates))
-    else {
+    let geometry = resolve_geometry(&layouts, &signature, current_work_area(window))
+        .or_else(|| legacy_geometry(&legacy_candidates));
+    // Seed before reveal so a first close while maximized or fullscreen can
+    // update only those flags and retain this normal rectangle.
+    if let Some(seed_geometry) = geometry.or_else(|| measured_normal_geometry(window)) {
+        if seed_layout(&mut layouts, &signature, seed_geometry, now_ms()) {
+            write_layouts(&layouts);
+        }
+    }
+    let Some(geometry) = geometry else {
         return;
     };
 
@@ -363,6 +403,23 @@ fn any_screen_shows<R: tauri::Runtime>(
         .unwrap_or(false)
 }
 
+fn geometry_for_save(
+    previous: Option<WindowGeometry>,
+    measured: Option<WindowGeometry>,
+    maximized: bool,
+    fullscreen: bool,
+) -> Option<WindowGeometry> {
+    if maximized || fullscreen {
+        previous.map(|previous| WindowGeometry {
+            maximized,
+            fullscreen,
+            ..previous
+        })
+    } else {
+        measured.filter(is_usable)
+    }
+}
+
 /// Stores the window's current geometry against the current screens.
 ///
 /// A maximized or fullscreen window reports the screen's rectangle, not the one
@@ -381,34 +438,13 @@ pub(crate) fn save<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let signature = layout_signature(&screens_of(&window));
     let mut layouts = read_layouts();
     let previous = layouts.profiles.get(&signature).map(|p| p.geometry);
-
-    let geometry = if maximized || fullscreen {
-        let Some(previous) = previous else {
-            // Never sized on this layout, so there is no rectangle worth
-            // keeping; remember the flags only once one exists.
-            return;
-        };
-        WindowGeometry {
-            maximized,
-            fullscreen,
-            ..previous
-        }
+    let measured = if maximized || fullscreen {
+        None
     } else {
-        let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) else {
-            return;
-        };
-        let measured = WindowGeometry {
-            x: position.x,
-            y: position.y,
-            width: size.width,
-            height: size.height,
-            maximized: false,
-            fullscreen: false,
-        };
-        if !is_usable(&measured) {
-            return;
-        }
-        measured
+        measured_normal_geometry(&window)
+    };
+    let Some(geometry) = geometry_for_save(previous, measured, maximized, fullscreen) else {
+        return;
     };
 
     remember(
@@ -552,6 +588,42 @@ mod tests {
         assert_eq!(
             resolve_geometry(&WindowLayouts::default(), "desk", None),
             None
+        );
+    }
+
+    #[test]
+    fn first_maximized_or_fullscreen_close_keeps_the_seeded_normal_rectangle() {
+        let normal = geometry(120, 80, 1200, 800);
+        let mut stored = WindowLayouts::default();
+        assert!(seed_layout(&mut stored, "desk", normal, 10));
+        let previous = stored.profiles.get("desk").map(|profile| profile.geometry);
+
+        for (maximized, fullscreen) in [(true, false), (false, true)] {
+            assert_eq!(
+                geometry_for_save(previous, None, maximized, fullscreen),
+                Some(WindowGeometry {
+                    maximized,
+                    fullscreen,
+                    ..normal
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn seeding_does_not_overwrite_known_geometry() {
+        let known = geometry(200, 100, 1600, 900);
+        let mut stored = layouts(&[("desk", known, 50)]);
+
+        assert!(!seed_layout(
+            &mut stored,
+            "desk",
+            geometry(0, 0, 1200, 800),
+            60
+        ));
+        assert_eq!(
+            stored.profiles.get("desk").map(|profile| profile.geometry),
+            Some(known)
         );
     }
 
