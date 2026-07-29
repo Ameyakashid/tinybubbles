@@ -40,7 +40,9 @@ import {
 } from '@mindwtr/core';
 import {
   commitProcessInboxWorkflowEvent,
+  resolveProcessInboxContainerFields,
   type ProcessInboxWorkflowEvent,
+  type ProcessInboxWorkflowFields,
 } from '@mindwtr/core/process-inbox-workflow';
 
 import type { AIResponseAction } from '../ai-response-modal';
@@ -567,16 +569,25 @@ export function useInboxProcessingController({
     updateTask,
   ]);
 
+  // Terminal destinations that skip the project section still carry whatever
+  // the user already picked; the state is hydrated from the task, so an
+  // untouched selection writes back unchanged (#958).
+  const buildSelectionFields = useCallback((): ProcessInboxWorkflowFields => ({
+    ...resolveProcessInboxContainerFields(selectedProjectId, selectedAreaId),
+    ...(showContextsField ? { contexts: selectedContexts } : {}),
+    ...(showTagsField ? { tags: selectedTags } : {}),
+  }), [selectedAreaId, selectedContexts, selectedProjectId, selectedTags, showContextsField, showTagsField]);
+
   const handleNotActionable = useCallback(async (action: 'trash' | 'someday' | 'reference') => {
     if (!currentTask) return;
     if (action === 'trash') {
       await applyWorkflowEvent({ type: 'discard' });
     } else if (action === 'someday') {
-      await applyWorkflowEvent({ type: 'someday' });
+      await applyWorkflowEvent({ type: 'someday', fields: buildSelectionFields() });
     } else {
-      await applyWorkflowEvent({ type: 'reference' });
+      await applyWorkflowEvent({ type: 'reference', fields: buildSelectionFields() });
     }
-  }, [applyWorkflowEvent, currentTask]);
+  }, [applyWorkflowEvent, buildSelectionFields, currentTask]);
 
   const handleLaterMobile = useCallback(async () => {
     if (!currentTask) return;
@@ -615,8 +626,8 @@ export function useInboxProcessingController({
   ]);
 
   const handleTwoMinYes = useCallback(async () => {
-    if (currentTask) await applyWorkflowEvent({ type: 'complete' });
-  }, [applyWorkflowEvent, currentTask]);
+    if (currentTask) await applyWorkflowEvent({ type: 'complete', fields: buildSelectionFields() });
+  }, [applyWorkflowEvent, buildSelectionFields, currentTask]);
 
   const buildScheduleUpdates = useCallback(() => {
     const updates: Partial<Task> = {};

@@ -22,7 +22,20 @@ export type ProcessInboxWorkflowFields = Partial<Pick<
     | 'reviewAt'
 >>;
 
-type ProcessInboxReferenceFields = Partial<Pick<Task, 'contexts' | 'tags'>>;
+/**
+ * Container exclusivity: a project home outranks a direct area, so a task
+ * never keeps both. Every Inbox-processing decision writes this pair so a
+ * picked project survives whichever destination the user lands on (#958).
+ */
+export function resolveProcessInboxContainerFields(
+    projectId: string | null | undefined,
+    areaId: string | null | undefined,
+): Pick<ProcessInboxWorkflowFields, 'projectId' | 'areaId'> {
+    return {
+        projectId: projectId || undefined,
+        areaId: projectId ? undefined : (areaId || undefined),
+    };
+}
 
 /**
  * Domain decisions emitted by an Inbox-processing UI.
@@ -33,9 +46,9 @@ type ProcessInboxReferenceFields = Partial<Pick<Task, 'contexts' | 'tags'>>;
  */
 export type ProcessInboxWorkflowEvent =
     | { type: 'discard' }
-    | { type: 'someday' }
-    | { type: 'reference'; fields?: ProcessInboxReferenceFields }
-    | { type: 'complete' }
+    | { type: 'someday'; fields?: ProcessInboxWorkflowFields }
+    | { type: 'reference'; fields?: ProcessInboxWorkflowFields }
+    | { type: 'complete'; fields?: ProcessInboxWorkflowFields }
     | { type: 'later'; fields: ProcessInboxWorkflowFields }
     | { type: 'waiting'; fields: ProcessInboxWorkflowFields; followUpAt?: string }
     | { type: 'next'; fields: ProcessInboxWorkflowFields };
@@ -85,11 +98,11 @@ export function resolveProcessInboxWorkflowEvent(
         case 'discard':
             return { type: 'delete' };
         case 'someday':
-            return updateEffect('someday');
+            return updateEffect('someday', event.fields);
         case 'reference':
             return updateEffect('reference', event.fields);
         case 'complete':
-            return updateEffect('done');
+            return updateEffect('done', event.fields);
         case 'later':
         case 'next':
             return updateEffect('next', event.fields);

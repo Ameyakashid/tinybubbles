@@ -8,6 +8,7 @@ import {
     getPersonOptionNames,
     goBackProcessInboxStep,
     parseQuickAddDateCommands,
+    resolveProcessInboxContainerFields,
     skipCurrentProcessInboxTask,
     startProcessInboxSession,
     tFallback,
@@ -368,12 +369,14 @@ export function useInboxProcessingController({
         setProcessingSession((current) => goBackProcessInboxStep(current));
     }, [setProcessingSession]);
 
-    const buildReferenceFields = useCallback((): ProcessInboxWorkflowFields => {
-        const fields: ProcessInboxWorkflowFields = {};
-        if (showContextsField) fields.contexts = selectedContexts;
-        if (showTagsField) fields.tags = selectedTags;
-        return fields;
-    }, [selectedContexts, selectedTags, showContextsField, showTagsField]);
+    // Terminal destinations that skip the project step still carry whatever the
+    // user already picked; the state is hydrated from the task, so an untouched
+    // selection writes back unchanged (#958).
+    const buildSelectionFields = useCallback((): ProcessInboxWorkflowFields => ({
+        ...resolveProcessInboxContainerFields(selectedProjectId, selectedAreaId),
+        ...(showContextsField ? { contexts: selectedContexts } : {}),
+        ...(showTagsField ? { tags: selectedTags } : {}),
+    }), [selectedAreaId, selectedContexts, selectedProjectId, selectedTags, showContextsField, showTagsField]);
 
     const handleNotActionable = useCallback(async (action: 'trash' | 'someday' | 'reference') => {
         if (!processingTask) return;
@@ -386,13 +389,13 @@ export function useInboxProcessingController({
                 goToStep('reference');
                 return;
             }
-            await applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
+            await applyWorkflowEvent({ type: 'reference', fields: buildSelectionFields() });
             return;
         }
-        await applyWorkflowEvent({ type: 'someday' });
+        await applyWorkflowEvent({ type: 'someday', fields: buildSelectionFields() });
     }, [
         applyWorkflowEvent,
-        buildReferenceFields,
+        buildSelectionFields,
         goToStep,
         processingMode,
         processingTask,
@@ -402,8 +405,8 @@ export function useInboxProcessingController({
 
     const handleConfirmReference = useCallback(async () => {
         if (!processingTask) return;
-        await applyWorkflowEvent({ type: 'reference', fields: buildReferenceFields() });
-    }, [applyWorkflowEvent, buildReferenceFields, processingTask]);
+        await applyWorkflowEvent({ type: 'reference', fields: buildSelectionFields() });
+    }, [applyWorkflowEvent, buildSelectionFields, processingTask]);
 
     const handleLater = useCallback(async () => {
         if (!processingTask) return;
@@ -413,29 +416,19 @@ export function useInboxProcessingController({
             showToast(tFallback(t, 'process.laterStartRequired', 'Choose a start date for Later.'), 'error');
             return;
         }
-        const projectUpdates = projectFirst && showProjectStep
-            ? {
-                ...(showProjectField ? { projectId: selectedProjectId || undefined } : {}),
-                ...(showAreaField ? { areaId: selectedProjectId ? undefined : (selectedAreaId || undefined) } : {}),
-            }
-            : {};
         await applyWorkflowEvent({
             type: 'later',
-            fields: { ...projectUpdates, startTime },
+            fields: { ...resolveProcessInboxContainerFields(selectedProjectId, selectedAreaId), startTime },
         });
     }, [
         applyWorkflowEvent,
         handleScheduleTimeCommit,
         processingTask,
-        projectFirst,
         scheduleDate,
         scheduleTime,
         scheduleTimeDraft,
         selectedAreaId,
         selectedProjectId,
-        showAreaField,
-        showProjectField,
-        showProjectStep,
         showToast,
         t,
     ]);
@@ -474,8 +467,8 @@ export function useInboxProcessingController({
 
     const handleTwoMinDone = useCallback(async () => {
         if (!processingTask) return;
-        await applyWorkflowEvent({ type: 'complete' });
-    }, [applyWorkflowEvent, processingTask]);
+        await applyWorkflowEvent({ type: 'complete', fields: buildSelectionFields() });
+    }, [applyWorkflowEvent, buildSelectionFields, processingTask]);
 
     const handleTwoMinNo = useCallback(() => {
         goToStep(twoMinuteFirst ? 'actionable' : 'decide');

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Task } from '@mindwtr/core';
+import type { Project, Task } from '@mindwtr/core';
 import { useInboxProcessingController } from './useInboxProcessingController';
 
 const makeTask = (id: string, status: Task['status'] = 'inbox'): Task => ({
@@ -62,5 +62,60 @@ describe('useInboxProcessingController session reconciliation', () => {
             expect(result.current.isProcessing).toBe(false);
         });
         expect(setProcessingSpy).toHaveBeenLastCalledWith(false);
+    });
+});
+
+describe('useInboxProcessingController not-actionable destinations', () => {
+    const tasks = [makeTask('one')];
+    const projects = [{ id: 'p1', title: 'Project', status: 'active' } as Project];
+    const areas: never[] = [];
+    const tokens: string[] = [];
+    const settings = {};
+
+    const renderController = (updateTask: ReturnType<typeof vi.fn>) => renderHook(() => {
+        // The session closes itself once the queue drains, so isProcessing has
+        // to be real state or the reconciliation effect never settles.
+        const [isProcessing, setIsProcessing] = useState(true);
+        return useInboxProcessingController({
+            t: (key) => key,
+            tasks,
+            projects,
+            areas,
+            settings,
+            addProject: async () => null,
+            addTask: async () => ({ success: true }),
+            updateTask,
+            deleteTask: async () => ({ success: true }),
+            allContexts: tokens,
+            allTags: tokens,
+            isProcessing,
+            setIsProcessing,
+        });
+    });
+
+    // #958: picking a project and then sending the item to Reference/Someday
+    // used to write only the status, silently dropping the project.
+    it.each([
+        ['reference', (wizard: ReturnType<typeof renderController>['result']['current']['wizardProps']) => wizard.handleConfirmReference()],
+        ['someday', (wizard: ReturnType<typeof renderController>['result']['current']['wizardProps']) => wizard.handleNotActionable('someday')],
+    ] as const)('keeps the picked project when the item goes to %s', async (status, commit) => {
+        const updateTask = vi.fn(async () => ({ success: true }));
+        const { result } = renderController(updateTask);
+
+        await waitFor(() => {
+            expect(result.current.wizardProps.processingTask?.id).toBe('one');
+        });
+
+        act(() => {
+            result.current.wizardProps.setSelectedProjectId('p1');
+        });
+        await act(async () => {
+            await commit(result.current.wizardProps);
+        });
+
+        expect(updateTask).toHaveBeenCalledWith('one', expect.objectContaining({
+            status,
+            projectId: 'p1',
+        }));
     });
 });

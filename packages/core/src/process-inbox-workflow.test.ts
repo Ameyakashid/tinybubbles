@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { startProcessInboxSession } from './process-inbox-session';
 import {
     commitProcessInboxWorkflowEvent,
+    resolveProcessInboxContainerFields,
     resolveProcessInboxWorkflowEvent,
 } from './process-inbox-workflow';
 
@@ -20,6 +21,28 @@ describe('resolveProcessInboxWorkflowEvent', () => {
             type: 'update',
             updates: { status },
         });
+    });
+
+    it.each(['someday', 'reference', 'complete'] as const)(
+        'keeps the picked project when %s ends the processing pass (#958)',
+        (type) => {
+            expect(resolveProcessInboxWorkflowEvent({
+                type,
+                fields: resolveProcessInboxContainerFields('project-1', 'area-1'),
+            })).toMatchObject({
+                type: 'update',
+                updates: { projectId: 'project-1', areaId: undefined },
+            });
+        },
+    );
+
+    it('drops the area once a project is picked, and keeps it otherwise', () => {
+        expect(resolveProcessInboxContainerFields('project-1', 'area-1'))
+            .toEqual({ projectId: 'project-1', areaId: undefined });
+        expect(resolveProcessInboxContainerFields(null, 'area-1'))
+            .toEqual({ projectId: undefined, areaId: 'area-1' });
+        expect(resolveProcessInboxContainerFields('', ''))
+            .toEqual({ projectId: undefined, areaId: undefined });
     });
 
     it('preserves the fields supplied by a platform for a next action', () => {
