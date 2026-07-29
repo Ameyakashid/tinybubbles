@@ -46,6 +46,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Desktop
 
+- Desktop time fields keep their text area available for manual entry; their native clock icon still opens the picker. (#896)
 - Desktop applies saved geometry before showing the window, waits for the interface to paint, and keeps a separate size and position for each monitor layout. Existing `v1.1.5` geometry seeds the first profile; on a first run or new monitor layout, startup geometry seeds a normal window rectangle so closing while maximized or fullscreen cannot overwrite it. (#936)
 - Search, feedback, and announcement dialogs stay within short windows and scroll their content while keeping actions reachable. (#957)
 - Linux calendar settings list writable targets without opening every remote calendar, so slow or offline accounts no longer stall task edits or hide other calendars. (#575)

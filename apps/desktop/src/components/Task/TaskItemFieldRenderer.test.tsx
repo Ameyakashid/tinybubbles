@@ -616,6 +616,31 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         expect(getByRole('dialog', { name: 'Due Date Calendar' })).toBeInTheDocument();
     });
 
+    it.each([
+        ['startTime' as const, 'Start time', 'startTime' as const],
+        ['dueDate' as const, 'Due time', 'dueDate' as const],
+    ])('does not force the native picker when the $fieldId time input is clicked', (fieldId, label, draftKey) => {
+        const setField = vi.fn();
+        const { getByLabelText } = render(
+            <TaskItemFieldRenderer
+                fieldId={fieldId}
+                {...createProps({
+                    draft: { [draftKey]: '2026-04-18T09:30' },
+                    setField,
+                })}
+            />
+        );
+        const input = getByLabelText(label) as HTMLInputElement;
+        const showPicker = vi.fn();
+        Object.defineProperty(input, 'showPicker', { configurable: true, value: showPicker });
+
+        fireEvent.click(input);
+        fireEvent.change(input, { target: { value: '10:15' } });
+
+        expect(showPicker).not.toHaveBeenCalled();
+        expect(setField).toHaveBeenCalledWith(draftKey, '2026-04-18T10:15');
+    });
+
     // step=5 made the browser report stepMismatch for any minute count off the
     // grid, so entering 7 minutes was flagged invalid (#896).
     it('accepts a Time Spent value that is not a multiple of five', () => {

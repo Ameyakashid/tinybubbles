@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import {
     applyMarkdownKeyboardShortcut,
@@ -87,19 +87,6 @@ const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_POPOVER_WIDTH = 418;
 const DATE_POPOVER_APPROX_HEIGHT = 340;
 const DATE_POPOVER_MARGIN = 8;
-
-// A native time input only opens its picker from the small clock glyph. Widen
-// that to the whole field so it matches the date input beside it (#896).
-// showPicker needs a user gesture and is missing on some engines, so a refusal
-// is ignored on purpose: the field still accepts typing and the glyph still
-// works, which is exactly the behaviour we had before.
-const openNativePickerOnClick = (event: ReactMouseEvent<HTMLInputElement>) => {
-    try {
-        event.currentTarget.showPicker?.();
-    } catch {
-        // Engine declined (unsupported, or not treated as user-activated).
-    }
-};
 
 type DescriptionAudioState = 'idle' | 'recording' | 'transcribing';
 
@@ -1378,7 +1365,6 @@ export function TaskItemFieldRenderer({
                             timeInput: (
                                 <input
                                     type="time"
-                                    onClick={openNativePickerOnClick}
                                     lang={nativeDateInputLocale}
                                     aria-label={t('task.aria.startTime')}
                                     value={timeValue}
@@ -1481,7 +1467,6 @@ export function TaskItemFieldRenderer({
                             timeInput: (
                                 <input
                                     type="time"
-                                    onClick={openNativePickerOnClick}
                                     lang={nativeDateInputLocale}
                                     aria-label={t('task.aria.dueTime')}
                                     value={timeValue}
