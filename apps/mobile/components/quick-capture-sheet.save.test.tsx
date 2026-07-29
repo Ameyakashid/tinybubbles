@@ -666,6 +666,51 @@ describe('QuickCaptureSheet save handling', () => {
     ]);
   });
 
+  it('dismisses bulk confirmation on modal request close without closing the sheet', async () => {
+    const onClose = vi.fn();
+    const draft = 'Email Bob\n\nCall Alice /next';
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <QuickCaptureSheet
+          visible
+          openRequestId={1}
+          initialValue={draft}
+          onClose={onClose}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+    if (!body) throw new Error('QuickCaptureSheetBody not found');
+
+    await act(async () => {
+      body.props.handleSave();
+      await Promise.resolve();
+    });
+
+    const pendingBody = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+    if (!pendingBody) throw new Error('QuickCaptureSheetBody not found');
+    expect(findBulkConfirm(tree)).toBeTruthy();
+    expect(pendingBody.props.contentAccessibilityHidden).toBe(true);
+
+    await act(async () => {
+      pendingBody.props.handleRequestClose();
+      await Promise.resolve();
+    });
+
+    const restoredBody = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+    if (!restoredBody) throw new Error('QuickCaptureSheetBody not found');
+    expect(findBulkConfirm(tree)).toBeUndefined();
+    expect(restoredBody.props.contentAccessibilityHidden).toBe(false);
+    expect(restoredBody.props.value).toBe(draft);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(addTasks).not.toHaveBeenCalled();
+    expect(addTask).not.toHaveBeenCalled();
+  });
+
   it('imports a text file through the in-sheet bulk confirmation', async () => {
     const alertSpy = vi.spyOn(Alert, 'alert').mockImplementation(vi.fn());
     addTask.mockResolvedValue({ success: true, id: 'task-1' });

@@ -48,7 +48,9 @@ interface QuickCaptureSheetBodyProps {
   focusNewTask?: boolean;
   canFocusNewTask?: boolean;
   focusNewTaskDisabledReason?: string;
+  contentAccessibilityHidden?: boolean;
   handleClose: () => void;
+  handleRequestClose?: () => void;
   handleImportTextFile?: () => void;
   handleSave: () => void;
   handleSaveAndEdit?: () => void;
@@ -103,7 +105,9 @@ export function QuickCaptureSheetBody({
   focusNewTask = false,
   canFocusNewTask = true,
   focusNewTaskDisabledReason,
+  contentAccessibilityHidden = false,
   handleClose,
+  handleRequestClose,
   handleImportTextFile,
   handleSave,
   handleSaveAndEdit,
@@ -214,7 +218,7 @@ export function QuickCaptureSheetBody({
       navigationBarTranslucent={Platform.OS === 'android'}
       statusBarTranslucent={Platform.OS === 'android'}
       accessibilityViewIsModal
-      onRequestClose={handleClose}
+      onRequestClose={handleRequestClose ?? handleClose}
     >
       <View style={styles.modalRoot} accessibilityViewIsModal>
         <Pressable
@@ -222,11 +226,15 @@ export function QuickCaptureSheetBody({
           onPress={handleClose}
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
+          accessibilityElementsHidden={contentAccessibilityHidden}
+          importantForAccessibility={contentAccessibilityHidden ? 'no-hide-descendants' : 'auto'}
         />
         <KeyboardAvoidingView
           behavior={keyboardAvoidingBehavior}
           keyboardVerticalOffset={0}
           style={[styles.keyboardAvoiding, androidKeyboardLift]}
+          accessibilityElementsHidden={contentAccessibilityHidden}
+          importantForAccessibility={contentAccessibilityHidden ? 'no-hide-descendants' : 'auto'}
         >
           <View
             style={[

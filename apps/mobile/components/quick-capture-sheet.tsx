@@ -109,7 +109,11 @@ function BulkQuickAddConfirm({
   title: string;
 }) {
   return (
-    <View style={styles.overlay} accessibilityViewIsModal>
+    <View
+      style={styles.overlay}
+      accessibilityViewIsModal
+      importantForAccessibility="yes"
+    >
       <Pressable
         style={styles.overlayBackdrop}
         onPress={onCancel}
@@ -1049,7 +1053,9 @@ export function QuickCaptureSheet({
         dueDate={dueDate}
         dueLabel={dueLabel}
         dueTimeLabel={dueTimeLabel}
+        contentAccessibilityHidden={Boolean(pendingBulkLines)}
         handleClose={handleClose}
+        handleRequestClose={pendingBulkLines ? cancelBulkQuickAdd : handleClose}
         handleImportTextFile={handleImportTextFile}
         handleSave={() => {
           void handleSave();

@@ -42,6 +42,7 @@ import { useToast } from '@/contexts/toast-context';
 import { useLanguage } from '../contexts/language-context';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
+import { addHardwareBackPressListener } from '@/lib/hardware-back';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 
 type CaptureSearchParams = {
@@ -543,6 +544,15 @@ export default function CaptureScreen() {
     if (shouldClose) closeCapture();
   };
 
+  useEffect(() => {
+    if (!pendingBulkLines) return;
+    const subscription = addHardwareBackPressListener(() => {
+      setPendingBulkLines(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [pendingBulkLines]);
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: tc.bg }]}
@@ -552,6 +562,8 @@ export default function CaptureScreen() {
         contentContainerStyle={styles.content}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
+        accessibilityElementsHidden={Boolean(pendingBulkLines)}
+        importantForAccessibility={pendingBulkLines ? 'no-hide-descendants' : 'auto'}
       >
         <View style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
           <View style={styles.titleRow}>
@@ -678,7 +690,11 @@ export default function CaptureScreen() {
         </View>
       </ScrollView>
       {pendingBulkLines ? (
-        <View style={styles.bulkConfirmOverlay} accessibilityViewIsModal>
+        <View
+          style={styles.bulkConfirmOverlay}
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+        >
           <Pressable
             style={styles.bulkConfirmBackdrop}
             onPress={() => setPendingBulkLines(null)}

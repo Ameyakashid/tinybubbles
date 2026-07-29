@@ -151,6 +151,8 @@ describe('Quick capture modal composition', () => {
   it('disables Android modal animation to avoid ghosted sheet trails', () => {
     let tree!: ReturnType<typeof create>;
     const originalPlatformOs = Platform.OS;
+    const handleClose = vi.fn();
+    const handleRequestClose = vi.fn();
 
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
@@ -167,7 +169,9 @@ describe('Quick capture modal composition', () => {
             dueDate={null}
             dueLabel="Due Date"
             dueTimeLabel="Change time"
-            handleClose={vi.fn()}
+            contentAccessibilityHidden
+            handleClose={handleClose}
+            handleRequestClose={handleRequestClose}
             handleSave={vi.fn()}
             insetsBottom={0}
             inputRef={{ current: null }}
@@ -215,7 +219,17 @@ describe('Quick capture modal composition', () => {
     expect(modal.props.transparent).toBe(true);
     expect(modal.props.animationType).toBe('none');
     expect(modal.props.hardwareAccelerated).toBe(true);
-    expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBeUndefined();
+    expect(modal.props.onRequestClose).toBe(handleRequestClose);
+    const keyboardAvoiding = tree.root.findByType(KeyboardAvoidingView);
+    expect(keyboardAvoiding.props.behavior).toBeUndefined();
+    expect(keyboardAvoiding.props.accessibilityElementsHidden).toBe(true);
+    expect(keyboardAvoiding.props.importantForAccessibility).toBe('no-hide-descendants');
+    const backdrop = tree.root.find(
+      (node) => node.props.accessibilityRole === 'button'
+        && node.props.accessibilityLabel === 'common.close'
+    );
+    expect(backdrop.props.accessibilityElementsHidden).toBe(true);
+    expect(backdrop.props.importantForAccessibility).toBe('no-hide-descendants');
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.accessibilityViewIsModal).toBe(true);
   });

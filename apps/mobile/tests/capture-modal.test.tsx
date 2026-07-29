@@ -1,13 +1,25 @@
 import React from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, ScrollView, Text, TouchableOpacity } from 'react-native';
+import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CaptureScreen, { sanitizeCaptureReturnToParam } from '@/app/capture-modal';
 
-const { openTaskScreen, parseQuickAdd, routerMocks, routeParams, storeState } = vi.hoisted(() => {
+const { hardwareBack, openTaskScreen, parseQuickAdd, routerMocks, routeParams, storeState } = vi.hoisted(() => {
   const parseQuickAdd = vi.fn<(value: string) => any>((value: string) => ({ title: value, props: {}, invalidDateCommands: [] }));
   return {
+    hardwareBack: {
+      handler: null as (() => boolean) | null,
+      remove: vi.fn(),
+    },
     openTaskScreen: vi.fn(),
     parseQuickAdd,
     routerMocks: {
@@ -130,6 +142,18 @@ vi.mock('@/lib/app-log', () => ({
   logError: vi.fn(),
 }));
 
+vi.mock('@/lib/hardware-back', () => ({
+  addHardwareBackPressListener: (handler: () => boolean) => {
+    hardwareBack.handler = handler;
+    return {
+      remove: () => {
+        hardwareBack.remove();
+        if (hardwareBack.handler === handler) hardwareBack.handler = null;
+      },
+    };
+  },
+}));
+
 vi.mock('@/lib/task-meta-navigation', () => ({
   openTaskScreen,
 }));
@@ -150,6 +174,7 @@ const findTouchableByText = (tree: ReturnType<typeof create>, label: string) => 
 describe('CaptureScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hardwareBack.handler = null;
     parseQuickAdd.mockImplementation((value: string) => ({ title: value, props: {}, invalidDateCommands: [] }));
     routerMocks.canGoBack.mockReturnValue(false);
     routeParams.current = { text: encodeURIComponent('Shared text') };
@@ -344,7 +369,7 @@ describe('CaptureScreen', () => {
   // native presentation on the first. On iOS it never showed: saving a
   // multi-line paste did nothing and left the screen blocked (#941). The
   // confirmation is drawn on the screen itself now, and no Alert is raised.
-  it('confirms multiline capture on screen before creating one task per line', async () => {
+  it('dismisses multiline confirmation with hardware Back before creating one task per line', async () => {
     routeParams.current = {
       initialValue: encodeURIComponent('Email Bob\n\nCall Alice /next'),
     };
@@ -370,9 +395,39 @@ describe('CaptureScreen', () => {
     expect(storeState.addTask).not.toHaveBeenCalled();
     expect(alertSpy).not.toHaveBeenCalled();
 
+    const hiddenForm = tree.root.findByType(ScrollView);
+    expect(hiddenForm.props.accessibilityElementsHidden).toBe(true);
+    expect(hiddenForm.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(tree.root.find(
+      (node) => node.props.accessibilityViewIsModal === true
+        && node.props.importantForAccessibility === 'yes'
+    )).toBeTruthy();
+
+    const backHandler = hardwareBack.handler;
+    expect(backHandler).not.toBeNull();
+    let handled = false;
+    act(() => {
+      handled = backHandler?.() ?? false;
+    });
+
+    expect(handled).toBe(true);
+    expect(routerMocks.back).not.toHaveBeenCalled();
+    expect(routerMocks.replace).not.toHaveBeenCalled();
+    expect(storeState.addTasks).not.toHaveBeenCalled();
+    expect(tree.root.findAll((node) => (
+      node.type === TouchableOpacity
+      && node.findAllByType(Text).some((child) => child.props.children === 'Create tasks')
+    ))).toHaveLength(0);
+    expect(tree.root.findByType(ScrollView).props.accessibilityElementsHidden).toBe(false);
+    expect(tree.root.findByType(ScrollView).props.importantForAccessibility).toBe('auto');
+    expect(tree.root.findByType(TextInput).props.value).toBe('Email Bob\n\nCall Alice /next');
+
+    await act(async () => {
+      await findTouchableByText(tree, 'Save').props.onPress();
+    });
+
     // The confirmation is on screen, reachable as ordinary rendered content.
     const confirmButton = findTouchableByText(tree, 'Create tasks');
-
     await act(async () => {
       await confirmButton.props.onPress();
     });
