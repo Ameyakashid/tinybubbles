@@ -140,7 +140,7 @@ const escapeIcsText = (value: string): string => value
     .replace(/\\/g, '\\\\')
     .replace(/;/g, '\\;')
     .replace(/,/g, '\\,')
-    .replace(/\r?\n/g, '\\n');
+    .replace(/\r\n|\r|\n/g, '\\n');
 
 /** RFC 5545 content lines are limited to 75 octets; continuations start with a space. */
 const foldIcsLine = (line: string): string[] => {

@@ -111,6 +111,14 @@ describe('buildCalendarFeed', () => {
         expect(ics).toContain('SUMMARY:Due: Task');
     });
 
+    it('escapes standalone carriage returns in text values', () => {
+        const ics = buildCalendarFeed({
+            tasks: [task({ id: 'a', title: 'Safe\rATTENDEE:evil', startTime: '2026-05-06T09:00:00.000Z' })],
+        }, { now: NOW });
+
+        expect(ics).toContain('SUMMARY:Safe\\nATTENDEE:evil');
+    });
+
     it('never exposes notes, checklists or other task detail', () => {
         const ics = buildCalendarFeed({
             tasks: [task({
