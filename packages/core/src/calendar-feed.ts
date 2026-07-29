@@ -12,7 +12,7 @@
  * business republishing finished work to whoever holds it — do not "fix" this
  * by mirroring the toggle.
  */
-import { hasTimeComponent, safeFormatDate, safeParseDate, safeParseDueDate } from './date';
+import { hasTimeComponent, safeParseDate, safeParseDueDate } from './date';
 import { isTaskInActiveProject } from './project-utils';
 import { expandCalendarRecurringTasks } from './recurrence';
 import { timeEstimateToMinutes } from './calendar-scheduling';
@@ -100,12 +100,16 @@ export function buildCalendarFeedEvents(
                 });
             }
 
-            // A task that is both scheduled and due on the same day shows once
-            // in the Calendar view, as its scheduled block. "Same day" is read
-            // in the feed generator's local time zone, which for a self-hosted
-            // server is the user's own.
+            // Without the user's time zone, the server can only prove two
+            // floating date-only values share a calendar day. Timed instants
+            // keep both events rather than letting the server's TZ hide one.
             if (!due) continue;
-            if (start && safeFormatDate(start, 'yyyy-MM-dd') === safeFormatDate(due, 'yyyy-MM-dd')) continue;
+            if (
+                start
+                && !hasTimeComponent(task.startTime)
+                && !hasTimeComponent(task.dueDate)
+                && task.startTime === task.dueDate
+            ) continue;
 
             const timedDue = hasTimeComponent(task.dueDate);
             events.push({

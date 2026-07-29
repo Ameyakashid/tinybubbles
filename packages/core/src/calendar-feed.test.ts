@@ -40,8 +40,28 @@ describe('buildCalendarFeedEvents', () => {
     });
 
     it('collapses a task scheduled and due on the same day to its scheduled block', () => {
-        expect(uids([task({ id: 'a', startTime: '2026-05-06T09:00:00.000Z', dueDate: '2026-05-06' })]))
+        expect(uids([task({ id: 'a', startTime: '2026-05-06', dueDate: '2026-05-06' })]))
             .toEqual(['a-start@mindwtr.app']);
+    });
+
+    it('does not let the server time zone hide a mixed timed/date-only deadline', () => {
+        const previousTimeZone = process.env.TZ;
+        const buildIn = (timeZone: string) => {
+            process.env.TZ = timeZone;
+            return uids([task({
+                id: 'a',
+                startTime: '2026-05-07T01:00:00.000Z',
+                dueDate: '2026-05-06',
+            })]).sort();
+        };
+
+        try {
+            expect(buildIn('UTC')).toEqual(['a-due@mindwtr.app', 'a-start@mindwtr.app']);
+            expect(buildIn('America/New_York')).toEqual(['a-due@mindwtr.app', 'a-start@mindwtr.app']);
+        } finally {
+            if (previousTimeZone === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTimeZone;
+        }
     });
 
     it('keeps both events when the start and due dates differ', () => {
