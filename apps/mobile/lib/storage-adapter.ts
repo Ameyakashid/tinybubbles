@@ -389,6 +389,12 @@ let jsonBackupSkippedOversize = false;
 
 const isJsonBackupUsable = (): boolean => !jsonBackupSkippedOversize;
 
+// The #975 read-authority rule: reads come from the JSON backup while it is
+// preferred (fast path) or holds writes SQLite hasn't taken yet (json-ahead).
+// getData() applies the same rule in expanded form for per-branch telemetry.
+const jsonIsReadAuthority = (): boolean =>
+    shouldUseJsonBackupFastPath() || (jsonAheadOfSqlite && isJsonBackupUsable());
+
 // Distinguishes a permanent Android CursorWindow overflow (the row can never be
 // read back, so recovery must give up) from a transient AsyncStorage error
 // (worth retrying on the next launch) when reading the JSON-ahead backup.
@@ -1304,10 +1310,9 @@ const createStorage = (): StorageAdapter => {
             });
         },
         queryTasks: async (options) => {
-            // Also take the JSON-backed path while jsonAheadOfSqlite is set (#975):
-            // a direct adapter.queryTasks() call below would read SQLite's known-stale
+            // A direct adapter.queryTasks() call below would read SQLite's known-stale
             // rows straight from SQL, bypassing getData()'s read-authority guard.
-            if (shouldUseJsonBackupFastPath() || (jsonAheadOfSqlite && isJsonBackupUsable())) {
+            if (jsonIsReadAuthority()) {
                 if (shouldUseJsonBackupFastPath()) {
                     warnPreferJsonBackup();
                 }
@@ -1358,8 +1363,7 @@ const createStorage = (): StorageAdapter => {
             });
         },
         searchAll: async (query: string) => {
-            // Same #975 read-authority extension as queryTasks above.
-            if (shouldUseJsonBackupFastPath() || (jsonAheadOfSqlite && isJsonBackupUsable())) {
+            if (jsonIsReadAuthority()) {
                 if (shouldUseJsonBackupFastPath()) {
                     warnPreferJsonBackup();
                 }
