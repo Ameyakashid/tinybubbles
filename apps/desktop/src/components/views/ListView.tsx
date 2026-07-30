@@ -1,6 +1,6 @@
 import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { HelpCircle } from 'lucide-react';
+import { AlertTriangle, Folder, HelpCircle } from 'lucide-react';
 import {
     buildProjectOrderMap,
     compareTasksByProjectThenOrder,
@@ -31,7 +31,11 @@ import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
 import type { TaskSortBy } from '@mindwtr/core';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ListEmptyState } from './list/ListEmptyState';
-import { ListControlsPanel } from './list/ListControlsPanel';
+import { ListHeader } from './list/ListHeader';
+import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
+import { ListBulkActions } from './list/ListBulkActions';
+import { ListFiltersPanel } from './list/ListFiltersPanel';
+import { ListQuickAdd } from './list/ListQuickAdd';
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { InboxProcessor } from './InboxProcessor';
@@ -51,7 +55,7 @@ import { nextDensityMode } from '../../lib/density';
 import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
-import { DONE_SORT_OPTIONS, LIST_END_GAP } from './list/list-toolbar';
+import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
     DONE_AXES,
     emptyCollapsedGroups,
@@ -93,6 +97,7 @@ interface ListViewProps {
 
 const EMPTY_PRIORITIES: TaskPriority[] = [];
 const EMPTY_ESTIMATES: TimeEstimate[] = [];
+const NEXT_WARNING_THRESHOLD = 15;
 // Reference kept its own key from when it was the only collapsible list (#734);
 // every other status gets its own, so collapsing Someday does not fold Next.
 const getListViewStateStorageKey = (statusFilter: string) => (
@@ -905,136 +910,255 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     return (
         <ErrorBoundary>
             <div className="flex h-full flex-col">
-                <ListControlsPanel
-                    title={title}
-                    t={t}
-                    nextCount={nextCount}
-                    taskCount={filteredTasks.length}
-                    hasFilters={hasFilters}
-                    filterSummaryLabel={filterSummaryLabel}
-                    filterSummarySuffix={filterSummarySuffix}
-                    sortBy={sortBy}
-                    sortByOptions={statusFilter === 'done' ? DONE_SORT_OPTIONS : undefined}
-                    onChangeSortBy={(value) => {
-                        if (statusFilter === 'done') {
-                            setListOptions({ doneSortBy: value });
-                            return;
-                        }
-                        void updateSettings({ taskSortBy: value });
-                    }}
-                    activeGroupBy={activeGroupBy}
-                    groupByOptions={groupByOptions}
-                    showGroupBy
-                    onChangeGroupBy={(value) => {
-                        if (statusFilter === 'reference') {
-                            setListOptions({ referenceGroupBy: value as ReferenceGroupBy });
-                            return;
-                        }
-                        if (statusFilter === 'done') {
-                            setListOptions({ doneGroupBy: value as DoneGroupBy });
-                            return;
-                        }
-                        setListOptions({ nextGroupBy: value as NextGroupBy });
-                    }}
-                    selectionMode={selectionMode}
-                    onToggleSelection={toggleSelectionMode}
-                    showListDetails={showListDetails}
-                    onToggleDetails={handleToggleDetails}
-                    densityMode={densityMode}
-                    onToggleDensity={() => {
-                        void updateSettings({
-                            appearance: {
-                                density: nextDensityMode(densityMode),
-                            },
-                        });
-                    }}
-                    isProcessing={isProcessing}
-                    isBatchDeleting={isBatchDeleting}
-                    bulkMoveCurrentStatus={statusFilter}
-                    selectedCount={selectedIdsArray.length}
-                    allVisibleTasksSelected={allVisibleTasksSelected}
-                    onSelectAllVisible={selectAllVisibleTasks}
-                    onClearSelection={clearTaskSelection}
-                    onMoveToStatus={handleBatchMove}
-                    onAssignArea={handleBatchAssignArea}
-                    areaOptions={bulkAreaOptions}
-                    onBulkOrganize={() => setBulkOrganizeOpen(true)}
-                    onAddTag={handleBatchAddTag}
-                    onRemoveTag={handleBatchRemoveTag}
-                    disableRemoveTag={removableTagOptions.length === 0}
-                    onAddContext={handleBatchAddContext}
-                    onRemoveContext={handleBatchRemoveContext}
-                    onDeleteSelection={handleBatchDelete}
-                    isNextView={isNextView}
-                    showDeferredProjectSection={showDeferredProjectSection}
-                    deferredProjects={deferredProjects}
-                    areaById={areaById}
-                    onOpenProject={handleOpenProject}
-                    onReactivateProject={handleReactivateProject}
-                    inboxProcessor={(
-                        <InboxProcessor
-                            t={t}
-                            isInbox={isInbox}
-                            tasks={tasks}
-                            projects={projects}
-                            areas={areas}
-                            settings={settings}
-                            addTask={addTask}
-                            addProject={addProject}
-                            updateTask={updateTask}
-                            deleteTask={deleteTask}
-                            allContexts={allContexts}
-                            allTags={allTags}
-                            isProcessing={isProcessing}
-                            setIsProcessing={setIsProcessing}
-                            onOpenMindSweep={openMindSweep}
+                <div className="space-y-6">
+                    <ListHeader
+                        title={title}
+                        showNextCount={isNextView}
+                        nextCount={nextCount}
+                        taskCount={filteredTasks.length}
+                        hasFilters={hasFilters}
+                        filterSummaryLabel={filterSummaryLabel}
+                        filterSummarySuffix={filterSummarySuffix}
+                        sortBy={sortBy}
+                        onChangeSortBy={(value) => {
+                            if (statusFilter === 'done') {
+                                setListOptions({ doneSortBy: value });
+                                return;
+                            }
+                            void updateSettings({ taskSortBy: value });
+                        }}
+                        showGroupBy
+                        groupBy={activeGroupBy}
+                        groupByOptions={groupByOptions}
+                        sortByOptions={statusFilter === 'done' ? DONE_SORT_OPTIONS : undefined}
+                        onChangeGroupBy={(value) => {
+                            if (statusFilter === 'reference') {
+                                setListOptions({ referenceGroupBy: value as ReferenceGroupBy });
+                                return;
+                            }
+                            if (statusFilter === 'done') {
+                                setListOptions({ doneGroupBy: value as DoneGroupBy });
+                                return;
+                            }
+                            setListOptions({ nextGroupBy: value as NextGroupBy });
+                        }}
+                        showFiltersButton={showFilters}
+                        filtersOpen={showFiltersPanel}
+                        onToggleFilters={() => setFiltersOpen(!filtersOpen)}
+                        selectionMode={selectionMode}
+                        onToggleSelection={toggleSelectionMode}
+                        showListDetails={showListDetails}
+                        onToggleDetails={handleToggleDetails}
+                        densityMode={densityMode}
+                        onToggleDensity={() => {
+                            void updateSettings({
+                                appearance: {
+                                    density: nextDensityMode(densityMode),
+                                },
+                            });
+                        }}
+                        t={t}
+                    />
+
+                    {isBatchDeleting && (
+                        <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                            {t('bulk.deleting') || 'Deleting selected tasks...'}
+                        </div>
+                    )}
+
+                    {selectionMode && (
+                        <div className="space-y-3">
+                            <BulkSelectionToolbar
+                                selectionCount={selectedIdsArray.length}
+                                totalCount={filteredTasks.length}
+                                allSelected={allVisibleTasksSelected}
+                                onSelectAll={selectAllVisibleTasks}
+                                onClearSelection={clearTaskSelection}
+                                t={t}
+                            />
+                            {selectedIdsArray.length > 0 && (
+                                <ListBulkActions
+                                    selectionCount={selectedIdsArray.length}
+                                    currentStatus={statusFilter}
+                                    onMoveToStatus={handleBatchMove}
+                                    onAssignArea={handleBatchAssignArea}
+                                    areaOptions={bulkAreaOptions}
+                                    onBulkOrganize={() => setBulkOrganizeOpen(true)}
+                                    onAddTag={handleBatchAddTag}
+                                    onRemoveTag={handleBatchRemoveTag}
+                                    disableRemoveTag={removableTagOptions.length === 0}
+                                    onAddContext={handleBatchAddContext}
+                                    onRemoveContext={handleBatchRemoveContext}
+                                    onDelete={handleBatchDelete}
+                                    isDeleting={isBatchDeleting}
+                                    t={t}
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    {isNextView && nextCount > NEXT_WARNING_THRESHOLD && (
+                        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 text-warning" />
+                            <div>
+                                <p className="font-medium text-warning">
+                                    {nextCount} {t('next.warningCount')}
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {t('next.warningHint')}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {showDeferredProjectSection && (
+                        <div className="rounded-lg border border-border bg-card/50 p-4">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {t('projects.title') || 'Projects'}
+                            </div>
+                            <div className="mt-3 space-y-2">
+                                {deferredProjects.map((project) => {
+                                    const projectArea = project.areaId ? areaById.get(project.areaId) : undefined;
+                                    return (
+                                        <div
+                                            key={project.id}
+                                            className="flex w-full items-center justify-between gap-3 rounded-md border border-border/60 bg-background px-3 py-2"
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenProject(project.id)}
+                                                className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-primary"
+                                                aria-label={`${t('projects.title') || 'Project'}: ${project.title}`}
+                                            >
+                                                <Folder className="h-4 w-4 shrink-0" style={{ color: project.color }} />
+                                                <span className="truncate text-sm font-medium text-foreground">{project.title}</span>
+                                                {projectArea && (
+                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                        <span
+                                                            className="h-2 w-2 rounded-full"
+                                                            style={{ backgroundColor: projectArea.color || DEFAULT_AREA_COLOR }}
+                                                        />
+                                                        {projectArea.name}
+                                                    </span>
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleReactivateProject(project.id)}
+                                                className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                            >
+                                                {t('projects.reactivate')}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    <InboxProcessor
+                        t={t}
+                        isInbox={isInbox}
+                        tasks={tasks}
+                        projects={projects}
+                        areas={areas}
+                        settings={settings}
+                        addTask={addTask}
+                        addProject={addProject}
+                        updateTask={updateTask}
+                        deleteTask={deleteTask}
+                        allContexts={allContexts}
+                        allTags={allTags}
+                        isProcessing={isProcessing}
+                        setIsProcessing={setIsProcessing}
+                        onOpenMindSweep={openMindSweep}
+                    />
+
+                    {showViewFilterInput && !isProcessing && (
+                        <input
+                            type="text"
+                            data-view-filter-input
+                            placeholder={t('common.search')}
+                            aria-label={t('common.search')}
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            className={VIEW_FILTER_INPUT}
                         />
                     )}
-                    showViewFilterInput={showViewFilterInput}
-                    searchQuery={searchQuery}
-                    onChangeSearch={setSearchQuery}
-                    isWaitingView={isWaitingView}
-                    waitingPeople={waitingPeople}
-                    selectedWaitingPerson={selectedWaitingPerson}
-                    onChangeSelectedWaitingPerson={setSelectedWaitingPerson}
-                    onClearSelectedWaitingPerson={() => setSelectedWaitingPerson('')}
-                    showFilters={showFilters}
-                    showFiltersPanel={showFiltersPanel}
-                    onClearFilters={clearFilters}
-                    onToggleFiltersOpen={() => setFiltersOpen(!filtersOpen)}
-                    allTokens={allTokens}
-                    selectedTokens={selectedTokens}
-                    tokenCounts={tokenCounts}
-                    onToggleToken={toggleTokenFilter}
-                    showPriorityFilters={showPriorityFilters}
-                    priorityOptions={priorityOptions}
-                    selectedPriorities={selectedPriorities}
-                    onTogglePriority={togglePriorityFilter}
-                    showTimeEstimateFilters={showTimeEstimateFilters}
-                    timeEstimateOptions={timeEstimateOptions}
-                    selectedTimeEstimates={selectedTimeEstimates}
-                    onToggleEstimate={toggleTimeFilter}
-                    formatEstimate={formatEstimate}
-                    showQuickAdd={showQuickAdd}
-                    quickAddValue={newTaskTitle}
-                    addInputRef={addInputRef}
-                    projects={projects}
-                    areas={areas}
-                    people={personOptionNames}
-                    onCreateProject={async (title) => {
-                        const created = await addProject(
-                            title,
-                            DEFAULT_AREA_COLOR,
-                            getQuickAddProjectInitialProps({}, defaultNewTaskAreaId),
-                        );
-                        return created?.id ?? null;
-                    }}
-                    onChangeQuickAdd={setNewTaskTitle}
-                    onSubmitQuickAdd={handleAddTask}
-                    onOpenAudioQuickAdd={() => openQuickAdd(statusFilter, 'audio')}
-                    onResetCopilot={resetCopilot}
-                    quickAddFooter={(
+
+                    {isWaitingView && !isProcessing && (
+                        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                            <span className="text-xs font-medium text-muted-foreground">{t('process.delegateWhoLabel')}</span>
+                            <select
+                                aria-label={t('process.delegateWhoLabel')}
+                                value={selectedWaitingPerson}
+                                onChange={(event) => setSelectedWaitingPerson(event.target.value)}
+                                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            >
+                                <option value="">{t('common.all')}</option>
+                                {waitingPeople.map((person) => (
+                                    <option key={person} value={person}>
+                                        {person}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedWaitingPerson && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedWaitingPerson('')}
+                                    className="rounded border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                >
+                                    {t('common.clear')}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {showFilters && showFiltersPanel && !isProcessing && (
+                        <ListFiltersPanel
+                            t={t}
+                            hasFilters={hasFilters}
+                            onClearFilters={clearFilters}
+                            allTokens={allTokens}
+                            selectedTokens={selectedTokens}
+                            tokenCounts={tokenCounts}
+                            onToggleToken={toggleTokenFilter}
+                            showPriorityFilters={showPriorityFilters}
+                            priorityOptions={priorityOptions}
+                            selectedPriorities={selectedPriorities}
+                            onTogglePriority={togglePriorityFilter}
+                            showTimeEstimateFilters={showTimeEstimateFilters}
+                            timeEstimateOptions={timeEstimateOptions}
+                            selectedTimeEstimates={selectedTimeEstimates}
+                            onToggleEstimate={toggleTimeFilter}
+                            formatEstimate={formatEstimate}
+                        />
+                    )}
+
+                    {showQuickAdd && (
                         <>
+                            <ListQuickAdd
+                                value={newTaskTitle}
+                                inputRef={addInputRef}
+                                projects={projects}
+                                areas={areas}
+                                contexts={allTokens}
+                                people={personOptionNames}
+                                t={t}
+                                dense={densityMode !== 'comfortable'}
+                                onCreateProject={async (title) => {
+                                    const created = await addProject(
+                                        title,
+                                        DEFAULT_AREA_COLOR,
+                                        getQuickAddProjectInitialProps({}, defaultNewTaskAreaId),
+                                    );
+                                    return created?.id ?? null;
+                                }}
+                                onChange={setNewTaskTitle}
+                                onSubmit={handleAddTask}
+                                onOpenAudio={() => openQuickAdd(statusFilter, 'audio')}
+                                onResetCopilot={resetCopilot}
+                            />
                             {aiEnabled && copilotSuggestion && !copilotApplied && (
                                 <button
                                     type="button"
@@ -1080,7 +1204,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             )}
                         </>
                     )}
-                />
+                </div>
             <div
                 ref={listScrollRef}
                 className="flex-1 min-h-0 overflow-y-auto pt-3"
