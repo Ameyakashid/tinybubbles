@@ -1160,19 +1160,6 @@ export function CalendarView() {
                   })}
                 </View>
               )}
-
-              {planningTasks.length > 0 && (
-                <PlanningTaskList
-                  getScheduleSlotLabel={getScheduleSlotLabel}
-                  planningTasks={planningTasks}
-                  scheduleTaskOnSelectedDate={scheduleTaskOnSelectedDate}
-                  selectedDate={selectedDate}
-                  selectedDatePlanningLabel={selectedDatePlanningLabel}
-                  t={t}
-                  tc={tc}
-                  tr={tr}
-                />
-              )}
             </View>
             </ScrollView>
           </Animated.View>
@@ -1953,19 +1940,6 @@ export function CalendarView() {
                     );
                   })}
                 </View>
-              )}
-
-              {planningTasks.length > 0 && (
-                <PlanningTaskList
-                  getScheduleSlotLabel={getScheduleSlotLabel}
-                  planningTasks={planningTasks}
-                  scheduleTaskOnSelectedDate={scheduleTaskOnSelectedDate}
-                  selectedDate={selectedDate}
-                  selectedDatePlanningLabel={selectedDatePlanningLabel}
-                  t={t}
-                  tc={tc}
-                  tr={tr}
-                />
               )}
 
               {externalCalendars.length > 0 && (
