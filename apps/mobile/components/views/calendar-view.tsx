@@ -20,6 +20,7 @@ import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handl
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CompactText } from '@/components/compact-text';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
@@ -1025,7 +1026,9 @@ export function CalendarView() {
                   const top = idx * 60 * PIXELS_PER_MINUTE;
                   return (
                     <View key={hour} pointerEvents="none" style={[styles.hourLine, { top }]}>
-                      <Text style={[styles.hourLabel, { color: tc.secondaryText }]}>{formatHourLabel(hour)}</Text>
+                      <CompactText style={[styles.hourLabel, { color: tc.secondaryText }]} numberOfLines={1}>
+                        {formatHourLabel(hour)}
+                      </CompactText>
                       <View style={[styles.hourDivider, { backgroundColor: tc.border }]} />
                     </View>
                   );
@@ -1300,9 +1303,13 @@ export function CalendarView() {
                   {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, idx) => {
                     const hour = DAY_START_HOUR + idx;
                     return (
-                      <Text key={hour} style={[styles.weekHourLabel, { top: idx * 60 * PIXELS_PER_MINUTE, color: tc.secondaryText }]}>
+                      <CompactText
+                        key={hour}
+                        style={[styles.weekHourLabel, { top: idx * 60 * PIXELS_PER_MINUTE, color: tc.secondaryText }]}
+                        numberOfLines={1}
+                      >
                         {formatHourLabel(hour)}
-                      </Text>
+                      </CompactText>
                     );
                   })}
                 </View>

@@ -4,6 +4,7 @@ import type { Task } from '@mindwtr/core';
 import {
   buildScheduledTasksByDate,
   calendarDateKey,
+  compactHourLabel,
   isAllDayScheduledTask,
   isTimedScheduledTask,
 } from './calendar-task-items';
@@ -33,5 +34,15 @@ describe('calendar task item grouping', () => {
     expect(isAllDayScheduledTask(dateOnly)).toBe(true);
     expect(isTimedScheduledTask(dateOnly)).toBe(false);
     expect(isTimedScheduledTask(timed)).toBe(true);
+  });
+});
+
+describe('compactHourLabel', () => {
+  it('drops the empty minutes only when a meridiem keeps the label long', () => {
+    expect(compactHourLabel('10:00 AM')).toBe('10 AM');
+    expect(compactHourLabel('12:00 PM')).toBe('12 PM');
+    expect(compactHourLabel('10.00 a.m.')).toBe('10 a.m.');
+    expect(compactHourLabel('午前10:00')).toBe('午前10');
+    expect(compactHourLabel('13:00')).toBe('13:00');
   });
 });

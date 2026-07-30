@@ -92,6 +92,7 @@ import {
   addCalendarMapItem,
   buildScheduledTasksByDate,
   calendarDateKey,
+  compactHourLabel,
   isAllDayScheduledTask,
   isTimedScheduledTask,
 } from './calendar-task-items';
@@ -872,7 +873,7 @@ export function useCalendarViewController() {
 
   const formatHourLabel = (hour: number) => {
     const sample = new Date(2025, 0, 1, hour, 0, 0, 0);
-    return safeFormatDate(sample, 'p');
+    return compactHourLabel(safeFormatDate(sample, 'p'));
   };
 
   const formatTimeRange = (start: Date, durationMinutes: number) => {

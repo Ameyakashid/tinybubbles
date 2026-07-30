@@ -30,6 +30,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Desktop Week view can show two to seven days and remembers the device-local choice. Shorter views are rolling ranges: Previous and Next advance by the visible day count, so no days disappear between pages. (#951)
 - A device-local **Completed** toggle shows done and archived tasks on their completion date across desktop and mobile. It also includes older tasks that only carry the legacy completion timestamp. (#955)
 - Mobile Calendar keeps long task titles clear of the **Schedule** action and shows the selected date in planning labels. Tapping a day now opens straight to task search followed by that day's own tasks and events; the next-action suggestion list no longer sits in between. (#972)
+- Mobile Day and Week timelines label the hour as **10 PM** instead of a wrapped, half-cut `10:00 PM`, and the labels stay inside the gutter at large display sizes.
 - A subscribed `.ics` feed that carries `CATEGORIES` splits into one calendar per category, each with its own colour and show/hide toggle. Desktop Week view keeps all-day and hourly columns aligned while showing midnight fully. (#966)
 - Self-hosted servers can publish a token-protected, read-only calendar feed for scheduled tasks and deadlines. Feed generation now handles standalone carriage returns and timed start/due values without dropping events because of the server time zone, and the server throttles invalid-token requests. (#952)
 
