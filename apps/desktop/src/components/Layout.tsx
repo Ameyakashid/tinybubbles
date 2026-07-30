@@ -941,7 +941,12 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 aria-label={tFallback(t, 'accessibility.mainContent', 'Main content')}
             >
                 <div className={cn(
-                    "mx-auto h-full p-4 lg:p-6 2xl:p-8",
+                    // No bottom padding: this box is `h-full`, so a `pb-*` here
+                    // is a dead band below every view that scrolls inside it and
+                    // is skipped entirely by every view that overflows it. Each
+                    // view puts LIST_END_GAP on its own scrolled content instead
+                    // (#977).
+                    "mx-auto h-full px-4 pt-4 lg:px-6 lg:pt-6 2xl:px-8 2xl:pt-8",
                     isFocusMode
                         ? "max-w-[800px]"
                         : isFullWidthView

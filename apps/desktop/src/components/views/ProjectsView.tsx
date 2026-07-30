@@ -724,7 +724,7 @@ export function ProjectsView() {
 
     return (
         <ErrorBoundary>
-            <div className="h-full px-4 py-3">
+            <div className="h-full px-4 pt-3">
                 <DndContext
                     sensors={dndSensors}
                     collisionDetection={projectsViewCollisionDetection}

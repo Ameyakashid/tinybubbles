@@ -51,7 +51,7 @@ import { nextDensityMode } from '../../lib/density';
 import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
-import { DONE_SORT_OPTIONS } from './list/list-toolbar';
+import { DONE_SORT_OPTIONS, LIST_END_GAP } from './list/list-toolbar';
 import {
     DONE_AXES,
     emptyCollapsedGroups,
@@ -1237,6 +1237,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                         ))}
                     </div>
                 )}
+                <div data-list-end className={LIST_END_GAP} aria-hidden="true" />
             </div>
         </div>
         <MindSweepModal

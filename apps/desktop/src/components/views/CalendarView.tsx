@@ -28,7 +28,7 @@ import {
     setCalendarTaskDragData,
 } from '../../lib/calendar-task-drag';
 import { useTaskListScope } from './list/task-list-scope';
-import { VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { collectCalendarKeyboardTasks } from './calendar/calendar-keyboard-tasks';
 import { CalendarOpenTaskModal, CalendarTaskComposerModal } from './calendar/CalendarModals';
 import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
@@ -265,7 +265,7 @@ export function CalendarView() {
 
     return (
         <ErrorBoundary>
-            <div className="space-y-6">
+            <div className={cn("space-y-6", LIST_END_GAP)} data-list-end>
             <header className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
                     <h2 className="text-3xl font-bold tracking-tight">{t('nav.calendar')}</h2>

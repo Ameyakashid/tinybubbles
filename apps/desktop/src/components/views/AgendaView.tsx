@@ -30,6 +30,7 @@ import { AgendaHeader } from './agenda/AgendaHeader';
 import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaSections';
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { LIST_END_GAP } from './list/list-toolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import {
     emptyCollapsedGroups,
@@ -1073,7 +1074,7 @@ export function AgendaView() {
 
     return (
         <ErrorBoundary>
-            <div className="space-y-6 w-full">
+            <div className={cn("space-y-6 w-full", LIST_END_GAP)} data-list-end>
             <AgendaHeader
                 filterCount={activeFilterCount}
                 filtersOpen={filtersOpen}

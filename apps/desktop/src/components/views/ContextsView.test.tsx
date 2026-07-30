@@ -6,6 +6,7 @@ import { LanguageProvider } from '../../contexts/language-context';
 import { ContextsView } from './ContextsView';
 import { CONTEXTS_VIEW_STATE_STORAGE_KEY, dispatchContextsTokenSelection } from '../../lib/contexts-view-state';
 import { selectToolbarOption } from '../../test/toolbar-select';
+import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 const initialTaskState = useTaskStore.getState();
 const now = '2026-05-12T12:00:00.000Z';
@@ -50,6 +51,11 @@ describe('ContextsView', () => {
             areas: [],
             settings: {},
         });
+    });
+
+    it('ends both scrollers with the shared end gap, not with viewport padding (#977)', () => {
+        const { container } = renderContextsView();
+        expectScrolledEndGap(container);
     });
 
     it('groups context and tag filters into collapsible sections', () => {

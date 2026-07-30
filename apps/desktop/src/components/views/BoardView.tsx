@@ -30,7 +30,7 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
-import { VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 const BOARD_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:board:v1';
@@ -93,7 +93,10 @@ function DroppableColumn({
     compact?: boolean;
 }) {
     const { setNodeRef } = useDroppable({ id });
-    const columnPadding = compact ? 'p-2' : 'p-3';
+    // No bottom padding on the card: it sits outside the column's scroller, so
+    // it reads as a strip the list can never reach. The gap lives on the
+    // scrolled content instead (#977).
+    const columnPadding = compact ? 'px-2 pt-2' : 'px-3 pt-3';
     const headerMargin = compact ? 'mb-3' : 'mb-4';
     const listSpacing = compact ? 'space-y-2' : 'space-y-3';
     const columnMinWidth = compact ? 'min-w-[36ch]' : 'min-w-[40ch]';
@@ -108,11 +111,12 @@ function DroppableColumn({
                 <span className="text-[11px] font-medium bg-muted/60 px-2 py-0.5 rounded-full text-muted-foreground">{tasks.length}</span>
             </h3>
             <div
-                className={`flex-1 ${listSpacing} overflow-y-auto min-h-[100px] focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-md px-1`}
+                className="flex-1 overflow-y-auto min-h-[100px] focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-md px-1"
                 tabIndex={0}
                 role="list"
                 aria-label={`${label} tasks list`}
             >
+                <div data-list-end className={`${listSpacing} ${LIST_END_GAP}`}>
                 {tasks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center text-center text-xs text-muted-foreground py-6 px-2 gap-2">
                         <div className="text-sm font-medium text-foreground">{emptyState.title}</div>
@@ -132,6 +136,7 @@ function DroppableColumn({
                         ))}
                     </SortableContext>
                 )}
+                </div>
             </div>
         </div>
     );

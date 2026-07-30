@@ -167,6 +167,19 @@ describe('Layout content width', () => {
         expect(content).toHaveClass('max-w-6xl');
         expect(content).not.toHaveClass('max-w-screen-2xl');
     });
+
+    // This box is `h-full`, so bottom padding here is a dead band below views
+    // that scroll inside it and is skipped entirely by views that overflow it
+    // (#977). Views own their end gap; jsdom cannot measure, so pin the classes.
+    it('keeps bottom padding off the shared content wrapper', () => {
+        const { container } = renderLayout('next');
+        const content = container.querySelector('[data-main-content] > div');
+        const classNames = (content?.className ?? '').split(/\s+/).filter(Boolean);
+
+        expect(classNames.filter((name) => /^(lg:|2xl:)?p-\d/.test(name))).toEqual([]);
+        expect(classNames.filter((name) => /^(lg:|2xl:)?p[by]-/.test(name))).toEqual([]);
+        expect(content).toHaveClass('px-4', 'pt-4', 'lg:px-6', 'lg:pt-6');
+    });
 });
 
 describe('Layout sidebar archive section', () => {

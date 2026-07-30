@@ -6,6 +6,7 @@ import { AgendaView } from './AgendaView';
 import { useUiStore } from '../../store/ui-store';
 import { MINDWTR_NAVIGATE_EVENT } from '../../lib/navigation-events';
 import { selectToolbarOption } from '../../test/toolbar-select';
+import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 // Capture the focus-drag handler so tests can drive a drop without a real
 // pointer gesture; dnd-kit contexts render as passthroughs (see BoardView.test).
@@ -93,6 +94,11 @@ describe('AgendaView', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it('ends the page with the shared end gap on its scrolled content (#977)', () => {
+        const { container } = renderAgenda();
+        expectScrolledEndGap(container);
     });
 
     it('keeps focus task details open when checklist items are toggled', async () => {

@@ -7,6 +7,7 @@ import { useUiStore } from '../../../store/ui-store';
 import { LanguageProvider } from '../../../contexts/language-context';
 import { KeybindingProvider } from '../../../contexts/keybinding-context';
 import { selectToolbarOption } from '../../../test/toolbar-select';
+import { expectScrolledEndGap } from '../../../test/list-end-gap';
 import { ProjectWorkspace } from './ProjectWorkspace';
 
 vi.mock('../../TaskItem', () => ({
@@ -262,6 +263,11 @@ describe('ProjectWorkspace Select mode', () => {
         vi.clearAllMocks();
         seedStore();
         useUiStore.setState({ editingTaskId: null });
+    });
+
+    it('ends the project scroller with the shared end gap, not with viewport padding (#977)', () => {
+        const { container } = renderWorkspace();
+        expectScrolledEndGap(container);
     });
 
     it('opens global quick add with the selected project defaults', () => {

@@ -43,7 +43,7 @@ import {
 import { CONTEXTS_AXES, groupTasks, type TaskGroup } from './list/next-grouping';
 import { GroupedTaskSections } from './list/GroupedTaskSections';
 import { GroupBySelect } from './list/GroupBySelect';
-import { SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { LIST_END_GAP, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { useUiStore } from '../../store/ui-store';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
@@ -441,7 +441,7 @@ export function ContextsView() {
 
     return (
         <>
-            <div className="h-full px-4 py-3">
+            <div className="h-full px-4 pt-3">
                 <div className="mx-auto flex h-full w-full max-w-[84rem] min-w-0 gap-0 lg:gap-5 xl:gap-6 2xl:max-w-[88rem]">
                     {/* Sidebar List of Contexts */}
                     <div className="hidden min-w-[13.5rem] w-[clamp(13.5rem,16vw,15.5rem)] flex-shrink-0 flex-col gap-4 border-r border-border pr-5 lg:flex xl:pr-6">
@@ -507,6 +507,7 @@ export function ContextsView() {
                                     })}
                                 </>
                             )}
+                            <div data-list-end className={LIST_END_GAP} aria-hidden="true" />
                         </div>
                     </div>
 
@@ -645,11 +646,15 @@ export function ContextsView() {
                         <div
                             ref={listScrollRef}
                             onScroll={handleVirtualScroll}
-                            className={cn(
-                                "flex-1 min-h-0 overflow-y-auto pr-2",
-                                !shouldVirtualize && !isGrouping && "divide-y divide-border/30",
-                            )}
+                            className="flex-1 min-h-0 overflow-y-auto pr-2"
                         >
+                            <div
+                                data-list-end
+                                className={cn(
+                                    LIST_END_GAP,
+                                    !shouldVirtualize && !isGrouping && "divide-y divide-border/30",
+                                )}
+                            >
                             {sortedTasks.length > 0 ? (
                                 shouldVirtualize ? (
                                     <div style={{ height: totalHeight, position: 'relative' }}>
@@ -701,6 +706,7 @@ export function ContextsView() {
                                     {normalizedSearchQuery ? t('filters.noMatch') : t('contexts.noTasks')}
                                 </div>
                             )}
+                            </div>
                         </div>
                     </div>
                 </div>

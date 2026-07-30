@@ -4,6 +4,7 @@ import { BoardView } from './BoardView';
 import { LanguageProvider } from '../../contexts/language-context';
 import { useTaskStore, type AppData, type Area, type Project, type Task } from '@mindwtr/core';
 import { useUiStore } from '../../store/ui-store';
+import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 vi.mock('@dnd-kit/core', () => ({
     DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -82,6 +83,11 @@ describe('BoardView', () => {
         const { getByRole } = renderWithProviders();
         expect(getByRole('heading', { name: /inbox/i })).toBeInTheDocument();
         expect(getByRole('heading', { name: /next actions/i })).toBeInTheDocument();
+    });
+
+    it('ends each column scroller with the shared end gap, not with viewport padding (#977)', () => {
+        const { container } = renderWithProviders();
+        expectScrolledEndGap(container);
     });
 
     it('exposes the project filter panel state with aria-expanded', () => {

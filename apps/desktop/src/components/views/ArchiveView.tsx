@@ -38,7 +38,7 @@ import {
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
-import { DONE_SORT_OPTIONS, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { DONE_SORT_OPTIONS, LIST_END_GAP, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
     PRIORITY_FILTER_OPTIONS,
     TIME_ESTIMATE_FILTER_OPTIONS,
@@ -642,6 +642,7 @@ export function ArchiveView() {
 
             {segment === 'projects' ? (
                 <div className={shouldVirtualizeFlatTasks ? "flex-1 min-h-0 overflow-y-auto" : undefined}>
+                    <div data-list-end className={LIST_END_GAP}>
                     {archivedProjects.length === 0 ? (
                         <div className="px-1 py-8 text-left text-sm text-muted-foreground">
                             <p>{tFallback(t, 'archived.emptyProjects', 'No archived projects')}</p>
@@ -661,6 +662,7 @@ export function ArchiveView() {
                             ))}
                         </div>
                     )}
+                    </div>
                 </div>
             ) : (
             <div
@@ -668,6 +670,7 @@ export function ArchiveView() {
                 onScroll={isGrouping ? undefined : handleVirtualScroll}
                 className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}
             >
+                <div data-list-end className={LIST_END_GAP}>
                 {archivedTasks.length === 0 ? (
                     <div className="px-1 py-8 text-left text-sm text-muted-foreground">
                         <p>{t('archived.noTasksFound')}</p>
@@ -767,6 +770,7 @@ export function ArchiveView() {
                         {archivedTasks.map(renderArchiveRow)}
                     </div>
                 )}
+                </div>
             </div>
             )}
             </div>

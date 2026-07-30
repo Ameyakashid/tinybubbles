@@ -18,6 +18,13 @@ export const TOOLBAR_CONTROL_ACTIVE = 'bg-primary/10 text-primary border-primary
 // need an icon or a clear button add padding on top of this, nothing else.
 export const VIEW_FILTER_INPUT = 'w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30';
 
+// The gap every list leaves below its last row. It belongs to the SCROLLED
+// CONTENT — on a scroll viewport or a wrapper around one it becomes a dead band
+// the list can never reach, which is how half the views ended short of the
+// window edge while the other half ran straight into it (#977). Sites that add
+// it also carry `data-list-end` so the tripwire tests can find it.
+export const LIST_END_GAP = 'pb-4';
+
 export { DONE_SORT_OPTIONS, SORT_OPTIONS };
 
 type ToolbarButtonProps = {

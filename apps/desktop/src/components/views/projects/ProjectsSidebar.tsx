@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, ChevronsLeft, CornerDownRight
 import { cn } from '../../../lib/utils';
 import { FocusStarIcon } from '../../FocusStarIcon';
 import { SortableProjectRow } from './SortableRows';
+import { LIST_END_GAP } from '../list/list-toolbar';
 import { tFallback, type Area, type Project, type Task } from '@mindwtr/core';
 import { ProjectAreaDropZone } from './project-area-dnd';
 import {
@@ -688,6 +689,7 @@ export function ProjectsSidebar({
                         </button>
                     </div>
                 )}
+                <div data-list-end className={LIST_END_GAP} aria-hidden="true" />
             </div>
 
             {contextMenu && (

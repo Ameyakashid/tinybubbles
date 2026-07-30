@@ -23,6 +23,7 @@ import {
 } from './list/useVirtualList';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
+import { LIST_END_GAP } from './list/list-toolbar';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
@@ -312,8 +313,9 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
             <div
                 ref={listScrollRef}
                 onScroll={handleVirtualScroll}
-                className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : "space-y-3"}
+                className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}
             >
+                <div data-list-end className={cn(LIST_END_GAP, !shouldVirtualize && "space-y-3")}>
                 {shouldVirtualize ? (
                     <div style={{ height: totalHeight, position: 'relative' }}>
                         {visibleTasks.map((task, visibleIndex) => {
@@ -345,6 +347,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                         />
                     ))
                 )}
+                </div>
             </div>
             </div>
             <PromptModal

@@ -26,7 +26,7 @@ import { TokenPickerModal } from '../../TokenPickerModal';
 import { TaskItem } from '../../TaskItem';
 import { useUiStore } from '../../../store/ui-store';
 import { BulkSelectionToolbar } from '../list/BulkSelectionToolbar';
-import { SortBySelect, VIEW_FILTER_INPUT } from '../list/list-toolbar';
+import { LIST_END_GAP, SortBySelect, VIEW_FILTER_INPUT } from '../list/list-toolbar';
 import { sortDoneTasksForListView } from '../list/done-sort';
 import { useTaskListScope } from '../list/task-list-scope';
 import { useTaskSelection } from '../list/useTaskSelection';
@@ -1650,6 +1650,7 @@ export function ProjectWorkspace({
                                     </div>
                                 </section>
                             )}
+                            <div data-list-end className={LIST_END_GAP} aria-hidden="true" />
                         </div>
                     ) : (
                         <div className="flex flex-1 items-center justify-center p-6 text-muted-foreground">

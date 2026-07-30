@@ -9,6 +9,7 @@ import { useUiStore } from '../../store/ui-store';
 import { restoreDeletedTasksWithFeedback } from './list/useTaskSelection';
 import { ListView, reportArchivedTaskQueryFailure } from './ListView';
 import { selectToolbarOption } from '../../test/toolbar-select';
+import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 const reportErrorMock = vi.hoisted(() => vi.fn());
 
@@ -89,6 +90,11 @@ describe('ListView', () => {
   it('renders the view title', () => {
     const html = renderStaticListView('inbox', 'Inbox');
     expect(html).toContain('Inbox');
+  });
+
+  it('ends the scroller with the shared end gap, not with viewport padding (#977)', () => {
+    const { container } = renderListView('next', 'Next');
+    expectScrolledEndGap(container);
   });
 
   it('does not render local search input in inbox view', () => {

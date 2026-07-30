@@ -6,6 +6,7 @@ import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
 import { useUiStore } from '../../store/ui-store';
 import { ArchiveView } from './ArchiveView';
+import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 const initialTaskState = useTaskStore.getState();
 const initialUiState = useUiStore.getState();
@@ -47,6 +48,16 @@ describe('ArchiveView', () => {
             _allProjects: [],
             settings: {},
         });
+    });
+
+    it('ends the list with the shared end gap, not with viewport padding (#977)', () => {
+        const { container } = render(
+            <LanguageProvider>
+                <ArchiveView />
+            </LanguageProvider>
+        );
+
+        expectScrolledEndGap(container);
     });
 
     it('shows the archived task completion date and time', () => {

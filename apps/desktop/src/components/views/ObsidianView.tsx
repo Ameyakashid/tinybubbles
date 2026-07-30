@@ -21,6 +21,7 @@ import { DEFAULT_TASKNOTES_FOLDER, generateUUID, safeFormatDate, translateWithFa
 import { ObsidianService } from '../../lib/obsidian-service';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { cn } from '../../lib/utils';
+import { LIST_END_GAP } from './list/list-toolbar';
 import { useLanguage } from '../../contexts/language-context';
 import { useObsidianStore } from '../../store/obsidian-store';
 import { useUiStore } from '../../store/ui-store';
@@ -30,7 +31,7 @@ const navigateToSettings = () => {
     dispatchNavigateEvent('settings');
 };
 
-const pageShellClassName = 'h-full px-4 py-3';
+const pageShellClassName = 'h-full px-4 pt-3';
 const pageContentClassName = 'mx-auto w-full max-w-[84rem] min-w-0 2xl:max-w-[88rem]';
 const MAX_TASKNOTES_DETECTED_PATHS = 6;
 const OBSIDIAN_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:obsidian:v1';
@@ -375,7 +376,7 @@ export function ObsidianView() {
 
     return (
         <div className={pageShellClassName}>
-            <div className={cn(pageContentClassName, 'space-y-6')}>
+            <div className={cn(pageContentClassName, 'space-y-6', LIST_END_GAP)} data-list-end>
                 <section className="rounded-3xl border border-border bg-card/95 p-8 shadow-sm">
                     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                         <div className="space-y-3">

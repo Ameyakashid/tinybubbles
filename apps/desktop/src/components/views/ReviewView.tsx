@@ -5,6 +5,7 @@ import { ReviewFiltersBar } from './review/ReviewFiltersBar';
 import { ReviewBulkActions } from './review/ReviewBulkActions';
 import { ReviewTaskList } from './review/ReviewTaskList';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { LIST_END_GAP } from './list/list-toolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
@@ -259,7 +260,7 @@ export function ReviewView() {
 
     return (
         <ErrorBoundary>
-            <div className="space-y-5">
+            <div className={`space-y-5 ${LIST_END_GAP}`} data-list-end>
                 <ReviewHeader
                     title={t('review.title')}
                     taskCountLabel={`${filteredTasks.length} ${t('common.tasks')}`}

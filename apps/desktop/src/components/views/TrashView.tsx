@@ -10,7 +10,7 @@ import { checkBudget } from '../../config/performanceBudgets';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { createTaskListScope } from './list/task-list-scope';
-import { VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 
 export function TrashView() {
     const perf = usePerformanceMonitor('TrashView');
@@ -279,7 +279,7 @@ export function TrashView() {
 
     return (
         <ErrorBoundary>
-            <div className="space-y-6">
+            <div className={`space-y-6 ${LIST_END_GAP}`} data-list-end>
             <header className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">{t('trash.title')}</h2>
                 <div className="flex items-center gap-3">
