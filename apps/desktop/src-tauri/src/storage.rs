@@ -1269,7 +1269,106 @@ fn row_to_person_value(row: &rusqlite::Row<'_>) -> Result<Value, rusqlite::Error
     Ok(Value::Object(map))
 }
 
+fn optional_id(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(|v| v.as_str())
+        .filter(|v| !v.trim().is_empty())
+        .map(str::to_string)
+}
+
+fn collect_ids(data: &Value, key: &str) -> std::collections::HashSet<String> {
+    data.get(key)
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("id").and_then(|v| v.as_str()).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Nulls project/task container references that don't resolve to a live row
+/// - what `ON DELETE SET NULL` would already have produced had the parent's
+/// deletion actually gone through instead of getting lost before this
+/// snapshot arrived - so a dangling reference in an old JSON snapshot can't
+/// fail the FK-enforced insert below. `sections.projectId` is `NOT NULL` (and
+/// `ON DELETE CASCADE`), so a section with no live project can't be nulled;
+/// it's dropped instead, the same end state CASCADE would have produced.
+/// Mutates `data` in place and returns each issue found in the same
+/// `(kind, id, missingId)` shape as core's own diagnostic instrumentation
+/// (`SqliteReferenceIssue` in sqlite-adapter.ts), for the caller to log.
+fn sanitize_dangling_container_references(data: &mut Value) -> Vec<(&'static str, String, String)> {
+    let area_ids = collect_ids(data, "areas");
+    let project_ids = collect_ids(data, "projects");
+    let mut issues: Vec<(&'static str, String, String)> = Vec::new();
+
+    if let Some(projects) = data.get_mut("projects").and_then(|v| v.as_array_mut()) {
+        for project in projects {
+            let Some(area_id) = optional_id(project.get("areaId")) else { continue };
+            if area_ids.contains(&area_id) {
+                continue;
+            }
+            let id = project.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            issues.push(("project.areaId", id, area_id));
+            if let Some(obj) = project.as_object_mut() {
+                obj.remove("areaId");
+            }
+        }
+    }
+
+    if let Some(sections) = data.get_mut("sections").and_then(|v| v.as_array_mut()) {
+        sections.retain(|section| {
+            let Some(project_id) = optional_id(section.get("projectId")) else { return true };
+            if project_ids.contains(&project_id) {
+                return true;
+            }
+            let id = section.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            issues.push(("section.projectId", id, project_id));
+            false
+        });
+    }
+    let section_ids = collect_ids(data, "sections");
+
+    if let Some(tasks) = data.get_mut("tasks").and_then(|v| v.as_array_mut()) {
+        for task in tasks {
+            let id = task.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            for (kind, field, live_ids) in [
+                ("task.projectId", "projectId", &project_ids),
+                ("task.sectionId", "sectionId", &section_ids),
+                ("task.areaId", "areaId", &area_ids),
+            ] {
+                let Some(referenced_id) = optional_id(task.get(field)) else { continue };
+                if live_ids.contains(&referenced_id) {
+                    continue;
+                }
+                issues.push((kind, id.clone(), referenced_id));
+                if let Some(obj) = task.as_object_mut() {
+                    obj.remove(field);
+                }
+            }
+        }
+    }
+
+    issues
+}
+
 fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), String> {
+    let mut data = data.clone();
+    let issues = sanitize_dangling_container_references(&mut data);
+    if !issues.is_empty() {
+        log::warn!(
+            "JSON->SQLite migration found {} dangling container reference(s), nulled/dropped: {}",
+            issues.len(),
+            issues
+                .iter()
+                .map(|(kind, id, missing_id)| format!("{kind}(id={id}, missingId={missing_id})"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let data = &data;
+
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute("DELETE FROM tasks", [])
         .map_err(|e| e.to_string())?;
@@ -1283,6 +1382,114 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     tx.execute("DELETE FROM settings", [])
         .map_err(|e| e.to_string())?;
+
+    // Insert order is parent-before-child so each row's FK references
+    // (tasks/sections -> projects, tasks/projects -> areas) already exist:
+    // areas depend on nothing, projects depend on areas, sections depend on
+    // projects, tasks depend on all three. `people`/`settings` have no FK
+    // columns, so their position relative to the others is unconstrained.
+    // This also matters beyond satisfying the constraint on this from-scratch
+    // migration: `INSERT OR REPLACE` on a row whose id already exists
+    // resolves the conflict by deleting the old row first, which fires the
+    // same `ON DELETE CASCADE`/`SET NULL` actions - so on any write that
+    // isn't a full wipe-and-reinsert (an incremental per-entity upsert
+    // elsewhere), re-inserting a parent before its children are also
+    // re-inserted can silently cascade-delete or null a child's own
+    // reference. Parent-before-child order is load-bearing for data
+    // integrity generally, not only for constraint satisfaction here.
+    let areas = data
+        .get("areas")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for area in areas {
+        tx.execute(
+            "INSERT OR REPLACE INTO areas (id, name, color, icon, orderNum, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                area.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
+                area.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
+                area.get("color").and_then(|v| v.as_str()),
+                area.get("icon").and_then(|v| v.as_str()),
+                area.get("order").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                area.get("deletedAt").and_then(|v| v.as_str()),
+                area.get("deletedAtBeforeProjectArchive")
+                    .and_then(|v| v.as_str()),
+                area.get("projectArchivedAt").and_then(|v| v.as_str()),
+                area.get("rev").and_then(|v| v.as_i64()),
+                area.get("revBy").and_then(|v| v.as_str()),
+                area.get("createdAt").and_then(|v| v.as_str()),
+                area.get("updatedAt").and_then(|v| v.as_str()),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let projects = data
+        .get("projects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for project in projects {
+        let tag_ids_json = json_str_or_default(project.get("tagIds"), "[]");
+        let attachments_json = json_str(project.get("attachments"));
+        tx.execute(
+            "INSERT OR REPLACE INTO projects (id, title, status, color, orderNum, tagIds, isSequential, sequentialScope, taskSortBy, isFocused, supportNotes, attachments, dueDate, reviewAt, areaId, areaTitle, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+            params![
+                project.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
+                project.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
+                project.get("status").and_then(|v| v.as_str()).unwrap_or("active"),
+                project.get("color").and_then(|v| v.as_str()).unwrap_or("#6B7280"),
+                project.get("order").and_then(|v| v.as_f64()),
+                tag_ids_json,
+                project.get("isSequential").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
+                project.get("sequentialScope").and_then(|v| v.as_str()),
+                normalize_project_task_sort_by(project.get("taskSortBy").and_then(|v| v.as_str())),
+                project.get("isFocused").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
+                project.get("supportNotes").and_then(|v| v.as_str()),
+                attachments_json,
+                project.get("dueDate").and_then(|v| v.as_str()),
+                project.get("reviewAt").and_then(|v| v.as_str()),
+                project.get("areaId").and_then(|v| v.as_str()),
+                project.get("areaTitle").and_then(|v| v.as_str()),
+                project.get("rev").and_then(|v| v.as_i64()),
+                project.get("revBy").and_then(|v| v.as_str()),
+                project.get("createdAt").and_then(|v| v.as_str()).unwrap_or_default(),
+                project.get("updatedAt").and_then(|v| v.as_str()).unwrap_or_default(),
+                project.get("deletedAt").and_then(|v| v.as_str()),
+                project.get("purgedAt").and_then(|v| v.as_str()),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let sections = data
+        .get("sections")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for section in sections {
+        tx.execute(
+            "INSERT OR REPLACE INTO sections (id, projectId, title, description, orderNum, isCollapsed, rev, revBy, createdAt, updatedAt, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                section.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
+                section.get("projectId").and_then(|v| v.as_str()).unwrap_or_default(),
+                section.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
+                section.get("description").and_then(|v| v.as_str()),
+                section.get("order").and_then(|v| v.as_f64()),
+                section.get("isCollapsed").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
+                section.get("rev").and_then(|v| v.as_i64()),
+                section.get("revBy").and_then(|v| v.as_str()),
+                section.get("createdAt").and_then(|v| v.as_str()).unwrap_or_default(),
+                section.get("updatedAt").and_then(|v| v.as_str()).unwrap_or_default(),
+                section.get("deletedAt").and_then(|v| v.as_str()),
+                section
+                    .get("deletedAtBeforeProjectArchive")
+                    .and_then(|v| v.as_str()),
+                section.get("projectArchivedAt").and_then(|v| v.as_str()),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
 
     let tasks = data
         .get("tasks")
@@ -1351,100 +1558,6 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
                 task.get("deletedAt").and_then(|v| v.as_str()),
                 task.get("purgedAt").and_then(|v| v.as_str()),
                 task.get("timeSpentMinutes").and_then(|v| v.as_i64()),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-
-    let projects = data
-        .get("projects")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for project in projects {
-        let tag_ids_json = json_str_or_default(project.get("tagIds"), "[]");
-        let attachments_json = json_str(project.get("attachments"));
-        tx.execute(
-            "INSERT OR REPLACE INTO projects (id, title, status, color, orderNum, tagIds, isSequential, sequentialScope, taskSortBy, isFocused, supportNotes, attachments, dueDate, reviewAt, areaId, areaTitle, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
-            params![
-                project.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
-                project.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
-                project.get("status").and_then(|v| v.as_str()).unwrap_or("active"),
-                project.get("color").and_then(|v| v.as_str()).unwrap_or("#6B7280"),
-                project.get("order").and_then(|v| v.as_f64()),
-                tag_ids_json,
-                project.get("isSequential").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
-                project.get("sequentialScope").and_then(|v| v.as_str()),
-                normalize_project_task_sort_by(project.get("taskSortBy").and_then(|v| v.as_str())),
-                project.get("isFocused").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
-                project.get("supportNotes").and_then(|v| v.as_str()),
-                attachments_json,
-                project.get("dueDate").and_then(|v| v.as_str()),
-                project.get("reviewAt").and_then(|v| v.as_str()),
-                project.get("areaId").and_then(|v| v.as_str()),
-                project.get("areaTitle").and_then(|v| v.as_str()),
-                project.get("rev").and_then(|v| v.as_i64()),
-                project.get("revBy").and_then(|v| v.as_str()),
-                project.get("createdAt").and_then(|v| v.as_str()).unwrap_or_default(),
-                project.get("updatedAt").and_then(|v| v.as_str()).unwrap_or_default(),
-                project.get("deletedAt").and_then(|v| v.as_str()),
-                project.get("purgedAt").and_then(|v| v.as_str()),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-
-    let areas = data
-        .get("areas")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for area in areas {
-        tx.execute(
-            "INSERT OR REPLACE INTO areas (id, name, color, icon, orderNum, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            params![
-                area.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
-                area.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
-                area.get("color").and_then(|v| v.as_str()),
-                area.get("icon").and_then(|v| v.as_str()),
-                area.get("order").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                area.get("deletedAt").and_then(|v| v.as_str()),
-                area.get("deletedAtBeforeProjectArchive")
-                    .and_then(|v| v.as_str()),
-                area.get("projectArchivedAt").and_then(|v| v.as_str()),
-                area.get("rev").and_then(|v| v.as_i64()),
-                area.get("revBy").and_then(|v| v.as_str()),
-                area.get("createdAt").and_then(|v| v.as_str()),
-                area.get("updatedAt").and_then(|v| v.as_str()),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-
-    let sections = data
-        .get("sections")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    for section in sections {
-        tx.execute(
-            "INSERT OR REPLACE INTO sections (id, projectId, title, description, orderNum, isCollapsed, rev, revBy, createdAt, updatedAt, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-            params![
-                section.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
-                section.get("projectId").and_then(|v| v.as_str()).unwrap_or_default(),
-                section.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
-                section.get("description").and_then(|v| v.as_str()),
-                section.get("order").and_then(|v| v.as_f64()),
-                section.get("isCollapsed").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
-                section.get("rev").and_then(|v| v.as_i64()),
-                section.get("revBy").and_then(|v| v.as_str()),
-                section.get("createdAt").and_then(|v| v.as_str()).unwrap_or_default(),
-                section.get("updatedAt").and_then(|v| v.as_str()).unwrap_or_default(),
-                section.get("deletedAt").and_then(|v| v.as_str()),
-                section
-                    .get("deletedAtBeforeProjectArchive")
-                    .and_then(|v| v.as_str()),
-                section.get("projectArchivedAt").and_then(|v| v.as_str()),
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -1817,7 +1930,15 @@ pub(crate) fn load_data_snapshot(app: &tauri::AppHandle) -> Result<Value, String
     if !sqlite_has_any_data(&conn)? && data_path.exists() {
         if let Ok(value) = read_json_with_retries(&data_path, 2) {
             let _ = fs::copy(&data_path, &backup_path);
-            migrate_json_to_sqlite(&mut conn, &value)?;
+            // A first-load migration failure must not brick the app: fall
+            // through to the JSON already in hand (sanitize_dangling_container_references
+            // above should prevent an FK failure here in the first place, but
+            // this is the backstop for anything else that goes wrong) instead
+            // of hard-failing the whole load.
+            if let Err(error) = migrate_json_to_sqlite(&mut conn, &value) {
+                log::warn!("First-load JSON->SQLite migration failed, using JSON directly: {error}");
+                return Ok(value);
+            }
             ensure_fts_populated(&conn, true)?;
         }
     }
@@ -2954,11 +3075,27 @@ mod tests {
             "deletedAt": "2026-06-08T08:00:00.000Z",
             "purgedAt": "2026-06-09T08:00:00.000Z"
         });
+        // Both the task and the project above point at area-1/section-1: with
+        // the tasks/projects/sections FK columns now mirroring core's schema,
+        // those rows must actually exist or the FK-enforced insert fails.
         let source = serde_json::json!({
             "tasks": [task.clone()],
             "projects": [project.clone()],
-            "areas": [],
-            "sections": [],
+            "areas": [{
+                "id": "area-1",
+                "name": "Work",
+                "order": 1,
+                "createdAt": "2026-06-01T00:00:00.000Z",
+                "updatedAt": "2026-06-01T00:00:00.000Z"
+            }],
+            "sections": [{
+                "id": "section-1",
+                "projectId": "project-full",
+                "title": "Section one",
+                "order": 1,
+                "createdAt": "2026-06-01T00:00:00.000Z",
+                "updatedAt": "2026-06-01T00:00:00.000Z"
+            }],
             "people": [],
             "settings": {}
         });
@@ -3210,6 +3347,105 @@ mod tests {
         assert_eq!(person["revBy"], "device-1");
         assert_eq!(person["createdAt"], "2026-05-25T00:00:00.000Z");
         assert_eq!(person["updatedAt"], "2026-05-26T00:00:00.000Z");
+    }
+
+    #[test]
+    fn sanitize_dangling_container_references_nulls_and_reports_task_and_project_refs() {
+        let mut data = serde_json::json!({
+            "areas": [{ "id": "area-live" }],
+            "projects": [
+                { "id": "project-live" },
+                { "id": "project-dangling-area", "areaId": "area-missing" }
+            ],
+            "tasks": [{
+                "id": "task-1",
+                "projectId": "project-missing",
+                "sectionId": "section-missing",
+                "areaId": "area-live"
+            }]
+        });
+
+        let issues = sanitize_dangling_container_references(&mut data);
+
+        assert_eq!(
+            data["projects"][1].get("areaId"),
+            None,
+            "dangling project.areaId should be nulled"
+        );
+        assert_eq!(data["tasks"][0].get("projectId"), None);
+        assert_eq!(data["tasks"][0].get("sectionId"), None);
+        assert_eq!(
+            data["tasks"][0]["areaId"], "area-live",
+            "a live areaId must survive untouched"
+        );
+
+        let kinds: Vec<&str> = issues.iter().map(|(kind, _, _)| *kind).collect();
+        assert!(kinds.contains(&"project.areaId"));
+        assert!(kinds.contains(&"task.projectId"));
+        assert!(kinds.contains(&"task.sectionId"));
+        assert!(!kinds.contains(&"task.areaId"));
+    }
+
+    #[test]
+    fn sanitize_dangling_container_references_drops_section_with_missing_project() {
+        let mut data = serde_json::json!({
+            "areas": [],
+            "projects": [{ "id": "project-live" }],
+            "sections": [
+                { "id": "section-live", "projectId": "project-live" },
+                { "id": "section-orphan", "projectId": "project-missing" }
+            ],
+            "tasks": []
+        });
+
+        let issues = sanitize_dangling_container_references(&mut data);
+
+        let remaining_section_ids: Vec<&str> = data["sections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|section| section["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(remaining_section_ids, vec!["section-live"]);
+        assert!(issues.iter().any(|(kind, id, missing)| *kind == "section.projectId"
+            && id == "section-orphan"
+            && missing == "project-missing"));
+    }
+
+    #[test]
+    fn migrate_json_to_sqlite_succeeds_on_a_snapshot_with_a_dangling_project_reference() {
+        // What used to brick first load once the FK columns were added
+        // (#rust-write-parity review): a task referencing a project that no
+        // longer exists must not fail the FK-enforced insert - it lands with
+        // the dangling reference nulled, same as ON DELETE SET NULL would
+        // have produced.
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+
+        let data = serde_json::json!({
+            "tasks": [{
+                "id": "task-orphan",
+                "title": "Orphaned task",
+                "status": "next",
+                "projectId": "project-does-not-exist",
+                "tags": [],
+                "contexts": [],
+                "createdAt": "2026-07-30T00:00:00.000Z",
+                "updatedAt": "2026-07-30T00:00:00.000Z"
+            }],
+            "projects": [],
+            "areas": [],
+            "sections": [],
+            "people": [],
+            "settings": {}
+        });
+
+        migrate_json_to_sqlite(&mut conn, &data)
+            .expect("migration must not fail on a dangling container reference");
+        let read = read_sqlite_data(&conn).expect("should read data");
+        let task = read["tasks"].as_array().and_then(|tasks| tasks.first()).expect("task should exist");
+        assert_eq!(task.get("projectId"), None);
     }
 }
 

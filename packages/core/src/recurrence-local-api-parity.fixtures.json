@@ -15,12 +15,18 @@
       "updatedAt": "2026-06-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Water plants",
       "status": "next",
       "dueDate": "2026-06-15",
       "recurrence": {
         "rule": "daily",
         "seriesId": "parity-daily-due-date"
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2026-06-14T12:00:00.000Z",
+      "updatedAt": "2026-06-14T12:00:00.000Z"
     }
   },
   {
@@ -39,12 +45,18 @@
       "updatedAt": "2026-06-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Weekly planning",
       "status": "next",
       "startTime": "2026-06-08T09:00:00.000Z",
       "recurrence": {
         "rule": "weekly",
         "seriesId": "parity-weekly-start-time"
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2026-06-01T12:00:00.000Z",
+      "updatedAt": "2026-06-01T12:00:00.000Z"
     }
   },
   {
@@ -63,6 +75,7 @@
       "updatedAt": "2025-01-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Month end report",
       "status": "next",
       "dueDate": "2025-02-28",
       "recurrence": {
@@ -70,7 +83,12 @@
         "seriesId": "parity-monthly-clamp",
         "anchorDay": 31,
         "dueAnchorDay": 31
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2025-01-31T12:00:00.000Z",
+      "updatedAt": "2025-01-31T12:00:00.000Z"
     }
   },
   {
@@ -93,6 +111,7 @@
       "updatedAt": "2025-02-28T12:00:00.000Z"
     },
     "expected": {
+      "title": "Month end report",
       "status": "next",
       "dueDate": "2025-03-31",
       "recurrence": {
@@ -102,7 +121,12 @@
         "startAnchorDay": 31,
         "dueAnchorDay": 31,
         "reviewAnchorDay": 31
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2025-02-28T12:00:00.000Z",
+      "updatedAt": "2025-02-28T12:00:00.000Z"
     }
   },
   {
@@ -125,6 +149,7 @@
       "updatedAt": "2027-02-28T12:00:00.000Z"
     },
     "expected": {
+      "title": "Leap day reminder",
       "status": "next",
       "dueDate": "2028-02-29T09:30:00.000Z",
       "recurrence": {
@@ -134,7 +159,12 @@
         "startAnchorDay": 29,
         "dueAnchorDay": 29,
         "reviewAnchorDay": 29
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2027-02-28T12:00:00.000Z",
+      "updatedAt": "2027-02-28T12:00:00.000Z"
     }
   },
   {
@@ -156,13 +186,19 @@
       "updatedAt": "2025-01-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Stretching",
       "status": "next",
       "dueDate": "2025-01-06T14:00:00.000Z",
       "recurrence": {
         "rule": "daily",
         "seriesId": "parity-fluid-due-datetime",
         "strategy": "fluid"
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2025-01-05T14:00:00.000Z",
+      "updatedAt": "2025-01-05T14:00:00.000Z"
     }
   },
   {
@@ -182,6 +218,7 @@
       "updatedAt": "2027-01-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Annual enrollment reminder",
       "status": "next",
       "startTime": "2028-03-01T09:00:00.000Z",
       "dueDate": "2028-04-15T09:00:00.000Z",
@@ -191,7 +228,12 @@
         "anchorDay": 15,
         "startAnchorDay": 1,
         "dueAnchorDay": 15
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2027-04-15T12:00:00.000Z",
+      "updatedAt": "2027-04-15T12:00:00.000Z"
     }
   },
   {
@@ -212,13 +254,19 @@
       "updatedAt": "2025-01-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Unscheduled recurring task",
       "status": "next",
       "startTime": "2025-01-06",
       "recurrence": {
         "rule": "daily",
         "seriesId": "parity-unscheduled-fluid",
         "strategy": "fluid"
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2025-01-05T14:00:00.000Z",
+      "updatedAt": "2025-01-05T14:00:00.000Z"
     }
   },
   {
@@ -241,6 +289,7 @@
       "updatedAt": "2025-01-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Three-time reminder",
       "status": "next",
       "dueDate": "2025-01-02",
       "recurrence": {
@@ -248,7 +297,12 @@
         "seriesId": "parity-counted-next",
         "count": 3,
         "completedOccurrences": 2
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2025-01-01T12:00:00.000Z",
+      "updatedAt": "2025-01-01T12:00:00.000Z"
     }
   },
   {
@@ -283,7 +337,11 @@
       "startTime": "2026-07-20T09:00:00.000Z",
       "recurrence": {
         "rule": "weekly",
-        "byDay": ["MO", "WE", "FR"],
+        "byDay": [
+          "MO",
+          "WE",
+          "FR"
+        ],
         "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
       },
       "tags": [],
@@ -292,14 +350,24 @@
       "updatedAt": "2026-07-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Standup",
       "status": "next",
       "startTime": "2026-07-22T09:00:00.000Z",
       "recurrence": {
         "rule": "weekly",
         "seriesId": "parity-weekly-byday-defer",
-        "byDay": ["MO", "WE", "FR"],
+        "byDay": [
+          "MO",
+          "WE",
+          "FR"
+        ],
         "rrule": "FREQ=WEEKLY;BYDAY=MO,WE,FR"
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2026-07-20T09:00:00.000Z",
+      "updatedAt": "2026-07-20T09:00:00.000Z"
     },
     "localApiExpected": null
   },
@@ -314,7 +382,10 @@
       "dueDate": "2026-07-01",
       "recurrence": {
         "rule": "monthly",
-        "byMonthDay": [1, 15],
+        "byMonthDay": [
+          1,
+          15
+        ],
         "rrule": "FREQ=MONTHLY;BYMONTHDAY=1,15"
       },
       "tags": [],
@@ -323,17 +394,427 @@
       "updatedAt": "2026-06-01T00:00:00.000Z"
     },
     "expected": {
+      "title": "Pay rent",
       "status": "next",
       "dueDate": "2026-07-15",
       "recurrence": {
         "rule": "monthly",
         "seriesId": "parity-monthly-bymonthday-defer",
-        "byMonthDay": [1, 15],
+        "byMonthDay": [
+          1,
+          15
+        ],
         "rrule": "FREQ=MONTHLY;BYMONTHDAY=1,15",
         "anchorDay": 1,
         "dueAnchorDay": 1
-      }
+      },
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2026-07-01T12:00:00.000Z",
+      "updatedAt": "2026-07-01T12:00:00.000Z"
     },
     "localApiExpected": null
+  },
+  {
+    "kind": "action",
+    "name": "complete a non-recurring task",
+    "action": "complete",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-complete-simple",
+      "title": "Buy milk",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z",
+      "rev": 3,
+      "revBy": "device-old"
+    },
+    "expectedTask": {
+      "id": "action-complete-simple",
+      "title": "Buy milk",
+      "status": "done",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "rev": 4,
+      "revBy": "device-a",
+      "completedAt": "2026-07-30T12:00:00.000Z",
+      "isFocusedToday": false
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "complete a recurring task creates a follow-up with rev/revBy stamped",
+    "action": "complete",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-complete-recurring",
+      "title": "Water plants",
+      "status": "next",
+      "dueDate": "2026-07-30",
+      "recurrence": { "rule": "daily" },
+      "taskMode": "deep",
+      "textDirection": "rtl",
+      "repeatReminderMinutes": 30,
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z",
+      "rev": 5,
+      "revBy": "device-old"
+    },
+    "expectedTask": {
+      "id": "action-complete-recurring",
+      "title": "Water plants",
+      "status": "done",
+      "dueDate": "2026-07-30",
+      "recurrence": { "rule": "daily" },
+      "taskMode": "deep",
+      "textDirection": "rtl",
+      "repeatReminderMinutes": 30,
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "rev": 6,
+      "revBy": "device-a",
+      "completedAt": "2026-07-30T12:00:00.000Z",
+      "isFocusedToday": false
+    },
+    "expectedFollowUp": {
+      "title": "Water plants",
+      "status": "next",
+      "dueDate": "2026-07-31",
+      "recurrence": { "rule": "daily", "seriesId": "action-complete-recurring" },
+      "taskMode": "deep",
+      "textDirection": "rtl",
+      "repeatReminderMinutes": 30,
+      "tags": [],
+      "contexts": [],
+      "isFocusedToday": false,
+      "createdAt": "2026-07-30T12:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "rev": 1,
+      "revBy": "device-a"
+    }
+  },
+  {
+    "kind": "action",
+    "name": "completing an archived task is a correction, not a new completion",
+    "action": "complete",
+    "previousStatus": "archived",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-archived-correction",
+      "title": "Renew passport",
+      "status": "archived",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-05T00:00:00.000Z",
+      "completedAt": "2026-01-05T00:00:00.000Z",
+      "isFocusedToday": false,
+      "focusOrder": 2,
+      "rev": 7,
+      "revBy": "device-old"
+    },
+    "expectedTask": {
+      "id": "action-archived-correction",
+      "title": "Renew passport",
+      "status": "done",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "completedAt": "2026-01-05T00:00:00.000Z",
+      "isFocusedToday": false,
+      "rev": 8,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "archive a task",
+    "action": "archive",
+    "previousStatus": "someday",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-archive-simple",
+      "title": "Old idea",
+      "status": "someday",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "focusOrder": 1,
+      "boardOrder": 3,
+      "isFocusedToday": true,
+      "rev": 2,
+      "revBy": "device-old"
+    },
+    "expectedTask": {
+      "id": "action-archive-simple",
+      "title": "Old idea",
+      "status": "archived",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "completedAt": "2026-07-30T12:00:00.000Z",
+      "isFocusedToday": false,
+      "rev": 3,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "restore drops a dangling projectId and sectionId but keeps a live areaId",
+    "action": "restore",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-restore-dangling",
+      "title": "Ghost task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": "2026-01-10T00:00:00.000Z",
+      "projectId": "missing-project",
+      "sectionId": "missing-section",
+      "areaId": "area-live",
+      "rev": 1,
+      "revBy": "device-old"
+    },
+    "containers": {
+      "projects": [],
+      "sections": [],
+      "areas": [{ "id": "area-live" }]
+    },
+    "expectedTask": {
+      "id": "action-restore-dangling",
+      "title": "Ghost task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "areaId": "area-live",
+      "rev": 2,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "complete refuses recurrence the local API engine cannot compute (409)",
+    "action": "complete",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-refusal-byday",
+      "title": "Standup",
+      "status": "next",
+      "startTime": "2026-07-20T09:00:00.000Z",
+      "recurrence": { "rule": "weekly", "byDay": ["MO", "WE", "FR"] },
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z"
+    },
+    "expectRefusal": true
+  },
+  {
+    "kind": "action",
+    "name": "completing an already-done task is a full no-op",
+    "action": "complete",
+    "previousStatus": "done",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-complete-already-done",
+      "title": "Already finished",
+      "status": "done",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-05T00:00:00.000Z",
+      "completedAt": "2026-01-05T00:00:00.000Z",
+      "isFocusedToday": false,
+      "rev": 11,
+      "revBy": "device-old"
+    },
+    "expectedTask": {
+      "id": "action-complete-already-done",
+      "title": "Already finished",
+      "status": "done",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-05T00:00:00.000Z",
+      "completedAt": "2026-01-05T00:00:00.000Z",
+      "isFocusedToday": false,
+      "rev": 11,
+      "revBy": "device-old"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "complete refuses recurrence with a relativeStartOffset the local API can't recompute (409)",
+    "action": "complete",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-refusal-relative-start",
+      "title": "Prep the day before",
+      "status": "next",
+      "dueDate": "2026-07-30",
+      "relativeStartOffset": { "amount": -1, "unit": "day" },
+      "recurrence": { "rule": "daily" },
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z"
+    },
+    "expectRefusal": true
+  },
+  {
+    "kind": "action",
+    "name": "restore: section adopts its project and clears area",
+    "action": "restore",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-restore-adopt-project",
+      "title": "Section only task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": "2026-01-10T00:00:00.000Z",
+      "sectionId": "section-a",
+      "areaId": "area-a",
+      "rev": 1,
+      "revBy": "device-old"
+    },
+    "containers": {
+      "projects": [{ "id": "project-a" }],
+      "sections": [{ "id": "section-a", "projectId": "project-a" }],
+      "areas": [{ "id": "area-a" }]
+    },
+    "expectedTask": {
+      "id": "action-restore-adopt-project",
+      "title": "Section only task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "projectId": "project-a",
+      "sectionId": "section-a",
+      "rev": 2,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "restore: section dropped when it belongs to another project",
+    "action": "restore",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-restore-section-mismatch",
+      "title": "Cross-project section task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": "2026-01-10T00:00:00.000Z",
+      "projectId": "project-a",
+      "sectionId": "section-b",
+      "rev": 4,
+      "revBy": "device-old"
+    },
+    "containers": {
+      "projects": [{ "id": "project-a" }, { "id": "project-b" }],
+      "sections": [{ "id": "section-b", "projectId": "project-b" }],
+      "areas": []
+    },
+    "expectedTask": {
+      "id": "action-restore-section-mismatch",
+      "title": "Cross-project section task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "projectId": "project-a",
+      "rev": 5,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
+  },
+  {
+    "kind": "action",
+    "name": "restore: area dropped when project set",
+    "action": "restore",
+    "previousStatus": "next",
+    "now": "2026-07-30T12:00:00.000Z",
+    "deviceId": "device-a",
+    "task": {
+      "id": "action-restore-area-dropped",
+      "title": "Project and area task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "deletedAt": "2026-01-10T00:00:00.000Z",
+      "projectId": "project-c",
+      "areaId": "area-c",
+      "rev": 9,
+      "revBy": "device-old"
+    },
+    "containers": {
+      "projects": [{ "id": "project-c" }],
+      "sections": [],
+      "areas": [{ "id": "area-c" }]
+    },
+    "expectedTask": {
+      "id": "action-restore-area-dropped",
+      "title": "Project and area task",
+      "status": "next",
+      "tags": [],
+      "contexts": [],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-30T12:00:00.000Z",
+      "projectId": "project-c",
+      "rev": 10,
+      "revBy": "device-a"
+    },
+    "expectedFollowUp": null
   }
 ]

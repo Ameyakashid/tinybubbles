@@ -18,6 +18,7 @@ import {
 import type { Task, TaskStatus } from './types';
 
 type LocalApiRecurrenceParityCase = {
+    kind?: 'recurrence';
     name: string;
     completedAt: string;
     previousStatus: TaskStatus;
@@ -25,19 +26,25 @@ type LocalApiRecurrenceParityCase = {
     expected: Record<string, unknown> | null;
 };
 
-const localApiRecurrenceParityCases = JSON.parse(
+// The fixture file also carries `kind: 'action'` cases (complete/archive/restore
+// write-path parity, asserted by local-api-action-parity.test.ts) alongside these
+// recurrence-only cases; the recurrence-only ones predate the `kind` field, so its
+// absence means 'recurrence'.
+const localApiRecurrenceParityCases = (JSON.parse(
     readFileSync(new URL('./recurrence-local-api-parity.fixtures.json', import.meta.url), 'utf8')
-) as LocalApiRecurrenceParityCase[];
+) as Array<LocalApiRecurrenceParityCase & { kind?: string }>).filter(
+    (testCase) => !testCase.kind || testCase.kind === 'recurrence'
+);
 
 const toLocalApiRecurrenceParitySnapshot = (task: Task | null): Record<string, unknown> | null => {
     if (!task) return null;
-    return {
-        status: task.status,
-        ...(task.startTime ? { startTime: task.startTime } : {}),
-        ...(task.dueDate ? { dueDate: task.dueDate } : {}),
-        ...(task.reviewAt ? { reviewAt: task.reviewAt } : {}),
-        ...(task.recurrence ? { recurrence: task.recurrence } : {}),
-    };
+    // Full-task equality except `id`: createNextRecurringTask mints a fresh
+    // random id independently of the Rust engine under test in
+    // local_api.rs's own parity test, making it the one legitimately
+    // platform/run-variant field (mirrored there by the same exclusion in
+    // comparable_local_api_recurring_task).
+    const { id: _id, ...rest } = task;
+    return rest;
 };
 
 describe('recurrence', () => {

@@ -121,6 +121,53 @@ const parseRustInsertColumns = (source: string, table: string): string[] => {
     return unique(match[1].split(',').map((column) => column.trim()).filter(Boolean), `Rust INSERT ${table}`);
 };
 
+// core's own schema is the source of truth for which columns REFERENCES
+// another table's `id` (revision-aware sync relies on ON DELETE SET
+// NULL/CASCADE actions, not app code, to keep container references
+// consistent - #964's sibling schema race). Comparing Rust against core
+// directly, rather than against a hand-maintained roster here, means a
+// future FK core adds is enforced automatically instead of needing this
+// script updated too. This mirrors parseCreateTableColumns's own CREATE
+// TABLE extraction but reads the REFERENCES clause instead of just the
+// leading column name, so a schema that silently drops a foreign key (as
+// apps/desktop's Rust copy did until this check existed) fails here instead
+// of only surfacing as an insert-order bug at migration time.
+const parseForeignKeyReferences = (source: string, table: string): Record<string, string> => {
+    const match = source.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\(([\\s\\S]*?)\\n\\);`));
+    if (!match) throw new Error(`Could not find CREATE TABLE for ${table}.`);
+    const references: Record<string, string> = {};
+    for (const line of match[1].split('\n')) {
+        const columnMatch = line.trim().match(/^(\w+)\s+TEXT(?:\s+NOT NULL)?\s+REFERENCES\s+(\w+)\(/);
+        if (columnMatch) references[columnMatch[1]] = columnMatch[2];
+    }
+    return references;
+};
+
+const compareForeignKeys = (
+    label: string,
+    actual: Record<string, string>,
+    expected: Record<string, string>
+): string[] => Object.entries(expected)
+    .filter(([column, table]) => actual[column] !== table)
+    .map(([column, table]) => `${label}: expected "${column} REFERENCES ${table}(id)", got ${
+        actual[column] ? `REFERENCES ${actual[column]}(id)` : 'no REFERENCES clause'
+    }`);
+
+// #964's fix (PRAGMA temp_store = MEMORY, so a spilled statement journal never
+// hits a read-only /tmp on Android) lives once in core's SQLITE_BASE_SCHEMA;
+// every native CREATE TABLE copy of that schema must carry the same pragma
+// line verbatim rather than re-deriving it.
+const REQUIRED_SQLITE_PRAGMAS = [
+    'PRAGMA journal_mode = WAL;',
+    'PRAGMA foreign_keys = ON;',
+    'PRAGMA busy_timeout = 5000;',
+    'PRAGMA temp_store = MEMORY;',
+];
+
+const compareRequiredPragmas = (label: string, source: string): string[] => REQUIRED_SQLITE_PRAGMAS
+    .filter((pragma) => !source.includes(pragma))
+    .map((pragma) => `${label}: missing "${pragma}"`);
+
 // TASK_SQLITE_COLUMNS, TASK_UPSERT_UPDATE_CLAUSE, and the ensureTaskColumns migration
 // list are now generated from TASK_SYNC_FIELD_SCHEMA in sqlite-adapter.ts itself (same
 // module-load pass, same source array), so they can no longer drift from each other
@@ -659,7 +706,16 @@ for (const entity of ENTITIES) {
     failures.push(...compareSet(`core SQLite schema ${table}`, parseCreateTableColumns(coreSqliteSchema, table), expectedSqlite));
     failures.push(...compareSet(`desktop Rust schema ${table}`, parseCreateTableColumns(desktopRustSchema, table), expectedSqlite));
     failures.push(...compareSet(`desktop Rust storage INSERT ${table}`, parseRustInsertColumns(desktopRustStorage, table), expectedSqlite));
+
+    failures.push(...compareForeignKeys(
+        `desktop Rust schema ${table}`,
+        parseForeignKeyReferences(desktopRustSchema, table),
+        parseForeignKeyReferences(coreSqliteSchema, table)
+    ));
 }
+
+failures.push(...compareRequiredPragmas('core SQLite schema', coreSqliteSchema));
+failures.push(...compareRequiredPragmas('desktop Rust schema', desktopRustSchema));
 
 for (const entity of ENTITIES) {
     const expectedCloud = EXPECTED[entity].cloud;

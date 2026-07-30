@@ -284,6 +284,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const SQLITE_SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+PRAGMA temp_store = MEMORY;
 
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
@@ -306,9 +308,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   textDirection TEXT,
   attachments TEXT,
   location TEXT,
-  projectId TEXT,
-  sectionId TEXT,
-  areaId TEXT,
+  projectId TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  sectionId TEXT REFERENCES sections(id) ON DELETE SET NULL,
+  areaId TEXT REFERENCES areas(id) ON DELETE SET NULL,
   orderNum INTEGER,
   boardOrder INTEGER,
   focusOrder INTEGER,
@@ -357,7 +359,7 @@ CREATE TABLE IF NOT EXISTS projects (
   attachments TEXT,
   dueDate TEXT,
   reviewAt TEXT,
-  areaId TEXT,
+  areaId TEXT REFERENCES areas(id) ON DELETE SET NULL,
   areaTitle TEXT,
   rev INTEGER,
   revBy TEXT,
@@ -384,7 +386,7 @@ CREATE TABLE IF NOT EXISTS areas (
 
 CREATE TABLE IF NOT EXISTS sections (
   id TEXT PRIMARY KEY,
-  projectId TEXT NOT NULL,
+  projectId TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
   orderNum INTEGER,

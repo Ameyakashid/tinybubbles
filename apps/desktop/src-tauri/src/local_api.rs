@@ -673,37 +673,29 @@ fn route_api_request(
             }
         }
         let device_id = device_id_from_data(&data);
+        // Only restore needs a live-container snapshot; building it for
+        // complete/archive would be wasted work.
+        let live_containers = if action == "restore" {
+            LiveContainers::from_data(&data)
+        } else {
+            LiveContainers::default()
+        };
+        let now = now_iso();
         let mut recurring_follow_up: Option<Map<String, Value>> = None;
         let task = update_task_in_data(&mut data, &segments[1], |task| {
-            let now = now_iso();
-            let previous_task = task.clone();
             let previous_status = task
                 .get("status")
                 .and_then(|value| value.as_str())
                 .unwrap_or("inbox")
                 .to_string();
-            if action == "complete" {
-                task.insert("status".to_string(), Value::String("done".to_string()));
-                task.insert("completedAt".to_string(), Value::String(now.clone()));
-                task.insert("isFocusedToday".to_string(), Value::Bool(false));
-                if should_create_recurring_follow_up(action, &previous_status) {
-                    recurring_follow_up = create_next_recurring_task_for_local_api(
-                        &previous_task,
-                        &now,
-                        &previous_status,
-                    );
-                }
-            } else if action == "archive" {
-                task.insert("status".to_string(), Value::String("archived".to_string()));
-                task.entry("completedAt".to_string())
-                    .or_insert_with(|| Value::String(now.clone()));
-                task.insert("isFocusedToday".to_string(), Value::Bool(false));
-            } else {
-                task.remove("deletedAt");
-                task.remove("purgedAt");
-            }
-            task.insert("updatedAt".to_string(), Value::String(now));
-            bump_task_revision(task, &device_id);
+            recurring_follow_up = apply_task_action(
+                task,
+                action,
+                &previous_status,
+                &now,
+                &device_id,
+                &live_containers,
+            )?;
             Ok(())
         })?;
         if let Some(next_task) = recurring_follow_up {
@@ -922,6 +914,222 @@ where
     Ok(Value::Object(task_object.clone()))
 }
 
+/// Live (non-deleted, non-purged) project/section/area ids, snapshotted from
+/// the data file before a restore mutates it. A section only counts as live
+/// when its own owning project is also live, mirroring
+/// `sanitizeRestoredTaskContainerReferences`'s `sectionProjectId` check
+/// (store-tasks.ts) exactly.
+#[derive(Default)]
+struct LiveContainers {
+    project_ids: std::collections::HashSet<String>,
+    section_project_ids: std::collections::HashMap<String, String>,
+    area_ids: std::collections::HashSet<String>,
+}
+
+impl LiveContainers {
+    fn from_data(data: &Value) -> Self {
+        let project_ids: std::collections::HashSet<String> = array_items(data, "projects")
+            .into_iter()
+            .filter(|project| !has_string_field(project, "deletedAt") && !has_string_field(project, "purgedAt"))
+            .filter_map(|project| project.get("id").and_then(Value::as_str).map(str::to_string))
+            .collect();
+        let section_project_ids = array_items(data, "sections")
+            .into_iter()
+            .filter(|section| !has_string_field(section, "deletedAt"))
+            .filter_map(|section| {
+                let id = section.get("id").and_then(Value::as_str)?.to_string();
+                let project_id = section.get("projectId").and_then(Value::as_str)?.to_string();
+                project_ids.contains(&project_id).then_some((id, project_id))
+            })
+            .collect();
+        let area_ids = array_items(data, "areas")
+            .into_iter()
+            .filter(|area| !has_string_field(area, "deletedAt"))
+            .filter_map(|area| area.get("id").and_then(Value::as_str).map(str::to_string))
+            .collect();
+        Self { project_ids, section_project_ids, area_ids }
+    }
+}
+
+fn normalize_optional_container_id(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+/// Direct Rust port of `resolveTaskContainerHierarchy` (task-container-rules.ts):
+/// a section wins the project it lives under (or gets dropped if its project
+/// isn't live/doesn't match), and an area only survives when no project is set.
+struct ResolvedContainers {
+    project_id: Option<String>,
+    section_id: Option<String>,
+    area_id: Option<String>,
+}
+
+fn resolve_task_container_hierarchy(
+    project_id: Option<String>,
+    section_id: Option<String>,
+    area_id: Option<String>,
+    section_project_id: Option<String>,
+) -> ResolvedContainers {
+    let mut next_project_id = project_id;
+    let mut next_section_id = section_id;
+    let mut next_area_id = area_id;
+
+    if next_section_id.is_some() {
+        if section_project_id.is_none() {
+            next_section_id = None;
+        } else if next_project_id.is_none() {
+            next_project_id = section_project_id;
+            next_area_id = None;
+        } else if section_project_id != next_project_id {
+            next_section_id = None;
+        }
+    }
+
+    if next_area_id.is_some() && next_project_id.is_some() {
+        next_area_id = None;
+    }
+
+    ResolvedContainers {
+        project_id: next_project_id,
+        section_id: next_section_id,
+        area_id: next_area_id,
+    }
+}
+
+fn set_or_remove_string(task: &mut Map<String, Value>, key: &str, value: Option<String>) {
+    match value {
+        Some(value) => {
+            task.insert(key.to_string(), Value::String(value));
+        }
+        None => {
+            task.remove(key);
+        }
+    }
+}
+
+/// Direct Rust port of `sanitizeRestoredTaskContainerReferences`
+/// (store-tasks.ts): a restored task never keeps a reference to a
+/// project/section/area that no longer exists.
+fn sanitize_restored_task_container_references(task: &mut Map<String, Value>, live: &LiveContainers) {
+    let mut project_id = normalize_optional_container_id(task.get("projectId"));
+    let mut section_id = normalize_optional_container_id(task.get("sectionId"));
+    let area_id = normalize_optional_container_id(task.get("areaId"));
+
+    let section_project_id = section_id
+        .as_ref()
+        .and_then(|id| live.section_project_ids.get(id))
+        .cloned();
+
+    if project_id.as_ref().is_some_and(|id| !live.project_ids.contains(id)) {
+        project_id = None;
+    }
+    if section_id.is_some() && section_project_id.is_none() {
+        section_id = None;
+    }
+
+    let resolved = resolve_task_container_hierarchy(project_id, section_id, area_id, section_project_id);
+    let mut resolved_area_id = resolved.area_id;
+    if resolved_area_id.as_ref().is_some_and(|id| !live.area_ids.contains(id)) {
+        resolved_area_id = None;
+    }
+
+    set_or_remove_string(task, "projectId", resolved.project_id);
+    set_or_remove_string(task, "sectionId", resolved.section_id);
+    set_or_remove_string(task, "areaId", resolved_area_id);
+}
+
+/// A completedAt value counts as set only if it's a non-empty string -
+/// mirrors core's `oldTask.completedAt || now` falsy fallback
+/// (applyTaskUpdates in store-helpers.ts) so complete's archived-correction
+/// branch and archive's own completedAt fallback use the same rule.
+fn has_non_empty_string(task: &Map<String, Value>, key: &str) -> bool {
+    task.get(key).and_then(Value::as_str).is_some_and(|value| !value.is_empty())
+}
+
+/// The complete/archive/restore mutation lifted out of `route_api_request`'s
+/// closure (previously untestable without a `tauri::AppHandle`). Mirrors
+/// core's write-invariant home for tasks: `applyTaskUpdates` for
+/// complete/archive (composed after `normalizeTaskUpdate`'s boardOrder
+/// clearing, per the store's own `updateTask`), `sanitizeRestoredTaskContainerReferences`
+/// for restore. Returns the recurring follow-up task to insert alongside
+/// `task`, if the action spawns one; `task` is mutated in place with
+/// `updatedAt`/`rev`/`revBy` stamped, matching every write path in core
+/// (`mutateTasks`/`updateTask`) - except when the status isn't actually
+/// changing (complete on an already-done task, archive on an already-archived
+/// one), which is a full no-op: core's `statusChanged` gate means nothing in
+/// `applyTaskUpdates` would touch the task, so nothing here should either.
+fn apply_task_action(
+    task: &mut Map<String, Value>,
+    action: &str,
+    previous_status: &str,
+    now: &str,
+    device_id: &str,
+    live_containers: &LiveContainers,
+) -> Result<Option<Map<String, Value>>, String> {
+    let target_status = match action {
+        "complete" => Some("done"),
+        "archive" => Some("archived"),
+        "restore" => None,
+        _ => return Err(format!("Unsupported task action: {action}")),
+    };
+    if target_status.is_some_and(|target| target == previous_status) {
+        return Ok(None);
+    }
+
+    let mut recurring_follow_up = None;
+    match action {
+        "complete" => {
+            let previous_task = task.clone();
+            // archived -> done is a lifecycle correction, not a new
+            // completion: keep the existing completedAt (falling back to
+            // `now` only if it is somehow missing) instead of overwriting it,
+            // and never spawn a follow-up occurrence.
+            let is_archive_correction = previous_status == "archived";
+            task.insert("status".to_string(), Value::String("done".to_string()));
+            if !is_archive_correction || !has_non_empty_string(task, "completedAt") {
+                task.insert("completedAt".to_string(), Value::String(now.to_string()));
+            }
+            task.insert("isFocusedToday".to_string(), Value::Bool(false));
+            // A manual Focus position only means something while starred;
+            // completing always unstars, so it must take focusOrder with it.
+            // boardOrder also resets on a status change unless the same
+            // patch sets it itself, which the server-triggered complete/
+            // archive actions never do (normalizeTaskUpdate's rule).
+            task.remove("focusOrder");
+            task.remove("boardOrder");
+            if should_create_recurring_follow_up(action, previous_status) {
+                recurring_follow_up = create_next_recurring_task_for_local_api(&previous_task, now, previous_status)
+                    .map(|mut next_task| {
+                        bump_task_revision(&mut next_task, device_id);
+                        next_task
+                    });
+            }
+        }
+        "archive" => {
+            task.insert("status".to_string(), Value::String("archived".to_string()));
+            if !has_non_empty_string(task, "completedAt") {
+                task.insert("completedAt".to_string(), Value::String(now.to_string()));
+            }
+            task.insert("isFocusedToday".to_string(), Value::Bool(false));
+            task.remove("focusOrder");
+            task.remove("boardOrder");
+        }
+        "restore" => {
+            task.remove("deletedAt");
+            task.remove("purgedAt");
+            sanitize_restored_task_container_references(task, live_containers);
+        }
+        _ => unreachable!("action already validated above"),
+    }
+    task.insert("updatedAt".to_string(), Value::String(now.to_string()));
+    bump_task_revision(task, device_id);
+    Ok(recurring_follow_up)
+}
+
 fn parse_body_object(body: &[u8]) -> Result<Map<String, Value>, String> {
     if body.is_empty() {
         return Err("Invalid JSON body".to_string());
@@ -964,11 +1172,16 @@ fn bump_task_revision(task: &mut Map<String, Value>, device_id: &str) {
 }
 
 /// True when the recurrence carries selectors this fixed interval/anchor-day
-/// engine cannot compute: explicit weekdays, explicit month days, or a raw
+/// engine cannot compute: explicit weekdays, explicit month days, a raw
 /// RFC 5545 fragment (which may itself encode BYSETPOS or other selectors
-/// this engine never parses). Only `packages/core/src/recurrence.ts`
+/// this engine never parses), or a `relativeStartOffset` (which core's
+/// `createNextRecurringTask` recomputes onto the follow-up's startTime -
+/// this engine doesn't carry it at all). Only `packages/core/src/recurrence.ts`
 /// understands these — the local API must refuse rather than guess a date.
 fn recurrence_needs_core_engine(task: &Map<String, Value>) -> bool {
+    if task.get("relativeStartOffset").is_some_and(|value| !value.is_null()) {
+        return true;
+    }
     let Some(Value::Object(recurrence)) = recurrence_value(task) else {
         return false;
     };
@@ -1112,12 +1325,15 @@ fn create_next_recurring_task_for_local_api(
             "priority",
             "energyLevel",
             "assignedTo",
+            "taskMode",
             "description",
+            "textDirection",
             "location",
             "projectId",
             "sectionId",
             "areaId",
             "timeEstimate",
+            "repeatReminderMinutes",
         ],
     );
     if let Some(value) = next_start_time {
@@ -1179,7 +1395,15 @@ fn create_next_recurring_task_for_local_api(
 }
 
 fn should_create_recurring_follow_up(action: &str, previous_status: &str) -> bool {
-    action == "complete" && previous_status != "done"
+    // Completing a task that was already archived is a lifecycle correction
+    // (archived -> done), not a new completion event: core never spawns a
+    // follow-up occurrence for it (store-helpers.ts's applyTaskUpdates treats
+    // `isReturningFromArchive` as `nextRecurringTask = null` regardless of
+    // recurrence), and this is also the sole gate the 409 refusal check
+    // (`recurrence_completion_refusal`) uses to decide whether to even look at
+    // the recurrence rule — so an archived-source completion is never refused
+    // either, even when its recurrence is one this engine cannot compute.
+    action == "complete" && previous_status != "done" && previous_status != "archived"
 }
 
 fn recurrence_value(task: &Map<String, Value>) -> Option<&Value> {
@@ -1858,16 +2082,16 @@ mod tests {
     }
 
     fn comparable_local_api_recurring_task(task: Option<Map<String, Value>>) -> Value {
-        let Some(task) = task else {
+        let Some(mut task) = task else {
             return Value::Null;
         };
-        let mut comparable = Map::new();
-        for key in ["status", "startTime", "dueDate", "reviewAt", "recurrence"] {
-            if let Some(value) = task.get(key) {
-                comparable.insert(key.to_string(), value.clone());
-            }
-        }
-        Value::Object(comparable)
+        // `id` is a fresh random UUID minted independently by each engine
+        // (TS's createNextRecurringTask and this Rust port each call their own
+        // uuid generator) - the one legitimately platform/run-variant field,
+        // so it is excluded rather than compared. Every other key is real
+        // full-task equality against the fixture's `expected`/`localApiExpected`.
+        task.remove("id");
+        Value::Object(task)
     }
 
     #[test]
@@ -1879,6 +2103,14 @@ mod tests {
         let cases = cases.as_array().expect("fixture array");
 
         for test_case in cases {
+            // The same fixture file also carries `kind: "action"` cases
+            // (complete/archive/restore write-path parity), asserted by
+            // `local_api_apply_task_action_matches_core_write_path_fixture`
+            // instead - this test only owns the recurrence-only cases, which
+            // predate the `kind` field, so its absence means "recurrence".
+            if test_case.get("kind").and_then(Value::as_str) == Some("action") {
+                continue;
+            }
             let name = test_case
                 .get("name")
                 .and_then(|value| value.as_str())
@@ -1979,7 +2211,9 @@ mod tests {
     #[test]
     fn local_api_complete_does_not_repeat_done_recurring_tasks() {
         assert!(should_create_recurring_follow_up("complete", "next"));
-        assert!(should_create_recurring_follow_up("complete", "archived"));
+        // archived -> done is a lifecycle correction (mirrors core's
+        // `isReturningFromArchive` in applyTaskUpdates): no new occurrence.
+        assert!(!should_create_recurring_follow_up("complete", "archived"));
         assert!(!should_create_recurring_follow_up("complete", "done"));
         assert!(!should_create_recurring_follow_up("archive", "next"));
     }
@@ -2002,5 +2236,160 @@ mod tests {
             "next",
         )
         .is_none());
+    }
+
+    #[test]
+    fn local_api_complete_does_not_refuse_archived_correction_even_with_complex_recurrence() {
+        // archived -> done never spawns a follow-up (it's a correction, not a
+        // completion), so it must never be refused either, even for a
+        // recurrence this engine could not otherwise compute a next date for.
+        let data = json!({
+            "tasks": [{
+                "id": "byday-archived",
+                "title": "Standup",
+                "status": "archived",
+                "completedAt": "2026-07-01T00:00:00.000Z",
+                "recurrence": { "rule": "weekly", "byDay": ["MO", "WE", "FR"] }
+            }]
+        });
+        assert!(recurrence_completion_refusal(&data, "byday-archived").is_none());
+    }
+
+    /// Consolidation-law pin: a test that only iterates `kind: "action"`
+    /// cases can't catch the fixture shrinking - deleting a case would
+    /// silently narrow the loop right along with the bug it stopped
+    /// covering. This roster mirrors the independent, hand-written list in
+    /// packages/core/src/local-api-action-parity.test.ts; removing a case
+    /// from the JSON without removing it in both places fails here.
+    #[test]
+    fn local_api_action_fixture_matches_pinned_case_roster() {
+        const PINNED_ACTION_CASE_NAMES: &[&str] = &[
+            "complete a non-recurring task",
+            "complete a recurring task creates a follow-up with rev/revBy stamped",
+            "completing an archived task is a correction, not a new completion",
+            "archive a task",
+            "restore drops a dangling projectId and sectionId but keeps a live areaId",
+            "complete refuses recurrence the local API engine cannot compute (409)",
+            "completing an already-done task is a full no-op",
+            "complete refuses recurrence with a relativeStartOffset the local API can't recompute (409)",
+            "restore: section adopts its project and clears area",
+            "restore: section dropped when it belongs to another project",
+            "restore: area dropped when project set",
+        ];
+
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/recurrence-local-api-parity.fixtures.json"
+        ))
+        .expect("valid recurrence parity fixture");
+        let cases = cases.as_array().expect("fixture array");
+
+        let mut actual_names: Vec<&str> = cases
+            .iter()
+            .filter(|case| case.get("kind").and_then(Value::as_str) == Some("action"))
+            .map(|case| case.get("name").and_then(Value::as_str).expect("action case name"))
+            .collect();
+        actual_names.sort_unstable();
+        let mut expected_names = PINNED_ACTION_CASE_NAMES.to_vec();
+        expected_names.sort_unstable();
+
+        assert_eq!(actual_names, expected_names);
+    }
+
+    /// The write-path counterpart to `local_api_recurring_task_matches_core_golden_fixture`:
+    /// exercises `apply_task_action` (complete/archive/restore, plus the 409
+    /// refusal) against the same shared fixture's `kind: "action"` cases,
+    /// whose `expectedTask`/`expectedFollowUp` are independently pinned
+    /// against core's real `applyTaskUpdates`/`nextRevision` in
+    /// packages/core/src/local-api-action-parity.test.ts.
+    #[test]
+    fn local_api_apply_task_action_matches_core_write_path_fixture() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/recurrence-local-api-parity.fixtures.json"
+        ))
+        .expect("valid recurrence parity fixture");
+        let cases = cases.as_array().expect("fixture array");
+
+        for test_case in cases {
+            if test_case.get("kind").and_then(Value::as_str) != Some("action") {
+                continue;
+            }
+            let name = test_case
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unnamed action parity case");
+
+            if test_case.get("expectRefusal").and_then(Value::as_bool) == Some(true) {
+                let task = test_case.get("task").cloned().unwrap_or(Value::Null);
+                let task_id = task
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let data = json!({ "tasks": [task] });
+                let refusal = recurrence_completion_refusal(&data, &task_id)
+                    .unwrap_or_else(|| panic!("{name}: expected a 409 refusal"));
+                assert_eq!(refusal.status, 409, "{name}");
+                assert_eq!(
+                    refusal.body.get("code").and_then(Value::as_str),
+                    Some("recurrence_requires_app"),
+                    "{name}"
+                );
+                continue;
+            }
+
+            let action = test_case
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("missing action for {name}"));
+            let previous_status = test_case
+                .get("previousStatus")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("missing previousStatus for {name}"));
+            let now = test_case
+                .get("now")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("missing now for {name}"));
+            let device_id = test_case
+                .get("deviceId")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("missing deviceId for {name}"));
+            let mut task = test_case
+                .get("task")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_else(|| panic!("missing task for {name}"));
+            let containers_data = test_case.get("containers").cloned().unwrap_or_else(|| json!({}));
+            let live_containers = LiveContainers::from_data(&containers_data);
+
+            let expected_task = test_case
+                .get("expectedTask")
+                .cloned()
+                .unwrap_or_else(|| panic!("missing expectedTask for {name}"));
+            let expected_follow_up = test_case.get("expectedFollowUp").cloned().unwrap_or(Value::Null);
+
+            let follow_up = apply_task_action(
+                &mut task,
+                action,
+                previous_status,
+                now,
+                device_id,
+                &live_containers,
+            )
+            .unwrap_or_else(|error| panic!("{name}: apply_task_action failed: {error}"));
+
+            assert_eq!(Value::Object(task), expected_task, "{name}: task mismatch");
+
+            match follow_up {
+                Some(mut next_task) => {
+                    // `id` is a fresh random uuid - the one legitimately
+                    // platform/run-variant field.
+                    next_task.remove("id");
+                    assert_eq!(Value::Object(next_task), expected_follow_up, "{name}: follow-up mismatch");
+                }
+                None => {
+                    assert_eq!(Value::Null, expected_follow_up, "{name}: expected no follow-up");
+                }
+            }
+        }
     }
 }
