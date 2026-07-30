@@ -1478,6 +1478,22 @@ describe('mobile storage adapter', () => {
 
       expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite', '1');
       expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data', JSON.stringify(jsonBackup));
+      const persistedKeys = asyncStorageMock.setItem.mock.calls.map(([key]) => key);
+      expect(persistedKeys.indexOf('mindwtr-data:json-ahead-of-sqlite'))
+        .toBeLessThan(persistedKeys.indexOf('mindwtr-data'));
+    }, 10_000);
+
+    it('reports failure instead of accepting an unmarked JSON-only write', async () => {
+      asyncStorageMock.setItem.mockImplementation((key: string) => (
+        key === 'mindwtr-data:json-ahead-of-sqlite'
+          ? Promise.reject(new Error('marker write failed'))
+          : Promise.resolve()
+      ));
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+
+      await expect(mobileStorage.saveData(jsonBackup)).rejects.toThrow('marker write failed');
+      expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', JSON.stringify(jsonBackup));
     }, 10_000);
 
     it('merges those writes back into SQLite on the next launch and clears the marker', async () => {

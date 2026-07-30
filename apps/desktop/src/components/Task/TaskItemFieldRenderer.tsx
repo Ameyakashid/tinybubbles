@@ -1432,6 +1432,7 @@ export function TaskItemFieldRenderer({
             {
                 const { date: dateValue, time: timeValue } = splitDateTime(editDueDate);
                 const hasTime = Boolean(timeValue);
+                const hasReminderHandoffSchedule = hasTimeComponent(editStartTime) || hasTime;
                 const parsed = editDueDate ? safeParseDate(editDueDate) : null;
                 const updateDueDate = (nextDueDate: string) => {
                     setEditDueDate(nextDueDate);
@@ -1479,7 +1480,7 @@ export function TaskItemFieldRenderer({
                             hasValue: Boolean(editDueDate),
                             warning: dateIssueLabel,
                         })}
-                        {hasTime && (
+                        {hasReminderHandoffSchedule && (
                             <label className="mt-1 flex items-start gap-2 rounded border border-border/70 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
                                 <input
                                     type="checkbox"

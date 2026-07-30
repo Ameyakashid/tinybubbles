@@ -48,6 +48,26 @@ const yearlyHolidayIcs = [
     'END:VCALENDAR',
 ].join('\n');
 
+const categorizedIcs = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'UID:work-january',
+    'SUMMARY:January work',
+    'DTSTART:20260115T090000Z',
+    'DTEND:20260115T100000Z',
+    'CATEGORIES:Work',
+    'END:VEVENT',
+    'BEGIN:VEVENT',
+    'UID:personal-february',
+    'SUMMARY:February personal',
+    'DTSTART:20260215T090000Z',
+    'DTEND:20260215T100000Z',
+    'CATEGORIES:Personal',
+    'END:VEVENT',
+    'END:VCALENDAR',
+].join('\n');
+
 describe('external calendar events', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -103,6 +123,34 @@ describe('external calendar events', () => {
         );
 
         expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps every feed category visible while paging months with different categories', async () => {
+        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
+        getCalendarsMock.mockResolvedValue([
+            { id: 'shared', name: 'Shared', url: 'https://calendar.example/shared.ics', enabled: true },
+        ]);
+        vi.mocked(fetch).mockImplementation(async () => new Response(categorizedIcs, { status: 200 }));
+
+        const january = await fetchExternalCalendarEvents(
+            new Date('2026-01-01T00:00:00.000Z'),
+            new Date('2026-02-01T00:00:00.000Z'),
+        );
+        const february = await fetchExternalCalendarEvents(
+            new Date('2026-02-01T00:00:00.000Z'),
+            new Date('2026-03-01T00:00:00.000Z'),
+        );
+
+        expect(january.calendars.map((calendar) => calendar.id)).toEqual([
+            'shared#Personal',
+            'shared#Work',
+        ]);
+        expect(january.events.map((event) => event.title)).toEqual(['January work']);
+        expect(february.calendars.map((calendar) => calendar.id)).toEqual([
+            'shared#Personal',
+            'shared#Work',
+        ]);
+        expect(february.events.map((event) => event.title)).toEqual(['February personal']);
     });
 
     it('loads yearly recurring subscribed ICS events in the visible desktop range', async () => {

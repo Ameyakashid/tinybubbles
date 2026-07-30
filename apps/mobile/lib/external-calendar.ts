@@ -7,7 +7,7 @@ import {
     isMindwtrMirrorCalendar,
     mergeExternalCalendarSources,
     normalizeExternalCalendarColor,
-    parseIcs,
+    parseIcsWithMetadata,
     type ExternalCalendarEvent,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
@@ -338,7 +338,12 @@ async function fetchIcsCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?:
     const results = await Promise.allSettled(
         enabled.map(async (calendar) => {
             const text = await fetchTextWithTimeout(calendar.url, 15_000, signal);
-            return parseIcs(text, { sourceId: calendar.id, rangeStart, rangeEnd, splitByCategory: true });
+            return parseIcsWithMetadata(text, {
+                sourceId: calendar.id,
+                rangeStart,
+                rangeEnd,
+                splitByCategory: true,
+            });
         })
     );
 
@@ -351,10 +356,14 @@ async function fetchIcsCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?:
     for (const [index, result] of results.entries()) {
         if (result.status !== 'fulfilled') continue;
         const calendar = enabled[index];
-        const contributed = expandCategoryCalendars(calendar, result.value);
+        const contributed = expandCategoryCalendars(
+            calendar,
+            result.value.events,
+            result.value.categoryInfo,
+        );
         if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
         categoryCalendars.push(...contributed.filter((entry) => entry.id !== calendar.id));
-        events.push(...result.value);
+        events.push(...result.value.events);
     }
 
     return {

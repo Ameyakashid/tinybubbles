@@ -25,6 +25,8 @@ interface PromptModalProps {
     placeholder?: string;
     defaultValue?: string;
     suggestions?: readonly string[];
+    createLabel?: string;
+    onCreate?: (value: string) => void | Promise<void>;
     inputType?: 'text' | 'date' | 'datetime-local';
     allowEmptyConfirm?: boolean;
     browseLabel?: string;
@@ -46,6 +48,8 @@ export function PromptModal({
     placeholder,
     defaultValue,
     suggestions,
+    createLabel,
+    onCreate,
     inputType = 'text',
     allowEmptyConfirm = false,
     browseLabel,
@@ -166,13 +170,6 @@ export function PromptModal({
                                     type="time"
                                     aria-label={tFallback(t, 'calendar.time', 'Time')}
                                     value={dateParts.time}
-                                    onClick={(event) => {
-                                        try {
-                                            event.currentTarget.showPicker?.();
-                                        } catch {
-                                            // Engine declined; the glyph still opens it.
-                                        }
-                                    }}
                                     onKeyDown={handleFieldKeyDown}
                                     onChange={(event) => {
                                         setHasInteracted(true);
@@ -192,6 +189,8 @@ export function PromptModal({
                             type={inputType}
                             value={value}
                             suggestions={suggestions ?? []}
+                            createLabel={createLabel}
+                            onCreate={onCreate}
                             onChange={(next) => {
                                 setValue(next);
                                 if (!hasInteracted) {

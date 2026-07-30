@@ -37,6 +37,17 @@ export interface ParseIcsOptions {
     splitByCategory?: boolean;
 }
 
+export interface IcsCategoryInfo {
+    names: string[];
+    hasUncategorized: boolean;
+}
+
+export interface ParseIcsResult {
+    events: ExternalCalendarEvent[];
+    /** Derived from every valid event in the feed, not only the requested range. */
+    categoryInfo: IcsCategoryInfo;
+}
+
 /**
  * How many calendars one .ics may split into. Feeds that use `CATEGORIES` as
  * free-form tags would otherwise turn a single subscription into a wall of
@@ -674,6 +685,10 @@ function expandRecurringEvent(event: ParsedVEvent, options: ParseIcsOptions): Ex
 }
 
 export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalendarEvent[] {
+    return parseIcsWithMetadata(input, options).events;
+}
+
+export function parseIcsWithMetadata(input: string, options: ParseIcsOptions): ParseIcsResult {
     const lines = unfoldIcsLines(input);
 
     const events: ParsedVEvent[] = [];
@@ -786,12 +801,21 @@ export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalen
 
     // Stable ordering
     occurrences.sort((a, b) => a.start.localeCompare(b.start));
-    return occurrences;
+    return {
+        events: occurrences,
+        categoryInfo: {
+            names: splitByCategory
+                ? [...categories].sort((left, right) => left.localeCompare(right))
+                : [],
+            hasUncategorized: splitByCategory && events.some((event) => !event.category),
+        },
+    };
 }
 
 /**
  * The calendars one subscription contributes, given the events `parseIcs`
- * produced for it.
+ * produced for it. Pass `parseIcsWithMetadata`'s category info when calendar
+ * identity must stay stable across range-limited loads.
  *
  * When the feed split by `CATEGORIES` the subscription is replaced by one
  * calendar per category — each picks up its own palette colour and its own
@@ -803,21 +827,24 @@ export function parseIcs(input: string, options: ParseIcsOptions): ExternalCalen
 export function expandCategoryCalendars(
     subscription: ExternalCalendarSubscription,
     events: readonly ExternalCalendarEvent[],
+    categoryInfo?: IcsCategoryInfo,
 ): ExternalCalendarSubscription[] {
     const prefix = categoryCalendarPrefix(subscription.id);
-    const categories: string[] = [];
+    const categories: string[] = categoryInfo ? [...categoryInfo.names] : [];
     const seen = new Set<string>();
-    let hasUncategorized = false;
+    let hasUncategorized = categoryInfo?.hasUncategorized ?? false;
 
-    for (const event of events) {
-        if (!event.sourceId.startsWith(prefix)) {
-            if (event.sourceId === subscription.id) hasUncategorized = true;
-            continue;
+    if (!categoryInfo) {
+        for (const event of events) {
+            if (!event.sourceId.startsWith(prefix)) {
+                if (event.sourceId === subscription.id) hasUncategorized = true;
+                continue;
+            }
+            const category = event.sourceId.slice(prefix.length);
+            if (!category || seen.has(category)) continue;
+            seen.add(category);
+            categories.push(category);
         }
-        const category = event.sourceId.slice(prefix.length);
-        if (!category || seen.has(category)) continue;
-        seen.add(category);
-        categories.push(category);
     }
 
     if (categories.length === 0) return [subscription];

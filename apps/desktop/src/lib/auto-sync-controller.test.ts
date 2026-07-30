@@ -226,24 +226,98 @@ describe('createDesktopAutoSyncController', () => {
             expect(performSync).toHaveBeenCalledTimes(1);
         });
 
-        // A further edit arms the retry, and is held rather than sent.
-        controller.handleDataChange();
-        await scheduler.advanceBy(2_000);
-        await Promise.resolve();
+        // The failed cycle itself arms the retry; no later edit or lifecycle
+        // event is required.
+        await scheduler.advanceBy(179_999);
         expect(performSync).toHaveBeenCalledTimes(1);
 
-        // Still parked well past the 60s this used to wait.
-        await scheduler.advanceBy(118_000);
-        expect(performSync).toHaveBeenCalledTimes(1);
-
-        // ...and goes once the delay CloudKit asked for is up, carrying the
-        // edits made in the meantime.
-        await scheduler.advanceBy(61_000);
+        await scheduler.advanceBy(1);
         await waitForAssertion(() => {
             expect(performSync).toHaveBeenCalledTimes(2);
         });
 
         controller.dispose();
+    });
+
+    it('rearms the automatic retry when consecutive failures grow the cooldown (#948)', async () => {
+        const scheduler = createManualScheduler();
+        const performSync = vi.fn(async () => ({
+            success: false,
+            error: 'CloudKit error: Request Rate Limited [retryAfter=10]',
+        }));
+        const controller = createDesktopAutoSyncController({
+            canSync: async () => true,
+            performSync,
+            flushPendingSave: async () => undefined,
+            reportError: vi.fn(),
+            isRuntimeActive: () => true,
+            now: scheduler.now,
+            setTimer: scheduler.setTimer,
+            clearTimer: scheduler.clearTimer,
+            minIntervalMs: 0,
+            periodicSyncIntervalMs: 0,
+        });
+
+        controller.handleDataChange();
+        await scheduler.advanceBy(2_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(1);
+        });
+
+        await scheduler.advanceBy(10_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(2);
+        });
+
+        // The second failure doubles the requested 10s delay to 20s.
+        await scheduler.advanceBy(19_999);
+        expect(performSync).toHaveBeenCalledTimes(2);
+
+        await scheduler.advanceBy(1);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(3);
+        });
+
+        controller.dispose();
+    });
+
+    it('cancels a pending automatic retry after a successful manual recovery (#948)', async () => {
+        const scheduler = createManualScheduler();
+        const performSync = vi.fn()
+            .mockResolvedValueOnce({
+                success: false,
+                error: 'CloudKit error: Request Rate Limited [retryAfter=180]',
+            })
+            .mockResolvedValue({ success: true });
+        const controller = createDesktopAutoSyncController({
+            canSync: async () => true,
+            performSync,
+            flushPendingSave: async () => undefined,
+            reportError: vi.fn(),
+            isRuntimeActive: () => true,
+            now: scheduler.now,
+            setTimer: scheduler.setTimer,
+            clearTimer: scheduler.clearTimer,
+            minIntervalMs: 0,
+            periodicSyncIntervalMs: 0,
+        });
+
+        controller.handleDataChange();
+        await scheduler.advanceBy(2_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(1);
+        });
+        expect(scheduler.getTimerCount()).toBe(1);
+
+        await controller.requestSync(0);
+
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(2);
+        });
+        expect(scheduler.getTimerCount()).toBe(0);
+
+        await scheduler.advanceBy(180_000);
+        expect(performSync).toHaveBeenCalledTimes(2);
     });
 
     it('delays a queued auto follow-up when the in-flight sync enters failure cooldown', async () => {

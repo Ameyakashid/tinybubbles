@@ -123,13 +123,21 @@ export const createDesktopAutoSyncController = (
         }, periodicSyncIntervalMs);
     };
 
-    const scheduleAutoRetryAfterCooldown = (source: string) => {
-        if (syncThrottleTimer) return;
+    const scheduleAutoRetryAfterCooldown = (source: string, replaceExisting = false) => {
         const waitMs = Math.max(0, autoSyncRetryAfter - now());
-        trace('Auto sync skipped during failure cooldown', {
-            source,
-            waitMs: String(waitMs),
-        });
+        if (replaceExisting) {
+            clearSyncThrottle();
+            trace('Auto sync retry scheduled after failure', {
+                source,
+                waitMs: String(waitMs),
+            });
+        } else {
+            trace('Auto sync skipped during failure cooldown', {
+                source,
+                waitMs: String(waitMs),
+            });
+            if (syncThrottleTimer) return;
+        }
         syncThrottleTimer = setTimer(() => {
             syncThrottleTimer = null;
             if (disposed) return;
@@ -195,11 +203,14 @@ export const createDesktopAutoSyncController = (
             if (result.success) {
                 autoSyncRetryAfter = 0;
                 consecutiveAutoSyncFailures = 0;
+                // A manual run can recover before a scheduled automatic retry.
+                // Its successful cycle already includes the pending local work.
+                clearSyncThrottle();
             } else {
                 // CloudKit answers a throttle with the delay it wants; honour it
                 // rather than retrying on a fixed 60s that keeps tripping the
-                // same limit. Local changes stay queued and the existing
-                // failure-cooldown timer retries once it expires (#948).
+                // same limit. Arm the retry now instead of waiting for another
+                // edit, focus change, or heartbeat to discover the cooldown.
                 consecutiveAutoSyncFailures += 1;
                 const cooldownMs = resolveSyncFailureCooldownMs({
                     error: result.error,
@@ -212,6 +223,7 @@ export const createDesktopAutoSyncController = (
                     consecutiveFailures: String(consecutiveAutoSyncFailures),
                 });
                 autoSyncRetryAfter = Math.max(autoSyncRetryAfter, now() + cooldownMs);
+                scheduleAutoRetryAfterCooldown(request.source, true);
             }
             if (!result.success && result.error) {
                 options.onSyncFailure?.(result.error);

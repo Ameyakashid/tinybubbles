@@ -8,6 +8,7 @@ import {
     getProjectsByArea,
     getProjectsByTag,
     isTaskInActiveProject,
+    isTaskInCalendarHistoryProject,
     isSelectableProjectForTaskAssignment,
     projectHasNextAction,
     shouldPromptForProjectNextAction,
@@ -270,6 +271,34 @@ describe('project-utils', () => {
         expect(isTaskInActiveProject(somedayProjectTask, projectMap)).toBe(false);
         expect(isTaskInActiveProject(deletedProjectTask, projectMap)).toBe(false);
         expect(isTaskInActiveProject(missingProjectTask, projectMap)).toBe(true);
+    });
+
+    it('includes archived projects only for the calendar history surface', () => {
+        const archivedProject: Project = {
+            id: 'p6',
+            title: 'Archived',
+            status: 'archived',
+            tagIds: [],
+            createdAt: '',
+            updatedAt: '',
+        };
+        const projectMap = new Map([...projects, archivedProject].map((project) => [project.id, project]));
+        const looseTask: Task = {
+            id: 'loose',
+            title: 'Loose task',
+            status: 'done',
+            tags: [],
+            contexts: [],
+            createdAt: '',
+            updatedAt: '',
+        };
+
+        expect(isTaskInCalendarHistoryProject(looseTask, projectMap)).toBe(true);
+        expect(isTaskInCalendarHistoryProject({ ...looseTask, projectId: 'p1' }, projectMap)).toBe(true);
+        expect(isTaskInCalendarHistoryProject({ ...looseTask, projectId: 'p6' }, projectMap)).toBe(true);
+        expect(isTaskInCalendarHistoryProject({ ...looseTask, projectId: 'p3' }, projectMap)).toBe(false);
+        expect(isTaskInCalendarHistoryProject({ ...looseTask, projectId: 'p5' }, projectMap)).toBe(false);
+        expect(isTaskInCalendarHistoryProject({ ...looseTask, projectId: 'missing' }, projectMap)).toBe(true);
     });
 
     it('filters projects by tag', () => {

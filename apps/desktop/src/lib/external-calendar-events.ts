@@ -2,10 +2,11 @@ import {
     expandCategoryCalendars,
     isMindwtrMirrorCalendar,
     mergeExternalCalendarSources,
-    parseIcs,
+    parseIcsWithMetadata,
     type ExternalCalendarEvent,
     type ExternalCalendarSourceResult,
     type ExternalCalendarSubscription,
+    type IcsCategoryInfo,
 } from '@mindwtr/core';
 import { gunzipSync, strFromU8 } from 'fflate';
 import { ExternalCalendarService } from './external-calendar-service';
@@ -18,9 +19,15 @@ const ICS_MONTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const ICS_MONTH_CACHE_MAX_ENTRIES = 120;
 
 type IcsMonthCacheEntry = {
+    categoryInfo: IcsCategoryInfo;
     events: ExternalCalendarEvent[];
     expiresAt: number;
     lastAccessedAt: number;
+};
+
+type LoadedIcsCalendar = {
+    categoryInfo: IcsCategoryInfo;
+    events: ExternalCalendarEvent[];
 };
 
 type MonthRange = {
@@ -87,9 +94,10 @@ async function loadCachedIcsEventsForCalendar(
     monthRanges: MonthRange[],
     rangeStart: Date,
     rangeEnd: Date,
-): Promise<ExternalCalendarEvent[]> {
+): Promise<LoadedIcsCalendar> {
     const now = Date.now();
     const events: ExternalCalendarEvent[] = [];
+    let categoryInfo: IcsCategoryInfo = { names: [], hasUncategorized: false };
     const missingRanges: MonthRange[] = [];
 
     for (const monthRange of monthRanges) {
@@ -97,6 +105,7 @@ async function loadCachedIcsEventsForCalendar(
         const cached = icsMonthCache.get(cacheKey);
         if (cached && cached.expiresAt > now) {
             cached.lastAccessedAt = now;
+            categoryInfo = cached.categoryInfo;
             events.push(...cached.events.filter((event) => eventOverlapsRange(event, rangeStart, rangeEnd)));
             continue;
         }
@@ -105,26 +114,28 @@ async function loadCachedIcsEventsForCalendar(
     }
 
     if (missingRanges.length === 0) {
-        return events;
+        return { categoryInfo, events };
     }
 
     const text = await fetchTextWithTimeout(calendar.url, 15_000);
     for (const monthRange of missingRanges) {
-        const parsed = parseIcs(text, {
+        const parsed = parseIcsWithMetadata(text, {
             sourceId: calendar.id,
             rangeStart: monthRange.start,
             rangeEnd: monthRange.end,
             splitByCategory: true,
         });
+        categoryInfo = parsed.categoryInfo;
         icsMonthCache.set(getIcsCacheKey(calendar, monthRange.key), {
-            events: parsed,
+            categoryInfo,
+            events: parsed.events,
             expiresAt: now + ICS_MONTH_CACHE_TTL_MS,
             lastAccessedAt: now,
         });
-        events.push(...parsed.filter((event) => eventOverlapsRange(event, rangeStart, rangeEnd)));
+        events.push(...parsed.events.filter((event) => eventOverlapsRange(event, rangeStart, rangeEnd)));
     }
     pruneIcsMonthCache();
-    return events;
+    return { categoryInfo, events };
 }
 
 async function readCalendarResponseText(res: Response): Promise<string> {
@@ -200,9 +211,13 @@ export async function fetchExternalCalendarEvents(
             warnings.push(`Failed to load "${label}": ${detail}`);
             continue;
         }
-        const contributed = expandCategoryCalendars(calendar, result.value);
+        const contributed = expandCategoryCalendars(
+            calendar,
+            result.value.events,
+            result.value.categoryInfo,
+        );
         if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
-        icsSources.push({ calendars: contributed, events: result.value });
+        icsSources.push({ calendars: contributed, events: result.value.events });
     }
 
     const sources: ExternalCalendarSourceResult[] = [

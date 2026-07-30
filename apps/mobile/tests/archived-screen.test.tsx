@@ -458,6 +458,34 @@ describe('ArchivedScreen', () => {
     expect(mocks.batchMoveTasks).toHaveBeenCalledWith(['task-2'], 'inbox');
   });
 
+  it('counts a multi-tag task once when deciding whether every visible task is selected', async () => {
+    mocks.storeState._allTasks = [
+      { ...mocks.storeState._allTasks[0], tags: ['Work', 'Urgent'] },
+    ];
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => (
+      key === 'mindwtr:view:archived:v1' ? JSON.stringify({ groupBy: 'tag' }) : null
+    ));
+
+    let tree!: renderer.ReactTestRenderer;
+    await renderer.act(async () => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    renderer.act(() => {
+      tree.root.find((node) => node.props.accessibilityLabel === 'Select').props.onPress();
+    });
+    const findSelectAll = () => tree.root.find(
+      (node) => node.props.accessibilityLabel === 'Select all',
+    );
+    expect(findSelectAll().props.disabled).toBe(false);
+
+    renderer.act(() => {
+      findSelectAll().props.onPress();
+    });
+
+    expect(findSelectAll().props.disabled).toBe(true);
+  });
+
   it('counts only the tasks left after filtering, so bulk actions cannot reach a hidden row', () => {
     mocks.storeState._allTasks = [
       { ...mocks.storeState._allTasks[0], id: 'task-1', title: 'Quarterly report' },

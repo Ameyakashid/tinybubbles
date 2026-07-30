@@ -103,7 +103,10 @@ export const calendarFeedResponse = (dataDir: string, key: string): Response => 
         status: 200,
         headers: {
             'Access-Control-Allow-Origin': corsOrigin,
-            'Cache-Control': 'no-cache',
+            // The URL is a bearer credential and the body contains task titles
+            // and times. `no-cache` still permits shared caches to retain it;
+            // never let a reverse proxy or browser cache store the feed (#952).
+            'Cache-Control': 'private, no-store',
             'Content-Disposition': 'inline; filename="mindwtr.ics"',
             'Content-Type': 'text/calendar; charset=utf-8',
         },

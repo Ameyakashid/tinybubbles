@@ -18,6 +18,7 @@ import {
     findFreeSlotForDay as findCalendarFreeSlotForDay,
     isSlotFreeForDay as isCalendarSlotFreeForDay,
     isTaskInActiveProject,
+    isTaskInCalendarHistoryProject,
     isProjectedRecurringTask,
     hasTimeComponent,
     resolveAreaFilter,
@@ -178,7 +179,7 @@ export function useDesktopCalendarController() {
     // completed look-back (#955) obeys it too and must not inherit the status
     // rule that hides done and archived tasks from the schedulable buckets.
     const isCalendarTaskInScope = useCallback((task: Task) => {
-        if (!isTaskInActiveProject(task, projectMap)) return false;
+        if (!isTaskInCalendarHistoryProject(task, projectMap)) return false;
         if (normalizedViewFilterQuery && !task.title.toLowerCase().includes(normalizedViewFilterQuery)) return false;
         return taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById);
     }, [projectMap, resolvedAreaFilter, areaById, normalizedViewFilterQuery]);

@@ -535,6 +535,11 @@ export const TaskItem = memo(function TaskItem({
             setDraftField('assignedTo', created.name);
         }
     }, [addPerson, setDraftField]);
+    const createWaitingAssignmentPerson = useCallback(async (name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        await addPerson(trimmed);
+    }, [addPerson]);
     const handleCreateSection = useCallback(async (title: string) => {
         const trimmed = title.trim();
         if (!trimmed) return null;
@@ -1527,6 +1532,7 @@ export const TaskItem = memo(function TaskItem({
                 openWaitingAssignmentPrompt={showWaitingAssignmentPrompt}
                 onCancelWaitingAssignmentPrompt={closeWaitingAssignmentPrompt}
                 onConfirmWaitingAssignmentPrompt={applyWaitingAssignment}
+                onCreateWaitingAssignmentPerson={createWaitingAssignmentPerson}
                 waitingAssignmentDefaultValue={task.assignedTo || ''}
                 waitingAssignmentSuggestions={waitingAssignmentSuggestions}
                 retryAudioTranscription={retryAudioTranscription}

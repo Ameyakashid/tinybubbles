@@ -54,6 +54,7 @@ export type InboxProcessingQuickPanelProps = {
     selectedAssignedTo: string;
     setSelectedAssignedTo: (value: string) => void;
     personOptions: string[];
+    onCreatePerson: (name: string) => void | Promise<void>;
     selectedTimeEstimate?: TimeEstimate;
     setSelectedTimeEstimate: (value: TimeEstimate | undefined) => void;
     timeEstimateOptions: TimeEstimate[];
@@ -157,6 +158,7 @@ export function InboxProcessingQuickPanel({
     selectedAssignedTo,
     setSelectedAssignedTo,
     personOptions,
+    onCreatePerson,
     selectedTimeEstimate,
     setSelectedTimeEstimate,
     timeEstimateOptions,
@@ -594,6 +596,8 @@ export function InboxProcessingQuickPanel({
                                 value={delegateWho}
                                 onChange={setDelegateWho}
                                 suggestions={personOptions}
+                                createLabel={tFallback(t, 'people.new', 'New Person')}
+                                onCreate={onCreatePerson}
                                 placeholder={t('process.delegateWhoPlaceholder')}
                                 className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/40 focus:outline-none"
                             />
@@ -812,6 +816,8 @@ export function InboxProcessingQuickPanel({
                                             value={selectedAssignedTo}
                                             onChange={setSelectedAssignedTo}
                                             suggestions={personOptions}
+                                            createLabel={tFallback(t, 'people.new', 'New Person')}
+                                            onCreate={onCreatePerson}
                                             placeholder={t('taskEdit.assignedToPlaceholder')}
                                             className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/40 focus:outline-none"
                                         />

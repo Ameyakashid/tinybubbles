@@ -149,6 +149,51 @@ describe('fetchExternalCalendarEvents', () => {
         expect(result.events.map((event) => event.title)).toEqual(['Local Meeting']);
     });
 
+    it('keeps out-of-range feed categories in the mobile calendar roster', async () => {
+        const rangeStart = new Date('2026-01-01T00:00:00.000Z');
+        const rangeEnd = new Date('2026-02-01T00:00:00.000Z');
+        mockGetItem.mockImplementation(async (key: string) => {
+            if (key === EXTERNAL_CALENDARS_KEY) {
+                return JSON.stringify([
+                    { id: 'shared', name: 'Shared', url: 'content://downloads/shared.ics', enabled: true },
+                ]);
+            }
+            if (key === SYSTEM_CALENDAR_SETTINGS_KEY) {
+                return JSON.stringify({ enabled: false, selectAll: true, selectedCalendarIds: [] });
+            }
+            return null;
+        });
+        mockReadSafString.mockResolvedValue(
+            [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'BEGIN:VEVENT',
+                'UID:work-january',
+                'SUMMARY:January work',
+                'DTSTART:20260115T090000Z',
+                'DTEND:20260115T100000Z',
+                'CATEGORIES:Work',
+                'END:VEVENT',
+                'BEGIN:VEVENT',
+                'UID:personal-february',
+                'SUMMARY:February personal',
+                'DTSTART:20260215T090000Z',
+                'DTEND:20260215T100000Z',
+                'CATEGORIES:Personal',
+                'END:VEVENT',
+                'END:VCALENDAR',
+            ].join('\r\n'),
+        );
+
+        const result = await fetchExternalCalendarEvents(rangeStart, rangeEnd);
+
+        expect(result.calendars.map((calendar) => calendar.id)).toEqual([
+            'shared#Personal',
+            'shared#Work',
+        ]);
+        expect(result.events.map((event) => event.title)).toEqual(['January work']);
+    });
+
     it('does not import Mindwtr-pushed events back into the Mindwtr calendar view', async () => {
         const rangeStart = new Date('2026-04-20T00:00:00.000Z');
         const rangeEnd = new Date('2026-04-21T00:00:00.000Z');

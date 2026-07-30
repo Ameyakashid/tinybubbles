@@ -120,6 +120,28 @@ export function isTaskInActiveProject(
     return project.status === 'active' || project.isFocused === true;
 }
 
+/**
+ * Project visibility for the Calendar's completed look-back (#955).
+ *
+ * Historical tasks from an archived project still describe work that happened,
+ * while tasks in deferred projects do not belong on the active calendar.
+ * Missing projects retain the existing loose-task behavior; deleted projects
+ * remain hidden.
+ */
+export function isTaskInCalendarHistoryProject(
+    task: Task,
+    projectLookup: Map<string, Project> | Record<string, Project>
+): boolean {
+    if (!task.projectId) return true;
+    const project =
+        projectLookup instanceof Map
+            ? projectLookup.get(task.projectId)
+            : projectLookup[task.projectId];
+    if (!project) return true;
+    if (project.deletedAt) return false;
+    return project.status === 'active' || project.status === 'archived' || project.isFocused === true;
+}
+
 export function projectHasNextAction(project: Project, tasks: Task[], excludeTaskId?: string): boolean {
     return tasks.some(t =>
         t.id !== excludeTaskId &&

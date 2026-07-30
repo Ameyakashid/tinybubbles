@@ -1430,7 +1430,7 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
         expect((getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
     });
 
-    it('only appears once the due date carries a time (nothing to suppress otherwise)', () => {
+    it('stays hidden for a date-only due date until a suppressible time exists', () => {
         const { queryByRole, rerender } = render(
             <TaskItemFieldRenderer fieldId="dueDate" {...createProps({ draft: { dueDate: '2026-04-19' } })} />
         );
@@ -1440,6 +1440,17 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
             <TaskItemFieldRenderer fieldId="dueDate" {...createProps({ draft: { dueDate: '2026-04-19T11:45' } })} />
         );
         expect(queryByRole('checkbox')).not.toBeNull();
+    });
+
+    it('appears for a timed start even when the task has no due date', () => {
+        const { getByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="dueDate"
+                {...createProps({ draft: { startTime: '2026-04-19T09:30', dueDate: '' } })}
+            />
+        );
+
+        expect(getByRole('checkbox')).not.toBeNull();
     });
 
     it('serializes on -> true and off -> undefined in the saved patch (#835/#836)', () => {

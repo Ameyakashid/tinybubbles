@@ -347,17 +347,149 @@ describe('useRootLayoutSyncEffects', () => {
     const attemptsAfterFailure = performMobileSync.mock.calls.length;
     expect(attemptsAfterFailure).toBeGreaterThan(0);
 
-    // Past the app-state dedupe window, but far inside the 300s CloudKit asked for.
+    // A rapid round trip through active is deduped. It must not cancel the
+    // failure-owned retry timer while clearing ordinary lifecycle pacing.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
       listener('active');
       await flushMicrotasks();
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(500);
       listener('background');
       await flushMicrotasks();
     });
 
     expect(performMobileSync).toHaveBeenCalledTimes(attemptsAfterFailure);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(299_499);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(attemptsAfterFailure);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(attemptsAfterFailure + 1);
+
+    await act(async () => {
+      tree.unmount();
+    });
+    vi.useRealTimers();
+  });
+
+  it('retries automatically at the grown failure cooldown without another trigger (#948)', async () => {
+    vi.useFakeTimers();
+    performMobileSync.mockResolvedValue({
+      success: false,
+      error: 'CloudKit error: Request Rate Limited [retryAfter=1]',
+    });
+
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<TestHarness />);
+      await flushMicrotasks();
+    });
+    const listener = Array.from(appStateListeners)[0];
+    expect(listener).toBeTypeOf('function');
+
+    await act(async () => {
+      listener('background');
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(2);
+
+    // The repeated failure doubles CloudKit's requested 1s delay.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_999);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      tree.unmount();
+    });
+    vi.useRealTimers();
+  });
+
+  it('cancels the automatic retry when a manual sync reports recovery (#948)', async () => {
+    vi.useFakeTimers();
+    type SyncStoreSnapshot = {
+      lastDataChangeAt: number;
+      settings: {
+        lastSyncAt?: string;
+        lastSyncStatus?: 'success' | 'error' | 'conflict';
+      };
+    };
+    const storeListeners: ((state: SyncStoreSnapshot, prevState: SyncStoreSnapshot) => void)[] = [];
+    storeSubscribe.mockImplementation((...args: unknown[]) => {
+      const callback = args[0] as (state: SyncStoreSnapshot, prevState: SyncStoreSnapshot) => void;
+      storeListeners.push(callback);
+      return vi.fn();
+    });
+    performMobileSync.mockResolvedValue({
+      success: false,
+      error: 'CloudKit error: Request Rate Limited [retryAfter=300]',
+    });
+
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<TestHarness />);
+      await flushMicrotasks();
+    });
+    const appStateListener = Array.from(appStateListeners)[0];
+    const storeListener = storeListeners.find((callback) => callback.length >= 2);
+    expect(appStateListener).toBeTypeOf('function');
+    expect(storeListener).toBeTypeOf('function');
+
+    await act(async () => {
+      appStateListener('background');
+      await flushMicrotasks();
+    });
+    expect(performMobileSync).toHaveBeenCalledTimes(1);
+
+    // A manual sync runs outside this hook. Its status update is the recovery
+    // signal that cancels the retry owned here.
+    await act(async () => {
+      storeListener?.(
+        {
+          lastDataChangeAt: 1,
+          settings: {
+            lastSyncAt: '2026-07-30T12:01:00.000Z',
+            lastSyncStatus: 'success',
+          },
+        },
+        {
+          lastDataChangeAt: 1,
+          settings: {
+            lastSyncAt: '2026-07-30T12:00:00.000Z',
+            lastSyncStatus: 'error',
+          },
+        },
+      );
+      await flushMicrotasks();
+      await vi.advanceTimersByTimeAsync(300_000);
+      await flushMicrotasks();
+    });
+
+    expect(performMobileSync).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       tree.unmount();

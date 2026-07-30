@@ -3479,6 +3479,7 @@ describe('cloud server calendar feed', () => {
             const feedResponse = await fetch(`${url}${feed.path}`);
             expect(feedResponse.status).toBe(200);
             expect(feedResponse.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+            expect(feedResponse.headers.get('cache-control')).toBe('private, no-store');
             const ics = await feedResponse.text();
             expect(ics).toContain('BEGIN:VCALENDAR');
             expect(ics).toContain('SUMMARY:Publish the feed');

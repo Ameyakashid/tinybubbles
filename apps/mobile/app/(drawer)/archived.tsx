@@ -406,7 +406,9 @@ export default function ArchivedScreen() {
     // Rows a folded heading has removed are not "on screen", so Select all and the
     // selection prune below both work off this rather than the filtered list.
     const visibleTaskIds = useMemo(
-        () => listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])),
+        () => Array.from(new Set(
+            listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])),
+        )),
         [listItems],
     );
     const archivedProjects = useMemo(
@@ -624,10 +626,15 @@ export default function ArchivedScreen() {
         return renderArchivedTask({ item: item.task });
     }, [renderArchivedTask, tc.secondaryText, tc.text, toggleGroup]);
 
-    // Section ids and task ids share one list, so prefix the section keys: a group
-    // titled with a task's id would otherwise collide and drop a row.
+    // A multi-tag task appears under several headings, so its group is part of
+    // the row identity. Prefix headings as well so no group id can collide with
+    // a task row.
     const groupedKeyExtractor = useCallback(
-        (item: TaskGroupItem) => (item.type === 'section' ? `section:${item.id}` : item.task.id),
+        (item: TaskGroupItem) => (
+            item.type === 'section'
+                ? `section:${item.id}`
+                : `task:${item.groupId ?? 'none'}:${item.task.id}`
+        ),
         [],
     );
 

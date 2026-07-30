@@ -755,6 +755,50 @@ describe('CalendarView', () => {
         expect(screen.getByText('Still open')).toBeInTheDocument();
     });
 
+    it('keeps completed work from archived projects in history without admitting deferred or deleted projects', async () => {
+        const archivedProject = makeProject({ id: 'project-archived', status: 'archived' });
+        const somedayProject = makeProject({ id: 'project-someday', status: 'someday' });
+        const deletedProject = makeProject({
+            id: 'project-deleted',
+            deletedAt: '2026-04-07T00:00:00',
+        });
+        const archivedProjectTask = makeTask({
+            id: 'task-archived-project',
+            title: 'Finished archived project work',
+            status: 'done',
+            projectId: archivedProject.id,
+            completedAt: '2026-04-08T10:00:00',
+        });
+        const somedayProjectTask = makeTask({
+            id: 'task-someday-project',
+            title: 'Deferred project history',
+            status: 'done',
+            projectId: somedayProject.id,
+            completedAt: '2026-04-08T11:00:00',
+        });
+        const deletedProjectTask = makeTask({
+            id: 'task-deleted-project',
+            title: 'Deleted project history',
+            status: 'done',
+            projectId: deletedProject.id,
+            completedAt: '2026-04-08T12:00:00',
+        });
+        storeMocks.taskStoreState.projects = [archivedProject, somedayProject, deletedProject];
+        storeMocks.taskStoreState.tasks = [archivedProjectTask, somedayProjectTask, deletedProjectTask];
+        storeMocks.taskStoreState._allTasks = [archivedProjectTask, somedayProjectTask, deletedProjectTask];
+
+        renderCalendar();
+        await flushCalendarEffects();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+            await Promise.resolve();
+        });
+
+        expect(screen.getAllByText('Finished archived project work').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Deferred project history')).not.toBeInTheDocument();
+        expect(screen.queryByText('Deleted project history')).not.toBeInTheDocument();
+    });
+
     it('sets a task due date when dropped on a month day', async () => {
         storeMocks.taskStoreState.tasks = [
             makeTask({

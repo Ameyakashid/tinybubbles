@@ -154,12 +154,12 @@ let jsonAheadOfSqlite = false;
 
 const markJsonAheadOfSqlite = async (): Promise<void> => {
     if (jsonAheadOfSqlite) return;
-    jsonAheadOfSqlite = true;
     try {
         await AsyncStorage.setItem(JSON_AHEAD_OF_SQLITE_KEY, '1');
+        jsonAheadOfSqlite = true;
     } catch (error) {
-        jsonAheadOfSqlite = false;
         logStorageWarn('[Storage] Failed to mark the JSON backup as ahead of SQLite', error);
+        throw error;
     }
 };
 
@@ -1126,14 +1126,15 @@ const createStorage = (): StorageAdapter => {
                         logStorageWarn('[Storage] SQLite save failed, keeping JSON backup', error);
                     }
                     try {
+                        // Persist the recovery intent first: if the process dies
+                        // after the backup lands, the next launch must not serve
+                        // stale SQLite rows (#964).
+                        await markJsonAheadOfSqlite();
                         // With SQLite down the JSON backup IS the durable copy; it
                         // must land before this save reports success.
                         scheduleStartupJsonBackup(data, 'mobile.storage.save_data.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
                         assertJsonFallbackLanded();
-                        // The backup now holds writes SQLite does not; the next
-                        // launch has to merge them back before reading (#964).
-                        await markJsonAheadOfSqlite();
                         markStartupPhase('mobile.storage.save_data.end');
                     } catch (e) {
                         markStartupPhase('mobile.storage.save_data.error');
@@ -1183,12 +1184,12 @@ const createStorage = (): StorageAdapter => {
                     }
 
                     try {
+                        await markJsonAheadOfSqlite();
                         // With SQLite down the JSON backup IS the durable copy; it
                         // must land before this save reports success.
                         scheduleStartupJsonBackup(snapshot, 'mobile.storage.save_task.json_fallback', queuedWriteStartedAtMs);
                         await flushPendingStartupJsonBackup();
                         assertJsonFallbackLanded();
-                        await markJsonAheadOfSqlite();
                     } catch (fallbackError) {
                         logStorageError('Failed to save task fallback data', fallbackError);
                         throw new Error('Failed to save task: ' + (fallbackError as Error).message);

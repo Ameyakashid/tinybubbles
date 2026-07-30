@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandCategoryCalendars, parseIcs } from './ics';
+import { expandCategoryCalendars, parseIcs, parseIcsWithMetadata } from './ics';
 
 describe('ics', () => {
     it('parses a simple timed event', () => {
@@ -313,19 +313,21 @@ describe('ics categories', () => {
         expect(expandCategoryCalendars(subscription, events)).toEqual([subscription]);
     });
 
-    it('splits on the whole file, so paging months cannot change the calendar list', () => {
+    it('keeps the full-feed category roster while paging a range with only one category', () => {
         const ics = buildIcs([
             timedEvent('january', 'Work'),
             ['UID:february', 'SUMMARY:february', 'DTSTART:20250205T090000Z', 'DTEND:20250205T100000Z', 'CATEGORIES:Personal'],
         ]);
 
-        const january = parseIcs(ics, {
+        const january = parseIcsWithMetadata(ics, {
             sourceId: 'cal',
             rangeStart: new Date('2025-01-01T00:00:00Z'),
             rangeEnd: new Date('2025-02-01T00:00:00Z'),
             splitByCategory: true,
         });
 
-        expect(january.map((event) => event.sourceId)).toEqual(['cal#Work']);
+        expect(january.events.map((event) => event.sourceId)).toEqual(['cal#Work']);
+        expect(expandCategoryCalendars(subscription, january.events, january.categoryInfo)
+            .map((calendar) => calendar.id)).toEqual(['cal#Personal', 'cal#Work']);
     });
 });

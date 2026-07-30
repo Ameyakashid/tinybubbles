@@ -105,6 +105,22 @@ describe('PromptModal datetime-local field', () => {
         expect(onConfirm).toHaveBeenCalledWith('2026-04-22T17:45');
     });
 
+    it('keeps manual time entry editable instead of forcing the native picker on click', () => {
+        const onConfirm = vi.fn();
+        render(<PromptModal {...dateTimeProps} onConfirm={onConfirm} />);
+
+        const time = screen.getByLabelText('Time') as HTMLInputElement;
+        const showPicker = vi.fn();
+        Object.defineProperty(time, 'showPicker', { configurable: true, value: showPicker });
+
+        fireEvent.click(time);
+        fireEvent.change(time, { target: { value: '17:45' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(showPicker).not.toHaveBeenCalled();
+        expect(onConfirm).toHaveBeenCalledWith('2026-04-22T17:45');
+    });
+
     it('keeps the time when a day is picked from the calendar', () => {
         const onConfirm = vi.fn();
         render(<PromptModal {...dateTimeProps} onConfirm={onConfirm} />);

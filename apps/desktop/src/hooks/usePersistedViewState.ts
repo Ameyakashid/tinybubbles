@@ -32,17 +32,26 @@ export function usePersistedViewState<T>(
     fallback: T,
     sanitize?: SanitizePersistedViewState<T>
 ): [T, Dispatch<SetStateAction<T>>] {
-    const [state, setState] = useState<T>(() => readPersistedViewState(storageKey, fallback, sanitize));
+    const [storedState, setStoredState] = useState<{ storageKey: string; value: T }>(() => ({
+        storageKey,
+        value: readPersistedViewState(storageKey, fallback, sanitize),
+    }));
+    const state = storedState.storageKey === storageKey
+        ? storedState.value
+        : readPersistedViewState(storageKey, fallback, sanitize);
 
     const setPersistedState = useCallback<Dispatch<SetStateAction<T>>>((nextState) => {
-        setState((current) => {
+        setStoredState((current) => {
+            const currentValue = current.storageKey === storageKey
+                ? current.value
+                : readPersistedViewState(storageKey, fallback, sanitize);
             const next = typeof nextState === 'function'
-                ? (nextState as (value: T) => T)(current)
+                ? (nextState as (value: T) => T)(currentValue)
                 : nextState;
             savePersistedViewState(storageKey, next);
-            return next;
+            return { storageKey, value: next };
         });
-    }, [storageKey]);
+    }, [fallback, sanitize, storageKey]);
 
     return [state, setPersistedState];
 }

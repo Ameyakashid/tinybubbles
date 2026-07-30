@@ -195,6 +195,12 @@ export function useRootLayoutSyncEffects({
         lastAppStateSyncTriggerAt.current = now;
     }, []);
 
+    const clearSyncThrottleTimer = useCallback(() => {
+        if (!syncThrottleTimer.current) return;
+        clearTimeout(syncThrottleTimer.current);
+        syncThrottleTimer.current = null;
+    }, []);
+
     const runSync = useCallback((minIntervalMs?: number) => {
         const requestedMinIntervalMs = typeof minIntervalMs === 'number'
             ? minIntervalMs
@@ -259,6 +265,8 @@ export function useRootLayoutSyncEffects({
             if (result.success) {
                 autoSyncRetryAfter.current = 0;
                 consecutiveSyncFailures.current = 0;
+                // A successful automatic cycle satisfies the pending work.
+                clearSyncThrottleTimer();
             }
             if (!result.success && result.error) {
                 if (isLikelyOfflineSyncError(result.error)) {
@@ -273,6 +281,15 @@ export function useRootLayoutSyncEffects({
                     baseMs: AUTO_SYNC_FAILURE_COOLDOWN_MS,
                     maxMs: MAX_AUTO_SYNC_FAILURE_COOLDOWN_MS,
                 });
+                // This timer is shared with ordinary pacing. A failure takes
+                // ownership immediately and a later failure replaces it with
+                // the newly-grown deadline, so no lifecycle trigger is needed.
+                clearSyncThrottleTimer();
+                const retryWaitMs = Math.max(0, autoSyncRetryAfter.current - Date.now());
+                syncThrottleTimer.current = setTimeout(() => {
+                    syncThrottleTimer.current = null;
+                    runSync(0);
+                }, retryWaitMs);
                 const nowMs = Date.now();
                 const shouldLog = result.error !== lastLoggedAutoSyncError.current
                     || nowMs - lastLoggedAutoSyncErrorAt.current > 10 * 60 * 1000;
@@ -327,7 +344,7 @@ export function useRootLayoutSyncEffects({
                 runSync(syncCadenceRef.current.minIntervalMs);
             }
         });
-    }, []);
+    }, [clearSyncThrottleTimer]);
 
     const requestSync = useCallback((minIntervalMs?: number) => {
         syncPending.current = true;
@@ -345,6 +362,23 @@ export function useRootLayoutSyncEffects({
         reconcileBackgroundSyncTask();
         lastAutoSyncPayloadFingerprint.current = readCurrentSyncPayloadFingerprint();
         const unsubscribe = useTaskStore.subscribe((state, prevState) => {
+            const currentSyncStatus = state.settings?.lastSyncStatus;
+            const previousSyncStatus = prevState.settings?.lastSyncStatus;
+            const syncCompleted = currentSyncStatus === 'success' || currentSyncStatus === 'conflict';
+            if (
+                syncCompleted
+                && (
+                    currentSyncStatus !== previousSyncStatus
+                    || state.settings?.lastSyncAt !== prevState.settings?.lastSyncAt
+                )
+            ) {
+                // Manual sync bypasses this hook, but its successful status
+                // update must still cancel an automatic retry left by a prior
+                // failure.
+                autoSyncRetryAfter.current = 0;
+                consecutiveSyncFailures.current = 0;
+                clearSyncThrottleTimer();
+            }
             // Cheap check first: the fingerprint is a full-dataset serialize and must
             // not run on every store update (#766). Data writes always bump
             // lastDataChangeAt, so skipping the fingerprint here is safe.
@@ -372,11 +406,9 @@ export function useRootLayoutSyncEffects({
             if (syncDebounceTimer.current) {
                 clearTimeout(syncDebounceTimer.current);
             }
-            if (syncThrottleTimer.current) {
-                clearTimeout(syncThrottleTimer.current);
-            }
+            clearSyncThrottleTimer();
         };
-    }, [readCurrentSyncPayloadFingerprint, requestSync, refreshSyncCadence]);
+    }, [clearSyncThrottleTimer, readCurrentSyncPayloadFingerprint, requestSync, refreshSyncCadence]);
 
     useEffect(() => {
         const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -443,9 +475,11 @@ export function useRootLayoutSyncEffects({
                     clearTimeout(syncDebounceTimer.current);
                     syncDebounceTimer.current = null;
                 }
-                if (syncThrottleTimer.current) {
-                    clearTimeout(syncThrottleTimer.current);
-                    syncThrottleTimer.current = null;
+                // Normal pacing should not block the background attempt, but a
+                // failure retry must keep its owned deadline even if this
+                // lifecycle transition is deduped.
+                if (autoSyncRetryAfter.current === 0) {
+                    clearSyncThrottleTimer();
                 }
                 abortMobileSync();
                 const now = Date.now();
@@ -469,16 +503,20 @@ export function useRootLayoutSyncEffects({
             if (syncDebounceTimer.current) {
                 clearTimeout(syncDebounceTimer.current);
             }
-            if (syncThrottleTimer.current) {
-                clearTimeout(syncThrottleTimer.current);
-            }
+            clearSyncThrottleTimer();
             if (widgetRefreshTimer.current) {
                 clearTimeout(widgetRefreshTimer.current);
             }
             syncInFlight.current = null;
             flushPendingSave().catch(logAppError);
         };
-    }, [markAppStateSyncTrigger, refreshSyncCadence, requestSync, shouldDedupeAppStateSyncTrigger]);
+    }, [
+        clearSyncThrottleTimer,
+        markAppStateSyncTrigger,
+        refreshSyncCadence,
+        requestSync,
+        shouldDedupeAppStateSyncTrigger,
+    ]);
 
     useEffect(() => {
         let previousEnabled = hasActiveMobileNotificationFeature(useTaskStore.getState().settings);

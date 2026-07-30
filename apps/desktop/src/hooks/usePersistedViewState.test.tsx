@@ -43,4 +43,30 @@ describe('usePersistedViewState', () => {
             showArchived: true,
         });
     });
+
+    it('loads and writes the new view state when its storage key changes', () => {
+        window.localStorage.setItem('mindwtr:test:inbox', JSON.stringify({ collapsed: ['inbox-group'] }));
+        window.localStorage.setItem('mindwtr:test:done', JSON.stringify({ collapsed: ['done-group'] }));
+
+        const { result, rerender } = renderHook(
+            ({ storageKey }) => usePersistedViewState(storageKey, { collapsed: [] as string[] }),
+            { initialProps: { storageKey: 'mindwtr:test:inbox' } },
+        );
+
+        expect(result.current[0].collapsed).toEqual(['inbox-group']);
+
+        rerender({ storageKey: 'mindwtr:test:done' });
+        expect(result.current[0].collapsed).toEqual(['done-group']);
+
+        act(() => {
+            result.current[1]((current) => ({ collapsed: [...current.collapsed, 'another-done-group'] }));
+        });
+
+        expect(JSON.parse(window.localStorage.getItem('mindwtr:test:done') || '{}')).toEqual({
+            collapsed: ['done-group', 'another-done-group'],
+        });
+        expect(JSON.parse(window.localStorage.getItem('mindwtr:test:inbox') || '{}')).toEqual({
+            collapsed: ['inbox-group'],
+        });
+    });
 });

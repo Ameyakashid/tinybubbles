@@ -7,16 +7,22 @@ type AutocompleteTextInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'v
     onChange: (value: string) => void;
     suggestions: readonly string[];
     maxSuggestions?: number;
+    createLabel?: string;
+    onCreate?: (value: string) => void | Promise<void>;
 };
 
-// Text input with an inline suggestion dropdown. Unlike the task editor's
-// autocomplete, Enter only picks a suggestion after the user arrows into the
-// list, so host forms (modals, wizards) keep their own Enter semantics.
+// Text input with an inline suggestion dropdown. By default, Enter only picks
+// a suggestion after the user arrows into the list, so host forms keep their
+// own Enter semantics. Supplying a create action opts into the task editor's
+// managed-field behavior: the first match is active and unmatched text offers
+// an explicit create row.
 export function AutocompleteTextInput({
     value,
     onChange,
     suggestions,
     maxSuggestions = 6,
+    createLabel,
+    onCreate,
     className,
     onKeyDown,
     onFocus,
@@ -27,6 +33,12 @@ export function AutocompleteTextInput({
     const [activeIndex, setActiveIndex] = useState(-1);
     const listboxId = `${useId()}listbox`;
     const query = value.trim();
+    const hasCreateAction = Boolean(createLabel && onCreate);
+    const hasExactMatch = useMemo(() => {
+        if (!query) return false;
+        const queryKey = query.toLowerCase();
+        return suggestions.some((option) => option.trim().toLowerCase() === queryKey);
+    }, [query, suggestions]);
 
     const matches = useMemo(() => {
         if (!focused || !query) return [];
@@ -42,37 +54,55 @@ export function AutocompleteTextInput({
         }
         return result;
     }, [focused, query, suggestions, maxSuggestions]);
+    const showCreate = Boolean(focused && query && hasCreateAction && !hasExactMatch);
+    const optionCount = matches.length + (showCreate ? 1 : 0);
 
     useEffect(() => {
-        setActiveIndex(-1);
-    }, [query]);
+        setActiveIndex(hasCreateAction ? 0 : -1);
+    }, [hasCreateAction, query]);
 
     const selectSuggestion = (option: string) => {
         onChange(option);
         setActiveIndex(-1);
     };
 
+    const selectCreate = () => {
+        if (!onCreate || !query) return;
+        onChange(query);
+        void onCreate(query);
+        setFocused(false);
+        setActiveIndex(-1);
+    };
+
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-        if (matches.length > 0) {
+        if (optionCount > 0) {
             if (event.key === 'ArrowDown') {
                 event.preventDefault();
-                setActiveIndex((index) => (index + 1) % matches.length);
+                setActiveIndex((index) => (index + 1) % optionCount);
                 return;
             }
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
-                setActiveIndex((index) => (index - 1 + matches.length) % matches.length);
+                setActiveIndex((index) => (index - 1 + optionCount) % optionCount);
                 return;
             }
-            if (event.key === 'Enter' && activeIndex >= 0) {
+            if (event.key === 'Enter' && (hasCreateAction || activeIndex >= 0)) {
                 event.preventDefault();
                 event.stopPropagation();
-                selectSuggestion(matches[activeIndex]);
+                if (showCreate && (matches.length === 0 || activeIndex === matches.length)) {
+                    selectCreate();
+                    return;
+                }
+                selectSuggestion(matches[activeIndex] ?? matches[0]);
                 return;
             }
             if (event.key === 'Escape' && activeIndex >= 0) {
                 event.stopPropagation();
-                setActiveIndex(-1);
+                if (hasCreateAction) {
+                    setFocused(false);
+                } else {
+                    setActiveIndex(-1);
+                }
                 return;
             }
         }
@@ -87,9 +117,9 @@ export function AutocompleteTextInput({
                 value={value}
                 role="combobox"
                 aria-autocomplete="list"
-                aria-expanded={matches.length > 0}
+                aria-expanded={optionCount > 0}
                 aria-controls={listboxId}
-                aria-activedescendant={activeIndex >= 0 && activeIndex < matches.length ? `${listboxId}-option-${activeIndex}` : undefined}
+                aria-activedescendant={activeIndex >= 0 && activeIndex < optionCount ? `${listboxId}-option-${activeIndex}` : undefined}
                 onChange={(event) => onChange(event.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={(event) => {
@@ -102,7 +132,7 @@ export function AutocompleteTextInput({
                 }}
                 className={className}
             />
-            {matches.length > 0 && (
+            {optionCount > 0 && (
                 <div
                     id={listboxId}
                     role="listbox"
@@ -129,6 +159,27 @@ export function AutocompleteTextInput({
                             {option}
                         </button>
                     ))}
+                    {showCreate && (
+                        <button
+                            id={`${listboxId}-option-${matches.length}`}
+                            type="button"
+                            role="option"
+                            aria-label={`${createLabel}: ${query}`}
+                            aria-selected={activeIndex === matches.length}
+                            onMouseDown={(event) => {
+                                event.preventDefault();
+                                selectCreate();
+                            }}
+                            className={cn(
+                                'flex w-full items-center px-2.5 py-1.5 text-left text-xs transition-colors',
+                                activeIndex === matches.length
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-primary hover:bg-muted/70'
+                            )}
+                        >
+                            + {createLabel} &quot;{query}&quot;
+                        </button>
+                    )}
                 </div>
             )}
         </div>

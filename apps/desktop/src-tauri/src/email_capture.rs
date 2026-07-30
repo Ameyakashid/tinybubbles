@@ -96,11 +96,51 @@ fn classify_imap_error(error: imap::error::Error, fallback_kind: &str) -> EmailC
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EmailCaptureState {
+    #[serde(default)]
+    mailbox_identity: Option<EmailCaptureMailboxIdentity>,
     uid_validity: Option<u32>,
     #[serde(default)]
     last_seen_uid: u32,
     #[serde(default)]
     seen_message_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct EmailCaptureMailboxIdentity {
+    host: String,
+    port: u16,
+    username: String,
+    folder: String,
+}
+
+fn email_capture_mailbox_identity(
+    payload: &EmailCaptureConfigPayload,
+) -> EmailCaptureMailboxIdentity {
+    EmailCaptureMailboxIdentity {
+        host: payload.host.to_ascii_lowercase(),
+        port: payload.port,
+        username: payload.username.clone(),
+        folder: payload.folder.clone(),
+    }
+}
+
+fn scope_email_capture_state(
+    mut state: EmailCaptureState,
+    identity: &EmailCaptureMailboxIdentity,
+) -> EmailCaptureState {
+    if state
+        .mailbox_identity
+        .as_ref()
+        .is_some_and(|stored| stored != identity)
+    {
+        return EmailCaptureState {
+            mailbox_identity: Some(identity.clone()),
+            ..EmailCaptureState::default()
+        };
+    }
+    state.mailbox_identity = Some(identity.clone());
+    state
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -431,6 +471,11 @@ pub(crate) fn set_email_capture_config(
         .map_err(|error| EmailCaptureError::config(format!("Invalid email settings: {error}")))?;
 
     let mut app_config = read_config(&app);
+    let previous_payload = read_email_capture_payload(&app_config);
+    let previous_identity = email_capture_mailbox_identity(&previous_payload);
+    let next_identity = email_capture_mailbox_identity(&payload);
+    let mailbox_identity_changed = previous_identity != next_identity;
+    let mut email_capture_state = read_email_capture_state(&app);
     let next_password = password
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
@@ -494,8 +539,28 @@ pub(crate) fn set_email_capture_config(
         .map_err(EmailCaptureError::other)?;
 
     if let Some(error) = validation_error {
+        // A failed connection check is persisted disabled so the form keeps the
+        // attempted values. Keep ownership of the old watermark explicit: a
+        // successful retry can then tell that the configured mailbox changed.
+        if mailbox_identity_changed && email_capture_state.mailbox_identity.is_none() {
+            email_capture_state.mailbox_identity = Some(previous_identity);
+            write_email_capture_state(&app, &email_capture_state)
+                .map_err(EmailCaptureError::other)?;
+        }
         return Err(error);
     }
+    let state_owner_changed = email_capture_state
+        .mailbox_identity
+        .as_ref()
+        .is_some_and(|stored| stored != &next_identity);
+    if mailbox_identity_changed || state_owner_changed {
+        email_capture_state = EmailCaptureState::default();
+    }
+    // Scope the UID watermark to the normalized host/account/folder only after
+    // the new configuration has passed validation and been persisted. Merely
+    // toggling capture or changing its password keeps the existing watermark.
+    email_capture_state.mailbox_identity = Some(next_identity);
+    write_email_capture_state(&app, &email_capture_state).map_err(EmailCaptureError::other)?;
     let has_password = effective_password.is_some();
     email_capture_status(&payload, has_password).map_err(EmailCaptureError::other)
 }
@@ -511,7 +576,10 @@ pub(crate) fn email_capture_poll(
     }
     let password = read_email_capture_password(&app, &app_config)
         .ok_or_else(|| EmailCaptureError::auth("No app password is stored."))?;
-    let state = read_email_capture_state(&app);
+    let state = scope_email_capture_state(
+        read_email_capture_state(&app),
+        &email_capture_mailbox_identity(&payload),
+    );
 
     let mut session = open_email_session(&payload, &password)?;
     let result = poll_mailbox(&mut session, &payload, &state);
@@ -581,7 +649,12 @@ pub(crate) fn email_capture_commit(
     last_seen_uid: u32,
     message_ids: Vec<String>,
 ) -> Result<(), String> {
-    let state = read_email_capture_state(&app);
+    let app_config = read_config(&app);
+    let payload = read_email_capture_payload(&app_config);
+    let state = scope_email_capture_state(
+        read_email_capture_state(&app),
+        &email_capture_mailbox_identity(&payload),
+    );
     let next = merge_email_capture_state(state, uid_validity, last_seen_uid, message_ids);
     write_email_capture_state(&app, &next)
 }
@@ -611,6 +684,7 @@ mod tests {
 
     fn state(uid_validity: Option<u32>, last_seen_uid: u32, ids: &[&str]) -> EmailCaptureState {
         EmailCaptureState {
+            mailbox_identity: None,
             uid_validity,
             last_seen_uid,
             seen_message_ids: ids.iter().map(|id| id.to_string()).collect(),
@@ -640,6 +714,87 @@ mod tests {
             folder: "Mindwtr".to_string(),
         });
         assert!(!disabled.enabled);
+    }
+
+    #[test]
+    fn mailbox_identity_ignores_enablement_and_host_case() {
+        let base = normalize_email_capture_payload(EmailCaptureConfigPayload {
+            enabled: true,
+            host: "IMAP.Example.com".to_string(),
+            port: 993,
+            username: "user@example.com".to_string(),
+            folder: "Mindwtr".to_string(),
+        });
+        let same_mailbox = normalize_email_capture_payload(EmailCaptureConfigPayload {
+            enabled: false,
+            host: "imap.example.com".to_string(),
+            ..base.clone()
+        });
+
+        assert_eq!(
+            email_capture_mailbox_identity(&base),
+            email_capture_mailbox_identity(&same_mailbox)
+        );
+    }
+
+    #[test]
+    fn mailbox_identity_changes_for_account_port_or_folder() {
+        let base = normalize_email_capture_payload(EmailCaptureConfigPayload {
+            enabled: true,
+            host: "imap.example.com".to_string(),
+            port: 993,
+            username: "first@example.com".to_string(),
+            folder: "Mindwtr".to_string(),
+        });
+        for changed in [
+            EmailCaptureConfigPayload {
+                host: "imap.other.example".to_string(),
+                ..base.clone()
+            },
+            EmailCaptureConfigPayload {
+                port: 1993,
+                ..base.clone()
+            },
+            EmailCaptureConfigPayload {
+                username: "second@example.com".to_string(),
+                ..base.clone()
+            },
+            EmailCaptureConfigPayload {
+                folder: "Other".to_string(),
+                ..base.clone()
+            },
+        ] {
+            assert_ne!(
+                email_capture_mailbox_identity(&base),
+                email_capture_mailbox_identity(&changed)
+            );
+        }
+    }
+
+    #[test]
+    fn mailbox_scope_preserves_watermark_only_for_the_same_identity() {
+        let first = EmailCaptureMailboxIdentity {
+            host: "imap.example.com".to_string(),
+            port: 993,
+            username: "first@example.com".to_string(),
+            folder: "Mindwtr".to_string(),
+        };
+        let second = EmailCaptureMailboxIdentity {
+            username: "second@example.com".to_string(),
+            ..first.clone()
+        };
+        let owned = scope_email_capture_state(state(Some(7), 42, &["message-id"]), &first);
+
+        let unchanged = scope_email_capture_state(owned.clone(), &first);
+        assert_eq!(unchanged.uid_validity, Some(7));
+        assert_eq!(unchanged.last_seen_uid, 42);
+        assert_eq!(unchanged.seen_message_ids, vec!["message-id"]);
+
+        let reset = scope_email_capture_state(owned, &second);
+        assert_eq!(reset.mailbox_identity, Some(second));
+        assert_eq!(reset.uid_validity, None);
+        assert_eq!(reset.last_seen_uid, 0);
+        assert!(reset.seen_message_ids.is_empty());
     }
 
     #[test]
@@ -689,6 +844,7 @@ mod tests {
             .collect();
         let merged = merge_email_capture_state(
             EmailCaptureState {
+                mailbox_identity: None,
                 uid_validity: Some(1),
                 last_seen_uid: 10,
                 seen_message_ids: existing,

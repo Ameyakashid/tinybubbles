@@ -43,6 +43,7 @@ type TaskItemOverlaysProps = {
     openWaitingAssignmentPrompt: boolean;
     onCancelWaitingAssignmentPrompt: () => void;
     onConfirmWaitingAssignmentPrompt: (value: string) => void;
+    onCreateWaitingAssignmentPerson: (value: string) => void | Promise<void>;
     waitingAssignmentDefaultValue: string;
     waitingAssignmentSuggestions?: readonly string[];
     retryAudioTranscription: () => void;
@@ -98,6 +99,7 @@ export function TaskItemOverlays({
     openWaitingAssignmentPrompt,
     onCancelWaitingAssignmentPrompt,
     onConfirmWaitingAssignmentPrompt,
+    onCreateWaitingAssignmentPerson,
     waitingAssignmentDefaultValue,
     waitingAssignmentSuggestions,
     retryAudioTranscription,
@@ -179,6 +181,8 @@ export function TaskItemOverlays({
                     placeholder={waitingAssignmentPlaceholder}
                     defaultValue={waitingAssignmentDefaultValue}
                     suggestions={waitingAssignmentSuggestions}
+                    createLabel={resolveText('people.new', 'New Person')}
+                    onCreate={onCreateWaitingAssignmentPerson}
                     allowEmptyConfirm
                     confirmLabel={t('common.save')}
                     cancelLabel={t('common.cancel')}

@@ -75,6 +75,7 @@ export function useInboxProcessingController({
 }: UseInboxProcessingControllerParams): UseInboxProcessingControllerResult {
     const showToast = useUiStore((state) => state.showToast);
     const people = useTaskStore((state) => state.people);
+    const addPerson = useTaskStore((state) => state.addPerson);
     const personOptions = useMemo(() => getPersonOptionNames(people, tasks), [people, tasks]);
     const {
         processingMode,
@@ -753,6 +754,12 @@ export function useInboxProcessingController({
         setSelectedTags(parseTokenListInput(value, '#'));
     }, [setSelectedTags, setTagsDraft]);
 
+    const handleCreatePerson = useCallback(async (name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        await addPerson(trimmed);
+    }, [addPerson]);
+
     const handleQuickSubmit = useCallback(async () => {
         handleScheduleTimeCommit();
         handleDueTimeCommit();
@@ -834,6 +841,7 @@ export function useInboxProcessingController({
             selectedAssignedTo,
             setSelectedAssignedTo,
             personOptions,
+            onCreatePerson: handleCreatePerson,
             selectedTimeEstimate,
             setSelectedTimeEstimate,
             timeEstimateOptions,
@@ -914,6 +922,7 @@ export function useInboxProcessingController({
         selectedAssignedTo,
         setSelectedAssignedTo,
         personOptions,
+        onCreatePerson: handleCreatePerson,
         selectedTimeEstimate,
         setSelectedTimeEstimate,
         timeEstimateOptions,

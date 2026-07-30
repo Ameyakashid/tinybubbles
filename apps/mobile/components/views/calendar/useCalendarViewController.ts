@@ -30,6 +30,7 @@ import {
   isProjectedRecurringTask,
   isProjectedRecurringTaskId,
   isTaskInActiveProject,
+  isTaskInCalendarHistoryProject,
   parseCalendarTimeOnDate,
   safeFormatDate,
   safeParseDate,
@@ -365,7 +366,7 @@ export function useCalendarViewController() {
     if (!showCompleted) return map;
     for (const task of allTasks) {
       if (!isCompletedCalendarTask(task)) continue;
-      if (!isTaskInActiveProject(task, projectById)) continue;
+      if (!isTaskInCalendarHistoryProject(task, projectById)) continue;
       if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)) continue;
       const completedAt = getTaskCompletionInstant(task);
       if (completedAt) addCalendarMapItem(map, completedAt, task);
