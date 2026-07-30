@@ -353,16 +353,31 @@ export function useInboxProcessingController({
     || (actionabilityChoice === 'actionable' && (!twoMinuteEnabled || twoMinuteChoice === 'no') && executionChoice === null);
   const isNextTaskDisabled = isDecisionIncomplete;
 
+  // Answering a question appends the next one below the fold, so on a phone the tap looks like it
+  // did nothing until you scroll. Follow the reveal down instead.
+  const scrollProcessingToRevealedStep = useCallback(() => {
+    requestAnimationFrame(() => {
+      processingScrollRef.current?.scrollToEnd?.({ animated: true });
+    });
+  }, []);
+
   const chooseActionability = useCallback((choice: Exclude<ActionabilityChoice, null>) => {
     setActionabilityChoice(choice);
     setTwoMinuteChoice(null);
     setExecutionChoice(null);
-  }, []);
+    scrollProcessingToRevealedStep();
+  }, [scrollProcessingToRevealedStep]);
 
   const chooseTwoMinute = useCallback((choice: Exclude<TwoMinuteChoice, null>) => {
     setTwoMinuteChoice(choice);
     setExecutionChoice(null);
-  }, []);
+    scrollProcessingToRevealedStep();
+  }, [scrollProcessingToRevealedStep]);
+
+  const chooseExecution = useCallback((choice: ExecutionChoice) => {
+    setExecutionChoice(choice);
+    if (choice) scrollProcessingToRevealedStep();
+  }, [scrollProcessingToRevealedStep]);
 
   const formatScheduledDateValue = useCallback((date: Date, forceDateOnly: boolean = false): string => {
     const dateOnlyValue = safeFormatDate(date, 'yyyy-MM-dd');
@@ -1213,7 +1228,7 @@ export function useInboxProcessingController({
     setDelegateFollowUpDate,
     setDelegateFollowUpDateOnly,
     setDelegateWho,
-    setExecutionChoice,
+    setExecutionChoice: chooseExecution,
     setNewContext,
     setLaterNoDateSelected,
     setPendingDueDate,

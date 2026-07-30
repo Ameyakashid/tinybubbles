@@ -31,6 +31,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - A device-local **Completed** toggle shows done and archived tasks on their completion date across desktop and mobile. It also includes older tasks that only carry the legacy completion timestamp. (#955)
 - Mobile Calendar keeps long task titles clear of the **Schedule** action and shows the selected date in planning labels. Tapping a day now opens straight to task search followed by that day's own tasks and events; the next-action suggestion list no longer sits in between. (#972)
 - Mobile Day and Week timelines label the hour as **10 PM** instead of a wrapped, half-cut `10:00 PM`, and the labels stay inside the gutter at large display sizes.
+- Mobile Inbox processing scrolls each newly revealed question into view, so answering one no longer looks like it did nothing while the next question sits below the fold.
 - Mobile Week view keeps its hour column visible while you scroll across the week, fits the full week on screen without clipping Saturday, and settles on whole days instead of stopping mid-column.
 - Desktop Calendar gets more width for the week and month grids than a list view, while keeping a margin on both sides. (#966)
 - A subscribed `.ics` feed that carries `CATEGORIES` splits into one calendar per category, each with its own colour and show/hide toggle. Desktop Week view keeps all-day and hourly columns aligned while showing midnight fully. (#966)
