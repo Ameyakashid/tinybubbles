@@ -817,8 +817,12 @@ function App() {
                 .catch((error) => reportError('Window listener failed', error));
         }
 
+        // Reminders are not Tauri-only: the notification service falls back to Web
+        // Notifications, so the self-hosted web app schedules them too while a tab
+        // is open (#962). Everything below this genuinely needs the native shell.
+        startDesktopNotifications().catch((error) => reportError('Notifications failed', error));
+
         if (isTauriRuntime()) {
-            startDesktopNotifications().catch((error) => reportError('Notifications failed', error));
             SyncService.startFileWatcher().catch((error) => reportError('File watcher failed', error));
 
             // Watch local data.json and SQLite sidecar files for external changes (CLI/MCP/Local REST).

@@ -37,6 +37,27 @@ let tauriNotificationApi: TauriNotificationApi | null = null;
 const CHECK_INTERVAL_MS = 15_000;
 const REPEAT_CATCH_UP_MS = CHECK_INTERVAL_MS;
 /**
+ * Furthest back a poll will look for reminders it slept through. Browsers throttle
+ * a hidden tab's timers to roughly one a minute, and a laptop that suspends stops
+ * them altogether, so consecutive polls are not reliably CHECK_INTERVAL_MS apart
+ * and a reminder can land between two of them (#962). Capped, because a window
+ * reopened after hours should not empty a queue of stale reminders at once.
+ */
+const MAX_CATCH_UP_MS = 5 * 60_000;
+let lastPollAt: number | null = null;
+
+/**
+ * How far back a poll should look for reminders it slept through, given when the
+ * previous poll ran. Floors at one poll window so a debounce-triggered check never
+ * narrows the normal window, and caps at MAX_CATCH_UP_MS. A first poll gets the
+ * plain window: reminders reached before the app was open stay skipped, which is
+ * the same limitation repeats already document.
+ */
+export function resolvePollCatchUpMs(nowMs: number, lastPollAtMs: number | null): number {
+    if (lastPollAtMs === null) return CHECK_INTERVAL_MS;
+    return Math.min(Math.max(nowMs - lastPollAtMs, CHECK_INTERVAL_MS), MAX_CATCH_UP_MS);
+}
+/**
  * Picks the due-time repeat occurrence to fire on this poll tick, or null.
  *
  * Repeat occurrences are in the past (the due time already fired the single reminder), so they are
@@ -49,8 +70,9 @@ export function resolveDueRepeatToFire(
     task: Task,
     now: Date,
     alreadyNotifiedKey: string | undefined,
-    options: { includeDueDate: boolean },
+    options: { includeDueDate: boolean; catchUpMs?: number },
 ): { key: string; index: number } | null {
+    const catchUpMs = options.catchUpMs ?? REPEAT_CATCH_UP_MS;
     const repeats = getTaskReminderPlan(task, now, {
         includeDueDate: options.includeDueDate,
     }).repeats;
@@ -59,7 +81,7 @@ export function resolveDueRepeatToFire(
     let chosen = null as (typeof repeats)[number] | null;
     for (const repeat of repeats) {
         const t = repeat.scheduledAt.getTime();
-        if (t <= nowMs && nowMs - t <= REPEAT_CATCH_UP_MS) {
+        if (t <= nowMs && nowMs - t <= catchUpMs) {
             chosen = repeat;
         }
     }
@@ -187,16 +209,25 @@ function checkDueAndNotify() {
     void loadTranslations(lang);
     const tr = getTranslationsSync(lang);
 
+    // How much of the past this poll is answerable for. Anchoring the reminder
+    // lookup at that moment instead of `now` is what keeps a just-missed reminder
+    // visible: getTaskReminderPlan only returns reminders still in the future.
+    // notifiedAtByTask/repeatNotifiedByTask dedupe, so a late fire is never a
+    // second fire.
+    const catchUpMs = resolvePollCatchUpMs(now.getTime(), lastPollAt);
+    lastPollAt = now.getTime();
+    const lookbackFrom = new Date(now.getTime() - catchUpMs);
+
     const includeStartTime = settings.startDateNotificationsEnabled !== false;
     const includeDueDate = settings.dueDateNotificationsEnabled !== false;
     const includeReviewAt = settings.reviewAtNotificationsEnabled !== false;
     tasks.forEach((task: Task) => {
-        const plan = getTaskReminderPlan(task, now, {
+        const plan = getTaskReminderPlan(task, lookbackFrom, {
             includeStartTime,
             includeDueDate,
             includeReviewAt,
         });
-        const repeat = resolveDueRepeatToFire(task, now, repeatNotifiedByTask.get(task.id), { includeDueDate });
+        const repeat = resolveDueRepeatToFire(task, now, repeatNotifiedByTask.get(task.id), { includeDueDate, catchUpMs });
         if (repeat) {
             void sendNotification(task.title, buildDesktopTaskNotificationBody(task, 'due-repeat', tr));
             repeatNotifiedByTask.set(task.id, repeat.key);
@@ -215,7 +246,7 @@ function checkDueAndNotify() {
 
     if (includeReviewAt) {
         projects.forEach((project) => {
-            const reminder = getProjectReviewReminderIntent(project, now);
+            const reminder = getProjectReviewReminderIntent(project, lookbackFrom);
             if (!reminder) return;
             const diffMs = reminder.scheduledAt.getTime() - now.getTime();
             if (diffMs > CHECK_INTERVAL_MS) return;
@@ -327,6 +358,7 @@ export function stopDesktopNotifications() {
     notifiedAtByTask.clear();
     repeatNotifiedByTask.clear();
     notifiedAtByProject.clear();
+    lastPollAt = null;
     digestSentOnByKind.clear();
     weeklyReviewSentOnDate = null;
     started = false;

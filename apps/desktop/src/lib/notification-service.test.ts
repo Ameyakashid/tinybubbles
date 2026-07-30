@@ -6,6 +6,7 @@ import { getNextScheduledAt } from '@mindwtr/core';
 import {
     buildDesktopTaskNotificationBody,
     resolveDueRepeatToFire,
+    resolvePollCatchUpMs,
 } from './notification-service';
 
 const baseTask: Task = {
@@ -98,6 +99,16 @@ describe('resolveDueRepeatToFire', () => {
         expect(resolveDueRepeatToFire(repeatTask, now, undefined, opts)).toBeNull();
     });
 
+    it('fires an occurrence missed inside a widened poll window (throttled tab)', () => {
+        // Same 30s-stale occurrence as above, but this poll is answerable for the
+        // last minute because the previous one was throttled that far back.
+        const now = new Date('2026-06-17T09:10:30.000Z');
+        expect(resolveDueRepeatToFire(repeatTask, now, undefined, { ...opts, catchUpMs: 60_000 })).toEqual({
+            key: '2026-06-17T09:00:00.000Z#1',
+            index: 1,
+        });
+    });
+
     it('returns null when due-date notifications are disabled', () => {
         const now = new Date('2026-06-17T09:20:05.000Z');
         expect(resolveDueRepeatToFire(repeatTask, now, undefined, { includeDueDate: false })).toBeNull();
@@ -107,6 +118,30 @@ describe('resolveDueRepeatToFire', () => {
         const suppressed = { ...repeatTask, suppressMindwtrReminders: true };
         const now = new Date('2026-06-17T09:20:05.000Z');
         expect(resolveDueRepeatToFire(suppressed, now, undefined, opts)).toBeNull();
+    });
+});
+
+// The poll loop is a 15s setInterval, but a browser tab that is not in the foreground
+// gets its timers throttled to roughly one a minute, so consecutive polls are not 15s
+// apart and a reminder can land between two of them (#962). The window each poll is
+// answerable for has to follow the real gap.
+describe('resolvePollCatchUpMs', () => {
+    const nowMs = new Date('2026-06-17T09:20:00.000Z').getTime();
+
+    it('uses one poll window on the first check, so reminders reached before the app opened stay skipped', () => {
+        expect(resolvePollCatchUpMs(nowMs, null)).toBe(15_000);
+    });
+
+    it('covers the whole gap when a throttled tab polled a minute ago', () => {
+        expect(resolvePollCatchUpMs(nowMs, nowMs - 60_000)).toBe(60_000);
+    });
+
+    it('caps the gap so a window reopened after a suspend does not empty a queue of stale reminders', () => {
+        expect(resolvePollCatchUpMs(nowMs, nowMs - 3 * 60 * 60_000)).toBe(5 * 60_000);
+    });
+
+    it('never narrows the normal window when a data change triggers an early check', () => {
+        expect(resolvePollCatchUpMs(nowMs, nowMs - 2_000)).toBe(15_000);
     });
 });
 

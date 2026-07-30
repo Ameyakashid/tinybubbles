@@ -71,6 +71,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Mobile no longer loses changes when the local database refuses writes. Saves that fall back to the JSON copy are now merged back on the next launch, and a database that still cannot take them is bypassed for reads instead of serving its older contents. (#964)
 - iCloud sync doubles repeated CloudKit retry delays up to ten minutes, and automatic app-state triggers respect the active cooldown. **Sync now** still retries immediately. (#948)
 - Cloud API, MCP, and desktop Local API task queries accept `isFocusedToday=true|false`; legacy MCP databases return the correct empty or unfocused result when the column is absent. (#960)
+- The browser and self-hosted PWA build now fires task, start, due, and review reminders as Web Notifications while a tab is open — the scheduler was only started in the native desktop shell. A reminder reached between two checks (a background tab has its timers throttled) is now delivered late instead of skipped, on desktop as well. (#962)
 - macOS desktop can sync with self-hosted and WebDAV servers that only accept TLS 1.3, which previously failed with a "bad protocol version" error. Certificates from the operating system store, including private and corporate roots, are still trusted on every desktop platform. (#973)
 
 ## Languages
