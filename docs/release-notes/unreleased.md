@@ -60,6 +60,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Self-hosted and WebDAV settings confirm successful saves. Native configuration failures now appear as errors instead of leaving a false success state. (#920)
 - Desktop uses the cleaned sidebar artwork, and Windows now ships a 32x32-first ICO so the taskbar selects a crisp native-size icon instead of upscaling 16x16. (#937)
 - Desktop due dates turn red only once they have passed. A due date inside the next three days uses the warning color, as it already did on mobile. (#640)
+- Desktop focus stars are gold again in the light and sepia themes instead of a dark brown. A filled star now paints its outline from a darker token than its fill, so it stays clearly legible on a light background without dulling the colour.
 - Desktop Archive rows are the same read-only rows Done uses, so an archived task's notes, subtasks and attachments open in place instead of needing the task restored first. Restore now sends an archived task back to the Inbox from the row as well as in bulk, and deleting one offers **Undo** instead of a confirmation. (#968)
 
 ## Settings

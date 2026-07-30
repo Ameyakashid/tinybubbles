@@ -29,6 +29,7 @@ export default {
                 warning: "hsl(var(--warning))",
                 "warning-foreground": "hsl(var(--warning-foreground))",
                 "focus-star": "hsl(var(--focus-star))",
+                "focus-star-outline": "hsl(var(--focus-star-outline))",
                 info: "hsl(var(--info))",
                 "info-foreground": "hsl(var(--info-foreground))",
                 "status-inbox": "hsl(var(--status-inbox))",

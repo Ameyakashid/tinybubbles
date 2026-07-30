@@ -51,7 +51,8 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 32%;
     --warning-foreground: 0 0% 100%;
-    --focus-star: 42 100% 34%;
+    --focus-star: 45 100% 55%;
+    --focus-star-outline: 38 92% 34%;
     --info: 217 91% 45%;
     --info-foreground: 0 0% 100%;
 
@@ -117,6 +118,7 @@
     --warning: 43 90% 62%;
     --warning-foreground: 35 80% 12%;
     --focus-star: 45 96% 65%;
+    --focus-star-outline: 40 90% 45%;
     --info: 210 90% 65%;
     --info-foreground: 220 50% 12%;
 
@@ -171,6 +173,7 @@
     --warning: 0 0% 0%;
     --warning-foreground: 0 0% 100%;
     --focus-star: 0 0% 0%;
+    --focus-star-outline: 0 0% 0%;
     --info: 0 0% 0%;
     --info-foreground: 0 0% 100%;
     --border: 0 0% 0%;
@@ -233,6 +236,7 @@
     --warning: 40 70% 64%;
     --warning-foreground: 220 16.4% 21.6%;
     --focus-star: 45 90% 68%;
+    --focus-star-outline: 38 75% 45%;
     --info: 193.3 43.4% 67.5%;
     --info-foreground: 220 16.4% 21.6%;
     --border: 220 16.5% 35.7%;
@@ -283,7 +287,8 @@
     --success-foreground: 42.9 56% 95%;
     --warning: 31.9 44.4% 36%;
     --warning-foreground: 42.9 56% 95%;
-    --focus-star: 38 80% 33%;
+    --focus-star: 44 95% 52%;
+    --focus-star-outline: 34 85% 32%;
     --info: 199 60% 35%;
     --info-foreground: 42.9 56% 95%;
     --border: 40 43.7% 79.8%;

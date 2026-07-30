@@ -340,7 +340,7 @@ export function DailyReviewGuideModal({ onClose }: DailyReviewGuideModalProps) {
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    {task.isFocusedToday && <FocusStarIcon className="w-4 h-4 text-warning" filled />}
+                                    {task.isFocusedToday && <FocusStarIcon className="w-4 h-4" filled />}
                                     <span className={cn("font-medium truncate", task.status === 'done' && "line-through text-muted-foreground")}>
                                         {task.title}
                                     </span>

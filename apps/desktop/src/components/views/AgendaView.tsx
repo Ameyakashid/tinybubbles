@@ -1060,7 +1060,7 @@ export function AgendaView() {
             className="rounded-xl border border-border/70 border-l-4 border-l-amber-400 bg-card/70 p-6 shadow-sm dark:border-border/60 dark:border-l-amber-400/80 dark:bg-card/60"
         >
             <h3 className="font-bold text-lg flex items-center gap-2 mb-4 text-foreground">
-                <FocusStarIcon className="w-5 h-5 text-warning" filled />
+                <FocusStarIcon className="w-5 h-5" filled />
                 {t('agenda.todaysFocus')}
                 <span className="text-sm font-normal text-muted-foreground">
                     ({focusedCount}/{focusTaskLimit})
