@@ -17,6 +17,7 @@ import {
     sanitizeCollapsedGroups,
     type TaskGroupAxis,
 } from './next-grouping';
+import { flattenVisibleGroupTasks } from './GroupedTaskSections';
 import { DEFAULT_CONTEXTS_VIEW_STATE, sanitizeContextsViewState } from '../../../lib/contexts-view-state';
 
 const baseTask = (overrides: Partial<Task>): Task => ({
@@ -135,6 +136,27 @@ describe('groupTasksByTag', () => {
         expect(groups[3]?.muted).toBe(true);
         expect(groups.find((group) => group.id === 'tag:#deep')?.tasks.map((task) => task.id)).toEqual(['t2']);
         expect(groups.find((group) => group.id === 'tag:#work')?.tasks.map((task) => task.id)).toEqual(['t2']);
+    });
+});
+
+describe('flattenVisibleGroupTasks', () => {
+    const tasks = [
+        baseTask({ id: 't1', title: 'Multi tag', tags: ['#work', '#deep'] }),
+        baseTask({ id: 't2', title: 'Home', tags: ['#home'] }),
+    ];
+    const groups = groupTasksByTag({ tasks, noTagLabel: 'No tags' });
+
+    it('lists a task in several groups only once', () => {
+        // Section order, one entry per task: the keyboard walk and Select all step
+        // by task, so a repeat leaves the cursor on an index no row claims (#970).
+        expect(flattenVisibleGroupTasks(groups, new Set()).map((task) => task.id)).toEqual(['t1', 't2']);
+    });
+
+    it('drops the tasks of a collapsed group but keeps ones another group still shows', () => {
+        const collapsed = new Set(['tag:#deep']);
+        expect(flattenVisibleGroupTasks(groups, collapsed).map((task) => task.id)).toEqual(['t2', 't1']);
+        expect(flattenVisibleGroupTasks(groups, new Set(['tag:#deep', 'tag:#work'])).map((task) => task.id))
+            .toEqual(['t2']);
     });
 });
 

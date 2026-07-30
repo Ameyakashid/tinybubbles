@@ -33,6 +33,7 @@ import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
 import {
     buildGroupedVirtualRows,
+    flattenVisibleGroupTasks,
     GroupedTaskSectionHeader,
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
@@ -332,7 +333,7 @@ export function ArchiveView() {
     // selectable tasks either.
     const orderedTasks = useMemo(
         () => (isGrouping
-            ? groupedTasks.flatMap((group) => (collapsedGroupIds.has(group.id) ? [] : group.tasks))
+            ? flattenVisibleGroupTasks(groupedTasks, collapsedGroupIds)
             : archivedTasks),
         [archivedTasks, collapsedGroupIds, groupedTasks, isGrouping]
     );

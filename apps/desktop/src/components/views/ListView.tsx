@@ -69,6 +69,7 @@ import {
 } from './list/next-grouping';
 import {
     buildGroupedVirtualRows,
+    flattenVisibleGroupTasks,
     GroupedTaskSectionHeader,
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
@@ -594,7 +595,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     // list is not showing would be worse than not folding them at all (#963).
     const visibleTasks = useMemo(() => (
         isListGrouping
-            ? groupedTasks.flatMap((group) => (collapsedGroupIds.has(group.id) ? [] : group.tasks))
+            ? flattenVisibleGroupTasks(groupedTasks, collapsedGroupIds)
             : filteredTasks
     ), [collapsedGroupIds, filteredTasks, groupedTasks, isListGrouping]);
     const taskIndexById = useMemo(() => {

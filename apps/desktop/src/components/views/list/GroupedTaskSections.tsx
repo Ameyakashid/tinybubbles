@@ -58,6 +58,29 @@ export function buildGroupedVirtualRows(
     });
 }
 
+/**
+ * The tasks a grouped list is showing, once per task. Tag and context grouping
+ * put a task in every group it belongs to, but the keyboard walk and "Select
+ * all" step by task rather than by row, so a repeat would leave the cursor on
+ * an index no row claims (#970).
+ */
+export function flattenVisibleGroupTasks(
+    groups: TaskGroup[],
+    collapsedGroupIds: ReadonlySet<string>,
+): Task[] {
+    const seen = new Set<string>();
+    const tasks: Task[] = [];
+    groups.forEach((group) => {
+        if (collapsedGroupIds.has(group.id)) return;
+        group.tasks.forEach((task) => {
+            if (seen.has(task.id)) return;
+            seen.add(task.id);
+            tasks.push(task);
+        });
+    });
+    return tasks;
+}
+
 type GroupedTaskSectionHeaderProps = {
     group: TaskGroup;
     collapsed: boolean;
