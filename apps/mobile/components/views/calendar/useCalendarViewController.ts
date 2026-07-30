@@ -29,6 +29,7 @@ import {
   isSlotFreeForDay as isCalendarSlotFreeForDay,
   isProjectedRecurringTask,
   isProjectedRecurringTaskId,
+  isTaskFinished,
   isTaskInActiveProject,
   isTaskInCalendarHistoryProject,
   parseCalendarTimeOnDate,
@@ -945,7 +946,7 @@ export function useCalendarViewController() {
         onPress: () => updateTask(task.id, { startTime: undefined }).catch(logCalendarError),
       });
     }
-    if (task.status !== 'done' && task.status !== 'archived') {
+    if (!isTaskFinished(task)) {
       buttons?.push({
         text: t('status.done'),
         onPress: () => markTaskDone(task.id),

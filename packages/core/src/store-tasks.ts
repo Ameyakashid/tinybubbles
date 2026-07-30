@@ -24,6 +24,7 @@ import {
     updateVisibleTasks,
 } from './store-helpers';
 import { logInfo, logWarn } from './logger';
+import { isTaskFinished } from './task-status';
 import { beginNotifyProfile, endNotifyProfile, type NotifyProfile } from './store-notify-profiler';
 import { generateUUID as uuidv4 } from './uuid';
 import { normalizeRecurrenceForLoad } from './recurrence';
@@ -109,7 +110,7 @@ const recurrenceKeyForDuplicateCheck = (task: Task): string => (
 const isExistingRecurringFollowUp = (existing: Task, candidate: Task): boolean => {
     if (existing.id === candidate.id) return false;
     if (existing.deletedAt) return false;
-    if (existing.status === 'done' || existing.status === 'archived') return false;
+    if (isTaskFinished(existing)) return false;
     if (existing.status !== candidate.status) return false;
     if (existing.title.trim() !== candidate.title.trim()) return false;
     if (normalizeOptionalTaskField(existing.projectId) !== normalizeOptionalTaskField(candidate.projectId)) return false;
@@ -279,7 +280,7 @@ export const mutateTasks = async (
     return missing ? actionFail(options.missingMessage ?? 'Task not found') : actionOk();
 };
 
-const sanitizeRestoredTaskContainerReferences = (
+export const sanitizeRestoredTaskContainerReferences = (
     task: Task,
     state: TaskStore,
 ): Pick<Task, 'projectId' | 'sectionId' | 'areaId'> => {
@@ -857,7 +858,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 title: sourceTask.title,
                 status: asNextAction
                     ? 'next'
-                    : sourceTask.status === 'done' || sourceTask.status === 'archived'
+                    : isTaskFinished(sourceTask)
                         ? 'inbox'
                         : sourceTask.status,
                 recurrence: typeof sourceTask.recurrence === 'object'

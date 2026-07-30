@@ -9,6 +9,7 @@ import {
     SUPPORTED_LANGUAGES,
     getTranslationsSync,
     getSequentialFirstTaskIds,
+    isTaskActionable,
     isTaskInActiveProject,
     loadTranslations,
     sortTasksBy,
@@ -309,7 +310,7 @@ export function buildWidgetPayload(
 
     const activeTasks = tasks.filter((task) => {
         if (task.deletedAt) return false;
-        if (task.status === 'archived' || task.status === 'done' || task.status === 'reference') return false;
+        if (!isTaskActionable(task)) return false;
         if (!isTaskInActiveProject(task, projectById)) return false;
         return true;
     });
@@ -391,7 +392,7 @@ export function buildShortcutsSnapshot(data: AppData): ShortcutsSnapshot {
 
     const activeTasks = tasks.filter((task) => {
         if (task.deletedAt) return false;
-        if (task.status === 'archived' || task.status === 'done' || task.status === 'reference') return false;
+        if (!isTaskActionable(task)) return false;
         if (!isTaskInActiveProject(task, projectById)) return false;
         return true;
     });

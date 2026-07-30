@@ -11,6 +11,7 @@ import {
     formatTimeEstimateLabel,
     formatTimeSpentLabel,
     hasTimeComponent,
+    isTaskFinished,
     resolveTaskTextDirection,
     safeFormatDate,
     safeParseDate,
@@ -152,7 +153,7 @@ export function SwipeableTaskItemContent({
         ? tFallback(t, 'task.dateIssue.startAfterDue', 'Starts after due date')
         : null;
     const completionLabel = (() => {
-        if (task.status !== 'done' && task.status !== 'archived') return null;
+        if (!isTaskFinished(task)) return null;
         const completionTimestamp = task.completedAt || task.updatedAt;
         if (!completionTimestamp) return null;
         return safeFormatDate(completionTimestamp, 'Pp', completionTimestamp);

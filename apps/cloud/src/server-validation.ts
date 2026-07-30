@@ -1,5 +1,6 @@
 import {
     filterNotDeleted,
+    isTaskFinished,
     normalizeRecurrenceForLoad,
     normalizeRelativeStartOffset,
     normalizeRepeatReminderMinutes,
@@ -456,7 +457,7 @@ export function pickTaskList(
 ): Task[] {
     let tasks = data.tasks;
     if (!opts.includeDeleted) tasks = tasks.filter((t) => !t.deletedAt);
-    if (!opts.includeCompleted) tasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'archived');
+    if (!opts.includeCompleted) tasks = tasks.filter((t) => !isTaskFinished(t));
     if (opts.status) tasks = tasks.filter((t) => t.status === opts.status);
     // Coerce rather than compare `=== true`: synced payloads carry booleans as true or 1
     // (core's toBool writes 1/0), so a strict check silently drops CloudKit-round-tripped rows.

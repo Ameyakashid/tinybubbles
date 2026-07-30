@@ -7,7 +7,7 @@ import { differenceInCalendarDays, startOfDay } from 'date-fns';
 import { isDueForReview, safeParseDate, safeParseDueDate } from './date';
 import { hasRecurrenceRule } from './recurrence';
 import { timeEstimateToMinutes } from './calendar-scheduling';
-import { TASK_STATUS_ORDER } from './task-status';
+import { isTaskActionable, TASK_STATUS_ORDER } from './task-status';
 import { isTaskInActiveProject } from './project-utils';
 import type { Language } from './i18n/i18n-types';
 
@@ -1059,7 +1059,7 @@ export function getTaskStaleness(createdAt: string): 'fresh' | 'aging' | 'stale'
  * Returns: 'overdue' | 'urgent' (24h) | 'upcoming' (72h) | 'normal' | 'done'
  */
 export function getTaskUrgency(task: Partial<Task>): 'overdue' | 'urgent' | 'upcoming' | 'normal' | 'done' {
-    if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return 'done';
+    if (!isTaskActionable(task)) return 'done';
     if (!task.dueDate) return 'normal';
 
     const now = new Date();

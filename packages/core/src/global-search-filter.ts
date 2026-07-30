@@ -3,6 +3,7 @@ import { matchesHierarchicalToken } from './hierarchy-utils';
 import { parseSearchQuery, searchAll } from './search';
 import { SEARCH_RESULT_LIMIT, type SearchProjectResult, type SearchResults, type SearchTaskResult } from './storage';
 import { shouldShowTaskForStart } from './task-utils';
+import { isTaskFinished } from './task-status';
 import type { Project, Task, TaskStatus } from './types';
 
 export type GlobalSearchScope = 'all' | 'projects' | 'tasks' | 'project_tasks';
@@ -196,7 +197,7 @@ export const computeGlobalSearchResults = ({
         } else {
             // A positive `id:` term is an unambiguous request for one task, so it
             // outranks the default done/archived/reference hiding.
-            if (!shouldBypassDefaultStatusHiding && !includeCompleted && ['done', 'archived'].includes(task.status)) return false;
+            if (!shouldBypassDefaultStatusHiding && !includeCompleted && isTaskFinished(task)) return false;
             if (!shouldBypassDefaultStatusHiding && !includeReference && task.status === 'reference') return false;
         }
         return passesNonStatusTaskFilters(task);
@@ -216,7 +217,7 @@ export const computeGlobalSearchResults = ({
         && !shouldBypassDefaultStatusHiding
         && scope !== 'projects'
         ? effectiveResults.tasks.filter((task) =>
-            (task.status === 'done' || task.status === 'archived') && passesNonStatusTaskFilters(task)
+            isTaskFinished(task) && passesNonStatusTaskFilters(task)
         ).length
         : 0;
     const hiddenArchivedProjectCount = !includeCompleted

@@ -9,6 +9,7 @@ import {
     compactPurgedProjectTombstone,
     filterNotDeleted,
     generateUUID,
+    isTaskFinished,
     mergeAppDataWithStats,
     normalizeTaskUpdate,
     parseQuickAdd,
@@ -523,7 +524,7 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
                 createdAt: nowIso,
                 updatedAt: nowIso,
             } as Task;
-            if ((status === 'done' || status === 'archived') && !task.completedAt) {
+            if (isTaskFinished(status) && !task.completedAt) {
                 task.completedAt = nowIso;
             }
             return task;

@@ -6,6 +6,7 @@ import type { Project, Task, TaskSortBy } from './types';
 import { hasTimeComponent, isDueForReview, safeParseDate, safeParseDueDate } from './date';
 import { filterProjectsNeedingNextAction, isTaskInActiveProject } from './project-utils';
 import { getSequentialFirstTaskIds, shouldShowTaskForStart, sortTasksBy } from './task-utils';
+import { isTaskActionable } from './task-status';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -314,9 +315,7 @@ export function getWeeklyReviewBuckets(
     // resolved" tasks: not deleted/done/archived/reference, in an active project.
     const isReviewable = (task: Task) => (
         !task.deletedAt
-        && task.status !== 'done'
-        && task.status !== 'archived'
-        && task.status !== 'reference'
+        && isTaskActionable(task)
         && isTaskInActiveProject(task, projectMap)
     );
 

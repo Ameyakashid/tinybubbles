@@ -6,6 +6,7 @@ import {
 } from './task-token-usage';
 import { resolveRelativeStartUpdates } from './task-relative-start';
 import { compareTasksByProjectOrder, isTaskFutureStart, rescheduleTask, shouldAutoArchiveCompletedTask } from './task-utils';
+import { isTaskActionable, isTaskFinished } from './task-status';
 import { safeParseDate } from './date';
 import { filterNotDeleted } from './sync-helpers';
 import { nextRevision, normalizeRevision } from './sync-revision';
@@ -64,7 +65,6 @@ export function applyTaskUpdates(oldTask: Task, updates: Partial<Task>, now: str
 
     let finalUpdates: Partial<Task> = updatesToApply;
     let nextRecurringTask: Task | null = null;
-    const isCompleteStatus = (status: TaskStatus) => status === 'done' || status === 'archived';
 
     // A caller-supplied completedAt backdates the completion (e.g. "I actually
     // finished this yesterday") and must also anchor after-completion recurrence,
@@ -106,7 +106,7 @@ export function applyTaskUpdates(oldTask: Task, updates: Partial<Task>, now: str
             isFocusedToday: false,
             ...clearsFocusOrder,
         };
-    } else if (statusChanged && isCompleteStatus(oldTask.status) && !isCompleteStatus(incomingStatus)) {
+    } else if (statusChanged && isTaskFinished(oldTask.status) && !isTaskFinished(incomingStatus)) {
         finalUpdates = {
             ...updatesToApply,
             status: incomingStatus,
@@ -386,8 +386,7 @@ export const restoreTaskFromProjectArchive = (task: Task, restoredAt: string, de
     const shouldRestore =
         !task.deletedAt &&
         Boolean(previousStatus) &&
-        previousStatus !== 'done' &&
-        previousStatus !== 'archived' &&
+        !isTaskFinished(previousStatus) &&
         task.status === 'done' &&
         Boolean(archivedAt) &&
         task.completedAt === archivedAt;
@@ -776,7 +775,7 @@ export const computeTaskDerivedState = (
             projectTasks.push(task);
             tasksByProjectId.set(task.projectId, projectTasks);
 
-            if (task.status !== 'done' && task.status !== 'reference' && task.status !== 'archived') {
+            if (isTaskActionable(task)) {
                 const summary = projectTaskSummaryById.get(task.projectId) ?? { activeTaskCount: 0 };
                 summary.activeTaskCount += 1;
                 if (task.status === 'next' && (!summary.nextAction || compareTasksByProjectOrder(task, summary.nextAction) < 0)) {

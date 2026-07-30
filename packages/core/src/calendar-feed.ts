@@ -16,6 +16,7 @@ import { hasTimeComponent, safeParseDate, safeParseDueDate } from './date';
 import { isTaskInActiveProject } from './project-utils';
 import { expandCalendarRecurringTasks } from './recurrence';
 import { timeEstimateToMinutes } from './calendar-scheduling';
+import { isTaskActionable } from './task-status';
 import type { AppData, Project, Task } from './types';
 
 /** A deadline carrying a time of day still needs a non-zero VEVENT duration. */
@@ -65,7 +66,7 @@ const addDays = (date: Date, days: number): Date => {
  */
 export const isCalendarFeedTask = (task: Task, projectsById: Map<string, Project>): boolean => {
     if (task.deletedAt) return false;
-    if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return false;
+    if (!isTaskActionable(task)) return false;
     return isTaskInActiveProject(task, projectsById);
 };
 

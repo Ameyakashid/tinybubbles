@@ -5,6 +5,7 @@ import type { ExternalCalendarEvent } from './ics';
 import { parseQuickAdd } from './quick-add';
 import { isSelectableProjectForTaskAssignment } from './project-utils';
 import { getTaskDateCoherenceIssues, type TaskDateCoherenceIssue } from './task-date-coherence';
+import { isTaskActionable } from './task-status';
 import type { Area, CustomTimeEstimate, Project, Task, TimeEstimate, TimeEstimatePreset } from './types';
 
 /** Shared translate-function shape for the localization seam below — same shape as
@@ -391,7 +392,7 @@ const getDayBounds = (day: Date, options?: CalendarSchedulingOptions): { dayEnd:
 const taskBlocksScheduling = (task: SchedulingTask, excludeTaskId?: string): boolean => {
     if (task.deletedAt) return false;
     if (task.id === excludeTaskId) return false;
-    return task.status !== 'done' && task.status !== 'archived' && task.status !== 'reference';
+    return isTaskActionable(task);
 };
 
 const collectBusyIntervals = (

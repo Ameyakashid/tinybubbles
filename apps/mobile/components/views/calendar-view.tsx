@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS, getCalendarDayOfMonth, getShortWeekdayLabels, getTaskCalendarOccurrenceDate, isProjectedRecurringTask, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, getCalendarDayOfMonth, getShortWeekdayLabels, getTaskCalendarOccurrenceDate, isProjectedRecurringTask, isTaskFinished, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -2048,7 +2048,7 @@ export function CalendarView() {
                         {projected ? `${t('calendar.deadline')} · ${projectedDisplayLabel}` : t('calendar.deadline')}
                       </Text>
                     </Pressable>
-                    {!projected && task.status !== 'done' && task.status !== 'archived' && (
+                    {!projected && !isTaskFinished(task) && (
                       <Pressable
                         style={[styles.quickDoneButton, { borderColor: toRgba(tc.tint, 0.35), backgroundColor: toRgba(tc.tint, 0.16) }]}
                         onPress={() => markTaskDone(task.id)}
@@ -2098,7 +2098,7 @@ export function CalendarView() {
                         })()}
                       </Text>
                     </View>
-                    {!projected && task.status !== 'done' && task.status !== 'archived' && (
+                    {!projected && !isTaskFinished(task) && (
                       <Pressable
                         style={[styles.quickDoneButton, { borderColor: toRgba(tc.tint, 0.35), backgroundColor: toRgba(tc.tint, 0.16) }]}
                         onPress={(event) => {

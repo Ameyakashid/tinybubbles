@@ -15,6 +15,7 @@ import { clearDerivedCache } from '../store-settings';
 import { generateUUID as uuidv4 } from '../uuid';
 import { DEFAULT_PROJECT_COLOR } from '../color-constants';
 import { findSelectableProjectByTitleAndArea } from '../project-utils';
+import { isTaskFinished } from '../task-status';
 import type { Project, ProjectCoreActions, ProjectActionContext, Task, TaskStatus } from './shared';
 import type { TaskStore } from '../store-types';
 import type { PendingRemoteAttachmentDelete } from '../types';
@@ -226,8 +227,7 @@ export const createProjectCoreActions = ({
                     if (
                         task.projectId === id &&
                         !task.deletedAt &&
-                        task.status !== 'done' &&
-                        task.status !== 'archived'
+                        !isTaskFinished(task)
                     ) {
                         return completeTaskForProjectArchive(task, now, deviceState.deviceId);
                     }

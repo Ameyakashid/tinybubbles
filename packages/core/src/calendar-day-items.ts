@@ -5,6 +5,7 @@
  */
 import { safeParseDate, safeParseDueDate } from './date';
 import type { ExternalCalendarEvent } from './ics';
+import { isTaskActionable } from './task-status';
 import type { Task } from './types';
 
 /**
@@ -38,9 +39,7 @@ export const isCompletedCalendarTask = (task: Task): boolean => (
  */
 export const isSchedulableCalendarTask = (task: Task): boolean => (
     !task.deletedAt
-    && task.status !== 'done'
-    && task.status !== 'archived'
-    && task.status !== 'reference'
+    && isTaskActionable(task)
 );
 
 export type CalendarDayItem =

@@ -4,6 +4,7 @@ import {
     isProjectedRecurringTaskId,
 } from './recurrence';
 import type { CalendarSyncEntry } from './sqlite-adapter';
+import { isTaskActionable } from './task-status';
 import type { Task } from './types';
 
 export type CalendarPushRunTarget = {
@@ -61,9 +62,7 @@ export type CalendarPushPartialSyncResult = {
 export function shouldRemoveCalendarPushTask(task: Task): boolean {
     return (!task.dueDate && !task.startTime)
         || Boolean(task.deletedAt)
-        || task.status === 'done'
-        || task.status === 'archived'
-        || task.status === 'reference';
+        || !isTaskActionable(task);
 }
 
 async function runLimitedSettled<T>(

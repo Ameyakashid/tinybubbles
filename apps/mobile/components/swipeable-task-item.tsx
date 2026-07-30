@@ -4,6 +4,8 @@ import {
     formatRecurrenceLabel,
     getProjectNextActionPromptData,
     hasTimeComponent,
+    isTaskActionable,
+    isTaskFinished,
     normalizeFocusTaskLimit,
     safeFormatDate,
     safeParseDate,
@@ -194,9 +196,7 @@ function SwipeableTaskItemInner({
         showTaskAge,
     } = rowContext;
     const canShowFocusToggle = showFocusToggle
-        && task.status !== 'done'
-        && task.status !== 'reference'
-        && task.status !== 'archived';
+        && isTaskActionable(task);
     const isReference = task.status === 'reference';
     const {
         cancelPendingChecklist,
@@ -623,7 +623,7 @@ function SwipeableTaskItemInner({
             localChecklist={localChecklist}
             onAccessibilityAction={handleAccessibilityAction}
             onContextPress={onContextPress}
-            onEditCompletedAt={(task.status === 'done' || task.status === 'archived') && !selectionMode
+            onEditCompletedAt={isTaskFinished(task) && !selectionMode
                 ? () => setCompletedAtPicker('edit')
                 : undefined}
             onLongPress={handleLongPress}

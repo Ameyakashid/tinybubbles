@@ -17,6 +17,7 @@ import {
   sortTasksBy,
   buildBulkTaskTokenUpdates,
   collectBulkTaskTokens,
+  isTaskFinished,
   isTaskInActiveProject,
   tFallback,
   type Task,
@@ -100,8 +101,7 @@ export function ContextsView() {
 
   const contextSourceTasks = tasks.filter((task) => (
     !task.deletedAt
-    && task.status !== 'archived'
-    && task.status !== 'done'
+    && !isTaskFinished(task)
     && isTaskInActiveProject(task, projectById)
     && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
   ));

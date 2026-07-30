@@ -3,6 +3,7 @@ import { endOfDay, startOfDay } from 'date-fns';
 import { safeParseDate, safeParseDueDate } from './date';
 import type { Project, Task } from './types';
 import { isTaskInActiveProject } from './project-utils';
+import { isTaskActionable } from './task-status';
 
 export interface DailyDigestSummary {
     dueToday: number;
@@ -30,7 +31,7 @@ export function getDailyDigestSummary(
 
     for (const task of tasks) {
         if (task.deletedAt) continue;
-        if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') continue;
+        if (!isTaskActionable(task)) continue;
         if (!isTaskInActiveProject(task, projectMap)) continue;
 
         if (task.isFocusedToday) focusToday += 1;

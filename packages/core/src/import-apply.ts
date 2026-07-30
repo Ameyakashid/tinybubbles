@@ -11,6 +11,7 @@ import { DEFAULT_AREA_COLOR, DEFAULT_PROJECT_COLOR } from './color-constants';
 import { safeParseDate } from './date';
 import { ensureDeviceId } from './store-helpers';
 import { nextRevision } from './sync-revision';
+import { isTaskFinished } from './task-status';
 import type { AppData, Area, ChecklistItem, Project, Task, TaskPriority, TaskStatus } from './types';
 import { generateUUID as uuidv4 } from './uuid';
 
@@ -300,7 +301,7 @@ export function applyImport(
         const createdAt = resolveTimestamp(task.createdAt, nowIso);
         const updatedAt = resolveTimestamp(task.updatedAt, createdAt);
         const status = resolveTaskStatus(task.status, projectId);
-        const completedAt = status === 'done' || status === 'archived'
+        const completedAt = isTaskFinished(status)
             ? task.completedAt ?? updatedAt
             : undefined;
         const nextTask: Task = {

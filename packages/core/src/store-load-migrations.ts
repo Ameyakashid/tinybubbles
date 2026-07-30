@@ -12,6 +12,7 @@ import {
     nextRevision,
 } from './store-helpers';
 import { getAutoArchiveDays, shouldAutoArchiveCompletedTask } from './task-utils';
+import { isTaskActionable, isTaskFinished } from './task-status';
 import { generateUUID as uuidv4 } from './uuid';
 import type { AppData, Area, Project, Task, TaskEditorFieldId } from './types';
 
@@ -239,9 +240,7 @@ function shouldPromoteScheduledTask(task: Task, nowMs: number): boolean {
     if (
         task.status === 'next'
         || task.status === 'waiting'
-        || task.status === 'done'
-        || task.status === 'archived'
-        || task.status === 'reference'
+        || !isTaskActionable(task)
     ) {
         return false;
     }
@@ -530,7 +529,7 @@ const archiveDescendantsOfArchivedProjectsMigration: LoadMigration = {
         const deviceId = data.settings.deviceId;
         let changed = false;
         const tasks = data.tasks.map((task) => {
-            if (task.deletedAt || task.status === 'done' || task.status === 'archived') return task;
+            if (task.deletedAt || isTaskFinished(task)) return task;
             if (!task.projectId || !archivedProjectIds.has(task.projectId)) return task;
             changed = true;
             return completeTaskForProjectArchive(task, ctx.nowIso, deviceId);

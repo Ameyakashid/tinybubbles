@@ -17,6 +17,26 @@ export const TASK_STATUS_ORDER: Record<TaskStatus, number> = {
     archived: 6,
 };
 
+/**
+ * A task is "finished" once it is done or archived — the two statuses a
+ * completed task can settle into (#968: a gate checking only 'done' misses
+ * archived rows). Accepts either a task-like object or a bare status so
+ * callers can pass whichever they already have in hand.
+ */
+export function isTaskFinished(taskOrStatus: { status?: TaskStatus } | TaskStatus | undefined): boolean {
+    const status = typeof taskOrStatus === 'string' ? taskOrStatus : taskOrStatus?.status;
+    return status === 'done' || status === 'archived';
+}
+
+/**
+ * A task is "actionable" unless it is done, archived, or reference — the
+ * three statuses that take a task out of active GTD workflow lists.
+ */
+export function isTaskActionable(taskOrStatus: { status?: TaskStatus } | TaskStatus | undefined): boolean {
+    const status = typeof taskOrStatus === 'string' ? taskOrStatus : taskOrStatus?.status;
+    return status !== 'done' && status !== 'archived' && status !== 'reference';
+}
+
 const LEGACY_STATUS_MAP: Record<string, TaskStatus> = {
     planned: 'next',
     pending: 'next',

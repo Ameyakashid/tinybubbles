@@ -1,6 +1,5 @@
-import type { Project, Task, TaskSortBy, TaskStatus } from './types';
-
-const CLOSED_PROJECT_TASK_STATUSES = new Set<TaskStatus>(['done', 'archived', 'reference']);
+import type { Project, Task, TaskSortBy } from './types';
+import { isTaskActionable } from './task-status';
 
 export function normalizeProjectSequentialScope(value: unknown): Project['sequentialScope'] {
     if (value === 'section' || value === 'project') return value;
@@ -82,7 +81,7 @@ const getTaskProjectOrder = (task: Task): number => {
 };
 
 const isOpenProjectTask = (task: Task): boolean => {
-    return !task.deletedAt && !CLOSED_PROJECT_TASK_STATUSES.has(task.status);
+    return !task.deletedAt && isTaskActionable(task);
 };
 
 export function isSelectableProjectForTaskAssignment(project: Project): boolean {

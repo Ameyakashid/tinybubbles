@@ -45,6 +45,7 @@ import {
   translateWithFallback,
   useTaskStore,
   getAdvancedReviewDate,
+  isTaskActionable,
   isTaskInActiveProject,
   isDueForReview,
   safeFormatDate,
@@ -276,9 +277,7 @@ export default function FocusScreen() {
   const baseActiveTasks = useMemo(() => (
     visibleTasks.filter((task) => (
       !task.deletedAt
-      && task.status !== 'done'
-      && task.status !== 'archived'
-      && task.status !== 'reference'
+      && isTaskActionable(task)
     ))
   ), [visibleTasks]);
   const activeTasks = useMemo(() => {
