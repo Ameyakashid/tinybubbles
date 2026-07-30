@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { isSameDay, isToday } from 'date-fns';
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react';
 import {
@@ -70,6 +70,7 @@ function getProjectedRecurrenceDisplayLabel(task: Task, projectedLabel: string):
 
 export function CalendarView() {
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+    const [timelineScrollbarWidth, setTimelineScrollbarWidth] = useState(0);
     const [isPlanningPanelCollapsed, setIsPlanningPanelCollapsed] = useState(readPlanningPanelCollapsedPreference);
     const controller = useDesktopCalendarController();
     const {
@@ -242,6 +243,13 @@ export function CalendarView() {
             // Ignore storage failures; the in-memory state still updates.
         }
     }, []);
+
+    useLayoutEffect(() => {
+        const scroller = timelineScrollRef.current;
+        if (!timelineScrollKey || !scroller) return;
+        // WebKit does not reliably mirror scrollbar-gutter on non-scrolling rows.
+        setTimelineScrollbarWidth(Math.max(0, scroller.offsetWidth - scroller.clientWidth));
+    }, [timelineScrollKey]);
 
     useEffect(() => {
         if (!timelineScrollKey) return;
@@ -632,8 +640,11 @@ export function CalendarView() {
                 {(viewMode === 'day' || viewMode === 'week') && (
                     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div
-                            className="grid overflow-y-hidden border-b border-border bg-muted/40 [scrollbar-gutter:stable]"
-                            style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}
+                            className="grid border-b border-border bg-muted/40"
+                            style={{
+                                gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))`,
+                                paddingRight: timelineScrollbarWidth,
+                            }}
                         >
                             <div className="border-r border-border p-2 text-xs font-medium text-muted-foreground">
                                 {resolveText('calendar.time', 'Time')}
@@ -659,8 +670,11 @@ export function CalendarView() {
                         </div>
 
                         <div
-                            className="grid overflow-y-hidden border-b border-border [scrollbar-gutter:stable]"
-                            style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}
+                            className="grid border-b border-border"
+                            style={{
+                                gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))`,
+                                paddingRight: timelineScrollbarWidth,
+                            }}
                         >
                             <div className="border-r border-border p-2 text-xs font-medium text-muted-foreground">
                                 {t('calendar.allDay')}
@@ -732,7 +746,7 @@ export function CalendarView() {
 
                         <div
                             ref={timelineScrollRef}
-                            className="overflow-y-auto [scrollbar-gutter:stable]"
+                            className="overflow-y-auto"
                             style={{ height: 'clamp(28rem, calc(100vh - 20rem), 48rem)' }}
                         >
                             <div className="grid" style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}>

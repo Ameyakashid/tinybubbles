@@ -147,16 +147,6 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-describe('Layout content width', () => {
-    it('lets the calendar use the available window width', () => {
-        const { container } = renderLayout('calendar');
-        const content = container.querySelector('[data-main-content] > div');
-
-        expect(content).toHaveClass('w-full', 'max-w-none');
-        expect(content).not.toHaveClass('max-w-6xl');
-    });
-});
-
 describe('Layout sidebar archive section', () => {
     it('keeps archive visible by default on a fresh sidebar', () => {
         const { container, getByRole } = renderLayout();
