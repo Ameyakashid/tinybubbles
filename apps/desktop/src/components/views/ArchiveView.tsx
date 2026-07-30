@@ -779,7 +779,7 @@ export function ArchiveView() {
                             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            {t('status.done')}
+                            {t('bulk.moveTo')} {t('status.done')}
                         </button>
                         <button
                             type="button"

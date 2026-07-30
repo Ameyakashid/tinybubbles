@@ -118,7 +118,9 @@ describe('ArchiveView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Select' }));
         fireEvent.click(screen.getByRole('checkbox', { name: 'Select Archived task' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Move to Done' }));
+        const moveToDoneButton = screen.getByRole('button', { name: 'Move to Done' });
+        expect(moveToDoneButton).toHaveTextContent('Move to Done');
+        fireEvent.click(moveToDoneButton);
 
         await waitFor(() => {
             const movedTask = useTaskStore.getState()._tasksById.get(archivedTask.id);

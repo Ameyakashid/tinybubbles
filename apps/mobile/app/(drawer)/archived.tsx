@@ -742,7 +742,7 @@ export default function ArchivedScreen() {
                                 style={[styles.bulkButton, { backgroundColor: tc.taskItemBg }]}
                             >
                                 <Text style={[styles.bulkButtonText, { color: tc.text }]}>
-                                    {t('status.done')}
+                                    {t('bulk.moveTo')} {t('status.done')}
                                 </Text>
                             </Pressable>
                             <Pressable

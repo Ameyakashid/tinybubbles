@@ -350,8 +350,12 @@ describe('ArchivedScreen', () => {
     renderer.act(() => {
       tree.root.find((node) => node.props.accessibilityLabel === 'Select Archived task').props.onPress();
     });
+    const moveToDoneButton = tree.root.find((node) => node.props.accessibilityLabel === 'Move to Done');
+    expect(moveToDoneButton.findAll((node) => (
+      Array.isArray(node.props.children) && node.props.children.join('') === 'Move to Done'
+    ))).not.toHaveLength(0);
     await renderer.act(async () => {
-      await tree.root.find((node) => node.props.accessibilityLabel === 'Move to Done').props.onPress();
+      await moveToDoneButton.props.onPress();
     });
 
     expect(mocks.batchMoveTasks).toHaveBeenCalledWith(['task-1'], 'done');

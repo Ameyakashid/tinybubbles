@@ -35,6 +35,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 ## Lists & Performance
 
 - Desktop Archive now offers Filters, Sort, and Group controls, including completion-date options, and keeps grouped archives virtualized at large sizes. Mobile Archive adds search plus the same filtering, sorting, and grouping model inside its filter sheet. (#959, #961)
+- Archive bulk selection now spells out **Move to Done** instead of the ambiguous **Done** label on desktop and mobile. (#959)
 - Grouping by completion date splits anything older than a week into calendar months instead of one **Earlier** heading, so archives spanning years read as a timeline. (#959)
 - The Archive and Trash search boxes match the search field used by every other list, and the Inbox capture bar draws its focus ring around the whole field instead of through the microphone and add buttons. (#959)
 - Grouped lists put the ungrouped catch-all group (No project, No context, General, …) last on desktop and mobile, so the groups you are looking for come first. (#963)
