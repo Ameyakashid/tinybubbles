@@ -68,7 +68,8 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Settings
 
-- Correcting a completed task's completion time to something older than the auto-archive limit now files it away immediately, instead of leaving it in Done until the twice-daily check runs. (#959)
+- Correcting a completed task's completion time to something older than the auto-archive limit now files it away immediately. (#959)
+- Auto-archive runs every time the app starts instead of at most twice a day, so a Done task that is past the limit is filed on the next launch rather than lingering for up to twelve hours. The check only looks at completed tasks and writes nothing when none are due. (#959)
 - Desktop exposes **Skip reminders** for a timed start even when the task has no timed due date, matching mobile and the reminder handoff behavior. (#885)
 
 ## Sync & Automation

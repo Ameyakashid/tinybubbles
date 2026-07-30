@@ -473,6 +473,11 @@ export interface FilterSettings {
 
 export interface MigrationSettings {
     version?: number;
+    /**
+     * Written by the auto-archive throttle removed in #959. Nothing reads it;
+     * kept typed so an install carrying one still round-trips through settings
+     * instead of being dropped on the next save.
+     */
     lastAutoArchiveAt?: string;
     lastTombstoneCleanupAt?: string;
 }

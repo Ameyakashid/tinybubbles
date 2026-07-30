@@ -158,37 +158,31 @@ describe('runLoadMigrations', () => {
         expect(result.tasks[0].status).toBe('next');
     });
 
-    it('auto-archive-stale-tasks + bump-auto-archive-timestamp: archives a stale completed task once the throttle elapses', () => {
+    // `settledSettings` carries `lastAutoArchiveAt: NOW_ISO`, i.e. a pass that just
+    // ran. The old twice-daily throttle skipped this load entirely, so a stale task
+    // sat in Done across restarts with nothing to explain why (#959).
+    it('auto-archive-stale-tasks: archives a stale completed task on a load right after the last pass', () => {
         const data = settledData({
             tasks: [{
                 id: 't1', title: 'T', status: 'done', tags: [], contexts: [],
                 completedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
             } as unknown as Task],
         });
-        data.settings = { ...data.settings, migrations: { ...data.settings.migrations, lastAutoArchiveAt: '2000-01-01T00:00:00.000Z' } };
         const { data: result, applied } = runLoadMigrations(data, ctxFor(data));
-        expect(applied).toEqual(['bump-auto-archive-timestamp', 'auto-archive-stale-tasks']);
+        expect(applied).toEqual(['auto-archive-stale-tasks']);
         expect(result.tasks[0].status).toBe('archived');
-        expect(result.settings.migrations?.lastAutoArchiveAt).toBe(NOW_ISO);
     });
 
-    it('bump-auto-archive-timestamp fires alone when the throttle elapses but nothing is actually stale', () => {
-        const data = settledData();
-        data.settings = { ...data.settings, migrations: { ...data.settings.migrations, lastAutoArchiveAt: '2000-01-01T00:00:00.000Z' } };
-        const { applied } = runLoadMigrations(data, ctxFor(data));
-        expect(applied).toEqual(['bump-auto-archive-timestamp']);
-    });
-
-    it('does not run auto-archive before the throttle interval elapses', () => {
+    it('auto-archive-stale-tasks: writes nothing when no completed task is stale yet', () => {
         const data = settledData({
             tasks: [{
                 id: 't1', title: 'T', status: 'done', tags: [], contexts: [],
-                completedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+                completedAt: NOW_ISO, createdAt: NOW_ISO, updatedAt: NOW_ISO,
             } as unknown as Task],
         });
         const { applied } = runLoadMigrations(data, ctxFor(data));
-        expect(applied).not.toContain('auto-archive-stale-tasks');
-        expect(applied).not.toContain('bump-auto-archive-timestamp');
+        // No bookkeeping timestamp to bump, so an idle load stays a no-op.
+        expect(applied).toEqual([]);
     });
 
     it('purge-expired-tombstones + bump-tombstone-cleanup-timestamp: purges an expired tombstone once the throttle elapses', () => {

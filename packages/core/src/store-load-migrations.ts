@@ -19,8 +19,6 @@ import type { AppData, Area, Project, Task, TaskEditorFieldId } from './types';
 // backfill) needs to run once for installs that predate it. Existing installs
 // already at this version skip that block entirely.
 export const MIGRATION_VERSION = 1;
-// Run auto-archive at most twice a day to keep background work bounded.
-export const AUTO_ARCHIVE_INTERVAL_MS = 12 * 60 * 60 * 1000;
 export const TOMBSTONE_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const TASK_EDITOR_DEFAULTS_VERSION = 5;
 const FOCUS_GROUP_BY_DEFAULTS_VERSION = 1;
@@ -45,8 +43,6 @@ export type LoadContext = {
     isFreshInstall: boolean;
     /** Gates the one-time project/area schema backfill (migrations.version). */
     shouldRunSchemaMigration: boolean;
-    /** Throttles the auto-archive pass to AUTO_ARCHIVE_INTERVAL_MS. */
-    shouldRunAutoArchive: boolean;
     /** Throttles the tombstone purge to TOMBSTONE_CLEANUP_INTERVAL_MS. */
     shouldRunTombstoneCleanup: boolean;
 };
@@ -58,14 +54,12 @@ export const buildLoadContext = (
     nowMs: number
 ): LoadContext => {
     const migrations = settings.migrations ?? {};
-    const lastAutoArchiveAt = safeParseDate(migrations.lastAutoArchiveAt)?.getTime() ?? 0;
     const lastTombstoneCleanupAt = safeParseDate(migrations.lastTombstoneCleanupAt)?.getTime() ?? 0;
     return {
         nowIso,
         nowMs,
         isFreshInstall,
         shouldRunSchemaMigration: (migrations.version ?? 0) < MIGRATION_VERSION,
-        shouldRunAutoArchive: nowMs - lastAutoArchiveAt > AUTO_ARCHIVE_INTERVAL_MS,
         shouldRunTombstoneCleanup: nowMs - lastTombstoneCleanupAt > TOMBSTONE_CLEANUP_INTERVAL_MS,
     };
 };
@@ -124,18 +118,6 @@ const bumpMigrationsVersionMigration: LoadMigration = {
         settings: {
             ...data.settings,
             migrations: { ...(data.settings.migrations ?? {}), version: MIGRATION_VERSION },
-        },
-    }),
-};
-
-const bumpAutoArchiveTimestampMigration: LoadMigration = {
-    name: 'bump-auto-archive-timestamp',
-    shouldRun: (ctx) => ctx.shouldRunAutoArchive,
-    run: (data, ctx) => ({
-        ...data,
-        settings: {
-            ...data.settings,
-            migrations: { ...(data.settings.migrations ?? {}), lastAutoArchiveAt: ctx.nowIso },
         },
     }),
 };
@@ -339,9 +321,16 @@ export const runAutoArchive = (
     };
 };
 
+/**
+ * Runs on every load, deliberately unthrottled. It walks the task list once and
+ * the predicate rejects anything that is not `done` on its second line — the
+ * same shape as promote-scheduled-tasks above, which has always run every load.
+ * A twice-daily throttle used to gate it, which meant a completion you had just
+ * corrected sat in Done across restarts with nothing to explain why, and cost a
+ * settings write per window even when nothing was stale (#959).
+ */
 const autoArchiveStaleTasksMigration: LoadMigration = {
     name: 'auto-archive-stale-tasks',
-    shouldRun: (ctx) => ctx.shouldRunAutoArchive,
     run: (data, ctx) => {
         const result = runAutoArchive(data.tasks, data.settings, {
             nowIso: ctx.nowIso,
@@ -673,7 +662,6 @@ const purgeExpiredTombstonesMigration: LoadMigration = {
 const LOAD_MIGRATIONS: LoadMigration[] = [
     normalizeAreaTimestampsMigration,
     bumpMigrationsVersionMigration,
-    bumpAutoArchiveTimestampMigration,
     bumpTombstoneCleanupTimestampMigration,
     // Everything below reads settings.deviceId for revBy stamping.
     ensureDeviceIdMigration,
