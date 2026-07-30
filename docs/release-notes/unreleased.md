@@ -54,6 +54,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Desktop
 
+- The in-app add-task shortcut (`a` in Vim/Emacs styles, Insert) is contextual again: inside a project it opens that project's add dialog instead of sending the task to the Inbox, and views with an inline capture bar focus it. Views without their own add affordance still open the global quick-add. (#978)
 - Desktop time fields keep their text area available for manual entry; their native clock icon still opens the picker. (#896)
 - The task editor's **Review date** takes the same native time field as Start and Due, so it has a picker and follows the clock format of your language instead of being a plain `HH:MM` text box. (#896)
 - Desktop applies saved geometry before showing the window, waits for the interface to paint, and keeps a separate size and position for each monitor layout. Existing `v1.1.5` geometry seeds the first profile; on a first run or new monitor layout, startup geometry seeds a normal window rectangle so closing while maximized or fullscreen cannot overwrite it. (#936)

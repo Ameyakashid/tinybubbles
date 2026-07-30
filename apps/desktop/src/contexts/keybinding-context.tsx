@@ -154,6 +154,23 @@ function triggerQuickAdd() {
     window.dispatchEvent(new Event('mindwtr:quick-add'));
 }
 
+// Click the current view's visible add-task affordance so a keyboard add
+// inherits its context — a project view's trigger presets that project —
+// instead of always landing in the Inbox (#978).
+function clickVisibleAddTaskTrigger(): boolean {
+    const root = document.querySelector<HTMLElement>('[data-main-content]') ?? document.body;
+    const target = Array.from(root.querySelectorAll<HTMLElement>('[data-add-task-trigger]'))
+        .find((element) => {
+            if ('disabled' in element && Boolean((element as HTMLButtonElement).disabled)) return false;
+            const style = window.getComputedStyle(element);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+    if (!target) return false;
+    target.focus();
+    target.click();
+    return true;
+}
+
 function getAppScopedShortcutKey(event: KeyboardEvent): string {
     if (event.key.length !== 1) return event.key;
     // Caps Lock reports 'A' without Shift; decide the a/A pair by Shift alone
@@ -755,7 +772,9 @@ export function KeybindingProvider({
                 }
                 if (!pendingRef.current.key && appShortcutKey === 'a') {
                     e.preventDefault();
-                    triggerQuickAdd();
+                    if (!scopeRef.current?.focusAddInput?.() && !clickVisibleAddTaskTrigger()) {
+                        triggerQuickAdd();
+                    }
                     return;
                 }
                 if (!pendingRef.current.key && appShortcutKey === 's') {
@@ -776,7 +795,7 @@ export function KeybindingProvider({
                 }
                 if (e.key === 'Insert') {
                     e.preventDefault();
-                    if (!scopeRef.current?.focusAddInput?.()) {
+                    if (!scopeRef.current?.focusAddInput?.() && !clickVisibleAddTaskTrigger()) {
                         triggerQuickAdd();
                     }
                     return;

@@ -283,7 +283,7 @@ describe('ProjectWorkspace Select mode', () => {
         window.removeEventListener('mindwtr:quick-add', quickAddListener);
     });
 
-    it('opens default quick add from the app-scoped add-task shortcut', () => {
+    it('opens quick add with the selected project from the app-scoped add-task shortcut (#978)', () => {
         const quickAddListener = vi.fn();
         window.addEventListener('mindwtr:quick-add', quickAddListener);
 
@@ -292,7 +292,12 @@ describe('ProjectWorkspace Select mode', () => {
         fireEvent.keyDown(window, { key: 'a' });
 
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        expect((quickAddListener.mock.calls[0]?.[0] as CustomEvent).detail).toBeUndefined();
+        expect((quickAddListener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+            initialProps: {
+                projectId: project.id,
+                status: 'next',
+            },
+        });
         window.removeEventListener('mindwtr:quick-add', quickAddListener);
     });
 

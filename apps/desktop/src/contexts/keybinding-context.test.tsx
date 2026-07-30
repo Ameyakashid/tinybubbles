@@ -213,7 +213,7 @@ describe('KeybindingProvider (vim)', () => {
         window.removeEventListener('mindwtr:quick-add', quickAddListener);
     });
 
-    it.each(['vim', 'emacs'] as const)('opens app-scoped quick add with a in %s style', (style) => {
+    it.each(['vim', 'emacs'] as const)('a focuses the scope add input instead of the global quick add in %s style (#978)', (style) => {
         const focusAddInput = vi.fn(() => true);
         const quickAddListener = vi.fn();
         window.addEventListener('mindwtr:quick-add', quickAddListener);
@@ -234,9 +234,61 @@ describe('KeybindingProvider (vim)', () => {
 
         fireEvent.keyDown(window, { key: 'a' });
 
+        expect(focusAddInput).toHaveBeenCalledTimes(1);
+        expect(quickAddListener).not.toHaveBeenCalled();
+        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+    });
+
+    it('a clicks the view add-task trigger when the scope has no add input (#978)', () => {
+        const quickAddListener = vi.fn();
+        const triggerClick = vi.fn();
+        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        useTaskStore.setState((state) => ({
+            settings: {
+                ...state.settings,
+                keybindingStyle: 'vim',
+            },
+        }));
+
+        render(
+            <LanguageProvider>
+                <KeybindingProvider currentView="projects" onNavigate={vi.fn()}>
+                    <div data-main-content>
+                        <button type="button" data-add-task-trigger onClick={triggerClick}>Add task</button>
+                        <DummyList />
+                    </div>
+                </KeybindingProvider>
+            </LanguageProvider>
+        );
+
+        fireEvent.keyDown(window, { key: 'a' });
+
+        expect(triggerClick).toHaveBeenCalledTimes(1);
+        expect(quickAddListener).not.toHaveBeenCalled();
+        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+    });
+
+    it('a falls back to the global quick add when the view has no add affordance', () => {
+        const quickAddListener = vi.fn();
+        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        useTaskStore.setState((state) => ({
+            settings: {
+                ...state.settings,
+                keybindingStyle: 'vim',
+            },
+        }));
+
+        render(
+            <LanguageProvider>
+                <KeybindingProvider currentView="inbox" onNavigate={vi.fn()}>
+                    <DummyList />
+                </KeybindingProvider>
+            </LanguageProvider>
+        );
+
+        fireEvent.keyDown(window, { key: 'a' });
+
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        expect((quickAddListener.mock.calls[0]?.[0] as CustomEvent).detail).toBeUndefined();
-        expect(focusAddInput).not.toHaveBeenCalled();
         window.removeEventListener('mindwtr:quick-add', quickAddListener);
     });
 
