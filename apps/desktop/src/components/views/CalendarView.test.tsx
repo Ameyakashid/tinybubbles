@@ -215,6 +215,23 @@ describe('CalendarView', () => {
         expect(markerStyle).toContain('color: hsl(var(--primary-foreground));');
     });
 
+    it('keeps week columns aligned beside the scrollbar and the midnight label visible', async () => {
+        window.history.replaceState(null, '', '/?calendarView=week&calendarDate=2026-04-03');
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        const headerGrid = screen.getByText('Time').parentElement;
+        const allDayGrid = screen.getByText('All day').parentElement;
+        const timedScroller = document.querySelector('[data-calendar-timed-drop-date]')?.parentElement?.parentElement;
+        const midnightLabel = timedScroller?.firstElementChild?.firstElementChild?.firstElementChild;
+
+        expect(headerGrid).toHaveClass('[scrollbar-gutter:stable]');
+        expect(allDayGrid).toHaveClass('[scrollbar-gutter:stable]');
+        expect(timedScroller).toHaveClass('[scrollbar-gutter:stable]');
+        expect(midnightLabel).toHaveClass('first:translate-y-0');
+    });
+
     it('starts a restored schedule view from today instead of the first day of the month', async () => {
         window.history.replaceState(null, '', '/?calendarView=schedule&calendarMonth=2026-04');
         storeMocks.taskStoreState.tasks = [

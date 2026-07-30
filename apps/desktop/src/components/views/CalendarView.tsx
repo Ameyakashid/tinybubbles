@@ -632,7 +632,7 @@ export function CalendarView() {
                 {(viewMode === 'day' || viewMode === 'week') && (
                     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
                         <div
-                            className="grid border-b border-border bg-muted/40"
+                            className="grid overflow-y-hidden border-b border-border bg-muted/40 [scrollbar-gutter:stable]"
                             style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}
                         >
                             <div className="border-r border-border p-2 text-xs font-medium text-muted-foreground">
@@ -659,7 +659,7 @@ export function CalendarView() {
                         </div>
 
                         <div
-                            className="grid border-b border-border"
+                            className="grid overflow-y-hidden border-b border-border [scrollbar-gutter:stable]"
                             style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}
                         >
                             <div className="border-r border-border p-2 text-xs font-medium text-muted-foreground">
@@ -732,7 +732,7 @@ export function CalendarView() {
 
                         <div
                             ref={timelineScrollRef}
-                            className="overflow-y-auto"
+                            className="overflow-y-auto [scrollbar-gutter:stable]"
                             style={{ height: 'clamp(28rem, calc(100vh - 20rem), 48rem)' }}
                         >
                             <div className="grid" style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}>
@@ -740,7 +740,7 @@ export function CalendarView() {
                                     {Array.from({ length: DESKTOP_DAY_END_HOUR - DESKTOP_DAY_START_HOUR + 1 }, (_, index) => {
                                         const hour = DESKTOP_DAY_START_HOUR + index;
                                         return (
-                                            <div key={hour} className="absolute right-2 -translate-y-2 text-[11px] text-muted-foreground" style={{ top: index * DESKTOP_HOUR_HEIGHT }}>
+                                            <div key={hour} className="absolute right-2 -translate-y-2 text-[11px] text-muted-foreground first:translate-y-0" style={{ top: index * DESKTOP_HOUR_HEIGHT }}>
                                                 {safeFormatDate(new Date(0, 0, 1, hour), 'p')}
                                             </div>
                                         );

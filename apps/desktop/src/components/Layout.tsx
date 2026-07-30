@@ -299,6 +299,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const isWideView = wideViews.has(currentView);
     const fullWidthViews = new Set([
         'board',
+        'calendar',
         'projects',
         'contexts',
         'obsidian',
@@ -946,7 +947,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                         ? "max-w-[800px]"
                         : isFullWidthView
                             ? "w-full max-w-none"
-                            : (isWideView || currentView === 'calendar')
+                            : isWideView
                             ? "w-full max-w-6xl"
                             : "max-w-4xl"
                 )}>
