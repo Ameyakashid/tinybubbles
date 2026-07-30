@@ -27,7 +27,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Calendar
 
-- Desktop Week view can show two to seven days, remembers the device-local choice, and keeps the selected weekday stable while paging. (#951)
+- Desktop Week view can show two to seven days and remembers the device-local choice. Shorter views are rolling ranges: Previous and Next advance by the visible day count, so no days disappear between pages. (#951)
 - A device-local **Completed** toggle shows done and archived tasks on their completion date across desktop and mobile. It also includes older tasks that only carry the legacy completion timestamp. (#955)
 - A subscribed `.ics` feed that carries `CATEGORIES` splits into one calendar per category, each with its own colour and show/hide toggle.
 - Self-hosted servers can publish a token-protected, read-only calendar feed for scheduled tasks and deadlines. Feed generation now handles standalone carriage returns and timed start/due values without dropping events because of the server time zone, and the server throttles invalid-token requests. (#952)

@@ -13,6 +13,7 @@ import {
     eachDayOfInterval,
     endOfWeek,
     format,
+    startOfDay,
     startOfWeek,
     subDays,
     subWeeks,
@@ -39,7 +40,6 @@ import {
     CALENDAR_DAYS_IN_WEEK,
     CALENDAR_TIMELINE_DAY_COUNT_DEFAULT,
     coerceCalendarTimelineDayCount,
-    getCalendarTimelineStartOffset,
     dayKey,
     type CalendarViewMode,
 } from './calendar-primitives';
@@ -161,15 +161,14 @@ export function useCalendarMonthNavigation({
         start: calendarStart,
         end: calendarEnd,
     });
-    // The week timeline's window: `timelineDayCount` days inside the week holding
-    // `currentMonth`, positioned so that day is always one of them. Every week-mode
-    // consumer below — the range, the header label, the columns — reads it, so the
-    // three can never disagree about which days are on screen.
-    const timelineStart = useMemo(() => {
-        const weekStart = startOfWeek(currentMonth, { weekStartsOn });
-        const anchorWeekdayIndex = (currentMonth.getDay() - weekStartsOn + CALENDAR_DAYS_IN_WEEK) % CALENDAR_DAYS_IN_WEEK;
-        return addDays(weekStart, getCalendarTimelineStartOffset(anchorWeekdayIndex, timelineDayCount));
-    }, [currentMonth, timelineDayCount, weekStartsOn]);
+    // A full week keeps the configured week boundary. Shorter timelines are
+    // contiguous rolling windows, so paging by their size never hides a day.
+    const timelineStart = useMemo(
+        () => timelineDayCount === CALENDAR_DAYS_IN_WEEK
+            ? startOfWeek(currentMonth, { weekStartsOn })
+            : startOfDay(currentMonth),
+        [currentMonth, timelineDayCount, weekStartsOn]
+    );
     const visibleRange = useMemo(() => {
         if (viewMode === 'day') {
             return { start: currentMonth, end: currentMonth };
@@ -225,7 +224,7 @@ export function useCalendarMonthNavigation({
 
     const selectCalendarDate = (date: Date) => {
         setSelectedDate(date);
-        if (!isSameCalendarMonth(date, currentMonth, calendarSystem)) {
+        if (viewMode !== 'week' && !isSameCalendarMonth(date, currentMonth, calendarSystem)) {
             setCurrentMonth(date);
         }
     };
@@ -261,7 +260,7 @@ export function useCalendarMonthNavigation({
         const next = viewMode === 'day'
             ? subDays(currentMonth, 1)
             : viewMode === 'week'
-            ? subWeeks(currentMonth, 1)
+            ? subDays(currentMonth, timelineDayCount)
             : viewMode === 'schedule'
             ? subWeeks(currentMonth, 2)
             : addCalendarSystemMonths(currentMonth, -1, calendarSystem);
@@ -274,7 +273,7 @@ export function useCalendarMonthNavigation({
         const next = viewMode === 'day'
             ? addDays(currentMonth, 1)
             : viewMode === 'week'
-            ? addWeeks(currentMonth, 1)
+            ? addDays(currentMonth, timelineDayCount)
             : viewMode === 'schedule'
             ? addWeeks(currentMonth, 2)
             : addCalendarSystemMonths(currentMonth, 1, calendarSystem);

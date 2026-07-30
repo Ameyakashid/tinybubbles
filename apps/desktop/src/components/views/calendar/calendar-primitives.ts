@@ -38,22 +38,6 @@ export const coerceCalendarTimelineDayCount = (value?: number | null): number =>
     );
 };
 
-/**
- * Where a shorter timeline starts inside the week it belongs to.
- *
- * Mobile keeps the full week mounted and scrolls a window of `dayCount` columns
- * over it, clamping the scroll so the anchor day stays on screen and the window
- * never runs past the week. Desktop has no horizontal scroll, so the same clamp
- * decides which days get rendered instead — same window, different mechanism.
- * Because the offset is derived from the anchor's weekday, stepping a whole week
- * lands on the same columns again: 5 days anchored on a Monday stays Mon–Fri.
- */
-export const getCalendarTimelineStartOffset = (anchorWeekdayIndex: number, dayCount: number): number => {
-    if (!Number.isFinite(anchorWeekdayIndex)) return 0;
-    const lastStart = CALENDAR_DAYS_IN_WEEK - coerceCalendarTimelineDayCount(dayCount);
-    return Math.max(0, Math.min(Math.round(anchorWeekdayIndex), lastStart));
-};
-
 export type CalendarCellItem = CalendarDayItem;
 
 export type CalendarViewMode = 'day' | 'week' | 'month' | 'schedule';

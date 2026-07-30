@@ -148,45 +148,55 @@ describe('useCalendarMonthNavigation', () => {
         expect(result.current.timelineDays).toHaveLength(1);
     });
 
-    // 2026-04-03 is a Friday; with a Sunday week start its week runs Mar 29 – Apr 4.
     describe('timeline day count (#951)', () => {
-        it('shortens the timeline around the current day without leaving its week', () => {
+        it('uses the current day as the start of a shorter rolling window', () => {
             const { result } = renderNavigation();
 
             act(() => result.current.handleViewModeChange('week'));
             act(() => result.current.setTimelineDayCount(5));
 
-            // Anchored on Friday, a 5-day window can only start on Tuesday if it
-            // is to hold Friday and still end inside the week.
             expect(result.current.timelineDays.map(dayKey)).toEqual([
-                '2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-04',
+                '2026-04-03', '2026-04-04', '2026-04-05', '2026-04-06', '2026-04-07',
             ]);
-            expect(dayKey(result.current.visibleRange.start)).toBe('2026-03-31');
-            expect(dayKey(result.current.visibleRange.end)).toBe('2026-04-04');
-            expect(result.current.currentMonthLabel).toBe('Mar 31 - Apr 4, 2026');
+            expect(dayKey(result.current.visibleRange.start)).toBe('2026-04-03');
+            expect(dayKey(result.current.visibleRange.end)).toBe('2026-04-07');
+            expect(result.current.currentMonthLabel).toBe('Apr 3 - Apr 7, 2026');
         });
 
-        it('keeps the same weekdays when stepping a week, so a work week stays a work week', () => {
-            const { result } = renderNavigation({ weekStartsOn: 1 });
+        it('steps by the visible day count so every day remains reachable', () => {
+            const { result } = renderNavigation();
 
             act(() => result.current.handleViewModeChange('week'));
             act(() => result.current.revealDate(new Date(2026, 3, 6)));
             act(() => result.current.setTimelineDayCount(5));
 
-            // Monday anchor, Monday week start: exactly the Mon–Fri the report asked for.
             expect(result.current.timelineDays.map(dayKey)).toEqual([
                 '2026-04-06', '2026-04-07', '2026-04-08', '2026-04-09', '2026-04-10',
             ]);
 
             act(() => result.current.handleNextMonth());
             expect(result.current.timelineDays.map(dayKey)).toEqual([
-                '2026-04-13', '2026-04-14', '2026-04-15', '2026-04-16', '2026-04-17',
+                '2026-04-11', '2026-04-12', '2026-04-13', '2026-04-14', '2026-04-15',
             ]);
 
             act(() => result.current.handlePrevMonth());
             act(() => result.current.handlePrevMonth());
             expect(result.current.timelineDays.map(dayKey)).toEqual([
-                '2026-03-30', '2026-03-31', '2026-04-01', '2026-04-02', '2026-04-03',
+                '2026-04-01', '2026-04-02', '2026-04-03', '2026-04-04', '2026-04-05',
+            ]);
+        });
+
+        it('does not shift a rolling window when selecting a visible day in the next month', () => {
+            const { result } = renderNavigation();
+
+            act(() => result.current.handleViewModeChange('week'));
+            act(() => result.current.revealDate(new Date(2026, 3, 29)));
+            act(() => result.current.setTimelineDayCount(5));
+            act(() => result.current.selectCalendarDate(new Date(2026, 4, 1)));
+
+            expect(dayKey(result.current.selectedDate as Date)).toBe('2026-05-01');
+            expect(result.current.timelineDays.map(dayKey)).toEqual([
+                '2026-04-29', '2026-04-30', '2026-05-01', '2026-05-02', '2026-05-03',
             ]);
         });
 
