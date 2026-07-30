@@ -40,9 +40,15 @@ tauri-plugin-single-instance = "2"
 dirs = "5"
 rusqlite = { version = "0.31", features = ["bundled"] }
 keyring = "2"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "native-tls-vendored"] }
+# rustls, not native-tls: macOS native-tls is Secure Transport, which never
+# gained TLS 1.3, so TLS-1.3-only servers reject the handshake with "bad
+# protocol version" (#973). `rustls-tls-native-roots` still trusts the OS
+# certificate store, which is what #663 needed.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
 imap = "2.4"
-native-tls = "0.2"
+# IMAP capture still uses native-tls; keep OpenSSL vendored so Linux packages do
+# not depend on the build machine's libssl.
+native-tls = { version = "0.2", features = ["vendored"] }
 mail-parser = "0.11"
 hound = "3.5"
 whisper-rs = "0.16.0"

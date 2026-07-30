@@ -19,7 +19,7 @@ const NATIVE_HTTP_TIMEOUT_SECS: u64 = 30;
 fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Client, String> {
     let mut builder = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS))
-        .use_native_tls();
+        .use_rustls_tls();
     if let Some(url) = proxy_url.map(str::trim).filter(|url| !url.is_empty()) {
         let proxy = reqwest::Proxy::all(url)
             .map_err(|error| format!("Invalid proxy URL ({url}): {error}"))?;
