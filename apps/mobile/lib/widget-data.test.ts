@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppData } from '@mindwtr/core';
-import { buildWidgetPayload, resolveWidgetLanguage } from './widget-data';
+import { buildShortcutsSnapshot, buildWidgetPayload, resolveWidgetLanguage, SHORTCUTS_SNAPSHOT_ITEM_CAP, SHORTCUTS_SNAPSHOT_PROJECT_CAP } from './widget-data';
 
 const baseData: AppData = {
     tasks: [],
@@ -544,6 +544,155 @@ describe('widget-data', () => {
             const farTarget = daysFromNow(30);
             const farItem = buildDueItem(toDateOnly(farTarget));
             expect(farItem.dueLabel).toBe(`${farTarget.getMonth() + 1}/${farTarget.getDate()}`);
+        });
+    });
+
+    describe('buildShortcutsSnapshot', () => {
+        const now = new Date().toISOString();
+        const task = (overrides: Partial<AppData['tasks'][number]>): AppData['tasks'][number] => ({
+            id: overrides.id ?? 'task',
+            title: overrides.title ?? 'Task',
+            status: overrides.status ?? 'next',
+            tags: [],
+            contexts: [],
+            createdAt: now,
+            updatedAt: now,
+            ...overrides,
+        });
+
+        it('buckets tasks by list, dropping done/archived/reference/deleted', () => {
+            const data: AppData = {
+                ...baseData,
+                tasks: [
+                    task({ id: 'i1', status: 'inbox' }),
+                    task({ id: 'n1', status: 'next' }),
+                    task({ id: 'w1', status: 'waiting' }),
+                    task({ id: 's1', status: 'someday' }),
+                    task({ id: 'd1', status: 'done' }),
+                    task({ id: 'a1', status: 'archived' }),
+                    task({ id: 'r1', status: 'reference' }),
+                    task({ id: 'del1', status: 'next', deletedAt: now }),
+                ],
+            };
+
+            const snapshot = buildShortcutsSnapshot(data);
+
+            expect(snapshot.lists.inbox.map((item) => item.id)).toEqual(['i1']);
+            expect(snapshot.lists.next.map((item) => item.id)).toEqual(['n1']);
+            expect(snapshot.lists.waiting.map((item) => item.id)).toEqual(['w1']);
+            expect(snapshot.lists.someday.map((item) => item.id)).toEqual(['s1']);
+            const allIds = Object.values(snapshot.lists).flat().map((item) => item.id);
+            expect(allIds).not.toContain('d1');
+            expect(allIds).not.toContain('a1');
+            expect(allIds).not.toContain('r1');
+            expect(allIds).not.toContain('del1');
+        });
+
+        it('puts starred next-action tasks in the focus list', () => {
+            const data: AppData = {
+                ...baseData,
+                tasks: [task({ id: 'star1', status: 'next', isFocusedToday: true })],
+            };
+
+            const snapshot = buildShortcutsSnapshot(data);
+
+            expect(snapshot.lists.focus.map((item) => item.id)).toEqual(['star1']);
+        });
+
+        it('groups active-project tasks and carries dueDate/startDate/project fields', () => {
+            const data: AppData = {
+                ...baseData,
+                projects: [
+                    { id: 'p1', title: 'Errands', status: 'active', color: '#000', order: 0, tagIds: [], createdAt: now, updatedAt: now },
+                    { id: 'p2', title: 'Old', status: 'archived', color: '#000', order: 1, tagIds: [], createdAt: now, updatedAt: now },
+                ],
+                tasks: [
+                    task({ id: 't1', projectId: 'p1', dueDate: '2026-08-14', startTime: '2026-08-01' }),
+                    task({ id: 't2', projectId: 'p2' }),
+                ],
+            };
+
+            const snapshot = buildShortcutsSnapshot(data);
+
+            expect(snapshot.projects).toHaveLength(1);
+            expect(snapshot.projects[0].id).toBe('p1');
+            expect(snapshot.projects[0].name).toBe('Errands');
+            const item = snapshot.projects[0].items[0];
+            expect(item.id).toBe('t1');
+            expect(item.projectId).toBe('p1');
+            expect(item.projectName).toBe('Errands');
+            expect(item.dueDate).toBe('2026-08-14');
+            expect(item.startDate).toBe('2026-08-01');
+            // The archived project's task is neither an active-project group
+            // nor, on its own, excluded from list buckets by project status --
+            // but only active projects get a group at all.
+            expect(snapshot.projects.some((group) => group.id === 'p2')).toBe(false);
+        });
+
+        it('groups each project from a single pass without cross-contaminating other projects', () => {
+            const data: AppData = {
+                ...baseData,
+                projects: [
+                    { id: 'p1', title: 'Errands', status: 'active', color: '#000', order: 0, tagIds: [], createdAt: now, updatedAt: now },
+                    { id: 'p2', title: 'Home', status: 'active', color: '#000', order: 1, tagIds: [], createdAt: now, updatedAt: now },
+                ],
+                tasks: [
+                    task({ id: 't1', projectId: 'p1' }),
+                    task({ id: 't2', projectId: 'p2' }),
+                    task({ id: 't3', projectId: 'p1' }),
+                    task({ id: 't4' }), // no project at all
+                ],
+            };
+
+            const snapshot = buildShortcutsSnapshot(data);
+
+            const p1 = snapshot.projects.find((group) => group.id === 'p1');
+            const p2 = snapshot.projects.find((group) => group.id === 'p2');
+            expect(p1?.items.map((item) => item.id).sort()).toEqual(['t1', 't3']);
+            expect(p2?.items.map((item) => item.id)).toEqual(['t2']);
+        });
+
+        it('caps the number of project groups deterministically by project order', () => {
+            const manyProjects = Array.from({ length: SHORTCUTS_SNAPSHOT_PROJECT_CAP + 10 }, (_, index) => ({
+                id: `p${index}`,
+                title: `Project ${index}`,
+                status: 'active' as const,
+                color: '#000',
+                // Reverse order so the survivors (lowest order) are NOT simply
+                // "first in the array" -- proves the cap sorts by order.
+                order: SHORTCUTS_SNAPSHOT_PROJECT_CAP + 10 - index,
+                tagIds: [],
+                createdAt: now,
+                updatedAt: now,
+            }));
+            const tasksOnePerProject = manyProjects.map((project, index) => (
+                task({ id: `t${index}`, projectId: project.id })
+            ));
+
+            const snapshot = buildShortcutsSnapshot({ ...baseData, projects: manyProjects, tasks: tasksOnePerProject });
+
+            expect(snapshot.projects).toHaveLength(SHORTCUTS_SNAPSHOT_PROJECT_CAP);
+            // The lowest `order` values are the last projects in the array
+            // (reversed order above), so they must be the ones that survive.
+            const survivingIds = new Set(snapshot.projects.map((group) => group.id));
+            for (let index = manyProjects.length - SHORTCUTS_SNAPSHOT_PROJECT_CAP; index < manyProjects.length; index += 1) {
+                expect(survivingIds.has(manyProjects[index].id)).toBe(true);
+            }
+        });
+
+        it('caps each list and project at the shared item cap', () => {
+            const manyTasks = Array.from({ length: SHORTCUTS_SNAPSHOT_ITEM_CAP + 10 }, (_, index) => (
+                task({ id: `n${index}`, status: 'next' })
+            ));
+            const snapshot = buildShortcutsSnapshot({ ...baseData, tasks: manyTasks });
+
+            expect(snapshot.lists.next).toHaveLength(SHORTCUTS_SNAPSHOT_ITEM_CAP);
+        });
+
+        it('never includes a generatedAt-dependent field inside lists/projects', () => {
+            const snapshot = buildShortcutsSnapshot({ ...baseData, tasks: [task({ id: 't1' })] });
+            expect(typeof snapshot.generatedAt).toBe('string');
+            expect(new Date(snapshot.generatedAt).toString()).not.toBe('Invalid Date');
         });
     });
 });

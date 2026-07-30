@@ -50,6 +50,31 @@ describe('parsePendingCapture', () => {
         expect(parsePendingCapture('not json')).toBeNull();
         expect(parsePendingCapture('[]')).toBeNull();
     });
+
+    it('accepts a valid ISO due/start date and collapses it to a date-only string', () => {
+        const capture = parsePendingCapture(JSON.stringify({
+            id: 'a',
+            title: 'Renew passport',
+            dueDate: '2026-08-14',
+            startDate: '2026-08-01T09:30:00',
+        }));
+        expect(capture?.dueDate).toBe('2026-08-14');
+        // The Shortcut's Date parameter always carries a time; it must collapse
+        // to the local calendar day so it never arms a start reminder (#755).
+        expect(capture?.startDate).toBe('2026-08-01');
+    });
+
+    it('ignores invalid due/start date junk without failing the capture', () => {
+        const capture = parsePendingCapture(JSON.stringify({
+            id: 'a',
+            title: 'Renew passport',
+            dueDate: 'not-a-date',
+            startDate: '',
+        }));
+        expect(capture).not.toBeNull();
+        expect(capture?.dueDate).toBeUndefined();
+        expect(capture?.startDate).toBeUndefined();
+    });
 });
 
 describe('buildPendingCaptureTaskProps', () => {
@@ -71,6 +96,15 @@ describe('buildPendingCaptureTaskProps', () => {
         expect(buildPendingCaptureTaskProps({ id: 'a', title: 'T', tags: [], project: 'p1' }, [active]).projectId).toBe('p1');
         expect(buildPendingCaptureTaskProps({ id: 'a', title: 'T', tags: [], project: 'Old' }, [archived]).projectId).toBeUndefined();
         expect(buildPendingCaptureTaskProps({ id: 'a', title: 'T', tags: [], project: 'Nope' }, [active]).projectId).toBeUndefined();
+    });
+
+    it('maps structured dueDate/startDate onto the task, startDate to startTime', () => {
+        const props = buildPendingCaptureTaskProps(
+            { id: 'a', title: 'T', tags: [], dueDate: '2026-08-14', startDate: '2026-08-01' },
+            [],
+        );
+        expect(props.dueDate).toBe('2026-08-14');
+        expect(props.startTime).toBe('2026-08-01');
     });
 });
 
@@ -210,6 +244,17 @@ describe('ingestPendingCaptures', () => {
         expect(addProject).not.toHaveBeenCalled();
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
         expect(props.projectId).toBe('p-active');
+    });
+
+    it('lets the structured due/start date beat a parsed /due: token', async () => {
+        oneFile('a.json', { id: 'a', title: 'Buy milk /due:2026-07-24', dueDate: '2026-08-14', startDate: '2026-08-01' });
+        const addTask = addTaskMock();
+
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+
+        const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
+        expect(props.dueDate).toBe('2026-08-14');
+        expect(props.startTime).toBe('2026-08-01');
     });
 
     it('unions structured tags with parsed #tags, deduped', async () => {

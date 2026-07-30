@@ -4,6 +4,7 @@ import {
     normalizeClockTimeInput,
     parseQuickAdd,
     prepareCaptureTask,
+    safeParseDate,
     type Area,
     type AppData,
     type CaptureAssemblyInput,
@@ -27,6 +28,8 @@ export type PendingCapture = {
     tags: string[];
     project?: string;
     createdAt?: string;
+    dueDate?: string;
+    startDate?: string;
 };
 
 const trimOrUndefined = (value: unknown): string | undefined => {
@@ -34,6 +37,27 @@ const trimOrUndefined = (value: unknown): string | undefined => {
     const trimmed = value.trim();
     return trimmed ? trimmed : undefined;
 };
+
+// The Shortcut's "Due date"/"Start date" parameters are a native Date picker,
+// so Swift always hands back a value with a time component even when the
+// user only picked a day. Collapsing to the local calendar day here (same
+// sanitization spirit as a deep link's task props: never trust the raw
+// string, never fail the capture on garbage input) guarantees these fields
+// stay date-only and never arm a due/start reminder, matching the v1
+// guardrail that background captures don't schedule notifications (#755).
+// ponytail: always drops any time component rather than trying to infer
+// user intent from it; revisit if Shortcuts-sourced reminder times are ever
+// requested.
+function sanitizeStructuredDateInput(raw: unknown): string | undefined {
+    const trimmed = trimOrUndefined(raw);
+    if (!trimmed) return undefined;
+    const parsed = safeParseDate(trimmed);
+    if (!parsed) return undefined;
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 export function parsePendingCapture(raw: string): PendingCapture | null {
     let parsed: unknown;
@@ -54,6 +78,8 @@ export function parsePendingCapture(raw: string): PendingCapture | null {
     const createdAt = trimOrUndefined(record.createdAt);
     const tagsRaw = trimOrUndefined(record.tags);
     const tags = tagsRaw ? tagsRaw.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
+    const dueDate = sanitizeStructuredDateInput(record.dueDate);
+    const startDate = sanitizeStructuredDateInput(record.startDate);
 
     return {
         id,
@@ -62,6 +88,8 @@ export function parsePendingCapture(raw: string): PendingCapture | null {
         tags,
         ...(project ? { project } : {}),
         ...(createdAt ? { createdAt } : {}),
+        ...(dueDate ? { dueDate } : {}),
+        ...(startDate ? { startDate } : {}),
     };
 }
 
@@ -89,6 +117,9 @@ export function buildPendingCaptureTaskProps(capture: PendingCapture, projects: 
 
     const projectId = resolveStructuredProjectId(capture, projects);
     if (projectId) props.projectId = projectId;
+
+    if (capture.dueDate) props.dueDate = capture.dueDate;
+    if (capture.startDate) props.startTime = capture.startDate;
 
     return props;
 }
@@ -149,6 +180,11 @@ async function assembleCaptureTask(
                 if (structuredTags.length > 0) {
                     taskProps.tags = Array.from(new Set([...(taskProps.tags ?? []), ...structuredTags]));
                 }
+
+                // The Shortcut's own date pickers beat a parsed /due: or /start:
+                // token in the title, same precedence as project/tags above.
+                if (capture.dueDate) taskProps.dueDate = capture.dueDate;
+                if (capture.startDate) taskProps.startTime = capture.startDate;
                 return taskProps;
             },
         });

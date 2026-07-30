@@ -76,6 +76,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Sync & Automation
 
+- Apple Shortcuts grows a v2 action set: the silent capture action is now called **Add to Mindwtr** (it always could file into a project — the old Inbox-only name hid it) and takes optional due and start dates; a new read-only **Get Mindwtr Tasks** action returns tasks from Inbox, Focus, Next, Waiting, Someday, or a project for use in later Shortcut steps; and tasks appear in Spotlight search on iOS 18+, opening Mindwtr to their list. Headless results reflect the last time Mindwtr was open. (#980)
 - A new **Merge Backup** option beside Restore combines a backup file with your current data instead of replacing it: items only in the backup are added, the newer copy wins where both exist, local-only items stay, and anything you deleted here stays deleted. The result reports how many tasks were added and updated, and a recovery snapshot is saved first. (#976)
 
 - While the local database is refusing writes, the fallback copy is now the one every read serves: opening the app, lists, and search no longer show older database contents, a read can no longer overwrite the fresher fallback with stale data, and a hiccup reading the fallback is retried on the next launch instead of silently abandoning the changes it holds. (#975)

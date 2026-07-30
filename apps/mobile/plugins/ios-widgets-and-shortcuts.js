@@ -15,6 +15,7 @@ const APP_INTENTS_FOLDER = 'ios-app-intents';
 const APP_GROUP = 'group.tech.dongdongbh.mindwtr';
 const SHORTCUT_URL_KEY = 'url';
 const SIRI_CAPTURE_SHORTCUTS_PROVIDER = 'MindwtrSiriCaptureShortcuts';
+const SPOTLIGHT_INDEXER = 'MindwtrShortcutsSpotlightIndexer';
 const SHORTCUT_ITEMS = [
   {
     UIApplicationShortcutItemType: 'tech.dongdongbh.mindwtr.add_task',
@@ -117,15 +118,27 @@ const ensureSourceFileInTarget = (xcodeProject, { filePath, groupKey, targetUuid
 
 const addSiriShortcutsRegistrationToAppDelegate = (contents) => {
   const registrationCall = `${SIRI_CAPTURE_SHORTCUTS_PROVIDER}.updateAppShortcutParameters()`;
-  if (contents.includes(registrationCall)) return contents;
+  // Spotlight reindexing must be driven by the app's own refresh path, never
+  // by an intent's perform() -- launch is the native entry point this plugin
+  // already owns, and it reads the same snapshot the widget pipeline writes
+  // on every foreground refresh (#980).
+  const reindexCall = `${SPOTLIGHT_INDEXER}.reindexIfNeeded()`;
+  const needsRegistration = !contents.includes(registrationCall);
+  const needsReindex = !contents.includes(reindexCall);
+  if (!needsRegistration && !needsReindex) return contents;
 
   const bindLine = '    bindReactNativeFactory(factory)\n';
   if (!contents.includes(bindLine)) return contents;
 
-  return contents.replace(
-    bindLine,
-    `${bindLine}\n    if #available(iOS 16.0, *) {\n      ${registrationCall}\n    }\n`
-  );
+  let insertion = '';
+  if (needsRegistration) {
+    insertion += `\n    if #available(iOS 16.0, *) {\n      ${registrationCall}\n    }\n`;
+  }
+  if (needsReindex) {
+    insertion += `\n    if #available(iOS 18.0, *) {\n      ${reindexCall}\n    }\n`;
+  }
+
+  return contents.replace(bindLine, `${bindLine}${insertion}`);
 };
 
 const addQuickActionsToInfoPlist = (config) =>
@@ -467,6 +480,7 @@ module.exports = withIosWidgetsAndShortcuts;
 module.exports.__testables = {
   APP_INTENTS_FOLDER,
   SIRI_CAPTURE_SHORTCUTS_PROVIDER,
+  SPOTLIGHT_INDEXER,
   addSiriShortcutsRegistrationToAppDelegate,
   collectSwiftFiles,
   ensureSourceFileInTarget,

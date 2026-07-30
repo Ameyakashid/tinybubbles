@@ -224,7 +224,7 @@ describe('widget-service', () => {
 
         expect(didUpdate).toBe(true);
         expect(mockRequestWidgetUpdate).not.toHaveBeenCalled();
-        expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(5);
+        expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(6);
         const payloadByKey = new Map(
             mockIosWidgetSetItem.mock.calls.map(([key, value]) => [key, JSON.parse(value as string)])
         );
@@ -235,5 +235,75 @@ describe('widget-service', () => {
         expect(payloadByKey.get('mindwtr-ios-widget-payload')?.items).toHaveLength(12);
         expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrTasksWidget');
         expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrFocusLockWidget');
+
+        const snapshot = payloadByKey.get('mindwtr-ios-shortcuts-snapshot');
+        expect(snapshot.lists.next.length).toBeGreaterThan(0);
+        expect(snapshot.lists.inbox).toEqual([]);
+        expect(typeof snapshot.generatedAt).toBe('string');
+    });
+
+    it('refreshes only the iOS shortcuts snapshot when a change is invisible to the widget, skipping widget writes and reload (#980 correction)', async () => {
+        mockPlatform.OS = 'ios';
+        mockIosWidgetSetItem.mockResolvedValue(undefined);
+
+        const data = buildData(2);
+        await updateMobileWidgetFromData(data);
+        mockIosWidgetSetItem.mockClear();
+        mockIosWidgetReloadTimelines.mockClear();
+
+        // A change outside the widget's own visible slice (a waiting-list task,
+        // never rendered on the widget) must still refresh the snapshot -- the
+        // snapshot has its own fingerprint, independent of the widget's.
+        const withWaitingTask: AppData = {
+            ...data,
+            tasks: [
+                ...data.tasks,
+                {
+                    id: 'waiting-1',
+                    title: 'Waiting on reply',
+                    status: 'waiting',
+                    tags: [],
+                    contexts: [],
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                },
+            ],
+        };
+        await updateMobileWidgetFromData(withWaitingTask);
+
+        // Only the snapshot key was written -- the widget's own fingerprint
+        // didn't change, so its five setItem calls and reloadTimelines must be
+        // skipped (restoring the #766 skip the shared fingerprint broke).
+        expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(1);
+        expect(mockIosWidgetReloadTimelines).not.toHaveBeenCalled();
+        const [key, value] = mockIosWidgetSetItem.mock.calls[0] as [string, string];
+        expect(key).toBe('mindwtr-ios-shortcuts-snapshot');
+        expect(JSON.parse(value).lists.waiting).toHaveLength(1);
+    });
+
+    it('refreshes only the widget payloads when a change is invisible to the snapshot, skipping the snapshot write (#980 correction)', async () => {
+        mockPlatform.OS = 'ios';
+        mockIosWidgetSetItem.mockResolvedValue(undefined);
+
+        // 30 starred/next tasks: the widget only shows its top slice, so
+        // pushing well past that slice (without changing snapshot content --
+        // same tasks, same lists) isn't representative. Instead, change a
+        // widget-visible task's title, which alters the widget fingerprint
+        // (it's inside the widget's own payload) and also alters the
+        // snapshot's "next" list content -- so assert the inverse case: a
+        // theme change affects only the widget payload (palette), never the
+        // snapshot (it carries no palette).
+        const data = buildData(2);
+        await updateMobileWidgetFromData(data);
+        mockIosWidgetSetItem.mockClear();
+        mockIosWidgetReloadTimelines.mockClear();
+
+        const withThemeChange: AppData = { ...data, settings: { ...data.settings, theme: 'nord' } };
+        await updateMobileWidgetFromData(withThemeChange);
+
+        expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(5);
+        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrTasksWidget');
+        const keys = mockIosWidgetSetItem.mock.calls.map(([key]) => key);
+        expect(keys).not.toContain('mindwtr-ios-shortcuts-snapshot');
     });
 });

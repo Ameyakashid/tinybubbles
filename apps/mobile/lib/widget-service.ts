@@ -6,7 +6,9 @@ import * as ReactNativeWidgetKit from 'react-native-widgetkit';
 
 import { buildTasksWidgetTree } from '../components/TasksWidget';
 import {
+    buildShortcutsSnapshot,
     buildWidgetPayload,
+    IOS_SHORTCUTS_SNAPSHOT_KEY,
     IOS_WIDGET_APP_GROUP,
     IOS_WIDGET_KIND,
     IOS_WIDGET_LOCK_KIND,
@@ -16,6 +18,7 @@ import {
     IOS_WIDGET_PAYLOAD_KEY_MEDIUM,
     IOS_WIDGET_PAYLOAD_KEY_SMALL,
     resolveWidgetLanguage,
+    type ShortcutsSnapshot,
     type TasksWidgetPayload,
     WIDGET_LANGUAGE_KEY,
 } from './widget-data';
@@ -128,7 +131,7 @@ async function updateAndroidWidgetsFromData(data: AppData, language: Language): 
     }
 }
 
-async function updateIosWidgetsFromData(data: AppData, language: Language): Promise<boolean> {
+async function updateIosWidgetPayloadsFromData(data: AppData, language: Language): Promise<boolean> {
     if (Platform.OS !== 'ios') return false;
     const widgetApi = await getIosWidgetApi();
     if (!widgetApi) return false;
@@ -183,6 +186,37 @@ async function updateIosWidgetsFromData(data: AppData, language: Language): Prom
     }
 }
 
+// Separate from the widget payload write above (#980 correction): the
+// snapshot changes on edits the widget never shows (a Waiting/Someday/Inbox
+// task, a project task outside the widget's own top-N slice), so it needs
+// its own change-skip gate. Sharing one fingerprint would either miss those
+// snapshot-only changes or re-run the widget's five setItem calls plus two
+// reloadTimelines on every one of them, which is exactly what #766 added a
+// cache to avoid.
+async function updateIosShortcutsSnapshotFromData(snapshot: ShortcutsSnapshot): Promise<boolean> {
+    if (Platform.OS !== 'ios') return false;
+    const widgetApi = await getIosWidgetApi();
+    if (!widgetApi) return false;
+
+    try {
+        await widgetApi.setItem(
+            IOS_SHORTCUTS_SNAPSHOT_KEY,
+            JSON.stringify(snapshot),
+            IOS_WIDGET_APP_GROUP,
+        );
+        return true;
+    } catch (error) {
+        if (__DEV__) {
+            void logWarn('[RNWidget] Failed to update iOS shortcuts snapshot', {
+                scope: 'widget',
+                extra: { error: error instanceof Error ? error.message : String(error) },
+            });
+        }
+        void logError(error, { scope: 'widget', extra: { platform: 'ios', surface: 'shortcuts-snapshot' } });
+        return false;
+    }
+}
+
 // Storage fires widget updates on every save and load, but the native render
 // (Android RemoteViews / iOS timeline reload) costs seconds on mid-range
 // devices while the payload build costs milliseconds (#766). Remember what was
@@ -191,25 +225,49 @@ async function updateIosWidgetsFromData(data: AppData, language: Language): Prom
 // widget-task-handler directly, so they never depend on this path.
 const WIDGET_FINGERPRINT_MAX_ITEMS = 50;
 let lastRenderedWidgetFingerprint: string | null = null;
+let lastRenderedShortcutsSnapshotFingerprint: string | null = null;
 
 export function resetMobileWidgetRenderCache(): void {
     lastRenderedWidgetFingerprint = null;
+    lastRenderedShortcutsSnapshotFingerprint = null;
 }
 
 export async function updateMobileWidgetFromData(data: AppData): Promise<boolean> {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') return false;
     const language = await resolvePayloadLanguage(data);
-    const fingerprint = `${language}:${JSON.stringify(
+
+    // Gate 1: the widget's own payload fingerprint, exactly as before #980 --
+    // this is the #766 skip and must not fire on changes the widget doesn't
+    // show.
+    const widgetFingerprint = `${language}:${JSON.stringify(
         buildPayloadFromData(data, language, WIDGET_FINGERPRINT_MAX_ITEMS),
     )}`;
-    if (fingerprint === lastRenderedWidgetFingerprint) return true;
-    const updated = Platform.OS === 'android'
-        ? await updateAndroidWidgetsFromData(data, language)
-        : await updateIosWidgetsFromData(data, language);
-    if (updated) {
-        lastRenderedWidgetFingerprint = fingerprint;
+    let widgetUpdated = true;
+    if (widgetFingerprint !== lastRenderedWidgetFingerprint) {
+        widgetUpdated = Platform.OS === 'android'
+            ? await updateAndroidWidgetsFromData(data, language)
+            : await updateIosWidgetPayloadsFromData(data, language);
+        if (widgetUpdated) {
+            lastRenderedWidgetFingerprint = widgetFingerprint;
+        }
     }
-    return updated;
+
+    // Gate 2: the Shortcuts/Spotlight snapshot's own fingerprint (iOS only),
+    // independent of the widget gate above. `generatedAt` is excluded -- it
+    // always changes, and folding it in would defeat the point of this cache.
+    let snapshotUpdated = true;
+    if (Platform.OS === 'ios') {
+        const snapshot = buildShortcutsSnapshot(data);
+        const snapshotFingerprint = JSON.stringify({ lists: snapshot.lists, projects: snapshot.projects });
+        if (snapshotFingerprint !== lastRenderedShortcutsSnapshotFingerprint) {
+            snapshotUpdated = await updateIosShortcutsSnapshotFromData(snapshot);
+            if (snapshotUpdated) {
+                lastRenderedShortcutsSnapshotFingerprint = snapshotFingerprint;
+            }
+        }
+    }
+
+    return widgetUpdated && snapshotUpdated;
 }
 
 export async function updateMobileWidgetFromStore(): Promise<boolean> {

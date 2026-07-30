@@ -24,6 +24,17 @@ export const IOS_WIDGET_PAYLOAD_KEY_SMALL = 'mindwtr-ios-widget-payload-small';
 export const IOS_WIDGET_PAYLOAD_KEY_MEDIUM = 'mindwtr-ios-widget-payload-medium';
 export const IOS_WIDGET_PAYLOAD_KEY_LARGE = 'mindwtr-ios-widget-payload-large';
 export const IOS_WIDGET_PAYLOAD_KEY_EXTRA_LARGE = 'mindwtr-ios-widget-payload-extra-large';
+// Read-only substrate for the "Get Mindwtr Tasks" Shortcuts action and
+// Spotlight indexing (#980). Written alongside the widget payloads into the
+// same App Group UserDefaults the widget already uses, so the App Intents
+// running in the main app process can read it with the same access pattern
+// -- no second storage mechanism, no live database read from an intent.
+export const IOS_SHORTCUTS_SNAPSHOT_KEY = 'mindwtr-ios-shortcuts-snapshot';
+export const SHORTCUTS_SNAPSHOT_ITEM_CAP = 50;
+// Global ceiling on project groups (not just items per group) -- otherwise a
+// library with hundreds of active projects has no bound on snapshot size or
+// how many entities get handed to Spotlight indexing per launch.
+export const SHORTCUTS_SNAPSHOT_PROJECT_CAP = 50;
 export const IOS_WIDGET_KIND = 'MindwtrTasksWidget';
 export const IOS_WIDGET_LOCK_KIND = 'MindwtrFocusLockWidget';
 export const WIDGET_FOCUS_URI = 'mindwtr:///focus';
@@ -63,6 +74,30 @@ export interface TasksWidgetPayload {
     quickCaptureUri: string;
     themeMode?: string;
     palette: WidgetPalette;
+}
+
+export type ShortcutsSnapshotListKey = 'inbox' | 'focus' | 'next' | 'waiting' | 'someday';
+
+export interface ShortcutsSnapshotTaskItem {
+    id: string;
+    title: string;
+    list: ShortcutsSnapshotListKey;
+    dueDate?: string;
+    startDate?: string;
+    projectId?: string;
+    projectName?: string;
+}
+
+export interface ShortcutsSnapshotProjectGroup {
+    id: string;
+    name: string;
+    items: ShortcutsSnapshotTaskItem[];
+}
+
+export interface ShortcutsSnapshot {
+    generatedAt: string;
+    lists: Record<ShortcutsSnapshotListKey, ShortcutsSnapshotTaskItem[]>;
+    projects: ShortcutsSnapshotProjectGroup[];
 }
 
 const TASK_SORT_OPTIONS: TaskSortBy[] = ['default', 'due', 'start', 'review', 'title', 'created', 'created-desc'];
@@ -171,24 +206,18 @@ const resolveWidgetPalette = (
     };
 };
 
-export function buildWidgetPayload(
-    data: AppData,
-    language: Language,
-    options?: { systemColorScheme?: WidgetSystemColorScheme; maxItems?: number }
-): TasksWidgetPayload {
-    void loadTranslations(language);
-    const tr = getTranslationsSync(language);
-    const tasks = data.tasks || [];
-    const projects = data.projects || [];
-    const projectById = new Map(projects.map((project) => [project.id, project]));
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const palette = resolveWidgetPalette(
-        typeof data.settings?.theme === 'string' ? data.settings.theme : undefined,
-        options?.systemColorScheme,
-    );
-
+// Shared by the widget's "Today" list and the Shortcuts snapshot's "focus"
+// list (#980) so both surfaces agree on what "today's focus" means: starred
+// tasks first, then next actions due/starting today or otherwise actionable,
+// respecting sequential-project gating. A single source of truth here avoids
+// the two surfaces silently drifting apart.
+function computeTodayFocusTasks(
+    activeTasks: AppData['tasks'],
+    projects: AppData['projects'],
+    widgetSort: TaskSortBy,
+    startOfToday: Date,
+    endOfToday: Date,
+): { starredTasks: AppData['tasks']; listSource: AppData['tasks'] } {
     const sequentialProjectIds = new Set(
         projects.filter((project) => project.isSequential && !project.deletedAt).map((project) => project.id)
     );
@@ -197,13 +226,6 @@ export function buildWidgetPayload(
             .filter((project) => project.isSequential && project.sequentialScope === 'section' && !project.deletedAt)
             .map((project) => project.id)
     );
-
-    const activeTasks = tasks.filter((task) => {
-        if (task.deletedAt) return false;
-        if (task.status === 'archived' || task.status === 'done' || task.status === 'reference') return false;
-        if (!isTaskInActiveProject(task, projectById)) return false;
-        return true;
-    });
 
     const isPlannedForFuture = (task: AppData['tasks'][number]) => {
         const start = safeParseDate(task.startTime);
@@ -259,11 +281,47 @@ export function buildWidgetPayload(
     ));
     const starredTaskIds = new Set(starredTasks.map((task) => task.id));
     const focusTasks = [...scheduleTasks, ...nextTasks].filter((task) => !starredTaskIds.has(task.id));
-    const widgetSort = resolveWidgetTaskSort(data);
     const listSource = [
         ...sortTasksBy(starredTasks, widgetSort),
         ...sortTasksBy(focusTasks, widgetSort),
     ];
+
+    return { starredTasks, listSource };
+}
+
+export function buildWidgetPayload(
+    data: AppData,
+    language: Language,
+    options?: { systemColorScheme?: WidgetSystemColorScheme; maxItems?: number }
+): TasksWidgetPayload {
+    void loadTranslations(language);
+    const tr = getTranslationsSync(language);
+    const tasks = data.tasks || [];
+    const projects = data.projects || [];
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const palette = resolveWidgetPalette(
+        typeof data.settings?.theme === 'string' ? data.settings.theme : undefined,
+        options?.systemColorScheme,
+    );
+
+    const activeTasks = tasks.filter((task) => {
+        if (task.deletedAt) return false;
+        if (task.status === 'archived' || task.status === 'done' || task.status === 'reference') return false;
+        if (!isTaskInActiveProject(task, projectById)) return false;
+        return true;
+    });
+
+    const widgetSort = resolveWidgetTaskSort(data);
+    const { starredTasks, listSource } = computeTodayFocusTasks(
+        activeTasks,
+        projects,
+        widgetSort,
+        startOfToday,
+        endOfToday,
+    );
 
     const maxItems = Number.isFinite(options?.maxItems)
         ? Math.max(1, Math.floor(options?.maxItems as number))
@@ -296,5 +354,112 @@ export function buildWidgetPayload(
         quickCaptureUri: WIDGET_QUICK_CAPTURE_URI,
         themeMode: typeof data.settings?.theme === 'string' ? data.settings.theme : 'system',
         palette,
+    };
+}
+
+const SHORTCUTS_SNAPSHOT_LISTS: readonly ShortcutsSnapshotListKey[] = ['inbox', 'focus', 'next', 'waiting', 'someday'];
+
+const buildSnapshotItem = (
+    task: AppData['tasks'][number],
+    list: ShortcutsSnapshotListKey,
+    projectById: Map<string, AppData['projects'][number]>,
+): ShortcutsSnapshotTaskItem => {
+    const project = task.projectId ? projectById.get(task.projectId) : undefined;
+    return {
+        id: task.id,
+        title: task.title,
+        list,
+        ...(task.dueDate ? { dueDate: task.dueDate } : {}),
+        ...(task.startTime ? { startDate: task.startTime } : {}),
+        ...(task.projectId ? { projectId: task.projectId } : {}),
+        ...(project?.title ? { projectName: project.title } : {}),
+    };
+};
+
+// Read-only substrate for the "Get Mindwtr Tasks" Shortcuts action and
+// Spotlight indexing (#980): a capped, per-list + per-project snapshot of
+// task metadata, refreshed on the same cadence as the widget payload. App
+// Intents only ever read this; they never touch the live database.
+export function buildShortcutsSnapshot(data: AppData): ShortcutsSnapshot {
+    const tasks = data.tasks || [];
+    const projects = data.projects || [];
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const widgetSort = resolveWidgetTaskSort(data);
+
+    const activeTasks = tasks.filter((task) => {
+        if (task.deletedAt) return false;
+        if (task.status === 'archived' || task.status === 'done' || task.status === 'reference') return false;
+        if (!isTaskInActiveProject(task, projectById)) return false;
+        return true;
+    });
+
+    const { listSource: focusListSource } = computeTodayFocusTasks(
+        activeTasks,
+        projects,
+        widgetSort,
+        startOfToday,
+        endOfToday,
+    );
+
+    const tasksByStatus = (status: ShortcutsSnapshotListKey) => (
+        sortTasksBy(activeTasks.filter((task) => task.status === status), widgetSort)
+    );
+
+    const listTasksByKey: Record<ShortcutsSnapshotListKey, AppData['tasks']> = {
+        inbox: tasksByStatus('inbox'),
+        focus: focusListSource,
+        next: tasksByStatus('next'),
+        waiting: tasksByStatus('waiting'),
+        someday: tasksByStatus('someday'),
+    };
+
+    const lists = SHORTCUTS_SNAPSHOT_LISTS.reduce((acc, key) => {
+        acc[key] = listTasksByKey[key]
+            .slice(0, SHORTCUTS_SNAPSHOT_ITEM_CAP)
+            .map((task) => buildSnapshotItem(task, key, projectById));
+        return acc;
+    }, {} as Record<ShortcutsSnapshotListKey, ShortcutsSnapshotTaskItem[]>);
+
+    // One grouping pass over activeTasks (O(tasks)) instead of filtering the
+    // full task list once per project (O(projects x tasks) -- measurably
+    // slow at a few hundred projects).
+    const tasksByProjectId = new Map<string, AppData['tasks']>();
+    for (const task of activeTasks) {
+        if (!task.projectId) continue;
+        const bucket = tasksByProjectId.get(task.projectId);
+        if (bucket) bucket.push(task);
+        else tasksByProjectId.set(task.projectId, [task]);
+    }
+
+    const projectGroups: ShortcutsSnapshotProjectGroup[] = projects
+        .filter((project) => project.status === 'active' && !project.deletedAt)
+        // Deterministic global cap on project groups (below): manual project
+        // order, same ordering the Projects list itself shows, so which
+        // projects survive the cap matches what the user already sees first.
+        .sort((a, b) => a.order - b.order)
+        .slice(0, SHORTCUTS_SNAPSHOT_PROJECT_CAP)
+        .map((project) => {
+            const projectTasks = sortTasksBy(
+                tasksByProjectId.get(project.id) ?? [],
+                widgetSort,
+            ).slice(0, SHORTCUTS_SNAPSHOT_ITEM_CAP);
+            return {
+                id: project.id,
+                name: project.title,
+                // Every remaining status on an active task is one of the four
+                // list keys above (activeTasks already excludes done/archived/
+                // reference), so the cast is safe.
+                items: projectTasks.map((task) => buildSnapshotItem(task, task.status as ShortcutsSnapshotListKey, projectById)),
+            };
+        })
+        .filter((group) => group.items.length > 0);
+
+    return {
+        generatedAt: new Date().toISOString(),
+        lists,
+        projects: projectGroups,
     };
 }
