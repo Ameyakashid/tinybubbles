@@ -482,6 +482,15 @@
 }
 
 @layer components {
+  /* A settings row picked from the search results, same ring a highlighted
+     task row gets. Cleared by SettingsView once the user has seen it. */
+  [data-settings-highlight] {
+    outline: 2px solid hsl(var(--primary) / 0.7);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+    background-color: hsl(var(--primary) / 0.05);
+  }
+
   button[role='switch'] {
     position: relative;
   }

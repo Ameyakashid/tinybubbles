@@ -271,7 +271,7 @@ export function SettingsAiPage({
             <div className="space-y-6">
                 <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 flex items-center justify-between gap-4">
-                    <button
+                    <button data-settings-key="aiEnable" data-settings-section="aiEnable"
                         type="button"
                         onClick={() => setAiOpen((prev) => !prev)}
                         aria-expanded={aiOpen}
@@ -305,7 +305,7 @@ export function SettingsAiPage({
                         </div>
 
                         <div className="border-t border-border p-4 space-y-3">
-                            <div className="flex items-center justify-between gap-4">
+                            <div data-settings-key="aiProvider" className="flex items-center justify-between gap-4">
                                 <div className="text-sm font-medium">{t.aiProvider}</div>
                                 <select
                                     aria-label={t.aiProvider}
@@ -319,7 +319,7 @@ export function SettingsAiPage({
                                 </select>
                             </div>
 
-                            <div className="flex items-center justify-between gap-4">
+                            <div data-settings-key="aiModel" className="flex items-center justify-between gap-4">
                                 <div className="text-sm font-medium">{t.aiModel}</div>
                                 <input
                                     type="text"
@@ -337,7 +337,7 @@ export function SettingsAiPage({
                                 </datalist>
                             </div>
 
-                            <div className="flex items-center justify-between gap-4">
+                            <div data-settings-key="aiCopilotModel" className="flex items-center justify-between gap-4">
                                 <div>
                                     <div className="text-sm font-medium">{t.aiCopilotModel}</div>
                                     <div className="text-xs text-muted-foreground">{t.aiCopilotHint}</div>
@@ -359,7 +359,7 @@ export function SettingsAiPage({
                             </div>
 
                             {aiProvider === 'openai' && (
-                                <div className="flex items-center justify-between gap-4">
+                                <div data-settings-key="aiReasoning" className="flex items-center justify-between gap-4">
                                     <div>
                                         <div className="text-sm font-medium">{t.aiReasoning}</div>
                                         <div className="text-xs text-muted-foreground">{t.aiReasoningHint}</div>
@@ -378,7 +378,7 @@ export function SettingsAiPage({
                             )}
 
                             {aiProvider === 'openai' && (
-                                <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                                <div data-settings-key="aiBaseUrl" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                                     <div className="text-sm font-medium">{t.aiBaseUrl}</div>
                                     <input
                                         type="text"
@@ -400,7 +400,7 @@ export function SettingsAiPage({
 
                             {aiProvider === 'openai' && (
                                 <div className="rounded-lg border border-border bg-muted/30">
-                                    <button
+                                    <button data-settings-key="aiExtraBodyParams"
                                         type="button"
                                         onClick={() => setOpenAIExtraOpen((open) => !open)}
                                         aria-expanded={openAIExtraOpen}
@@ -444,7 +444,7 @@ export function SettingsAiPage({
 
                             {aiProvider === 'anthropic' && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between gap-4">
+                                    <div data-settings-key="aiThinkingEnable" className="flex items-center justify-between gap-4">
                                         <div>
                                             <div className="text-sm font-medium">{t.aiThinkingEnable}</div>
                                             <div className="text-xs text-muted-foreground">{t.aiThinkingEnableDesc}</div>
@@ -456,7 +456,7 @@ export function SettingsAiPage({
                                         />
                                     </div>
                                     {anthropicThinkingEnabled && (
-                                        <div className="flex items-center justify-between gap-4">
+                                        <div data-settings-key="aiThinkingBudget" className="flex items-center justify-between gap-4">
                                             <div>
                                                 <div className="text-sm font-medium">{t.aiThinkingBudget}</div>
                                                 <div className="text-xs text-muted-foreground">{t.aiThinkingHint}</div>
@@ -498,7 +498,7 @@ export function SettingsAiPage({
                             )}
                         </div>
 
-                        <div className="border-t border-border p-4 space-y-2">
+                        <div data-settings-key="aiApiKey" className="border-t border-border p-4 space-y-2">
                             <div className="text-sm font-medium">{t.aiApiKey}</div>
                             <input
                                 type="password"
@@ -516,7 +516,7 @@ export function SettingsAiPage({
 
             <div className="bg-card border border-border rounded-lg">
                 <div className="p-4 flex items-center justify-between gap-4">
-                    <button
+                    <button data-settings-key="speechTitle" data-settings-section="speechTitle"
                         type="button"
                         onClick={() => setSpeechOpen((prev) => !prev)}
                         aria-expanded={speechOpen}
@@ -537,7 +537,7 @@ export function SettingsAiPage({
 
                 {speechOpen && (
                     <div className="border-t border-border p-4 space-y-3">
-                        <div className="flex items-center justify-between gap-4">
+                        <div data-settings-key="speechProvider" className="flex items-center justify-between gap-4">
                             <div className="text-sm font-medium">{t.speechProvider}</div>
                             <select
                                 value={speechProvider}
@@ -551,7 +551,7 @@ export function SettingsAiPage({
                             </select>
                         </div>
 
-                        <div className="flex items-center justify-between gap-4">
+                        <div data-settings-key="speechModel" className="flex items-center justify-between gap-4">
                             <div className="text-sm font-medium">{t.speechModel}</div>
                             {speechProvider === 'openai' ? (
                                 <>
@@ -585,7 +585,7 @@ export function SettingsAiPage({
                         </div>
 
                         {speechProvider === 'openai' && (
-                            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                            <div data-settings-key="speechBaseUrl" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                                 <div className="text-sm font-medium">{t.speechBaseUrl}</div>
                                 <input
                                     type="text"
@@ -605,7 +605,7 @@ export function SettingsAiPage({
                         )}
 
                         {speechProvider === 'whisper' ? (
-                            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                            <div data-settings-key="speechOfflineModel" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                                 <div className="text-sm font-medium">{t.speechOfflineModel}</div>
                                 <div className="text-xs text-muted-foreground">{t.speechOfflineModelDesc}</div>
                                 <div className="flex items-center justify-between gap-3">
@@ -709,7 +709,7 @@ export function SettingsAiPage({
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between gap-4">
+                        <div data-settings-key="speechLanguage" className="flex items-center justify-between gap-4">
                             <div>
                                 <div className="text-sm font-medium">{t.speechLanguage}</div>
                                 <div className="text-xs text-muted-foreground">{t.speechLanguageHint}</div>
@@ -723,7 +723,7 @@ export function SettingsAiPage({
                             />
                         </div>
 
-                        <div className="flex items-center justify-between gap-4">
+                        <div data-settings-key="speechMode" className="flex items-center justify-between gap-4">
                             <div>
                                 <div className="text-sm font-medium">{t.speechMode}</div>
                                 <div className="text-xs text-muted-foreground">{t.speechModeHint}</div>
@@ -738,7 +738,7 @@ export function SettingsAiPage({
                             </select>
                         </div>
 
-                        <div className="flex items-center justify-between gap-4">
+                        <div data-settings-key="speechFieldStrategy" className="flex items-center justify-between gap-4">
                             <div>
                                 <div className="text-sm font-medium">{t.speechFieldStrategy}</div>
                                 <div className="text-xs text-muted-foreground">{t.speechFieldStrategyHint}</div>

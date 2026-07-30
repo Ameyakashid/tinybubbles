@@ -163,7 +163,7 @@ const renderDropboxPanel = ({
     | 't'
 >) => (
     <div className="space-y-3">
-        <div className="flex flex-col gap-2">
+        <div data-settings-key="dropboxAppKey" className="flex flex-col gap-2">
             <label className="text-sm font-medium">{t.dropboxAppKey}</label>
             <p className="text-xs text-muted-foreground">{t.dropboxAppKeyHint}</p>
             {dropboxAuthInProgress && dropboxRedirectUri.trim() && (
@@ -221,7 +221,7 @@ const renderCalendarFeedPanel = ({
     | 'onRevokeCalendarFeed'
     | 't'
 >) => (
-    <div className="flex flex-col gap-2 border-t border-border pt-3">
+    <div data-settings-key="calendarFeed" className="flex flex-col gap-2 border-t border-border pt-3">
         <label className="text-sm font-medium">{t.calendarFeed}</label>
         <p className="text-xs text-muted-foreground">{t.calendarFeedDesc}</p>
         {calendarFeedUrl ? (
@@ -303,7 +303,7 @@ const renderSelfHostedCloudPanel = ({
     | 't'
 > & { cloudUrlError: boolean }) => (
     <div className="space-y-3">
-        <div className="flex flex-col gap-2">
+        <div data-settings-key="cloudUrl" className="flex flex-col gap-2">
             <label className="text-sm font-medium">{t.cloudUrl}</label>
             <input
                 type="text"
@@ -328,7 +328,7 @@ const renderSelfHostedCloudPanel = ({
             onCheckedChange={onCloudAllowInsecureHttpChange}
         />
 
-        <div className="flex flex-col gap-2">
+        <div data-settings-key="cloudToken" className="flex flex-col gap-2">
             <label className="text-sm font-medium">{t.cloudToken}</label>
             <input
                 type="password"
@@ -406,7 +406,7 @@ const renderWebDavPanel = ({
     | 'webdavUsername'
 > & { webdavUrlError: boolean }) => (
     <div className="space-y-3">
-        <div className="flex flex-col gap-2">
+        <div data-settings-key="webdavUrl" className="flex flex-col gap-2">
             <label className="text-sm font-medium">{t.webdavUrl}</label>
             <input
                 type="text"
@@ -432,7 +432,7 @@ const renderWebDavPanel = ({
         />
 
         <div className="grid sm:grid-cols-2 gap-2">
-            <div className="flex flex-col gap-2">
+            <div data-settings-key="webdavUsername" className="flex flex-col gap-2">
                 <label className="text-sm font-medium">{t.webdavUsername}</label>
                 <input
                     type="text"
@@ -441,7 +441,7 @@ const renderWebDavPanel = ({
                     className="bg-muted p-2 rounded text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
             </div>
-            <div className="flex flex-col gap-2">
+            <div data-settings-key="webdavPassword" className="flex flex-col gap-2">
                 <label className="text-sm font-medium">{t.webdavPassword}</label>
                 <input
                     type="password"
@@ -629,7 +629,7 @@ export function SyncConfigurationSection({
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </a>
 
-                <div className="space-y-1">
+                <div data-settings-key="syncBackend" className="space-y-1">
                     <span className="text-sm font-medium">{t.syncBackend}</span>
                     <p className="text-xs text-muted-foreground">{t.syncBackendChoiceHint}</p>
                 </div>
@@ -660,7 +660,7 @@ export function SyncConfigurationSection({
                 )}
 
                 {syncBackend === 'file' && (
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="syncFolderLocation" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.syncFolderLocation}</label>
                         <div className="flex gap-2">
                             <input

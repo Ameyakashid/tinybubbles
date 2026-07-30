@@ -157,6 +157,9 @@ type SettingsGtdPageProps = {
 };
 
 type SettingsDisclosureCardProps = {
+    // Label key of the settings this card contains, so a search result can
+    // open it before scrolling to the row (see settings-search.ts).
+    sectionKey: string;
     title: string;
     description?: string;
     hint?: string;
@@ -168,6 +171,7 @@ type SettingsDisclosureCardProps = {
 const SHOW_TEMP_ONBOARDING_TRIGGER = false;
 
 function SettingsDisclosureCard({
+    sectionKey,
     title,
     description,
     hint,
@@ -181,6 +185,8 @@ function SettingsDisclosureCard({
                 type="button"
                 onClick={onToggle}
                 aria-expanded={open}
+                data-settings-section={sectionKey}
+                data-settings-key={sectionKey}
                 className="w-full p-4 flex items-center justify-between gap-4 text-left"
             >
                 <div className="min-w-0">
@@ -574,7 +580,7 @@ export function SettingsGtdPage({
                 </div>
             ) : null}
             <div className="bg-card border border-border rounded-lg divide-y divide-border">
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="autoArchive" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.autoArchive}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.autoArchiveDesc}</div>
@@ -602,7 +608,7 @@ export function SettingsGtdPage({
                         </select>
                     </div>
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="defaultScheduleTime" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.defaultScheduleTime}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.defaultScheduleTimeDesc}</div>
@@ -623,7 +629,7 @@ export function SettingsGtdPage({
                         className="w-24 shrink-0 text-sm bg-muted/50 text-foreground border border-border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="focusTaskLimit" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.focusTaskLimit}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.focusTaskLimitDesc}</div>
@@ -652,7 +658,7 @@ export function SettingsGtdPage({
                         })}
                     </div>
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="defaultProjectFlowMode" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.defaultProjectFlowMode}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.defaultProjectFlowModeDesc}</div>
@@ -686,12 +692,13 @@ export function SettingsGtdPage({
                 </div>
             </div>
             <SettingsDisclosureCard
+                sectionKey="features"
                 title={t.features}
                 description={t.featuresDesc}
                 open={featuresOpen}
                 onToggle={() => setFeaturesOpen((prev) => !prev)}
             >
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="featurePomodoro" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.featurePomodoro}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.featurePomodoroDesc}</div>
@@ -710,7 +717,7 @@ export function SettingsGtdPage({
                     />
                 </div>
                 {pomodoroEnabled && (
-                    <div className="p-4 space-y-3">
+                    <div data-settings-key="pomodoroCustomPreset" className="p-4 space-y-3">
                         <div>
                             <div className="text-sm font-medium">{t.pomodoroCustomPreset}</div>
                             <div className="text-xs text-muted-foreground mt-1">{t.pomodoroCustomPresetDesc}</div>
@@ -754,7 +761,7 @@ export function SettingsGtdPage({
                             </label>
                         </div>
                         <div className="rounded-lg border border-border divide-y divide-border">
-                            <div className="p-3 flex items-center justify-between gap-6">
+                            <div data-settings-key="pomodoroLinkTask" className="p-3 flex items-center justify-between gap-6">
                                 <div className="min-w-0">
                                     <div className="text-sm font-medium">{t.pomodoroLinkTask}</div>
                                     <div className="text-xs text-muted-foreground mt-1">{t.pomodoroLinkTaskDesc}</div>
@@ -765,7 +772,7 @@ export function SettingsGtdPage({
                                     onCheckedChange={() => updatePomodoroSettings({ linkTask: !pomodoroLinkTask })}
                                 />
                             </div>
-                            <div className="p-3 flex items-center justify-between gap-6">
+                            <div data-settings-key="pomodoroAutoStartBreaks" className="p-3 flex items-center justify-between gap-6">
                                 <div className="min-w-0">
                                     <div className="text-sm font-medium">{t.pomodoroAutoStartBreaks}</div>
                                     <div className="text-xs text-muted-foreground mt-1">{t.pomodoroAutoStartBreaksDesc}</div>
@@ -779,7 +786,7 @@ export function SettingsGtdPage({
                                     )}
                                 />
                             </div>
-                            <div className="p-3 flex items-center justify-between gap-6">
+                            <div data-settings-key="pomodoroAutoStartFocus" className="p-3 flex items-center justify-between gap-6">
                                 <div className="min-w-0">
                                     <div className="text-sm font-medium">{t.pomodoroAutoStartFocus}</div>
                                     <div className="text-xs text-muted-foreground mt-1">{t.pomodoroAutoStartFocusDesc}</div>
@@ -798,6 +805,7 @@ export function SettingsGtdPage({
                 )}
             </SettingsDisclosureCard>
             <SettingsDisclosureCard
+                sectionKey="timeEstimatePresets"
                 title={t.timeEstimatePresets}
                 description={t.timeEstimatePresetsDesc}
                 open={timeEstimatesOpen}
@@ -858,6 +866,7 @@ export function SettingsGtdPage({
                 )}
             </SettingsDisclosureCard>
             <SettingsDisclosureCard
+                sectionKey="captureDefault"
                 title={t.captureDefault}
                 description={t.captureDefaultDesc}
                 open={captureOpen}
@@ -905,7 +914,7 @@ export function SettingsGtdPage({
                         </button>
                     </div>
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="defaultArea" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.defaultArea}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.defaultAreaDesc}</div>
@@ -933,7 +942,7 @@ export function SettingsGtdPage({
                     </select>
                 </div>
                 {defaultCaptureMethod === 'audio' && speechEnabled ? (
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="captureSaveAudio" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.captureSaveAudio}</div>
                             <div className="text-xs text-muted-foreground mt-1">{t.captureSaveAudioDesc}</div>
@@ -952,7 +961,7 @@ export function SettingsGtdPage({
                         />
                     </div>
                 ) : null}
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="quickAddAutoClean" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.quickAddAutoClean}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.quickAddAutoCleanDesc}</div>
@@ -967,7 +976,7 @@ export function SettingsGtdPage({
                         }}
                     />
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="naturalLanguageDates" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.naturalLanguageDates}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.naturalLanguageDatesDesc}</div>
@@ -987,7 +996,7 @@ export function SettingsGtdPage({
                         }}
                     />
                 </div>
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="markdownEditorAssist" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.markdownEditorAssist}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.markdownEditorAssistDesc}</div>
@@ -1004,12 +1013,13 @@ export function SettingsGtdPage({
                 </div>
             </SettingsDisclosureCard>
             <SettingsDisclosureCard
+                sectionKey="weeklyReviewConfig"
                 title={t.weeklyReviewConfig}
                 description={t.weeklyReviewConfigDesc}
                 open={reviewOpen}
                 onToggle={() => setReviewOpen((prev) => !prev)}
             >
-                <div className="p-4 flex items-center justify-between gap-6">
+                <div data-settings-key="weeklyReviewIncludeContextsStep" className="p-4 flex items-center justify-between gap-6">
                     <div className="min-w-0">
                         <div className="text-sm font-medium">{t.weeklyReviewIncludeContextsStep}</div>
                         <div className="text-xs text-muted-foreground mt-1">{t.weeklyReviewIncludeContextsStepDesc}</div>
@@ -1026,6 +1036,8 @@ export function SettingsGtdPage({
                     type="button"
                     onClick={() => setInboxOpen((prev) => !prev)}
                     aria-expanded={inboxOpen}
+                    data-settings-section="inboxProcessing"
+                    data-settings-key="inboxProcessing"
                     className="w-full p-4 flex items-center justify-between gap-4 text-left"
                 >
                     <div className="min-w-0">
@@ -1035,7 +1047,7 @@ export function SettingsGtdPage({
                     {inboxOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </button>
                 {inboxOpen && <div className="divide-y divide-border border-t border-border">
-                    <div className="p-4 space-y-3">
+                    <div data-settings-key="inboxDefaultMode" className="p-4 space-y-3">
                         <div className="text-sm font-medium">{t.inboxDefaultMode}</div>
                         <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
                             <button
@@ -1064,7 +1076,7 @@ export function SettingsGtdPage({
                             </button>
                         </div>
                     </div>
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="inboxTwoMinuteEnabled" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.inboxTwoMinuteEnabled}</div>
                         </div>
@@ -1074,7 +1086,7 @@ export function SettingsGtdPage({
                             onCheckedChange={() => updateInboxProcessing({ twoMinuteEnabled: !inboxTwoMinuteEnabled })}
                         />
                     </div>
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="inboxTwoMinuteFirst" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.inboxTwoMinuteFirst}</div>
                         </div>
@@ -1085,7 +1097,7 @@ export function SettingsGtdPage({
                             onCheckedChange={() => updateInboxProcessing({ twoMinuteFirst: !inboxTwoMinuteFirst })}
                         />
                     </div>
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="inboxProjectFirst" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.inboxProjectFirst}</div>
                         </div>
@@ -1095,7 +1107,7 @@ export function SettingsGtdPage({
                             onCheckedChange={() => updateInboxProcessing({ projectFirst: !inboxProjectFirst })}
                         />
                     </div>
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="inboxContextStepEnabled" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.inboxContextStepEnabled}</div>
                         </div>
@@ -1105,7 +1117,7 @@ export function SettingsGtdPage({
                             onCheckedChange={() => updateInboxProcessing({ contextStepEnabled: !inboxContextStepEnabled })}
                         />
                     </div>
-                    <div className="p-4 flex items-center justify-between gap-6">
+                    <div data-settings-key="inboxScheduleEnabled" className="p-4 flex items-center justify-between gap-6">
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{t.inboxScheduleEnabled}</div>
                         </div>
@@ -1122,6 +1134,8 @@ export function SettingsGtdPage({
                     type="button"
                     onClick={() => setTaskEditorOpen((prev) => !prev)}
                     aria-expanded={taskEditorOpen}
+                    data-settings-section="taskEditorLayout"
+                    data-settings-key="taskEditorLayout"
                     className="w-full p-4 flex items-center justify-between gap-4 text-left"
                 >
                     <div className="min-w-0">
@@ -1132,7 +1146,7 @@ export function SettingsGtdPage({
                     {taskEditorOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </button>
                 {taskEditorOpen && <div className="p-4 space-y-4">
-                    <div className="rounded-md border border-border bg-muted/20 p-3">
+                    <div data-settings-key="taskEditorPresentation" className="rounded-md border border-border bg-muted/20 p-3">
                         <div className="mb-3">
                             <div className="text-sm font-medium">{t.taskEditorPresentation}</div>
                             <div className="text-xs text-muted-foreground mt-1">{t.taskEditorPresentationDesc}</div>

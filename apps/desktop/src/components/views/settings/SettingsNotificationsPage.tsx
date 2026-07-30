@@ -77,7 +77,7 @@ export function SettingsNotificationsPage({
         <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <p className="text-sm text-muted-foreground">{t.notificationsDesc}</p>
 
-            <div className="flex items-start justify-between gap-4">
+            <div data-settings-key="notificationsEnable" className="flex items-start justify-between gap-4">
                 <div>
                     <p className="text-sm font-medium">{t.notificationsEnable}</p>
                 </div>
@@ -88,7 +88,7 @@ export function SettingsNotificationsPage({
                 />
             </div>
 
-            <div className="flex items-start justify-between gap-4">
+            <div data-settings-key="startDateNotifications" className="flex items-start justify-between gap-4">
                 <div>
                     <p className="text-sm font-medium">{t.startDateNotifications}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t.startDateNotificationsDesc}</p>
@@ -101,7 +101,7 @@ export function SettingsNotificationsPage({
                 />
             </div>
 
-            <div className="flex items-start justify-between gap-4">
+            <div data-settings-key="dueDateNotifications" className="flex items-start justify-between gap-4">
                 <div>
                     <p className="text-sm font-medium">{t.dueDateNotifications}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t.dueDateNotificationsDesc}</p>
@@ -114,7 +114,7 @@ export function SettingsNotificationsPage({
                 />
             </div>
 
-            <div className="flex items-start justify-between gap-4">
+            <div data-settings-key="reviewAtNotifications" className="flex items-start justify-between gap-4">
                 <div>
                     <p className="text-sm font-medium">{t.reviewAtNotifications}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t.reviewAtNotificationsDesc}</p>
@@ -129,7 +129,7 @@ export function SettingsNotificationsPage({
 
             <div className="border-t border-border/50"></div>
 
-            <div className="space-y-3">
+            <div data-settings-key="weeklyReview" className="space-y-3">
                 <div>
                     <p className="text-sm font-medium">{t.weeklyReview}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t.weeklyReviewDesc}</p>
@@ -145,7 +145,7 @@ export function SettingsNotificationsPage({
                     />
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div data-settings-key="weeklyReviewDay" className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium">{t.weeklyReviewDay}</div>
                     <select
                         aria-label={t.weeklyReviewDay}
@@ -162,7 +162,7 @@ export function SettingsNotificationsPage({
                     </select>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div data-settings-key="weeklyReviewTime" className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium">{t.weeklyReviewTime}</div>
                     <input
                         type="time"
@@ -177,13 +177,13 @@ export function SettingsNotificationsPage({
 
             <div className="border-t border-border/50"></div>
 
-            <div className="space-y-3">
+            <div data-settings-key="dailyDigest" className="space-y-3">
                 <div>
                     <p className="text-sm font-medium">{t.dailyDigest}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t.dailyDigestDesc}</p>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div data-settings-key="dailyDigestMorning" className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium">{t.dailyDigestMorning}</div>
                     <div className="flex items-center gap-3">
                         <input
@@ -203,7 +203,7 @@ export function SettingsNotificationsPage({
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div data-settings-key="dailyDigestEvening" className="flex items-center justify-between gap-4">
                     <div className="text-sm font-medium">{t.dailyDigestEvening}</div>
                     <div className="flex items-center gap-3">
                         <input

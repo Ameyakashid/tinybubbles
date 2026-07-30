@@ -87,21 +87,21 @@ export function SettingsAboutPage({
     return (
         <>
             <div className="bg-muted/30 rounded-lg p-6 space-y-4 border border-border">
-                <div className="flex justify-between items-center">
+                <div data-settings-key="version" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.version}</span>
                     <span className="font-mono bg-muted px-2 py-1 rounded text-sm">v{appVersion}</span>
                 </div>
                 {installChannel && (
                     <>
                         <div className="border-t border-border/50"></div>
-                        <div className="flex justify-between items-center gap-4">
+                        <div data-settings-key="installChannel" className="flex justify-between items-center gap-4">
                             <span className="text-muted-foreground">{t.installChannel}</span>
                             <span className="font-mono bg-muted px-2 py-1 rounded text-sm">{installChannel}</span>
                         </div>
                     </>
                 )}
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center">
+                <div data-settings-key="checkForUpdates" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{actionLabel}</span>
                     <button
                         onClick={onCheckUpdates}
@@ -124,7 +124,7 @@ export function SettingsAboutPage({
                     <div className="text-sm text-muted-foreground">{updateNotice}</div>
                 )}
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center gap-4">
+                <div data-settings-key="feedback" className="flex justify-between items-center gap-4">
                     <span className="text-muted-foreground">{t.feedback}</span>
                     <button
                         onClick={() => setFeedbackOpen(true)}
@@ -135,7 +135,7 @@ export function SettingsAboutPage({
                     </button>
                 </div>
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center">
+                <div data-settings-key="documentation" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.documentation}</span>
                     <button
                         onClick={() => onOpenLink('https://docs.mindwtr.app')}
@@ -146,7 +146,7 @@ export function SettingsAboutPage({
                     </button>
                 </div>
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center">
+                <div data-settings-key="github" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.github}</span>
                     <button
                         onClick={() => onOpenLink('https://github.com/dongdongbh/Mindwtr')}
@@ -157,7 +157,7 @@ export function SettingsAboutPage({
                     </button>
                 </div>
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center">
+                <div data-settings-key="sponsorProject" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.sponsorProject}</span>
                     <button
                         onClick={() => onOpenLink('https://mindwtr.app/donate?src=app_about')}
@@ -168,7 +168,7 @@ export function SettingsAboutPage({
                     </button>
                 </div>
                 <div className="border-t border-border/50"></div>
-                <div className="flex justify-between items-center">
+                <div data-settings-key="license" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.license}</span>
                     <span className="font-medium">AGPL-3.0</span>
                 </div>

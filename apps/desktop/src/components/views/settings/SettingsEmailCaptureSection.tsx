@@ -154,7 +154,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
         <div className="bg-card border border-border rounded-lg">
             <div className="p-4 flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1 space-y-2">
-                    <button
+                    <button data-settings-key="emailCapture" data-settings-section="emailCapture"
                         type="button"
                         onClick={() => setOpen((prev) => !prev)}
                         aria-expanded={open}
@@ -185,7 +185,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
             {open && (
                 <div className="border-t border-border p-4 space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-3">
-                        <div className="flex flex-col gap-2">
+                        <div data-settings-key="emailCaptureHost" className="flex flex-col gap-2">
                             <label className="text-sm font-medium">{t.emailCaptureHost}</label>
                             <input
                                 type="text"
@@ -196,7 +196,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                                 className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                             />
                         </div>
-                        <div className="flex flex-col gap-2">
+                        <div data-settings-key="emailCapturePort" className="flex flex-col gap-2">
                             <label className="text-sm font-medium">{t.emailCapturePort}</label>
                             <input
                                 type="number"
@@ -210,7 +210,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="emailCaptureUsername" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.emailCaptureUsername}</label>
                         <input
                             type="text"
@@ -223,7 +223,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                         />
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="emailCapturePassword" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.emailCapturePassword}</label>
                         <input
                             type="password"
@@ -239,7 +239,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                         </p>
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="emailCaptureFolder" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.emailCaptureFolder}</label>
                         <input
                             type="text"

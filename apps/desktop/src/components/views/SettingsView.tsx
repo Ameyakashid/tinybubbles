@@ -47,12 +47,18 @@ import {
   wrapSettingsOpenImport,
 } from "../../lib/settings-open-diagnostics";
 import {
-  buildNavKeywords,
   labelKeyOverrides,
   SETTINGS_LABEL_KEYS,
-  SETTINGS_PAGE_LABEL_KEYS,
   type SettingsLabels,
 } from "./settings/labels";
+import {
+  buildDesktopSettingsSearchResults,
+  clearSettingsRowHighlight,
+  expandSettingsSection,
+  findSettingsRow,
+  highlightSettingsRow,
+  type SettingsSearchResult,
+} from "./settings/settings-search";
 import { LIST_END_GAP } from "./list/list-toolbar";
 import { SettingsUpdateModal } from "./settings/SettingsUpdateModal";
 import { SettingsSidebar } from "./settings/SettingsSidebar";
@@ -284,6 +290,50 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     return result;
   }, [language, translate]);
 
+  const searchResults = useMemo(
+    () => buildDesktopSettingsSearchResults((key) => translateWithFallback(translate, key, "")),
+    [language, translate],
+  );
+  const [revealSetting, setRevealSetting] = useState<SettingsSearchResult | null>(null);
+
+  // Take the user to the setting they picked: switch pages, open the
+  // disclosure it hides inside, then scroll it into view and mark it. The page
+  // chunk loads lazily, so retry across a few frames before giving up.
+  useEffect(() => {
+    if (!revealSetting) return;
+    let cancelled = false;
+    let frameId = 0;
+    let highlighted: HTMLElement | null = null;
+    let clearTimer = 0;
+    const attempt = (remaining: number) => {
+      if (cancelled) return;
+      const expanded = expandSettingsSection(revealSetting.sectionKey);
+      const row = expanded ? null : findSettingsRow(revealSetting.key);
+      if (row) {
+        highlighted = row;
+        highlightSettingsRow(row);
+        clearTimer = window.setTimeout(() => setRevealSetting(null), 4000);
+        return;
+      }
+      if (remaining > 0) {
+        frameId = window.requestAnimationFrame(() => attempt(remaining - 1));
+      }
+    };
+    attempt(20);
+    return () => {
+      cancelled = true;
+      if (frameId) window.cancelAnimationFrame(frameId);
+      if (clearTimer) window.clearTimeout(clearTimer);
+      if (highlighted) clearSettingsRowHighlight(highlighted);
+    };
+  }, [revealSetting]);
+
+  const handleSelectSearchResult = useCallback((result: SettingsSearchResult) => {
+    setPage(result.pageId as SettingsPage);
+    // Fresh object so picking the same result twice re-runs the reveal effect.
+    setRevealSetting({ ...result });
+  }, []);
+
   const advancedPageProps = useSettingsAdvancedPage({ isTauri, showSaved, t });
 
   const requestSettingsConfirmation = useCallback(
@@ -439,73 +489,26 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
         id: "main",
         icon: Monitor,
         label: t.general,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.main, [
-          "theme",
-          "font size",
-          "text size",
-          "dark mode",
-          "light mode",
-          "launch at startup",
-          "autostart",
-          "login item",
-        ]),
       },
       {
         id: "gtd",
         icon: ListChecks,
         label: t.gtd,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.gtd, [
-          "auto-archive",
-          "priorities",
-          "time estimates",
-          "pomodoro",
-          "capture",
-          "inbox processing",
-          "2-minute rule",
-          "task editor",
-        ]),
       },
       {
         id: "manage",
         icon: Layers,
         label: t.manage,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.manage, [
-          "areas",
-          "contexts",
-          "tags",
-          "rename",
-          "delete",
-          "reorder",
-        ]),
       },
       {
         id: "notifications",
         icon: Bell,
         label: t.notifications,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.notifications, [
-          "review reminders",
-          "weekly review",
-          "daily digest",
-          "morning",
-          "evening",
-        ]),
       },
       {
         id: "sync",
         icon: RefreshCw,
         label: t.sync,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.sync, [
-          "file sync",
-          "WebDAV",
-          "cloud",
-          "sync now",
-          "sync history",
-          "recovery snapshots",
-          "dropbox",
-          "self-hosted",
-          "iCloud",
-          "settings sync",
-        ]),
       },
       {
         id: "data",
@@ -516,60 +519,21 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
             : language === "zh-Hant"
               ? "數據"
               : translateText("Data", language),
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.data, [
-          "backup",
-          "restore",
-          "import",
-          "Todoist",
-          "DGT GTD",
-          "OmniFocus",
-          "attachments",
-          "cleanup",
-          "diagnostics",
-          "logging",
-        ]),
       },
       {
         id: "integrations",
         icon: Link2,
         label: t.integrations,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.integrations, [
-          "obsidian",
-          "vault",
-          "calendar",
-          "ICS",
-          "apple calendar",
-          "integration",
-        ]),
       },
       {
         id: "ai",
         icon: Sparkles,
         label: t.ai,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.ai, [
-          "OpenAI",
-          "Gemini",
-          "Anthropic",
-          "API key",
-          "speech",
-          "whisper",
-          "copilot",
-          "model",
-        ]),
       },
       {
         id: "advanced",
         icon: SlidersHorizontal,
         label: t.advanced,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.advanced, [
-          "automation",
-          "local api",
-          "localhost",
-          "port",
-          "mcp",
-          "Claude",
-          "LLM",
-        ]),
       },
       {
         id: "about",
@@ -577,12 +541,6 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
         label: t.about,
         badge: hasUpdateBadge,
         badgeLabel: t.updateAvailable,
-        keywords: buildNavKeywords(t, SETTINGS_PAGE_LABEL_KEYS.about, [
-          "version",
-          "update",
-          "license",
-          "sponsor",
-        ]),
       },
     ],
     [hasUpdateBadge, language, t],
@@ -729,6 +687,9 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
               items={navItems}
               activeId={page}
               onSelect={(id) => setPage(id as SettingsPage)}
+              searchResults={searchResults}
+              onSelectSearchResult={handleSelectSearchResult}
+              noResultsLabel={translateWithFallback(translate, "common.noMatches", "No matches")}
             />
 
             <main className="min-w-0 flex-1 lg:max-w-[920px]">

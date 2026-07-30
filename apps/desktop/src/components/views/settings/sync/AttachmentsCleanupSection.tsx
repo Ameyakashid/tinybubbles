@@ -23,7 +23,7 @@ export function AttachmentsCleanupSection({
 }: AttachmentsCleanupSectionProps) {
     return (
         <section className="space-y-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h2 data-settings-key="attachmentsCleanup" className="text-lg font-semibold flex items-center gap-2">
                 <Trash2 className="w-5 h-5" />
                 {t.attachmentsCleanup}
             </h2>

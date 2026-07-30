@@ -193,7 +193,7 @@ export function SyncStatusSection({
             </h2>
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <div className="space-y-3">
-                    <button
+                    <button data-settings-key="syncPreferences"
                         type="button"
                         onClick={() => setSyncOptionsOpen((prev) => !prev)}
                         aria-expanded={syncOptionsOpen}
@@ -239,7 +239,7 @@ export function SyncStatusSection({
                     </div>
                 )}
 
-                <div className="pt-2 text-xs text-muted-foreground">
+                <div data-settings-key="backgroundSync" className="pt-2 text-xs text-muted-foreground">
                     <div className="font-medium text-foreground">{t.backgroundSync}</div>
                     <p>{t.backgroundSyncDesc}</p>
                 </div>
@@ -293,7 +293,7 @@ export function SyncStatusSection({
                     )}
                     {historyEntries.length > 0 && (
                         <div className="pt-2 space-y-1">
-                            <button
+                            <button data-settings-key="syncHistory"
                                 type="button"
                                 onClick={() => setSyncHistoryOpen((prev) => !prev)}
                                 className="w-full flex items-center justify-between text-left"
@@ -328,7 +328,7 @@ export function SyncStatusSection({
                         </div>
                     )}
                     <div className="pt-3 space-y-1">
-                        <button
+                        <button data-settings-key="recoverySnapshots"
                             type="button"
                             onClick={() => setSnapshotsOpen((prev) => !prev)}
                             className="w-full flex items-center justify-between text-left"

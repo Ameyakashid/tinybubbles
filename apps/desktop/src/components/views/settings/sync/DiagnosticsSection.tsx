@@ -32,14 +32,14 @@ export function DiagnosticsSection({
 
     return (
         <section className="space-y-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h2 data-settings-key="diagnostics" className="text-lg font-semibold flex items-center gap-2">
                 <Info className="w-5 h-5" />
                 {t.diagnostics}
             </h2>
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <p className="text-sm text-muted-foreground">{t.diagnosticsDesc}</p>
                 {analyticsHeartbeatAvailable && (
-                    <div className="flex items-start justify-between gap-4">
+                    <div data-settings-key="analyticsHeartbeat" className="flex items-start justify-between gap-4">
                         <div>
                             <p className="text-sm font-medium">{t.analyticsHeartbeat}</p>
                             <p className="text-xs text-muted-foreground">{t.analyticsHeartbeatDesc}</p>
@@ -51,7 +51,7 @@ export function DiagnosticsSection({
                         />
                     </div>
                 )}
-                <div className="flex items-start justify-between gap-4">
+                <div data-settings-key="debugLogging" className="flex items-start justify-between gap-4">
                     <div>
                         <p className="text-sm font-medium">{t.debugLogging}</p>
                         <p className="text-xs text-muted-foreground">{t.debugLoggingDesc}</p>
@@ -63,7 +63,7 @@ export function DiagnosticsSection({
                     />
                 </div>
                 {loggingEnabled && logPath && (
-                    <div className="text-xs text-muted-foreground">
+                    <div data-settings-key="logFile" className="text-xs text-muted-foreground">
                         <span className="font-medium">{t.logFile}:</span>{' '}
                         <span className="font-mono break-all">{logPath}</span>
                     </div>

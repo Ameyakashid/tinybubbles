@@ -1,9 +1,10 @@
 import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@mindwtr/core/whisper-models';
 import {
+    getSettingsSearchEntries,
+    getSettingsSearchEntryKeys,
     LOCALES,
     resolveSettingsSearchI18nKey,
     SETTINGS_SEARCH_MOBILE_EXCLUSIONS,
-    SETTINGS_SEARCH_PAGE_KEYS,
     type SettingsSearchPageId,
 } from '@mindwtr/core';
 
@@ -96,11 +97,15 @@ const MOBILE_SEARCH_KEY_OVERRIDES: Partial<Record<string, string>> = {
     importOmniFocus: 'settings.syncMobile.importFromOmnifocus',
 };
 
+function mobileI18nKey(key: string): string {
+    return MOBILE_SEARCH_KEY_OVERRIDES[key] ?? resolveSettingsSearchI18nKey(key);
+}
+
 function derivedRowKeys(row: SettingsMenuRowId): string[] {
     return DESKTOP_PAGES_FOR_ROW[row].flatMap((pageId) =>
-        SETTINGS_SEARCH_PAGE_KEYS[pageId]
+        getSettingsSearchEntryKeys(pageId)
             .filter((key) => !(key in SETTINGS_SEARCH_MOBILE_EXCLUSIONS))
-            .map((key) => MOBILE_SEARCH_KEY_OVERRIDES[key] ?? resolveSettingsSearchI18nKey(key)),
+            .map(mobileI18nKey),
     );
 }
 
@@ -135,7 +140,9 @@ const MOBILE_ROW_EXTRA_KEYS: Record<SettingsMenuRowId, readonly string[]> = {
     advanced: [
         'settings.aiProvider', 'settings.aiModel', 'settings.aiApiKey',
         'settings.aiProviderOpenAI', 'settings.aiProviderAnthropic', 'settings.aiProviderGemini',
-        'settings.calendar', 'settings.calendarMobile.icsSubscriptions',
+        // Desktop indexes these on its Integrations page, which has no mobile
+        // row; mobile renders them on the Calendar screen under Advanced.
+        'settings.calendar', 'settings.calendarMobile.icsSubscriptions', 'settings.externalCalendars',
     ],
     about: ['settings.changelog', 'settings.checkForUpdates', 'settings.documentation'],
 };
@@ -166,6 +173,45 @@ export function buildSettingsMenuSearchText(
         .filter(({ key, value }) => value && value !== key)
         .map(({ value }) => value);
     return [title, description ?? '', ...keywordLabels].join(' ').toLowerCase();
+}
+
+// Which setting inside a menu row the query actually hit, and where it lives
+// ("GTD → Default capture method"). The row itself still navigates to its
+// sub-screen; this only tells the user why the row matched — the same
+// page/section path desktop shows in its results list.
+export type SettingsMenuMatch = { title: string; path: string };
+
+export function findSettingsMenuMatch(
+    id: SettingsMenuRowId,
+    rowTitle: string,
+    t: (key: string) => string,
+    query: string,
+): SettingsMenuMatch | null {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    // `t` echoes the key back when a translation is missing; those aren't labels.
+    const label = (key: string): string | null => {
+        const value = t(key);
+        return value && value !== key ? value : null;
+    };
+    let fallback: SettingsMenuMatch | null = null;
+    for (const pageId of DESKTOP_PAGES_FOR_ROW[id]) {
+        for (const entry of getSettingsSearchEntries(pageId)) {
+            if (entry.key in SETTINGS_SEARCH_MOBILE_EXCLUSIONS) continue;
+            const title = label(mobileI18nKey(entry.key));
+            if (!title || title === rowTitle) continue;
+            const lower = title.toLowerCase();
+            if (!lower.includes(q)) continue;
+            const sectionTitle = entry.section ? label(mobileI18nKey(entry.section)) : null;
+            const match: SettingsMenuMatch = {
+                title,
+                path: sectionTitle && sectionTitle !== title ? `${rowTitle} → ${sectionTitle}` : rowTitle,
+            };
+            if (lower.startsWith(q)) return match;
+            fallback = fallback ?? match;
+        }
+    }
+    return fallback;
 }
 
 export function settingsMenuMatchesQuery(searchText: string, query: string): boolean {

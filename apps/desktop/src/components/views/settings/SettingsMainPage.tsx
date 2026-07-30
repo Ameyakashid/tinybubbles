@@ -143,9 +143,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
     );
 }
 
-function SettingsRow({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function SettingsRow({ settingsKey, title, description, children }: { settingsKey: string; title: string; description?: string; children: React.ReactNode }) {
     return (
-        <div className="px-4 py-3 flex items-center justify-between gap-6">
+        <div data-settings-key={settingsKey} className="px-4 py-3 flex items-center justify-between gap-6">
             <div className="min-w-0">
                 <div className="text-[13px] font-medium">{title}</div>
                 {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
@@ -251,6 +251,7 @@ export function SettingsMainPage({
             <SectionHeader>{t.lookAndFeel}</SectionHeader>
             <SettingsCard>
                 <SettingsRow
+                    settingsKey="appearance"
                     title={t.appearance}
                     description={`${t.system} / ${t.light} / ${t.dark} / ${t.eink} / ${t.nord} / ${t.sepia}`}
                 >
@@ -268,7 +269,7 @@ export function SettingsMainPage({
                         <option value="sepia">{t.sepia}</option>
                     </select>
                 </SettingsRow>
-                <SettingsRow title={t.density} description={t.densityDesc}>
+                <SettingsRow settingsKey="density" title={t.density} description={t.densityDesc}>
                     <select
                         aria-label={t.density}
                         value={densityMode}
@@ -280,7 +281,7 @@ export function SettingsMainPage({
                         <option value="condensed">{t.densityCondensed}</option>
                     </select>
                 </SettingsRow>
-                <SettingsRow title={t.textSize} description={t.textSizeDesc}>
+                <SettingsRow settingsKey="textSize" title={t.textSize} description={t.textSizeDesc}>
                     <select
                         aria-label={t.textSize}
                         value={textSizeMode}
@@ -293,7 +294,7 @@ export function SettingsMainPage({
                         <option value="extra-large">{t.textSizeExtraLarge}</option>
                     </select>
                 </SettingsRow>
-                <SettingsRow title={t.showTaskAge} description={t.showTaskAgeDesc}>
+                <SettingsRow settingsKey="showTaskAge" title={t.showTaskAge} description={t.showTaskAgeDesc}>
                     <Toggle
                         enabled={showTaskAge}
                         label={t.showTaskAge}
@@ -306,6 +307,7 @@ export function SettingsMainPage({
             <SectionHeader>{t.localization}</SectionHeader>
             <SettingsCard>
                 <SettingsRow
+                    settingsKey="language"
                     title={t.language}
                     description={languages.find((l) => l.id === language)?.native ?? language}
                 >
@@ -323,6 +325,7 @@ export function SettingsMainPage({
                     </select>
                 </SettingsRow>
                 <SettingsRow
+                    settingsKey="weekStart"
                     title={t.weekStart}
                     description={weekStartDescription}
                 >
@@ -339,6 +342,7 @@ export function SettingsMainPage({
                     </select>
                 </SettingsRow>
                 <SettingsRow
+                    settingsKey="dateFormat"
                     title={t.dateFormat}
                     description={
                         dateFormat === 'dmy'
@@ -364,6 +368,7 @@ export function SettingsMainPage({
                 </SettingsRow>
                 {showCalendarSystem && (
                     <SettingsRow
+                        settingsKey="calendarSystem"
                         title={t.calendarSystem}
                         description={
                             calendarSystem === 'jalali'
@@ -383,6 +388,7 @@ export function SettingsMainPage({
                     </SettingsRow>
                 )}
                 <SettingsRow
+                    settingsKey="timeFormat"
                     title={t.timeFormat}
                     description={
                         timeFormat === '12h'
@@ -408,7 +414,7 @@ export function SettingsMainPage({
             {/* Input */}
             <SectionHeader>{t.input}</SectionHeader>
             <SettingsCard>
-                <SettingsRow title={t.keybindings} description={t.keybindingsDesc}>
+                <SettingsRow settingsKey="keybindings" title={t.keybindings} description={t.keybindingsDesc}>
                     <select
                         aria-label={t.keybindings}
                         value={keybindingStyle}
@@ -427,6 +433,7 @@ export function SettingsMainPage({
                     </button>
                 </SettingsRow>
                 <SettingsRow
+                    settingsKey="globalQuickAddShortcut"
                     title={t.globalQuickAddShortcut}
                     description={isFlatpak ? t.globalQuickAddFlatpakDesc : t.globalQuickAddShortcutDesc}
                 >
@@ -453,7 +460,7 @@ export function SettingsMainPage({
                         </code>
                     </div>
                 )}
-                <SettingsRow title={t.undoNotifications} description={t.undoNotificationsDesc}>
+                <SettingsRow settingsKey="undoNotifications" title={t.undoNotifications} description={t.undoNotificationsDesc}>
                     <Toggle
                         enabled={undoNotificationsEnabled}
                         label={t.undoNotifications}
@@ -468,7 +475,7 @@ export function SettingsMainPage({
                     <SectionHeader>{t.windowBehavior}</SectionHeader>
                     <SettingsCard>
                         {showWindowDecorations && (
-                            <SettingsRow title={t.windowDecorations} description={t.windowDecorationsDesc}>
+                            <SettingsRow settingsKey="windowDecorations" title={t.windowDecorations} description={t.windowDecorationsDesc}>
                                 <Toggle
                                     enabled={windowDecorationsEnabled}
                                     label={t.windowDecorations}
@@ -477,7 +484,7 @@ export function SettingsMainPage({
                             </SettingsRow>
                         )}
                         {showCloseBehavior && (
-                            <SettingsRow title={t.closeBehavior} description={t.closeBehaviorDesc}>
+                            <SettingsRow settingsKey="closeBehavior" title={t.closeBehavior} description={t.closeBehaviorDesc}>
                                 <select
                                     aria-label={t.closeBehavior}
                                     value={closeBehavior}
@@ -491,7 +498,7 @@ export function SettingsMainPage({
                             </SettingsRow>
                         )}
                         {showTrayToggle && (
-                            <SettingsRow title={t.showTray} description={t.showTrayDesc}>
+                            <SettingsRow settingsKey="showTray" title={t.showTray} description={t.showTrayDesc}>
                                 <Toggle
                                     enabled={trayVisible}
                                     label={t.showTray}
@@ -500,7 +507,7 @@ export function SettingsMainPage({
                             </SettingsRow>
                         )}
                         {showLaunchAtStartup && (
-                            <SettingsRow title={t.launchAtStartup} description={t.launchAtStartupDesc}>
+                            <SettingsRow settingsKey="launchAtStartup" title={t.launchAtStartup} description={t.launchAtStartupDesc}>
                                 <Toggle
                                     disabled={launchAtStartupLoading}
                                     enabled={launchAtStartupEnabled}

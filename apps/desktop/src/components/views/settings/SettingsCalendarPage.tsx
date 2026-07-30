@@ -101,7 +101,7 @@ export function SettingsCalendarPage({
         <div className="space-y-6">
             {showSystemCalendarSection && (
                 <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-                    <div className="space-y-1">
+                    <div data-settings-key="calendarSystemTitle" className="space-y-1">
                         <div className="text-sm font-semibold">{t.calendarSystemTitle}</div>
                         <p className="text-sm text-muted-foreground">{t.calendarSystemDesc}</p>
                     </div>
@@ -125,7 +125,7 @@ export function SettingsCalendarPage({
                     )}
                     <div className="border-t border-border pt-4 space-y-3">
                         <div className="flex items-start justify-between gap-4">
-                            <div className="space-y-1">
+                            <div data-settings-key="calendarPushTitle" className="space-y-1">
                                 <div className="text-sm font-medium">{t.calendarPushTitle}</div>
                                 <p className="text-xs text-muted-foreground">{t.calendarPushDesc}</p>
                             </div>
@@ -139,7 +139,7 @@ export function SettingsCalendarPage({
 
                         {calendarPushEnabled && systemCalendarPermission === 'granted' && (
                             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                                <label className="space-y-1">
+                                <label data-settings-key="calendarPushTarget" className="space-y-1">
                                     <span className="text-sm font-medium">{t.calendarPushTarget}</span>
                                     <select
                                         value={calendarPushTargetCalendarId ?? ''}
@@ -171,7 +171,7 @@ export function SettingsCalendarPage({
             )}
 
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-                <div className="space-y-1">
+                <div data-settings-key="calendar" className="space-y-1">
                     <div className="text-sm font-medium">{t.calendar}</div>
                     <p className="text-xs text-muted-foreground">{t.calendarDesc}</p>
                 </div>
@@ -186,7 +186,7 @@ export function SettingsCalendarPage({
                 </a>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1">
+                    <div data-settings-key="calendarName" className="space-y-1">
                         <div className="text-sm font-medium">{t.calendarName}</div>
                         <input
                             value={newCalendarName}
@@ -196,7 +196,7 @@ export function SettingsCalendarPage({
                             className="w-full text-sm px-3 py-2 rounded border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
                         />
                     </div>
-                    <div className="space-y-1">
+                    <div data-settings-key="calendarUrl" className="space-y-1">
                         <div className="text-sm font-medium">{t.calendarUrl}</div>
                         <input
                             value={newCalendarUrl}
@@ -208,7 +208,7 @@ export function SettingsCalendarPage({
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div data-settings-key="calendarChooseLocalFile" className="flex items-center justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <button
                             disabled={!newCalendarUrl.trim()}
@@ -240,7 +240,7 @@ export function SettingsCalendarPage({
 
             {externalCalendars.length > 0 && (
                 <div className="bg-card border border-border rounded-lg overflow-hidden">
-                    <div className="px-4 py-3 text-sm font-medium border-b border-border">{t.externalCalendars}</div>
+                    <div data-settings-key="externalCalendars" className="px-4 py-3 text-sm font-medium border-b border-border">{t.externalCalendars}</div>
                     <div className="divide-y divide-border">
                         {externalCalendars.map((calendar) => (
                             <div key={calendar.id} className="p-4 flex items-start justify-between gap-4">

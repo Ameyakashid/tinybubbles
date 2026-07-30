@@ -32,6 +32,7 @@ import { MenuItem, SettingsTopBar } from '@/components/settings/settings.shell';
 import { styles } from '@/components/settings/settings.styles';
 import {
     buildSettingsMenuSearchText,
+    findSettingsMenuMatch,
     SETTINGS_SCREEN_SET,
     settingsMenuMatchesQuery,
     type SettingsMenuRowId,
@@ -210,12 +211,19 @@ export default function SettingsPage() {
 
     const filteredGroups = menuGroups
         .map((group) =>
-            group.filter((row) =>
-                settingsMenuMatchesQuery(
-                    buildSettingsMenuSearchText(row.id, row.title, row.description, t),
-                    search,
-                ),
-            ),
+            group
+                .filter((row) =>
+                    settingsMenuMatchesQuery(
+                        buildSettingsMenuSearchText(row.id, row.title, row.description, t),
+                        search,
+                    ),
+                )
+                // While searching, the row's second line says which setting
+                // matched and where it lives, instead of the generic blurb.
+                .map((row) => {
+                    const match = findSettingsMenuMatch(row.id, row.title, t, search);
+                    return match ? { ...row, description: `${match.title} · ${match.path}` } : row;
+                }),
         )
         .filter((group) => group.length > 0);
 

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
     getEnglishI18nValue,
     resolveSettingsSearchI18nKey,
+    SETTINGS_SEARCH_INDEX,
     SETTINGS_SEARCH_MOBILE_EXCLUSIONS,
-    SETTINGS_SEARCH_PAGE_KEYS,
 } from '@mindwtr/core';
 
 import {
     buildSettingsMenuSearchText,
+    findSettingsMenuMatch,
     SETTINGS_MENU_KEYWORD_KEYS,
     settingsMenuMatchesQuery,
     type SettingsMenuRowId,
@@ -123,12 +124,10 @@ describe('settings menu search index', () => {
                 .filter((value): value is string => Boolean(value)),
         );
         const missing: string[] = [];
-        for (const keys of Object.values(SETTINGS_SEARCH_PAGE_KEYS)) {
-            for (const key of keys) {
-                if (key in SETTINGS_SEARCH_MOBILE_EXCLUSIONS) continue;
-                const text = getEnglishI18nValue(resolveSettingsSearchI18nKey(key));
-                if (text && !mobileTexts.has(text)) missing.push(`${key} -> "${text}"`);
-            }
+        for (const entry of SETTINGS_SEARCH_INDEX) {
+            if (entry.key in SETTINGS_SEARCH_MOBILE_EXCLUSIONS) continue;
+            const text = getEnglishI18nValue(resolveSettingsSearchI18nKey(entry.key));
+            if (text && !mobileTexts.has(text)) missing.push(`${entry.key} -> "${text}"`);
         }
         expect(missing).toEqual([]);
     });
@@ -165,5 +164,22 @@ describe('settings menu search index', () => {
         const text = buildSettingsMenuSearchText('gtd', t('settings.gtd'), undefined, t);
         expect(text).not.toContain('settings.');
         expect(text).toContain('pomodoro timer');
+    });
+
+    // #884 follow-up: the row still navigates to its sub-screen, but while
+    // searching its second line names the setting that matched and the path to
+    // it — the same "Page → Section" data desktop shows in its results list.
+    it('reports which setting matched a row and where it lives', () => {
+        expect(findSettingsMenuMatch('gtd', t('settings.gtd'), t, 'clean up quick add')).toEqual({
+            title: 'Clean up quick add text',
+            path: 'GTD → Default capture method',
+        });
+        expect(findSettingsMenuMatch('gtd', t('settings.gtd'), t, 'estimate')).toEqual({
+            title: 'Time estimate presets',
+            path: 'GTD',
+        });
+        // A row that matched on its own title has no inner setting to report.
+        expect(findSettingsMenuMatch('gtd', t('settings.gtd'), t, 'gtd')).toBeNull();
+        expect(findSettingsMenuMatch('gtd', t('settings.gtd'), t, '  ')).toBeNull();
     });
 });

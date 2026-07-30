@@ -3,11 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { getEnglishI18nValue, getTranslationsSync, loadTranslations, type Language } from '@mindwtr/core';
 
 import {
-    buildNavKeywords,
-    getEnglishSettingsLabels,
     labelKeyOverrides,
     SETTINGS_LABEL_KEYS,
-    SETTINGS_PAGE_LABEL_KEYS,
     type SettingsLabels,
 } from './labels';
 
@@ -93,43 +90,5 @@ describe('settings label registry', () => {
     it('keeps Simplified Chinese fallbacks unchanged for zh', async () => {
         const zh = await buildLabels('zh');
         expect(zh.searchPlaceholder).toBe('搜索设置…');
-    });
-});
-
-describe('settings nav search keywords', () => {
-    it('derives GTD keywords from the translated setting labels it renders', () => {
-        const keywords = buildNavKeywords(getEnglishSettingsLabels(), SETTINGS_PAGE_LABEL_KEYS.gtd, [
-            'auto-archive',
-            'pomodoro',
-        ]);
-
-        // Real setting labels, so "default", "project", "area" and
-        // "time estimate" all surface the GTD page (#884).
-        expect(keywords).toContain('Default project flow');
-        expect(keywords).toContain('Default area for new tasks');
-        expect(keywords).toContain('Time estimate presets');
-        // Hand-curated synonyms still supplement the derived labels.
-        expect(keywords).toContain('auto-archive');
-    });
-
-    it('only lists label keys that exist in the settings label registry', () => {
-        const known = new Set<string>(SETTINGS_LABEL_KEYS);
-        const missing: string[] = [];
-        for (const keys of Object.values(SETTINGS_PAGE_LABEL_KEYS)) {
-            for (const key of keys) {
-                if (!known.has(key)) missing.push(key);
-            }
-        }
-        expect(missing).toEqual([]);
-    });
-
-    it('localizes derived keywords and drops duplicates', async () => {
-        const zh = await buildLabels('zh');
-        const keywords = buildNavKeywords(zh, SETTINGS_PAGE_LABEL_KEYS.gtd, [
-            zh.defaultProjectFlowMode,
-        ]);
-
-        expect(keywords).toContain('默认项目流程');
-        expect(keywords.filter((kw) => kw === '默认项目流程')).toHaveLength(1);
     });
 });

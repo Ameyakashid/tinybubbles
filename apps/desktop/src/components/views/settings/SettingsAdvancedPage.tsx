@@ -43,16 +43,18 @@ function SettingsCard({ children }: { children: ReactNode }) {
 }
 
 function SettingsRow({
+    settingsKey,
     title,
     description,
     children,
 }: {
+    settingsKey: string;
     title: string;
     description?: ReactNode;
     children: ReactNode;
 }) {
     return (
-        <div className="px-4 py-3 flex items-center justify-between gap-6">
+        <div data-settings-key={settingsKey} className="px-4 py-3 flex items-center justify-between gap-6">
             <div className="min-w-0">
                 <div className="text-[13px] font-medium">{title}</div>
                 {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
@@ -112,7 +114,7 @@ export function SettingsAdvancedPage({
         <div className="space-y-5">
             <SectionHeader>{t.automation}</SectionHeader>
             <SettingsCard>
-                <SettingsRow title={t.localApiServer} description={statusText}>
+                <SettingsRow settingsKey="localApiServer" title={t.localApiServer} description={statusText}>
                     <Toggle
                         disabled={!isTauri || localApiBusy}
                         enabled={localApiStatus.enabled}
@@ -120,7 +122,7 @@ export function SettingsAdvancedPage({
                         onChange={() => onLocalApiToggle(!localApiStatus.enabled)}
                     />
                 </SettingsRow>
-                <SettingsRow title={t.localApiPort} description={t.localApiPortDesc}>
+                <SettingsRow settingsKey="localApiPort" title={t.localApiPort} description={t.localApiPortDesc}>
                     <input
                         aria-label={t.localApiPort}
                         className={inputCls}
@@ -135,7 +137,7 @@ export function SettingsAdvancedPage({
                     />
                 </SettingsRow>
                 {localApiStatus.enabled && localApiStatus.token && (
-                    <SettingsRow title={t.localApiToken} description={t.localApiTokenDesc}>
+                    <SettingsRow settingsKey="localApiToken" title={t.localApiToken} description={t.localApiTokenDesc}>
                         <code className="max-w-[320px] break-all rounded border border-border bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
                             {localApiStatus.token}
                         </code>
@@ -156,7 +158,7 @@ export function SettingsAdvancedPage({
                 <>
                     <SectionHeader>{t.rendering}</SectionHeader>
                     <SettingsCard>
-                        <SettingsRow title={t.softwareRendering} description={t.softwareRenderingDesc}>
+                        <SettingsRow settingsKey="softwareRendering" title={t.softwareRendering} description={t.softwareRenderingDesc}>
                             <Toggle
                                 disabled={desktopRenderingBusy}
                                 enabled={desktopRenderingConfig.disableHardwareAcceleration}
@@ -172,6 +174,7 @@ export function SettingsAdvancedPage({
                                 type="button"
                                 onClick={() => setNetworkProxyOpen((open) => !open)}
                                 aria-expanded={networkProxyOpen}
+                                data-settings-key="networkProxyUrl"
                                 className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
                             >
                                 <div className="min-w-0">

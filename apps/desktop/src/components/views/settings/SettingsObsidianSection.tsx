@@ -133,7 +133,7 @@ export function SettingsObsidianSection({
         <div className="bg-card border border-border rounded-lg">
             <div className="p-4 flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1 space-y-2">
-                    <button
+                    <button data-settings-key="obsidianVault" data-settings-section="obsidianVault"
                         type="button"
                         onClick={() => setOpen((prev) => !prev)}
                         aria-expanded={open}
@@ -163,7 +163,7 @@ export function SettingsObsidianSection({
             </div>
             {open && (
                 <div className="border-t border-border p-4 space-y-4">
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="obsidianVaultPath" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.obsidianVaultPath}</label>
                         <div className="flex gap-2">
                             <input
@@ -207,7 +207,7 @@ export function SettingsObsidianSection({
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="obsidianScanFolders" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.obsidianScanFolders}</label>
                         <textarea
                             value={obsidianScanFoldersText}
@@ -220,7 +220,7 @@ export function SettingsObsidianSection({
                         <p className="text-xs text-muted-foreground">{t.obsidianScanFoldersHint}</p>
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div data-settings-key="obsidianInboxFile" className="flex flex-col gap-2">
                         <label className="text-sm font-medium">{t.obsidianInboxFile}</label>
                         <input
                             type="text"
@@ -239,7 +239,7 @@ export function SettingsObsidianSection({
                             <p className="text-xs text-muted-foreground">{t.obsidianDataviewDesc}</p>
                         </div>
 
-                        <div className="flex items-start justify-between gap-4">
+                        <div data-settings-key="obsidianDataviewMetadata" className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-sm font-medium">{t.obsidianDataviewMetadata}</p>
                                 <p className="text-xs text-muted-foreground">{t.obsidianDataviewMetadataHint}</p>
@@ -258,7 +258,7 @@ export function SettingsObsidianSection({
                             <p className="text-xs text-muted-foreground">{t.obsidianTaskNotesDesc}</p>
                         </div>
 
-                        <div className="flex items-start justify-between gap-4">
+                        <div data-settings-key="obsidianTaskNotesIncludeArchived" className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-sm font-medium">{t.obsidianTaskNotesIncludeArchived}</p>
                                 <p className="text-xs text-muted-foreground">{t.obsidianTaskNotesIncludeArchivedHint}</p>
@@ -270,7 +270,7 @@ export function SettingsObsidianSection({
                             />
                         </div>
 
-                        <div className="flex flex-col gap-2">
+                        <div data-settings-key="obsidianNewTaskFormat" className="flex flex-col gap-2">
                             <label className="text-sm font-medium">{t.obsidianNewTaskFormat}</label>
                             <select
                                 value={obsidianNewTaskFormat}

@@ -320,11 +320,13 @@ function PersonRow({
 // ---------------------------------------------------------------------------
 
 function ManageSection({
+    settingsKey,
     title,
     count,
     defaultOpen = false,
     children,
 }: {
+    settingsKey?: string;
     title: string;
     count: number;
     defaultOpen?: boolean;
@@ -336,6 +338,7 @@ function ManageSection({
         <div className="rounded-lg border border-border bg-card overflow-visible">
             <button
                 type="button"
+                data-settings-key={settingsKey}
                 onClick={() => setOpen((prev) => !prev)}
                 className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
             >
@@ -451,6 +454,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
         <div className="space-y-6">
             {/* Areas */}
             <ManageSection
+                settingsKey="manageAreas"
                 title={resolveText('areas.manage', 'Manage Areas')}
                 count={sortedAreas.length}
             >
@@ -576,6 +580,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
 
             {/* Contexts */}
             <ManageSection
+                settingsKey="manageContexts"
                 title={resolveText('contexts.title', 'Contexts')}
                 count={allContexts.length}
             >
@@ -597,6 +602,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
 
             {/* Tags */}
             <ManageSection
+                settingsKey="manageTags"
                 title={resolveText('contexts.tags', 'Tags')}
                 count={allTags.length}
             >
