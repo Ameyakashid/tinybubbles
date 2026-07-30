@@ -3,14 +3,16 @@ import { Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } 
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { normalizeDateFormatSetting, resolveDateLocaleTag, useTaskStore } from '@mindwtr/core';
-
 import {
     areDueDateRemindersEnabled,
     areStartDateRemindersEnabled,
     areTaskRemindersEnabled,
     isWeeklyReviewReminderEnabled,
-} from '@/lib/mobile-notification-settings';
+    normalizeDateFormatSetting,
+    resolveDateLocaleTag,
+    useTaskStore,
+} from '@mindwtr/core';
+
 import { requestNotificationPermission, startMobileNotifications } from '@/lib/notification-service';
 import {
     applyPersistentCaptureNotification,

@@ -69,42 +69,48 @@ vi.mock('expo-application', () => ({
   getInstallReferrerAsync,
 }));
 
-vi.mock('@mindwtr/core', () => ({
-  generateUUID: () => 'generated-id',
-  resetHeartbeatOptOutMarker: vi.fn(async () => undefined),
-  sendDailyHeartbeat: vi.fn(async () => undefined),
-  sendHeartbeatOptOut: vi.fn(async () => undefined),
-  selectVisibleTasks: (tasks: Array<{ deletedAt?: string | null; status?: string }>) => (
-    tasks.filter((task) => !task.deletedAt && task.status !== 'archived')
-  ),
-  SQLITE_SCHEMA_VERSION: 1,
-  useTaskStore: {
-    getState: () => storeHolder.state,
-    setState: (partial: Record<string, unknown> | ((state: any) => Record<string, unknown>)) => {
-      const nextPartial = typeof partial === 'function' ? partial(storeHolder.state) : partial;
-      const nextState = {
-        ...storeHolder.state,
-        ...nextPartial,
-      };
-      if (Array.isArray(nextPartial._allTasks)) {
-        nextState.tasks = nextPartial._allTasks.filter((task: any) => !task.deletedAt && task.status !== 'archived');
-      }
-      if (Array.isArray(nextPartial._allProjects)) {
-        nextState.projects = nextPartial._allProjects.filter((project: any) => !project.deletedAt);
-      }
-      if (Array.isArray(nextPartial._allSections)) {
-        nextState.sections = nextPartial._allSections.filter((section: any) => !section.deletedAt);
-      }
-      if (Array.isArray(nextPartial._allAreas)) {
-        nextState.areas = nextPartial._allAreas.filter((area: any) => !area.deletedAt);
-      }
-      storeHolder.state = {
-        ...nextState,
-      };
-      setStateSpy(nextPartial);
+vi.mock('@mindwtr/core', async () => {
+  // hasActiveMobileNotificationFeature is a pure predicate (packages/core/src/schedule-utils.ts):
+  // passthrough the real implementation rather than re-stub it here.
+  const { hasActiveMobileNotificationFeature } = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  return {
+    generateUUID: () => 'generated-id',
+    hasActiveMobileNotificationFeature,
+    resetHeartbeatOptOutMarker: vi.fn(async () => undefined),
+    sendDailyHeartbeat: vi.fn(async () => undefined),
+    sendHeartbeatOptOut: vi.fn(async () => undefined),
+    selectVisibleTasks: (tasks: Array<{ deletedAt?: string | null; status?: string }>) => (
+      tasks.filter((task) => !task.deletedAt && task.status !== 'archived')
+    ),
+    SQLITE_SCHEMA_VERSION: 1,
+    useTaskStore: {
+      getState: () => storeHolder.state,
+      setState: (partial: Record<string, unknown> | ((state: any) => Record<string, unknown>)) => {
+        const nextPartial = typeof partial === 'function' ? partial(storeHolder.state) : partial;
+        const nextState = {
+          ...storeHolder.state,
+          ...nextPartial,
+        };
+        if (Array.isArray(nextPartial._allTasks)) {
+          nextState.tasks = nextPartial._allTasks.filter((task: any) => !task.deletedAt && task.status !== 'archived');
+        }
+        if (Array.isArray(nextPartial._allProjects)) {
+          nextState.projects = nextPartial._allProjects.filter((project: any) => !project.deletedAt);
+        }
+        if (Array.isArray(nextPartial._allSections)) {
+          nextState.sections = nextPartial._allSections.filter((section: any) => !section.deletedAt);
+        }
+        if (Array.isArray(nextPartial._allAreas)) {
+          nextState.areas = nextPartial._allAreas.filter((area: any) => !area.deletedAt);
+        }
+        storeHolder.state = {
+          ...nextState,
+        };
+        setStateSpy(nextPartial);
+      },
     },
-  },
-}));
+  };
+});
 
 vi.mock('@/lib/storage-adapter', () => ({
   getMobileStartupSnapshotFromBackup,

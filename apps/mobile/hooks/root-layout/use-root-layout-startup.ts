@@ -4,12 +4,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
     type AppData,
+    hasActiveMobileNotificationFeature,
     SQLITE_SCHEMA_VERSION,
     useTaskStore,
 } from '@mindwtr/core';
 
 import { startMobileNotifications } from '@/lib/notification-service';
-import { hasActiveMobileNotificationFeature } from '@/lib/mobile-notification-settings';
 import { getMobileStartupSnapshotFromBackup } from '@/lib/storage-adapter';
 import { updateMobileWidgetFromStore } from '@/lib/widget-service';
 import { markStartupPhase, measureStartupPhase } from '@/lib/startup-profiler';

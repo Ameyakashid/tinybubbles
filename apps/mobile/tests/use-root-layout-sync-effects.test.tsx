@@ -69,6 +69,7 @@ vi.mock('@mindwtr/core', async () => {
   return {
     flushPendingSave,
     getInMemorySyncChangeFingerprint,
+    hasActiveMobileNotificationFeature,
     resolveSyncFailureCooldownMs,
     useTaskStore: {
       getState: () => ({ settings: {} }),
@@ -113,10 +114,6 @@ vi.mock('@/lib/cloudkit-sync', () => ({
 
 vi.mock('@/lib/widget-service', () => ({
   updateMobileWidgetFromStore,
-}));
-
-vi.mock('@/lib/mobile-notification-settings', () => ({
-  hasActiveMobileNotificationFeature,
 }));
 
 vi.mock('@/lib/app-log', () => ({

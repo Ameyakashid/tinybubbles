@@ -134,12 +134,14 @@ export function SettingsNotificationsPage({
                 </div>
 
                 {/* The group above carries the `weeklyReview` search key. */}
+                {/* Not gated on notificationsEnabled: the weekly review nudge fires
+                    independent of the task-reminder master switch, so its own toggle must
+                    stay operable even when that switch is off (matches mobile). */}
                 <SettingRow settingsKey={null} title={t.weeklyReview}>
                     <Switch
                         checked={weeklyReviewEnabled}
                         onCheckedChange={(checked) => handleUpdate({ weeklyReviewEnabled: checked })}
                         aria-label={t.weeklyReview}
-                        disabled={!notificationsEnabled}
                     />
                 </SettingRow>
 
@@ -147,7 +149,7 @@ export function SettingsNotificationsPage({
                     <select
                         aria-label={t.weeklyReviewDay}
                         value={weeklyReviewDay}
-                        disabled={!notificationsEnabled || !weeklyReviewEnabled}
+                        disabled={!weeklyReviewEnabled}
                         onChange={(e) => handleUpdate({ weeklyReviewDay: Number(e.target.value) })}
                         className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -164,7 +166,7 @@ export function SettingsNotificationsPage({
                         type="time"
                         aria-label={t.weeklyReviewTime}
                         value={weeklyReviewTime}
-                        disabled={!notificationsEnabled || !weeklyReviewEnabled}
+                        disabled={!weeklyReviewEnabled}
                         onChange={(e) => handleUpdate({ weeklyReviewTime: e.target.value })}
                         className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
                     />

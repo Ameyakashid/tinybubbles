@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { flushPendingSave, getInMemorySyncChangeFingerprint, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
+import { flushPendingSave, getInMemorySyncChangeFingerprint, hasActiveMobileNotificationFeature, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { getNotificationPermissionStatus, startMobileNotifications, stopMobileNotifications } from '@/lib/notification-service';
@@ -13,7 +13,6 @@ import { classifySyncFailure, coerceSupportedBackend, isLikelyOfflineSyncError, 
 import { SYNC_BACKEND_KEY } from '@/lib/sync-constants';
 import { isCloudKitAvailable, subscribeToCloudKitChanges } from '@/lib/cloudkit-sync';
 import { updateMobileWidgetFromStore } from '@/lib/widget-service';
-import { hasActiveMobileNotificationFeature } from '@/lib/mobile-notification-settings';
 import { logError, logWarn } from '@/lib/app-log';
 
 type ResolveText = (key: string, fallback: string) => string;

@@ -373,6 +373,13 @@ export type ReminderScheduleInput = {
     translations: Record<string, string>;
     /** Platform cap on pending one-shot alarms (e.g. 60 on iOS, 200 on Android). Omit for no cap. */
     maxOneShotReminders?: number;
+    /**
+     * Skip building a request (message body included) for anything firing after this instant.
+     * Omitted = unbounded, today's behavior (mobile pre-arms every future occurrence). A polling
+     * platform sets this to avoid paying for `buildReminderNotificationBody` (stripMarkdown, etc.)
+     * on occurrences it will immediately discard as out-of-window.
+     */
+    deliveryWindowTo?: Date;
 };
 
 export type ReminderSchedule = {
@@ -395,6 +402,11 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
     const { settings, tasks, projects, translations } = input;
     const now = input.now ?? new Date();
     const nowMs = now.getTime();
+    const windowToMs = input.deliveryWindowTo?.getTime() ?? Infinity;
+    // A windowed (polling) caller discards diagnostics along with everything outside its window
+    // (see resolveDueReminders) -- skip the classification pass nobody reads instead of parsing
+    // every task's dates twice per poll for counts no one consumes.
+    const trackDiagnostics = input.deliveryWindowTo === undefined;
 
     const taskRemindersEnabled = areTaskRemindersEnabled(settings);
     const includeStartTime = areStartDateRemindersEnabled(settings);
@@ -456,34 +468,36 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
             // Single pass: the diagnostic classification below and the plan that produces the
             // actual request both read this same task/now/options, in the same iteration, so
             // they cannot disagree with each other the way two separate traversals could.
-            const suppressTaskReminders = task.suppressMindwtrReminders === true;
-            const hasSuppressibleReminder = (includeDueDate && hasTimeComponent(task.dueDate))
-                || (includeStartTime && hasTimeComponent(task.startTime));
-            if (suppressTaskReminders && hasSuppressibleReminder) {
-                suppressedTaskReminderCount += 1;
-            }
-            if (!suppressTaskReminders && includeDueDate && task.dueDate) {
-                if (hasTimeComponent(task.dueDate)) {
-                    const dueAtMs = safeParseDate(task.dueDate)?.getTime() ?? NaN;
-                    if (Number.isFinite(dueAtMs) && dueAtMs > nowMs) futureDueDateReminderCount += 1;
-                    else if (Number.isFinite(dueAtMs)) pastDueDateReminderCount += 1;
-                } else {
-                    dateOnlyDueDateCount += 1;
+            if (trackDiagnostics) {
+                const suppressTaskReminders = task.suppressMindwtrReminders === true;
+                const hasSuppressibleReminder = (includeDueDate && hasTimeComponent(task.dueDate))
+                    || (includeStartTime && hasTimeComponent(task.startTime));
+                if (suppressTaskReminders && hasSuppressibleReminder) {
+                    suppressedTaskReminderCount += 1;
                 }
-            }
-            if (!suppressTaskReminders && includeStartTime && task.startTime) {
-                if (hasTimeComponent(task.startTime)) {
-                    const startAtMs = safeParseDate(task.startTime)?.getTime() ?? NaN;
-                    if (Number.isFinite(startAtMs) && startAtMs > nowMs) futureStartTimeReminderCount += 1;
-                    else if (Number.isFinite(startAtMs)) pastStartTimeReminderCount += 1;
-                } else {
-                    dateOnlyStartTimeCount += 1;
+                if (!suppressTaskReminders && includeDueDate && task.dueDate) {
+                    if (hasTimeComponent(task.dueDate)) {
+                        const dueAtMs = safeParseDate(task.dueDate)?.getTime() ?? NaN;
+                        if (Number.isFinite(dueAtMs) && dueAtMs > nowMs) futureDueDateReminderCount += 1;
+                        else if (Number.isFinite(dueAtMs)) pastDueDateReminderCount += 1;
+                    } else {
+                        dateOnlyDueDateCount += 1;
+                    }
                 }
-            }
-            if (includeReviewAt && task.reviewAt && hasTimeComponent(task.reviewAt)) {
-                const reviewAtMs = safeParseDate(task.reviewAt)?.getTime() ?? NaN;
-                if (Number.isFinite(reviewAtMs) && reviewAtMs > nowMs) futureTaskReviewReminderCount += 1;
-                else if (Number.isFinite(reviewAtMs)) pastTaskReviewReminderCount += 1;
+                if (!suppressTaskReminders && includeStartTime && task.startTime) {
+                    if (hasTimeComponent(task.startTime)) {
+                        const startAtMs = safeParseDate(task.startTime)?.getTime() ?? NaN;
+                        if (Number.isFinite(startAtMs) && startAtMs > nowMs) futureStartTimeReminderCount += 1;
+                        else if (Number.isFinite(startAtMs)) pastStartTimeReminderCount += 1;
+                    } else {
+                        dateOnlyStartTimeCount += 1;
+                    }
+                }
+                if (includeReviewAt && task.reviewAt && hasTimeComponent(task.reviewAt)) {
+                    const reviewAtMs = safeParseDate(task.reviewAt)?.getTime() ?? NaN;
+                    if (Number.isFinite(reviewAtMs) && reviewAtMs > nowMs) futureTaskReviewReminderCount += 1;
+                    else if (Number.isFinite(reviewAtMs)) pastTaskReviewReminderCount += 1;
+                }
             }
 
             const plan = getTaskReminderPlan(task, now, { includeStartTime, includeDueDate, includeReviewAt });
@@ -493,7 +507,7 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
             // `next`, but its remaining repeat occurrences must still fire.
             for (const repeat of plan.repeats) {
                 const repeatFireAtMs = repeat.scheduledAt.getTime();
-                if (repeatFireAtMs <= nowMs) continue;
+                if (repeatFireAtMs <= nowMs || repeatFireAtMs > windowToMs) continue;
                 oneShot.push({
                     key: repeat.key,
                     title: task.title,
@@ -507,7 +521,7 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
 
             const next = plan.next;
             const fireAtMs = next?.scheduledAt.getTime() ?? NaN;
-            if (!next || fireAtMs <= nowMs) continue;
+            if (!next || fireAtMs <= nowMs || fireAtMs > windowToMs) continue;
             const isReview = next.kind === 'review';
             if (isReview) taskReviewReminderCount += 1;
             else taskReminderCount += 1;
@@ -527,7 +541,7 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
         const reviewLabel = translations['review.projectsStep'] ?? 'Review project';
         for (const project of projects) {
             const reminder = getProjectReviewReminderIntent(project, now);
-            if (!reminder) continue;
+            if (!reminder || reminder.scheduledAt.getTime() > windowToMs) continue;
             projectReviewReminderCount += 1;
             oneShot.push({
                 key: reminder.key,
@@ -566,4 +580,41 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
             oneShotReminderCount: oneShot.length,
         },
     };
+}
+
+// --- Windowed delivery (the seam a polling platform adopts instead of pre-arming alarms) ---
+
+export type ReminderDeliveryWindow = {
+    /** Look-back start: reminders due before this instant are treated as already missed. */
+    from: Date;
+    /** Reminders due after this instant haven't arrived yet this cycle. */
+    to: Date;
+};
+
+/**
+ * Windowed view of `buildReminderSchedule` for a platform that polls rather than pre-arms
+ * alarms (desktop): the schedule is computed anchored at `window.from` instead of "now", so a
+ * reminder due while the app was asleep or throttled is still caught (the same look-back desktop
+ * already used per-task before this existed), then only the task/project one-shot requests due
+ * by `window.to` are kept.
+ *
+ * Digest/weekly-review entries are excluded: a polling platform tracks those on its own per-day
+ * cadence (see desktop's `checkDueAndNotify`), not as a one-shot delivery. Due-time repeat
+ * occurrences are excluded too — a polling platform resolves which single occurrence fires this
+ * cycle itself (see desktop's `resolveDueRepeatToFire`); folding core's whole future repeat chain
+ * in here could hand back more than one per cycle.
+ */
+export function resolveDueReminders(
+    input: Omit<ReminderScheduleInput, 'now'>,
+    window: ReminderDeliveryWindow,
+): ReminderScheduleRequest[] {
+    // `now` is anchored at window.from (the look-back point) rather than passed by the caller,
+    // and deliveryWindowTo skips building a request (message body included) for anything the
+    // window will discard anyway -- the expensive part (buildReminderNotificationBody) never
+    // runs for out-of-window entries.
+    const { requests } = buildReminderSchedule({ ...input, now: window.from, deliveryWindowTo: window.to });
+    return requests.filter((request) => (
+        !request.repeatInterval
+        && (!request.data.taskId || request.key === `task:${request.data.taskId}`)
+    ));
 }

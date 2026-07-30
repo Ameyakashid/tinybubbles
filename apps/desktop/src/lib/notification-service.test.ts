@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { NotificationSettings, Task } from '@mindwtr/core';
 
-import { getNextScheduledAt } from '@mindwtr/core';
+import { buildReminderSchedule, getNextScheduledAt, useTaskStore } from '@mindwtr/core';
 
 import {
     buildDesktopTaskNotificationBody,
+    resolveDesktopReminderGates,
     resolveDueRepeatToFire,
     resolvePollCatchUpMs,
+    startDesktopNotifications,
+    stopDesktopNotifications,
 } from './notification-service';
 
 const baseTask: Task = {
@@ -180,5 +183,85 @@ describe('desktop next-reminder scheduling honors suppressMindwtrReminders', () 
             suppressMindwtrReminders: true,
         };
         expect(getNextScheduledAt(task, now, allOn)).toEqual(new Date('2026-06-17T10:00:00.000Z'));
+    });
+});
+
+// Cross-platform parity: desktop's poll-loop gates (resolveDesktopReminderGates) and mobile's
+// pre-arm gates (buildReminderSchedule's diagnostics/digest requests) must enable the same
+// reminder kinds for the same settings. Includes the notifications-off + weekly-review-on row
+// desktop used to break by killing all four categories behind one early return.
+describe('desktop/mobile reminder-kind parity', () => {
+    const now = new Date('2026-07-30T12:00:00.000Z');
+
+    const rows: Array<{ label: string; settings: NotificationSettings }> = [
+        { label: 'all off', settings: { notificationsEnabled: false } },
+        { label: 'notifications off, weekly review on', settings: { notificationsEnabled: false, weeklyReviewEnabled: true } },
+        {
+            label: 'notifications on, everything on',
+            settings: {
+                notificationsEnabled: true,
+                weeklyReviewEnabled: true,
+                dailyDigestMorningEnabled: true,
+                dailyDigestEveningEnabled: true,
+            },
+        },
+        { label: 'notifications off, morning digest on (must not fire)', settings: { notificationsEnabled: false, dailyDigestMorningEnabled: true } },
+        { label: 'notifications on, weekly review explicitly off', settings: { notificationsEnabled: true, weeklyReviewEnabled: false } },
+    ];
+
+    it.each(rows)('desktop gates match mobile\'s schedule for: $label', ({ settings }) => {
+        const desktop = resolveDesktopReminderGates(settings);
+        const mobile = buildReminderSchedule({ settings, tasks: [], projects: [], now, translations: {} });
+
+        expect(desktop.taskRemindersEnabled).toBe(mobile.diagnostics.taskRemindersEnabled);
+        expect(desktop.weeklyReviewEnabled).toBe(mobile.diagnostics.weeklyReviewEnabled);
+        expect(desktop.morningDigestEnabled).toBe(mobile.requests.some((request) => request.key === 'digest:morning'));
+        expect(desktop.eveningDigestEnabled).toBe(mobile.requests.some((request) => request.key === 'digest:evening'));
+    });
+
+    it('pins the fix: the weekly review stays on even though notificationsEnabled is off (#reminder-window)', () => {
+        const gates = resolveDesktopReminderGates({ notificationsEnabled: false, weeklyReviewEnabled: true });
+        expect(gates.weeklyReviewEnabled).toBe(true);
+        expect(gates.taskRemindersEnabled).toBe(false);
+        expect(gates.morningDigestEnabled).toBe(false);
+    });
+});
+
+// Drives the real checkDueAndNotify poll loop end to end (not just its gating helper) so a
+// regression at the actual bug site -- re-adding the notificationsEnabled early return -- is
+// caught here, not only in a parity comparison of two derivations of the same predicates.
+describe('startDesktopNotifications sends the weekly review while notificationsEnabled is off (#reminder-window)', () => {
+    const initialStoreState = useTaskStore.getState();
+
+    afterEach(async () => {
+        stopDesktopNotifications();
+        useTaskStore.setState(initialStoreState, true);
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+    });
+
+    it('constructs one notification for the weekly review slot', async () => {
+        const fixedNow = new Date(2026, 6, 31, 18, 0, 0, 0); // a Friday, local time
+        vi.useFakeTimers();
+        vi.setSystemTime(fixedNow);
+
+        useTaskStore.setState({
+            tasks: [],
+            projects: [],
+            settings: {
+                notificationsEnabled: false,
+                weeklyReviewEnabled: true,
+                weeklyReviewDay: fixedNow.getDay(),
+                weeklyReviewTime: '18:00',
+            },
+        });
+
+        const NotificationSpy = vi.fn() as any;
+        NotificationSpy.permission = 'granted';
+        vi.stubGlobal('Notification', NotificationSpy);
+
+        await startDesktopNotifications();
+
+        expect(NotificationSpy).toHaveBeenCalledTimes(1);
     });
 });

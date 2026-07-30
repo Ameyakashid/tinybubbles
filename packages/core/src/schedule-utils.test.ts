@@ -15,6 +15,7 @@ import {
     isWeeklyReviewReminderEnabled,
     normalizeRepeatReminderMinutes,
     REPEAT_REMINDER_INTERVAL_OPTIONS,
+    resolveDueReminders,
 } from './schedule-utils';
 import type { Project, Task } from './types';
 
@@ -503,5 +504,111 @@ describe('buildReminderSchedule', () => {
         expect(taskReminderRequests).toHaveLength(diagnostics.taskReminderCount);
         expect(taskReviewRequests).toHaveLength(diagnostics.taskReviewReminderCount);
         expect(projectReviewRequests).toHaveLength(diagnostics.projectReviewReminderCount);
+    });
+
+    // Pins mobile's existing call site (notification-service-local.ts: bare buildReminderSchedule,
+    // no window) against a multi-kind input, so a future change to this file cannot silently shift
+    // what mobile arms. If this ever needs updating, mobile's alarm scheduling changed too.
+    it('is a stable pin for mobile\'s unwindowed call site across digest, task, repeat, and project-review kinds', () => {
+        const task = buildTask({
+            id: 'task-1',
+            title: 'Pay rent',
+            dueDate: '2026-06-17T09:00:00.000Z',
+            repeatReminderMinutes: 30,
+        });
+        const project = buildProject({ id: 'project-1', reviewAt: '2026-06-18T09:00:00.000Z' });
+
+        const { requests } = buildReminderSchedule({
+            settings: {
+                dailyDigestMorningEnabled: true,
+                dailyDigestMorningTime: '09:00',
+                weeklyReviewEnabled: true,
+                weeklyReviewDay: 5,
+                weeklyReviewTime: '18:00',
+            },
+            tasks: [task],
+            projects: [project],
+            now,
+            translations,
+            maxOneShotReminders: 60,
+        });
+
+        expect(requests.map((request) => request.key)).toEqual([
+            'digest:morning',
+            'digest:weekly-review',
+            'task:task-1',
+            'task:task-1:r1',
+            'task:task-1:r2',
+            'task:task-1:r3',
+            'task:task-1:r4',
+            'project:project-1',
+        ]);
+    });
+});
+
+describe('resolveDueReminders', () => {
+    const translations = {
+        'settings.dueDateNotifications': 'Due date reminder',
+        'review.projectsStep': 'Review project',
+    };
+
+    it('anchors the schedule at window.from so a reminder due while the app was asleep is still caught, then bounds it by window.to', () => {
+        const task = buildTask({ id: 'task-1', dueDate: '2026-06-17T09:00:00.000Z' });
+        // Poll ran 4 minutes late (now=09:04:00); window.to = now + one poll interval.
+
+        const caught = resolveDueReminders(
+            { settings: {}, tasks: [task], projects: [], translations },
+            { from: new Date('2026-06-17T08:59:00.000Z'), to: new Date('2026-06-17T09:04:15.000Z') },
+        );
+        expect(caught.map((request) => request.key)).toEqual(['task:task-1']);
+
+        // A window whose "from" is already past the due time means an earlier poll would have
+        // caught it already -- this cycle must not resend it.
+        const alreadyPast = resolveDueReminders(
+            { settings: {}, tasks: [task], projects: [], translations },
+            { from: new Date('2026-06-17T09:01:00.000Z'), to: new Date('2026-06-17T09:04:15.000Z') },
+        );
+        expect(alreadyPast).toEqual([]);
+    });
+
+    it('excludes due-time repeat occurrences -- desktop resolves which one fires via its own resolveDueRepeatToFire', () => {
+        const task = buildTask({
+            id: 'task-1',
+            dueDate: '2026-06-17T09:00:00.000Z',
+            repeatReminderMinutes: 10,
+        });
+        // The due+20min repeat (index 2) would be the only entry buildReminderSchedule has for
+        // this task in this window -- the base "next" reminder is long past window.from.
+        const due = resolveDueReminders(
+            { settings: {}, tasks: [task], projects: [], translations },
+            { from: new Date('2026-06-17T09:19:50.000Z'), to: new Date('2026-06-17T09:20:20.000Z') },
+        );
+        expect(due).toEqual([]);
+    });
+
+    it('excludes digest/weekly-review entries -- a polling platform tracks those on its own per-day cadence', () => {
+        const now = new Date();
+        now.setHours(9, 0, 5, 0); // just past the default 09:00 morning digest slot
+        const due = resolveDueReminders(
+            {
+                settings: { dailyDigestMorningEnabled: true, weeklyReviewEnabled: true },
+                tasks: [],
+                projects: [],
+                translations,
+            },
+            { from: new Date(now.getTime() - 15_000), to: new Date(now.getTime() + 15_000) },
+        );
+        expect(due).toEqual([]);
+    });
+
+    it('includes project review reminders within the window', () => {
+        const project = buildProject({ reviewAt: '2026-06-18T09:00:00.000Z' });
+        const now = new Date('2026-06-18T08:59:50.000Z');
+
+        const due = resolveDueReminders(
+            { settings: {}, tasks: [], projects: [project], translations },
+            { from: new Date(now.getTime() - 15_000), to: new Date(now.getTime() + 15_000) },
+        );
+        expect(due).toEqual([expect.objectContaining({ key: 'project:project-1' })]);
     });
 });

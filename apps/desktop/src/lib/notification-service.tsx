@@ -1,10 +1,14 @@
 import {
+    areDueDateRemindersEnabled,
+    areTaskRemindersEnabled,
     buildReminderNotificationBody,
+    type DigestSchedule,
     getDailyDigestSummary,
     getDigestSchedule,
-    getProjectReviewReminderIntent,
     getTaskReminderPlan,
+    resolveDueReminders,
     type Language,
+    type NotificationSettings,
     type Task,
     getTranslationsSync,
     loadTranslations,
@@ -198,68 +202,92 @@ async function sendNotification(title: string, body?: string) {
     }
 }
 
+export type DesktopReminderGates = {
+    taskRemindersEnabled: boolean;
+    weeklyReviewEnabled: boolean;
+    morningDigestEnabled: boolean;
+    eveningDigestEnabled: boolean;
+};
+
+/**
+ * Which reminder categories are live for this poll, mirroring core's `buildReminderSchedule`
+ * gating (the module mobile pre-arms alarms from): the weekly review nudge is deliberately
+ * independent of the task-reminder master switch (schedule-utils.ts `isWeeklyReviewReminderEnabled`),
+ * everything else -- start/due/review task reminders, project reviews, the morning/evening
+ * digest -- requires it. Desktop used to hand-roll a single early return that killed all four
+ * together, silently dropping the weekly review whenever notifications were off.
+ */
+export function resolveDesktopReminderGates(
+    settings: NotificationSettings,
+    digest: DigestSchedule = getDigestSchedule(settings),
+): DesktopReminderGates {
+    const taskRemindersEnabled = areTaskRemindersEnabled(settings);
+    return {
+        taskRemindersEnabled,
+        weeklyReviewEnabled: digest.weekly.enabled,
+        morningDigestEnabled: taskRemindersEnabled && digest.morning.enabled,
+        eveningDigestEnabled: taskRemindersEnabled && digest.evening.enabled,
+    };
+}
+
 function checkDueAndNotify() {
     const now = new Date();
     const { tasks, projects, settings } = useTaskStore.getState();
-
-    if (settings.notificationsEnabled === false) return;
 
     const dateKey = localDateKey(now);
     const lang = getCurrentLanguage();
     void loadTranslations(lang);
     const tr = getTranslationsSync(lang);
 
-    // How much of the past this poll is answerable for. Anchoring the reminder
-    // lookup at that moment instead of `now` is what keeps a just-missed reminder
-    // visible: getTaskReminderPlan only returns reminders still in the future.
-    // notifiedAtByTask/repeatNotifiedByTask dedupe, so a late fire is never a
-    // second fire.
+    // How much of the past this poll is answerable for. Anchoring the reminder lookup at that
+    // moment instead of `now` is what keeps a just-missed reminder visible. notifiedAtByTask/
+    // repeatNotifiedByTask/notifiedAtByProject dedupe, so a late fire is never a second fire.
     const catchUpMs = resolvePollCatchUpMs(now.getTime(), lastPollAt);
     lastPollAt = now.getTime();
     const lookbackFrom = new Date(now.getTime() - catchUpMs);
-
-    const includeStartTime = settings.startDateNotificationsEnabled !== false;
-    const includeDueDate = settings.dueDateNotificationsEnabled !== false;
-    const includeReviewAt = settings.reviewAtNotificationsEnabled !== false;
-    tasks.forEach((task: Task) => {
-        const plan = getTaskReminderPlan(task, lookbackFrom, {
-            includeStartTime,
-            includeDueDate,
-            includeReviewAt,
-        });
-        const repeat = resolveDueRepeatToFire(task, now, repeatNotifiedByTask.get(task.id), { includeDueDate, catchUpMs });
-        if (repeat) {
-            void sendNotification(task.title, buildDesktopTaskNotificationBody(task, 'due-repeat', tr));
-            repeatNotifiedByTask.set(task.id, repeat.key);
-        }
-
-        const next = plan.next;
-        if (!next) return;
-        const diffMs = next.scheduledAt.getTime() - now.getTime();
-        if (diffMs > CHECK_INTERVAL_MS) return;
-
-        if (notifiedAtByTask.get(task.id) === next.dedupeKey) return;
-
-        void sendNotification(task.title, buildDesktopTaskNotificationBody(task, next.kind, tr));
-        notifiedAtByTask.set(task.id, next.dedupeKey);
-    });
-
-    if (includeReviewAt) {
-        projects.forEach((project) => {
-            const reminder = getProjectReviewReminderIntent(project, lookbackFrom);
-            if (!reminder) return;
-            const diffMs = reminder.scheduledAt.getTime() - now.getTime();
-            if (diffMs > CHECK_INTERVAL_MS) return;
-            if (notifiedAtByProject.get(project.id) === reminder.dedupeKey) return;
-            void sendNotification(project.title, tr['review.projectsStep'] ?? 'Review project');
-            notifiedAtByProject.set(project.id, reminder.dedupeKey);
-        });
-    }
+    const lookaheadTo = new Date(now.getTime() + CHECK_INTERVAL_MS);
 
     const digest = getDigestSchedule(settings);
+    const gates = resolveDesktopReminderGates(settings, digest);
+    const includeDueDate = areDueDateRemindersEnabled(settings);
+
+    // Due-time repeats resolve on their own bounded chain, independent of the "next" occurrence
+    // below: a task whose due time already passed has no future "next", but its remaining
+    // repeat occurrences must still fire (#905).
+    tasks.forEach((task: Task) => {
+        const repeat = resolveDueRepeatToFire(task, now, repeatNotifiedByTask.get(task.id), { includeDueDate, catchUpMs });
+        if (!repeat) return;
+        void sendNotification(task.title, buildDesktopTaskNotificationBody(task, 'due-repeat', tr));
+        repeatNotifiedByTask.set(task.id, repeat.key);
+    });
+
+    // Everything else -- each task's next start/due/review reminder, each project's review
+    // reminder -- comes from core's buildReminderSchedule (the same module mobile pre-arms
+    // alarms from), windowed to what this poll is answerable for (#962).
+    const dueReminders = resolveDueReminders(
+        { settings, tasks, projects, translations: tr },
+        { from: lookbackFrom, to: lookaheadTo },
+    );
+    for (const request of dueReminders) {
+        const fireIso = request.fireAt.toISOString();
+        const taskId = request.data.taskId;
+        const projectId = request.data.projectId;
+        if (taskId) {
+            if (notifiedAtByTask.get(taskId) === fireIso) continue;
+            void sendNotification(request.title, request.message);
+            notifiedAtByTask.set(taskId, fireIso);
+        } else if (projectId) {
+            if (notifiedAtByProject.get(projectId) === fireIso) continue;
+            void sendNotification(request.title, request.message);
+            notifiedAtByProject.set(projectId, fireIso);
+        } else {
+            console.warn('resolveDueReminders returned a request with neither taskId nor projectId', request);
+        }
+    }
+
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-    if (digest.morning.enabled) {
+    if (gates.morningDigestEnabled) {
         const target = digest.morning.hour * 60 + digest.morning.minute;
         if (nowMinutes >= target && digestSentOnByKind.get('morning') !== dateKey) {
             const summary = getDailyDigestSummary(tasks, projects, now);
@@ -281,7 +309,7 @@ function checkDueAndNotify() {
         }
     }
 
-    if (digest.evening.enabled) {
+    if (gates.eveningDigestEnabled) {
         const target = digest.evening.hour * 60 + digest.evening.minute;
         if (nowMinutes >= target && digestSentOnByKind.get('evening') !== dateKey) {
             void sendNotification(tr['digest.eveningTitle'], tr['digest.eveningBody']);
@@ -289,7 +317,7 @@ function checkDueAndNotify() {
         }
     }
 
-    if (digest.weekly.enabled) {
+    if (gates.weeklyReviewEnabled) {
         const target = digest.weekly.hour * 60 + digest.weekly.minute;
         if (now.getDay() === digest.weekly.day && nowMinutes >= target && weeklyReviewSentOnDate !== dateKey) {
             void sendNotification(tr['digest.weeklyReviewTitle'], tr['digest.weeklyReviewBody']);
