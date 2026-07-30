@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef, type UIEvent } from 'react';
+import { memo, useMemo, useState, useEffect, useCallback, useRef, type UIEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ErrorBoundary } from '../ErrorBoundary';
 import {
@@ -20,15 +20,15 @@ import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { PromptModal } from '../PromptModal';
 import { cn } from '../../lib/utils';
-import { toDateTimeLocalValue } from '../Task/task-item-helpers';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
     LIST_VIRTUAL_ROW_ESTIMATE,
     LIST_VIRTUAL_OVERSCAN,
     useVirtualList,
 } from './list/useVirtualList';
+import { StoreTaskItem } from './list/StoreTaskItem';
+import { VirtualTaskRow } from './list/VirtualTaskRow';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
 import {
@@ -58,140 +58,6 @@ import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
 import { useLocalDayKey } from '../../hooks/useLocalDayKey';
 import { resolveDoneTaskSortBy } from '../../lib/task-list-sort';
-
-type ArchiveTaskRowInnerProps = {
-    task: Task;
-    onRestore: (taskId: string) => void;
-    onDelete: (taskId: string) => void;
-    onEditCompletedAt: (taskId: string) => void;
-    onToggleSelect: (taskId: string) => void;
-    selectionMode: boolean;
-    isSelected: boolean;
-    t: (key: string) => string;
-};
-
-const ArchiveTaskRowInner = memo(function ArchiveTaskRowInner({
-    task,
-    onRestore,
-    onDelete,
-    onEditCompletedAt,
-    onToggleSelect,
-    selectionMode,
-    isSelected,
-    t,
-}: ArchiveTaskRowInnerProps) {
-    const handleRestore = useCallback(() => onRestore(task.id), [onRestore, task.id]);
-    const handleDelete = useCallback(() => onDelete(task.id), [onDelete, task.id]);
-    const handleEditCompletedAt = useCallback(() => onEditCompletedAt(task.id), [onEditCompletedAt, task.id]);
-    const handleToggleSelect = useCallback(() => onToggleSelect(task.id), [onToggleSelect, task.id]);
-    const completionTimestamp = task.completedAt || task.updatedAt;
-    const completedLabel = t('list.done') || 'Completed';
-    const editCompletedAtLabel = tFallback(t, 'task.editCompletedAt', 'Edit completion time');
-    const completedText = `${completedLabel}: ${completionTimestamp ? safeFormatDate(completionTimestamp, 'Pp', completionTimestamp) : 'Unknown'}`;
-    const otherMetadataParts = [
-        task.dueDate ? `${t('taskEdit.dueDateLabel')}: ${safeFormatDate(task.dueDate, 'P')}` : '',
-        ...(task.contexts ?? []),
-    ].filter(Boolean);
-
-    return (
-        // data-task-id is what the shared task-list scope resolves keyboard
-        // actions against; without it j/k/e/x/s silently do nothing here.
-        <div
-            data-task-id={task.id}
-            className="rounded-lg px-3 py-3 flex items-center justify-between group hover:bg-muted/50 transition-colors"
-        >
-            <div className="flex min-w-0 items-center gap-3">
-                {selectionMode && (
-                    <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={handleToggleSelect}
-                        aria-label={`${tFallback(t, 'bulk.select', 'Select')} ${task.title}`}
-                        className="h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary"
-                    />
-                )}
-                <div>
-                    <h3 className="font-medium text-foreground line-through opacity-70">{task.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                        <button
-                            type="button"
-                            onClick={handleEditCompletedAt}
-                            // Completion time is the only editable field on an
-                            // archived task, so it is what `e` opens.
-                            data-task-edit-trigger
-                            title={editCompletedAtLabel}
-                            aria-label={editCompletedAtLabel}
-                            className="hover:text-foreground hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
-                        >
-                            {completedText}
-                        </button>
-                        {otherMetadataParts.length > 0 ? ` • ${otherMetadataParts.join(' • ')}` : ''}
-                    </p>
-                </div>
-            </div>
-            {!selectionMode && <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                <button
-                    onClick={handleRestore}
-                    className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-primary transition-colors"
-                    title={t('archived.restoreToInbox')}
-                >
-                    <Undo2 className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={handleDelete}
-                    className="p-2 hover:bg-destructive/10 rounded-md text-muted-foreground hover:text-destructive transition-colors"
-                    title={t('common.delete')}
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            </div>}
-        </div>
-    );
-});
-
-type VirtualArchiveTaskRowProps = ArchiveTaskRowInnerProps & {
-    top: number;
-    onMeasure: (id: string, height: number) => void;
-};
-
-const VirtualArchiveTaskRow = memo(function VirtualArchiveTaskRow({
-    task,
-    top,
-    onRestore,
-    onDelete,
-    onEditCompletedAt,
-    onToggleSelect,
-    selectionMode,
-    isSelected,
-    onMeasure,
-    t,
-}: VirtualArchiveTaskRowProps) {
-    const rowRef = useRef<HTMLDivElement | null>(null);
-
-    useLayoutEffect(() => {
-        const node = rowRef.current;
-        if (!node) return;
-        const nextHeight = Math.ceil(node.getBoundingClientRect().height);
-        onMeasure(task.id, nextHeight);
-    }, [task.id, task.updatedAt, onMeasure]);
-
-    return (
-        <div ref={rowRef} style={{ position: 'absolute', top, left: 0, right: 0 }}>
-            <div className="border-b border-border/30">
-                <ArchiveTaskRowInner
-                    task={task}
-                    onRestore={onRestore}
-                    onDelete={onDelete}
-                    onEditCompletedAt={onEditCompletedAt}
-                    onToggleSelect={onToggleSelect}
-                    selectionMode={selectionMode}
-                    isSelected={isSelected}
-                    t={t}
-                />
-            </div>
-        </div>
-    );
-});
 
 type ArchiveProjectRowProps = {
     project: Project;
@@ -274,8 +140,6 @@ export function ArchiveView() {
         _allTasks,
         projects,
         areas,
-        updateTask,
-        deleteTask,
         updateProject,
         deleteProject,
         batchMoveTasks,
@@ -287,8 +151,6 @@ export function ArchiveView() {
             _allTasks: state._allTasks,
             projects: state.projects,
             areas: state.areas,
-            updateTask: state.updateTask,
-            deleteTask: state.deleteTask,
             updateProject: state.updateProject,
             deleteProject: state.deleteProject,
             batchMoveTasks: state.batchMoveTasks,
@@ -308,7 +170,6 @@ export function ArchiveView() {
         DEFAULT_ARCHIVE_VIEW_STATE,
         sanitizeArchiveViewState,
     );
-    const [completedAtTaskId, setCompletedAtTaskId] = useState<string | null>(null);
     const listScrollRef = useRef<HTMLDivElement>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
@@ -541,10 +402,6 @@ export function ArchiveView() {
         ? groupedRowVirtualizer.getTotalSize()
         : 0;
 
-    const handleRestore = useCallback((taskId: string) => {
-        updateTask(taskId, { status: 'inbox' }); // Restore to inbox? Or previous status? Inbox is safest.
-    }, [updateTask]);
-
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
         // The projects segment renders no task rows, so the keyboard must not
@@ -571,32 +428,6 @@ export function ArchiveView() {
         });
     }, [deleteSelectedTasks, requestConfirmation, t]);
 
-    const handleEditCompletedAt = useCallback((taskId: string) => {
-        setCompletedAtTaskId(taskId);
-    }, []);
-
-    const applyCompletedAt = useCallback((value: string) => {
-        const taskId = completedAtTaskId;
-        setCompletedAtTaskId(null);
-        if (!taskId) return;
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) return;
-        updateTask(taskId, { completedAt: parsed.toISOString() });
-    }, [completedAtTaskId, updateTask]);
-
-    const handleDelete = useCallback(async (taskId: string) => {
-        const task = _allTasks.find((item) => item.id === taskId);
-        if (!task) return;
-        const confirmed = await requestConfirmation({
-            title: task.title,
-            description: t('task.deleteConfirmBody'),
-            confirmLabel: t('common.delete'),
-            cancelLabel: t('common.cancel') || 'Cancel',
-        });
-        if (!confirmed) return;
-        await deleteTask(taskId);
-    }, [_allTasks, deleteTask, requestConfirmation, t]);
-
     const handleRestoreProject = useCallback((projectId: string) => {
         void updateProject(projectId, { status: 'active' });
     }, [updateProject]);
@@ -612,19 +443,23 @@ export function ArchiveView() {
         await deleteProject(project.id);
     }, [deleteProject, requestConfirmation, t]);
 
+    // The same read-only row Done uses, so an archived task's notes, checklist and
+    // attachments are readable without restoring it first (#968). Restore, Delete
+    // and the completion-time correction all come from TaskItem's read-only
+    // actions; Archive no longer hand-rolls a row, a delete confirm or a
+    // completion-time prompt of its own.
     const renderArchiveRow = useCallback((task: Task) => (
-        <ArchiveTaskRowInner
+        <StoreTaskItem
             key={task.id}
-            task={task}
-            onRestore={handleRestore}
-            onDelete={handleDelete}
-            onEditCompletedAt={handleEditCompletedAt}
-            onToggleSelect={toggleTaskSelection}
+            taskId={task.id}
+            readOnly
             selectionMode={selectionMode}
-            isSelected={selectedIds.has(task.id)}
-            t={t}
+            isMultiSelected={selectedIds.has(task.id)}
+            onToggleSelectId={toggleTaskSelection}
+            showQuickDone={false}
+            showProjectBadgeInActions={false}
         />
-    ), [handleDelete, handleEditCompletedAt, handleRestore, selectedIds, selectionMode, t, toggleTaskSelection]);
+    ), [selectedIds, selectionMode, toggleTaskSelection]);
 
     const formatEstimate = useCallback(
         (value: TimeEstimate) => formatTimeEstimateLabel(value, { t }),
@@ -902,18 +737,18 @@ export function ArchiveView() {
                         }) : visibleTasks.map((task, visibleIndex) => {
                             const taskIndex = startIndex + visibleIndex;
                             return (
-                                <VirtualArchiveTaskRow
+                                <VirtualTaskRow
                                     key={task.id}
-                                    task={task}
+                                    taskId={task.id}
+                                    index={taskIndex}
                                     top={rowOffsets[taskIndex] ?? 0}
                                     onMeasure={handleVirtualRowMeasure}
-                                    onRestore={handleRestore}
-                                    onDelete={handleDelete}
-                                    onEditCompletedAt={handleEditCompletedAt}
-                                    onToggleSelect={toggleTaskSelection}
+                                    onToggleSelectId={toggleTaskSelection}
                                     selectionMode={selectionMode}
-                                    isSelected={selectedIds.has(task.id)}
-                                    t={t}
+                                    isMultiSelected={selectedIds.has(task.id)}
+                                    readOnly
+                                    showQuickDone={false}
+                                    showProjectBadgeInActions={false}
                                 />
                             );
                         })}
@@ -935,23 +770,6 @@ export function ArchiveView() {
             )}
             </div>
             {confirmModal}
-            {completedAtTaskId && (
-                <PromptModal
-                    isOpen
-                    title={tFallback(t, 'task.completedAtPromptTitle', 'Completion time')}
-                    defaultValue={toDateTimeLocalValue(
-                        (() => {
-                            const task = _allTasks.find((item) => item.id === completedAtTaskId);
-                            return task ? (task.completedAt || task.updatedAt) : undefined;
-                        })()
-                    )}
-                    inputType="datetime-local"
-                    confirmLabel={t('common.save')}
-                    cancelLabel={t('common.cancel')}
-                    onCancel={() => setCompletedAtTaskId(null)}
-                    onConfirm={applyCompletedAt}
-                />
-            )}
         </ErrorBoundary>
     );
 }

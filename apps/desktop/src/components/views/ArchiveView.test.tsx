@@ -62,6 +62,51 @@ describe('ArchiveView', () => {
         expect(getByText(`Completed: ${completionLabel}`)).toBeInTheDocument();
     });
 
+    // The whole point of #968: an archived task's notes and checklist are readable
+    // in place, so nobody has to restore a task just to read what it said.
+    it('opens an archived task read-only, without restoring it', () => {
+        const taskWithNotes: Task = {
+            ...archivedTask,
+            description: 'Receipt is in the shared drive',
+            checklist: [{ id: 'c1', title: 'Scan receipt', isCompleted: true }],
+        };
+        useTaskStore.setState({
+            _allTasks: [taskWithNotes],
+            _tasksById: new Map([[taskWithNotes.id, taskWithNotes]]),
+        });
+
+        render(
+            <LanguageProvider>
+                <ArchiveView />
+            </LanguageProvider>
+        );
+
+        // A collapsed row shows a one-line description preview, so the checklist
+        // is what tells the closed row from the open one.
+        expect(screen.queryByText('Scan receipt')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Toggle task details' }));
+
+        expect(screen.getByText('Receipt is in the shared drive')).toBeInTheDocument();
+        expect(screen.getByText('Scan receipt')).toBeInTheDocument();
+        // Reading is not restoring.
+        expect(useTaskStore.getState()._tasksById.get(taskWithNotes.id)?.status).toBe('archived');
+    });
+
+    it('restores an archived task to the Inbox from the row, not to Next', async () => {
+        render(
+            <LanguageProvider>
+                <ArchiveView />
+            </LanguageProvider>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Restore to Inbox' }));
+
+        await waitFor(() => {
+            expect(useTaskStore.getState()._tasksById.get(archivedTask.id)?.status).toBe('inbox');
+        });
+    });
+
     it('moves an archived task to Trash instead of purging it', async () => {
         render(
             <LanguageProvider>
@@ -69,8 +114,7 @@ describe('ArchiveView', () => {
             </LanguageProvider>
         );
 
-        fireEvent.click(screen.getByTitle('Delete'));
-        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Delete task' }));
 
         await waitFor(() => {
             const deletedTask = useTaskStore.getState()._tasksById.get(archivedTask.id);
@@ -118,7 +162,7 @@ describe('ArchiveView', () => {
         );
 
         fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select Archived task' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Select task' }));
         fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
 
@@ -304,7 +348,7 @@ describe('ArchiveView', () => {
             );
         };
 
-        const rowTitles = () => Array.from(document.querySelectorAll('[data-task-id] h3')).map((el) => el.textContent);
+        const rowTitles = () => Array.from(document.querySelectorAll('[data-task-id] .task-item-display__title')).map((el) => el.textContent);
 
         const pickOption = (selectName: string, optionName: string) => {
             fireEvent.click(screen.getByRole('combobox', { name: selectName }));
@@ -315,7 +359,9 @@ describe('ArchiveView', () => {
             renderWithBoth();
 
             fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-            fireEvent.click(screen.getByRole('button', { name: /@home/ }));
+            // Rows carry their own clickable context chips now, so anchor the
+            // match to the panel's chip, whose name starts with the token.
+            fireEvent.click(screen.getByRole('button', { name: /^@home/ }));
 
             expect(screen.getByText('Tidy the garage')).toBeInTheDocument();
             expect(screen.queryByText('Archived task')).not.toBeInTheDocument();
@@ -353,12 +399,12 @@ describe('ArchiveView', () => {
         it('groups archived tasks by the chosen axis', () => {
             renderWithBoth();
 
-            expect(screen.queryByText('House')).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /House\s*1/i })).not.toBeInTheDocument();
 
             pickOption('Group', 'Project');
 
-            expect(screen.getByText('House')).toBeInTheDocument();
-            expect(screen.getByText('No Project')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /House\s*1/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /No Project\s*1/i })).toBeInTheDocument();
         });
 
         it('collapses a group and leaves it collapsed on the next visit (#963)', () => {

@@ -370,6 +370,14 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
         && task.status !== 'done'
         && task.status !== 'archived'
         && task.status !== 'reference';
+    const canEditCompletedAt = Boolean(completionLabel && onEditCompletedAt) && !selectionMode;
+    // A read-only row restores to where the task belongs: an archived task goes
+    // back to the Inbox to be re-clarified, which is what Archive's bulk action
+    // and mobile already do; anything else picks up as the next action.
+    const readOnlyRestoreStatus: TaskStatus = task.status === 'archived' ? 'inbox' : 'next';
+    const readOnlyRestoreLabel = task.status === 'archived'
+        ? tFallback(t, 'archived.restoreToInbox', 'Restore to Inbox')
+        : t('waiting.moveToNext');
     const renderCompletionMetadataBadge = () => {
         if (!completionLabel) return null;
         const badge = (
@@ -381,7 +389,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
         );
         // Done/archived rows are readOnly by design, but correcting the completion
         // timestamp is exactly for those rows — only selection mode disables it.
-        if (!onEditCompletedAt || selectionMode) return badge;
+        if (!canEditCompletedAt || !onEditCompletedAt) return badge;
         const editCompletedAtLabel = tFallback(t, 'task.editCompletedAt', 'Edit completion time');
         return (
             <button
@@ -625,10 +633,16 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                         selectionMode ? "cursor-pointer hover:bg-muted/40" : "cursor-default",
                     )}
                 >
+                    {/*
+                      * What the list's `e` shortcut clicks. A read-only row has no
+                      * editor to open, but correcting the completion timestamp is
+                      * the one edit it does allow — without this `e` is silently
+                      * dead on every Done and Archived row.
+                      */}
                     <button
                         type="button"
                         data-task-edit-trigger
-                        onClick={onEdit}
+                        onClick={readOnly && canEditCompletedAt ? onEditCompletedAt : onEdit}
                         className="sr-only"
                         aria-label={t('common.edit')}
                         tabIndex={-1}
@@ -681,7 +695,9 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             className={cn(
                                 "task-item-display__title font-semibold whitespace-normal break-words text-foreground group-hover/content:text-primary transition-colors",
                                 dense ? "text-sm" : "text-base",
-                                task.status === 'done' && "line-through text-muted-foreground",
+                                // Archived work is finished work, so it reads struck
+                                // through the same way Done does.
+                                (task.status === 'done' || task.status === 'archived') && "line-through text-muted-foreground",
                                 actionsOverlay && "pr-20",
                                 (overlayDragHandle || overlayQuickDone) && "pl-12"
                             )}
@@ -956,9 +972,9 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             </button>
                             <button
                                 type="button"
-                                onClick={() => onStatusChange('next')}
-                                aria-label={t('waiting.moveToNext')}
-                                title={t('waiting.moveToNext')}
+                                onClick={() => onStatusChange(readOnlyRestoreStatus)}
+                                aria-label={readOnlyRestoreLabel}
+                                title={readOnlyRestoreLabel}
                                 className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                             >
                                 <RotateCcw className="w-4 h-4" />
