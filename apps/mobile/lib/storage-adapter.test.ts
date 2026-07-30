@@ -1535,6 +1535,35 @@ describe('mobile storage adapter', () => {
       asyncStorageMock.getItem.mockImplementation((key: string) => Promise.resolve(keys[key] ?? null));
     };
 
+    // Wires a live Map-backed AsyncStorage (so a marker/counter written by one
+    // call is readable by the next) and primes the in-memory jsonAheadOfSqlite
+    // marker the same way the app does: a real failed saveData that falls back
+    // to the JSON backup. Returns the backing store so a test can flip
+    // `dataKeyError` to make the *next* backup read fail deliberately.
+    const primeJsonAheadMarker = async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      const stored = new Map<string, string>();
+      const dataKeyError = { current: null as Error | null };
+      asyncStorageMock.getItem.mockImplementation(async (key: string) => {
+        if (key === 'mindwtr-data' && dataKeyError.current) {
+          throw dataKeyError.current;
+        }
+        return stored.get(key) ?? null;
+      });
+      asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+        stored.set(key, value);
+      });
+      asyncStorageMock.removeItem.mockImplementation(async (key: string) => {
+        stored.delete(key);
+      });
+
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+      await mobileStorage.saveData(jsonBackup);
+      expect(stored.get('mindwtr-data:json-ahead-of-sqlite')).toBe('1');
+
+      return { mobileStorage, __mobileStorageTestUtils, stored, dataKeyError };
+    };
+
     it('marks the JSON backup as ahead when it takes a write SQLite rejected', async () => {
       const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
       __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
@@ -1594,6 +1623,214 @@ describe('mobile storage adapter', () => {
         .rejects.toThrow('disk I/O error');
       // Still ahead: the writes are only in the backup, so the marker must stay.
       expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+    }, 10_000);
+
+    // #975: once the marker is set, SQLite reads keep succeeding but serve
+    // progressively stale data. Reads must prefer the JSON backup instead of
+    // trusting SQLite, and must never let that stale read overwrite the newer
+    // backup.
+    it('serves the JSON backup for getData and does not let a succeeding SQLite read overwrite it (#975)', async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      const stored = new Map<string, string>();
+      asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
+      asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+        stored.set(key, value);
+      });
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+
+      // SQLite refuses the write; the marker is set and the backup takes it.
+      await mobileStorage.saveData(jsonBackup);
+      expect(stored.get('mindwtr-data')).toBe(JSON.stringify(jsonBackup));
+
+      // SQLite recovers enough to serve reads again, but what it holds predates
+      // the write above — the marker says the backup is still ahead.
+      const sqliteAdapterGetData = vi.fn().mockResolvedValue(staleSqliteData);
+      __mobileStorageTestUtils.setSqliteStateForTests({
+        adapter: { saveTask: sqliteAdapterSaveTask, getData: sqliteAdapterGetData } as never,
+        client: {},
+      });
+
+      const data = await mobileStorage.getData();
+
+      expect(data).toEqual(jsonBackup);
+      expect(sqliteAdapterGetData).not.toHaveBeenCalled();
+      await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
+      expect(stored.get('mindwtr-data')).toBe(JSON.stringify(jsonBackup));
+    }, 10_000);
+
+    it('falls through to the SQLite read and skips scheduling a backup write when the marker is set but the JSON backup is unusable (#975)', async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      const makeHugeTask = (id: string): Task => ({
+        id,
+        title: `Task ${id} ${'padding '.repeat(20)}`,
+        status: 'next',
+        tags: [],
+        contexts: [],
+        createdAt: '2026-07-29T00:00:00.000Z',
+        updatedAt: '2026-07-29T00:00:00.000Z',
+      });
+      const hugeSnapshot: AppData = {
+        ...jsonBackup,
+        tasks: Array.from({ length: 6_000 }, (_, index) => makeHugeTask(`task-${index}`)),
+      };
+      expect(JSON.stringify(hugeSnapshot).length).toBeGreaterThan(1_500_000);
+
+      const stored = new Map<string, string>();
+      asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
+      asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+        stored.set(key, value);
+      });
+
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+      // SQLite refuses the write; the fallback backup is too large for Android's
+      // AsyncStorage to read back, so the marker ends up set with an unusable backup.
+      await expect(mobileStorage.saveData(hugeSnapshot)).rejects.toThrow('too large for the JSON backup');
+      expect(stored.has('mindwtr-data')).toBe(false);
+
+      const sqliteAdapterGetData = vi.fn().mockResolvedValue(staleSqliteData);
+      __mobileStorageTestUtils.setSqliteStateForTests({
+        adapter: { saveTask: sqliteAdapterSaveTask, getData: sqliteAdapterGetData } as never,
+        client: {},
+      });
+
+      const data = await mobileStorage.getData();
+
+      expect(data).toEqual(staleSqliteData);
+      expect(sqliteAdapterGetData).toHaveBeenCalledTimes(1);
+      await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
+      expect(stored.has('mindwtr-data')).toBe(false);
+    }, 20_000);
+
+    it('recoverJsonAheadWrites keeps the marker and rethrows on a transient AsyncStorage read error, but still clears it when the backup is absent (#975)', async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+      const adapter = { getData: vi.fn(), saveData: vi.fn() } as any;
+
+      // Prime the in-memory marker the same way the app does: a real failed
+      // saveData that falls back to the JSON backup.
+      __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
+      await mobileStorage.saveData(jsonBackup);
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite', '1');
+
+      // Transient read error: keep the marker and propagate so init fails loudly.
+      asyncStorageMock.getItem.mockImplementation((key: string) => (
+        key === 'mindwtr-data'
+          ? Promise.reject(new Error('AsyncStorage getItem failed: I/O error'))
+          : Promise.resolve(null)
+      ));
+
+      await expect(__mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter))
+        .rejects.toThrow('AsyncStorage getItem failed');
+      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(adapter.getData).not.toHaveBeenCalled();
+      expect(adapter.saveData).not.toHaveBeenCalled();
+
+      // Pin the existing predicate: an absent backup still clears the marker.
+      asyncStorageMock.removeItem.mockClear();
+      asyncStorageMock.getItem.mockResolvedValue(null);
+
+      await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
+      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(adapter.saveData).not.toHaveBeenCalled();
+    }, 10_000);
+
+    // Review finding 1: an open-ended rethrow on every transient read error can
+    // strand the app permanently, since the fallback read re-issues the exact
+    // read that just failed. Bounded to two consecutive failures.
+    it('recoverJsonAheadWrites clears the marker after two consecutive transient read failures, but keeps it (and rethrows) on the first (#975)', async () => {
+      const { __mobileStorageTestUtils, stored, dataKeyError } = await primeJsonAheadMarker();
+      const adapter = { getData: vi.fn(), saveData: vi.fn() } as any;
+      dataKeyError.current = new Error('AsyncStorage getItem failed: I/O error');
+
+      await expect(__mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter))
+        .rejects.toThrow('AsyncStorage getItem failed');
+      expect(stored.get('mindwtr-data:json-ahead-of-sqlite')).toBe('1');
+      expect(stored.get('mindwtr-data:json-ahead-recovery-failures')).toBe('1');
+      expect(adapter.getData).not.toHaveBeenCalled();
+      expect(adapter.saveData).not.toHaveBeenCalled();
+
+      await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
+      expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+      expect(stored.has('mindwtr-data:json-ahead-recovery-failures')).toBe(false);
+      expect(adapter.getData).not.toHaveBeenCalled();
+      expect(adapter.saveData).not.toHaveBeenCalled();
+    }, 10_000);
+
+    it.each([
+      ['Row too big to fit into CursorWindow'],
+      ['Cursor window allocation of 2048 kb failed'],
+    ])('recoverJsonAheadWrites clears the marker and the failure counter on a permanent read error: %s (#975)', async (message) => {
+      const { __mobileStorageTestUtils, stored, dataKeyError } = await primeJsonAheadMarker();
+      const adapter = { getData: vi.fn(), saveData: vi.fn() } as any;
+      dataKeyError.current = new Error(message);
+
+      await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
+
+      expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+      expect(stored.has('mindwtr-data:json-ahead-recovery-failures')).toBe(false);
+      expect(adapter.getData).not.toHaveBeenCalled();
+      expect(adapter.saveData).not.toHaveBeenCalled();
+    }, 10_000);
+
+    it('recoverJsonAheadWrites clears the marker when the backup is corrupt JSON', async () => {
+      const { __mobileStorageTestUtils, stored } = await primeJsonAheadMarker();
+      const adapter = { getData: vi.fn(), saveData: vi.fn() } as any;
+      stored.set('mindwtr-data', '{ not valid json');
+
+      await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
+
+      expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+      expect(adapter.getData).not.toHaveBeenCalled();
+      expect(adapter.saveData).not.toHaveBeenCalled();
+    }, 10_000);
+
+    // Review finding 2: an absent backup key must fall through to the SQLite
+    // read (SQLite is healthy here), not resolve as an empty library — the
+    // store would otherwise treat that as a fresh install and save emptiness
+    // over a healthy database.
+    it('getData falls through to the SQLite read, never empty data, when the marker is set but the backup key is absent (#975)', async () => {
+      const { mobileStorage, __mobileStorageTestUtils, stored } = await primeJsonAheadMarker();
+      // Simulate the marker surviving without a backup behind it (e.g. the
+      // marker write landed but the backup write that should have followed
+      // did not).
+      stored.delete('mindwtr-data');
+
+      const sqliteAdapterGetData = vi.fn().mockResolvedValue(staleSqliteData);
+      __mobileStorageTestUtils.setSqliteStateForTests({
+        adapter: { saveTask: sqliteAdapterSaveTask, getData: sqliteAdapterGetData } as never,
+        client: {},
+      });
+
+      const data = await mobileStorage.getData();
+
+      expect(data).toEqual(staleSqliteData);
+      expect(sqliteAdapterGetData).toHaveBeenCalledTimes(1);
+    }, 10_000);
+
+    // Review Q6: queryTasks/searchAll must not read SQLite directly while the
+    // marker is set, since that bypasses getData()'s read-authority guard.
+    it('queryTasks and searchAll serve the JSON backup instead of a direct SQLite query while the marker is set (#975)', async () => {
+      const { mobileStorage, __mobileStorageTestUtils } = await primeJsonAheadMarker();
+      if (!mobileStorage.queryTasks || !mobileStorage.searchAll) {
+        throw new Error('Expected mobile storage to support queryTasks and searchAll');
+      }
+      const sqliteAdapterQueryTasks = vi.fn().mockResolvedValue([staleSqliteData]);
+      const sqliteAdapterSearchAll = vi.fn().mockResolvedValue([]);
+      __mobileStorageTestUtils.setSqliteStateForTests({
+        adapter: {
+          saveTask: sqliteAdapterSaveTask,
+          queryTasks: sqliteAdapterQueryTasks,
+          searchAll: sqliteAdapterSearchAll,
+        } as never,
+        client: {},
+      });
+
+      const tasks = await mobileStorage.queryTasks({});
+      const searchResults = await mobileStorage.searchAll('Written');
+
+      expect(tasks.map((task) => task.id)).toEqual([backupTask.id]);
+      expect(searchResults.tasks.some((task) => task.id === backupTask.id)).toBe(true);
+      expect(sqliteAdapterQueryTasks).not.toHaveBeenCalled();
+      expect(sqliteAdapterSearchAll).not.toHaveBeenCalled();
     }, 10_000);
   });
 });

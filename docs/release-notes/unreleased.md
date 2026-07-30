@@ -74,6 +74,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Sync & Automation
 
+- While the local database is refusing writes, the fallback copy is now the one every read serves: opening the app, lists, and search no longer show older database contents, a read can no longer overwrite the fresher fallback with stale data, and a hiccup reading the fallback is retried on the next launch instead of silently abandoning the changes it holds. (#975)
 - iOS builds ship the full-text search module again. Its absence in `v1.1.5` made every database save fail, leaving all changes in the fallback copy — and on large libraries losing them, since the fallback refused anything past a size cap that only Android's storage needs. That cap now applies on Android only, so an iOS library of any size keeps a working fallback. (#979)
 - Mobile no longer loses changes when the local database refuses writes. Saves that fall back to the JSON copy are now merged back on the next launch, and a database that still cannot take them is bypassed for reads instead of serving its older contents. A fallback cannot report success before its recovery marker is durable. (#964)
 - Android saves that failed with a "disk I/O error" now succeed: the database asked the operating system for a scratch file in a location Android does not provide, which refused any write large enough to need one. Scratch data is kept in memory instead. (#964)

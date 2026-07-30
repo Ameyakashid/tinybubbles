@@ -16,6 +16,14 @@ const STARTUP_BACKUP_UPDATED_AT_KEY = `${DATA_KEY}:startup-backup-updated-at`;
 // keep succeeding, so without this marker the app happily serves the stale
 // database and every change taken by the fallback is silently dropped (#964).
 const JSON_AHEAD_OF_SQLITE_KEY = `${DATA_KEY}:json-ahead-of-sqlite`;
+// Counts consecutive launches where recovering the marker above failed to even
+// read the backup (a transient AsyncStorage error, not a permanent CursorWindow
+// overflow). Only ever read/written while that marker is set. Bounds the
+// otherwise open-ended "keep the marker and retry" trade-off from #975 — after
+// JSON_AHEAD_RECOVERY_MAX_ATTEMPTS straight failures, availability wins and
+// recovery gives up rather than stranding the app on an empty-error loop forever.
+const JSON_AHEAD_RECOVERY_FAILURES_KEY = `${DATA_KEY}:json-ahead-recovery-failures`;
+const JSON_AHEAD_RECOVERY_MAX_ATTEMPTS = 2;
 const STARTUP_BACKUP_VERSION = '2';
 const LEGACY_DATA_KEYS = ['focus-gtd-data', 'gtd-todo-data', 'gtd-data'];
 const EMPTY_APP_DATA: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
@@ -180,6 +188,25 @@ const readJsonAheadOfSqlite = async (): Promise<boolean> => {
         logStorageWarn('[Storage] Failed to read the JSON-ahead marker', error);
     }
     return jsonAheadOfSqlite;
+};
+
+const readJsonAheadRecoveryFailures = async (): Promise<number> => {
+    try {
+        const raw = await AsyncStorage.getItem(JSON_AHEAD_RECOVERY_FAILURES_KEY);
+        const parsed = raw == null ? 0 : Number.parseInt(raw, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    } catch (error) {
+        logStorageWarn('[Storage] Failed to read the JSON-ahead recovery failure counter', error);
+        return 0;
+    }
+};
+
+const clearJsonAheadRecoveryFailures = async (): Promise<void> => {
+    try {
+        await AsyncStorage.removeItem(JSON_AHEAD_RECOVERY_FAILURES_KEY);
+    } catch (error) {
+        logStorageWarn('[Storage] Failed to clear the JSON-ahead recovery failure counter', error);
+    }
 };
 
 const markPreferJsonBackup = () => {
@@ -361,6 +388,13 @@ const JSON_BACKUP_MAX_CHARS = Platform.OS === 'android' ? 1_500_000 : Number.POS
 let jsonBackupSkippedOversize = false;
 
 const isJsonBackupUsable = (): boolean => !jsonBackupSkippedOversize;
+
+// Distinguishes a permanent Android CursorWindow overflow (the row can never be
+// read back, so recovery must give up) from a transient AsyncStorage error
+// (worth retrying on the next launch) when reading the JSON-ahead backup.
+const isPermanentJsonBackupReadError = (error: unknown): boolean => (
+    /cursor\s*window|row too big/i.test(formatError(error))
+);
 
 const saveStartupJsonBackup = async (
     AsyncStorage: any,
@@ -760,18 +794,58 @@ const reconcileJsonBackupIntoSqlite = async (
  * last state SQLite accepted.
  */
 const recoverJsonAheadWrites = async (adapter: SqliteAdapter, currentSnapshot?: AppData): Promise<void> => {
-    let backup: AppData;
+    let jsonValue: string | null;
     try {
-        const jsonValue = await getLegacyJson(AsyncStorage);
-        if (jsonValue == null) {
+        jsonValue = await getLegacyJson(AsyncStorage);
+    } catch (error) {
+        if (isPermanentJsonBackupReadError(error)) {
+            // Android's CursorWindow limit means nothing will ever read this row
+            // back; keeping the marker would fail init on every launch from here on.
+            logStorageWarn('[Storage] JSON-ahead backup is permanently unreadable; abandoning recovery', error);
             await clearJsonAheadOfSqlite();
+            await clearJsonAheadRecoveryFailures();
             return;
         }
+        const failureCount = (await readJsonAheadRecoveryFailures()) + 1;
+        if (failureCount >= JSON_AHEAD_RECOVERY_MAX_ATTEMPTS) {
+            // Two straight failed recovery attempts: retrying forever would strand
+            // the app on a hard error loop with no data at all, so availability
+            // wins here — degrade to the pre-#975 behavior and let this launch
+            // serve stale-but-present SQLite instead of nothing.
+            logStorageWarn('[Storage] Giving up on JSON-ahead recovery after repeated read failures; clearing marker', error, {
+                failureCount: String(failureCount),
+            });
+            await clearJsonAheadOfSqlite();
+            await clearJsonAheadRecoveryFailures();
+            return;
+        }
+        // Transient (AsyncStorage hiccup, etc.): the pending writes may still be
+        // recoverable, so keep the marker and fail init loudly rather than
+        // silently forgetting they exist. This session's reads fall back to the
+        // JSON backup instead; the next launch retries recovery.
+        logStorageWarn('[Storage] Could not read the JSON backup to recover pending writes; keeping marker to retry', error, {
+            failureCount: String(failureCount),
+        });
+        try {
+            await AsyncStorage.setItem(JSON_AHEAD_RECOVERY_FAILURES_KEY, String(failureCount));
+        } catch (setError) {
+            logStorageWarn('[Storage] Failed to persist the JSON-ahead recovery failure counter', setError);
+        }
+        throw error;
+    }
+    // The read finally succeeded; forget any earlier failed attempts.
+    await clearJsonAheadRecoveryFailures();
+    if (jsonValue == null) {
+        await clearJsonAheadOfSqlite();
+        return;
+    }
+    let backup: AppData;
+    try {
         backup = parseStoredAppDataJson(jsonValue);
     } catch (error) {
-        // Unreadable or corrupt: there is nothing to recover, and keeping the
-        // marker would fail init on every launch from here on.
-        logStorageWarn('[Storage] Could not read the JSON backup to recover pending writes', error);
+        // Corrupt: there is nothing to recover, and keeping the marker would fail
+        // init on every launch from here on.
+        logStorageWarn('[Storage] JSON-ahead backup is corrupt; abandoning recovery', error);
         await clearJsonAheadOfSqlite();
         return;
     }
@@ -975,7 +1049,13 @@ const createStorage = (): StorageAdapter => {
     return {
         getData: async (): Promise<AppData> => {
             markStartupPhase('mobile.storage.get_data.start');
-            const loadJsonBackup = async (phase = 'get_data') => {
+            // allowEmptyOnAbsent: the SQLite-genuinely-failed callers (json_fast_path,
+            // json_preferred_sqlite_disabled, get_data_fallback) have always treated an
+            // absent backup as a fresh install. The json_ahead caller must not: SQLite
+            // is healthy there, so an absent backup means "nothing to serve from this
+            // path", not "empty library" — the caller falls through to the SQLite read
+            // instead (#975).
+            const loadJsonBackup = async (phase = 'get_data', allowEmptyOnAbsent = true) => {
                 // A deferred backup may still be pending; land it before trusting
                 // the stored copy (and before the freshness assert reads its stamp).
                 await flushPendingStartupJsonBackup();
@@ -988,6 +1068,9 @@ const createStorage = (): StorageAdapter => {
                 await assertJsonBackupFreshEnough(AsyncStorage, phase);
                 const jsonValue = await getLegacyJson(AsyncStorage);
                 if (jsonValue == null) {
+                    if (!allowEmptyOnAbsent) {
+                        throw new Error('JSON backup is absent; nothing to serve from the json-ahead path.');
+                    }
                     return { ...EMPTY_APP_DATA };
                 }
                 if (jsonValue != null) {
@@ -1015,6 +1098,16 @@ const createStorage = (): StorageAdapter => {
             }
             if (preferJsonBackup) {
                 warnPreferJsonBackup();
+            }
+            // The JSON backup holds writes SQLite hasn't taken yet (#975): serve it
+            // instead of a known-stale SQLite read, and touch no marker here — only
+            // saveData may clear jsonAheadOfSqlite (#964).
+            if (jsonAheadOfSqlite && isJsonBackupUsable()) {
+                try {
+                    return await loadJsonBackup('json_ahead', false);
+                } catch (error) {
+                    logStorageWarn('[Storage] Failed to load the JSON-ahead backup; falling back to SQLite read', error);
+                }
             }
             try {
                 if (!shouldUseSqlite) {
@@ -1044,7 +1137,12 @@ const createStorage = (): StorageAdapter => {
                     logStorageInfo('[Storage] Slow SQLite load', { readMs: String(readMs), ...(sqliteJournalDiagnostics ?? {}) });
                 }
                 data.areas = Array.isArray(data.areas) ? data.areas : [];
-                scheduleStartupJsonBackup(data, 'mobile.storage.get_data', latestQueuedWriteStartedAtMs);
+                if (!jsonAheadOfSqlite) {
+                    // While the marker is set the JSON backup is ahead of this SQLite
+                    // read; scheduling a backup here would overwrite the fresher copy
+                    // with stale data (#975).
+                    scheduleStartupJsonBackup(data, 'mobile.storage.get_data', latestQueuedWriteStartedAtMs);
+                }
                 markStartupPhase('mobile.storage.get_data.widget_update_dispatched');
                 clearPreferJsonBackup();
                 markStartupPhase('mobile.storage.get_data.end');
@@ -1206,8 +1304,13 @@ const createStorage = (): StorageAdapter => {
             });
         },
         queryTasks: async (options) => {
-            if (shouldUseJsonBackupFastPath()) {
-                warnPreferJsonBackup();
+            // Also take the JSON-backed path while jsonAheadOfSqlite is set (#975):
+            // a direct adapter.queryTasks() call below would read SQLite's known-stale
+            // rows straight from SQL, bypassing getData()'s read-authority guard.
+            if (shouldUseJsonBackupFastPath() || (jsonAheadOfSqlite && isJsonBackupUsable())) {
+                if (shouldUseJsonBackupFastPath()) {
+                    warnPreferJsonBackup();
+                }
                 const data = await mobileStorage.getData();
                 const statusFilter = options.status;
                 const excludeStatuses = options.excludeStatuses ?? [];
@@ -1255,8 +1358,11 @@ const createStorage = (): StorageAdapter => {
             });
         },
         searchAll: async (query: string) => {
-            if (shouldUseJsonBackupFastPath()) {
-                warnPreferJsonBackup();
+            // Same #975 read-authority extension as queryTasks above.
+            if (shouldUseJsonBackupFastPath() || (jsonAheadOfSqlite && isJsonBackupUsable())) {
+                if (shouldUseJsonBackupFastPath()) {
+                    warnPreferJsonBackup();
+                }
                 const data = await mobileStorage.getData();
                 return searchAll(data.tasks, data.projects, query);
             }
@@ -1313,6 +1419,7 @@ export const __mobileStorageTestUtils = {
     reconcileJsonBackupIntoSqliteForTests: reconcileJsonBackupIntoSqlite,
     recoverJsonAheadWritesForTests: recoverJsonAheadWrites,
     jsonAheadOfSqliteKeyForTests: JSON_AHEAD_OF_SQLITE_KEY,
+    jsonAheadRecoveryFailuresKeyForTests: JSON_AHEAD_RECOVERY_FAILURES_KEY,
     sqliteHasAnyDataForTests: sqliteHasAnyData,
     reset: () => {
         saveQueue = Promise.resolve();
