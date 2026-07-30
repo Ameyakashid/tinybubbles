@@ -4,6 +4,7 @@ import { formatI18nTemplate, getEnglishI18nValue, getI18nKeyForEnglishText } fro
 describe('formatI18nTemplate', () => {
     it('replaces repeated named placeholders wherever translators place them', () => {
         expect(formatI18nTemplate('{{name}} löschen? {{ name }}', { name: 'Inbox' })).toBe('Inbox löschen? Inbox');
+        expect(formatI18nTemplate('Plan for {date}', { date: 'Thu, Jul 30' })).toBe('Plan for Thu, Jul 30');
     });
 
     it('leaves unknown placeholders intact', () => {

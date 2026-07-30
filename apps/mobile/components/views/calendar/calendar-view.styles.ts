@@ -301,6 +301,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     padding: 12,
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -317,6 +318,7 @@ export const styles = StyleSheet.create({
   taskItemTitle: {
     fontSize: 14,
     color: '#111827',
+    flexShrink: 1,
   },
   taskItemTime: {
     fontSize: 12,

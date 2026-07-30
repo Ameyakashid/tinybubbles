@@ -30,7 +30,7 @@ export function formatI18nTemplate(
     template: string,
     values: Record<string, string | number | boolean | null | undefined>,
 ): string {
-    return template.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (match, key: string) => (
+    return template.replace(/\{\{?\s*([A-Za-z0-9_]+)\s*\}\}?/g, (match, key: string) => (
         Object.prototype.hasOwnProperty.call(values, key)
             ? String(values[key] ?? '')
             : match
