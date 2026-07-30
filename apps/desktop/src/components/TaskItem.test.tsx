@@ -1151,6 +1151,41 @@ describe('TaskItem', () => {
         }
     });
 
+    it('keeps the age badge off completed rows, archived as well as done', () => {
+        const createdAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+        act(() => {
+            useTaskStore.setState({
+                settings: { appearance: { showTaskAge: true } },
+            });
+        });
+
+        const renderWithStatus = (status: Task['status'], id: string) => {
+            const task: Task = { ...mockTask, id, status, createdAt, completedAt: new Date().toISOString() };
+            act(() => {
+                useTaskStore.setState({
+                    tasks: [task],
+                    _allTasks: [task],
+                    _tasksById: new Map([[task.id, task]]),
+                });
+            });
+            // Scoped to this render's own container: every render in this test shares
+            // document.body, so a screen-level query would find the previous row.
+            const { container } = render(
+                <LanguageProvider>
+                    <TaskItem task={task} />
+                </LanguageProvider>
+            );
+            return container.textContent ?? '';
+        };
+
+        // Age is a nudge about work still waiting, so an open task keeps it…
+        expect(renderWithStatus('next', 'age-next-task')).toContain('5 days old');
+        // …and neither kind of finished task shows it (#968: Archive picked it up when
+        // its rows became the shared read-only row).
+        expect(renderWithStatus('done', 'age-done-task')).not.toContain('5 days old');
+        expect(renderWithStatus('archived', 'age-archived-task')).not.toContain('5 days old');
+    });
+
     it('duplicates a completed task from the quick actions menu too', async () => {
         const doneTask: Task = {
             ...mockTask,
@@ -1166,13 +1201,17 @@ describe('TaskItem', () => {
             });
         });
 
-        const { findByRole, getByRole } = render(
+        const { container, findByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItem task={doneTask} />
             </LanguageProvider>
         );
 
-        fireEvent.click(getByRole('button', { name: /more options/i }));
+        // A completed row carries Duplicate, Restore and Delete as buttons, so it drops
+        // the "More options" trigger that would only repeat them; right-click still
+        // reaches the menu (#968).
+        expect(queryByRole('button', { name: /more options/i })).toBeNull();
+        fireEvent.contextMenu(container.querySelector('[data-task-id="done-menu-duplicate-task"]')!);
         const duplicateItem = await findByRole('menuitem', { name: /duplicate/i });
         await act(async () => {
             fireEvent.click(duplicateItem);

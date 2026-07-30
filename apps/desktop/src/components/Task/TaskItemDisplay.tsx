@@ -162,7 +162,13 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
         () => getInlineMarkdownPreview(task.description ?? ''),
         [task.description],
     );
-    const showAgeBadge = showTaskAge && task.status !== 'done' && Boolean(ageLabel);
+    // The age badge nudges about work that has been sitting unfinished, so it stays
+    // off completed rows — archived as well as done, which Archive started showing
+    // when its rows became the shared read-only row (#968).
+    const showAgeBadge = showTaskAge
+        && task.status !== 'done'
+        && task.status !== 'archived'
+        && Boolean(ageLabel);
     const completionTimestamp = task.status === 'done' || task.status === 'archived'
         ? task.completedAt || task.updatedAt
         : undefined;
@@ -945,7 +951,13 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             <FocusStarIcon className="w-4 h-4" filled={focusToggle.isFocused} />
                         </button>
                     )}
-                    {onOpenQuickActions && (
+                    {/*
+                      * A read-only row's menu holds only Duplicate and Delete, and both
+                      * are buttons right here — "More options" with nothing more in it is
+                      * noise (#968). Right-click still opens the menu. Restore the trigger
+                      * if the read-only menu ever gains an action this cluster lacks.
+                      */}
+                    {onOpenQuickActions && !readOnly && (
                         <button
                             type="button"
                             onClick={onOpenQuickActions}
@@ -982,6 +994,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             <button
                                 onClick={onDelete}
                                 aria-label={t('task.aria.delete')}
+                                title={t('task.aria.delete')}
                                 className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-muted-foreground hover:text-muted-foreground/70 p-1 rounded hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                             >
                                 <Trash2 className="w-4 h-4" />
