@@ -1065,10 +1065,13 @@ describe('mobile storage adapter', () => {
 
     const statements = executedStatements.map((entry) => entry.sql);
     // Connection pragmas apply for real (a wrapper transaction would no-op them)…
-    expect(statements.slice(0, 3)).toEqual([
+    // …including temp_store, without which a spilled statement journal fails with
+    // "disk I/O error" on Android (#964).
+    expect(statements.slice(0, 4)).toEqual([
       'PRAGMA journal_mode = WAL',
       'PRAGMA foreign_keys = ON',
       'PRAGMA busy_timeout = 5000',
+      'PRAGMA temp_store = MEMORY',
     ]);
     // …the schema flows through the same direct path…
     expect(statements.some((statement) => statement.startsWith('CREATE TABLE IF NOT EXISTS tasks'))).toBe(true);

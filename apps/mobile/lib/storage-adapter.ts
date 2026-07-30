@@ -854,9 +854,13 @@ const initSqliteState = async (): Promise<SqliteState> => {
     try {
         const journalRow = await client.get<{ journal_mode?: string }>('PRAGMA journal_mode');
         const busyRow = await client.get<{ timeout?: number }>('PRAGMA busy_timeout');
+        // 2 = MEMORY. Anything else means a spilled statement journal will look for a
+        // temp directory Android does not have and fail the write (#964).
+        const tempStoreRow = await client.get<{ temp_store?: number }>('PRAGMA temp_store');
         sqliteJournalDiagnostics = {
             journalMode: String(journalRow?.journal_mode ?? 'unknown'),
             busyTimeoutMs: String(busyRow?.timeout ?? 'unknown'),
+            tempStore: String(tempStoreRow?.temp_store ?? 'unknown'),
             openMode: sqliteOpenMode,
             ...(sqliteDbPath ? { dbPath: sqliteDbPath } : {}),
         };

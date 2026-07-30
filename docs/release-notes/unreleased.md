@@ -72,6 +72,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 ## Sync & Automation
 
 - Mobile no longer loses changes when the local database refuses writes. Saves that fall back to the JSON copy are now merged back on the next launch, and a database that still cannot take them is bypassed for reads instead of serving its older contents. A fallback cannot report success before its recovery marker is durable. (#964)
+- Android saves that failed with a "disk I/O error" now succeed: the database asked the operating system for a scratch file in a location Android does not provide, which refused any write large enough to need one. Scratch data is kept in memory instead. (#964)
 - Email capture resets its saved IMAP UID watermark after a validated mailbox, account, or folder change, so messages in the new mailbox are not skipped. Password-only and enable/disable edits retain the existing progress. (#35)
 - iCloud sync doubles repeated CloudKit retry delays up to ten minutes, and automatic app-state triggers respect the active cooldown. Each failed automatic cycle schedules its own retry, so quiet changes do not wait for another edit or heartbeat. **Sync now** still retries immediately. (#948)
 - Cloud API, MCP, and desktop Local API task queries accept `isFocusedToday=true|false`; legacy MCP databases return the correct empty or unfocused result when the column is absent. (#960)
