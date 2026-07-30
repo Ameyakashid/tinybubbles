@@ -28,4 +28,10 @@ describe('Switch', () => {
         rerender(<Switch checked aria-label="Theme-safe switch" />);
         expect(switchElement.firstElementChild?.className).toContain('bg-primary-foreground');
     });
+
+    it('keeps the off track distinct from the cards it sits in', () => {
+        const { getByRole } = render(<Switch checked={false} aria-label="Off switch" />);
+
+        expect(getByRole('switch', { name: 'Off switch' }).className).not.toContain('bg-card');
+    });
 });
