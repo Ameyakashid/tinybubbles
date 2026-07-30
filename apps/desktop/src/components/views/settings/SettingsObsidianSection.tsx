@@ -3,6 +3,7 @@ import { safeFormatDate } from '@mindwtr/core';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
 import { Switch } from '../../ui/Switch';
+import { SettingField, SettingRow } from './SettingRow';
 
 const OBSIDIAN_INTEGRATION_GUIDE_URL = 'https://docs.mindwtr.app/power-users/obsidian';
 
@@ -163,8 +164,7 @@ export function SettingsObsidianSection({
             </div>
             {open && (
                 <div className="border-t border-border p-4 space-y-4">
-                    <div data-settings-key="obsidianVaultPath" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.obsidianVaultPath}</label>
+                    <SettingField settingsKey="obsidianVaultPath" title={t.obsidianVaultPath}>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -205,10 +205,9 @@ export function SettingsObsidianSection({
                                 {obsidianHasVaultMarker === false ? t.obsidianMissingMarker : obsidianVaultWarning}
                             </p>
                         )}
-                    </div>
+                    </SettingField>
 
-                    <div data-settings-key="obsidianScanFolders" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.obsidianScanFolders}</label>
+                    <SettingField settingsKey="obsidianScanFolders" title={t.obsidianScanFolders}>
                         <textarea
                             value={obsidianScanFoldersText}
                             aria-label={t.obsidianScanFolders}
@@ -218,10 +217,9 @@ export function SettingsObsidianSection({
                             placeholder={'/\nProjects\nDaily'}
                         />
                         <p className="text-xs text-muted-foreground">{t.obsidianScanFoldersHint}</p>
-                    </div>
+                    </SettingField>
 
-                    <div data-settings-key="obsidianInboxFile" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.obsidianInboxFile}</label>
+                    <SettingField settingsKey="obsidianInboxFile" title={t.obsidianInboxFile}>
                         <input
                             type="text"
                             value={obsidianInboxFile}
@@ -231,7 +229,7 @@ export function SettingsObsidianSection({
                             className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                         <p className="text-xs text-muted-foreground">{t.obsidianInboxFileHint}</p>
-                    </div>
+                    </SettingField>
 
                     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-4">
                         <div className="space-y-1">
@@ -239,17 +237,13 @@ export function SettingsObsidianSection({
                             <p className="text-xs text-muted-foreground">{t.obsidianDataviewDesc}</p>
                         </div>
 
-                        <div data-settings-key="obsidianDataviewMetadata" className="flex items-start justify-between gap-4">
-                            <div>
-                                <p className="text-sm font-medium">{t.obsidianDataviewMetadata}</p>
-                                <p className="text-xs text-muted-foreground">{t.obsidianDataviewMetadataHint}</p>
-                            </div>
+                        <SettingRow settingsKey="obsidianDataviewMetadata" title={t.obsidianDataviewMetadata} description={t.obsidianDataviewMetadataHint}>
                             <Switch
                                 aria-label={t.obsidianDataviewMetadata}
                                 checked={obsidianDataviewMetadataEnabled}
                                 onCheckedChange={onObsidianDataviewMetadataEnabledChange}
                             />
-                        </div>
+                        </SettingRow>
                     </div>
 
                     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 p-4">
@@ -258,20 +252,15 @@ export function SettingsObsidianSection({
                             <p className="text-xs text-muted-foreground">{t.obsidianTaskNotesDesc}</p>
                         </div>
 
-                        <div data-settings-key="obsidianTaskNotesIncludeArchived" className="flex items-start justify-between gap-4">
-                            <div>
-                                <p className="text-sm font-medium">{t.obsidianTaskNotesIncludeArchived}</p>
-                                <p className="text-xs text-muted-foreground">{t.obsidianTaskNotesIncludeArchivedHint}</p>
-                            </div>
+                        <SettingRow settingsKey="obsidianTaskNotesIncludeArchived" title={t.obsidianTaskNotesIncludeArchived} description={t.obsidianTaskNotesIncludeArchivedHint}>
                             <Switch
                                 aria-label={t.obsidianTaskNotesIncludeArchived}
                                 checked={obsidianTaskNotesIncludeArchived}
                                 onCheckedChange={onObsidianTaskNotesIncludeArchivedChange}
                             />
-                        </div>
+                        </SettingRow>
 
-                        <div data-settings-key="obsidianNewTaskFormat" className="flex flex-col gap-2">
-                            <label className="text-sm font-medium">{t.obsidianNewTaskFormat}</label>
+                        <SettingField settingsKey="obsidianNewTaskFormat" title={t.obsidianNewTaskFormat}>
                             <select
                                 value={obsidianNewTaskFormat}
                                 onChange={(event) => onObsidianNewTaskFormatChange(event.target.value as 'auto' | 'inline' | 'tasknotes')}
@@ -282,7 +271,7 @@ export function SettingsObsidianSection({
                                 <option value="tasknotes">{t.obsidianNewTaskFormatTaskNotes}</option>
                             </select>
                             <p className="text-xs text-muted-foreground">{t.obsidianNewTaskFormatHint}</p>
-                        </div>
+                        </SettingField>
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-3">

@@ -5,6 +5,7 @@ import { cn } from '../../../../lib/utils';
 import { Switch } from '../../../ui/Switch';
 import { ConfirmModal } from '../../../ConfirmModal';
 import { formatClockSkew } from './sync-page-utils';
+import { SettingRow } from '../SettingRow';
 import type { SettingsSyncPageProps, SyncPreferences } from './types';
 
 const RECENT_SYNC_RESULT_MS = 8000;
@@ -32,32 +33,6 @@ type SyncStatusSectionProps = Pick<
     | 'isRestoringSnapshot'
     | 'onRestoreSnapshot'
 >;
-
-function SyncPreferenceToggle({
-    checked,
-    hint,
-    label,
-    onClick,
-}: {
-    checked: boolean;
-    hint?: string;
-    label: string;
-    onClick: () => void;
-}) {
-    return (
-        <div className="flex items-start justify-between gap-4">
-            <div>
-                <p className="text-sm font-medium">{label}</p>
-                {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-            </div>
-            <Switch
-                aria-label={label}
-                checked={checked}
-                onCheckedChange={onClick}
-            />
-        </div>
-    );
-}
 
 export function SyncStatusSection({
     conflictCount,
@@ -176,12 +151,15 @@ export function SyncStatusSection({
     const renderSyncToggle = (key: keyof SyncPreferences, label: string, hint?: string) => {
         const checked = syncPrefs[key] === true;
         return (
-            <SyncPreferenceToggle
-                checked={checked}
-                label={label}
-                hint={hint}
-                onClick={() => onUpdateSyncPreferences({ [key]: !checked } as Partial<SyncPreferences>)}
-            />
+            // Which categories sync is one control per SyncPreferences field, not
+            // a setting people search for by name, so these rows stay unindexed.
+            <SettingRow settingsKey={null} title={label} description={hint}>
+                <Switch
+                    aria-label={label}
+                    checked={checked}
+                    onCheckedChange={() => onUpdateSyncPreferences({ [key]: !checked } as Partial<SyncPreferences>)}
+                />
+            </SettingRow>
         );
     };
 
@@ -239,10 +217,12 @@ export function SyncStatusSection({
                     </div>
                 )}
 
-                <div data-settings-key="backgroundSync" className="pt-2 text-xs text-muted-foreground">
-                    <div className="font-medium text-foreground">{t.backgroundSync}</div>
-                    <p>{t.backgroundSyncDesc}</p>
-                </div>
+                <SettingRow
+                    settingsKey="backgroundSync"
+                    title={t.backgroundSync}
+                    description={t.backgroundSyncDesc}
+                    className="pt-2"
+                />
 
                 <div className="pt-3 text-xs text-muted-foreground space-y-1">
                     <div>

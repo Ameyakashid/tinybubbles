@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { ConfirmModal } from '../../ConfirmModal';
 import { Switch } from '../../ui/Switch';
+import { SettingField, SettingRow } from './SettingRow';
 
 type Labels = {
     aiEnable: string;
@@ -305,8 +306,7 @@ export function SettingsAiPage({
                         </div>
 
                         <div className="border-t border-border p-4 space-y-3">
-                            <div data-settings-key="aiProvider" className="flex items-center justify-between gap-4">
-                                <div className="text-sm font-medium">{t.aiProvider}</div>
+                            <SettingRow settingsKey="aiProvider" title={t.aiProvider}>
                                 <select
                                     aria-label={t.aiProvider}
                                     value={aiProvider}
@@ -317,10 +317,9 @@ export function SettingsAiPage({
                                     <option value="gemini">{t.aiProviderGemini}</option>
                                     <option value="anthropic">{t.aiProviderAnthropic}</option>
                                 </select>
-                            </div>
+                            </SettingRow>
 
-                            <div data-settings-key="aiModel" className="flex items-center justify-between gap-4">
-                                <div className="text-sm font-medium">{t.aiModel}</div>
+                            <SettingRow settingsKey="aiModel" title={t.aiModel}>
                                 <input
                                     type="text"
                                     aria-label={t.aiModel}
@@ -335,13 +334,9 @@ export function SettingsAiPage({
                                         <option key={option} value={option} />
                                     ))}
                                 </datalist>
-                            </div>
+                            </SettingRow>
 
-                            <div data-settings-key="aiCopilotModel" className="flex items-center justify-between gap-4">
-                                <div>
-                                    <div className="text-sm font-medium">{t.aiCopilotModel}</div>
-                                    <div className="text-xs text-muted-foreground">{t.aiCopilotHint}</div>
-                                </div>
+                            <SettingRow settingsKey="aiCopilotModel" title={t.aiCopilotModel} description={t.aiCopilotHint}>
                                 <input
                                     type="text"
                                     aria-label={t.aiCopilotModel}
@@ -356,14 +351,10 @@ export function SettingsAiPage({
                                         <option key={option} value={option} />
                                     ))}
                                 </datalist>
-                            </div>
+                            </SettingRow>
 
                             {aiProvider === 'openai' && (
-                                <div data-settings-key="aiReasoning" className="flex items-center justify-between gap-4">
-                                    <div>
-                                        <div className="text-sm font-medium">{t.aiReasoning}</div>
-                                        <div className="text-xs text-muted-foreground">{t.aiReasoningHint}</div>
-                                    </div>
+                                <SettingRow settingsKey="aiReasoning" title={t.aiReasoning} description={t.aiReasoningHint}>
                                     <select
                                         aria-label={t.aiReasoning}
                                         value={aiReasoningEffort}
@@ -374,12 +365,15 @@ export function SettingsAiPage({
                                         <option value="medium">{t.aiEffortMedium}</option>
                                         <option value="high">{t.aiEffortHigh}</option>
                                     </select>
-                                </div>
+                                </SettingRow>
                             )}
 
                             {aiProvider === 'openai' && (
-                                <div data-settings-key="aiBaseUrl" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                                    <div className="text-sm font-medium">{t.aiBaseUrl}</div>
+                                <SettingField
+                                    settingsKey="aiBaseUrl"
+                                    title={t.aiBaseUrl}
+                                    className="rounded-lg border border-border bg-muted/30 p-3"
+                                >
                                     <input
                                         type="text"
                                         aria-label={t.aiBaseUrl}
@@ -395,7 +389,7 @@ export function SettingsAiPage({
                                     {showCustomBaseUrlModelHint && (
                                         <div className="text-xs text-warning">{t.aiBaseUrlModelHint}</div>
                                     )}
-                                </div>
+                                </SettingField>
                             )}
 
                             {aiProvider === 'openai' && (
@@ -444,23 +438,15 @@ export function SettingsAiPage({
 
                             {aiProvider === 'anthropic' && (
                                 <div className="space-y-3">
-                                    <div data-settings-key="aiThinkingEnable" className="flex items-center justify-between gap-4">
-                                        <div>
-                                            <div className="text-sm font-medium">{t.aiThinkingEnable}</div>
-                                            <div className="text-xs text-muted-foreground">{t.aiThinkingEnableDesc}</div>
-                                        </div>
+                                    <SettingRow settingsKey="aiThinkingEnable" title={t.aiThinkingEnable} description={t.aiThinkingEnableDesc}>
                                         <Switch
                                             aria-label={t.aiThinkingEnable}
                                             checked={anthropicThinkingEnabled}
                                             onCheckedChange={onToggleAnthropicThinking}
                                         />
-                                    </div>
+                                    </SettingRow>
                                     {anthropicThinkingEnabled && (
-                                        <div data-settings-key="aiThinkingBudget" className="flex items-center justify-between gap-4">
-                                            <div>
-                                                <div className="text-sm font-medium">{t.aiThinkingBudget}</div>
-                                                <div className="text-xs text-muted-foreground">{t.aiThinkingHint}</div>
-                                            </div>
+                                        <SettingRow settingsKey="aiThinkingBudget" title={t.aiThinkingBudget} description={t.aiThinkingHint}>
                                             <select
                                                 value={String(aiThinkingBudget)}
                                                 onChange={(e) => onUpdateAISettings({ thinkingBudget: Number(e.target.value) })}
@@ -472,17 +458,19 @@ export function SettingsAiPage({
                                                     </option>
                                                 ))}
                                             </select>
-                                        </div>
+                                        </SettingRow>
                                     )}
                                 </div>
                             )}
 
                             {aiProvider === 'gemini' && (
-                                <div className="flex items-center justify-between gap-4">
-                                    <div>
-                                        <div className="text-sm font-medium">{t.aiThinkingBudget}</div>
-                                        <div className="text-xs text-muted-foreground">{t.aiThinkingHint}</div>
-                                    </div>
+                                // Gemini's own budget row; the indexed
+                                // `aiThinkingBudget` key is on the Anthropic one.
+                                <SettingRow
+                                    settingsKey={null}
+                                    title={t.aiThinkingBudget}
+                                    description={t.aiThinkingHint}
+                                >
                                     <select
                                         aria-label={t.aiThinkingBudget}
                                         value={String(aiThinkingBudget)}
@@ -494,12 +482,15 @@ export function SettingsAiPage({
                                         <option value="256">{t.aiThinkingMedium}</option>
                                         <option value="512">{t.aiThinkingHigh}</option>
                                     </select>
-                                </div>
+                                </SettingRow>
                             )}
                         </div>
 
-                        <div data-settings-key="aiApiKey" className="border-t border-border p-4 space-y-2">
-                            <div className="text-sm font-medium">{t.aiApiKey}</div>
+                        <SettingField
+                            settingsKey="aiApiKey"
+                            title={t.aiApiKey}
+                            className="border-t border-border p-4"
+                        >
                             <input
                                 type="password"
                                 aria-label={t.aiApiKey}
@@ -509,7 +500,7 @@ export function SettingsAiPage({
                                 className="w-full text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                             />
                             <div className="text-xs text-muted-foreground">{t.aiApiKeyHint}</div>
-                        </div>
+                        </SettingField>
                     </>
                 )}
             </div>
@@ -537,8 +528,7 @@ export function SettingsAiPage({
 
                 {speechOpen && (
                     <div className="border-t border-border p-4 space-y-3">
-                        <div data-settings-key="speechProvider" className="flex items-center justify-between gap-4">
-                            <div className="text-sm font-medium">{t.speechProvider}</div>
+                        <SettingRow settingsKey="speechProvider" title={t.speechProvider}>
                             <select
                                 value={speechProvider}
                                 onChange={(e) => onSpeechProviderChange(e.target.value as SpeechProvider)}
@@ -549,10 +539,9 @@ export function SettingsAiPage({
                                 <option value="whisper">{t.speechProviderOffline}</option>
                                 <option value="parakeet">{t.speechProviderParakeet}</option>
                             </select>
-                        </div>
+                        </SettingRow>
 
-                        <div data-settings-key="speechModel" className="flex items-center justify-between gap-4">
-                            <div className="text-sm font-medium">{t.speechModel}</div>
+                        <SettingRow settingsKey="speechModel" title={t.speechModel}>
                             {speechProvider === 'openai' ? (
                                 <>
                                     <input
@@ -582,11 +571,14 @@ export function SettingsAiPage({
                                     ))}
                                 </select>
                             )}
-                        </div>
+                        </SettingRow>
 
                         {speechProvider === 'openai' && (
-                            <div data-settings-key="speechBaseUrl" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                                <div className="text-sm font-medium">{t.speechBaseUrl}</div>
+                            <SettingField
+                                settingsKey="speechBaseUrl"
+                                title={t.speechBaseUrl}
+                                className="rounded-lg border border-border bg-muted/30 p-3"
+                            >
                                 <input
                                     type="text"
                                     aria-label={t.speechBaseUrl}
@@ -601,13 +593,16 @@ export function SettingsAiPage({
                                     spellCheck={false}
                                 />
                                 <div className="text-xs text-muted-foreground">{t.speechBaseUrlHint}</div>
-                            </div>
+                            </SettingField>
                         )}
 
                         {speechProvider === 'whisper' ? (
-                            <div data-settings-key="speechOfflineModel" className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                                <div className="text-sm font-medium">{t.speechOfflineModel}</div>
-                                <div className="text-xs text-muted-foreground">{t.speechOfflineModelDesc}</div>
+                            <SettingField
+                                settingsKey="speechOfflineModel"
+                                title={t.speechOfflineModel}
+                                description={t.speechOfflineModelDesc}
+                                className="rounded-lg border border-border bg-muted/30 p-3"
+                            >
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="text-xs text-muted-foreground">
                                         {speechOfflineReady ? t.speechOfflineReady : t.speechOfflineNotDownloaded}
@@ -643,11 +638,16 @@ export function SettingsAiPage({
                                     <div className="text-xs text-destructive">{t.speechOfflineDownloadError}: {speechDownloadError}</div>
                                 ) : null}
                                 {speechDownloadProgressView}
-                            </div>
+                            </SettingField>
                         ) : speechProvider === 'parakeet' ? (
-                            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-                                <div className="text-sm font-medium">{t.speechOfflineModel}</div>
-                                <div className="text-xs text-muted-foreground">{t.speechParakeetModelDesc}</div>
+                            // Parakeet's variant of the offline-model card above,
+                            // which carries the indexed `speechOfflineModel` key.
+                            <SettingField
+                                settingsKey={null}
+                                title={t.speechOfflineModel}
+                                description={t.speechParakeetModelDesc}
+                                className="rounded-lg border border-border bg-muted/30 p-3"
+                            >
                                 <label className="block space-y-1">
                                     <span className="text-xs font-medium text-muted-foreground">{t.speechParakeetModelPath}</span>
                                     <input
@@ -693,10 +693,11 @@ export function SettingsAiPage({
                                     <div className="text-xs text-destructive">{t.speechOfflineDownloadError}: {speechDownloadError}</div>
                                 ) : null}
                                 {speechDownloadProgressView}
-                            </div>
+                            </SettingField>
                         ) : (
-                            <div className="space-y-2">
-                                <div className="text-sm font-medium">{t.aiApiKey}</div>
+                            // The speech provider's key, separate from the
+                            // assistant's indexed `aiApiKey` field above.
+                            <SettingField settingsKey={null} title={t.aiApiKey}>
                                 <input
                                     type="password"
                                     aria-label={t.aiApiKey}
@@ -706,14 +707,10 @@ export function SettingsAiPage({
                                     className="w-full text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 />
                                 <div className="text-xs text-muted-foreground">{t.aiApiKeyHint}</div>
-                            </div>
+                            </SettingField>
                         )}
 
-                        <div data-settings-key="speechLanguage" className="flex items-center justify-between gap-4">
-                            <div>
-                                <div className="text-sm font-medium">{t.speechLanguage}</div>
-                                <div className="text-xs text-muted-foreground">{t.speechLanguageHint}</div>
-                            </div>
+                        <SettingRow settingsKey="speechLanguage" title={t.speechLanguage} description={t.speechLanguageHint}>
                             <input
                                 aria-label={t.speechLanguage}
                                 value={speechLanguage}
@@ -721,13 +718,9 @@ export function SettingsAiPage({
                                 placeholder={t.speechLanguageAuto}
                                 className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40"
                             />
-                        </div>
+                        </SettingRow>
 
-                        <div data-settings-key="speechMode" className="flex items-center justify-between gap-4">
-                            <div>
-                                <div className="text-sm font-medium">{t.speechMode}</div>
-                                <div className="text-xs text-muted-foreground">{t.speechModeHint}</div>
-                            </div>
+                        <SettingRow settingsKey="speechMode" title={t.speechMode} description={t.speechModeHint}>
                             <select
                                 value={speechMode}
                                 onChange={(e) => onUpdateSpeechSettings({ mode: e.target.value as 'smart_parse' | 'transcribe_only' })}
@@ -736,13 +729,9 @@ export function SettingsAiPage({
                                 <option value="smart_parse">{t.speechModeSmart}</option>
                                 <option value="transcribe_only">{t.speechModeTranscript}</option>
                             </select>
-                        </div>
+                        </SettingRow>
 
-                        <div data-settings-key="speechFieldStrategy" className="flex items-center justify-between gap-4">
-                            <div>
-                                <div className="text-sm font-medium">{t.speechFieldStrategy}</div>
-                                <div className="text-xs text-muted-foreground">{t.speechFieldStrategyHint}</div>
-                            </div>
+                        <SettingRow settingsKey="speechFieldStrategy" title={t.speechFieldStrategy} description={t.speechFieldStrategyHint}>
                             <select
                                 value={speechFieldStrategy}
                                 onChange={(e) =>
@@ -756,7 +745,7 @@ export function SettingsAiPage({
                                 <option value="title_only">{t.speechFieldTitle}</option>
                                 <option value="description_only">{t.speechFieldDescription}</option>
                             </select>
-                        </div>
+                        </SettingRow>
                     </div>
                 )}
             </div>

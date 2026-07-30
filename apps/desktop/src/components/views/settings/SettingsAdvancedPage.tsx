@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { SettingsLabels } from './labels';
 import type { LocalApiServerStatus } from '../../../lib/local-api-server';
 import type { DesktopRenderingConfig } from '../../../lib/desktop-rendering';
 import { Switch } from '../../ui/Switch';
+import { SettingRow, SettingsCard, SettingsSectionHeader } from './SettingRow';
 
 export type SettingsAdvancedPageProps = {
     t: SettingsLabels;
@@ -25,65 +26,6 @@ export type SettingsAdvancedPageProps = {
 
 const inputCls =
     'h-8 w-24 rounded-md border border-border bg-muted/50 px-2.5 text-right text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60';
-
-function SectionHeader({ children }: { children: ReactNode }) {
-    return (
-        <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            {children}
-        </h3>
-    );
-}
-
-function SettingsCard({ children }: { children: ReactNode }) {
-    return (
-        <div className="bg-card border border-border rounded-lg divide-y divide-border/50">
-            {children}
-        </div>
-    );
-}
-
-function SettingsRow({
-    settingsKey,
-    title,
-    description,
-    children,
-}: {
-    settingsKey: string;
-    title: string;
-    description?: ReactNode;
-    children: ReactNode;
-}) {
-    return (
-        <div data-settings-key={settingsKey} className="px-4 py-3 flex items-center justify-between gap-6">
-            <div className="min-w-0">
-                <div className="text-[13px] font-medium">{title}</div>
-                {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">{children}</div>
-        </div>
-    );
-}
-
-function Toggle({
-    disabled = false,
-    enabled,
-    label,
-    onChange,
-}: {
-    disabled?: boolean;
-    enabled: boolean;
-    label: string;
-    onChange: () => void;
-}) {
-    return (
-        <Switch
-            disabled={disabled}
-            aria-label={label}
-            checked={enabled}
-            onCheckedChange={onChange}
-        />
-    );
-}
 
 export function SettingsAdvancedPage({
     t,
@@ -112,17 +54,17 @@ export function SettingsAdvancedPage({
 
     return (
         <div className="space-y-5">
-            <SectionHeader>{t.automation}</SectionHeader>
+            <SettingsSectionHeader>{t.automation}</SettingsSectionHeader>
             <SettingsCard>
-                <SettingsRow settingsKey="localApiServer" title={t.localApiServer} description={statusText}>
-                    <Toggle
+                <SettingRow padded settingsKey="localApiServer" title={t.localApiServer} description={statusText}>
+                    <Switch
                         disabled={!isTauri || localApiBusy}
-                        enabled={localApiStatus.enabled}
-                        label={t.localApiServer}
-                        onChange={() => onLocalApiToggle(!localApiStatus.enabled)}
+                        checked={localApiStatus.enabled}
+                        aria-label={t.localApiServer}
+                        onCheckedChange={() => onLocalApiToggle(!localApiStatus.enabled)}
                     />
-                </SettingsRow>
-                <SettingsRow settingsKey="localApiPort" title={t.localApiPort} description={t.localApiPortDesc}>
+                </SettingRow>
+                <SettingRow padded settingsKey="localApiPort" title={t.localApiPort} description={t.localApiPortDesc}>
                     <input
                         aria-label={t.localApiPort}
                         className={inputCls}
@@ -135,13 +77,13 @@ export function SettingsAdvancedPage({
                         onBlur={onLocalApiPortCommit}
                         onChange={(event) => onLocalApiPortInputChange(event.target.value)}
                     />
-                </SettingsRow>
+                </SettingRow>
                 {localApiStatus.enabled && localApiStatus.token && (
-                    <SettingsRow settingsKey="localApiToken" title={t.localApiToken} description={t.localApiTokenDesc}>
+                    <SettingRow padded settingsKey="localApiToken" title={t.localApiToken} description={t.localApiTokenDesc}>
                         <code className="max-w-[320px] break-all rounded border border-border bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
                             {localApiStatus.token}
                         </code>
-                    </SettingsRow>
+                    </SettingRow>
                 )}
                 {localApiStatus.enabled && (
                     <div className="px-4 py-3 text-xs text-muted-foreground">
@@ -156,18 +98,18 @@ export function SettingsAdvancedPage({
             </SettingsCard>
             {isTauri && (
                 <>
-                    <SectionHeader>{t.rendering}</SectionHeader>
+                    <SettingsSectionHeader>{t.rendering}</SettingsSectionHeader>
                     <SettingsCard>
-                        <SettingsRow settingsKey="softwareRendering" title={t.softwareRendering} description={t.softwareRenderingDesc}>
-                            <Toggle
+                        <SettingRow padded settingsKey="softwareRendering" title={t.softwareRendering} description={t.softwareRenderingDesc}>
+                            <Switch
                                 disabled={desktopRenderingBusy}
-                                enabled={desktopRenderingConfig.disableHardwareAcceleration}
-                                label={t.softwareRendering}
-                                onChange={() => onDesktopRenderingToggle(!desktopRenderingConfig.disableHardwareAcceleration)}
+                                checked={desktopRenderingConfig.disableHardwareAcceleration}
+                                aria-label={t.softwareRendering}
+                                onCheckedChange={() => onDesktopRenderingToggle(!desktopRenderingConfig.disableHardwareAcceleration)}
                             />
-                        </SettingsRow>
+                        </SettingRow>
                     </SettingsCard>
-                    <SectionHeader>{t.network}</SectionHeader>
+                    <SettingsSectionHeader>{t.network}</SettingsSectionHeader>
                     <SettingsCard>
                         <div>
                             <button
@@ -175,11 +117,11 @@ export function SettingsAdvancedPage({
                                 onClick={() => setNetworkProxyOpen((open) => !open)}
                                 aria-expanded={networkProxyOpen}
                                 data-settings-key="networkProxyUrl"
-                                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left"
+                                className="flex w-full items-center justify-between gap-4 p-4 text-left"
                             >
                                 <div className="min-w-0">
-                                    <div className="text-[13px] font-medium">{t.networkProxyUrl}</div>
-                                    <div className="text-xs text-muted-foreground mt-0.5">
+                                    <div className="text-sm font-medium">{t.networkProxyUrl}</div>
+                                    <div className="text-xs text-muted-foreground mt-1">
                                         {t.networkProxyUrlDesc}
                                     </div>
                                 </div>

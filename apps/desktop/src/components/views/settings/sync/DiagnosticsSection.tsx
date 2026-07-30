@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react';
 import { Switch } from '../../../ui/Switch';
+import { SettingRow } from '../SettingRow';
 import type { SettingsDataPageProps } from './types';
 
 type DiagnosticsSectionProps = Pick<
@@ -39,29 +40,29 @@ export function DiagnosticsSection({
             <div className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <p className="text-sm text-muted-foreground">{t.diagnosticsDesc}</p>
                 {analyticsHeartbeatAvailable && (
-                    <div data-settings-key="analyticsHeartbeat" className="flex items-start justify-between gap-4">
-                        <div>
-                            <p className="text-sm font-medium">{t.analyticsHeartbeat}</p>
-                            <p className="text-xs text-muted-foreground">{t.analyticsHeartbeatDesc}</p>
-                        </div>
+                    <SettingRow
+                        settingsKey="analyticsHeartbeat"
+                        title={t.analyticsHeartbeat}
+                        description={t.analyticsHeartbeatDesc}
+                    >
                         <Switch
                             aria-label={t.analyticsHeartbeat}
                             checked={analyticsHeartbeatOptedOut}
                             onCheckedChange={toggleAnalyticsHeartbeatOptOut}
                         />
-                    </div>
+                    </SettingRow>
                 )}
-                <div data-settings-key="debugLogging" className="flex items-start justify-between gap-4">
-                    <div>
-                        <p className="text-sm font-medium">{t.debugLogging}</p>
-                        <p className="text-xs text-muted-foreground">{t.debugLoggingDesc}</p>
-                    </div>
+                <SettingRow
+                    settingsKey="debugLogging"
+                    title={t.debugLogging}
+                    description={t.debugLoggingDesc}
+                >
                     <Switch
                         aria-label={t.debugLogging}
                         checked={loggingEnabled}
                         onCheckedChange={onToggleLogging}
                     />
-                </div>
+                </SettingRow>
                 {loggingEnabled && logPath && (
                     <div data-settings-key="logFile" className="text-xs text-muted-foreground">
                         <span className="font-medium">{t.logFile}:</span>{' '}

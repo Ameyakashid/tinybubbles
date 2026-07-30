@@ -30,6 +30,7 @@ import {
     isTaskEditorSectionableField,
 } from '../../Task/task-item-helpers';
 import { Switch } from '../../ui/Switch';
+import { SettingField, SettingRow } from './SettingRow';
 
 type Labels = {
     gtdDesc: string;
@@ -580,39 +581,29 @@ export function SettingsGtdPage({
                 </div>
             ) : null}
             <div className="bg-card border border-border rounded-lg divide-y divide-border">
-                <div data-settings-key="autoArchive" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.autoArchive}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.autoArchiveDesc}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <select
-                            aria-label={t.autoArchive}
-                            value={autoArchiveDays}
-                            onChange={(e) => {
-                                const value = Number.parseInt(e.target.value, 10);
-                                updateSettings({
-                                    gtd: {
-                                        ...(safeSettings.gtd ?? {}),
-                                        autoArchiveDays: Number.isFinite(value) ? value : 7,
-                                    },
-                                }).then(showSaved).catch((error) => reportError('Failed to update auto-archive settings', error));
-                            }}
-                            className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        >
-                            {autoArchiveOptions.map((days) => (
-                                <option key={days} value={days}>
-                                    {formatArchiveLabel(days)}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                <div data-settings-key="defaultScheduleTime" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.defaultScheduleTime}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.defaultScheduleTimeDesc}</div>
-                    </div>
+                <SettingRow padded settingsKey="autoArchive" title={t.autoArchive} description={t.autoArchiveDesc}>
+                    <select
+                        aria-label={t.autoArchive}
+                        value={autoArchiveDays}
+                        onChange={(e) => {
+                            const value = Number.parseInt(e.target.value, 10);
+                            updateSettings({
+                                gtd: {
+                                    ...(safeSettings.gtd ?? {}),
+                                    autoArchiveDays: Number.isFinite(value) ? value : 7,
+                                },
+                            }).then(showSaved).catch((error) => reportError('Failed to update auto-archive settings', error));
+                        }}
+                        className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    >
+                        {autoArchiveOptions.map((days) => (
+                            <option key={days} value={days}>
+                                {formatArchiveLabel(days)}
+                            </option>
+                        ))}
+                    </select>
+                </SettingRow>
+                <SettingRow padded settingsKey="defaultScheduleTime" title={t.defaultScheduleTime} description={t.defaultScheduleTimeDesc}>
                     <input
                         type="text"
                         inputMode="numeric"
@@ -628,12 +619,8 @@ export function SettingsGtdPage({
                         }}
                         className="w-24 shrink-0 text-sm bg-muted/50 text-foreground border border-border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
-                </div>
-                <div data-settings-key="focusTaskLimit" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.focusTaskLimit}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.focusTaskLimitDesc}</div>
-                    </div>
+                </SettingRow>
+                <SettingRow padded settingsKey="focusTaskLimit" title={t.focusTaskLimit} description={t.focusTaskLimitDesc}>
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 shrink-0">
                         {FOCUS_TASK_LIMIT_OPTIONS.map((option) => {
                             const selected = focusTaskLimit === option;
@@ -657,12 +644,8 @@ export function SettingsGtdPage({
                             );
                         })}
                     </div>
-                </div>
-                <div data-settings-key="defaultProjectFlowMode" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.defaultProjectFlowMode}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.defaultProjectFlowModeDesc}</div>
-                    </div>
+                </SettingRow>
+                <SettingRow padded settingsKey="defaultProjectFlowMode" title={t.defaultProjectFlowMode} description={t.defaultProjectFlowModeDesc}>
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 shrink-0">
                         {([
                             { id: 'parallel', label: t.projectFlowParallel },
@@ -689,7 +672,7 @@ export function SettingsGtdPage({
                             );
                         })}
                     </div>
-                </div>
+                </SettingRow>
             </div>
             <SettingsDisclosureCard
                 sectionKey="features"
@@ -698,11 +681,7 @@ export function SettingsGtdPage({
                 open={featuresOpen}
                 onToggle={() => setFeaturesOpen((prev) => !prev)}
             >
-                <div data-settings-key="featurePomodoro" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.featurePomodoro}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.featurePomodoroDesc}</div>
-                    </div>
+                <SettingRow padded settingsKey="featurePomodoro" title={t.featurePomodoro} description={t.featurePomodoroDesc}>
                     <Switch
                         aria-label={t.featurePomodoro}
                         checked={pomodoroEnabled}
@@ -715,13 +694,14 @@ export function SettingsGtdPage({
                             }).then(showSaved).catch((error) => reportError('Failed to update feature flags', error));
                         }}
                     />
-                </div>
+                </SettingRow>
                 {pomodoroEnabled && (
-                    <div data-settings-key="pomodoroCustomPreset" className="p-4 space-y-3">
-                        <div>
-                            <div className="text-sm font-medium">{t.pomodoroCustomPreset}</div>
-                            <div className="text-xs text-muted-foreground mt-1">{t.pomodoroCustomPresetDesc}</div>
-                        </div>
+                    <SettingField
+                        settingsKey="pomodoroCustomPreset"
+                        title={t.pomodoroCustomPreset}
+                        description={t.pomodoroCustomPresetDesc}
+                        className="p-4 gap-3"
+                    >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <label className="space-y-1.5">
                                 <span className="text-xs font-medium text-muted-foreground">{t.pomodoroFocusMinutes}</span>
@@ -761,22 +741,14 @@ export function SettingsGtdPage({
                             </label>
                         </div>
                         <div className="rounded-lg border border-border divide-y divide-border">
-                            <div data-settings-key="pomodoroLinkTask" className="p-3 flex items-center justify-between gap-6">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium">{t.pomodoroLinkTask}</div>
-                                    <div className="text-xs text-muted-foreground mt-1">{t.pomodoroLinkTaskDesc}</div>
-                                </div>
+                            <SettingRow padded settingsKey="pomodoroLinkTask" title={t.pomodoroLinkTask} description={t.pomodoroLinkTaskDesc}>
                                 <Switch
                                     aria-label={t.pomodoroLinkTask}
                                     checked={pomodoroLinkTask}
                                     onCheckedChange={() => updatePomodoroSettings({ linkTask: !pomodoroLinkTask })}
                                 />
-                            </div>
-                            <div data-settings-key="pomodoroAutoStartBreaks" className="p-3 flex items-center justify-between gap-6">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium">{t.pomodoroAutoStartBreaks}</div>
-                                    <div className="text-xs text-muted-foreground mt-1">{t.pomodoroAutoStartBreaksDesc}</div>
-                                </div>
+                            </SettingRow>
+                            <SettingRow padded settingsKey="pomodoroAutoStartBreaks" title={t.pomodoroAutoStartBreaks} description={t.pomodoroAutoStartBreaksDesc}>
                                 <Switch
                                     aria-label={t.pomodoroAutoStartBreaks}
                                     checked={pomodoroAutoStartBreaks}
@@ -785,12 +757,8 @@ export function SettingsGtdPage({
                                         { showAutoStartNotice: !pomodoroAutoStartBreaks }
                                     )}
                                 />
-                            </div>
-                            <div data-settings-key="pomodoroAutoStartFocus" className="p-3 flex items-center justify-between gap-6">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium">{t.pomodoroAutoStartFocus}</div>
-                                    <div className="text-xs text-muted-foreground mt-1">{t.pomodoroAutoStartFocusDesc}</div>
-                                </div>
+                            </SettingRow>
+                            <SettingRow padded settingsKey="pomodoroAutoStartFocus" title={t.pomodoroAutoStartFocus} description={t.pomodoroAutoStartFocusDesc}>
                                 <Switch
                                     aria-label={t.pomodoroAutoStartFocus}
                                     checked={pomodoroAutoStartFocus}
@@ -799,9 +767,9 @@ export function SettingsGtdPage({
                                         { showAutoStartNotice: !pomodoroAutoStartFocus }
                                     )}
                                 />
-                            </div>
+                            </SettingRow>
                         </div>
-                    </div>
+                    </SettingField>
                 )}
             </SettingsDisclosureCard>
             <SettingsDisclosureCard
@@ -914,11 +882,7 @@ export function SettingsGtdPage({
                         </button>
                     </div>
                 </div>
-                <div data-settings-key="defaultArea" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.defaultArea}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.defaultAreaDesc}</div>
-                    </div>
+                <SettingRow padded settingsKey="defaultArea" title={t.defaultArea} description={t.defaultAreaDesc}>
                     <select
                         value={defaultAreaSelectValue}
                         aria-label={t.defaultArea}
@@ -940,13 +904,9 @@ export function SettingsGtdPage({
                             <option key={area.id} value={area.id}>{area.name}</option>
                         ))}
                     </select>
-                </div>
+                </SettingRow>
                 {defaultCaptureMethod === 'audio' && speechEnabled ? (
-                    <div data-settings-key="captureSaveAudio" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.captureSaveAudio}</div>
-                            <div className="text-xs text-muted-foreground mt-1">{t.captureSaveAudioDesc}</div>
-                        </div>
+                    <SettingRow padded settingsKey="captureSaveAudio" title={t.captureSaveAudio} description={t.captureSaveAudioDesc}>
                         <Switch
                             aria-label={t.captureSaveAudio}
                             checked={saveAudioAttachments}
@@ -959,13 +919,9 @@ export function SettingsGtdPage({
                                 }).then(showSaved).catch((error) => reportError('Failed to update audio capture settings', error));
                             }}
                         />
-                    </div>
+                    </SettingRow>
                 ) : null}
-                <div data-settings-key="quickAddAutoClean" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.quickAddAutoClean}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.quickAddAutoCleanDesc}</div>
-                    </div>
+                <SettingRow padded settingsKey="quickAddAutoClean" title={t.quickAddAutoClean} description={t.quickAddAutoCleanDesc}>
                     <Switch
                         aria-label={t.quickAddAutoClean}
                         checked={quickAddAutoClean}
@@ -975,12 +931,8 @@ export function SettingsGtdPage({
                                 .catch((error) => reportError('Failed to update quick add settings', error));
                         }}
                     />
-                </div>
-                <div data-settings-key="naturalLanguageDates" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.naturalLanguageDates}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.naturalLanguageDatesDesc}</div>
-                    </div>
+                </SettingRow>
+                <SettingRow padded settingsKey="naturalLanguageDates" title={t.naturalLanguageDates} description={t.naturalLanguageDatesDesc}>
                     <Switch
                         aria-label={t.naturalLanguageDates}
                         checked={naturalLanguageDates}
@@ -995,12 +947,8 @@ export function SettingsGtdPage({
                                 .catch((error) => reportError('Failed to update quick add settings', error));
                         }}
                     />
-                </div>
-                <div data-settings-key="markdownEditorAssist" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.markdownEditorAssist}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.markdownEditorAssistDesc}</div>
-                    </div>
+                </SettingRow>
+                <SettingRow padded settingsKey="markdownEditorAssist" title={t.markdownEditorAssist} description={t.markdownEditorAssistDesc}>
                     <Switch
                         aria-label={t.markdownEditorAssist}
                         checked={markdownEditorAssist}
@@ -1010,7 +958,7 @@ export function SettingsGtdPage({
                                 .catch((error) => reportError('Failed to update editor settings', error));
                         }}
                     />
-                </div>
+                </SettingRow>
             </SettingsDisclosureCard>
             <SettingsDisclosureCard
                 sectionKey="weeklyReviewConfig"
@@ -1019,17 +967,13 @@ export function SettingsGtdPage({
                 open={reviewOpen}
                 onToggle={() => setReviewOpen((prev) => !prev)}
             >
-                <div data-settings-key="weeklyReviewIncludeContextsStep" className="p-4 flex items-center justify-between gap-6">
-                    <div className="min-w-0">
-                        <div className="text-sm font-medium">{t.weeklyReviewIncludeContextsStep}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{t.weeklyReviewIncludeContextsStepDesc}</div>
-                    </div>
+                <SettingRow padded settingsKey="weeklyReviewIncludeContextsStep" title={t.weeklyReviewIncludeContextsStep} description={t.weeklyReviewIncludeContextsStepDesc}>
                     <Switch
                         aria-label={t.weeklyReviewIncludeContextsStep}
                         checked={includeContextStep}
                         onCheckedChange={() => updateWeeklyReviewConfig({ includeContextStep: !includeContextStep })}
                     />
-                </div>
+                </SettingRow>
             </SettingsDisclosureCard>
             <div className="bg-card border border-border rounded-lg">
                 <button
@@ -1047,8 +991,7 @@ export function SettingsGtdPage({
                     {inboxOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </button>
                 {inboxOpen && <div className="divide-y divide-border border-t border-border">
-                    <div data-settings-key="inboxDefaultMode" className="p-4 space-y-3">
-                        <div className="text-sm font-medium">{t.inboxDefaultMode}</div>
+                    <SettingField settingsKey="inboxDefaultMode" title={t.inboxDefaultMode} className="p-4 gap-3">
                         <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
                             <button
                                 type="button"
@@ -1075,58 +1018,43 @@ export function SettingsGtdPage({
                                 {t.inboxModeQuick}
                             </button>
                         </div>
-                    </div>
-                    <div data-settings-key="inboxTwoMinuteEnabled" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.inboxTwoMinuteEnabled}</div>
-                        </div>
+                    </SettingField>
+                    <SettingRow padded settingsKey="inboxTwoMinuteEnabled" title={t.inboxTwoMinuteEnabled}>
                         <Switch
                             aria-label={t.inboxTwoMinuteEnabled}
                             checked={inboxTwoMinuteEnabled}
                             onCheckedChange={() => updateInboxProcessing({ twoMinuteEnabled: !inboxTwoMinuteEnabled })}
                         />
-                    </div>
-                    <div data-settings-key="inboxTwoMinuteFirst" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.inboxTwoMinuteFirst}</div>
-                        </div>
+                    </SettingRow>
+                    <SettingRow padded settingsKey="inboxTwoMinuteFirst" title={t.inboxTwoMinuteFirst}>
                         <Switch
                             aria-label={t.inboxTwoMinuteFirst}
                             checked={inboxTwoMinuteFirst}
                             disabled={!inboxTwoMinuteEnabled}
                             onCheckedChange={() => updateInboxProcessing({ twoMinuteFirst: !inboxTwoMinuteFirst })}
                         />
-                    </div>
-                    <div data-settings-key="inboxProjectFirst" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.inboxProjectFirst}</div>
-                        </div>
+                    </SettingRow>
+                    <SettingRow padded settingsKey="inboxProjectFirst" title={t.inboxProjectFirst}>
                         <Switch
                             aria-label={t.inboxProjectFirst}
                             checked={inboxProjectFirst}
                             onCheckedChange={() => updateInboxProcessing({ projectFirst: !inboxProjectFirst })}
                         />
-                    </div>
-                    <div data-settings-key="inboxContextStepEnabled" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.inboxContextStepEnabled}</div>
-                        </div>
+                    </SettingRow>
+                    <SettingRow padded settingsKey="inboxContextStepEnabled" title={t.inboxContextStepEnabled}>
                         <Switch
                             aria-label={t.inboxContextStepEnabled}
                             checked={inboxContextStepEnabled}
                             onCheckedChange={() => updateInboxProcessing({ contextStepEnabled: !inboxContextStepEnabled })}
                         />
-                    </div>
-                    <div data-settings-key="inboxScheduleEnabled" className="p-4 flex items-center justify-between gap-6">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium">{t.inboxScheduleEnabled}</div>
-                        </div>
+                    </SettingRow>
+                    <SettingRow padded settingsKey="inboxScheduleEnabled" title={t.inboxScheduleEnabled}>
                         <Switch
                             aria-label={t.inboxScheduleEnabled}
                             checked={inboxScheduleEnabled}
                             onCheckedChange={() => updateInboxProcessing({ scheduleEnabled: !inboxScheduleEnabled })}
                         />
-                    </div>
+                    </SettingRow>
                 </div>}
             </div>
             <div className="bg-card border border-border rounded-lg">
@@ -1146,11 +1074,12 @@ export function SettingsGtdPage({
                     {taskEditorOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                 </button>
                 {taskEditorOpen && <div className="p-4 space-y-4">
-                    <div data-settings-key="taskEditorPresentation" className="rounded-md border border-border bg-muted/20 p-3">
-                        <div className="mb-3">
-                            <div className="text-sm font-medium">{t.taskEditorPresentation}</div>
-                            <div className="text-xs text-muted-foreground mt-1">{t.taskEditorPresentationDesc}</div>
-                        </div>
+                    <SettingField
+                        settingsKey="taskEditorPresentation"
+                        title={t.taskEditorPresentation}
+                        description={t.taskEditorPresentationDesc}
+                        className="rounded-md border border-border bg-muted/20 p-3 gap-3"
+                    >
                         <div className="grid gap-2 sm:grid-cols-2">
                             {([
                                 {
@@ -1189,7 +1118,7 @@ export function SettingsGtdPage({
                                 );
                             })}
                         </div>
-                    </div>
+                    </SettingField>
                     <div className="flex justify-end">
                         <button
                             type="button"

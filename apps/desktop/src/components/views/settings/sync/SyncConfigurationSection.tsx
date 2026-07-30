@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { Switch } from '../../../ui/Switch';
+import { SettingField, SettingRow } from '../SettingRow';
 import type { SettingsSyncPageProps } from './types';
 
 type SyncConfigurationSectionProps = Pick<
@@ -87,29 +88,9 @@ const BackendButton = ({
     </button>
 );
 
-const SwitchRow = ({
-    checked,
-    hint,
-    label,
-    onCheckedChange,
-}: {
-    checked: boolean;
-    hint: string;
-    label: string;
-    onCheckedChange: (checked: boolean) => void;
-}) => (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-border bg-muted/30 p-3">
-        <div>
-            <p className="text-sm font-medium">{label}</p>
-            <p className="text-xs text-muted-foreground">{hint}</p>
-        </div>
-        <Switch
-            aria-label={label}
-            checked={checked}
-            onCheckedChange={onCheckedChange}
-        />
-    </div>
-);
+// Connection options that belong to the backend form around them rather than
+// being settings of their own, so they carry no search key.
+const CONNECTION_OPTION_ROW_CLS = 'rounded-md border border-border bg-muted/30 p-3';
 
 const ConnectionBadge = ({
     state,
@@ -163,9 +144,7 @@ const renderDropboxPanel = ({
     | 't'
 >) => (
     <div className="space-y-3">
-        <div data-settings-key="dropboxAppKey" className="flex flex-col gap-2">
-            <label className="text-sm font-medium">{t.dropboxAppKey}</label>
-            <p className="text-xs text-muted-foreground">{t.dropboxAppKeyHint}</p>
+        <SettingField settingsKey="dropboxAppKey" title={t.dropboxAppKey} description={t.dropboxAppKeyHint}>
             {dropboxAuthInProgress && dropboxRedirectUri.trim() && (
                 <p className="text-xs text-muted-foreground">
                     {t.dropboxRedirectUri}: <span className="font-mono break-all">{dropboxRedirectUri}</span>
@@ -179,7 +158,7 @@ const renderDropboxPanel = ({
             <p className="text-xs text-muted-foreground">
                 {t.dropboxStatus}: {dropboxConnected ? t.dropboxConnected : t.dropboxNotConnected}
             </p>
-        </div>
+        </SettingField>
 
         <div className="flex flex-wrap justify-end gap-2">
             <button
@@ -221,9 +200,12 @@ const renderCalendarFeedPanel = ({
     | 'onRevokeCalendarFeed'
     | 't'
 >) => (
-    <div data-settings-key="calendarFeed" className="flex flex-col gap-2 border-t border-border pt-3">
-        <label className="text-sm font-medium">{t.calendarFeed}</label>
-        <p className="text-xs text-muted-foreground">{t.calendarFeedDesc}</p>
+    <SettingField
+        settingsKey="calendarFeed"
+        title={t.calendarFeed}
+        description={t.calendarFeedDesc}
+        className="border-t border-border pt-3"
+    >
         {calendarFeedUrl ? (
             <input
                 type="text"
@@ -262,7 +244,7 @@ const renderCalendarFeedPanel = ({
                 {calendarFeedUrl ? t.calendarFeedRegenerate : t.calendarFeedGenerate}
             </button>
         </div>
-    </div>
+    </SettingField>
 );
 
 const renderSelfHostedCloudPanel = ({
@@ -303,8 +285,7 @@ const renderSelfHostedCloudPanel = ({
     | 't'
 > & { cloudUrlError: boolean }) => (
     <div className="space-y-3">
-        <div data-settings-key="cloudUrl" className="flex flex-col gap-2">
-            <label className="text-sm font-medium">{t.cloudUrl}</label>
+        <SettingField settingsKey="cloudUrl" title={t.cloudUrl}>
             <input
                 type="text"
                 value={cloudUrl}
@@ -319,32 +300,43 @@ const renderSelfHostedCloudPanel = ({
             {cloudUrlError && (
                 <p className="text-xs text-destructive">Enter a valid http(s) URL.</p>
             )}
-        </div>
+        </SettingField>
 
-        <SwitchRow
-            checked={cloudAllowInsecureHttp}
-            label={t.allowInsecureHttp}
-            hint={t.allowInsecureHttpHint}
-            onCheckedChange={onCloudAllowInsecureHttpChange}
-        />
+        <SettingRow
+            settingsKey={null}
+            title={t.allowInsecureHttp}
+            description={t.allowInsecureHttpHint}
+            className={CONNECTION_OPTION_ROW_CLS}
+        >
+            <Switch
+                aria-label={t.allowInsecureHttp}
+                checked={cloudAllowInsecureHttp}
+                onCheckedChange={onCloudAllowInsecureHttpChange}
+            />
+        </SettingRow>
 
-        <div data-settings-key="cloudToken" className="flex flex-col gap-2">
-            <label className="text-sm font-medium">{t.cloudToken}</label>
+        <SettingField settingsKey="cloudToken" title={t.cloudToken}>
             <input
                 type="password"
                 value={cloudToken}
                 onChange={(e) => onCloudTokenChange(e.target.value)}
                 className="bg-muted p-2 rounded text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
             />
-        </div>
+        </SettingField>
 
         {!isTauri && (
-            <SwitchRow
-                checked={cloudRememberToken}
-                label={t.cloudRememberToken}
-                hint={t.cloudRememberTokenHint}
-                onCheckedChange={onCloudRememberTokenChange}
-            />
+            <SettingRow
+                settingsKey={null}
+                title={t.cloudRememberToken}
+                description={t.cloudRememberTokenHint}
+                className={CONNECTION_OPTION_ROW_CLS}
+            >
+                <Switch
+                    aria-label={t.cloudRememberToken}
+                    checked={cloudRememberToken}
+                    onCheckedChange={onCloudRememberTokenChange}
+                />
+            </SettingRow>
         )}
 
         <div className="flex justify-end">
@@ -406,8 +398,7 @@ const renderWebDavPanel = ({
     | 'webdavUsername'
 > & { webdavUrlError: boolean }) => (
     <div className="space-y-3">
-        <div data-settings-key="webdavUrl" className="flex flex-col gap-2">
-            <label className="text-sm font-medium">{t.webdavUrl}</label>
+        <SettingField settingsKey="webdavUrl" title={t.webdavUrl}>
             <input
                 type="text"
                 value={webdavUrl}
@@ -422,27 +413,31 @@ const renderWebDavPanel = ({
             {webdavUrlError && (
                 <p className="text-xs text-destructive">Enter a valid http(s) URL.</p>
             )}
-        </div>
+        </SettingField>
 
-        <SwitchRow
-            checked={webdavAllowInsecureHttp}
-            label={t.allowInsecureHttp}
-            hint={t.allowInsecureHttpHint}
-            onCheckedChange={onWebdavAllowInsecureHttpChange}
-        />
+        <SettingRow
+            settingsKey={null}
+            title={t.allowInsecureHttp}
+            description={t.allowInsecureHttpHint}
+            className={CONNECTION_OPTION_ROW_CLS}
+        >
+            <Switch
+                aria-label={t.allowInsecureHttp}
+                checked={webdavAllowInsecureHttp}
+                onCheckedChange={onWebdavAllowInsecureHttpChange}
+            />
+        </SettingRow>
 
         <div className="grid sm:grid-cols-2 gap-2">
-            <div data-settings-key="webdavUsername" className="flex flex-col gap-2">
-                <label className="text-sm font-medium">{t.webdavUsername}</label>
+            <SettingField settingsKey="webdavUsername" title={t.webdavUsername}>
                 <input
                     type="text"
                     value={webdavUsername}
                     onChange={(e) => onWebdavUsernameChange(e.target.value)}
                     className="bg-muted p-2 rounded text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-            </div>
-            <div data-settings-key="webdavPassword" className="flex flex-col gap-2">
-                <label className="text-sm font-medium">{t.webdavPassword}</label>
+            </SettingField>
+            <SettingField settingsKey="webdavPassword" title={t.webdavPassword}>
                 <input
                     type="password"
                     value={webdavPassword}
@@ -450,7 +445,7 @@ const renderWebDavPanel = ({
                     placeholder={webdavHasPassword && !webdavPassword ? '••••••••' : ''}
                     className="bg-muted p-2 rounded text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-            </div>
+            </SettingField>
         </div>
         {!isTauri && (
             <p className="text-xs text-warning">
@@ -629,10 +624,12 @@ export function SyncConfigurationSection({
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </a>
 
-                <div data-settings-key="syncBackend" className="space-y-1">
-                    <span className="text-sm font-medium">{t.syncBackend}</span>
-                    <p className="text-xs text-muted-foreground">{t.syncBackendChoiceHint}</p>
-                </div>
+                <SettingField
+                    settingsKey="syncBackend"
+                    title={t.syncBackend}
+                    description={t.syncBackendChoiceHint}
+                    className="gap-1"
+                />
 
                 <div
                     aria-label={t.syncBackend}
@@ -660,8 +657,7 @@ export function SyncConfigurationSection({
                 )}
 
                 {syncBackend === 'file' && (
-                    <div data-settings-key="syncFolderLocation" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.syncFolderLocation}</label>
+                    <SettingField settingsKey="syncFolderLocation" title={t.syncFolderLocation}>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -686,7 +682,7 @@ export function SyncConfigurationSection({
                             </button>
                         </div>
                         <p className="text-xs text-muted-foreground">{t.pathHint}</p>
-                    </div>
+                    </SettingField>
                 )}
 
                 {syncBackend === 'webdav' && renderWebDavPanel({

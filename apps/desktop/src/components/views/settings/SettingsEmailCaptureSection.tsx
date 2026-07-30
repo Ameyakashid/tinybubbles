@@ -3,6 +3,7 @@ import { safeFormatDate } from '@mindwtr/core';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
 import { Switch } from '../../ui/Switch';
+import { SettingField } from './SettingRow';
 import {
     DEFAULT_EMAIL_CAPTURE_FOLDER,
     DEFAULT_EMAIL_CAPTURE_PORT,
@@ -185,8 +186,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
             {open && (
                 <div className="border-t border-border p-4 space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-3">
-                        <div data-settings-key="emailCaptureHost" className="flex flex-col gap-2">
-                            <label className="text-sm font-medium">{t.emailCaptureHost}</label>
+                        <SettingField settingsKey="emailCaptureHost" title={t.emailCaptureHost}>
                             <input
                                 type="text"
                                 value={host}
@@ -195,9 +195,8 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                                 placeholder="imap.gmail.com"
                                 className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                             />
-                        </div>
-                        <div data-settings-key="emailCapturePort" className="flex flex-col gap-2">
-                            <label className="text-sm font-medium">{t.emailCapturePort}</label>
+                        </SettingField>
+                        <SettingField settingsKey="emailCapturePort" title={t.emailCapturePort}>
                             <input
                                 type="number"
                                 value={portText}
@@ -207,11 +206,10 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                                 max={65535}
                                 className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                             />
-                        </div>
+                        </SettingField>
                     </div>
 
-                    <div data-settings-key="emailCaptureUsername" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.emailCaptureUsername}</label>
+                    <SettingField settingsKey="emailCaptureUsername" title={t.emailCaptureUsername}>
                         <input
                             type="text"
                             value={username}
@@ -221,10 +219,9 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                             autoComplete="off"
                             className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                         />
-                    </div>
+                    </SettingField>
 
-                    <div data-settings-key="emailCapturePassword" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.emailCapturePassword}</label>
+                    <SettingField settingsKey="emailCapturePassword" title={t.emailCapturePassword}>
                         <input
                             type="password"
                             value={password}
@@ -237,10 +234,9 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                         <p className="text-xs text-muted-foreground">
                             {hasPassword ? t.emailCapturePasswordStored : t.emailCapturePasswordHint}
                         </p>
-                    </div>
+                    </SettingField>
 
-                    <div data-settings-key="emailCaptureFolder" className="flex flex-col gap-2">
-                        <label className="text-sm font-medium">{t.emailCaptureFolder}</label>
+                    <SettingField settingsKey="emailCaptureFolder" title={t.emailCaptureFolder}>
                         <input
                             type="text"
                             value={folder}
@@ -250,7 +246,7 @@ export function SettingsEmailCaptureSection({ t, isTauri, showSaved }: SettingsE
                             className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                         <p className="text-xs text-muted-foreground">{t.emailCaptureFolderHint}</p>
-                    </div>
+                    </SettingField>
 
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-1">

@@ -3,6 +3,7 @@ import type { AppData } from '@mindwtr/core';
 import { reportError } from '../../../lib/report-error';
 import { requestDesktopNotificationPermission } from '../../../lib/notification-service';
 import { Switch } from '../../ui/Switch';
+import { SettingRow } from './SettingRow';
 
 type Labels = {
     notificationsDesc: string;
@@ -77,55 +78,52 @@ export function SettingsNotificationsPage({
         <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <p className="text-sm text-muted-foreground">{t.notificationsDesc}</p>
 
-            <div data-settings-key="notificationsEnable" className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium">{t.notificationsEnable}</p>
-                </div>
+            <SettingRow settingsKey="notificationsEnable" title={t.notificationsEnable}>
                 <Switch
                     checked={notificationsEnabled}
                     onCheckedChange={(checked) => handleUpdate({ notificationsEnabled: checked })}
                     aria-label={t.notificationsEnable}
                 />
-            </div>
+            </SettingRow>
 
-            <div data-settings-key="startDateNotifications" className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium">{t.startDateNotifications}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t.startDateNotificationsDesc}</p>
-                </div>
+            <SettingRow
+                settingsKey="startDateNotifications"
+                title={t.startDateNotifications}
+                description={t.startDateNotificationsDesc}
+            >
                 <Switch
                     checked={startDateNotificationsEnabled}
                     onCheckedChange={(checked) => handleUpdate({ startDateNotificationsEnabled: checked })}
                     aria-label={t.startDateNotifications}
                     disabled={!notificationsEnabled}
                 />
-            </div>
+            </SettingRow>
 
-            <div data-settings-key="dueDateNotifications" className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium">{t.dueDateNotifications}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t.dueDateNotificationsDesc}</p>
-                </div>
+            <SettingRow
+                settingsKey="dueDateNotifications"
+                title={t.dueDateNotifications}
+                description={t.dueDateNotificationsDesc}
+            >
                 <Switch
                     checked={dueDateNotificationsEnabled}
                     onCheckedChange={(checked) => handleUpdate({ dueDateNotificationsEnabled: checked })}
                     aria-label={t.dueDateNotifications}
                     disabled={!notificationsEnabled}
                 />
-            </div>
+            </SettingRow>
 
-            <div data-settings-key="reviewAtNotifications" className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="text-sm font-medium">{t.reviewAtNotifications}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t.reviewAtNotificationsDesc}</p>
-                </div>
+            <SettingRow
+                settingsKey="reviewAtNotifications"
+                title={t.reviewAtNotifications}
+                description={t.reviewAtNotificationsDesc}
+            >
                 <Switch
                     checked={reviewAtNotificationsEnabled}
                     onCheckedChange={(checked) => handleUpdate({ reviewAtNotificationsEnabled: checked })}
                     aria-label={t.reviewAtNotifications}
                     disabled={!notificationsEnabled}
                 />
-            </div>
+            </SettingRow>
 
             <div className="border-t border-border/50"></div>
 
@@ -135,18 +133,17 @@ export function SettingsNotificationsPage({
                     <p className="text-xs text-muted-foreground mt-1">{t.weeklyReviewDesc}</p>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium">{t.weeklyReview}</div>
+                {/* The group above carries the `weeklyReview` search key. */}
+                <SettingRow settingsKey={null} title={t.weeklyReview}>
                     <Switch
                         checked={weeklyReviewEnabled}
                         onCheckedChange={(checked) => handleUpdate({ weeklyReviewEnabled: checked })}
                         aria-label={t.weeklyReview}
                         disabled={!notificationsEnabled}
                     />
-                </div>
+                </SettingRow>
 
-                <div data-settings-key="weeklyReviewDay" className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium">{t.weeklyReviewDay}</div>
+                <SettingRow settingsKey="weeklyReviewDay" title={t.weeklyReviewDay}>
                     <select
                         aria-label={t.weeklyReviewDay}
                         value={weeklyReviewDay}
@@ -160,10 +157,9 @@ export function SettingsNotificationsPage({
                             </option>
                         ))}
                     </select>
-                </div>
+                </SettingRow>
 
-                <div data-settings-key="weeklyReviewTime" className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium">{t.weeklyReviewTime}</div>
+                <SettingRow settingsKey="weeklyReviewTime" title={t.weeklyReviewTime}>
                     <input
                         type="time"
                         aria-label={t.weeklyReviewTime}
@@ -172,7 +168,7 @@ export function SettingsNotificationsPage({
                         onChange={(e) => handleUpdate({ weeklyReviewTime: e.target.value })}
                         className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                </div>
+                </SettingRow>
             </div>
 
             <div className="border-t border-border/50"></div>
@@ -183,45 +179,39 @@ export function SettingsNotificationsPage({
                     <p className="text-xs text-muted-foreground mt-1">{t.dailyDigestDesc}</p>
                 </div>
 
-                <div data-settings-key="dailyDigestMorning" className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium">{t.dailyDigestMorning}</div>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="time"
-                            aria-label={t.dailyDigestMorning}
-                            value={dailyDigestMorningTime}
-                            disabled={!notificationsEnabled || !dailyDigestMorningEnabled}
-                            onChange={(e) => handleUpdate({ dailyDigestMorningTime: e.target.value })}
-                            className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                        <Switch
-                            checked={dailyDigestMorningEnabled}
-                            onCheckedChange={(checked) => handleUpdate({ dailyDigestMorningEnabled: checked })}
-                            aria-label={t.dailyDigestMorning}
-                            disabled={!notificationsEnabled}
-                        />
-                    </div>
-                </div>
+                <SettingRow settingsKey="dailyDigestMorning" title={t.dailyDigestMorning}>
+                    <input
+                        type="time"
+                        aria-label={t.dailyDigestMorning}
+                        value={dailyDigestMorningTime}
+                        disabled={!notificationsEnabled || !dailyDigestMorningEnabled}
+                        onChange={(e) => handleUpdate({ dailyDigestMorningTime: e.target.value })}
+                        className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <Switch
+                        checked={dailyDigestMorningEnabled}
+                        onCheckedChange={(checked) => handleUpdate({ dailyDigestMorningEnabled: checked })}
+                        aria-label={t.dailyDigestMorning}
+                        disabled={!notificationsEnabled}
+                    />
+                </SettingRow>
 
-                <div data-settings-key="dailyDigestEvening" className="flex items-center justify-between gap-4">
-                    <div className="text-sm font-medium">{t.dailyDigestEvening}</div>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="time"
-                            aria-label={t.dailyDigestEvening}
-                            value={dailyDigestEveningTime}
-                            disabled={!notificationsEnabled || !dailyDigestEveningEnabled}
-                            onChange={(e) => handleUpdate({ dailyDigestEveningTime: e.target.value })}
-                            className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                        <Switch
-                            checked={dailyDigestEveningEnabled}
-                            onCheckedChange={(checked) => handleUpdate({ dailyDigestEveningEnabled: checked })}
-                            aria-label={t.dailyDigestEvening}
-                            disabled={!notificationsEnabled}
-                        />
-                    </div>
-                </div>
+                <SettingRow settingsKey="dailyDigestEvening" title={t.dailyDigestEvening}>
+                    <input
+                        type="time"
+                        aria-label={t.dailyDigestEvening}
+                        value={dailyDigestEveningTime}
+                        disabled={!notificationsEnabled || !dailyDigestEveningEnabled}
+                        onChange={(e) => handleUpdate({ dailyDigestEveningTime: e.target.value })}
+                        className="bg-muted px-2 py-1 rounded text-sm border border-border disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <Switch
+                        checked={dailyDigestEveningEnabled}
+                        onCheckedChange={(checked) => handleUpdate({ dailyDigestEveningEnabled: checked })}
+                        aria-label={t.dailyDigestEvening}
+                        disabled={!notificationsEnabled}
+                    />
+                </SettingRow>
             </div>
         </div>
     );

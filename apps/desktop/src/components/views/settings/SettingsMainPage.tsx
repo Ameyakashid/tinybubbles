@@ -5,6 +5,7 @@ import {
     getGlobalQuickAddShortcutOptions,
 } from '../../../lib/global-quick-add-shortcut';
 import { Switch } from '../../ui/Switch';
+import { SettingRow, SettingsCard, SettingsSectionHeader } from './SettingRow';
 
 const FLATPAK_QUICK_ADD_COMMAND = 'flatpak run tech.dongdongbh.mindwtr --quick-add';
 
@@ -135,55 +136,6 @@ export type SettingsMainPageProps = {
 const selectCls =
     "text-[13px] bg-muted/50 text-foreground border border-border rounded-md px-2.5 py-1.5 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40";
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
-    return (
-        <h3 className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            {children}
-        </h3>
-    );
-}
-
-function SettingsRow({ settingsKey, title, description, children }: { settingsKey: string; title: string; description?: string; children: React.ReactNode }) {
-    return (
-        <div data-settings-key={settingsKey} className="px-4 py-3 flex items-center justify-between gap-6">
-            <div className="min-w-0">
-                <div className="text-[13px] font-medium">{title}</div>
-                {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">{children}</div>
-        </div>
-    );
-}
-
-function SettingsCard({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="bg-card border border-border rounded-lg divide-y divide-border/50">
-            {children}
-        </div>
-    );
-}
-
-function Toggle({
-    disabled = false,
-    enabled,
-    label,
-    onChange,
-}: {
-    disabled?: boolean;
-    enabled: boolean;
-    label: string;
-    onChange: () => void;
-}) {
-    return (
-        <Switch
-            disabled={disabled}
-            aria-label={label}
-            checked={enabled}
-            onCheckedChange={onChange}
-        />
-    );
-}
-
 export function SettingsMainPage({
     t,
     themeMode,
@@ -248,9 +200,9 @@ export function SettingsMainPage({
     return (
         <div className="space-y-5">
             {/* Look & Feel */}
-            <SectionHeader>{t.lookAndFeel}</SectionHeader>
+            <SettingsSectionHeader>{t.lookAndFeel}</SettingsSectionHeader>
             <SettingsCard>
-                <SettingsRow
+                <SettingRow padded
                     settingsKey="appearance"
                     title={t.appearance}
                     description={`${t.system} / ${t.light} / ${t.dark} / ${t.eink} / ${t.nord} / ${t.sepia}`}
@@ -268,8 +220,8 @@ export function SettingsMainPage({
                         <option value="nord">{t.nord}</option>
                         <option value="sepia">{t.sepia}</option>
                     </select>
-                </SettingsRow>
-                <SettingsRow settingsKey="density" title={t.density} description={t.densityDesc}>
+                </SettingRow>
+                <SettingRow padded settingsKey="density" title={t.density} description={t.densityDesc}>
                     <select
                         aria-label={t.density}
                         value={densityMode}
@@ -280,8 +232,8 @@ export function SettingsMainPage({
                         <option value="compact">{t.densityCompact}</option>
                         <option value="condensed">{t.densityCondensed}</option>
                     </select>
-                </SettingsRow>
-                <SettingsRow settingsKey="textSize" title={t.textSize} description={t.textSizeDesc}>
+                </SettingRow>
+                <SettingRow padded settingsKey="textSize" title={t.textSize} description={t.textSizeDesc}>
                     <select
                         aria-label={t.textSize}
                         value={textSizeMode}
@@ -293,20 +245,20 @@ export function SettingsMainPage({
                         <option value="large">{t.textSizeLarge}</option>
                         <option value="extra-large">{t.textSizeExtraLarge}</option>
                     </select>
-                </SettingsRow>
-                <SettingsRow settingsKey="showTaskAge" title={t.showTaskAge} description={t.showTaskAgeDesc}>
-                    <Toggle
-                        enabled={showTaskAge}
-                        label={t.showTaskAge}
-                        onChange={() => onShowTaskAgeChange(!showTaskAge)}
+                </SettingRow>
+                <SettingRow padded settingsKey="showTaskAge" title={t.showTaskAge} description={t.showTaskAgeDesc}>
+                    <Switch
+                        checked={showTaskAge}
+                        aria-label={t.showTaskAge}
+                        onCheckedChange={() => onShowTaskAgeChange(!showTaskAge)}
                     />
-                </SettingsRow>
+                </SettingRow>
             </SettingsCard>
 
             {/* Localization */}
-            <SectionHeader>{t.localization}</SectionHeader>
+            <SettingsSectionHeader>{t.localization}</SettingsSectionHeader>
             <SettingsCard>
-                <SettingsRow
+                <SettingRow padded
                     settingsKey="language"
                     title={t.language}
                     description={languages.find((l) => l.id === language)?.native ?? language}
@@ -323,8 +275,8 @@ export function SettingsMainPage({
                             </option>
                         ))}
                     </select>
-                </SettingsRow>
-                <SettingsRow
+                </SettingRow>
+                <SettingRow padded
                     settingsKey="weekStart"
                     title={t.weekStart}
                     description={weekStartDescription}
@@ -340,8 +292,8 @@ export function SettingsMainPage({
                         <option value="monday">{t.weekStartMonday}</option>
                         <option value="saturday">{t.weekStartSaturday}</option>
                     </select>
-                </SettingsRow>
-                <SettingsRow
+                </SettingRow>
+                <SettingRow padded
                     settingsKey="dateFormat"
                     title={t.dateFormat}
                     description={
@@ -365,9 +317,9 @@ export function SettingsMainPage({
                         <option value="mdy">{t.dateFormatMdy}</option>
                         <option value="ymd">{t.dateFormatYmd}</option>
                     </select>
-                </SettingsRow>
+                </SettingRow>
                 {showCalendarSystem && (
-                    <SettingsRow
+                    <SettingRow padded
                         settingsKey="calendarSystem"
                         title={t.calendarSystem}
                         description={
@@ -385,9 +337,9 @@ export function SettingsMainPage({
                             <option value="gregorian">{t.calendarSystemGregorian}</option>
                             <option value="jalali">{t.calendarSystemJalali}</option>
                         </select>
-                    </SettingsRow>
+                    </SettingRow>
                 )}
-                <SettingsRow
+                <SettingRow padded
                     settingsKey="timeFormat"
                     title={t.timeFormat}
                     description={
@@ -408,13 +360,13 @@ export function SettingsMainPage({
                         <option value="12h">{t.timeFormat12h}</option>
                         <option value="24h">{t.timeFormat24h}</option>
                     </select>
-                </SettingsRow>
+                </SettingRow>
             </SettingsCard>
 
             {/* Input */}
-            <SectionHeader>{t.input}</SectionHeader>
+            <SettingsSectionHeader>{t.input}</SettingsSectionHeader>
             <SettingsCard>
-                <SettingsRow settingsKey="keybindings" title={t.keybindings} description={t.keybindingsDesc}>
+                <SettingRow padded settingsKey="keybindings" title={t.keybindings} description={t.keybindingsDesc}>
                     <select
                         aria-label={t.keybindings}
                         value={keybindingStyle}
@@ -431,8 +383,8 @@ export function SettingsMainPage({
                     >
                         {t.viewShortcuts}
                     </button>
-                </SettingsRow>
-                <SettingsRow
+                </SettingRow>
+                <SettingRow padded
                     settingsKey="globalQuickAddShortcut"
                     title={t.globalQuickAddShortcut}
                     description={isFlatpak ? t.globalQuickAddFlatpakDesc : t.globalQuickAddShortcutDesc}
@@ -450,7 +402,7 @@ export function SettingsMainPage({
                             </option>
                         ))}
                     </select>
-                </SettingsRow>
+                </SettingRow>
                 {isFlatpak && (
                     <div className="px-4 py-3">
                         <div className="text-[13px] font-medium">{t.globalQuickAddFlatpakCommand}</div>
@@ -460,31 +412,31 @@ export function SettingsMainPage({
                         </code>
                     </div>
                 )}
-                <SettingsRow settingsKey="undoNotifications" title={t.undoNotifications} description={t.undoNotificationsDesc}>
-                    <Toggle
-                        enabled={undoNotificationsEnabled}
-                        label={t.undoNotifications}
-                        onChange={() => onUndoNotificationsChange(!undoNotificationsEnabled)}
+                <SettingRow padded settingsKey="undoNotifications" title={t.undoNotifications} description={t.undoNotificationsDesc}>
+                    <Switch
+                        checked={undoNotificationsEnabled}
+                        aria-label={t.undoNotifications}
+                        onCheckedChange={() => onUndoNotificationsChange(!undoNotificationsEnabled)}
                     />
-                </SettingsRow>
+                </SettingRow>
             </SettingsCard>
 
             {/* Window Behavior */}
             {hasWindowSection && (
                 <>
-                    <SectionHeader>{t.windowBehavior}</SectionHeader>
+                    <SettingsSectionHeader>{t.windowBehavior}</SettingsSectionHeader>
                     <SettingsCard>
                         {showWindowDecorations && (
-                            <SettingsRow settingsKey="windowDecorations" title={t.windowDecorations} description={t.windowDecorationsDesc}>
-                                <Toggle
-                                    enabled={windowDecorationsEnabled}
-                                    label={t.windowDecorations}
-                                    onChange={() => onWindowDecorationsChange?.(!windowDecorationsEnabled)}
+                            <SettingRow padded settingsKey="windowDecorations" title={t.windowDecorations} description={t.windowDecorationsDesc}>
+                                <Switch
+                                    checked={windowDecorationsEnabled}
+                                    aria-label={t.windowDecorations}
+                                    onCheckedChange={() => onWindowDecorationsChange?.(!windowDecorationsEnabled)}
                                 />
-                            </SettingsRow>
+                            </SettingRow>
                         )}
                         {showCloseBehavior && (
-                            <SettingsRow settingsKey="closeBehavior" title={t.closeBehavior} description={t.closeBehaviorDesc}>
+                            <SettingRow padded settingsKey="closeBehavior" title={t.closeBehavior} description={t.closeBehaviorDesc}>
                                 <select
                                     aria-label={t.closeBehavior}
                                     value={closeBehavior}
@@ -495,26 +447,26 @@ export function SettingsMainPage({
                                     <option value="tray">{t.closeBehaviorTray}</option>
                                     <option value="quit">{t.closeBehaviorQuit}</option>
                                 </select>
-                            </SettingsRow>
+                            </SettingRow>
                         )}
                         {showTrayToggle && (
-                            <SettingsRow settingsKey="showTray" title={t.showTray} description={t.showTrayDesc}>
-                                <Toggle
-                                    enabled={trayVisible}
-                                    label={t.showTray}
-                                    onChange={() => onTrayVisibleChange?.(!trayVisible)}
+                            <SettingRow padded settingsKey="showTray" title={t.showTray} description={t.showTrayDesc}>
+                                <Switch
+                                    checked={trayVisible}
+                                    aria-label={t.showTray}
+                                    onCheckedChange={() => onTrayVisibleChange?.(!trayVisible)}
                                 />
-                            </SettingsRow>
+                            </SettingRow>
                         )}
                         {showLaunchAtStartup && (
-                            <SettingsRow settingsKey="launchAtStartup" title={t.launchAtStartup} description={t.launchAtStartupDesc}>
-                                <Toggle
+                            <SettingRow padded settingsKey="launchAtStartup" title={t.launchAtStartup} description={t.launchAtStartupDesc}>
+                                <Switch
                                     disabled={launchAtStartupLoading}
-                                    enabled={launchAtStartupEnabled}
-                                    label={t.launchAtStartup}
-                                    onChange={() => onLaunchAtStartupChange?.(!launchAtStartupEnabled)}
+                                    checked={launchAtStartupEnabled}
+                                    aria-label={t.launchAtStartup}
+                                    onCheckedChange={() => onLaunchAtStartupChange?.(!launchAtStartupEnabled)}
                                 />
-                            </SettingsRow>
+                            </SettingRow>
                         )}
                     </SettingsCard>
                 </>
