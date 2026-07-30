@@ -129,6 +129,16 @@ describe('GlobalSearch', () => {
         for (const region of scrollRegions) {
             expect(region.className).toContain('min-h-0');
         }
+
+        // …and the empty-results hint gives its ~100px to the filter panel rather
+        // than making it scroll while nothing is on screen below it (#957).
+        expect(screen.queryByText('Type to search...')).not.toBeInTheDocument();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            await vi.advanceTimersByTimeAsync(50);
+        });
+        expect(screen.getByText('Type to search...')).toBeInTheDocument();
     });
 
     it('searches all areas when opened from an active area filter', async () => {

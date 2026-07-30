@@ -704,7 +704,13 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                         </div>
                     )}
 
-                    {!ftsLoading && results.length === 0 && !hasActiveSearch && (
+                    {/*
+                      * The hint costs ~100px, which the capped panel would otherwise take
+                      * off the filter panel and make it scroll while this region sits
+                      * empty (#957). The search field's own placeholder says the same
+                      * thing, so it only earns its space when the filters are closed.
+                      */}
+                    {!ftsLoading && results.length === 0 && !hasActiveSearch && !filtersOpen && (
                         <div className="text-center py-8 text-muted-foreground text-sm">
                             {t('search.typeToSearch')}
                         </div>
