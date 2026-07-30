@@ -383,6 +383,10 @@ function attachNativeEventListeners(): void {
   openSubscription = emitter.addListener('OnNotificationOpened', (payload: unknown) => {
     const data = parseEventPayload(payload);
     if (!data) return;
+    if (data.kind === 'pomodoro') {
+      // Presentation evidence for #888: a tap proves iOS actually showed it.
+      logNotificationInfo('Pomodoro notification opened', { id: data.alarmKey || data.id || '' });
+    }
     if (alarmApi && (data.taskId || data.projectId)) {
       enqueueNotificationEventReschedule(alarmApi);
     }
@@ -404,6 +408,9 @@ function attachNativeEventListeners(): void {
   dismissSubscription?.remove();
   dismissSubscription = emitter.addListener('OnNotificationDismissed', (payload: unknown) => {
     const data = parseEventPayload(payload);
+    if (data?.kind === 'pomodoro') {
+      logNotificationInfo('Pomodoro notification dismissed', { id: data.alarmKey || data.id || '' });
+    }
     if (alarmApi && data && (data.taskId || data.projectId)) {
       enqueueNotificationEventReschedule(alarmApi);
     }
@@ -834,18 +841,27 @@ export async function scheduleLocalPomodoroCompletionNotification(
   data?: Record<string, string>,
 ): Promise<void> {
   const trimmedTitle = String(title || '').trim();
-  if (!trimmedTitle) return;
-
   const fireAtMs = fireAt.getTime();
-  if (!Number.isFinite(fireAtMs)) return;
+  const fireAtValid = Number.isFinite(fireAtMs);
 
-  // Logged before any gate below so a diagnostic log proves whether the panel
-  // asked for an alert at all — an empty log used to be ambiguous (#888).
+  // The very first statement, before every gate: a diagnostic log with no
+  // "requested" line now proves the panel never asked for an alert at all —
+  // an empty log used to be ambiguous (#888).
   logNotificationInfo('Pomodoro alarm requested', {
-    fireAt: new Date(fireAtMs).toISOString(),
-    inMs: String(fireAtMs - Date.now()),
+    fireAt: fireAtValid ? new Date(fireAtMs).toISOString() : 'invalid',
+    inMs: fireAtValid ? String(fireAtMs - Date.now()) : 'invalid',
     phase: data?.phase ?? '',
+    hasTitle: String(Boolean(trimmedTitle)),
   });
+
+  if (!trimmedTitle) {
+    logNotificationWarn('Pomodoro alarm skipped; empty title');
+    return;
+  }
+  if (!fireAtValid) {
+    logNotificationWarn('Pomodoro alarm skipped; invalid fire date');
+    return;
+  }
 
   const api = await loadAlarmApi();
   if (!api) {
