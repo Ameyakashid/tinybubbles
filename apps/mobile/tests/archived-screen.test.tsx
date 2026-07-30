@@ -118,14 +118,12 @@ vi.mock('../contexts/language-context', () => ({
       'bulk.confirmDeleteTitle': 'Delete tasks',
       'bulk.select': 'Select',
       'bulk.selected': 'selected',
-      'bulk.moveTo': 'Move to',
       'common.all': 'all',
       'common.cancel': 'Cancel',
       'common.delete': 'Delete',
       'common.done': 'Done',
       'common.tasks': 'tasks',
       'list.done': 'Completed',
-      'status.done': 'Done',
       'task.deleteConfirmBody': 'Move this task to Trash?',
       'trash.restoreToInbox': 'Restore to Inbox',
       'projects.title': 'Projects',
@@ -335,30 +333,8 @@ describe('ArchivedScreen', () => {
     });
 
     expect(mocks.showToast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'warning' }));
-    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Move to Done')).not.toHaveLength(0);
-  });
-
-  it('bulk moves selected archived tasks back to Done', async () => {
-    let tree!: renderer.ReactTestRenderer;
-    renderer.act(() => {
-      tree = renderer.create(<ArchivedScreen />);
-    });
-
-    renderer.act(() => {
-      tree.root.find((node) => node.props.accessibilityLabel === 'Select').props.onPress();
-    });
-    renderer.act(() => {
-      tree.root.find((node) => node.props.accessibilityLabel === 'Select Archived task').props.onPress();
-    });
-    const moveToDoneButton = tree.root.find((node) => node.props.accessibilityLabel === 'Move to Done');
-    expect(moveToDoneButton.findAll((node) => (
-      Array.isArray(node.props.children) && node.props.children.join('') === 'Move to Done'
-    ))).not.toHaveLength(0);
-    await renderer.act(async () => {
-      await moveToDoneButton.props.onPress();
-    });
-
-    expect(mocks.batchMoveTasks).toHaveBeenCalledWith(['task-1'], 'done');
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Restore to Inbox')).not.toHaveLength(0);
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Move to Done')).toHaveLength(0);
   });
 
   it('bulk moves selected archived tasks to Trash', async () => {

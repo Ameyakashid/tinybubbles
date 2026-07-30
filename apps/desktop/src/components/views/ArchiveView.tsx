@@ -15,7 +15,7 @@ import {
 } from '@mindwtr/core';
 import type { FilterCriteria, Task, Project, TimeEstimate } from '@mindwtr/core';
 
-import { CheckCircle2, CheckSquare, Filter, SlidersHorizontal, Undo2, Trash2 } from 'lucide-react';
+import { CheckSquare, Filter, SlidersHorizontal, Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
@@ -560,10 +560,6 @@ export function ArchiveView() {
         await moveSelectedTasks('inbox');
     }, [moveSelectedTasks]);
 
-    const handleBulkMoveToDone = useCallback(async () => {
-        await moveSelectedTasks('done');
-    }, [moveSelectedTasks]);
-
     const handleBulkDelete = useCallback(async () => {
         await deleteSelectedTasks({
             confirm: () => requestConfirmation({
@@ -771,16 +767,6 @@ export function ArchiveView() {
                         t={t}
                     />
                     <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={() => { void handleBulkMoveToDone(); }}
-                            disabled={selectedIds.size === 0}
-                            aria-label={`${t('bulk.moveTo')} ${t('status.done')}`}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            {t('bulk.moveTo')} {t('status.done')}
-                        </button>
                         <button
                             type="button"
                             onClick={() => { void handleBulkRestore(); }}

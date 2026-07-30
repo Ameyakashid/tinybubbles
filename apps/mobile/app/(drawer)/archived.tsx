@@ -502,14 +502,6 @@ export default function ArchivedScreen() {
         });
     }, [batchMoveTasks, exitSelectionMode, restoreActionLabel, runBulkAction, selectedIdsArray]);
 
-    const handleBulkMoveToDone = useCallback(async () => {
-        if (selectedIdsArray.length === 0) return;
-        await runBulkAction(t('status.done'), async () => {
-            assertBulkActionSucceeded(await batchMoveTasks(selectedIdsArray, 'done'));
-            exitSelectionMode();
-        });
-    }, [batchMoveTasks, exitSelectionMode, runBulkAction, selectedIdsArray, t]);
-
     const [completedAtTaskId, setCompletedAtTaskId] = useState<string | null>(null);
     const completedAtTask = useMemo(
         () => completedAtTaskId ? _allTasks.find((task) => task.id === completedAtTaskId) ?? null : null,
@@ -732,17 +724,6 @@ export default function ArchivedScreen() {
                             >
                                 <Text style={[styles.bulkButtonText, { color: tc.text }]}>
                                     {tFallback(t, 'bulk.select', 'Select')} {tFallback(t, 'common.all', 'all')}
-                                </Text>
-                            </Pressable>
-                            <Pressable
-                                onPress={() => { void handleBulkMoveToDone(); }}
-                                disabled={selectedIds.size === 0}
-                                accessibilityRole="button"
-                                accessibilityLabel={`${t('bulk.moveTo')} ${t('status.done')}`}
-                                style={[styles.bulkButton, { backgroundColor: tc.taskItemBg }]}
-                            >
-                                <Text style={[styles.bulkButtonText, { color: tc.text }]}>
-                                    {t('bulk.moveTo')} {t('status.done')}
                                 </Text>
                             </Pressable>
                             <Pressable

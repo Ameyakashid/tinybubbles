@@ -101,31 +101,12 @@ describe('ArchiveView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Select' }));
         fireEvent.click(screen.getByRole('button', { name: /Select all/i }));
+        expect(screen.queryByRole('button', { name: 'Move to Done' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Restore to Inbox' }));
 
         await waitFor(() => {
             expect(useTaskStore.getState()._tasksById.get(archivedTask.id)?.status).toBe('inbox');
             expect(useTaskStore.getState()._tasksById.get(secondArchivedTask.id)?.status).toBe('inbox');
-        });
-    });
-
-    it('bulk moves selected archived tasks back to Done without changing completion time', async () => {
-        render(
-            <LanguageProvider>
-                <ArchiveView />
-            </LanguageProvider>
-        );
-
-        fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select Archived task' }));
-        const moveToDoneButton = screen.getByRole('button', { name: 'Move to Done' });
-        expect(moveToDoneButton).toHaveTextContent('Move to Done');
-        fireEvent.click(moveToDoneButton);
-
-        await waitFor(() => {
-            const movedTask = useTaskStore.getState()._tasksById.get(archivedTask.id);
-            expect(movedTask?.status).toBe('done');
-            expect(movedTask?.completedAt).toBe(archivedTask.completedAt);
         });
     });
 
