@@ -11,6 +11,7 @@ import {
     runDataTransferTransactionWithoutSnapshot,
     serializeBackupData,
     type AppData,
+    type MergeResult,
     useTaskStore,
     validateBackupJson,
 } from '@mindwtr/core';
@@ -369,6 +370,13 @@ export const inspectOmniFocusDocument = (document: TransferDocument): Promise<Im
 export const restoreDataFromBackup = async (backupData: AppData): Promise<SnapshotApplyResult> => {
     const { snapshotName } = await runImport('backup', backupData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string };
+};
+
+export const mergeDataFromBackup = async (
+    backupData: AppData
+): Promise<SnapshotApplyResult & { result: MergeResult }> => {
+    const { result, snapshotName } = await runImport('backup-merge', backupData, mobileBoundaries, mobileLog);
+    return { snapshotName: snapshotName as string, result };
 };
 
 export const importTodoistData = async (

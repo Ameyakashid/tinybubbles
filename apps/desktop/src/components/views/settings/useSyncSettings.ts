@@ -13,6 +13,7 @@ import {
     isValidCloudSyncToken,
     safeFormatDate,
     SYNC_LOCAL_INSECURE_URL_OPTIONS,
+    summarizeBackupMerge,
     summarizeMergeStats,
     translateWithFallback,
     useTaskStore,
@@ -30,6 +31,7 @@ import {
     inspectDesktopOmniFocusImport,
     inspectDesktopTickTickImport,
     inspectDesktopTodoistImport,
+    mergeDesktopBackup,
     restoreDesktopBackup,
 } from '../../../lib/data-transfer';
 import { isValidHttpUrl } from './sync/sync-page-utils';
@@ -42,6 +44,22 @@ import type {
 export type { SyncBackend };
 export type DropboxTestState = 'idle' | 'success' | 'error';
 export type WebDavTestState = 'idle' | 'success' | 'error';
+
+// Restore and merge read the same file and preview it identically; only the sentence about
+// what the action does to local data differs.
+const buildBackupConfirmation = (
+    validation: NonNullable<Awaited<ReturnType<typeof inspectDesktopBackup>>>,
+    effect: string,
+): string => [
+    validation.metadata?.backupAt
+        ? `Backup date: ${new Date(validation.metadata.backupAt).toLocaleString()}`
+        : validation.metadata?.fileName
+            ? `File: ${validation.metadata.fileName}`
+            : null,
+    `Contains ${validation.metadata?.taskCount ?? 0} tasks and ${validation.metadata?.projectCount ?? 0} projects.`,
+    effect,
+    ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
+].filter(Boolean).join('\n');
 
 const formatClockSkew = (ms: number): string => {
     if (!Number.isFinite(ms) || ms <= 0) return '0 ms';
@@ -99,7 +117,7 @@ export const useSyncSettings = ({
     const [snapshots, setSnapshots] = useState<string[]>([]);
     const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
     const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
-    const [transferAction, setTransferAction] = useState<null | 'export' | 'restore' | 'import'>(null);
+    const [transferAction, setTransferAction] = useState<null | 'export' | 'restore' | 'merge' | 'import'>(null);
     const showToast = useUiStore((state) => state.showToast);
     const settings = useTaskStore((state) => state.settings) ?? ({} as AppData['settings']);
     const updateSettings = useTaskStore((state) => state.updateSettings);
@@ -728,19 +746,12 @@ export const useSyncSettings = ({
                 return;
             }
 
-            const lines = [
-                validation.metadata?.backupAt
-                    ? `Backup date: ${new Date(validation.metadata.backupAt).toLocaleString()}`
-                    : validation.metadata?.fileName
-                        ? `File: ${validation.metadata.fileName}`
-                        : null,
-                `Contains ${validation.metadata?.taskCount ?? 0} tasks and ${validation.metadata?.projectCount ?? 0} projects.`,
-                'This will replace current local data. A recovery snapshot will be saved first when available.',
-                ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
-            ].filter(Boolean);
             const confirmed = await requestConfirmation({
                 title: 'Restore backup?',
-                message: lines.join('\n'),
+                message: buildBackupConfirmation(
+                    validation,
+                    'This will replace current local data. A recovery snapshot will be saved first when available.',
+                ),
             });
             if (!confirmed) return;
 
@@ -755,6 +766,50 @@ export const useSyncSettings = ({
             setTransferAction(null);
         }
     }, [appVersion, isTauri, requestConfirmation, showToast, toErrorMessage]);
+
+    const handleMergeBackup = useCallback(async () => {
+        addBreadcrumb('transfer:restore');
+        setTransferAction('merge');
+        try {
+            const validation = await inspectDesktopBackup(appVersion);
+            if (!validation) return;
+            if (!validation.valid || !validation.data) {
+                showToast(validation.errors[0] || 'Selected file is not a valid Mindwtr backup.', 'error');
+                return;
+            }
+
+            const confirmed = await requestConfirmation({
+                title: resolveText('settings.mergeBackup', 'Merge Backup'),
+                message: buildBackupConfirmation(
+                    validation,
+                    resolveText(
+                        'settings.mergeBackupConfirm',
+                        'Newer items from the backup are combined with your current data. Nothing local is removed, and items you deleted here stay deleted. A recovery snapshot is saved first when available.',
+                    ),
+                ),
+            });
+            if (!confirmed) return;
+
+            const { snapshotName, result } = await mergeDesktopBackup(validation.data);
+            if (isTauri) {
+                setSnapshots(await SyncService.listDataSnapshots());
+            }
+            const merged = summarizeBackupMerge(result);
+            const details = [
+                formatText(
+                    'settings.mergeBackupSummary',
+                    '{{addedCount}} task(s) added, {{updatedCount}} updated.',
+                    { addedCount: merged.added, updatedCount: merged.updated },
+                ),
+                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+            ].filter(Boolean).join('\n');
+            showToast(details, 'success', 6000);
+        } catch (error) {
+            showToast(toErrorMessage(error, 'Failed to merge backup.'), 'error');
+        } finally {
+            setTransferAction(null);
+        }
+    }, [appVersion, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const handleImportTodoist = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1120,6 +1175,7 @@ export const useSyncSettings = ({
             transferAction,
             onExportBackup: handleExportBackup,
             onRestoreBackup: handleRestoreBackup,
+            onMergeBackup: handleMergeBackup,
             onImportTodoist: handleImportTodoist,
             onImportTickTick: handleImportTickTick,
             onImportDgt: handleImportDgt,

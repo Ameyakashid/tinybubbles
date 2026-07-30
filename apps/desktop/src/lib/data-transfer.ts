@@ -5,6 +5,7 @@ import {
     flushPendingSave,
     serializeBackupData,
     type AppData,
+    type MergeResult,
     useTaskStore,
 } from '@mindwtr/core';
 import {
@@ -299,6 +300,11 @@ export const restoreDesktopBackup = async (data: AppData): Promise<DesktopTransf
     const { snapshotName } = await runImport('backup', data, desktopBoundaries, desktopLog);
     return { snapshotName };
 };
+
+export const mergeDesktopBackup = (
+    data: AppData
+): Promise<DesktopTransferResult & { result: MergeResult }> =>
+    runImport('backup-merge', data, desktopBoundaries, desktopLog);
 
 export const importDesktopTodoistData = (
     parsedProjects: ParsedTodoistProject[]

@@ -294,6 +294,8 @@ export const SETTINGS_LABEL_KEYS = [
     'exportBackupDesc',
     'restoreBackup',
     'restoreBackupDesc',
+    'mergeBackup',
+    'mergeBackupDesc',
     'importTodoist',
     'importTodoistDesc',
     'importTickTick',

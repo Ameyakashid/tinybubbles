@@ -21,6 +21,8 @@ import {
     type OmniFocusImportParseResult,
     type ParsedOmniFocusImportData,
 } from './omnifocus-import';
+import { mergeAppDataWithStats } from './sync';
+import type { EntityMergeStats, MergeResult } from './sync-types';
 import {
     applyTickTickImport,
     parseTickTickImportSource,
@@ -35,8 +37,8 @@ import {
 } from './todoist-import';
 import type { AppData } from './types';
 
-export type ImportSourceId = 'backup' | 'dgt' | 'omnifocus' | 'ticktick' | 'todoist';
-export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup'>;
+export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'omnifocus' | 'ticktick' | 'todoist';
+export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup' | 'backup-merge'>;
 
 export type ImportDescriptorInput = ImportSourceInput & {
     appVersion?: string | null;
@@ -45,6 +47,7 @@ export type ImportDescriptorInput = ImportSourceInput & {
 
 export type ImportSourceParseResultMap = {
     backup: BackupValidation;
+    'backup-merge': BackupValidation;
     dgt: DgtImportParseResult;
     omnifocus: OmniFocusImportParseResult;
     ticktick: TickTickImportParseResult;
@@ -80,6 +83,7 @@ export type ImportRunnerLog = {
 // actual importer signature instead of erasing to `unknown` and casting back per source.
 type ImportTypeMap = {
     backup: { parsed: AppData; result: AppData };
+    'backup-merge': { parsed: AppData; result: MergeResult };
     todoist: { parsed: ParsedTodoistProject[]; result: ReturnType<typeof applyTodoistImport> };
     ticktick: { parsed: ParsedTickTickImportData; result: ReturnType<typeof applyTickTickImport> };
     dgt: { parsed: ParsedDgtImportData; result: ReturnType<typeof applyDgtImport> };
@@ -103,25 +107,62 @@ const toBackupCountExtra = (data: AppData): Record<string, string> => ({
     areas: String(data.areas.filter((area) => !area.deletedAt).length),
 });
 
+// `resolvedUsingIncoming` counts every record the backup supplied, records this device had
+// never seen included, so the records that were genuinely *changed* are what's left once the
+// additions come out. Both shells report merge results through this, so the arithmetic can't
+// drift between desktop and mobile.
+export const summarizeBackupMerge = (result: MergeResult): { added: number; updated: number } => ({
+    added: result.stats.tasks.incomingOnly,
+    updated: Math.max(0, result.stats.tasks.resolvedUsingIncoming - result.stats.tasks.incomingOnly),
+});
+
+const toMergeCountExtra = (entity: string, stats: EntityMergeStats): Record<string, string> => ({
+    [`${entity}Added`]: String(stats.incomingOnly),
+    [`${entity}Updated`]: String(Math.max(0, stats.resolvedUsingIncoming - stats.incomingOnly)),
+});
+
+const parseBackupInput = (input: ImportDescriptorInput): BackupValidation => validateBackupJson(
+    input.text ?? new TextDecoder().decode(input.bytes ?? undefined),
+    {
+        appVersion: input.appVersion,
+        fileModifiedAt: input.lastModified,
+        fileName: input.fileName,
+    },
+);
+
 const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
     backup: {
         operation: 'restoreBackup',
         source: 'backup',
         startLabel: 'Backup restore started',
         completeLabel: 'Backup restore complete',
-        parse: (input) => validateBackupJson(
-            input.text ?? new TextDecoder().decode(input.bytes ?? undefined),
-            {
-                appVersion: input.appVersion,
-                fileModifiedAt: input.lastModified,
-                fileName: input.fileName,
-            },
-        ),
+        parse: parseBackupInput,
         apply: (currentData, parsed) => {
             const restored = prepareRestoredBackupDataForSync(parsed, { previousData: currentData });
             return { data: restored, result: restored };
         },
         countExtra: toBackupCountExtra,
+    },
+    // Same file, opposite intent: restore replaces local data and deliberately outranks local
+    // tombstones (prepareRestoredBackupDataForSync stamps fresh revisions), while a merge is
+    // plain sync semantics — newer wins, local-only records stay, and a task deleted locally
+    // stays deleted even if the backup still holds a live copy. Never rev-stamp here.
+    'backup-merge': {
+        operation: 'mergeBackup',
+        source: 'backup-merge',
+        startLabel: 'Backup merge started',
+        completeLabel: 'Backup merge complete',
+        parse: parseBackupInput,
+        apply: (currentData, parsed) => {
+            const merge = mergeAppDataWithStats(currentData, parsed);
+            return { data: merge.data, result: merge };
+        },
+        countExtra: (result) => ({
+            ...toMergeCountExtra('tasks', result.stats.tasks),
+            ...toMergeCountExtra('projects', result.stats.projects),
+            ...toMergeCountExtra('sections', result.stats.sections),
+            ...toMergeCountExtra('areas', result.stats.areas),
+        }),
     },
     todoist: {
         operation: 'importTodoist',

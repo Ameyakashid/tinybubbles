@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
     parseImportSource,
     runImport,
+    summarizeBackupMerge,
     type DataTransferBoundaries,
     type ImportRunnerLog,
 } from './import-runner';
-import { mockAppData } from './sync-test-utils';
+import { SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
+import { createMockTask, mockAppData } from './sync-test-utils';
 import type { ParsedTodoistProject } from './todoist-import';
 import type { AppData } from './types';
 
@@ -95,6 +97,73 @@ describe('runImport', () => {
             sections: '0',
             checklistItems: '0',
         });
+    });
+
+    // Restore and merge read the same backup file through the same descriptor table, so the
+    // only thing keeping them apart is which apply() each one runs. These two tests pin both
+    // sides of that line: a merge must never resurrect what this device deleted, and restore
+    // must keep doing exactly that (#939) — checking only the new behaviour would let the old
+    // one shrink unnoticed.
+    const buildDivergedData = () => {
+        const local = mockAppData([
+            createMockTask('local-only', '2026-01-05T00:00:00.000Z'),
+            createMockTask('shared', '2026-01-01T00:00:00.000Z'),
+            createMockTask('newer-local', '2026-02-01T00:00:00.000Z'),
+            createMockTask('deleted-locally', '2026-01-10T00:00:00.000Z', '2026-01-10T00:00:00.000Z'),
+        ]);
+        const backup = mockAppData([
+            { ...createMockTask('shared', '2026-01-20T00:00:00.000Z'), title: 'From backup' },
+            { ...createMockTask('newer-local', '2026-01-01T00:00:00.000Z'), title: 'From backup' },
+            createMockTask('deleted-locally', '2026-01-01T00:00:00.000Z'),
+            createMockTask('backup-only', '2026-01-15T00:00:00.000Z'),
+        ]);
+        return { local, backup };
+    };
+
+    it('merges a backup with sync semantics instead of replacing local data', async () => {
+        const { local, backup } = buildDivergedData();
+        const { boundaries, persisted } = buildBoundaries(local);
+        const { log, infoCalls } = buildLog();
+
+        const { result } = await runImport('backup-merge', backup, boundaries, log);
+
+        const byId = new Map(persisted[0].tasks.map((task) => [task.id, task]));
+        expect(byId.get('local-only')).toBeDefined();
+        expect(byId.get('backup-only')).toBeDefined();
+        expect(byId.get('shared')?.title).toBe('From backup');
+        expect(byId.get('newer-local')?.title).toBe('Task newer-local');
+        // The whole point of merge mode: a task this device deleted stays deleted even though
+        // the backup still holds a live (older) copy of it.
+        expect(byId.get('deleted-locally')?.deletedAt).toBe('2026-01-10T00:00:00.000Z');
+        // Merge must not re-stamp revisions the way restore does, or every merged record would
+        // outrank other devices' tombstones on the next sync.
+        expect(persisted[0].tasks.some((task) => task.revBy === SYNC_BACKUP_RESTORE_REV_BY)).toBe(false);
+        expect(byId.get('local-only')?.updatedAt).toBe('2026-01-05T00:00:00.000Z');
+
+        // resolvedUsingIncoming counts backup-only records too, so the summary has to subtract
+        // them or every added task would also be reported as updated.
+        expect(result.stats.tasks.resolvedUsingIncoming).toBe(2);
+        expect(summarizeBackupMerge(result)).toEqual({ added: 1, updated: 1 });
+        expect(infoCalls.map((call) => call.message)).toEqual(['Backup merge started', 'Backup merge complete']);
+        expect(infoCalls[1]?.context?.extra).toMatchObject({
+            operation: 'mergeBackup',
+            source: 'backup-merge',
+            tasksAdded: '1',
+            tasksUpdated: '1',
+        });
+    });
+
+    it('keeps restore replacing local data and outranking local tombstones', async () => {
+        const { local, backup } = buildDivergedData();
+        const { boundaries, persisted } = buildBoundaries(local);
+        const { log } = buildLog();
+
+        await runImport('backup', backup, boundaries, log);
+
+        const byId = new Map(persisted[0].tasks.map((task) => [task.id, task]));
+        expect(byId.get('deleted-locally')?.deletedAt).toBeUndefined();
+        expect(byId.get('newer-local')?.title).toBe('From backup');
+        expect(byId.get('backup-only')?.revBy).toBe(SYNC_BACKUP_RESTORE_REV_BY);
     });
 
     it('logs and rethrows when the importer throws, without logging completion', async () => {

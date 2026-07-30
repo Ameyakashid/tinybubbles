@@ -37,7 +37,7 @@ export const SETTINGS_SEARCH_PAGE_KEYS: Record<SettingsSearchPageId, readonly st
     manage: ['manage'],
     notifications: ['notifications'],
     sync: ['sync', 'backgroundSync', 'calendarFeed'],
-    data: ['dataTransfer', 'restoreBackup', 'importTodoist', 'importTickTick', 'importDgt', 'importOmniFocus'],
+    data: ['dataTransfer', 'restoreBackup', 'mergeBackup', 'importTodoist', 'importTickTick', 'importDgt', 'importOmniFocus'],
     integrations: ['integrations', 'obsidianVault', 'calendarChooseLocalFile'],
     ai: ['ai'],
     advanced: ['advanced', 'localApiServer'],

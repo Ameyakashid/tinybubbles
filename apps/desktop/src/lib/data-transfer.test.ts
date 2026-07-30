@@ -78,7 +78,7 @@ vi.mock('./app-log', () => ({
     logInfo: logMocks.logInfo,
 }));
 
-import { createDesktopRecoverySnapshot, importDesktopTodoistData } from './data-transfer';
+import { createDesktopRecoverySnapshot, importDesktopTodoistData, mergeDesktopBackup } from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
     name: 'Todoist',
@@ -148,6 +148,32 @@ describe('desktop data transfer', () => {
             tasks: [expect.objectContaining({ title: 'Imported task' })],
         }));
         expect(storeStateRef.current.fetchData).toHaveBeenCalledWith({ silent: true });
+    });
+
+    it('keeps local tasks when merging a backup and reports what the backup added', async () => {
+        const localTask = {
+            id: 'local-1',
+            title: 'Local task',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        };
+        storageMocks.getData.mockResolvedValue({ ...emptyData, tasks: [localTask] });
+
+        const transfer = await mergeDesktopBackup({
+            ...emptyData,
+            tasks: [{ ...localTask, id: 'backup-1', title: 'Backup task' }],
+        });
+
+        expect(transfer.result.stats.tasks.incomingOnly).toBe(1);
+        expect(storageMocks.saveData).toHaveBeenCalledWith(expect.objectContaining({
+            tasks: expect.arrayContaining([
+                expect.objectContaining({ id: 'local-1' }),
+                expect.objectContaining({ id: 'backup-1' }),
+            ]),
+        }));
     });
 
     it('creates a native recovery snapshot after pending saves finish', async () => {

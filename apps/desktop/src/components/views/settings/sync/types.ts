@@ -7,6 +7,8 @@ export type SettingsSyncLabels = {
     exportBackupDesc: string;
     restoreBackup: string;
     restoreBackupDesc: string;
+    mergeBackup: string;
+    mergeBackupDesc: string;
     importTodoist: string;
     importTodoistDesc: string;
     importTickTick: string;
@@ -229,9 +231,10 @@ export type SettingsDiagnosticsProps = {
 };
 
 export type SettingsDataTransferProps = {
-    transferAction: null | 'export' | 'restore' | 'import';
+    transferAction: null | 'export' | 'restore' | 'merge' | 'import';
     onExportBackup: () => Promise<void> | void;
     onRestoreBackup: () => Promise<void> | void;
+    onMergeBackup: () => Promise<void> | void;
     onImportTodoist: () => Promise<void> | void;
     onImportTickTick: () => Promise<void> | void;
     onImportDgt: () => Promise<void> | void;

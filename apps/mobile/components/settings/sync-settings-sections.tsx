@@ -114,12 +114,13 @@ export function BackgroundSyncInfoCard({
 }
 
 type SyncBackupSectionProps = {
-  backupAction: null | 'export' | 'restore' | 'import' | 'snapshot';
+  backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
   handleBackup: () => void;
   handleImportDgt: () => void;
   handleImportOmniFocus: () => void;
   handleImportTickTick: () => void;
   handleImportTodoist: () => void;
+  handleMergeBackup: () => void;
   handleRestoreBackup: () => void;
   isBackupBusy: boolean;
   isSyncing: boolean;
@@ -135,6 +136,7 @@ export function SyncBackupSection({
   handleImportOmniFocus,
   handleImportTickTick,
   handleImportTodoist,
+  handleMergeBackup,
   handleRestoreBackup,
   isBackupBusy,
   isSyncing,
@@ -165,6 +167,19 @@ export function SyncBackupSection({
             </Text>
           </View>
           {backupAction === 'restore' && <ActivityIndicator size="small" color={tc.tint} />}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+          onPress={handleMergeBackup}
+          disabled={isSyncing || isBackupBusy}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.mergeBackup')}</Text>
+            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+              {t('settings.mergeBackupDesc')}
+            </Text>
+          </View>
+          {backupAction === 'merge' && <ActivityIndicator size="small" color={tc.tint} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -224,7 +239,7 @@ export function SyncBackupSection({
 }
 
 type RecoverySnapshotsCardProps = {
-  backupAction: null | 'export' | 'restore' | 'import' | 'snapshot';
+  backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
   formatRecoverySnapshotLabel: (fileName: string) => string;
   handleRestoreRecoverySnapshot: (snapshotName: string) => void;
   isBackupBusy: boolean;

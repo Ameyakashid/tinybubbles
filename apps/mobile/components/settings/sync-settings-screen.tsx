@@ -111,7 +111,7 @@ function SyncSettingsView({
     const supportsNativeICloudSync = Platform.OS === 'ios' && isCloudKitAvailable();
     const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
     const [syncHistoryExpanded, setSyncHistoryExpanded] = useState(false);
-    const [backupAction, setBackupAction] = useState<null | 'export' | 'restore' | 'import' | 'snapshot'>(null);
+    const [backupAction, setBackupAction] = useState<null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot'>(null);
     const [gettingStartedBusy, setGettingStartedBusy] = useState(false);
     const [recoverySnapshots, setRecoverySnapshots] = useState<string[]>([]);
     const [recoverySnapshotsOpen, setRecoverySnapshotsOpen] = useState(false);
@@ -424,6 +424,7 @@ function SyncSettingsView({
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,
+        handleMergeBackup,
         handleRestoreBackup,
         handleRestoreRecoverySnapshot,
         handleShareLog,
@@ -864,6 +865,7 @@ function SyncSettingsView({
                             handleImportOmniFocus={() => void handleImportOmniFocus()}
                             handleImportTickTick={() => void handleImportTickTick()}
                             handleImportTodoist={() => void handleImportTodoist()}
+                            handleMergeBackup={() => void handleMergeBackup()}
                             handleRestoreBackup={() => void handleRestoreBackup()}
                             isBackupBusy={isBackupBusy}
                             isSyncing={isSyncing}

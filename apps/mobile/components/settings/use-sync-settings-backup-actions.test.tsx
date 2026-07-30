@@ -40,6 +40,7 @@ vi.mock('@/lib/data-transfer', () => ({
     inspectOmniFocusDocument: vi.fn(),
     inspectTickTickDocument: vi.fn(),
     inspectTodoistDocument: vi.fn(),
+    mergeDataFromBackup: vi.fn(),
     pickBackupDocument: vi.fn(),
     pickDgtDocument: vi.fn(),
     pickOmniFocusDocument: vi.fn(),
@@ -49,6 +50,9 @@ vi.mock('@/lib/data-transfer', () => ({
     restoreLocalDataSnapshot: vi.fn(),
 }));
 
+import { Alert } from 'react-native';
+
+import * as dataTransfer from '@/lib/data-transfer';
 import { useSyncSettingsBackupActions } from './use-sync-settings-backup-actions';
 
 type HookResult = ReturnType<typeof useSyncSettingsBackupActions>;
@@ -110,5 +114,42 @@ describe('useSyncSettingsBackupActions', () => {
 
         expect(sharingMocks.shareAsync).toHaveBeenCalledWith('file://logs/mindwtr.log', { mimeType: 'text/plain' });
         expect(showToast).not.toHaveBeenCalled();
+    });
+
+    it('merges a backup only after the confirmation is accepted, and reports what changed', async () => {
+        const backupData = { tasks: [], projects: [], sections: [], areas: [], settings: {} };
+        vi.mocked(dataTransfer.pickBackupDocument).mockResolvedValue({ uri: 'file://backup.json', fileName: 'backup.json' });
+        vi.mocked(dataTransfer.inspectBackupDocument).mockResolvedValue({
+            valid: true,
+            data: backupData,
+            errors: [],
+            warnings: [],
+            metadata: { taskCount: 3, projectCount: 1 },
+        } as unknown as Awaited<ReturnType<typeof dataTransfer.inspectBackupDocument>>);
+        vi.mocked(dataTransfer.mergeDataFromBackup).mockResolvedValue({
+            snapshotName: 'data.snapshot.json',
+            result: { stats: { tasks: { incomingOnly: 2, resolvedUsingIncoming: 3 } } },
+        } as unknown as Awaited<ReturnType<typeof dataTransfer.mergeDataFromBackup>>);
+
+        await act(async () => {
+            create(<Harness />);
+        });
+        await latest?.handleMergeBackup();
+
+        // Nothing is written until the user accepts the confirmation.
+        expect(dataTransfer.mergeDataFromBackup).not.toHaveBeenCalled();
+        const [title, , buttons] = vi.mocked(Alert.alert).mock.calls[0] as [string, string, Array<{ onPress?: () => void }>];
+        expect(title).toBe('settings.mergeBackup');
+
+        await act(async () => {
+            buttons[1].onPress?.();
+        });
+
+        expect(dataTransfer.mergeDataFromBackup).toHaveBeenCalledWith(backupData);
+        expect(showToast).toHaveBeenCalledWith(expect.objectContaining({
+            title: 'settings.mergeBackup',
+            tone: 'success',
+        }));
+        expect(dataTransfer.restoreDataFromBackup).not.toHaveBeenCalled();
     });
 });

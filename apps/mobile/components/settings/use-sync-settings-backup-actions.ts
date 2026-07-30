@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import Constants from 'expo-constants';
+import { summarizeBackupMerge } from '@mindwtr/core';
 import type {
     Area,
     BackupValidation,
@@ -28,6 +29,7 @@ import {
     inspectOmniFocusDocument,
     inspectTickTickDocument,
     inspectTodoistDocument,
+    mergeDataFromBackup,
     pickBackupDocument,
     pickDgtDocument,
     pickOmniFocusDocument,
@@ -39,7 +41,7 @@ import {
 import { clearLog, ensureLogFilePath, logInfo } from '@/lib/app-log';
 import { logSettingsError } from '@/lib/settings-utils';
 
-type BackupAction = null | 'export' | 'restore' | 'import' | 'snapshot';
+type BackupAction = null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
 
 type UseSyncSettingsBackupActionsParams = {
     areas: Area[];
@@ -85,7 +87,12 @@ export function useSyncSettingsBackupActions({
         return `${localDate.toLocaleDateString()} ${localDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }, []);
 
-    const buildBackupSummary = useCallback((validation: Awaited<ReturnType<typeof inspectBackupDocument>>) => {
+    // Restore and merge preview the same file identically; only the sentence about what the
+    // action does to local data differs.
+    const buildBackupSummary = useCallback((
+        validation: Awaited<ReturnType<typeof inspectBackupDocument>>,
+        effect: string,
+    ) => {
         const details = [
             validation.metadata?.backupAt
                 ? tr('settings.backupMobile.backupDateLabel', { backupDate: new Date(validation.metadata.backupAt).toLocaleString() })
@@ -93,7 +100,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.fileLabel', { fileName: validation.metadata.fileName })
                     : null,
             tr('settings.backupMobile.backupPreviewCounts', { taskCount: validation.metadata?.taskCount ?? 0, projectCount: validation.metadata?.projectCount ?? 0 }),
-            tr('settings.backupMobile.thisWillReplaceAllCurrentLocalDataARecoverySnapshot'),
+            effect,
             ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
         ].filter(Boolean);
         return details.join('\n');
@@ -251,7 +258,10 @@ export function useSyncSettingsBackupActions({
                 );
                 return;
             }
-            const summary = buildBackupSummary(validation);
+            const summary = buildBackupSummary(
+                validation,
+                tr('settings.backupMobile.thisWillReplaceAllCurrentLocalDataARecoverySnapshot'),
+            );
             Alert.alert(
                 tr('settings.backupMobile.restoreBackup'),
                 summary,
@@ -271,6 +281,65 @@ export function useSyncSettingsBackupActions({
             setBackupAction(null);
         }
     }, [buildBackupSummary, confirmRestoreBackup, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+
+    const confirmMergeBackup = useCallback(async (validation: BackupValidation) => {
+        if (!validation.data) return;
+        setBackupAction('merge');
+        try {
+            const { snapshotName, result } = await mergeDataFromBackup(validation.data);
+            await refreshRecoverySnapshots();
+            const merged = summarizeBackupMerge(result);
+            const details = [
+                tr('settings.mergeBackupSummary', { addedCount: merged.added, updatedCount: merged.updated }),
+                tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
+            ];
+            showToast({
+                title: tr('settings.mergeBackup'),
+                message: details.join('\n'),
+                tone: 'success',
+                durationMs: 5600,
+            });
+        } catch (error) {
+            logSettingsError(error);
+            showSettingsErrorToast(tr('settings.mergeBackupFailed'), String(error), 5200);
+        } finally {
+            setBackupAction(null);
+        }
+    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+
+    const handleMergeBackup = useCallback(async () => {
+        setBackupAction('merge');
+        try {
+            const document = await pickBackupDocument();
+            if (!document) return;
+            const validation = await inspectBackupDocument(document, {
+                appVersion: Constants.expoConfig?.version ?? '0.0.0',
+            });
+            if (!validation.valid || !validation.data) {
+                showSettingsWarning(
+                    tr('settings.backupMobile.invalidBackup'),
+                    validation.errors[0] || tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup')
+                );
+                return;
+            }
+            Alert.alert(
+                tr('settings.mergeBackup'),
+                buildBackupSummary(validation, tr('settings.mergeBackupConfirm')),
+                [
+                    { text: tr('common.cancel'), style: 'cancel' },
+                    {
+                        text: tr('settings.mergeBackupAction'),
+                        onPress: () => void confirmMergeBackup(validation),
+                    },
+                ]
+            );
+        } catch (error) {
+            logSettingsError(error);
+            showSettingsErrorToast(tr('settings.mergeBackupFailed'), String(error), 5200);
+        } finally {
+            setBackupAction(null);
+        }
+    }, [buildBackupSummary, confirmMergeBackup, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const confirmTodoistImport = useCallback(async (parsedProjects: ParsedTodoistProject[]) => {
         setBackupAction('import');
@@ -613,6 +682,7 @@ export function useSyncSettingsBackupActions({
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,
+        handleMergeBackup,
         handleRestoreBackup,
         handleRestoreRecoverySnapshot,
         handleShareLog,

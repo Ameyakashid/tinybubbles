@@ -11,6 +11,8 @@ const baseProps = {
         exportBackupDesc: 'Save backup.',
         restoreBackup: 'Restore Backup',
         restoreBackupDesc: 'Restore backup.',
+        mergeBackup: 'Merge Backup',
+        mergeBackupDesc: 'Merge a backup.',
         importTodoist: 'Import from Todoist',
         importTodoistDesc: 'Import Todoist exports.',
         importTickTick: 'Import from TickTick',
@@ -24,6 +26,7 @@ const baseProps = {
     transferAction: null,
     onExportBackup: vi.fn(),
     onRestoreBackup: vi.fn(),
+    onMergeBackup: vi.fn(),
     onImportTodoist: vi.fn(),
     onImportTickTick: vi.fn(),
     onImportDgt: vi.fn(),
@@ -53,6 +56,23 @@ describe('DataTransferSection', () => {
         fireEvent.click(getByRole('button', { name: /import from ticktick/i }));
 
         expect(onImportTickTick).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers merging a backup beside restoring one', () => {
+        const onMergeBackup = vi.fn();
+        const onRestoreBackup = vi.fn();
+        const { getByRole } = render(
+            <DataTransferSection
+                {...baseProps}
+                onMergeBackup={onMergeBackup}
+                onRestoreBackup={onRestoreBackup}
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: /merge backup/i }));
+
+        expect(onMergeBackup).toHaveBeenCalledTimes(1);
+        expect(onRestoreBackup).not.toHaveBeenCalled();
     });
 
     it('exposes a recovery action for Getting Started content', () => {
