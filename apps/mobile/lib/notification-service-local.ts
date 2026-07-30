@@ -127,6 +127,10 @@ const logNotificationInfo = (message: string, extra?: Record<string, unknown>) =
   void logInfo(`[Local Notifications] ${message}`, { scope: 'notifications', extra });
 };
 
+const logNotificationWarn = (message: string, extra?: Record<string, unknown>) => {
+  void logWarn(`[Local Notifications] ${message}`, { scope: 'notifications', extra });
+};
+
 async function loadPomodoroAlarmEntry(): Promise<PomodoroAlarmEntry | null> {
   try {
     const raw = await AsyncStorage.getItem(LOCAL_POMODORO_ALARM_KEY);
@@ -238,7 +242,7 @@ async function loadAlarmApi(): Promise<AlarmNotificationsApi | null> {
 
 async function clearScheduledAlarms(api: AlarmNotificationsApi | null): Promise<void> {
   await loadAlarmMapIfNeeded();
-  await cancelLocalPomodoroCompletionNotification(api, { removeFired: true });
+  await cancelLocalPomodoroCompletionNotification(api, { removeFired: true, reason: 'service-clear' });
   const scheduledAlarmCount = alarmMap.size;
 
   if (api) {
@@ -794,10 +798,20 @@ export async function sendLocalMobileNotification(
 
 export async function cancelLocalPomodoroCompletionNotification(
   loadedApi?: AlarmNotificationsApi | null,
-  options: { removeFired?: boolean } = {},
+  options: { removeFired?: boolean; reason?: string } = {},
 ): Promise<void> {
   const api = loadedApi ?? await loadAlarmApi();
   const entry = await loadPomodoroAlarmEntry();
+  if (entry) {
+    // Every path that kills a pending completion alert must say so: #888's
+    // empty diagnostic log was itself the bug report.
+    logNotificationInfo('Pomodoro alarm cancelled', {
+      alarmId: entry.id,
+      reason: options.reason ?? 'unspecified',
+      fireAt: entry.fireAtMs ? new Date(entry.fireAtMs).toISOString() : '',
+      apiAvailable: String(Boolean(api)),
+    });
+  }
   if (api && entry) {
     try {
       api.deleteAlarm(entry.id);
@@ -825,14 +839,29 @@ export async function scheduleLocalPomodoroCompletionNotification(
   const fireAtMs = fireAt.getTime();
   if (!Number.isFinite(fireAtMs)) return;
 
+  // Logged before any gate below so a diagnostic log proves whether the panel
+  // asked for an alert at all — an empty log used to be ambiguous (#888).
+  logNotificationInfo('Pomodoro alarm requested', {
+    fireAt: new Date(fireAtMs).toISOString(),
+    inMs: String(fireAtMs - Date.now()),
+    phase: data?.phase ?? '',
+  });
+
   const api = await loadAlarmApi();
-  if (!api) return;
+  if (!api) {
+    logNotificationWarn('Pomodoro alarm skipped; alarm module unavailable');
+    return;
+  }
 
   const permission = await requestLocalNotificationPermission();
-  if (!permission.granted) return;
+  if (!permission.granted) {
+    logNotificationWarn('Pomodoro alarm skipped; notification permission not granted');
+    return;
+  }
 
   if (fireAtMs <= Date.now() + 1000) {
-    await cancelLocalPomodoroCompletionNotification(api);
+    logNotificationInfo('Pomodoro completion already due; notifying immediately');
+    await cancelLocalPomodoroCompletionNotification(api, { reason: 'past-due-immediate' });
     await sendLocalMobileNotification(trimmedTitle, message, data);
     return;
   }

@@ -259,7 +259,9 @@ export function PomodoroPanel({
     // timer that is in fact still running (#888). Wait for the real state.
     if (isHydratingSession) return;
     if (!notificationsEnabled || !timerIsRunning || !phaseEndsAt) {
-      void cancelMobilePomodoroCompletionNotification();
+      void cancelMobilePomodoroCompletionNotification(
+        !notificationsEnabled ? 'notifications-disabled' : !timerIsRunning ? 'timer-not-running' : 'no-phase-end',
+      );
       return;
     }
     const fireAt = new Date(phaseEndsAt);

@@ -62,6 +62,6 @@ export async function scheduleMobilePomodoroCompletionNotification(
   await scheduleLocalPomodoroCompletionNotification(title, message, fireAt, data);
 }
 
-export async function cancelMobilePomodoroCompletionNotification(): Promise<void> {
-  await cancelLocalPomodoroCompletionNotification();
+export async function cancelMobilePomodoroCompletionNotification(reason?: string): Promise<void> {
+  await cancelLocalPomodoroCompletionNotification(undefined, { reason });
 }
