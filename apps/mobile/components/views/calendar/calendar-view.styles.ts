@@ -529,6 +529,10 @@ export const styles = StyleSheet.create({
     width: 56,
     position: 'relative',
   },
+  weekTimeGutterPinned: {
+    // Day columns are later siblings, so they would paint over the pinned gutter without this.
+    zIndex: 5,
+  },
   weekDayHeader: {
     alignItems: 'center',
     justifyContent: 'center',

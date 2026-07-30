@@ -17,7 +17,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { CALENDAR_TIME_ESTIMATE_OPTIONS, getCalendarDayOfMonth, getShortWeekdayLabels, getTaskCalendarOccurrenceDate, isProjectedRecurringTask, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CompactText } from '@/components/compact-text';
@@ -55,6 +55,9 @@ const MONTH_DETAILS_HIDE_THRESHOLD = 0.2;
 const MONTH_DETAILS_MIN_HEIGHT = 176;
 const TIMED_BLOCK_COLUMN_GAP = 2;
 const WEEK_TIME_GUTTER_WIDTH = 56;
+// The gutter is pinned by counter-translating it against this scroller's offset, so it needs to
+// be animatable. Wrapping the gesture-handler ScrollView keeps the existing scroll behaviour.
+const AnimatedWeekScrollView = Animated.createAnimatedComponent(ScrollView);
 const WEEK_DENSITY_VALUES = Array.from(
   { length: CALENDAR_WEEK_VISIBLE_DAYS_MAX - CALENDAR_WEEK_VISIBLE_DAYS_MIN + 1 },
   (_, index) => CALENDAR_WEEK_VISIBLE_DAYS_MIN + index
@@ -410,7 +413,17 @@ export function CalendarView() {
   const scheduleScrollRef = useRef<any>(null);
   const lastWeekAutoScrollKeyRef = useRef<string | null>(null);
   const [weekDensityTrackWidth, setWeekDensityTrackWidth] = useState(0);
-  const weekAvailableColumnWidth = Math.max(1, screenWidth);
+  const weekScrollX = useSharedValue(0);
+  const weekHorizontalScrollHandler = useAnimatedScrollHandler((event) => {
+    weekScrollX.value = event.contentOffset.x;
+  });
+  // Zoomed-in weeks are wider than the screen, so without this the hour labels scroll away and
+  // the grid loses its only time reference. Day columns pass underneath instead.
+  const weekGutterPinStyle = useAnimatedStyle(() => ({ transform: [{ translateX: weekScrollX.value }] }));
+  // The gutter is a column too: sizing days against the full screen width made the canvas
+  // overflow by exactly the gutter, so the last day was clipped and the hour labels could be
+  // scrolled off the left edge even at full-week zoom.
+  const weekAvailableColumnWidth = Math.max(1, screenWidth - WEEK_TIME_GUTTER_WIDTH);
   const weekColumnWidth = getCalendarWeekColumnWidth(weekAvailableColumnWidth, calendarWeekVisibleDays);
   const compactWeekColumns = weekColumnWidth < 86;
   const ultraCompactWeekColumns = weekColumnWidth < 58;
@@ -493,7 +506,8 @@ export function CalendarView() {
 
     const x = getCalendarWeekInitialScrollX({
       columnWidth: weekColumnWidth,
-      leadingInset: WEEK_TIME_GUTTER_WIDTH,
+      // The gutter stays pinned now, so the first day column already starts beside it.
+      leadingInset: 0,
       selectedDate,
       visibleDays: calendarWeekVisibleDays,
       weekDays,
@@ -1208,16 +1222,22 @@ export function CalendarView() {
           {renderShowCompletedToggle()}
         </View>
 
-        <ScrollView
+        <AnimatedWeekScrollView
           ref={weekHorizontalScrollRef}
           horizontal
           nestedScrollEnabled
+          onScroll={weekHorizontalScrollHandler}
+          scrollEventThrottle={16}
+          // Land on whole days: a half-scrolled column hides its own header under the pinned gutter.
+          snapToInterval={weekColumnWidth}
+          snapToAlignment="start"
+          decelerationRate="fast"
           style={styles.weekHorizontal}
           contentContainerStyle={styles.weekHorizontalContent}
         >
           <View style={[styles.weekCanvas, { width: WEEK_TIME_GUTTER_WIDTH + weekColumnWidth * weekDays.length }]}>
             <View style={[styles.weekHeaderRow, { borderBottomColor: tc.border }]}>
-              <View style={styles.weekTimeGutter} />
+              <Animated.View style={[styles.weekTimeGutter, styles.weekTimeGutterPinned, { backgroundColor: tc.bg }, weekGutterPinStyle]} />
               {weekDays.map((day) => (
                 <Pressable
                   key={`header-${day.toISOString()}`}
@@ -1238,9 +1258,9 @@ export function CalendarView() {
             </View>
 
             <View style={[styles.weekAllDayRow, { borderBottomColor: tc.border }]}>
-              <View style={styles.weekTimeGutter}>
+              <Animated.View style={[styles.weekTimeGutter, styles.weekTimeGutterPinned, { backgroundColor: tc.bg }, weekGutterPinStyle]}>
                 <Text style={[styles.weekAllDayLabel, { color: tc.secondaryText }]}>{t('calendar.allDay')}</Text>
-              </View>
+              </Animated.View>
               {weekDays.map((day) => {
                 const allDayItems = getCalendarItemsForDate(day)
                   .filter((item) =>
@@ -1299,7 +1319,7 @@ export function CalendarView() {
               contentContainerStyle={styles.weekVerticalContent}
             >
               <View style={styles.weekGridRow}>
-                <View style={[styles.weekTimeGutter, { height: timelineHeight }]}>
+                <Animated.View style={[styles.weekTimeGutter, styles.weekTimeGutterPinned, { backgroundColor: tc.bg, height: timelineHeight }, weekGutterPinStyle]}>
                   {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, idx) => {
                     const hour = DAY_START_HOUR + idx;
                     return (
@@ -1312,7 +1332,7 @@ export function CalendarView() {
                       </CompactText>
                     );
                   })}
-                </View>
+                </Animated.View>
                 {weekDays.map((day) => {
                   const now = new Date();
                   const nowMinutes = (now.getHours() - DAY_START_HOUR) * 60 + now.getMinutes();
@@ -1479,7 +1499,7 @@ export function CalendarView() {
               </View>
             </ScrollView>
           </View>
-        </ScrollView>
+        </AnimatedWeekScrollView>
 
         <View style={[styles.weekDensityBar, { backgroundColor: tc.cardBg, borderTopColor: tc.border, paddingBottom: Math.max(12, insets.bottom + 8) }]}>
           <GestureDetector gesture={weekDensityGesture}>
