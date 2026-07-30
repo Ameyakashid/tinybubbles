@@ -353,7 +353,11 @@ const parseStoredAppDataJson = (jsonValue: string): AppData => (
 // CursorWindow"): writing it costs seconds of JS thread for a copy nothing can
 // load, and trusting it turns a transient SQLite timeout into a hard sync
 // failure. Past the limit the backup is skipped and treated as absent (#766).
-const JSON_BACKUP_MAX_CHARS = 1_500_000;
+// This is Android-only: iOS AsyncStorage is file-backed with no CursorWindow
+// row limit, and the JSON backup is iOS's only fallback when SQLite fails
+// (e.g. a missing native module), so capping it there would turn a SQLite
+// failure into total, unrecoverable save loss (#979).
+const JSON_BACKUP_MAX_CHARS = Platform.OS === 'android' ? 1_500_000 : Number.POSITIVE_INFINITY;
 let jsonBackupSkippedOversize = false;
 
 const isJsonBackupUsable = (): boolean => !jsonBackupSkippedOversize;

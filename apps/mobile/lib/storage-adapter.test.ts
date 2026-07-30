@@ -9,6 +9,7 @@ const {
   updateMobileWidgetFromDataMock,
   appStateListeners,
   appStateCurrentState,
+  mockPlatformOS,
 } = vi.hoisted(() => ({
   asyncStorageMock: {
     getItem: vi.fn(),
@@ -25,6 +26,7 @@ const {
   updateMobileWidgetFromDataMock: vi.fn(),
   appStateListeners: [] as Array<(state: string) => void>,
   appStateCurrentState: { value: undefined as string | undefined },
+  mockPlatformOS: { value: 'android' as 'android' | 'ios' },
 }));
 
 vi.mock('expo-constants', () => ({
@@ -40,7 +42,9 @@ vi.mock('react-native', async () => {
     ...actual,
     Platform: {
       ...actual.Platform,
-      OS: 'android',
+      get OS() {
+        return mockPlatformOS.value;
+      },
     },
     NativeModules: {
       ...actual.NativeModules,
@@ -116,6 +120,7 @@ describe('mobile storage adapter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockPlatformOS.value = 'android';
     appStateListeners.length = 0;
     appStateCurrentState.value = undefined;
     asyncStorageMock.getItem.mockResolvedValue(null);
@@ -319,6 +324,63 @@ describe('mobile storage adapter', () => {
       throw new Error('SQLite read timed out');
     });
     await expect(mobileStorage.getData()).rejects.toThrow('SQLite read timed out');
+  }, 20_000);
+
+  it('writes and trusts an oversized JSON backup on iOS, where it is the only fallback when SQLite fails (#979)', async () => {
+    mockPlatformOS.value = 'ios';
+    const stored = new Map<string, string>();
+    asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
+    asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+      stored.set(key, value);
+    });
+    const makeTask = (id: string): Task => ({
+      id,
+      title: `Task ${id} ${'padding '.repeat(20)}`,
+      status: 'next',
+      tags: [],
+      contexts: [],
+      createdAt: '2026-06-15T00:00:00.000Z',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+    });
+    const hugeSnapshot: AppData = {
+      tasks: Array.from({ length: 6_000 }, (_, index) => makeTask(`task-${index}`)),
+      projects: [],
+      sections: [],
+      areas: [],
+      people: [],
+      settings: {},
+    };
+    expect(JSON.stringify(hugeSnapshot).length).toBeGreaterThan(1_500_000);
+
+    const { mobileStorage, __mobileStorageTestUtils } = await import('./storage-adapter');
+    if (!mobileStorage.saveTask) {
+      throw new Error('Expected mobile storage to support saveTask');
+    }
+    __mobileStorageTestUtils.setSqliteStateForTests({
+      adapter: { saveTask: sqliteAdapterSaveTask },
+      client: {},
+    });
+
+    await mobileStorage.saveTask(hugeSnapshot.tasks[0], hugeSnapshot);
+    await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
+
+    // iOS AsyncStorage has no CursorWindow row limit, so the backup is written
+    // in full instead of skipped as oversized (#979).
+    expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data', expect.any(String));
+    expect(logWarnMock).not.toHaveBeenCalledWith(
+      '[Storage] Skipped JSON backup; library exceeds the readable AsyncStorage size',
+      expect.anything(),
+    );
+
+    // With SQLite failing, the oversized backup must still serve as a readable
+    // fallback rather than being refused as unreadable (the #979 regression:
+    // this used to throw and leave the device unable to load or save at all).
+    __mobileStorageTestUtils.setSqliteInitializerForTests(async () => {
+      throw new Error('SQLite read timed out');
+    });
+    await expect(mobileStorage.getData()).resolves.toEqual(
+      expect.objectContaining({ tasks: expect.arrayContaining([expect.objectContaining({ id: 'task-0' })]) }),
+    );
   }, 20_000);
 
   it('coalesces a burst of task saves into a single backup write with the newest payload (#766)', async () => {
