@@ -779,14 +779,20 @@ API_AVAILABLE(ios(10.0)) {
     'if([details[@"has_button"] isEqualToNumber: [NSNumber numberWithInt: 1]] || [details[@"has_complete_action"] isEqualToNumber: [NSNumber numberWithInt: 1]]){\n                content.categoryIdentifier = @"CUSTOM_ACTIONS";\n            }'
   );
 
+  // ?: @NO on both injected values: these land inside an Objective-C @{...}
+  // dictionary literal, where a nil value raises NSInvalidArgumentException
+  // and rejects the whole scheduleAlarm call. The task-reminder path always
+  // passes has_complete_action, so the crash only hit callers that omit it —
+  // the pomodoro completion alert never scheduled on iOS because of exactly
+  // this (#888).
   next = next.replace(
     /@"has_button": \[contentInfo\.userInfo objectForKey:@"has_button"\],\n                @"schedule_type":/g,
-    '@"has_button": [contentInfo.userInfo objectForKey:@"has_button"],\n                @"has_complete_action": [contentInfo.userInfo objectForKey:@"has_complete_action"],\n                @"schedule_type":'
+    '@"has_button": [contentInfo.userInfo objectForKey:@"has_button"],\n                @"has_complete_action": ([contentInfo.userInfo objectForKey:@"has_complete_action"] ?: @NO),\n                @"schedule_type":'
   );
 
   next = next.replace(
     /@"has_button": details\[@"has_button"\],\n                @"schedule_type":/g,
-    '@"has_button": details[@"has_button"],\n                @"has_complete_action": details[@"has_complete_action"],\n                @"schedule_type":'
+    '@"has_button": details[@"has_button"],\n                @"has_complete_action": (details[@"has_complete_action"] ?: @NO),\n                @"schedule_type":'
   );
 
   if (!next.includes('actionWithIdentifier:@"COMPLETE_ACTION"')) {

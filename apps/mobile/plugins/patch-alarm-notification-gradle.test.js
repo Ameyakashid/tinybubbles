@@ -449,6 +449,10 @@ API_AVAILABLE(ios(10.0)) {
                 @"has_button": details[@"has_button"],
                 @"schedule_type": details[@"schedule_type"]
             };
+            content.userInfo = @{
+                @"has_button": [contentInfo.userInfo objectForKey:@"has_button"],
+                @"schedule_type": [contentInfo.userInfo objectForKey:@"schedule_type"]
+            };
 
         UNNotificationAction* snoozeAction = [UNNotificationAction
               actionWithIdentifier:@"SNOOZE_ACTION"
@@ -475,7 +479,12 @@ API_AVAILABLE(ios(10.0)) {
     expect(output).toContain('consumePendingNotificationOpenPayload');
     expect(output).toContain('actionWithIdentifier:@"COMPLETE_ACTION"');
     expect(output).toContain('cachePendingNotificationOpenPayload(formattedNotification)');
-    expect(output).toContain('@"has_complete_action": details[@"has_complete_action"]');
+    // Nil-safe injection: a caller omitting has_complete_action (the pomodoro
+    // path) must not raise NSInvalidArgumentException from the userInfo
+    // dictionary literal (#888).
+    expect(output).toContain('@"has_complete_action": (details[@"has_complete_action"] ?: @NO)');
+    expect(output).toContain('@"has_complete_action": ([contentInfo.userInfo objectForKey:@"has_complete_action"] ?: @NO)');
+    expect(output).not.toContain('@"has_complete_action": details[@"has_complete_action"],');
   });
 
   it('makes iOS notification identifiers unique instead of epoch-second shared', () => {

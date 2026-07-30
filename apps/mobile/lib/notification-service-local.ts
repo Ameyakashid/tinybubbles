@@ -893,6 +893,11 @@ export async function scheduleLocalPomodoroCompletionNotification(
       small_icon: LOCAL_SMALL_ICON,
       color: LOCAL_NOTIFICATION_COLOR,
       has_button: false,
+      // The patched iOS module reads this key into a dictionary literal, where
+      // a missing value is nil and throws NSInvalidArgumentException — the
+      // reason no pomodoro alert ever scheduled on iOS (#888). Always pass it,
+      // like the task-reminder path does.
+      has_complete_action: false,
       loop_sound: false,
       play_sound: true,
       schedule_type: 'once',
