@@ -1,7 +1,7 @@
 import type { AppData, Attachment, Area, Person, Project, SavedFilter, Section, Task } from './types';
 import { prunePendingRemoteAttachmentDeletes } from './attachment-cleanup';
 
-const DEFAULT_TOMBSTONE_RETENTION_DAYS = 90;
+export const DEFAULT_TOMBSTONE_RETENTION_DAYS = 90;
 const MIN_TOMBSTONE_RETENTION_DAYS = 1;
 const MAX_TOMBSTONE_RETENTION_DAYS = 3650;
 

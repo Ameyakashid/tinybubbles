@@ -1,8 +1,8 @@
 import {
-    buildSaveSnapshot,
     ensureDeviceId,
     getNextDataChangeAt,
     nextRevision,
+    persist,
     selectVisiblePeople,
     selectVisibleTasks,
 } from '../store-helpers';
@@ -24,7 +24,6 @@ export const createPeopleActions = ({
         const normalized = getPersonNameKey(trimmedName);
         const now = new Date().toISOString();
         const changeAt = Date.now();
-        let snapshot = null;
         let createdPerson: Person | null = null;
         let existingPersonId: string | null = null;
         let shouldRestoreDeletedPerson = false;
@@ -56,7 +55,7 @@ export const createPeopleActions = ({
             };
             createdPerson = newPerson;
             const newAllPeople = [...state._allPeople, newPerson];
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 people: newAllPeople,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -79,9 +78,6 @@ export const createPeopleActions = ({
             }
             const resolved = get()._allPeople.find((person) => person.id === existingPersonId);
             return resolved && !resolved.deletedAt ? resolved : null;
-        }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
         }
         return createdPerson;
     },
@@ -136,7 +132,6 @@ export const createPeopleActions = ({
         }
         const now = new Date().toISOString();
         const changeAt = Date.now();
-        let snapshot = null;
         let missingPerson = false;
         set((state) => {
             const person = state._allPeople.find((item) => item.id === id);
@@ -200,7 +195,7 @@ export const createPeopleActions = ({
             }
 
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 people: nextAllPeople,
                 tasks: nextAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -218,9 +213,6 @@ export const createPeopleActions = ({
             const message = 'Person not found';
             set({ error: message });
             return actionFail(message);
-        }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
         }
         return actionOk();
     },

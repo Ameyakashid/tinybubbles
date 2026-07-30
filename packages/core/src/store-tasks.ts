@@ -13,6 +13,7 @@ import {
     isTaskVisible,
     nextRevision,
     normalizeTaskUpdate,
+    persist,
     replaceEntitiesInArray,
     replaceEntitiesInMap,
     replaceEntityInArray,
@@ -228,7 +229,6 @@ export const mutateTasks = async (
 ): Promise<StoreActionResult> => {
     const changeAt = Date.now();
     const now = new Date().toISOString();
-    let snapshot: AppData | null = null;
     let missing = false;
     set((state) => {
         const selectedTasks = options.selectTasks(state);
@@ -262,7 +262,7 @@ export const mutateTasks = async (
         });
         const nextSettings = updatedSettings ?? deviceState.settings;
         const settingsChanged = Boolean(updatedSettings) || deviceState.updated;
-        snapshot = buildSaveSnapshot(state, {
+        persist(set, debouncedSave, state, {
             tasks: nextAllTasks,
             ...(settingsChanged ? { settings: nextSettings } : {}),
         });
@@ -276,9 +276,6 @@ export const mutateTasks = async (
             ...(settingsChanged ? { settings: nextSettings } : {}),
         };
     });
-    if (snapshot) {
-        debouncedSave(snapshot, (msg) => set({ error: msg }));
-    }
     return missing ? actionFail(options.missingMessage ?? 'Task not found') : actionOk();
 };
 
@@ -514,9 +511,8 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             nextAllTasks.push(newTask);
         }
 
-        let snapshot: AppData | null = null;
         set((state) => {
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: nextAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -527,9 +523,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             };
         });
 
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk({ id: newTasks[0]?.id, ids: newTasks.map((task) => task.id) });
     },
 
@@ -821,7 +814,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
     duplicateTask: async (id: string, asNextAction?: boolean) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot: AppData | null = null;
         let missingTask = false;
         let duplicatedTaskId: string | undefined;
         set((state) => {
@@ -887,7 +879,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
 
             const newAllTasks = [...state._allTasks, newTask];
             const newVisibleTasks = updateVisibleTasks(state.tasks, null, newTask);
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -898,9 +890,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return missingTask ? actionFail('Task not found') : actionOk({ id: duplicatedTaskId });
     },
 
@@ -910,7 +899,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
     promoteTaskToProject: async (id: string, options?: { title?: string; color?: string; areaId?: string }) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot: AppData | null = null;
         let missingTask = false;
         let errorMessage: string | undefined;
         let promotedProjectId: string | undefined;
@@ -1002,7 +990,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             );
             const nextAllTasks = replaceEntityInArray(state._allTasks, id, updatedTask);
             const nextVisibleTasks = updateVisibleTasks(state.tasks, sourceTask, updatedTask);
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: nextAllTasks,
                 projects: nextAllProjects,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -1015,9 +1003,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         if (missingTask) return actionFail('Task not found');
         if (errorMessage) return actionFail(errorMessage);
         return actionOk({ id: promotedProjectId, reused: reusedExistingProject });
@@ -1109,7 +1094,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
         }
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot: AppData | null = null;
 
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
@@ -1153,7 +1137,7 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 : newAllTasksBase;
             const newVisibleTasks = applyVisibleTaskChanges(state.tasks, changedTasks, nextRecurringTasks);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -1167,9 +1151,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
             };
         });
 
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 

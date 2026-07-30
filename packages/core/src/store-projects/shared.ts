@@ -1,11 +1,11 @@
 import type { AppData, Area, Person, Project, Section, Task, TaskStatus } from '../types';
 import type { StoreActionResult, TaskStore } from '../store-types';
 import {
-    buildSaveSnapshot,
     ensureDeviceId,
     getNextDataChangeAt,
     nextRevision,
     normalizeTagId,
+    persist,
     replaceEntitiesInArray,
     replaceEntitiesInMap,
     selectVisibleAreas,
@@ -132,7 +132,6 @@ export const mutateEntities = async <K extends EntityCollection>(
 ): Promise<StoreActionResult> => {
     const changeAt = Date.now();
     const now = new Date().toISOString();
-    let snapshot: AppData | null = null;
     let missing = false;
     set((state) => {
         const selectedEntities = options.select(state);
@@ -166,7 +165,7 @@ export const mutateEntities = async <K extends EntityCollection>(
             : { ...deviceState.settings, ...settingsUpdates };
         const settingsChanged = settingsUpdates !== undefined || deviceState.updated;
 
-        snapshot = buildSaveSnapshot(state, {
+        persist(set, debouncedSave, state, {
             [options.collection]: nextAllEntities,
             ...(settingsChanged ? { settings: nextSettings } : {}),
         });
@@ -181,9 +180,6 @@ export const mutateEntities = async <K extends EntityCollection>(
             ...(settingsChanged ? { settings: nextSettings } : {}),
         } as Partial<TaskStore>;
     });
-    if (snapshot) {
-        debouncedSave(snapshot, (msg) => set({ error: msg }));
-    }
     return missing ? actionFail(options.missingMessage ?? 'Entity not found') : actionOk();
 };
 

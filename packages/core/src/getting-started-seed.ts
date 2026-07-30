@@ -1,8 +1,8 @@
 import {
-    buildSaveSnapshot,
     ensureDeviceId,
     getNextDataChangeAt,
     nextRevision,
+    persist,
     selectVisibleProjects,
     selectVisibleTasks,
 } from './store-helpers';
@@ -284,7 +284,6 @@ export const createSeedGettingStartedAction = (
 ): ((options?: { language?: string }) => Promise<StoreActionResult>) => async (options) => {
     const changeAt = Date.now();
     const nowIso = new Date().toISOString();
-    let snapshot: AppData | null = null;
     let projectId: string | undefined;
 
     set((state) => {
@@ -406,7 +405,7 @@ export const createSeedGettingStartedAction = (
             : state._allTasks;
         const nextTasks = tasksToAdd.length > 0 ? [...repairedTasks, ...tasksToAdd] : repairedTasks;
 
-        snapshot = buildSaveSnapshot(state, {
+        persist(set, debouncedSave, state, {
             tasks: nextTasks,
             projects: nextProjects,
             ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -422,8 +421,5 @@ export const createSeedGettingStartedAction = (
         };
     });
 
-    if (snapshot) {
-        debouncedSave(snapshot, (msg) => set({ error: msg }));
-    }
     return { success: true, id: projectId };
 };

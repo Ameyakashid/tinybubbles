@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
     buildEntityMap,
     clearDeletedTaskProjectArchiveMetadata,
@@ -9,6 +9,7 @@ import {
     getNextProjectOrder,
     hasSameEntityIdentity,
     normalizeTaskUpdate,
+    persist,
     reconcileEntityCollection,
     replaceEntitiesInArray,
     replaceEntitiesInMap,
@@ -20,6 +21,7 @@ import {
     reuseSettingsIfEquivalent,
 } from './store-helpers';
 import type { Project, Section, Task } from './types';
+import type { SaveBaseState } from './store-types';
 
 const createTask = (
     id: string,
@@ -844,5 +846,47 @@ describe('completion timestamp updates', () => {
         });
         const { updatedTask } = applyTaskUpdates(task, { status: 'done', focusOrder: 7 }, now);
         expect(updatedTask.focusOrder).toBe(7);
+    });
+});
+
+describe('persist', () => {
+    const baseState: SaveBaseState = {
+        _allTasks: [createTask('t1'), createTask('t2')],
+        _allProjects: [],
+        _allSections: [],
+        _allAreas: [],
+        _allPeople: [],
+        settings: {},
+    };
+
+    it('builds the full snapshot via buildSaveSnapshot and enqueues it through the caller-provided debouncedSave', () => {
+        const set = vi.fn();
+        const debouncedSave = vi.fn();
+
+        persist(set, debouncedSave, baseState, { tasks: [createTask('t1'), createTask('t2'), createTask('t3')] });
+
+        expect(debouncedSave).toHaveBeenCalledTimes(1);
+        const [snapshot, onError] = debouncedSave.mock.calls[0];
+        expect(snapshot.tasks.map((task: Task) => task.id)).toEqual(['t1', 't2', 't3']);
+        expect(snapshot.projects).toBe(baseState._allProjects);
+        expect(snapshot.settings).toBe(baseState.settings);
+
+        // The enqueue's own error callback writes through the caller's `set`,
+        // same as every hand-written call site used to.
+        onError('save failed');
+        expect(set).toHaveBeenCalledWith({ error: 'save failed' });
+    });
+
+    it('refuses to enqueue a snapshot that drops an existing task, and never calls debouncedSave', () => {
+        const set = vi.fn();
+        const debouncedSave = vi.fn();
+
+        // Only t1 survives -- t2 silently disappeared, the exact partial-snapshot
+        // bug the guard exists to catch (store-settings.ts's fetchData used to
+        // bypass this by hand-building its save payload instead of routing
+        // through buildSaveSnapshot).
+        expect(() => persist(set, debouncedSave, baseState, { tasks: [createTask('t1')] }))
+            .toThrow(/Refusing to save a partial task snapshot/);
+        expect(debouncedSave).not.toHaveBeenCalled();
     });
 });

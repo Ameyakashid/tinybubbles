@@ -1,10 +1,10 @@
 import {
-    buildSaveSnapshot,
     archiveSectionForProjectArchive,
     completeTaskForProjectArchive,
     ensureDeviceId,
     getNextDataChangeAt,
     nextRevision,
+    persist,
     restoreSectionFromProjectArchive,
     restoreTaskFromProjectArchive,
     selectVisibleTasks,
@@ -163,7 +163,6 @@ export const createProjectCoreActions = ({
             return null;
         }
         const targetAreaId = typeof initialProps?.areaId === 'string' ? initialProps.areaId : undefined;
-        let snapshot = null;
         let createdProject: Project | null = null;
         let existingProject: Project | null = null;
         set((state) => {
@@ -186,7 +185,7 @@ export const createProjectCoreActions = ({
             createdProject = newProject;
             const newAllProjects = [...state._allProjects, newProject];
             const newVisibleProjects = [...state.projects, newProject];
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 projects: newAllProjects,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -200,16 +199,12 @@ export const createProjectCoreActions = ({
         if (existingProject) {
             return existingProject;
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return createdProject;
     },
 
     updateProject: async (id: string, updates: Partial<Project>) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingProject = false;
         set((state) => {
             const allProjects = state._allProjects;
@@ -289,7 +284,7 @@ export const createProjectCoreActions = ({
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -318,16 +313,12 @@ export const createProjectCoreActions = ({
             return actionFail(message);
         }
 
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     deleteProject: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingProject = false;
         set((state) => {
             const target = state._allProjects.find((project) => project.id === id && !project.deletedAt);
@@ -379,7 +370,7 @@ export const createProjectCoreActions = ({
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -406,16 +397,12 @@ export const createProjectCoreActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     restoreProject: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingProject = false;
         set((state) => {
             const target = state._allProjects.find((project) => project.id === id);
@@ -483,7 +470,7 @@ export const createProjectCoreActions = ({
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -500,16 +487,12 @@ export const createProjectCoreActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return missingProject ? actionFail('Project not found') : actionOk();
     },
 
     purgeProject: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingProject = false;
         set((state) => {
             const target = state._allProjects.find((project) => project.id === id && !project.purgedAt);
@@ -569,7 +552,7 @@ export const createProjectCoreActions = ({
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -596,16 +579,12 @@ export const createProjectCoreActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     purgeDeletedProjects: async () => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         set((state) => {
             const selectedProjects = state._allProjects.filter((project) => project.deletedAt && !project.purgedAt);
             if (selectedProjects.length === 0) return state;
@@ -663,7 +642,7 @@ export const createProjectCoreActions = ({
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -680,16 +659,12 @@ export const createProjectCoreActions = ({
                 ...(settingsChanged ? { settings: nextSettings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     duplicateProject: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let createdProject: Project | null = null;
         set((state) => {
             const sourceProject = state._allProjects.find((project) => project.id === id && !project.deletedAt);
@@ -779,7 +754,7 @@ export const createProjectCoreActions = ({
             const newAllProjects = [...state._allProjects, newProject];
             const newAllSections = [...state._allSections, ...newSections];
             const newAllTasks = [...state._allTasks, ...newTasks];
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -796,9 +771,6 @@ export const createProjectCoreActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return createdProject;
     },
 

@@ -1,4 +1,4 @@
-import { buildSaveSnapshot, ensureDeviceId, getNextDataChangeAt, nextRevision, normalizeTagId, selectVisibleTasks } from '../store-helpers';
+import { ensureDeviceId, getNextDataChangeAt, nextRevision, normalizeTagId, persist, selectVisibleTasks } from '../store-helpers';
 import type { ProjectActionContext, TaxonomyActions } from './shared';
 import { dedupeTagValuesLastWins, formatTagIdPreservingCase } from './shared';
 
@@ -11,7 +11,6 @@ export const createTaxonomyActions = ({
         if (!normalizedTarget) return;
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
             const newAllTasks = state._allTasks.map((task) => {
@@ -43,7 +42,7 @@ export const createTaxonomyActions = ({
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             const newVisibleProjects = newAllProjects.filter((p) => !p.deletedAt);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -57,9 +56,6 @@ export const createTaxonomyActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 
     renameTag: async (oldTagId: string, newTagId: string) => {
@@ -70,7 +66,6 @@ export const createTaxonomyActions = ({
         if (normalizedOld === normalizedNew && formatTagIdPreservingCase(oldTagId) === nextTagId) return;
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
             const newAllTasks = state._allTasks.map((task) => {
@@ -106,7 +101,7 @@ export const createTaxonomyActions = ({
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             const newVisibleProjects = newAllProjects.filter((p) => !p.deletedAt);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -120,9 +115,6 @@ export const createTaxonomyActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 
     deleteContext: async (context: string) => {
@@ -130,7 +122,6 @@ export const createTaxonomyActions = ({
         if (!normalized) return;
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
             const newAllTasks = state._allTasks.map((task) => {
@@ -148,7 +139,7 @@ export const createTaxonomyActions = ({
 
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -159,9 +150,6 @@ export const createTaxonomyActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 
     renameContext: async (oldContext: string, newContext: string) => {
@@ -171,7 +159,6 @@ export const createTaxonomyActions = ({
         if (normalizedOld === normalizedNew.toLowerCase() && oldContext.trim() === normalizedNew) return;
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
             const newAllTasks = state._allTasks.map((task) => {
@@ -198,7 +185,7 @@ export const createTaxonomyActions = ({
 
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
 
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -209,8 +196,5 @@ export const createTaxonomyActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 });

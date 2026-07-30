@@ -1,4 +1,4 @@
-import { buildSaveSnapshot, ensureDeviceId, getNextDataChangeAt, nextRevision, selectVisibleTasks } from '../store-helpers';
+import { ensureDeviceId, getNextDataChangeAt, nextRevision, persist, selectVisibleTasks } from '../store-helpers';
 import { logWarn } from '../logger';
 import { generateUUID as uuidv4 } from '../uuid';
 import type { ProjectActionContext, Section, SectionActions } from './shared';
@@ -13,7 +13,6 @@ export const createSectionActions = ({
         if (!projectId || !trimmedTitle) return null;
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let createdSection: Section | null = null;
         set((state) => {
             const projectExists = state._allProjects.some((project) => project.id === projectId && !project.deletedAt);
@@ -39,7 +38,7 @@ export const createSectionActions = ({
             createdSection = newSection;
             const newAllSections = [...allSections, newSection];
             const newVisibleSections = [...state.sections, newSection];
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 sections: newAllSections,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -50,9 +49,6 @@ export const createSectionActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return createdSection;
     },
 
@@ -93,7 +89,6 @@ export const createSectionActions = ({
     deleteSection: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingSection = false;
         set((state) => {
             const allSections = state._allSections;
@@ -127,7 +122,7 @@ export const createSectionActions = ({
             });
             const newVisibleSections = newAllSections.filter((item) => !item.deletedAt);
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 sections: newAllSections,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -150,9 +145,6 @@ export const createSectionActions = ({
             });
             set({ error: message });
             return actionFail(message);
-        }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
         }
         return actionOk();
     },

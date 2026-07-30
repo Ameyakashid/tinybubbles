@@ -2191,6 +2191,62 @@ describe('TaskStore', () => {
         expect((mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls.length).toBe(firstSaveCount);
     });
 
+    // #store-helpers guard hole: fetchData used to hand-build its debounced-save
+    // payload instead of calling buildSaveSnapshot, so a storage read that came
+    // back missing live tasks (a truncated/corrupted read, not a tombstone purge)
+    // silently overwrote memory and re-persisted the gap. It now routes through
+    // the same buildSaveSnapshot guard every other write action uses.
+    it('fails a load whose storage read drops live tasks instead of silently saving the gap', async () => {
+        const nowIso = '2026-07-21T12:00:00.000Z';
+        vi.setSystemTime(new Date(nowIso));
+        const settledSettings = {
+            deviceId: 'device-a',
+            migrations: {
+                version: 9999,
+                lastAutoArchiveAt: nowIso,
+                lastTombstoneCleanupAt: nowIso,
+            },
+            gtd: {
+                taskEditor: { defaultsVersion: 9999 },
+                focusGroupByDefaultsVersion: 1,
+            },
+        };
+        mockStorage.getData = vi.fn().mockResolvedValue({
+            tasks: [createStoreTask('task-victim-1'), createStoreTask('task-victim-2')],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: settledSettings,
+        });
+        await useTaskStore.getState().fetchData({ silent: true });
+        expect(useTaskStore.getState()._allTasks.map((task) => task.id).sort()).toEqual(['task-victim-1', 'task-victim-2']);
+        const saveCallsAfterFirstLoad = (mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls.length;
+
+        // The second read drops both existing tasks entirely (simulating a bad or
+        // truncated storage read) while carrying an overdue inbox task, which
+        // always trips the unconditional promote-scheduled-tasks migration --
+        // proving the guard fires on a genuine gap, not just "nothing changed".
+        mockStorage.getData = vi.fn().mockResolvedValue({
+            tasks: [createStoreTask('task-trigger', { dueDate: '2020-01-01' })],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: settledSettings,
+        });
+
+        await useTaskStore.getState().fetchData({ silent: true });
+
+        const state = useTaskStore.getState();
+        expect(state.error).toMatch(/Refusing to save a partial task snapshot/);
+        // The guard throws inside the set() producer, so the whole state update
+        // is discarded -- both tasks survive in memory rather than vanishing.
+        expect(state._allTasks.map((task) => task.id).sort()).toEqual(['task-victim-1', 'task-victim-2']);
+        await flushPendingSave();
+        expect((mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls.length).toBe(saveCallsAfterFirstLoad);
+    });
+
     it('does not overwrite same-millisecond task completions made during an in-flight fetch', async () => {
         const fixedNow = new Date('2026-03-22T10:00:00.000Z').getTime();
         vi.setSystemTime(fixedNow);

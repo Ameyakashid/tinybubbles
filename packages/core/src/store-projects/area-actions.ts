@@ -1,5 +1,5 @@
 import { DEFAULT_PROJECT_COLOR } from '../color-constants';
-import { buildSaveSnapshot, ensureDeviceId, getNextDataChangeAt, nextRevision, selectVisibleTasks } from '../store-helpers';
+import { ensureDeviceId, getNextDataChangeAt, nextRevision, persist, selectVisibleTasks } from '../store-helpers';
 import { logWarn } from '../logger';
 import { clearDerivedCache } from '../store-settings';
 import { generateUUID as uuidv4 } from '../uuid';
@@ -17,7 +17,6 @@ export const createAreaActions = ({
         const changeAt = Date.now();
         const now = new Date().toISOString();
         const normalized = trimmedName.toLowerCase();
-        let snapshot = null;
         let createdArea: Area | null = null;
         let existingAreaId: string | null = null;
         let shouldRestoreDeletedArea = false;
@@ -53,7 +52,7 @@ export const createAreaActions = ({
             createdArea = newArea;
             const newAllAreas = [...allAreas, newArea].sort((a, b) => a.order - b.order);
             const newVisibleAreas = newAllAreas.filter((area) => !area.deletedAt);
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 areas: newAllAreas,
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             });
@@ -94,15 +93,11 @@ export const createAreaActions = ({
             }
             return resolvedArea && !resolvedArea.deletedAt ? resolvedArea : null;
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return createdArea;
     },
 
     updateArea: async (id: string, updates: Partial<Area>) => {
         const changeAt = Date.now();
-        let snapshot = null;
         let missingArea = false;
         let invalidName = false;
         set((state) => {
@@ -167,7 +162,7 @@ export const createAreaActions = ({
                     const newVisibleProjects = newAllProjects.filter(p => !p.deletedAt);
                     const newVisibleTasks = selectVisibleTasks(newAllTasks);
                     clearDerivedCache();
-                    snapshot = buildSaveSnapshot(state, {
+                    persist(set, debouncedSave, state, {
                         tasks: newAllTasks,
                         areas: newAllAreas,
                         projects: newAllProjects,
@@ -221,7 +216,7 @@ export const createAreaActions = ({
                     }
                     : a))
                 .sort((a, b) => a.order - b.order);
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 areas: newAllAreas,
                 ...(projectsChanged ? { projects: newAllProjects } : {}),
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
@@ -254,16 +249,12 @@ export const createAreaActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     deleteArea: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingArea = false;
         set((state) => {
             const allAreas = state._allAreas;
@@ -311,7 +302,7 @@ export const createAreaActions = ({
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             const newVisibleAreas = newAllAreas.filter((item) => !item.deletedAt);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 tasks: newAllTasks,
                 projects: newAllProjects,
                 areas: newAllAreas,
@@ -338,16 +329,12 @@ export const createAreaActions = ({
             set({ error: message });
             return actionFail(message);
         }
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return actionOk();
     },
 
     restoreArea: async (id: string) => {
         const changeAt = Date.now();
         const now = new Date().toISOString();
-        let snapshot = null;
         let missingArea = false;
         set((state) => {
             const area = state._allAreas.find((item) => item.id === id);
@@ -435,7 +422,7 @@ export const createAreaActions = ({
             const newVisibleSections = newAllSections.filter((section) => !section.deletedAt);
             const newVisibleTasks = selectVisibleTasks(newAllTasks);
             clearDerivedCache();
-            snapshot = buildSaveSnapshot(state, {
+            persist(set, debouncedSave, state, {
                 areas: newAllAreas,
                 projects: newAllProjects,
                 sections: newAllSections,
@@ -455,9 +442,6 @@ export const createAreaActions = ({
                 ...(deviceState.updated ? { settings: deviceState.settings } : {}),
             };
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
         return missingArea ? actionFail('Area not found') : actionOk();
     },
 

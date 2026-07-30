@@ -11,6 +11,7 @@ import {
     ensureDeviceId,
     getNextDataChangeAt,
     normalizeAiSettingsForSync,
+    persist,
     reconcileEntityCollection,
     reuseArrayIfShallowEqual,
     reuseSettingsIfEquivalent,
@@ -21,8 +22,8 @@ import {
     selectVisibleTasks,
     stripSensitiveSettings,
     withTimeout,
-    buildSaveSnapshot,
 } from './store-helpers';
+import { DEFAULT_TOMBSTONE_RETENTION_DAYS, purgeExpiredTombstones } from './sync-tombstones';
 import { buildLoadContext, runAutoArchive, runLoadMigrations } from './store-load-migrations';
 import { createSeedGettingStartedAction } from './getting-started-seed';
 import { beginNotifyProfile, endNotifyProfile, recordDerivedRebuildMs, type NotifyProfile } from './store-notify-profiler';
@@ -264,6 +265,57 @@ export const createSettingsActions = ({
                             setProducerMs = Date.now() - producerStartedAt;
                             return state;
                         }
+                        if (applied.length > 0) {
+                            // Tombstone GC ('purge-expired-tombstones', applied above via
+                            // runLoadMigrations) legitimately shrinks these collections
+                            // relative to `state` — the in-memory data this fetch started
+                            // from — once a day. Run the identical age-based cleanup on
+                            // `state`'s own collections so the partial-snapshot guard
+                            // compares like for like instead of tripping on that expected
+                            // GC shrink (it would otherwise fail every load on the day the
+                            // cleanup runs for any long-lived process).
+                            //
+                            // DEFAULT_TOMBSTONE_RETENTION_DAYS is passed explicitly (matching
+                            // purgeExpiredTombstonesMigration's own implicit default) rather
+                            // than left to purgeExpiredTombstones' internal fallback: the
+                            // sync-merge path threads a configurable io.tombstoneRetentionDays
+                            // (sync.ts) instead of the default. If the load-migration path ever
+                            // grows the same knob, this explicit constant is what a grep for
+                            // DEFAULT_TOMBSTONE_RETENTION_DAYS turns up as the thing to update.
+                            //
+                            // `settings` is omitted from the input (passed as `{}`) because
+                            // only .tasks/.projects/.sections/.areas/.people below are read --
+                            // the pruned settings purgeExpiredTombstones would otherwise compute
+                            // (savedFilters/pendingRemoteDeletes) are unused here.
+                            const gcReference = purgeExpiredTombstones(
+                                {
+                                    tasks: state._allTasks,
+                                    projects: state._allProjects,
+                                    sections: state._allSections,
+                                    areas: state._allAreas,
+                                    people: state._allPeople,
+                                    settings: {},
+                                },
+                                nowIso,
+                                DEFAULT_TOMBSTONE_RETENTION_DAYS
+                            ).data;
+                            persist(set, debouncedSave, {
+                                _allTasks: gcReference.tasks,
+                                _allProjects: gcReference.projects,
+                                _allSections: gcReference.sections,
+                                _allAreas: gcReference.areas,
+                                _allPeople: gcReference.people ?? [],
+                                settings: state.settings,
+                            }, {
+                                tasks: nextTasks.items,
+                                projects: nextProjects.items,
+                                sections: nextSections.items,
+                                areas: nextAreas.items,
+                                people: nextPeople.items,
+                                settings: nextSettings,
+                            });
+                            markCoreStartupPhase('core.fetch_data.debounced_save_enqueued');
+                        }
                         setProducerMs = Date.now() - producerStartedAt;
                         return {
                             tasks: visibleTasks,
@@ -351,13 +403,6 @@ export const createSettingsActions = ({
                 return;
             }
 
-            if (applied.length > 0) {
-                markCoreStartupPhase('core.fetch_data.debounced_save_enqueued');
-                debouncedSave(
-                    { tasks: allTasks, projects: allProjects, sections: allSections, areas: allAreas, people: allPeople, settings: nextSettings },
-                    (msg) => set({ error: msg })
-                );
-            }
             markCoreStartupPhase('core.fetch_data.end');
         } catch (err) {
             markCoreStartupPhase('core.fetch_data.error');
@@ -385,7 +430,6 @@ export const createSettingsActions = ({
             return;
         }
         const archiveDaysUpdate = updates.gtd?.autoArchiveDays !== undefined;
-        let snapshot: AppData | null = null;
         set((state) => {
             const deviceState = ensureDeviceId(state.settings);
             const nowIso = new Date().toISOString();
@@ -462,7 +506,7 @@ export const createSettingsActions = ({
                 });
 
                 if (autoArchiveResult.didAutoArchive) {
-                    snapshot = buildSaveSnapshot(state, { tasks: autoArchiveResult.allTasks, settings: newSettings });
+                    persist(set, debouncedSave, state, { tasks: autoArchiveResult.allTasks, settings: newSettings });
                     return {
                         tasks: autoArchiveResult.visibleTasks ?? selectVisibleTasks(autoArchiveResult.allTasks),
                         _allTasks: autoArchiveResult.allTasks,
@@ -472,27 +516,19 @@ export const createSettingsActions = ({
                 }
             }
 
-            snapshot = buildSaveSnapshot(state, { settings: newSettings });
+            persist(set, debouncedSave, state, { settings: newSettings });
             return {
                 settings: newSettings,
                 lastDataChangeAt: shouldTrackChange ? getNextDataChangeAt(state.lastDataChangeAt) : state.lastDataChangeAt,
             };
         });
-
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 
     persistSnapshot: async () => {
-        let snapshot: AppData | null = null;
         set((state) => {
-            snapshot = buildSaveSnapshot(state);
+            persist(set, debouncedSave, state);
             return {};
         });
-        if (snapshot) {
-            debouncedSave(snapshot, (msg) => set({ error: msg }));
-        }
     },
 
     getDerivedState: () => {

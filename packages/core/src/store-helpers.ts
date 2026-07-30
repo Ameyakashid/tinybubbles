@@ -11,7 +11,7 @@ import { filterNotDeleted } from './sync-helpers';
 import { nextRevision, normalizeRevision } from './sync-revision';
 import type { AiSettings, AppData, Area, Person, Project, Section, Task, TaskStatus } from './types';
 import { generateUUID as uuidv4 } from './uuid';
-import type { DerivedState, SaveBaseState } from './store-types';
+import type { DerivedState, SaveBaseState, TaskStore } from './store-types';
 
 const hasOwnField = (value: object, field: PropertyKey): boolean => Object.prototype.hasOwnProperty.call(value, field);
 
@@ -672,6 +672,36 @@ export const buildSaveSnapshot = (state: SaveBaseState, overrides?: Partial<AppD
         people,
         settings: overrides?.settings ?? state.settings,
     };
+};
+
+type PersistSet = (partial: Partial<TaskStore> | ((state: TaskStore) => Partial<TaskStore> | TaskStore)) => void;
+type PersistDebouncedSave = (data: AppData, onError?: (msg: string) => void) => void;
+
+/**
+ * The store-write enqueue ritual, in one call: build the full-document
+ * snapshot via {@link buildSaveSnapshot} (so the partial-snapshot guard always
+ * runs) and hand it to the caller's debounced save with the store's standard
+ * error write. Call it from inside the `set()` producer that computed
+ * `overrides`, using that producer's own `state` argument.
+ *
+ * `debouncedSave` CAN call `set` synchronously here: a full pending-save queue
+ * makes `enforcePendingSaveCap` write `error` (via `setError`, and via every
+ * dropped save's `onError`) before `debouncedSave` returns. That nested write
+ * still lands correctly because zustand's merge re-reads its module-level
+ * state — but only if the *outer* producer's own return value is a partial,
+ * not the `state` identity it was given. Callers must never `return state`
+ * after calling `persist` in the same branch — return a fresh partial/object
+ * instead — or the outer merge's last-write-wins `Object.assign` clobbers the
+ * nested error write with the pre-nested state.
+ */
+export const persist = (
+    set: PersistSet,
+    debouncedSave: PersistDebouncedSave,
+    state: SaveBaseState,
+    overrides?: Partial<AppData>,
+): void => {
+    const snapshot = buildSaveSnapshot(state, overrides);
+    debouncedSave(snapshot, (msg) => set({ error: msg }));
 };
 
 export const computeDerivedState = (tasks: Task[], projects: Project[]): DerivedState => {
