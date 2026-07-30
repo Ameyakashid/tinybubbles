@@ -557,6 +557,7 @@ export const csOverrides: Record<string, string> = {
         'projects.colorRed': 'Červená',
         'projects.colorPurple': 'Fialová',
         'projects.colorPink': 'Růžová',
+        'projects.colorNone': 'Bez barvy',
         'projects.create': 'Vytvořit',
         'areas.create': 'Vytvořit',
         'areas.deleteConfirm': 'Chcete tuto oblast smazat? Projekty a úkoly v této oblasti zůstanou zachované a přesunou se do nepřiřazených.',

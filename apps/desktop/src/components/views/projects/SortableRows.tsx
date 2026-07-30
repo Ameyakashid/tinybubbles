@@ -11,7 +11,7 @@ type AreaRowProps = {
     area: Area;
     onDelete: (areaId: string) => void;
     onUpdateName: (areaId: string, name: string) => Promise<StoreActionResult> | void;
-    onUpdateColor: (areaId: string, color: string) => Promise<StoreActionResult> | void;
+    onUpdateColor: (areaId: string, color: string | undefined) => Promise<StoreActionResult> | void;
     t: (key: string) => string;
 };
 
@@ -33,8 +33,8 @@ export function SortableAreaRow({
         if (!name || name === area.name) return;
         void Promise.resolve(onUpdateName(area.id, name));
     };
-    const commitAreaColor = (nextColor: string) => {
-        if (!nextColor || nextColor === area.color) return;
+    const commitAreaColor = (nextColor: string | undefined) => {
+        if (nextColor === area.color) return;
         void Promise.resolve(onUpdateColor(area.id, nextColor));
     };
 
@@ -53,6 +53,7 @@ export function SortableAreaRow({
                 value={area.color}
                 onChange={commitAreaColor}
                 title={t('projects.color')}
+                noneLabel={t('projects.colorNone')}
             />
             <input
                 key={`${area.id}-${area.updatedAt}`}

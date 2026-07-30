@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { AREA_PRESET_COLORS, DEFAULT_AREA_COLOR } from '@mindwtr/core';
-import { Check } from 'lucide-react';
+import { Ban, Check } from 'lucide-react';
 
 type AreaColorPickerProps = {
     value?: string;
-    onChange: (color: string) => void;
+    onChange: (color: string | undefined) => void;
     title: string;
     align?: 'left' | 'right';
+    /** Label for the "no color" option. Defaults to "None". */
+    noneLabel?: string;
 };
 
 export function AreaColorPicker({
@@ -14,6 +16,7 @@ export function AreaColorPicker({
     onChange,
     title,
     align = 'left',
+    noneLabel = 'None',
 }: AreaColorPickerProps) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +70,20 @@ export function AreaColorPicker({
                     }`}
                     data-testid="area-color-picker-menu"
                 >
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (value) onChange(undefined);
+                            setOpen(false);
+                        }}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full border bg-card ${
+                            !value ? 'border-foreground' : 'border-border'
+                        }`}
+                        title={noneLabel}
+                        aria-label={noneLabel}
+                    >
+                        <Ban className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
                     {AREA_PRESET_COLORS.map((color) => {
                         const selected = resolvedValue === color;
                         return (

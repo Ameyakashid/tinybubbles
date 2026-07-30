@@ -80,6 +80,7 @@ import {
     fetchExternalCalendarEvents,
     getSystemCalendars,
     openExternalCalendarEvent,
+    saveExternalCalendars,
 } from '@/lib/external-calendar';
 
 beforeEach(() => {
@@ -147,6 +148,41 @@ describe('fetchExternalCalendarEvents', () => {
             {},
         );
         expect(result.events.map((event) => event.title)).toEqual(['Local Meeting']);
+    });
+
+    it('surfaces an uncategorised ICS feed\'s calendar-level color, the common case (#974)', async () => {
+        const rangeStart = new Date('2026-04-20T00:00:00.000Z');
+        const rangeEnd = new Date('2026-04-21T00:00:00.000Z');
+        mockGetItem.mockImplementation(async (key: string) => {
+            if (key === EXTERNAL_CALENDARS_KEY) {
+                return JSON.stringify([
+                    { id: 'local-ics', name: 'Local ICS', url: 'content://downloads/agenda.ics', enabled: true },
+                ]);
+            }
+            if (key === SYSTEM_CALENDAR_SETTINGS_KEY) {
+                return JSON.stringify({ enabled: false, selectAll: true, selectedCalendarIds: [] });
+            }
+            return null;
+        });
+        mockReadSafString.mockResolvedValue(
+            [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'X-APPLE-CALENDAR-COLOR:#123456',
+                'BEGIN:VEVENT',
+                'UID:local-event',
+                'DTSTART:20260420T110000Z',
+                'DTEND:20260420T113000Z',
+                'SUMMARY:Local Meeting',
+                'END:VEVENT',
+                'END:VCALENDAR',
+            ].join('\r\n'),
+        );
+
+        const result = await fetchExternalCalendarEvents(rangeStart, rangeEnd);
+
+        const calendar = result.calendars.find((entry) => entry.id === 'local-ics');
+        expect(calendar?.feedColor).toBe('#123456');
     });
 
     it('keeps out-of-range feed categories in the mobile calendar roster', async () => {
@@ -227,6 +263,21 @@ describe('fetchExternalCalendarEvents', () => {
         expect(result.events[0]?.nativeEventId).toBe('external-meeting');
     });
 
+    it('surfaces a system calendar\'s own color as a feed hint, not an explicit pick (#974)', async () => {
+        const rangeStart = new Date('2026-04-20T00:00:00.000Z');
+        const rangeEnd = new Date('2026-04-21T00:00:00.000Z');
+        mockGetCalendarsAsync.mockResolvedValue([
+            { id: 'google-primary', title: 'Google', color: '#123456' },
+        ]);
+        mockGetEventsAsync.mockResolvedValue([]);
+
+        const result = await fetchExternalCalendarEvents(rangeStart, rangeEnd);
+
+        const systemCalendar = result.calendars.find((calendar) => calendar.id === 'system:google-primary');
+        expect(systemCalendar?.feedColor).toBe('#123456');
+        expect(systemCalendar?.color).toBeUndefined();
+    });
+
     it('opens native device calendar events in the calendar app', async () => {
         const event = {
             id: 'system:google-primary:external-meeting:2026-04-20T11:00:00.000Z',
@@ -263,5 +314,17 @@ describe('fetchExternalCalendarEvents', () => {
         expect(canOpenExternalCalendarEvent(event)).toBe(false);
         expect(mockEditEventInCalendarAsync).not.toHaveBeenCalled();
         expect(mockOpenEventInCalendarAsync).not.toHaveBeenCalled();
+    });
+});
+
+describe('saveExternalCalendars', () => {
+    it('never persists a derived feedColor into synced settings storage (#974)', async () => {
+        await saveExternalCalendars([
+            { id: 'a', name: 'A', url: 'https://example.test/a.ics', enabled: true, feedColor: '#123456' } as never,
+        ]);
+
+        const [, savedRaw] = mockSetItem.mock.calls.find(([key]) => key === EXTERNAL_CALENDARS_KEY) ?? [];
+        const saved = JSON.parse(savedRaw ?? '[]');
+        expect(saved[0].feedColor).toBeUndefined();
     });
 });

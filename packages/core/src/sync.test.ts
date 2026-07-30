@@ -516,6 +516,35 @@ describe('Sync Logic', () => {
             }
         });
 
+        it('keeps a cleared area color cleared against a peer that still has it (#974)', () => {
+            // rev and updatedAt disagree on purpose: the cleared side has the
+            // HIGHER rev but the OLDER updatedAt, and the still-colored peer
+            // has the newer updatedAt but the lower rev. If merge fell back
+            // to plain updatedAt LWW, the still-colored peer (newer
+            // updatedAt) would win and this test would fail — so a pass here
+            // actually pins the rev-based mechanism, not just "clear wins".
+            const clearedArea: Area = {
+                ...createMockArea('area-1', '2024-01-01T00:00:00.000Z'),
+                color: undefined,
+                rev: 5,
+                revBy: 'device-b',
+            };
+            const staleColoredArea: Area = {
+                ...createMockArea('area-1', '2024-01-02T00:00:00.000Z'),
+                color: '#3b82f6',
+                rev: 2,
+                revBy: 'device-a',
+            };
+
+            const merged = mergeAppData(
+                { ...mockAppData(), areas: [clearedArea] },
+                { ...mockAppData(), areas: [staleColoredArea] },
+            );
+
+            expect(merged.areas[0].color).toBeUndefined();
+            expect(merged.areas[0].rev).toBe(5);
+        });
+
         it('marks attachment as available when local URI exists without localStatus', () => {
             const localAttachment: Attachment = {
                 id: 'att-available',

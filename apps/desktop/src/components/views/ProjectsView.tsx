@@ -196,7 +196,7 @@ export function ProjectsView() {
     const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
     const [showAreaManager, setShowAreaManager] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
-    const [newAreaColor, setNewAreaColor] = useState(DEFAULT_AREA_COLOR);
+    const [newAreaColor, setNewAreaColor] = useState<string | undefined>(DEFAULT_AREA_COLOR);
     const [showQuickAreaPrompt, setShowQuickAreaPrompt] = useState(false);
     const [pendingAreaAssignProjectId, setPendingAreaAssignProjectId] = useState<string | null>(null);
     const [isCreatingProject, setIsCreatingProject] = useState(false);

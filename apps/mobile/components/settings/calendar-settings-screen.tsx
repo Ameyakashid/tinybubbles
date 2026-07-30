@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     EXTERNAL_CALENDAR_COLORS,
     generateUUID,
-    getExternalCalendarColorForId,
     normalizeExternalCalendarColor,
+    resolveExternalCalendarColor,
     tFallback,
     type ExternalCalendarSubscription,
     useTaskStore,
@@ -405,9 +405,11 @@ export function CalendarSettingsScreen() {
 
         const name = (newCalendarName.trim() || tr('nav.calendar')).trim();
         const id = generateUUID();
+        // No color yet: an unset color means "no explicit pick", so a feed
+        // hint or the deterministic hash fallback can still apply (#974).
         const next: ExternalCalendarSubscription[] = [
             ...externalCalendars,
-            { id, name, url, enabled: true, color: getExternalCalendarColorForId(id) },
+            { id, name, url, enabled: true },
         ];
 
         setExternalCalendars(next);
@@ -433,7 +435,7 @@ export function CalendarSettingsScreen() {
             const id = generateUUID();
             const next: ExternalCalendarSubscription[] = [
                 ...externalCalendars,
-                { id, name, url: asset.uri.trim(), enabled: true, color: getExternalCalendarColorForId(id) },
+                { id, name, url: asset.uri.trim(), enabled: true },
             ];
 
             setExternalCalendars(next);
@@ -918,7 +920,7 @@ export function CalendarSettingsScreen() {
                                         </Text>
                                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                                             {EXTERNAL_CALENDAR_COLORS.map((color) => {
-                                                const selectedColor = calendar.color ?? getExternalCalendarColorForId(calendar.id);
+                                                const selectedColor = resolveExternalCalendarColor(calendar.id, calendar.color, calendar.feedColor);
                                                 const selected = selectedColor === color;
                                                 return (
                                                     <TouchableOpacity

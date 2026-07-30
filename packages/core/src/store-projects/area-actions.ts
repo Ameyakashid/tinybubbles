@@ -1,3 +1,4 @@
+import { DEFAULT_PROJECT_COLOR } from '../color-constants';
 import { buildSaveSnapshot, ensureDeviceId, getNextDataChangeAt, nextRevision, selectVisibleTasks } from '../store-helpers';
 import { logWarn } from '../logger';
 import { clearDerivedCache } from '../store-settings';
@@ -189,8 +190,11 @@ export const createAreaActions = ({
             const nextName = updates.name !== undefined ? updates.name.trim() : area.name;
             let projectsChanged = false;
             let newAllProjects = state._allProjects;
-            if (typeof updates.color === 'string') {
-                const nextAreaColor = updates.color;
+            if ('color' in updates) {
+                // Project.color is required, so clearing the area color
+                // repaints its projects back to the neutral default rather
+                // than leaving them stuck on the color the area just lost.
+                const nextAreaColor = updates.color ?? DEFAULT_PROJECT_COLOR;
                 newAllProjects = state._allProjects.map((project) => {
                     if (project.areaId !== id) return project;
                     if (project.color === nextAreaColor) return project;

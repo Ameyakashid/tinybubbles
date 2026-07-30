@@ -9,6 +9,7 @@ import {
     normalizeExternalCalendarColor,
     parseIcsWithMetadata,
     type ExternalCalendarEvent,
+    type ExternalCalendarSourceResult,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
 import * as FileSystem from './file-system';
@@ -347,12 +348,14 @@ async function fetchIcsCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?:
         })
     );
 
-    const events: ExternalCalendarEvent[] = [];
     // A feed split by CATEGORIES is represented by its category calendars, so
     // the subscription itself drops out of the visible list once nothing is
-    // left on it.
+    // left on it. `contributed` also carries the parent's `feedColor` when
+    // the feed wasn't split — it must win over the raw persisted entry
+    // (which never carries `feedColor`), so it's merged in as a later
+    // source rather than dropped, the same way desktop does it.
     const splitCalendarIds = new Set<string>();
-    const categoryCalendars: ExternalCalendarSubscription[] = [];
+    const icsSources: ExternalCalendarSourceResult[] = [];
     for (const [index, result] of results.entries()) {
         if (result.status !== 'fulfilled') continue;
         const calendar = enabled[index];
@@ -360,16 +363,18 @@ async function fetchIcsCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?:
             calendar,
             result.value.events,
             result.value.categoryInfo,
+            result.value.calendarColor,
         );
         if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
-        categoryCalendars.push(...contributed.filter((entry) => entry.id !== calendar.id));
-        events.push(...result.value.events);
+        icsSources.push({ calendars: contributed, events: result.value.events });
     }
 
-    return {
-        calendars: [...calendars.filter((calendar) => !splitCalendarIds.has(calendar.id)), ...categoryCalendars],
-        events,
-    };
+    const merged = mergeExternalCalendarSources([
+        { calendars: calendars.filter((calendar) => !splitCalendarIds.has(calendar.id)), events: [] },
+        ...icsSources,
+    ]);
+
+    return merged;
 }
 
 async function fetchSystemCalendarEvents(rangeStart: Date, rangeEnd: Date, signal?: AbortSignal): Promise<{
@@ -422,6 +427,9 @@ async function fetchSystemCalendarEvents(rangeStart: Date, rangeEnd: Date, signa
         name: getCalendarDisplayName(calendar),
         url: `system://${encodeURIComponent(calendar.id)}`,
         enabled: true,
+        // The OS calendar's own color, resolved as a feed hint (#974) — never
+        // an explicit pick, so it never gets written into synced settings.
+        feedColor: typeof calendar.color === 'string' && calendar.color.trim().length > 0 ? calendar.color : undefined,
     }));
 
     const events: ExternalCalendarEvent[] = [];

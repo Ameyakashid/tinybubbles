@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    getExternalCalendarColorForId,
+    resolveExternalCalendarColor,
     safeParseDate,
     type ExternalCalendarEvent,
     type ExternalCalendarSubscription,
@@ -20,9 +20,9 @@ import { dayKey } from './calendar-primitives';
 
 const HIDDEN_EXTERNAL_CALENDAR_IDS_STORAGE_KEY = 'mindwtr.calendar.hiddenExternalCalendars';
 
-/** The palette colour for a calendar source, before the user's own override. */
-export const defaultExternalCalendarColor = (sourceId: string, override?: string): string => (
-    override ?? getExternalCalendarColorForId(sourceId || 'calendar')
+/** User pick > feed-provided color > deterministic palette hash (#974). */
+export const defaultExternalCalendarColor = (sourceId: string, override?: string, feedColor?: string): string => (
+    resolveExternalCalendarColor(sourceId, override, feedColor)
 );
 
 const serializeHiddenExternalCalendarIds = (ids: Iterable<string>): string => (
@@ -130,7 +130,7 @@ export function useCalendarExternalEvents({ filterQuery, visibleRange }: Calenda
 
     const calendarNameById = useMemo(() => new Map(externalCalendars.map((c) => [c.id, c.name])), [externalCalendars]);
     const calendarColorById = useMemo(
-        () => new Map(externalCalendars.map((c) => [c.id, defaultExternalCalendarColor(c.id, c.color)])),
+        () => new Map(externalCalendars.map((c) => [c.id, defaultExternalCalendarColor(c.id, c.color, c.feedColor)])),
         [externalCalendars]
     );
     const getExternalCalendarColor = useCallback(

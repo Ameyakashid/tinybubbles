@@ -1,4 +1,5 @@
 import { addDays, addMonths, addWeeks, differenceInCalendarDays, startOfWeek } from 'date-fns';
+import { normalizeDerivedIcsColor } from './external-calendar-colors';
 
 export interface ExternalCalendarSubscription {
     id: string;
@@ -6,6 +7,8 @@ export interface ExternalCalendarSubscription {
     url: string;
     enabled: boolean;
     color?: string;
+    /** Derived from the feed (ICS COLOR/X-APPLE-CALENDAR-COLOR or an OS calendar's own color). Never persisted to synced settings — resolve through `resolveExternalCalendarColor`. */
+    feedColor?: string;
 }
 
 export interface ExternalCalendarEvent {
@@ -40,12 +43,16 @@ export interface ParseIcsOptions {
 export interface IcsCategoryInfo {
     names: string[];
     hasUncategorized: boolean;
+    /** Category name -> `#RRGGBB`. The first color seen for a category wins. */
+    colors?: Record<string, string>;
 }
 
 export interface ParseIcsResult {
     events: ExternalCalendarEvent[];
     /** Derived from every valid event in the feed, not only the requested range. */
     categoryInfo: IcsCategoryInfo;
+    /** RFC 7986 COLOR or X-APPLE-CALENDAR-COLOR for the whole feed, if present. */
+    calendarColor?: string;
 }
 
 /**
@@ -83,7 +90,60 @@ type ParsedVEvent = {
     rrule?: ParsedRRule;
     /** First `CATEGORIES` value, if any. An event lands on one calendar only. */
     category?: string;
+    /** RFC 7986 COLOR or X-FOSSIFY-CATEGORY-COLOR on this event, if present. */
+    categoryColor?: string;
 };
+
+/**
+ * CSS Color Module Level 3 extended keywords, the set RFC 7986's calendar
+ * `COLOR` property draws from. Lower-case keys.
+ */
+const CSS3_COLOR_NAMES: Record<string, string> = {
+    aliceblue: '#F0F8FF', antiquewhite: '#FAEBD7', aqua: '#00FFFF', aquamarine: '#7FFFD4', azure: '#F0FFFF',
+    beige: '#F5F5DC', bisque: '#FFE4C4', black: '#000000', blanchedalmond: '#FFEBCD', blue: '#0000FF',
+    blueviolet: '#8A2BE2', brown: '#A52A2A', burlywood: '#DEB887', cadetblue: '#5F9EA0', chartreuse: '#7FFF00',
+    chocolate: '#D2691E', coral: '#FF7F50', cornflowerblue: '#6495ED', cornsilk: '#FFF8DC', crimson: '#DC143C',
+    cyan: '#00FFFF', darkblue: '#00008B', darkcyan: '#008B8B', darkgoldenrod: '#B8860B', darkgray: '#A9A9A9',
+    darkgreen: '#006400', darkgrey: '#A9A9A9', darkkhaki: '#BDB76B', darkmagenta: '#8B008B', darkolivegreen: '#556B2F',
+    darkorange: '#FF8C00', darkorchid: '#9932CC', darkred: '#8B0000', darksalmon: '#E9967A', darkseagreen: '#8FBC8F',
+    darkslateblue: '#483D8B', darkslategray: '#2F4F4F', darkslategrey: '#2F4F4F', darkturquoise: '#00CED1', darkviolet: '#9400D3',
+    deeppink: '#FF1493', deepskyblue: '#00BFFF', dimgray: '#696969', dimgrey: '#696969', dodgerblue: '#1E90FF',
+    firebrick: '#B22222', floralwhite: '#FFFAF0', forestgreen: '#228B22', fuchsia: '#FF00FF', gainsboro: '#DCDCDC',
+    ghostwhite: '#F8F8FF', gold: '#FFD700', goldenrod: '#DAA520', gray: '#808080', green: '#008000',
+    greenyellow: '#ADFF2F', grey: '#808080', honeydew: '#F0FFF0', hotpink: '#FF69B4', indianred: '#CD5C5C',
+    indigo: '#4B0082', ivory: '#FFFFF0', khaki: '#F0E68C', lavender: '#E6E6FA', lavenderblush: '#FFF0F5',
+    lawngreen: '#7CFC00', lemonchiffon: '#FFFACD', lightblue: '#ADD8E6', lightcoral: '#F08080', lightcyan: '#E0FFFF',
+    lightgoldenrodyellow: '#FAFAD2', lightgray: '#D3D3D3', lightgreen: '#90EE90', lightgrey: '#D3D3D3', lightpink: '#FFB6C1',
+    lightsalmon: '#FFA07A', lightseagreen: '#20B2AA', lightskyblue: '#87CEFA', lightslategray: '#778899', lightslategrey: '#778899',
+    lightsteelblue: '#B0C4DE', lightyellow: '#FFFFE0', lime: '#00FF00', limegreen: '#32CD32', linen: '#FAF0E6',
+    magenta: '#FF00FF', maroon: '#800000', mediumaquamarine: '#66CDAA', mediumblue: '#0000CD', mediumorchid: '#BA55D3',
+    mediumpurple: '#9370DB', mediumseagreen: '#3CB371', mediumslateblue: '#7B68EE', mediumspringgreen: '#00FA9A', mediumturquoise: '#48D1CC',
+    mediumvioletred: '#C71585', midnightblue: '#191970', mintcream: '#F5FFFA', mistyrose: '#FFE4E1', moccasin: '#FFE4B5',
+    navajowhite: '#FFDEAD', navy: '#000080', oldlace: '#FDF5E6', olive: '#808000', olivedrab: '#6B8E23',
+    orange: '#FFA500', orangered: '#FF4500', orchid: '#DA70D6', palegoldenrod: '#EEE8AA', palegreen: '#98FB98',
+    paleturquoise: '#AFEEEE', palevioletred: '#DB7093', papayawhip: '#FFEFD5', peachpuff: '#FFDAB9', peru: '#CD853F',
+    pink: '#FFC0CB', plum: '#DDA0DD', powderblue: '#B0E0E6', purple: '#800080', rebeccapurple: '#663399',
+    red: '#FF0000', rosybrown: '#BC8F8F', royalblue: '#4169E1', saddlebrown: '#8B4513', salmon: '#FA8072',
+    sandybrown: '#F4A460', seagreen: '#2E8B57', seashell: '#FFF5EE', sienna: '#A0522D', silver: '#C0C0C0',
+    skyblue: '#87CEEB', slateblue: '#6A5ACD', slategray: '#708090', slategrey: '#708090', snow: '#FFFAFA',
+    springgreen: '#00FF7F', steelblue: '#4682B4', tan: '#D2B48C', teal: '#008080', thistle: '#D8BFD8',
+    tomato: '#FF6347', turquoise: '#40E0D0', violet: '#EE82EE', wheat: '#F5DEB3', white: '#FFFFFF',
+    whitesmoke: '#F5F5F5', yellow: '#FFFF00', yellowgreen: '#9ACD32',
+};
+
+function resolveCssColorName(value: string): string | undefined {
+    return CSS3_COLOR_NAMES[value.trim().toLowerCase()];
+}
+
+/** Signed 32-bit ARGB (Android `Color.parseColor`/Fossify convention) -> `#RRGGBB`, alpha dropped. */
+function argbIntToHex(raw: string): string | undefined {
+    const trimmed = raw.trim();
+    if (!/^-?\d+$/.test(trimmed)) return undefined;
+    const parsed = parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed)) return undefined;
+    const rgb = (parsed >>> 0) & 0xFFFFFF;
+    return `#${rgb.toString(16).padStart(6, '0').toUpperCase()}`;
+}
 
 function unfoldIcsLines(input: string): string[] {
     const normalized = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -694,51 +754,86 @@ export function parseIcsWithMetadata(input: string, options: ParseIcsOptions): P
     const events: ParsedVEvent[] = [];
     let current: Partial<ParsedVEvent> | null = null;
     let currentDurationMs: number | null = null;
+    let calendarColorRfc: string | undefined;
+    let calendarColorApple: string | undefined;
+    // Every BEGIN:/END: nesting, not just VEVENT, so a calendar-level
+    // property can be told apart from the same property name inside a
+    // nested component (VTODO, VJOURNAL, VTIMEZONE, ...).
+    const componentStack: string[] = [];
 
     for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) continue;
 
-        if (line.toUpperCase() === 'BEGIN:VEVENT') {
-            current = {};
-            currentDurationMs = null;
+        const beginMatch = /^BEGIN:(\S+)$/i.exec(line);
+        if (beginMatch) {
+            const component = beginMatch[1].toUpperCase();
+            componentStack.push(component);
+            if (component === 'VEVENT') {
+                current = {};
+                currentDurationMs = null;
+            }
             continue;
         }
-        if (line.toUpperCase() === 'END:VEVENT') {
-            if (!current) continue;
-            if (!current.uid || !current.summary || !current.start) {
+
+        const endMatch = /^END:(\S+)$/i.exec(line);
+        if (endMatch) {
+            const component = endMatch[1].toUpperCase();
+            if (componentStack[componentStack.length - 1] === component) componentStack.pop();
+            if (component === 'VEVENT') {
+                if (!current) continue;
+                if (!current.uid || !current.summary || !current.start) {
+                    current = null;
+                    currentDurationMs = null;
+                    continue;
+                }
+
+                const allDay = Boolean(current.allDay);
+                let end = current.end;
+                if (!end && currentDurationMs !== null) {
+                    end = new Date(current.start.getTime() + currentDurationMs);
+                }
+                if (!end) {
+                    // Reasonable defaults.
+                    end = allDay ? addDays(current.start, 1) : new Date(current.start.getTime() + 60 * 60 * 1000);
+                }
+
+                events.push({
+                    uid: current.uid,
+                    summary: current.summary,
+                    description: current.description,
+                    location: current.location,
+                    start: current.start,
+                    end,
+                    allDay,
+                    rrule: current.rrule,
+                    category: current.category,
+                    categoryColor: current.categoryColor,
+                });
                 current = null;
                 currentDurationMs = null;
-                continue;
             }
-
-            const allDay = Boolean(current.allDay);
-            let end = current.end;
-            if (!end && currentDurationMs !== null) {
-                end = new Date(current.start.getTime() + currentDurationMs);
-            }
-            if (!end) {
-                // Reasonable defaults.
-                end = allDay ? addDays(current.start, 1) : new Date(current.start.getTime() + 60 * 60 * 1000);
-            }
-
-            events.push({
-                uid: current.uid,
-                summary: current.summary,
-                description: current.description,
-                location: current.location,
-                start: current.start,
-                end,
-                allDay,
-                rrule: current.rrule,
-                category: current.category,
-            });
-            current = null;
-            currentDurationMs = null;
             continue;
         }
 
-        if (!current) continue;
+        if (!current) {
+            // Calendar-level properties (COLOR, X-APPLE-CALENDAR-COLOR) only
+            // count directly inside VCALENDAR — not inside VTODO, VJOURNAL,
+            // VTIMEZONE, or any other nested component, which may carry a
+            // same-named property with an unrelated meaning. First value of
+            // each wins; Apple's hex is preferred over the RFC 7986
+            // name-table approximation below.
+            const directlyInVcalendar = componentStack.length === 1 && componentStack[0] === 'VCALENDAR';
+            if (directlyInVcalendar && (!calendarColorRfc || !calendarColorApple)) {
+                const calendarProp = parseIcsLine(line);
+                if (calendarProp?.name === 'COLOR' && !calendarColorRfc) {
+                    calendarColorRfc = resolveCssColorName(calendarProp.value);
+                } else if (calendarProp?.name === 'X-APPLE-CALENDAR-COLOR' && !calendarColorApple) {
+                    calendarColorApple = normalizeDerivedIcsColor(calendarProp.value);
+                }
+            }
+            continue;
+        }
 
         const parsed = parseIcsLine(line);
         if (!parsed) continue;
@@ -771,6 +866,10 @@ export function parseIcsWithMetadata(input: string, options: ParseIcsOptions): P
             current.category = splitIcsTextList(value)
                 .map((entry) => unescapeIcsText(entry).trim())
                 .find((entry) => entry.length > 0);
+        } else if (name === 'X-FOSSIFY-CATEGORY-COLOR' && !current.categoryColor) {
+            current.categoryColor = argbIntToHex(value);
+        } else if (name === 'COLOR' && !current.categoryColor) {
+            current.categoryColor = resolveCssColorName(value);
         }
     }
 
@@ -782,6 +881,15 @@ export function parseIcsWithMetadata(input: string, options: ParseIcsOptions): P
             : [],
     );
     const splitByCategory = categories.size > 0 && categories.size <= MAX_CATEGORY_CALENDARS;
+
+    // First color seen for a category wins, so paging months can't change it.
+    const categoryColors: Record<string, string> = {};
+    if (splitByCategory) {
+        for (const event of events) {
+            if (!event.category || !event.categoryColor || categoryColors[event.category]) continue;
+            categoryColors[event.category] = event.categoryColor;
+        }
+    }
 
     const occurrences: ExternalCalendarEvent[] = [];
     const maxTotal = options.maxTotalOccurrences ?? 5000;
@@ -808,7 +916,9 @@ export function parseIcsWithMetadata(input: string, options: ParseIcsOptions): P
                 ? [...categories].sort((left, right) => left.localeCompare(right))
                 : [],
             hasUncategorized: splitByCategory && events.some((event) => !event.category),
+            colors: Object.keys(categoryColors).length > 0 ? categoryColors : undefined,
         },
+        calendarColor: calendarColorApple ?? calendarColorRfc,
     };
 }
 
@@ -828,6 +938,8 @@ export function expandCategoryCalendars(
     subscription: ExternalCalendarSubscription,
     events: readonly ExternalCalendarEvent[],
     categoryInfo?: IcsCategoryInfo,
+    /** Whole-feed color from `parseIcsWithMetadata`, or an OS calendar's own color. */
+    calendarColor?: string,
 ): ExternalCalendarSubscription[] {
     const prefix = categoryCalendarPrefix(subscription.id);
     const categories: string[] = categoryInfo ? [...categoryInfo.names] : [];
@@ -847,7 +959,11 @@ export function expandCategoryCalendars(
         }
     }
 
-    if (categories.length === 0) return [subscription];
+    const withFeedColor: ExternalCalendarSubscription = calendarColor
+        ? { ...subscription, feedColor: calendarColor }
+        : subscription;
+
+    if (categories.length === 0) return [withFeedColor];
 
     categories.sort((left, right) => left.localeCompare(right));
     const calendars = categories.map((category) => ({
@@ -855,6 +971,7 @@ export function expandCategoryCalendars(
         name: category,
         url: subscription.url,
         enabled: subscription.enabled,
+        feedColor: categoryInfo?.colors?.[category] ?? calendarColor,
     }));
-    return hasUncategorized ? [subscription, ...calendars] : calendars;
+    return hasUncategorized ? [withFeedColor, ...calendars] : calendars;
 }

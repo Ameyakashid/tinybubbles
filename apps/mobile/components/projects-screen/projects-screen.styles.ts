@@ -79,6 +79,10 @@ export const projectsScreenStyles = StyleSheet.create({
     colorOptionSelected: {
         borderColor: '#000',
     },
+    colorOptionNone: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     addIconButton: {
         width: 46,
         height: 46,

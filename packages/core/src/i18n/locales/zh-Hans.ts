@@ -519,6 +519,7 @@ export const zhHans: Record<string, string> = {
         'projects.colorRed': '红色',
         'projects.colorPurple': '紫色',
         'projects.colorPink': '粉色',
+        'projects.colorNone': '无颜色',
         'projects.create': '创建',
         'areas.create': '创建',
         'areas.deleteConfirm': '删除此区域？此区域中的项目和任务会保留并移至未分配。',

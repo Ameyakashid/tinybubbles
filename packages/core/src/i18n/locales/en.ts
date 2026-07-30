@@ -594,6 +594,7 @@ export const en: Record<string, string> = {
         'projects.colorRed': 'Red',
         'projects.colorPurple': 'Purple',
         'projects.colorPink': 'Pink',
+        'projects.colorNone': 'None',
         'projects.create': 'Create',
         'areas.create': 'Create',
         'areas.deleteConfirm': 'Delete this area? Projects and tasks in this area will be kept and moved to unassigned.',

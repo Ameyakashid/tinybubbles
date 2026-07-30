@@ -37,7 +37,7 @@ import {
   safeParseDueDate,
   shallow,
   startOfCalendarMonth,
-  getExternalCalendarColorForId,
+  resolveExternalCalendarColor,
   timeEstimateToMinutes as resolveTimeEstimateToMinutes,
   translateText,
   type CalendarSettings,
@@ -151,8 +151,9 @@ type CalendarTaskComposerState = CalendarComposerState & {
   startTimeValue: string;
 };
 
-const sourceColorForId = (sourceId: string, override?: string): string => (
-  override ?? getExternalCalendarColorForId(sourceId || 'calendar')
+/** User pick > feed-provided color > deterministic palette hash (#974). */
+const sourceColorForId = (sourceId: string, override?: string, feedColor?: string): string => (
+  resolveExternalCalendarColor(sourceId, override, feedColor)
 );
 
 const formatTimeInputValue = formatCalendarTimeInputValue;
@@ -562,7 +563,7 @@ export function useCalendarViewController() {
     [externalCalendars],
   );
   const calendarColorById = useMemo(
-    () => new Map(externalCalendars.map((calendar) => [calendar.id, sourceColorForId(calendar.id, calendar.color)])),
+    () => new Map(externalCalendars.map((calendar) => [calendar.id, sourceColorForId(calendar.id, calendar.color, calendar.feedColor)])),
     [externalCalendars],
   );
   const getSourceColorForId = useCallback(

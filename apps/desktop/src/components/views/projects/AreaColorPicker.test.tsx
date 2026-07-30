@@ -19,6 +19,37 @@ describe('AreaColorPicker', () => {
         expect(onChange).toHaveBeenCalledWith('#10b981');
     });
 
+    it('clears the color via the None option', () => {
+        const onChange = vi.fn();
+        const { getByLabelText } = render(
+            <AreaColorPicker
+                value="#3b82f6"
+                onChange={onChange}
+                title="Area color"
+            />,
+        );
+
+        fireEvent.click(getByLabelText('Area color'));
+        fireEvent.click(getByLabelText('None'));
+
+        expect(onChange).toHaveBeenCalledWith(undefined);
+    });
+
+    it('does not call onChange when None is clicked while already unset', () => {
+        const onChange = vi.fn();
+        const { getByLabelText } = render(
+            <AreaColorPicker
+                onChange={onChange}
+                title="Area color"
+            />,
+        );
+
+        fireEvent.click(getByLabelText('Area color'));
+        fireEvent.click(getByLabelText('None'));
+
+        expect(onChange).not.toHaveBeenCalled();
+    });
+
     it('raises the open menu above manage panels', () => {
         const onChange = vi.fn();
         const { getByLabelText, getByTestId } = render(

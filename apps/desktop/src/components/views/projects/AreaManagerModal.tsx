@@ -13,8 +13,8 @@ type AreaManagerModalProps = {
     onDragEnd: (event: DragEndEvent) => void;
     onDeleteArea: (areaId: string) => void;
     onUpdateArea: (areaId: string, updates: Partial<Area>) => Promise<StoreActionResult> | void;
-    newAreaColor: string;
-    onChangeNewAreaColor: (color: string) => void;
+    newAreaColor: string | undefined;
+    onChangeNewAreaColor: (color: string | undefined) => void;
     newAreaName: string;
     onChangeNewAreaName: ChangeEventHandler<HTMLInputElement>;
     onCreateArea: () => void;
@@ -127,6 +127,7 @@ export function AreaManagerModal({
                                 value={newAreaColor}
                                 onChange={onChangeNewAreaColor}
                                 title={t('projects.color')}
+                                noneLabel={t('projects.colorNone')}
                             />
                             <input
                                 type="text"

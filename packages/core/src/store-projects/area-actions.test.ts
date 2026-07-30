@@ -99,6 +99,23 @@ describe('area actions', () => {
         expect(saved.tasks.find((item) => item.title === 'Project task')?.deletedAt).toBeUndefined();
     });
 
+    it('repaints projects back to the default color when the area color is cleared (#974)', async () => {
+        const { addArea, addProject, updateArea } = useTaskStore.getState();
+        const area = await addArea('Work', { color: '#3b82f6' });
+        expect(area).not.toBeNull();
+        if (!area) return;
+        const project = await addProject('Launch', '#3b82f6', { areaId: area.id, areaTitle: 'Work' });
+        expect(project).not.toBeNull();
+        if (!project) return;
+        expect(useTaskStore.getState().projects.find((item) => item.id === project.id)?.color).toBe('#3b82f6');
+
+        await updateArea(area.id, { color: undefined });
+
+        const state = useTaskStore.getState();
+        expect(state.areas.find((item) => item.id === area.id)?.color).toBeUndefined();
+        expect(state.projects.find((item) => item.id === project.id)?.color).toBe('#94a3b8');
+    });
+
     it('restores the area without resurrecting independently deleted children', async () => {
         const { addArea, addProject, addSection, addTask, deleteArea, deleteProject, deleteTask, restoreArea } = useTaskStore.getState();
         const area = await addArea('Work');

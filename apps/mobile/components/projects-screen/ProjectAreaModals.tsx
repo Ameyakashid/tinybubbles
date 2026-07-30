@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ban } from 'lucide-react-native';
 import type { Area, Project } from '@mindwtr/core';
 
 import { projectsScreenStyles as styles } from './projects-screen.styles';
@@ -211,6 +212,25 @@ export function ProjectAreaModals({
                                             </View>
                                             {isExpanded ? (
                                                 <View style={styles.areaColorPickerRow}>
+                                                    <TouchableOpacity
+                                                        accessibilityLabel={t('projects.colorNone') || 'None'}
+                                                        style={[
+                                                            styles.colorOption,
+                                                            styles.colorOptionNone,
+                                                            { borderColor: tc.border },
+                                                            // Not styles.colorOptionSelected (#000 border) — invisible
+                                                            // against this button's transparent fill in dark theme.
+                                                            // The color swatches below stay visible on #000 because
+                                                            // they have a solid fill; this one needs a theme token.
+                                                            !area.color && { borderColor: tc.tint },
+                                                        ]}
+                                                        onPress={() => {
+                                                            void updateArea(area.id, { color: undefined });
+                                                            onSetExpandedAreaColorId(null);
+                                                        }}
+                                                    >
+                                                        <Ban size={16} color={tc.secondaryText} />
+                                                    </TouchableOpacity>
                                                     {colors.map((color) => (
                                                         <TouchableOpacity
                                                             key={`${area.id}-${color}`}

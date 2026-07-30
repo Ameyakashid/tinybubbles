@@ -46,7 +46,7 @@ function SortableAreaRow({
     area: Area;
     onDelete: (id: string) => void;
     onUpdateName: (id: string, name: string) => void;
-    onUpdateColor: (id: string, color: string) => void;
+    onUpdateColor: (id: string, color: string | undefined) => void;
     translate: (key: string) => string;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: area.id });
@@ -60,8 +60,8 @@ function SortableAreaRow({
         if (!name || name === area.name) return;
         onUpdateName(area.id, name);
     };
-    const commitColor = (color: string) => {
-        if (!color || color === area.color) return;
+    const commitColor = (color: string | undefined) => {
+        if (color === area.color) return;
         onUpdateColor(area.id, color);
     };
 
@@ -80,6 +80,7 @@ function SortableAreaRow({
                 value={area.color}
                 onChange={commitColor}
                 title={translate('projects.color')}
+                noneLabel={translate('projects.colorNone')}
             />
             <input
                 key={`${area.id}-${area.updatedAt}`}
@@ -384,7 +385,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
 
     // New area form
     const [newAreaName, setNewAreaName] = useState('');
-    const [newAreaColor, setNewAreaColor] = useState(DEFAULT_AREA_COLOR);
+    const [newAreaColor, setNewAreaColor] = useState<string | undefined>(DEFAULT_AREA_COLOR);
     const [isCreatingArea, setIsCreatingArea] = useState(false);
     const [newPersonName, setNewPersonName] = useState('');
     const [isCreatingPerson, setIsCreatingPerson] = useState(false);
@@ -494,6 +495,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
                             value={newAreaColor}
                             onChange={setNewAreaColor}
                             title={translate('projects.color')}
+                            noneLabel={translate('projects.colorNone')}
                         />
                         <input
                             type="text"

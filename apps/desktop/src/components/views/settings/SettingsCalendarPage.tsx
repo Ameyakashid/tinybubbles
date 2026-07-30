@@ -1,7 +1,7 @@
 import type { SystemCalendarPermissionStatus, SystemCalendarPushTarget } from '../../../lib/system-calendar';
 import {
     EXTERNAL_CALENDAR_COLORS,
-    getExternalCalendarColorForId,
+    resolveExternalCalendarColor,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
 import { ExternalLink } from 'lucide-react';
@@ -249,7 +249,7 @@ export function SettingsCalendarPage({
                                             <div className="text-xs text-muted-foreground truncate mt-1">{maskCalendarUrl(calendar.url)}</div>
                                             <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`${calendar.name} color`}>
                                                 {EXTERNAL_CALENDAR_COLORS.map((color) => {
-                                                    const selectedColor = calendar.color ?? getExternalCalendarColorForId(calendar.id);
+                                                    const selectedColor = resolveExternalCalendarColor(calendar.id, calendar.color, calendar.feedColor);
                                                     const selected = selectedColor === color;
                                                     return (
                                                         <button

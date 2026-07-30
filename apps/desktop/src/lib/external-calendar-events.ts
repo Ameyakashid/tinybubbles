@@ -19,6 +19,7 @@ const ICS_MONTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const ICS_MONTH_CACHE_MAX_ENTRIES = 120;
 
 type IcsMonthCacheEntry = {
+    calendarColor?: string;
     categoryInfo: IcsCategoryInfo;
     events: ExternalCalendarEvent[];
     expiresAt: number;
@@ -26,6 +27,7 @@ type IcsMonthCacheEntry = {
 };
 
 type LoadedIcsCalendar = {
+    calendarColor?: string;
     categoryInfo: IcsCategoryInfo;
     events: ExternalCalendarEvent[];
 };
@@ -98,6 +100,7 @@ async function loadCachedIcsEventsForCalendar(
     const now = Date.now();
     const events: ExternalCalendarEvent[] = [];
     let categoryInfo: IcsCategoryInfo = { names: [], hasUncategorized: false };
+    let calendarColor: string | undefined;
     const missingRanges: MonthRange[] = [];
 
     for (const monthRange of monthRanges) {
@@ -106,6 +109,7 @@ async function loadCachedIcsEventsForCalendar(
         if (cached && cached.expiresAt > now) {
             cached.lastAccessedAt = now;
             categoryInfo = cached.categoryInfo;
+            calendarColor = cached.calendarColor;
             events.push(...cached.events.filter((event) => eventOverlapsRange(event, rangeStart, rangeEnd)));
             continue;
         }
@@ -114,7 +118,7 @@ async function loadCachedIcsEventsForCalendar(
     }
 
     if (missingRanges.length === 0) {
-        return { categoryInfo, events };
+        return { calendarColor, categoryInfo, events };
     }
 
     const text = await fetchTextWithTimeout(calendar.url, 15_000);
@@ -126,7 +130,9 @@ async function loadCachedIcsEventsForCalendar(
             splitByCategory: true,
         });
         categoryInfo = parsed.categoryInfo;
+        calendarColor = parsed.calendarColor;
         icsMonthCache.set(getIcsCacheKey(calendar, monthRange.key), {
+            calendarColor,
             categoryInfo,
             events: parsed.events,
             expiresAt: now + ICS_MONTH_CACHE_TTL_MS,
@@ -135,7 +141,7 @@ async function loadCachedIcsEventsForCalendar(
         events.push(...parsed.events.filter((event) => eventOverlapsRange(event, rangeStart, rangeEnd)));
     }
     pruneIcsMonthCache();
-    return { categoryInfo, events };
+    return { calendarColor, categoryInfo, events };
 }
 
 async function readCalendarResponseText(res: Response): Promise<string> {
@@ -215,6 +221,7 @@ export async function fetchExternalCalendarEvents(
             calendar,
             result.value.events,
             result.value.categoryInfo,
+            result.value.calendarColor,
         );
         if (!contributed.some((entry) => entry.id === calendar.id)) splitCalendarIds.add(calendar.id);
         icsSources.push({ calendars: contributed, events: result.value.events });

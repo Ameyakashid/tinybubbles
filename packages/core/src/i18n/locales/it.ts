@@ -532,6 +532,7 @@ export const itOverrides: Record<string, string> = {
         'projects.colorRed': 'Rosso',
         'projects.colorPurple': 'Viola',
         'projects.colorPink': 'Rosa',
+        'projects.colorNone': 'Nessun colore',
         'projects.create': 'Crea',
         'areas.create': 'Crea',
         'areas.deleteConfirm': 'Eliminare questa area? Progetti e attività in questa area verranno mantenuti e spostati in Non assegnato.',

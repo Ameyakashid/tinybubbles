@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
     generateUUID,
-    getExternalCalendarColorForId,
     normalizeExternalCalendarColor,
     type AppData,
     type ExternalCalendarSubscription,
@@ -156,9 +155,11 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
         }
         const name = (newCalendarName.trim() || 'Calendar').trim();
         const id = generateUUID();
+        // No color yet: an unset color means "no explicit pick", so a feed
+        // hint or the deterministic hash fallback can still apply (#974).
         const next = [
             ...externalCalendars,
-            { id, name, url, enabled: true, color: getExternalCalendarColorForId(id) },
+            { id, name, url, enabled: true },
         ];
         setNewCalendarName('');
         setNewCalendarUrl('');

@@ -331,3 +331,216 @@ describe('ics categories', () => {
             .map((calendar) => calendar.id)).toEqual(['cal#Personal', 'cal#Work']);
     });
 });
+
+describe('ics colors', () => {
+    const range = {
+        rangeStart: new Date('2025-01-01T00:00:00Z'),
+        rangeEnd: new Date('2025-01-02T00:00:00Z'),
+    };
+
+    it('reads an RFC 7986 calendar COLOR name', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'COLOR:turquoise',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBe('#40E0D0');
+    });
+
+    it('reads X-APPLE-CALENDAR-COLOR hex, stripping alpha', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'X-APPLE-CALENDAR-COLOR:#FF00807F',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBe('#FF0080');
+    });
+
+    it('prefers X-APPLE-CALENDAR-COLOR over an RFC 7986 COLOR name when both are present', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'COLOR:turquoise',
+            'X-APPLE-CALENDAR-COLOR:#123456',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBe('#123456');
+    });
+
+    it('drops malformed calendar colors silently', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'COLOR:not-a-real-color',
+            'X-APPLE-CALENDAR-COLOR:not-hex',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBeUndefined();
+    });
+
+    it('does not read a COLOR inside a nested VTODO as the calendar color (#974)', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VTODO',
+            'UID:t1',
+            'COLOR:tomato',
+            'END:VTODO',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBeUndefined();
+    });
+
+    it('still reads a genuine calendar-level COLOR that comes after a nested VTODO', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VTODO',
+            'UID:t1',
+            'COLOR:tomato',
+            'END:VTODO',
+            'COLOR:turquoise',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        expect(parseIcsWithMetadata(ics, { sourceId: 'cal', ...range }).calendarColor).toBe('#40E0D0');
+    });
+
+    it('converts a signed 32-bit ARGB X-FOSSIFY-CATEGORY-COLOR to #RRGGBB', () => {
+        // -16776961 == 0xFF0000FF: full alpha, blue.
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'CATEGORIES:Work',
+            'X-FOSSIFY-CATEGORY-COLOR:-16776961',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        const result = parseIcsWithMetadata(ics, { sourceId: 'cal', ...range, splitByCategory: true });
+        expect(result.categoryInfo.colors).toEqual({ Work: '#0000FF' });
+    });
+
+    it('drops an X-FOSSIFY-CATEGORY-COLOR that is not a plain integer, instead of truncating it', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'CATEGORIES:Work',
+            'X-FOSSIFY-CATEGORY-COLOR:12abc',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        const result = parseIcsWithMetadata(ics, { sourceId: 'cal', ...range, splitByCategory: true });
+        expect(result.categoryInfo.colors).toBeUndefined();
+    });
+
+    it('keeps the first category color across paged ranges', () => {
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VEVENT',
+            'UID:january',
+            'SUMMARY:january',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'CATEGORIES:Work',
+            'X-FOSSIFY-CATEGORY-COLOR:-16776961',
+            'END:VEVENT',
+            'BEGIN:VEVENT',
+            'UID:february',
+            'SUMMARY:february',
+            'DTSTART:20250205T090000Z',
+            'DTEND:20250205T100000Z',
+            'CATEGORIES:Work',
+            'X-FOSSIFY-CATEGORY-COLOR:-65536',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        const february = parseIcsWithMetadata(ics, {
+            sourceId: 'cal',
+            rangeStart: new Date('2025-02-01T00:00:00Z'),
+            rangeEnd: new Date('2025-03-01T00:00:00Z'),
+            splitByCategory: true,
+        });
+
+        // The whole feed is scanned regardless of the requested range, so
+        // January's color (first seen) wins even though only February shows.
+        expect(february.categoryInfo.colors).toEqual({ Work: '#0000FF' });
+    });
+
+    it('carries the feed color through expandCategoryCalendars as feedColor, never color', () => {
+        const subscription = { id: 'cal', name: 'Feed', url: 'https://example.test/f.ics', enabled: true };
+        const ics = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'X-APPLE-CALENDAR-COLOR:#123456',
+            'BEGIN:VEVENT',
+            'UID:a',
+            'SUMMARY:a',
+            'DTSTART:20250101T090000Z',
+            'DTEND:20250101T100000Z',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\n');
+
+        const result = parseIcsWithMetadata(ics, { sourceId: 'cal', ...range });
+        const [calendar] = expandCategoryCalendars(subscription, result.events, result.categoryInfo, result.calendarColor);
+        expect(calendar.feedColor).toBe('#123456');
+        expect(calendar.color).toBeUndefined();
+    });
+});
