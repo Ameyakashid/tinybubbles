@@ -2,6 +2,8 @@ import React from 'react';
 import renderer from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import ArchivedScreen from '../app/(drawer)/archived';
 
 const mocks = vi.hoisted(() => {
@@ -181,6 +183,8 @@ vi.mock('react-native-gesture-handler', () => ({
 
 vi.mock('lucide-react-native', () => ({
   Archive: (props: any) => React.createElement('Archive', props),
+  ChevronDown: (props: any) => React.createElement('ChevronDown', props),
+  ChevronRight: (props: any) => React.createElement('ChevronRight', props),
   SlidersHorizontal: (props: any) => React.createElement('SlidersHorizontal', props),
 }));
 
@@ -211,6 +215,9 @@ describe('ArchivedScreen', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations, so restore the empty store or a test
+    // that seeds persisted view state leaks it into the next one.
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => null);
     mocks.storeState.projects = [];
     mocks.storeState.areas = [];
     mocks.storeState.settings = {};
@@ -411,6 +418,44 @@ describe('ArchivedScreen', () => {
 
     typeSearch(tree, '');
     expect(hasText(tree, 'Quarterly report')).toBe(true);
+  });
+
+  it('folds a grouping heading, taking its rows off screen and out of Select all', async () => {
+    mocks.storeState.areas = [{ id: 'a1', name: 'Work', order: 0 }];
+    mocks.storeState._allTasks = [
+      { ...mocks.storeState._allTasks[0], id: 'task-1', title: 'Quarterly report', areaId: 'a1' },
+      { ...mocks.storeState._allTasks[0], id: 'task-2', title: 'Fix the printer' },
+    ];
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => (
+      key === 'mindwtr:view:archived:v1' ? JSON.stringify({ groupBy: 'area' }) : null
+    ));
+
+    let tree!: renderer.ReactTestRenderer;
+    await renderer.act(async () => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+    expect(hasText(tree, 'Quarterly report')).toBe(true);
+
+    await renderer.act(async () => {
+      tree.root.find((node) => node.props.testID === 'archived-group-header-a1').props.onPress();
+    });
+
+    // The heading and its count stay, so the group is still findable; the row does not.
+    expect(hasText(tree, 'Work')).toBe(true);
+    expect(hasText(tree, 'Quarterly report')).toBe(false);
+    expect(hasText(tree, 'Fix the printer')).toBe(true);
+
+    renderer.act(() => {
+      tree.root.find((node) => node.props.accessibilityLabel === 'Select').props.onPress();
+    });
+    renderer.act(() => {
+      tree.root.find((node) => node.props.accessibilityLabel === 'Select all').props.onPress();
+    });
+    await renderer.act(async () => {
+      await tree.root.find((node) => node.props.accessibilityLabel === 'Restore to Inbox').props.onPress();
+    });
+
+    expect(mocks.batchMoveTasks).toHaveBeenCalledWith(['task-2'], 'inbox');
   });
 
   it('counts only the tasks left after filtering, so bulk actions cannot reach a hidden row', () => {

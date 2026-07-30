@@ -29,6 +29,7 @@ import {
     serializeArchivedListViewState,
     type ArchivedListViewState,
 } from '@/lib/view-state/archived-list-view-state';
+import { useCollapsedTaskGroups } from '@/lib/view-state/task-group-collapse-state';
 import { MarkdownInlineText } from '@/components/markdown-text';
 import { useLanguage } from '../../contexts/language-context';
 
@@ -38,10 +39,10 @@ import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { CompletedAtPicker } from '@/components/completed-at-picker';
-import { assertBulkActionSucceeded, useTaskListSelection } from '@/components/use-task-list-selection';
+import { assertBulkActionSucceeded, usePruneSelectionToVisible, useTaskListSelection } from '@/components/use-task-list-selection';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Archive, SlidersHorizontal } from 'lucide-react-native';
+import { Archive, ChevronDown, ChevronRight, SlidersHorizontal } from 'lucide-react-native';
 
 function ArchivedTaskItem({
     task,
@@ -383,6 +384,7 @@ export default function ArchivedScreen() {
     })), [allArchivedTasks, selections.criteria, selections.searchQuery]);
 
     const groupBy = viewState.groupBy;
+    const { collapsedGroupIds, toggleGroup } = useCollapsedTaskGroups('archived', groupBy);
     const localDayKey = useLocalDayKey(groupBy === 'completedDate');
     // Always the grouped row shape, even ungrouped: one list type keeps the FlatList
     // monomorphic instead of switching its data/renderItem/keyExtractor together.
@@ -398,8 +400,15 @@ export default function ArchivedScreen() {
             areas,
             projectById,
             t,
+            collapsedGroupIds,
         });
-    }, [archivedTasks, areas, groupBy, localDayKey, projectById, t]);
+    }, [archivedTasks, areas, collapsedGroupIds, groupBy, localDayKey, projectById, t]);
+    // Rows a folded heading has removed are not "on screen", so Select all and the
+    // selection prune below both work off this rather than the filtered list.
+    const visibleTaskIds = useMemo(
+        () => listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])),
+        [listItems],
+    );
     const archivedProjects = useMemo(
         () => projects
             .filter((project) => (
@@ -468,13 +477,7 @@ export default function ArchivedScreen() {
         }
     }, [selectedTask, selectedTaskId]);
 
-    useEffect(() => {
-        const visibleIds = new Set(archivedTasks.map((task) => task.id));
-        setMultiSelectedIds((previous) => {
-            const next = new Set(Array.from(previous).filter((id) => visibleIds.has(id)));
-            return next.size === previous.size ? previous : next;
-        });
-    }, [archivedTasks, setMultiSelectedIds]);
+    usePruneSelectionToVisible(setMultiSelectedIds, visibleTaskIds);
 
     const handleOpenTask = useCallback((taskId: string) => {
         setSelectedTaskId(taskId);
@@ -491,8 +494,8 @@ export default function ArchivedScreen() {
     }, [updateTask]);
 
     const selectAllTasks = useCallback(() => {
-        setMultiSelectedIds(new Set(archivedTasks.map((task) => task.id)));
-    }, [archivedTasks, setMultiSelectedIds]);
+        setMultiSelectedIds(new Set(visibleTaskIds));
+    }, [setMultiSelectedIds, visibleTaskIds]);
 
     const handleBulkRestore = useCallback(async () => {
         if (selectedIdsArray.length === 0) return;
@@ -597,8 +600,17 @@ export default function ArchivedScreen() {
 
     const renderGroupedItem = useCallback(({ item }: { item: TaskGroupItem }) => {
         if (item.type === 'section') {
+            const Chevron = item.collapsed ? ChevronRight : ChevronDown;
             return (
-                <View style={styles.groupHeader}>
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: item.collapsed !== true }}
+                    disabled={!item.collapsible}
+                    onPress={() => toggleGroup(item.id)}
+                    style={styles.groupHeader}
+                    testID={`archived-group-header-${item.id}`}
+                >
+                    {item.collapsible ? <Chevron size={15} color={tc.secondaryText} /> : null}
                     <Text
                         style={[styles.groupHeaderText, { color: item.muted ? tc.secondaryText : tc.text }]}
                         numberOfLines={1}
@@ -606,11 +618,11 @@ export default function ArchivedScreen() {
                         {item.title}
                     </Text>
                     <Text style={[styles.groupHeaderCount, { color: tc.secondaryText }]}>{item.count}</Text>
-                </View>
+                </Pressable>
             );
         }
         return renderArchivedTask({ item: item.task });
-    }, [renderArchivedTask, tc.secondaryText, tc.text]);
+    }, [renderArchivedTask, tc.secondaryText, tc.text, toggleGroup]);
 
     // Section ids and task ids share one list, so prefix the section keys: a group
     // titled with a task's id would otherwise collide and drop a row.
@@ -717,7 +729,7 @@ export default function ArchivedScreen() {
                         <View style={styles.bulkActions}>
                             <Pressable
                                 onPress={selectAllTasks}
-                                disabled={archivedTasks.length === 0 || selectedIds.size === archivedTasks.length}
+                                disabled={visibleTaskIds.length === 0 || selectedIds.size === visibleTaskIds.length}
                                 accessibilityRole="button"
                                 accessibilityLabel={`${tFallback(t, 'bulk.select', 'Select')} ${tFallback(t, 'common.all', 'all')}`}
                                 style={[styles.bulkButton, { backgroundColor: tc.taskItemBg }]}

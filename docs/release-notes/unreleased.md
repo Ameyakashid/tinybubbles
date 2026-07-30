@@ -45,6 +45,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - The Archive and Trash search boxes match the search field used by every other list, and the Inbox capture bar draws its focus ring around the whole field instead of through the microphone and add buttons. (#959)
 - Grouped lists put the ungrouped catch-all group (No project, No context, General, …) last on desktop and mobile, so the groups you are looking for come first. (#963)
 - Desktop group headers collapse on every grouped list, not only Focus and Reference. Each list remembers which groups are folded per grouping mode on that device. (#963)
+- Mobile grouping headings fold too — tap one on Inbox, Done, Reference, or Archive. Each list remembers its folded groups per grouping mode on that device, and a folded group's rows leave **Select all** and bulk actions the same way they do on desktop. (#970)
 - Desktop Inbox now exposes the shared Filters panel, so filters chosen in another list remain visible and removable. (#956)
 - Saving a task in a large desktop project no longer scrolls the pinned project row past the list and leaves a blank screen. (#916)
 - Mobile stops re-rendering project screens behind the current route, reducing multi-second updates in large libraries while preserving each screen's state. (#766)

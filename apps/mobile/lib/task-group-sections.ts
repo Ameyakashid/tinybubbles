@@ -26,6 +26,9 @@ export type TaskGroupSectionItem = {
   title: string;
   count: number;
   muted?: boolean;
+  /** Set when the caller passes `collapsedGroupIds`, so the header draws a chevron. */
+  collapsible?: boolean;
+  collapsed?: boolean;
 };
 
 export type TaskGroupTaskItem = {
@@ -66,6 +69,13 @@ export type BuildTaskGroupSectionsParams = {
    * local-day change control the boundary rather than each call inventing its own.
    */
   now?: Date;
+  /**
+   * Groups the caller has folded. Passing the set (even empty) is what makes the
+   * headers collapsible; a folded group keeps its header and its count but
+   * contributes no task rows, so the rows also leave the id list the screens
+   * feed to selection and range select (#970).
+   */
+  collapsedGroupIds?: ReadonlySet<string>;
 };
 
 /**
@@ -82,16 +92,20 @@ export function buildTaskGroupSections({
   projectById,
   t,
   now,
+  collapsedGroupIds,
 }: BuildTaskGroupSectionsParams): TaskGroupItem[] {
   const appendSection = (items: TaskGroupItem[], id: string, title: string, tasksForGroup: Task[], muted = false) => {
     if (tasksForGroup.length === 0) return;
+    const collapsed = collapsedGroupIds?.has(id) === true;
     items.push({
       type: 'section',
       id,
       title,
       count: tasksForGroup.length,
       muted,
+      ...(collapsedGroupIds ? { collapsible: true, collapsed } : {}),
     });
+    if (collapsed) return;
     tasksForGroup.forEach((task) => items.push({ type: 'task', task, groupId: id }));
   };
 

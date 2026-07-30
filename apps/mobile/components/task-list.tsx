@@ -97,7 +97,7 @@ import {
   taskMatchesFilterSelections,
   useTaskFilterSelections,
 } from '@/hooks/use-task-filter-selections';
-import { useTaskListSelection } from './use-task-list-selection';
+import { usePruneSelectionToVisible, useTaskListSelection } from './use-task-list-selection';
 import { useLocalDayKey } from '@/hooks/use-local-day-key';
 import {
   DONE_TASK_LIST_SORT_OPTIONS,
@@ -105,6 +105,7 @@ import {
   resolveTaskListSortBy,
 } from '@/lib/task-list-sort';
 import { DONE_LIST_GROUP_OPTIONS } from '@/lib/view-state/done-list-view-state';
+import { useCollapsedTaskGroups } from '@/lib/view-state/task-group-collapse-state';
 
 const PROJECT_REORDER_ITEM_HEIGHT = 80;
 const PROJECT_REORDER_ANIMATION_CONFIG = {
@@ -124,6 +125,9 @@ type AddTaskOptions = {
 };
 
 export type TaskListGroupBy = TaskGroupBy;
+
+/** The project Completed pile: a screen section, not a grouping heading. */
+const PROJECT_COMPLETED_SECTION_ID = 'project-completed-tasks';
 
 /** What the list shows: which tasks, in what order, grouped how. */
 interface TaskListContentProps {
@@ -398,6 +402,7 @@ function TaskListComponent({
     removeTagPickerVisible,
     selectedIdsArray,
     selectionMode,
+    setMultiSelectedIds,
     setRemoveTagPickerVisible,
     setTagInput,
     setTagModalVisible,
@@ -422,6 +427,9 @@ function TaskListComponent({
     viewSortBy,
   });
   const activeGroupBy: TaskListGroupBy = groupBy ?? 'none';
+  // Folds are per list and per axis. Project views group by section instead, so
+  // they share nothing with these and keep their own Completed toggle below.
+  const { collapsedGroupIds, toggleGroup } = useCollapsedTaskGroups(statusFilter, activeGroupBy);
   const localDayKey = useLocalDayKey(activeGroupBy === 'completedDate');
   const handleChangeGroupBy = onChangeGroupBy;
   const canUseProjectReorder = Boolean(enableProjectReorder && projectId && sortBy === 'default');
@@ -644,6 +652,7 @@ function TaskListComponent({
         areas,
         projectById,
         t,
+        collapsedGroupIds,
       });
     }
 
@@ -651,7 +660,7 @@ function TaskListComponent({
       if (!shouldGroupCompletedTasks || orderedCompletedTasks.length === 0) return items;
       items.push({
         type: 'section',
-        id: 'project-completed-tasks',
+        id: PROJECT_COMPLETED_SECTION_ID,
         title: tFallback(t, 'list.done', tFallback(t, 'status.done', 'Completed')),
         count: orderedCompletedTasks.length,
         muted: true,
@@ -700,11 +709,12 @@ function TaskListComponent({
       unsectioned.forEach((task) => items.push({ type: 'task', task, reorderSectionId }));
     }
     return appendCompletedTasks(items);
-  }, [activeGroupBy, areas, completedTasksCollapsed, localDayKey, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
+  }, [activeGroupBy, areas, collapsedGroupIds, completedTasksCollapsed, localDayKey, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
   const orderedTaskIds = useMemo(
     () => Array.from(new Set(listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])))),
     [listItems],
   );
+  usePruneSelectionToVisible(setMultiSelectedIds, orderedTaskIds);
   const performanceRoute = useMemo(
     () => resolveMobilePerformanceRoute({ projectId, statusFilter }),
     [projectId, statusFilter],
@@ -1472,6 +1482,16 @@ function TaskListComponent({
     themeColorsMemo.text,
   ]);
 
+  const toggleSection = useCallback((sectionId: string) => {
+    // The project Completed pile is a fixed part of that screen with its own
+    // single boolean; every other collapsible header is a grouping heading.
+    if (sectionId === PROJECT_COMPLETED_SECTION_ID) {
+      setCompletedTasksCollapsed((value) => !value);
+      return;
+    }
+    toggleGroup(sectionId);
+  }, [toggleGroup]);
+
   const renderListItem = useCallback(({ item }: { item: ListItem }) => {
     if (item.type === 'section') {
       if (item.collapsible) {
@@ -1479,7 +1499,7 @@ function TaskListComponent({
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityState={{ expanded: item.collapsed !== true }}
-            onPress={() => setCompletedTasksCollapsed((value) => !value)}
+            onPress={() => toggleSection(item.id)}
             style={styles.sectionHeader}
           >
             <View style={styles.sectionHeaderTitleBlock}>
@@ -1511,7 +1531,7 @@ function TaskListComponent({
       );
     }
     return renderTask({ item: item.task });
-  }, [renderTask, themeColorsMemo.secondaryText, themeColorsMemo.text]);
+  }, [renderTask, themeColorsMemo.secondaryText, themeColorsMemo.text, toggleSection]);
 
   const renderProjectReorderHeader = useCallback((group: ProjectTaskReorderGroup<Task>) => {
     const sectionIndex = typeof group.sectionId === 'string' ? projectSectionIds.indexOf(group.sectionId) : -1;

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Alert } from 'react-native';
 import {
   buildBulkOrganizeTaskUpdates,
@@ -36,6 +36,25 @@ export function assertBulkActionSucceeded(result: void | StoreActionResult): voi
   if (result && result.success === false) {
     throw new Error(result.error ?? '');
   }
+}
+
+/**
+ * Drops selected ids that are no longer on screen. Every surface that hides rows
+ * — a filter, a search, a folded grouping heading — must call this with the ids
+ * it actually renders: rows a bulk action still reaches after they disappear are
+ * worse than not hiding them at all (#963, #970).
+ */
+export function usePruneSelectionToVisible(
+  setMultiSelectedIds: Dispatch<SetStateAction<Set<string>>>,
+  visibleTaskIds: readonly string[],
+): void {
+  useEffect(() => {
+    const visibleIds = new Set(visibleTaskIds);
+    setMultiSelectedIds((previous) => {
+      const next = new Set(Array.from(previous).filter((id) => visibleIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [setMultiSelectedIds, visibleTaskIds]);
 }
 
 export function useTaskListSelection({

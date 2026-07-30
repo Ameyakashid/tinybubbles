@@ -282,6 +282,7 @@ vi.mock('../lib/app-log', () => ({
 
 vi.mock('./use-task-list-selection', () => ({
   useTaskListSelection: () => taskListSelectionState.current,
+  usePruneSelectionToVisible: () => undefined,
 }));
 
 vi.mock('./task-list/TaskListBulkBar', () => ({
@@ -460,6 +461,46 @@ describe('TaskList project quick add', () => {
       groupByLabel: 'Tags',
       onOpenGroup: expect.any(Function),
     }));
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('folds a grouping heading, dropping its rows from the list data', async () => {
+    const tagged = makeTask('task-tagged', 'Book the venue', { status: 'inbox', projectId: undefined, tags: ['events'] });
+    const untagged = makeTask('task-untagged', 'Fix the printer', { status: 'inbox', projectId: undefined });
+    let tree!: ReturnType<typeof create>;
+
+    await act(async () => {
+      tree = create(
+        <TaskList
+          allowAdd={false}
+          groupBy="tag"
+          onChangeGroupBy={vi.fn()}
+          showHeader={false}
+          statusFilter="inbox"
+          taskSource={[tagged, untagged]}
+          title="Inbox"
+        />,
+      );
+    });
+
+    const listData = () => flatListPropsSpy.mock.calls.at(-1)?.[0].data as any[];
+    const header = listData().find((item) => item.type === 'section' && item.id === 'tag:events');
+    expect(header).toMatchObject({ title: 'events', count: 1, collapsible: true, collapsed: false });
+    expect(listData().some((item) => item.type === 'task' && item.task.id === 'task-tagged')).toBe(true);
+
+    const renderItem = flatListPropsSpy.mock.calls.at(-1)?.[0].renderItem;
+    await act(async () => {
+      renderItem({ item: header }).props.onPress();
+    });
+
+    expect(listData().find((item) => item.type === 'section' && item.id === 'tag:events'))
+      .toMatchObject({ count: 1, collapsed: true });
+    // The row leaves the data, which is what orderedTaskIds and range select read.
+    expect(listData().some((item) => item.type === 'task' && item.task.id === 'task-tagged')).toBe(false);
+    expect(listData().some((item) => item.type === 'task' && item.task.id === 'task-untagged')).toBe(true);
 
     act(() => {
       tree.unmount();

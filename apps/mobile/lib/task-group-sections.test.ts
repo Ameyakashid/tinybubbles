@@ -169,6 +169,43 @@ describe('buildTaskGroupSections', () => {
 
     expect(layout(items)[0]?.ids).toEqual(['third', 'first', 'second']);
   });
+
+  it('leaves headers plain when no collapsed set is passed', () => {
+    const items = buildTaskGroupSections({
+      groupBy: 'area',
+      tasks: [task('t1', { areaId: 'a1' })],
+      areas: [area('a1', 'Work', 0)],
+      projectById: new Map(),
+      t,
+    });
+
+    expect(items[0]).toMatchObject({ type: 'section', title: 'Work' });
+    expect(items[0]).not.toHaveProperty('collapsible');
+  });
+
+  it('keeps a folded group header and its count while dropping its rows', () => {
+    const items = buildTaskGroupSections({
+      groupBy: 'area',
+      tasks: [
+        task('work-1', { areaId: 'a1' }),
+        task('work-2', { areaId: 'a1' }),
+        task('home-1', { areaId: 'a2' }),
+      ],
+      areas: [area('a1', 'Work', 0), area('a2', 'Home', 1)],
+      projectById: new Map(),
+      t,
+      collapsedGroupIds: new Set(['a1']),
+    });
+
+    expect(layout(items)).toEqual([
+      { section: 'Work', count: 2, ids: [] },
+      { section: 'Home', count: 1, ids: ['home-1'] },
+    ]);
+    // Every header is tappable once folding is available, not only folded ones.
+    expect(items.filter((item) => item.type === 'section').map((item) => (
+      item.type === 'section' ? [item.title, item.collapsible, item.collapsed] : null
+    ))).toEqual([['Work', true, true], ['Home', true, false]]);
+  });
 });
 
 describe('getTaskGroupByLabel', () => {
