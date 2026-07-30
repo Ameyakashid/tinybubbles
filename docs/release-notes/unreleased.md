@@ -88,6 +88,10 @@ Changes collected after `v1.1.5` and before the next version tag.
 - The browser and self-hosted PWA build now fires task, start, due, and review reminders as Web Notifications while a tab is open — the scheduler was only started in the native desktop shell. A reminder reached between two checks (a background tab has its timers throttled) is now delivered late instead of skipped, on desktop as well. (#962)
 - macOS desktop can sync with self-hosted and WebDAV servers that only accept TLS 1.3, which previously failed with a "bad protocol version" error. Certificates from the operating system store, including private and corporate roots, are still trusted on every desktop platform. (#973)
 
+## Packaging
+
+- Source builds that install workspace dependencies in isolation (Nix/bun2nix) no longer fail type-checking: the core package now declares its React dependency and the desktop app declares its test renderer, instead of relying on hoisting from sibling workspaces. (#981)
+
 ## Languages
 
 - Korean gesture help now explains each action, and search-match text once again includes the result count. (#943)

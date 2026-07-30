@@ -47,8 +47,12 @@
     "test:perf": "MINDWTR_PERF_TEST=1 vitest run src/performance-large-store.test.ts"
   },
   "devDependencies": {
+    "@types/react": "~19.1.0",
     "@types/uuid": "^9.0.8",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
   }
 }
