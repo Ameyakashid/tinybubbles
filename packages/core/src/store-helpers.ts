@@ -275,18 +275,27 @@ export const normalizeTaskUpdate = (
     // Correcting a completion time to something older than the auto-archive
     // window files the task away now, instead of leaving it in Done until the
     // twice-daily sweep runs — which read as the setting being broken (#959).
-    // Only an edit that carries no status of its own: moving a task back to
-    // Done deliberately keeps its old completion time, and re-archiving it in
-    // the same write would make that action a no-op.
+    // Only an edit that carries no status *change* of its own: an absent
+    // status field, or the same status resent by a full-editor patch (the
+    // desktop editor's submit always includes `status: draft.status`). A
+    // genuine status transition — e.g. moving a task back to Done from
+    // Archive — deliberately keeps its old completion time, and re-archiving
+    // it in the same write would make that action a no-op.
+    const archiveEditNowMs = context?.nowMs ?? Date.now();
     if (
         context?.settings
         && hasOwnField(updates, 'completedAt')
-        && !hasOwnField(updates, 'status')
+        && (!hasOwnField(updates, 'status') || updates.status === task.status)
         && task.status === 'done'
         && shouldAutoArchiveCompletedTask(
-            { ...task, ...adjustedUpdates },
+            // Evaluated against the post-stamp updatedAt (applyTaskUpdates
+            // hasn't run yet here), so a patch that clears/invalidates
+            // completedAt falls back to "now" instead of the task's pre-edit
+            // updatedAt — matching what the load-time sweep would conclude
+            // after the write, instead of archiving a task the user just touched.
+            { ...task, ...adjustedUpdates, updatedAt: new Date(archiveEditNowMs).toISOString() },
             context.settings,
-            context.nowMs ?? Date.now(),
+            archiveEditNowMs,
         )
     ) {
         adjustedUpdates = {

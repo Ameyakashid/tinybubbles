@@ -2453,6 +2453,80 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState()._tasksById.get('task-archived')?.status).toBe('done');
     });
 
+    it('archives a done task when the full editor resends the unchanged status (#959)', async () => {
+        vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
+        const doneTask = createStoreTask('task-done-editor', {
+            status: 'done',
+            completedAt: '2026-04-09T12:00:00.000Z',
+            updatedAt: '2026-04-09T12:00:00.000Z',
+        });
+        useTaskStore.setState({
+            tasks: [doneTask],
+            _allTasks: [doneTask],
+            _tasksById: new Map([[doneTask.id, doneTask]]),
+            settings: { deviceId: 'device-a', gtd: { autoArchiveDays: 7 } },
+            lastDataChangeAt: 0,
+        });
+
+        // The desktop full editor's submit always resends the task's current
+        // status, unlike the bare `{ completedAt }` patch from "Edit completion
+        // time" — the rule must fire for both.
+        await useTaskStore.getState().updateTask('task-done-editor', {
+            status: 'done',
+            completedAt: '2025-06-01T17:45:00.000Z',
+        });
+
+        const updated = useTaskStore.getState()._tasksById.get('task-done-editor');
+        expect(updated?.status).toBe('archived');
+        expect(updated?.isFocusedToday).toBe(false);
+    });
+
+    it('does not archive a done task when a completion-time edit clears completedAt (#959)', async () => {
+        vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
+        const doneTask = createStoreTask('task-done-cleared', {
+            status: 'done',
+            completedAt: '2026-04-09T12:00:00.000Z',
+            // Pre-edit updatedAt is stale past the archive window; evaluating
+            // against it (instead of the post-stamp "now") would wrongly
+            // archive a task the user just touched (Defect B).
+            updatedAt: '2025-06-01T17:45:00.000Z',
+        });
+        useTaskStore.setState({
+            tasks: [doneTask],
+            _allTasks: [doneTask],
+            _tasksById: new Map([[doneTask.id, doneTask]]),
+            settings: { deviceId: 'device-a', gtd: { autoArchiveDays: 7 } },
+            lastDataChangeAt: 0,
+        });
+
+        await useTaskStore.getState().updateTask('task-done-cleared', { completedAt: undefined });
+
+        expect(useTaskStore.getState()._tasksById.get('task-done-cleared')?.status).toBe('done');
+    });
+
+    it('does not archive a backdated-complete task moving from Next to Done (#959)', async () => {
+        vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
+        const nextTask = createStoreTask('task-next-backdated', {
+            status: 'next',
+            completedAt: undefined,
+            updatedAt: '2026-04-09T12:00:00.000Z',
+        });
+        useTaskStore.setState({
+            tasks: [nextTask],
+            _allTasks: [nextTask],
+            _tasksById: new Map([[nextTask.id, nextTask]]),
+            settings: { deviceId: 'device-a', gtd: { autoArchiveDays: 7 } },
+            lastDataChangeAt: 0,
+        });
+
+        await useTaskStore.getState().updateTask('task-next-backdated', {
+            status: 'done',
+            completedAt: '2025-06-01T17:45:00.000Z',
+        });
+
+        expect(useTaskStore.getState()._tasksById.get('task-next-backdated')?.status).toBe('done');
+    });
+
     it('auto-archives stale completed tasks when archive days change', async () => {
         vi.setSystemTime(new Date('2026-04-10T12:00:00.000Z'));
         const staleTask = createStoreTask('task-stale', {
