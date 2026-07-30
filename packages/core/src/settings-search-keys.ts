@@ -83,7 +83,7 @@ export const SETTINGS_SEARCH_PAGE_KEYS: Record<SettingsSearchPageId, readonly Se
         // field, not settings people search for by name.
         { key: 'taskEditorPresentation', section: 'taskEditorLayout' },
     ],
-    manage: ['manage', 'manageAreas', 'manageContexts', 'manageTags'],
+    manage: ['manage', 'manageAreas', 'managePeople', 'manageContexts', 'manageTags'],
     notifications: [
         'notifications',
         'notificationsEnable',
@@ -218,6 +218,7 @@ export const SETTINGS_SEARCH_PAGE_TITLE_KEYS: Record<SettingsSearchPageId, strin
 const SEARCH_KEY_I18N_OVERRIDES: Record<string, string> = {
     keybindings: 'keybindings.helpTitle',
     manageAreas: 'areas.manage',
+    managePeople: 'people.title',
     manageContexts: 'contexts.title',
     manageTags: 'tags.title',
 };

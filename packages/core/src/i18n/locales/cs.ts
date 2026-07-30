@@ -597,6 +597,7 @@ export const csOverrides: Record<string, string> = {
         'sections.search': 'Hledat sekce',
         'areas.search': 'Hledat oblasti',
         'areas.manage': 'Oblasti',
+        'people.title': 'Lidé',
         'areas.new': 'Nová oblast',
         'areas.namePlaceholder': 'Název oblasti',
         'projects.sortAreas': 'Seřadit oblasti',

@@ -554,6 +554,7 @@ export const zhHans: Record<string, string> = {
         'sections.search': '搜索分区',
         'areas.search': '搜索领域',
         'areas.manage': '领域',
+        'people.title': '人员',
         'areas.new': '新建领域',
         'areas.namePlaceholder': '领域名称',
         'projects.sortAreas': '排序领域',

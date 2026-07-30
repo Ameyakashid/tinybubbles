@@ -528,6 +528,7 @@ export function SettingsManagePage({ t: _t, translate, requestConfirmation }: Se
 
             {/* People */}
             <ManageSection
+                settingsKey="managePeople"
                 title={resolveText('people.title', 'People')}
                 count={sortedPeople.length}
             >

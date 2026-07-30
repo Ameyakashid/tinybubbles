@@ -634,6 +634,7 @@ export const en: Record<string, string> = {
         'sections.search': 'Search sections',
         'areas.search': 'Search areas',
         'areas.manage': 'Areas',
+        'people.title': 'People',
         'areas.new': 'New Area',
         'areas.namePlaceholder': 'Area name',
         'projects.sortAreas': 'Sort areas',
