@@ -22,7 +22,6 @@ import {
     isMarkdownEditorAssistEnabled,
     isQuickDatePresetSelected,
     QUICK_DATE_PRESETS_EXTENDED,
-    normalizeClockTimeInput,
     normalizeDateFormatSetting,
     parseCalendarInputDate,
     parseRRuleString,
@@ -757,7 +756,6 @@ export function TaskItemFieldRenderer({
 
     const markdownEditorAssist = useTaskStore((state) => isMarkdownEditorAssistEnabled(state.settings));
 
-    const [reviewTimeDraft, setReviewTimeDraft] = useState('');
     const [repeatReminderOptionsExpanded, setRepeatReminderOptionsExpanded] = useState(false);
     const [descriptionExpanded, setDescriptionExpanded] = useState(false);
     const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -771,12 +769,6 @@ export function TaskItemFieldRenderer({
     const [descriptionAudioState, setDescriptionAudioState] = useState<DescriptionAudioState>('idle');
     const [descriptionAudioError, setDescriptionAudioError] = useState<string | null>(null);
     const descriptionAudioStateRef = useRef<DescriptionAudioState>('idle');
-    useEffect(() => {
-        const parsed = editReviewAt ? safeParseDate(editReviewAt) : null;
-        const hasTime = hasTimeComponent(editReviewAt);
-        const next = hasTime && parsed ? safeFormatDate(parsed, 'HH:mm') : '';
-        setReviewTimeDraft(next);
-    }, [editReviewAt]);
     useEffect(() => {
         descriptionAudioStateRef.current = descriptionAudioState;
     }, [descriptionAudioState]);
@@ -1579,32 +1571,21 @@ export function TaskItemFieldRenderer({
                     selectedDate: parsed,
                     onDateChange: handleDateChange,
                     timeInput: (
+                        // The same native control Start and Due use (#896). It was the one
+                        // text field parsed on blur, with a mirrored draft and an effect to
+                        // keep that draft in step with the task — all of which the native
+                        // input does for free.
                         <input
-                            type="text"
+                            type="time"
+                            lang={nativeDateInputLocale}
                             aria-label={t('task.aria.reviewTime')}
-                            value={reviewTimeDraft}
-                            inputMode="numeric"
-                            placeholder="HH:MM"
-                            onChange={(event) => setReviewTimeDraft(event.target.value)}
-                            onBlur={() => {
-                                const normalized = normalizeClockTimeInput(reviewTimeDraft);
-                                if (normalized === null) {
-                                    setReviewTimeDraft(timeValue);
-                                    return;
-                                }
-                                setReviewTimeDraft(normalized);
-                                handleTimeChange(normalized);
-                            }}
+                            value={timeValue}
+                            onChange={(event) => handleTimeChange(event.target.value)}
                             className={timeInputClassName}
                         />
                     ),
                     onClear: () => setEditReviewAt(''),
-                    onDateOnly: hasTime
-                        ? () => {
-                            setReviewTimeDraft('');
-                            handleTimeChange('');
-                        }
-                        : undefined,
+                    onDateOnly: hasTime ? () => handleTimeChange('') : undefined,
                     hasValue: Boolean(editReviewAt),
                 });
             }
