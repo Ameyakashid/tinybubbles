@@ -147,6 +147,28 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
+describe('Layout content width', () => {
+    // This width has flipped between list-width, edge-to-edge, and back once already
+    // (#966). jsdom cannot measure it, so pin both halves: wider than a list view,
+    // still capped so the grid keeps its side margins.
+    it('gives the calendar a wider cap than list views without going edge-to-edge', () => {
+        const { container } = renderLayout('calendar');
+        const content = container.querySelector('[data-main-content] > div');
+
+        expect(content).toHaveClass('w-full', 'max-w-screen-2xl');
+        expect(content).not.toHaveClass('max-w-none');
+        expect(content).not.toHaveClass('max-w-6xl');
+    });
+
+    it('leaves list views on the narrower cap', () => {
+        const { container } = renderLayout('next');
+        const content = container.querySelector('[data-main-content] > div');
+
+        expect(content).toHaveClass('max-w-6xl');
+        expect(content).not.toHaveClass('max-w-screen-2xl');
+    });
+});
+
 describe('Layout sidebar archive section', () => {
     it('keeps archive visible by default on a fresh sidebar', () => {
         const { container, getByRole } = renderLayout();

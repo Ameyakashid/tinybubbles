@@ -946,7 +946,11 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                         ? "max-w-[800px]"
                         : isFullWidthView
                             ? "w-full max-w-none"
-                            : (isWideView || currentView === 'calendar')
+                            // The week/month grids want more room than a list does, but going
+                            // edge-to-edge looks wrong, so the calendar keeps its side margins (#966).
+                            : currentView === 'calendar'
+                            ? "w-full max-w-screen-2xl"
+                            : isWideView
                             ? "w-full max-w-6xl"
                             : "max-w-4xl"
                 )}>
