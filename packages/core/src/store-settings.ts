@@ -373,6 +373,7 @@ export const createSettingsActions = ({
                             notifyTimedMs: String(Math.round(notifyProfile.timedTotalMs)),
                             notifyMaxMs: String(Math.round(notifyProfile.maxMs)),
                             notifyTop5Ms: notifyProfile.top5Ms.map(Math.round).join(','),
+                            notifyTop5Names: notifyProfile.top5Names.join(','),
                         } : {}),
                         tasksReplaced,
                         projectsReplaced,

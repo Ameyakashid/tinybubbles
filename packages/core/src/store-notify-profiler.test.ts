@@ -8,6 +8,7 @@ import {
     beginNotifyProfile,
     endNotifyProfile,
     instrumentStoreSubscribe,
+    nameNotifyListener,
 } from './store-notify-profiler';
 
 type TestState = {
@@ -48,6 +49,7 @@ describe('store notify profiler', () => {
             timedTotalMs: 12,
             maxMs: 8,
             top5Ms: [8, 4],
+            top5Names: ['anonymous', 'anonymous'],
         });
         unsubscribeFirst();
         unsubscribeSecond();
@@ -64,7 +66,7 @@ describe('store notify profiler', () => {
         expect(endNotifyProfile()?.listenerCount).toBe(0);
     });
 
-    it('passes selector-form subscriptions through and counts them without timing', () => {
+    it('passes selector-form subscriptions through and times them too', () => {
         const store = createTestStore();
         const listener = vi.fn();
         const unsubscribe = store.subscribe((state) => state.value, listener);
@@ -74,7 +76,21 @@ describe('store notify profiler', () => {
         const profile = endNotifyProfile();
 
         expect(listener).toHaveBeenCalledWith(2, 0);
-        expect(profile).toMatchObject({ listenerCount: 1, timedCalls: 0 });
+        expect(profile).toMatchObject({ listenerCount: 1, timedCalls: 1 });
+        unsubscribe();
+    });
+
+    it('reports named listeners at the top of the profile', () => {
+        const store = createTestStore();
+        const unsubscribe = store.subscribe(
+            nameNotifyListener('slow-suspect', () => undefined),
+        );
+
+        beginNotifyProfile();
+        store.setState({ value: 5 });
+        const profile = endNotifyProfile();
+
+        expect(profile?.top5Names).toEqual(['slow-suspect']);
         unsubscribe();
     });
 
@@ -168,6 +184,7 @@ describe('fetchData notify profiling log fields', () => {
             notifyTimedMs: expect.any(String),
             notifyMaxMs: expect.any(String),
             notifyTop5Ms: expect.any(String),
+            notifyTop5Names: expect.any(String),
         });
     });
 

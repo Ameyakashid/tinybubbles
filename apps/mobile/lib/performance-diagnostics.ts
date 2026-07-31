@@ -27,6 +27,7 @@ type MobilePerformanceInput = {
   visibleItemCount?: number;
   filterCount?: number;
   rowRenderCount?: number;
+  scrollRetryCount?: number;
 };
 
 type MobilePerformanceMeasurement = ReturnType<typeof beginPerformanceLogMeasurement>;

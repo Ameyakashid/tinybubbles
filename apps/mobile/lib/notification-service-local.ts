@@ -8,6 +8,7 @@ import {
   hasActiveMobileNotificationFeature,
   isWeeklyReviewReminderEnabled,
   loadStoredLanguage,
+  nameNotifyListener,
   type Language,
   type ReminderScheduleRequest,
   useTaskStore,
@@ -976,7 +977,7 @@ export async function startLocalMobileNotifications(): Promise<void> {
   logNotificationInfo('Service started');
 
   storeSubscription?.();
-  storeSubscription = useTaskStore.subscribe((state, prevState) => {
+  storeSubscription = useTaskStore.subscribe(nameNotifyListener('notification-reschedule', (state, prevState) => {
     // Reschedule cycles only read tasks, projects, and settings; skip store
     // updates (sync status, loading flags, editor state) that leave them untouched.
     if (
@@ -991,7 +992,7 @@ export async function startLocalMobileNotifications(): Promise<void> {
       rescheduleTimer = null;
       enqueueReschedule(api);
     }, STORE_RESCHEDULE_DEBOUNCE_MS);
-  });
+  }));
 }
 
 export async function stopLocalMobileNotifications(): Promise<void> {

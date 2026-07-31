@@ -70,6 +70,7 @@ vi.mock('@mindwtr/core', async () => {
     flushPendingSave,
     getInMemorySyncChangeFingerprint,
     hasActiveMobileNotificationFeature,
+    nameNotifyListener: (_name: string, listener: unknown) => listener,
     resolveSyncFailureCooldownMs,
     useTaskStore: {
       getState: () => ({ settings: {} }),

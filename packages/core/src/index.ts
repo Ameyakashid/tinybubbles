@@ -30,6 +30,7 @@ export * from './speech-to-task';
 export * from './data-transfer-transaction';
 export * from './feedback';
 export * from './store';
+export { nameNotifyListener } from './store-notify-profiler';
 export * from './store-types';
 export * from './store-helpers';
 export * from './sync';

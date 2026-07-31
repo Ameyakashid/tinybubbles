@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { flushPendingSave, getInMemorySyncChangeFingerprint, hasActiveMobileNotificationFeature, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
+import { flushPendingSave, getInMemorySyncChangeFingerprint, hasActiveMobileNotificationFeature, nameNotifyListener, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { getNotificationPermissionStatus, startMobileNotifications, stopMobileNotifications } from '@/lib/notification-service';
@@ -360,7 +360,7 @@ export function useRootLayoutSyncEffects({
         void refreshSyncCadence().catch(logAppError);
         reconcileBackgroundSyncTask();
         lastAutoSyncPayloadFingerprint.current = readCurrentSyncPayloadFingerprint();
-        const unsubscribe = useTaskStore.subscribe((state, prevState) => {
+        const unsubscribe = useTaskStore.subscribe(nameNotifyListener('auto-sync-trigger', (state, prevState) => {
             const currentSyncStatus = state.settings?.lastSyncStatus;
             const previousSyncStatus = prevState.settings?.lastSyncStatus;
             const syncCompleted = currentSyncStatus === 'success' || currentSyncStatus === 'conflict';
@@ -398,7 +398,7 @@ export function useRootLayoutSyncEffects({
                 if (!isActive.current) return;
                 requestSync();
             }, debounceMs);
-        });
+        }));
 
         return () => {
             unsubscribe();
@@ -519,7 +519,7 @@ export function useRootLayoutSyncEffects({
 
     useEffect(() => {
         let previousEnabled = hasActiveMobileNotificationFeature(useTaskStore.getState().settings);
-        const unsubscribe = useTaskStore.subscribe((state) => {
+        const unsubscribe = useTaskStore.subscribe(nameNotifyListener('notification-feature-watcher', (state) => {
             const enabled = hasActiveMobileNotificationFeature(state.settings);
             if (enabled === previousEnabled) return;
             previousEnabled = enabled;
@@ -529,7 +529,7 @@ export function useRootLayoutSyncEffects({
             } else {
                 startMobileNotifications().catch(logAppError);
             }
-        });
+        }));
 
         return () => unsubscribe();
     }, []);

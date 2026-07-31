@@ -15,6 +15,7 @@ import {
     hasTimeComponent,
     isProjectedRecurringTask,
     runCalendarPushFullSync,
+    nameNotifyListener,
     runCalendarPushPartialSync,
     safeFormatDate,
     safeParseDate,
@@ -769,7 +770,7 @@ export const startCalendarPushSync = (): (() => void) => {
 
     unsubscribeStore = useTaskStore.subscribe(
         (state) => state._allTasks,
-        (currentTasks) => {
+        nameNotifyListener('calendar-push', (currentTasks: Task[]) => {
             const changedIds: string[] = [];
             const currentMap = buildCalendarSyncTaskMap(currentTasks);
 
@@ -807,7 +808,7 @@ export const startCalendarPushSync = (): (() => void) => {
             if (changedIds.length > 0) {
                 scheduleSyncDebounced(changedIds);
             }
-        }
+        })
     );
 
     return stopCalendarPushSync;

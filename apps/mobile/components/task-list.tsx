@@ -927,6 +927,23 @@ function TaskListComponent({
     );
     if (index <= 0) return undefined;
     projectReorderScrollOffsetRef.current = 0;
+    // How long entering Task order leaves the viewport parked on unrendered
+    // rows: the entry jump only sticks once the target has rendered, so the
+    // settle time IS the blank window slow devices report (#784).
+    const enteredAt = Date.now();
+    let entryLogged = false;
+    const logEntrySettled = (retriesUsed: number) => {
+      if (entryLogged) return;
+      entryLogged = true;
+      if (useTaskStore.getState().settings?.diagnostics?.loggingEnabled !== true) return;
+      void logMobilePerformanceDiagnostic({
+        operation: 'project_reorder_enter',
+        route: 'project',
+        elapsedMs: Date.now() - enteredAt,
+        listItemCount: projectReorderFlatItemsRef.current.length,
+        scrollRetryCount: retriesUsed,
+      });
+    };
     const scrollToTarget = () => {
       try {
         reorderListRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0 });
@@ -940,10 +957,17 @@ function TaskListComponent({
       timer = null;
       // Stop once the list actually moved off the top (a clamped first jump
       // keeps it at 0) or the retries run out.
-      if (projectReorderScrollOffsetRef.current > 1) return;
+      if (projectReorderScrollOffsetRef.current > 1) {
+        logEntrySettled(attempts);
+        return;
+      }
       scrollToTarget();
       attempts += 1;
-      if (attempts < 5) timer = setTimeout(retry, 250);
+      if (attempts < 5) {
+        timer = setTimeout(retry, 250);
+      } else {
+        logEntrySettled(attempts);
+      }
     };
     const frame = typeof requestAnimationFrame === 'function'
       ? requestAnimationFrame(scrollToTarget)

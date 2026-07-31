@@ -9,6 +9,7 @@ export type PerformanceOperation =
     | 'task_persistence'
     | 'task_list_derive'
     | 'task_list_commit'
+    | 'project_reorder_enter'
     | 'navigation_transition';
 
 export type PerformanceRoute =
@@ -38,6 +39,9 @@ export type PerformanceLogInput = {
     // list length means row memoization is not holding and the whole window
     // re-renders per store change (#766).
     rowRenderCount?: number;
+    // Entry-scroll retries before the reorder list settled on the target row;
+    // pairs with elapsedMs to size the blank window on slow devices (#784).
+    scrollRetryCount?: number;
     platform?: PerformancePlatform;
     appVersion?: string;
 };
@@ -52,6 +56,7 @@ export type PerformanceLogMeasurementFinishInput = Partial<Pick<PerformanceLogIn
     | 'visibleItemCount'
     | 'filterCount'
     | 'rowRenderCount'
+    | 'scrollRetryCount'
     | 'platform'
     | 'appVersion'
 >>;
@@ -72,6 +77,7 @@ export const PERFORMANCE_LOG_OPERATIONS: readonly PerformanceOperation[] = [
     'task_persistence',
     'task_list_derive',
     'task_list_commit',
+    'project_reorder_enter',
     'navigation_transition',
 ];
 
@@ -104,6 +110,7 @@ export const PERFORMANCE_LOG_CONTEXT_KEYS: readonly string[] = [
     'visibleItemCount',
     'filterCount',
     'rowRenderCount',
+    'scrollRetryCount',
     'platform',
     'appVersion',
 ];
@@ -187,6 +194,7 @@ export function buildPerformanceLogContext(input: PerformanceLogInput): Record<s
     addCount(context, 'listItemCount', input.listItemCount);
     addCount(context, 'visibleItemCount', input.visibleItemCount);
     addCount(context, 'filterCount', input.filterCount);
+    addCount(context, 'scrollRetryCount', input.scrollRetryCount);
     addCount(context, 'rowRenderCount', input.rowRenderCount);
 
     if (isPerformancePlatform(input.platform)) {
@@ -244,6 +252,7 @@ const mergeMeasurementInput = (
     rowRenderCount: finishInput?.rowRenderCount ?? input.rowRenderCount,
     visibleItemCount: finishInput?.visibleItemCount ?? input.visibleItemCount,
     filterCount: finishInput?.filterCount ?? input.filterCount,
+    scrollRetryCount: finishInput?.scrollRetryCount ?? input.scrollRetryCount,
     platform: finishInput?.platform ?? input.platform,
     appVersion: finishInput?.appVersion ?? input.appVersion,
 });
