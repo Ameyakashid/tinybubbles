@@ -1,7 +1,9 @@
-import type { Project } from '@mindwtr/core';
+import { safeParseDate, type Project } from '@mindwtr/core';
 import { Calendar, CalendarClock, FolderOpenDot, ListOrdered, Plus, Settings2, Signal, Tags } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { useNativeDateInputLocale } from '../../../hooks/use-native-date-input-locale';
 import { TokenAutocompleteInput } from '../../Task/TokenAutocompleteInput';
+import { DateField } from '../../ui/DateField';
 
 type ProjectDetailsFieldsProps = {
     project: Project;
@@ -58,6 +60,7 @@ export function ProjectDetailsFields({
     };
     const resolvedSequenceModeLabel = resolveText('projects.sequenceMode', 'Flow Mode');
     const resolvedSequentialScope = sequentialScope === 'section' ? 'section' : 'project';
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
 
     return (
         <section className="py-5 border-b border-border/50">
@@ -192,12 +195,19 @@ export function ProjectDetailsFields({
                         <Calendar className="h-3.5 w-3.5" />
                         {t('taskEdit.dueDateLabel')}
                     </label>
-                    <input
+                    <DateField
                         key={`${project.id}-due`}
-                        type="date"
-                        defaultValue={dueDateValue}
-                        onBlur={(e) => onDueDateChange(e.target.value)}
-                        className="h-9 w-full text-sm bg-background border border-border rounded-md px-2 text-foreground"
+                        t={t}
+                        dateAriaLabel={t('taskEdit.dueDateLabel')}
+                        dateValue={dueDateValue}
+                        selectedDate={safeParseDate(dueDateValue)}
+                        dateFormatSetting={dateFormatSetting}
+                        nativeDateInputLocale={nativeDateInputLocale}
+                        dateInputClassName="h-9 text-sm bg-background border border-border rounded-md px-2 text-foreground"
+                        className="max-w-none"
+                        hasValue={Boolean(dueDateValue)}
+                        onDateChange={onDueDateChange}
+                        onClear={() => onDueDateChange('')}
                     />
                 </div>
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { createTaskDraft, setTaskDraftField, type Task, type TaskDraft } from '@mindwtr/core';
 
+import { LanguageProvider } from '../contexts/language-context';
 import { InboxProcessingQuickPanel, type InboxProcessingQuickPanelProps } from './InboxProcessingQuickPanel';
 import { InboxProcessingWizard, type InboxProcessingWizardProps, type ProcessingStep } from './InboxProcessingWizard';
 import type {
@@ -85,6 +86,7 @@ function QuickPanelHarness(overrides: Partial<InboxProcessingQuickPanelProps> = 
     const { draft, setField } = useLiveDraft();
 
     return (
+        <LanguageProvider>
         <InboxProcessingQuickPanel
             t={t}
             processingTask={processingTask}
@@ -123,6 +125,7 @@ function QuickPanelHarness(overrides: Partial<InboxProcessingQuickPanelProps> = 
             onSubmit={noop}
             {...overrides}
         />
+        </LanguageProvider>
     );
 }
 
@@ -130,6 +133,7 @@ function WizardHarness({ processingStep = 'refine' as ProcessingStep, ...overrid
     const { draft, setField } = useLiveDraft();
 
     return (
+        <LanguageProvider>
         <InboxProcessingWizard
             t={t}
             isProcessing
@@ -196,6 +200,7 @@ function WizardHarness({ processingStep = 'refine' as ProcessingStep, ...overrid
             visibleScheduleFieldKeys={[]}
             {...overrides}
         />
+        </LanguageProvider>
     );
 }
 

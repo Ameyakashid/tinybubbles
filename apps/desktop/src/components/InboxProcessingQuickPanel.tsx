@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, CheckCircle, ClipboardList, Clock, Trash2, User, 
 import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Project, type Task, type TaskDraft, type TaskDraftSetter, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
+import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';
 import {
     InboxProcessingScheduleFields,
     type InboxProcessingScheduleFieldKey,
@@ -18,6 +19,7 @@ import { TokenAutocompleteInput } from './Task/TokenAutocompleteInput';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { AreaSelector } from './ui/AreaSelector';
 import { ProjectSelector } from './ui/ProjectSelector';
+import { DateField } from './ui/DateField';
 import { QuickDateChips } from './QuickDateChips';
 
 type QuickActionabilityChoice = 'actionable' | 'later' | 'trash' | 'someday' | 'reference';
@@ -130,6 +132,7 @@ export function InboxProcessingQuickPanel({
     addProject,
     onSubmit,
 }: InboxProcessingQuickPanelProps) {
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
     const {
         allContexts,
         allTags,
@@ -591,12 +594,18 @@ export function InboxProcessingQuickPanel({
                                 selectedDate={safeParseDate(delegateFollowUp)}
                                 onSelect={(date) => setDelegateFollowUp(date ? safeFormatDate(date, 'yyyy-MM-dd') : '')}
                             />
-                            <input
-                                type="date"
-                                aria-label={t('process.delegateFollowUpLabel')}
-                                value={delegateFollowUp}
-                                onChange={(event) => setDelegateFollowUp(event.target.value)}
-                                className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/40 focus:outline-none"
+                            <DateField
+                                t={t}
+                                dateAriaLabel={t('process.delegateFollowUpLabel')}
+                                dateValue={delegateFollowUp}
+                                selectedDate={safeParseDate(delegateFollowUp)}
+                                dateFormatSetting={dateFormatSetting}
+                                nativeDateInputLocale={nativeDateInputLocale}
+                                dateInputClassName="bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/40 focus:outline-none"
+                                className="max-w-none"
+                                hasValue={Boolean(delegateFollowUp)}
+                                onDateChange={setDelegateFollowUp}
+                                onClear={() => setDelegateFollowUp('')}
                             />
                         </div>
                         <button

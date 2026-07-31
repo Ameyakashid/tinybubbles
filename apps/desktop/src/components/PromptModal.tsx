@@ -7,7 +7,7 @@ import {
     parseDateTimeLocalDate,
     splitDateTimeLocal,
 } from '../lib/datetime-local-value';
-import { DateField } from './Task/TaskItemFieldRenderer';
+import { DateField } from './ui/DateField';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { Button } from './ui/Button';
 import { Dialog, DialogBody, DialogHeader } from './ui/Dialog';
@@ -27,7 +27,9 @@ interface PromptModalProps {
     suggestions?: readonly string[];
     createLabel?: string;
     onCreate?: (value: string) => void | Promise<void>;
-    inputType?: 'text' | 'date' | 'datetime-local';
+    // No bare 'date': dates go through DateField below, so a Jalali user never
+    // meets a native Gregorian control here.
+    inputType?: 'text' | 'datetime-local';
     allowEmptyConfirm?: boolean;
     browseLabel?: string;
     onBrowse?: () => Promise<string | null>;

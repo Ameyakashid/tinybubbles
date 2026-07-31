@@ -1,12 +1,14 @@
 import { format } from 'date-fns';
 import { Check, Search, X } from 'lucide-react';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel, safeParseDate } from '@mindwtr/core';
 
 import { TaskInput } from '../../Task/TaskInput';
 import { TaskItem } from '../../TaskItem';
 import { Dialog, DialogBody } from '../../ui/Dialog';
+import { DateField } from '../../ui/DateField';
 import { QuickAddSyntaxHint } from '../../ui/QuickAddSyntaxHint';
 import { cn } from '../../../lib/utils';
+import { useNativeDateInputLocale } from '../../../hooks/use-native-date-input-locale';
 import { DESKTOP_GRID_SNAP_MINUTES, combineDateAndTime } from './calendar-primitives';
 import type { DesktopCalendarController } from './useDesktopCalendarController';
 
@@ -113,6 +115,8 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
         updateTaskComposerStart,
         updateTaskComposerTitle,
     } = controller;
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
+    const dateLabel = resolveText('calendar.date', 'Date');
 
     if (!taskComposer) return null;
 
@@ -246,15 +250,22 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                     )}
 
                     <div className="grid gap-3 sm:grid-cols-4">
-                        <label className="space-y-1 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
-                            {resolveText('calendar.date', 'Date')}
-                            <input
-                                type="date"
-                                value={taskComposer.startDateValue}
-                                onChange={(event) => updateTaskComposerStart({ startDateValue: event.target.value })}
-                                className="h-10 w-full rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        {/* Not a <label> wrapper: it would swallow clicks meant for
+                            DateField's calendar button. */}
+                        <div className="space-y-1 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+                            {dateLabel}
+                            <DateField
+                                t={t}
+                                dateAriaLabel={dateLabel}
+                                dateValue={taskComposer.startDateValue}
+                                selectedDate={safeParseDate(taskComposer.startDateValue)}
+                                dateFormatSetting={dateFormatSetting}
+                                nativeDateInputLocale={nativeDateInputLocale}
+                                dateInputClassName="h-10 rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                className="max-w-none"
+                                onDateChange={(value) => updateTaskComposerStart({ startDateValue: value })}
                             />
-                        </label>
+                        </div>
                         <label className="space-y-1 text-xs font-semibold uppercase tracking-normal text-muted-foreground">
                             {resolveText('calendar.start', 'Start')}
                             <input

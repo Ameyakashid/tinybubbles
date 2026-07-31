@@ -236,10 +236,12 @@ const renderWorkspace = (overrides: Record<string, unknown> = {}) => {
     const { store, props } = splitOverrides(overrides);
     seedStore(store);
     return render(
-        <ProjectWorkspace
-            {...defaultProps}
-            {...(props as Partial<ProjectWorkspaceProps>)}
-        />
+        <LanguageProvider>
+            <ProjectWorkspace
+                {...defaultProps}
+                {...(props as Partial<ProjectWorkspaceProps>)}
+            />
+        </LanguageProvider>
     );
 };
 

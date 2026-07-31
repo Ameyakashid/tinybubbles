@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import { useTaskStore } from '@mindwtr/core';
 
+import { LanguageProvider } from '../contexts/language-context';
 import {
     InboxProcessingScheduleFields,
     type InboxProcessingScheduleFieldControl,
@@ -56,7 +58,9 @@ describe('InboxProcessingScheduleFields date-only control', () => {
         });
 
         const { getByRole } = render(
-            <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            <LanguageProvider>
+                <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            </LanguageProvider>
         );
 
         fireEvent.click(getByRole('button', { name: 'Date only: Due Date' }));
@@ -70,9 +74,60 @@ describe('InboxProcessingScheduleFields date-only control', () => {
         });
 
         const { queryByRole } = render(
-            <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            <LanguageProvider>
+                <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            </LanguageProvider>
         );
 
         expect(queryByRole('button', { name: 'Date only: Due Date' })).toBeNull();
+    });
+});
+
+describe('InboxProcessingScheduleFields calendar system', () => {
+    const originalSettings = useTaskStore.getState().settings;
+    const originalLanguages = navigator.languages;
+
+    afterEach(() => {
+        // Unmount before restoring the store, or the settings write lands on a
+        // still-mounted DateField outside act().
+        cleanup();
+        useTaskStore.setState({ settings: originalSettings });
+        Object.defineProperty(navigator, 'languages', {
+            value: originalLanguages,
+            configurable: true,
+        });
+    });
+
+    it('renders Jalali dates when the calendarSystem setting is jalali', () => {
+        // resolveCalendarSystemSetting only honours 'jalali' for a Persian
+        // language or system locale, so the setting alone is not enough.
+        Object.defineProperty(navigator, 'languages', {
+            value: ['fa-IR'],
+            configurable: true,
+        });
+        useTaskStore.setState({
+            settings: { ...useTaskStore.getState().settings, calendarSystem: 'jalali' },
+        });
+        const fields = createControls({ due: createField({ date: '2026-04-19' }) });
+
+        const { getByLabelText } = render(
+            <LanguageProvider>
+                <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            </LanguageProvider>
+        );
+
+        expect((getByLabelText('Due Date') as HTMLInputElement).value).toBe('1405-01-30');
+    });
+
+    it('renders Gregorian dates by default', () => {
+        const fields = createControls({ due: createField({ date: '2026-04-19' }) });
+
+        const { getByLabelText } = render(
+            <LanguageProvider>
+                <InboxProcessingScheduleFields t={t} fields={fields} visibleFieldKeys={['due']} />
+            </LanguageProvider>
+        );
+
+        expect((getByLabelText('Due Date') as HTMLInputElement).value).not.toBe('1405-01-30');
     });
 });

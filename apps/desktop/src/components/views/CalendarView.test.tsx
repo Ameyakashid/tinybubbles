@@ -432,7 +432,9 @@ describe('CalendarView', () => {
         fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Draft launch note' } });
         fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-04-09' } });
 
-        expect(screen.getByLabelText('Date')).toHaveValue('2026-04-09');
+        // The composer uses the shared DateField, which echoes the date back in
+        // the locale's display order rather than the stored ISO value.
+        expect(screen.getByLabelText('Date')).toHaveValue('04/09/2026');
 
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Save' }));

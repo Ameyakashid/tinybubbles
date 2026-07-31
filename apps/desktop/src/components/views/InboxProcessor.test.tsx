@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AppData, Area, Project, Task } from '@mindwtr/core';
 
+import { LanguageProvider } from '../../contexts/language-context';
 import { InboxProcessor } from './InboxProcessor';
 import { reportError } from '../../lib/report-error';
 import { useUiStore } from '../../store/ui-store';
@@ -132,6 +133,7 @@ const renderInboxProcessor = (options?: AppData['settings'] | RenderInboxProcess
     const TestHarness = () => {
         const [isProcessing, setIsProcessing] = useState(false);
         return (
+            <LanguageProvider>
             <InboxProcessor
                 t={(key) => key}
                 isInbox
@@ -148,6 +150,7 @@ const renderInboxProcessor = (options?: AppData['settings'] | RenderInboxProcess
                 isProcessing={isProcessing}
                 setIsProcessing={setIsProcessing}
             />
+            </LanguageProvider>
         );
     };
 

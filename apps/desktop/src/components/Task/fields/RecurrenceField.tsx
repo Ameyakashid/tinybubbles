@@ -1,6 +1,7 @@
-import { buildRRuleString, parseRRuleString, RECURRENCE_INTERVAL_MAX, tFallback, type RecurrenceByDay, type RecurrenceRule, type RecurrenceStrategy } from '@mindwtr/core';
+import { buildRRuleString, parseRRuleString, RECURRENCE_INTERVAL_MAX, safeParseDate, tFallback, type RecurrenceByDay, type RecurrenceRule, type RecurrenceStrategy } from '@mindwtr/core';
 
 import { cn } from '../../../lib/utils';
+import { DateField } from '../../ui/DateField';
 import { WeekdaySelector } from '../TaskForm/WeekdaySelector';
 import type { MonthlyRecurrenceInfo } from '../TaskItemFieldRenderer';
 import { taskEditorLabelClassName } from '../task-editor-label';
@@ -15,6 +16,8 @@ type RecurrenceFieldProps = {
     parsedRecurrenceRRule: ReturnType<typeof parseRRuleString>;
     recurrenceEndMode: 'never' | 'until' | 'count';
     recurrenceDefaultEndDate: string;
+    dateFormatSetting?: string | null;
+    nativeDateInputLocale: string;
     projectedRecurrenceDateLabel?: string;
     onRecurrenceChange: (value: RecurrenceRule | '') => void;
     onRecurrenceStrategyChange: (value: RecurrenceStrategy) => void;
@@ -49,6 +52,8 @@ export function RecurrenceField({
     parsedRecurrenceRRule,
     recurrenceEndMode,
     recurrenceDefaultEndDate,
+    dateFormatSetting,
+    nativeDateInputLocale,
     projectedRecurrenceDateLabel,
     onRecurrenceChange,
     onRecurrenceStrategyChange,
@@ -237,16 +242,24 @@ export function RecurrenceField({
                         <option value="count">{t('recurrence.endsAfterCount')}</option>
                     </select>
                     {recurrenceEndMode === 'until' && (
-                        <input
-                            type="date"
-                            value={parsedRecurrenceRRule.until || recurrenceDefaultEndDate}
-                            onChange={(event) => {
+                        <DateField
+                            t={t}
+                            dateAriaLabel={t('recurrence.endsOnDate')}
+                            dateValue={parsedRecurrenceRRule.until || recurrenceDefaultEndDate}
+                            selectedDate={safeParseDate(parsedRecurrenceRRule.until || recurrenceDefaultEndDate)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName="text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground"
+                            // Inline in the "Ends" row, and there is no empty state:
+                            // clearing it falls back to the default end date, so no
+                            // onClear and no clear button.
+                            className="w-40 max-w-none"
+                            onDateChange={(value) => {
                                 onRecurrenceRRuleChange(buildRecurrenceRRule(editRecurrence, {
                                     count: undefined,
-                                    until: event.target.value || recurrenceDefaultEndDate,
+                                    until: value || recurrenceDefaultEndDate,
                                 }));
                             }}
-                            className="text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground"
                         />
                     )}
                     {recurrenceEndMode === 'count' && (

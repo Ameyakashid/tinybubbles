@@ -1,8 +1,9 @@
-import { X } from 'lucide-react';
-import { safeFormatDate, safeParseDate, tFallback } from '@mindwtr/core';
+import { safeFormatDate, safeParseDate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
+import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';
 import { QuickDateChips } from './QuickDateChips';
+import { DateField } from './ui/DateField';
 
 export type InboxProcessingScheduleFieldControl = {
     date: string;
@@ -55,8 +56,7 @@ export function InboxProcessingScheduleFields({
     variant = 'quick',
 }: InboxProcessingScheduleFieldsProps) {
     const compact = variant === 'quick';
-    const clearText = tFallback(t, 'common.clear', 'Clear');
-    const dateOnlyText = t('taskEdit.dateOnly');
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
     const renderedFieldConfig = visibleFieldKeys?.length
         ? FIELD_CONFIG.filter(({ key }) => visibleFieldKeys.includes(key))
         : FIELD_CONFIG;
@@ -76,59 +76,38 @@ export function InboxProcessingScheduleFields({
                         )}>
                             {label}
                         </label>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="date"
-                                aria-label={label}
-                                value={field.date}
-                                onChange={(event) => field.onDateChange(event.target.value)}
-                                className={cn(
-                                    'flex-1 rounded border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40',
-                                    compact ? 'px-3 py-2 text-sm' : 'px-2 py-1 text-xs'
-                                )}
-                            />
-                            <input
-                                type="text"
-                                aria-label={t(timeAriaKey)}
-                                value={field.timeDraft}
-                                inputMode="numeric"
-                                placeholder="HH:MM"
-                                onChange={(event) => field.onTimeDraftChange(event.target.value)}
-                                onBlur={field.onTimeCommit}
-                                className={cn(
-                                    'w-24 shrink-0 rounded border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40',
-                                    compact ? 'px-3 py-2 text-sm' : 'px-2 py-1 text-xs'
-                                )}
-                            />
-                            {field.hasTime ? (
-                                <button
-                                    type="button"
-                                    onClick={field.onDateOnly}
-                                    className={cn(
-                                        'shrink-0 whitespace-nowrap rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                                        compact ? 'px-2 py-2 text-xs' : 'px-1.5 py-1 text-[11px]'
-                                    )}
-                                    aria-label={`${dateOnlyText}: ${label}`}
-                                >
-                                    {dateOnlyText}
-                                </button>
-                            ) : null}
-                            {showClear ? (
-                                <button
-                                    type="button"
-                                    onClick={field.onClear}
-                                    className={cn(
-                                        'shrink-0 rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                                        compact ? 'p-2' : 'p-1.5'
-                                    )}
-                                    aria-label={`${clearText} ${label}`}
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            ) : (
-                                <span aria-hidden="true" className="h-8 w-8 shrink-0" />
+                        <DateField
+                            t={t}
+                            dateAriaLabel={label}
+                            dateValue={field.date}
+                            selectedDate={safeParseDate(field.date)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName={cn(
+                                'rounded border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40',
+                                compact ? 'px-3 py-2 text-sm' : 'px-2 py-1 text-xs'
                             )}
-                        </div>
+                            className="max-w-none"
+                            timeInput={(
+                                <input
+                                    type="text"
+                                    aria-label={t(timeAriaKey)}
+                                    value={field.timeDraft}
+                                    inputMode="numeric"
+                                    placeholder="HH:MM"
+                                    onChange={(event) => field.onTimeDraftChange(event.target.value)}
+                                    onBlur={field.onTimeCommit}
+                                    className={cn(
+                                        'w-24 shrink-0 rounded border border-border bg-muted/50 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40',
+                                        compact ? 'px-3 py-2 text-sm' : 'px-2 py-1 text-xs'
+                                    )}
+                                />
+                            )}
+                            hasValue={showClear}
+                            onDateChange={field.onDateChange}
+                            onClear={field.onClear}
+                            onDateOnly={field.hasTime ? field.onDateOnly : undefined}
+                        />
                         <QuickDateChips
                             t={t}
                             selectedDate={safeParseDate(field.date)}

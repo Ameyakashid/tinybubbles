@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, Check, CheckCircle, ChevronLeft, ClipboardList, C
 import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskDraft, type TaskDraftSetter, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
+import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';
 import {
     InboxProcessingScheduleFields,
     type InboxProcessingScheduleFieldKey,
@@ -18,6 +19,7 @@ import { TokenAutocompleteInput } from './Task/TokenAutocompleteInput';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { AreaSelector } from './ui/AreaSelector';
 import { ProjectSelector } from './ui/ProjectSelector';
+import { DateField } from './ui/DateField';
 import { QuickDateChips } from './QuickDateChips';
 
 export type ProcessingStep = 'refine' | 'actionable' | 'projectcheck' | 'twomin' | 'decide' | 'context' | 'reference' | 'project' | 'delegate';
@@ -157,6 +159,7 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     scheduleFields,
     visibleScheduleFieldKeys,
 }: InboxProcessingWizardProps) {
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
     const {
         allContexts,
         allTags,
@@ -615,11 +618,18 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
                             selectedDate={safeParseDate(delegateFollowUp)}
                             onSelect={(date) => setDelegateFollowUp(date ? safeFormatDate(date, 'yyyy-MM-dd') : '')}
                         />
-                        <input
-                            type="date"
-                            value={delegateFollowUp}
-                            onChange={(e) => setDelegateFollowUp(e.target.value)}
-                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                        <DateField
+                            t={t}
+                            dateAriaLabel={t('process.delegateFollowUpLabel')}
+                            dateValue={delegateFollowUp}
+                            selectedDate={safeParseDate(delegateFollowUp)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName="bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                            className="max-w-none"
+                            hasValue={Boolean(delegateFollowUp)}
+                            onDateChange={setDelegateFollowUp}
+                            onClear={() => setDelegateFollowUp('')}
                         />
                     </div>
                     <button

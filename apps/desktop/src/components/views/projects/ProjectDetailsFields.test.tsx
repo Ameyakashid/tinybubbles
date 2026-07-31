@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Project } from '@mindwtr/core';
 
+import { LanguageProvider } from '../../../contexts/language-context';
 import { ProjectDetailsFields } from './ProjectDetailsFields';
 
 const translations: Record<string, string> = {
@@ -71,10 +72,12 @@ const defaultProps = {
 describe('ProjectDetailsFields', () => {
     it('offers existing tag completions for the project tag field', async () => {
         render(
-            <ProjectDetailsFields
-                {...defaultProps}
-                tagSuggestions={['#client', '#creative']}
-            />
+            <LanguageProvider>
+                <ProjectDetailsFields
+                    {...defaultProps}
+                    tagSuggestions={['#client', '#creative']}
+                />
+            </LanguageProvider>
         );
 
         const tagInput = screen.getByRole('combobox', { name: 'Tags' }) as HTMLInputElement;

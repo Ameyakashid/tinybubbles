@@ -28,7 +28,7 @@ import { Button } from '../ui/Button';
 import { AreaSelector } from '../ui/AreaSelector';
 import { normalizeDateInputValue } from './task-item-helpers';
 import { ContextsField } from './fields/TaskMetadataFields';
-import { DateField } from './TaskItemFieldRenderer';
+import { DateField } from '../ui/DateField';
 
 const VIEWPORT_MARGIN_PX = 8;
 const PANEL_GAP_PX = 8;

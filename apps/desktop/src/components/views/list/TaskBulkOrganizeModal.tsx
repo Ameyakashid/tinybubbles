@@ -3,6 +3,7 @@ import { ClipboardCheck, X } from 'lucide-react';
 import {
     isSelectableProjectForTaskAssignment,
     parseBulkOrganizeTokenInput,
+    safeParseDate,
     tFallback,
     type Area,
     type BulkOrganizeStatus,
@@ -12,6 +13,8 @@ import {
 
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
+import { DateField } from '../../ui/DateField';
+import { useNativeDateInputLocale } from '../../../hooks/use-native-date-input-locale';
 
 type TaskBulkOrganizeModalProps = {
     isOpen: boolean;
@@ -29,6 +32,7 @@ type TaskBulkOrganizeModalProps = {
 const STATUS_OPTIONS: BulkOrganizeStatus[] = ['next', 'waiting', 'someday', 'reference', 'done'];
 const KEEP_VALUE = '__KEEP__';
 const NONE_VALUE = '__NONE__';
+const bulkDateInputClassName = 'h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
 export function TaskBulkOrganizeModal({
     isOpen,
@@ -52,6 +56,7 @@ export function TaskBulkOrganizeModal({
     const [reviewDate, setReviewDate] = useState('');
     const [delegateWho, setDelegateWho] = useState('');
     const [showValidation, setShowValidation] = useState(false);
+    const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
 
     useEffect(() => {
         if (!isOpen) return;
@@ -86,6 +91,11 @@ export function TaskBulkOrganizeModal({
     const canApply = selectedCount > 0 && (!isWaiting || delegateWho.trim().length > 0);
     const selectedProjectId = projectChoice !== KEEP_VALUE && projectChoice !== NONE_VALUE ? projectChoice : undefined;
     const title = tFallback(t, titleKey, titleFallback);
+    const startDateLabel = tFallback(t, 'taskEdit.startDateLabel', 'Start');
+    const dueDateLabel = tFallback(t, 'taskEdit.dueDateLabel', 'Due');
+    const reviewDateLabel = isWaiting
+        ? tFallback(t, 'process.followUpLabel', 'Follow-up')
+        : tFallback(t, 'taskEdit.reviewDateLabel', 'Review');
 
     const apply = () => {
         if (!canApply) {
@@ -227,34 +237,57 @@ export function TaskBulkOrganizeModal({
                     )}
                 </div>
 
+                {/* The labels sit outside DateField: a <label> wrapper would swallow
+                    clicks meant for the calendar button. */}
                 <div className="grid gap-3 sm:grid-cols-3">
-                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                        <span>{tFallback(t, 'taskEdit.startDateLabel', 'Start')}</span>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(event) => setStartDate(event.currentTarget.value)}
-                            className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                        <span>{startDateLabel}</span>
+                        <DateField
+                            t={t}
+                            dateAriaLabel={startDateLabel}
+                            dateValue={startDate}
+                            selectedDate={safeParseDate(startDate)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName={bulkDateInputClassName}
+                            className="max-w-none"
+                            hasValue={Boolean(startDate)}
+                            onDateChange={setStartDate}
+                            onClear={() => setStartDate('')}
                         />
-                    </label>
-                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                        <span>{tFallback(t, 'taskEdit.dueDateLabel', 'Due')}</span>
-                        <input
-                            type="date"
-                            value={dueDate}
-                            onChange={(event) => setDueDate(event.currentTarget.value)}
-                            className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    </div>
+                    <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                        <span>{dueDateLabel}</span>
+                        <DateField
+                            t={t}
+                            dateAriaLabel={dueDateLabel}
+                            dateValue={dueDate}
+                            selectedDate={safeParseDate(dueDate)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName={bulkDateInputClassName}
+                            className="max-w-none"
+                            hasValue={Boolean(dueDate)}
+                            onDateChange={setDueDate}
+                            onClear={() => setDueDate('')}
                         />
-                    </label>
-                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                        <span>{isWaiting ? tFallback(t, 'process.followUpLabel', 'Follow-up') : tFallback(t, 'taskEdit.reviewDateLabel', 'Review')}</span>
-                        <input
-                            type="date"
-                            value={reviewDate}
-                            onChange={(event) => setReviewDate(event.currentTarget.value)}
-                            className="h-9 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    </div>
+                    <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                        <span>{reviewDateLabel}</span>
+                        <DateField
+                            t={t}
+                            dateAriaLabel={reviewDateLabel}
+                            dateValue={reviewDate}
+                            selectedDate={safeParseDate(reviewDate)}
+                            dateFormatSetting={dateFormatSetting}
+                            nativeDateInputLocale={nativeDateInputLocale}
+                            dateInputClassName={bulkDateInputClassName}
+                            className="max-w-none"
+                            hasValue={Boolean(reviewDate)}
+                            onDateChange={setReviewDate}
+                            onClear={() => setReviewDate('')}
                         />
-                    </label>
+                    </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">

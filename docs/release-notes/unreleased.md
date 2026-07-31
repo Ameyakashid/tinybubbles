@@ -55,6 +55,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Desktop
 
+- Every date field on desktop now uses the same locale-aware input — bulk organize, project details, the recurrence end date, calendar event creation, and inbox processing previously showed a plain browser date picker, so a Jalali calendar user saw Gregorian dates there while the task editor showed Jalali. All of them now share the task editor's date input, with its calendar popover and clear affordance where clearing is valid.
 - Every desktop dialog now shares one accessible shell: Escape closes each of them, focus is trapped inside and returned to where you were when the dialog closes, and long content scrolls within a capped panel instead of running off short windows — the Area Manager, Mind Sweep, and prompt dialogs were previously uncapped. Dialogs that guard an in-flight operation (onboarding's Start Fresh, an update download, bulk organize) no longer dismiss from Escape while the operation runs.
 - The weekly review nudge fires on desktop even when general notifications are switched off, matching mobile — the weekly review reminder has always been its own setting, and its toggle, day, and time controls in Settings → Notifications now stay usable while the master switch is off.
 - Every desktop list now ends the same way: the last row scrolls to a small gap above the window edge instead of either stopping short (Projects, Someday, Waiting, Board, Contexts, Done) or sitting flush against it (Focus, Calendar, Review, Archive). (#977)
