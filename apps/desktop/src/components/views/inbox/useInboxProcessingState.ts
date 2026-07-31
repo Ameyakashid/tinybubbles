@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
     createProcessInboxSession,
+    createTaskDraft,
     getFrequentTaskTokens,
     getRecentTaskTokens,
     filterProjectsBySelectedArea,
@@ -8,13 +9,14 @@ import {
     normalizeClockTimeInput,
     openProcessInboxTask,
     selectProcessInboxCandidates,
+    setTaskDraftField,
     type AppData,
     type Area,
     type ProcessInboxSession,
     type Project,
     type Task,
-    type TaskEnergyLevel,
-    type TaskPriority,
+    type TaskDraft,
+    type TaskDraftSetter,
     type TaskEditorFieldId,
     type TimeEstimate,
 } from '@mindwtr/core';
@@ -32,11 +34,22 @@ import {
     getDateFieldDraft,
     mergeSuggestedTokens,
     resolveCommittedTime,
+    type InboxProcessingVisibility,
 } from './inbox-processing-utils';
 
 type ProcessingMode = 'guided' | 'quick';
 
 const ALL_TIME_ESTIMATE_OPTIONS: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
+
+/** Nothing being processed: an all-empty draft built by the same core factory
+ *  that hydrates a real task, so reset and hydrate cannot drift apart. */
+const EMPTY_PROCESSING_DRAFT: TaskDraft = createTaskDraft({
+    id: '',
+    title: '',
+    status: 'inbox',
+    createdAt: '',
+    updatedAt: '',
+} as Task);
 
 type UseInboxProcessingStateParams = {
     tasks: Task[];
@@ -58,27 +71,20 @@ export function useInboxProcessingState({
     const [quickActionability, setQuickActionability] = useState<QuickActionabilityChoice>('actionable');
     const [quickTwoMinuteChoice, setQuickTwoMinuteChoice] = useState<QuickTwoMinuteChoice>('no');
     const [quickExecutionChoice, setQuickExecutionChoice] = useState<QuickExecutionChoice>('defer');
-    const [selectedContexts, setSelectedContexts] = useState<string[]>([]);
-    const [contextsDraft, setContextsDraft] = useState('');
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [tagsDraft, setTagsDraft] = useState('');
-    const [selectedEnergyLevel, setSelectedEnergyLevel] = useState<TaskEnergyLevel | undefined>(undefined);
-    const [selectedAssignedTo, setSelectedAssignedTo] = useState('');
-    const [selectedPriority, setSelectedPriority] = useState<TaskPriority | undefined>(undefined);
-    const [selectedTimeEstimate, setSelectedTimeEstimate] = useState<TimeEstimate | undefined>(undefined);
+    // Every task field the flow edits lives in one core draft (title,
+    // description, contexts, tags, priority, energy, assignee, estimate,
+    // project, area). The date fields keep their own draft/committed pairs
+    // below because their inputs commit on blur.
+    const [draft, setDraft] = useState<TaskDraft>(EMPTY_PROCESSING_DRAFT);
     const [delegateWho, setDelegateWho] = useState('');
     const [delegateFollowUp, setDelegateFollowUp] = useState('');
     const [projectSearch, setProjectSearch] = useState('');
-    const [processingTitle, setProcessingTitle] = useState('');
-    const [processingDescription, setProcessingDescription] = useState('');
     const [convertToProject, setConvertToProject] = useState(false);
     const [projectTitleDraft, setProjectTitleDraft] = useState('');
     const [nextActionDraft, setNextActionDraft] = useState('');
     const [extraActionDrafts, setExtraActionDrafts] = useState<string[]>([]);
     const [customContext, setCustomContext] = useState('');
     const [customTag, setCustomTag] = useState('');
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
     const [scheduleDate, setScheduleDate] = useState('');
     const [scheduleTime, setScheduleTime] = useState('');
     const [scheduleTimeDraft, setScheduleTimeDraft] = useState('');
@@ -137,9 +143,47 @@ export function useInboxProcessingState({
         || showAssignedToField
         || showTimeEstimateField
     );
+    const visibility = useMemo<InboxProcessingVisibility>(() => ({
+        showProjectField,
+        showAreaField,
+        showContextsField,
+        showTagsField,
+        showPriorityField,
+        showEnergyLevelField,
+        showAssignedToField,
+        showTimeEstimateField,
+        showScheduleFields,
+        showReferenceOption: referenceEnabled,
+    }), [
+        referenceEnabled,
+        showAreaField,
+        showAssignedToField,
+        showContextsField,
+        showEnergyLevelField,
+        showPriorityField,
+        showProjectField,
+        showScheduleFields,
+        showTagsField,
+        showTimeEstimateField,
+    ]);
 
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+
+    /**
+     * The one write path into the processing draft: the core reducer applies
+     * the field descriptor cascades, and the inbox adds its own container rule
+     * on top — picking an area drops a project that lives outside it.
+     */
+    const setField = useCallback<TaskDraftSetter>((field, value) => {
+        setDraft((current) => {
+            const next = setTaskDraftField(current, field, value);
+            if (field !== 'areaId' || !next.areaId || !next.projectId) return next;
+            return projectMap.get(next.projectId)?.areaId === next.areaId
+                ? next
+                : setTaskDraftField(next, 'projectId', '');
+        });
+    }, [projectMap]);
     const resolvedAreaFilter = useMemo(
         () => resolveAreaFilter(settings?.filters?.areaId, areas),
         [settings?.filters?.areaId, areas],
@@ -153,11 +197,11 @@ export function useInboxProcessingState({
     const skippedIds = processingSession.skippedTaskIds;
 
     const filteredProjects = useMemo(() => {
-        const areaFilteredProjects = filterProjectsBySelectedArea(projects, selectedAreaId || undefined);
+        const areaFilteredProjects = filterProjectsBySelectedArea(projects, draft.areaId || undefined);
         if (!projectSearch.trim()) return areaFilteredProjects;
         const query = projectSearch.trim().toLowerCase();
         return areaFilteredProjects.filter((project) => project.title.toLowerCase().includes(query));
-    }, [projects, projectSearch, selectedAreaId]);
+    }, [draft.areaId, projects, projectSearch]);
 
     const hasExactProjectMatch = useMemo(() => {
         if (!projectSearch.trim()) return false;
@@ -194,27 +238,16 @@ export function useInboxProcessingState({
         setQuickActionability('actionable');
         setQuickTwoMinuteChoice('no');
         setQuickExecutionChoice('defer');
-        setSelectedContexts([]);
-        setContextsDraft('');
-        setSelectedTags([]);
-        setTagsDraft('');
-        setSelectedEnergyLevel(undefined);
-        setSelectedAssignedTo('');
-        setSelectedPriority(undefined);
-        setSelectedTimeEstimate(undefined);
+        setDraft(EMPTY_PROCESSING_DRAFT);
         setDelegateWho('');
         setDelegateFollowUp('');
         setProjectSearch('');
-        setProcessingTitle('');
-        setProcessingDescription('');
         setConvertToProject(false);
         setProjectTitleDraft('');
         setNextActionDraft('');
         setExtraActionDrafts([]);
         setCustomContext('');
         setCustomTag('');
-        setSelectedProjectId(null);
-        setSelectedAreaId(null);
         setScheduleDate('');
         setScheduleTime('');
         setScheduleTimeDraft('');
@@ -234,29 +267,17 @@ export function useInboxProcessingState({
         setQuickActionability('actionable');
         setQuickTwoMinuteChoice('no');
         setQuickExecutionChoice('defer');
-        const taskContexts = task.contexts ?? [];
-        const taskTags = task.tags ?? [];
-        setSelectedContexts(taskContexts);
-        setContextsDraft(taskContexts.join(', '));
-        setSelectedTags(taskTags);
-        setTagsDraft(taskTags.join(', '));
-        setSelectedEnergyLevel(task.energyLevel);
-        setSelectedAssignedTo(task.assignedTo ?? '');
-        setSelectedPriority(task.priority);
-        setSelectedTimeEstimate(task.timeEstimate);
+        // Keep an area assigned while the task sat in the inbox; a project home
+        // outranks the direct area (container exclusivity).
+        const taskDraft = createTaskDraft(task);
+        setDraft(task.projectId ? setTaskDraftField(taskDraft, 'areaId', '') : taskDraft);
         setCustomContext('');
         setCustomTag('');
         setProjectSearch('');
-        setProcessingTitle(task.title);
-        setProcessingDescription(task.description || '');
         setConvertToProject(false);
         setProjectTitleDraft(task.title);
         setNextActionDraft('');
         setExtraActionDrafts([]);
-        setSelectedProjectId(task.projectId ?? null);
-        // Keep an area assigned while the task sat in the inbox; a project home
-        // outranks the direct area (container exclusivity).
-        setSelectedAreaId(task.projectId ? null : (task.areaId ?? null));
         const startDraft = getDateFieldDraft(task.startTime);
         setScheduleDate(startDraft.date);
         setScheduleTime(startDraft.time);
@@ -431,6 +452,7 @@ export function useInboxProcessingState({
     ]);
 
     const timeEstimateOptions = useMemo<TimeEstimate[]>(() => {
+        const selectedTimeEstimate = draft.timeEstimate || undefined;
         const savedPresets = settings?.gtd?.timeEstimatePresets ?? [];
         const normalizedPresets = ALL_TIME_ESTIMATE_OPTIONS.filter((value) => savedPresets.includes(value));
         if (normalizedPresets.length > 0) {
@@ -441,7 +463,7 @@ export function useInboxProcessingState({
         return selectedTimeEstimate && !ALL_TIME_ESTIMATE_OPTIONS.includes(selectedTimeEstimate)
             ? [...ALL_TIME_ESTIMATE_OPTIONS, selectedTimeEstimate]
             : ALL_TIME_ESTIMATE_OPTIONS;
-    }, [selectedTimeEstimate, settings?.gtd?.timeEstimatePresets]);
+    }, [draft.timeEstimate, settings?.gtd?.timeEstimatePresets]);
 
     return {
         processingMode,
@@ -457,32 +479,14 @@ export function useInboxProcessingState({
         setQuickTwoMinuteChoice,
         quickExecutionChoice,
         setQuickExecutionChoice,
-        selectedContexts,
-        setSelectedContexts,
-        contextsDraft,
-        setContextsDraft,
-        selectedTags,
-        setSelectedTags,
-        tagsDraft,
-        setTagsDraft,
-        selectedEnergyLevel,
-        setSelectedEnergyLevel,
-        selectedAssignedTo,
-        setSelectedAssignedTo,
-        selectedPriority,
-        setSelectedPriority,
-        selectedTimeEstimate,
-        setSelectedTimeEstimate,
+        draft,
+        setField,
         delegateWho,
         setDelegateWho,
         delegateFollowUp,
         setDelegateFollowUp,
         projectSearch,
         setProjectSearch,
-        processingTitle,
-        setProcessingTitle,
-        processingDescription,
-        setProcessingDescription,
         convertToProject,
         setConvertToProject,
         projectTitleDraft,
@@ -495,10 +499,6 @@ export function useInboxProcessingState({
         setCustomContext,
         customTag,
         setCustomTag,
-        selectedProjectId,
-        setSelectedProjectId,
-        selectedAreaId,
-        setSelectedAreaId,
         skippedIds,
         defaultProcessingMode,
         twoMinuteEnabled,
@@ -506,20 +506,11 @@ export function useInboxProcessingState({
         projectFirst,
         contextStepEnabled,
         scheduleEnabled,
-        referenceEnabled,
         prioritiesEnabled,
         timeEstimatesEnabled,
-        showProjectField,
-        showAreaField,
-        showContextsField,
-        showTagsField,
-        showPriorityField,
-        showEnergyLevelField,
-        showAssignedToField,
-        showTimeEstimateField,
+        visibility,
         showProjectStep,
         visibleScheduleFieldKeys,
-        showScheduleFields,
         showOrganizationStep,
         areaById,
         projectMap,

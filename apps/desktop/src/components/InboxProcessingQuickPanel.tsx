@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { ArrowRight, BookOpen, CheckCircle, ClipboardList, Clock, Trash2, User, X } from 'lucide-react';
-import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
+import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Project, type Task, type TaskDraft, type TaskDraftSetter, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
 import {
@@ -8,6 +8,12 @@ import {
     type InboxProcessingScheduleFieldKey,
     type InboxProcessingScheduleFieldsControls,
 } from './InboxProcessingScheduleFields';
+import {
+    parseContextsInput,
+    parseTagsInput,
+    type InboxProcessingOptionLists,
+    type InboxProcessingVisibility,
+} from './views/inbox/inbox-processing-utils';
 import { TokenAutocompleteInput } from './Task/TokenAutocompleteInput';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { AreaSelector } from './ui/AreaSelector';
@@ -22,22 +28,21 @@ export type InboxProcessingQuickPanelProps = {
     t: (key: string) => string;
     processingTask: Task;
     remainingCount: number;
-    processingTitle: string;
-    processingDescription: string;
-    setProcessingTitle: (value: string) => void;
-    setProcessingDescription: (value: string) => void;
+    /** The task fields being clarified, and the one write path into them. */
+    draft: TaskDraft;
+    setField: TaskDraftSetter;
+    visibility: InboxProcessingVisibility;
+    options: InboxProcessingOptionLists;
     processingMode: 'guided' | 'quick';
     onModeChange: (mode: 'guided' | 'quick') => void;
     onSkip: () => void;
     onClose: () => void;
-    showReferenceOption: boolean;
     actionabilityChoice: QuickActionabilityChoice;
     setActionabilityChoice: (value: QuickActionabilityChoice) => void;
     twoMinuteChoice: QuickTwoMinuteChoice;
     setTwoMinuteChoice: (value: QuickTwoMinuteChoice) => void;
     executionChoice: QuickExecutionChoice;
     setExecutionChoice: (value: QuickExecutionChoice) => void;
-    showScheduleFields: boolean;
     scheduleFields: InboxProcessingScheduleFieldsControls;
     visibleScheduleFieldKeys: InboxProcessingScheduleFieldKey[];
     delegateWho: string;
@@ -45,43 +50,9 @@ export type InboxProcessingQuickPanelProps = {
     delegateFollowUp: string;
     setDelegateFollowUp: (value: string) => void;
     onSendDelegateRequest: () => void;
-    selectedContexts: string[];
-    contextsDraft: string;
-    selectedTags: string[];
-    tagsDraft: string;
-    selectedEnergyLevel?: Task['energyLevel'];
-    setSelectedEnergyLevel: (value: Task['energyLevel']) => void;
-    selectedAssignedTo: string;
-    setSelectedAssignedTo: (value: string) => void;
-    personOptions: string[];
     onCreatePerson: (name: string) => void | Promise<void>;
-    selectedTimeEstimate?: TimeEstimate;
-    setSelectedTimeEstimate: (value: TimeEstimate | undefined) => void;
-    timeEstimateOptions: TimeEstimate[];
-    showContextsField: boolean;
-    showTagsField: boolean;
-    showEnergyLevelField: boolean;
-    showAssignedToField: boolean;
-    showTimeEstimateField: boolean;
-    showPriorityField: boolean;
-    selectedPriority?: TaskPriority;
-    setSelectedPriority: (value: TaskPriority | undefined) => void;
-    onContextsInputChange: (value: string) => void;
-    onTagsInputChange: (value: string) => void;
     toggleContext: (ctx: string) => void;
     toggleTag: (tag: string) => void;
-    suggestedContexts: string[];
-    suggestedTags: string[];
-    allContexts: string[];
-    allTags: string[];
-    projects: Project[];
-    areas: Area[];
-    selectedProjectId: string | null;
-    setSelectedProjectId: (value: string | null) => void;
-    selectedAreaId: string | null;
-    setSelectedAreaId: (value: string | null) => void;
-    showProjectField: boolean;
-    showAreaField: boolean;
     convertToProject: boolean;
     setConvertToProject: (value: boolean) => void;
     projectTitleDraft: string;
@@ -126,22 +97,20 @@ export function InboxProcessingQuickPanel({
     t,
     processingTask,
     remainingCount,
-    processingTitle,
-    processingDescription,
-    setProcessingTitle,
-    setProcessingDescription,
+    draft,
+    setField,
+    visibility,
+    options,
     processingMode,
     onModeChange,
     onSkip,
     onClose,
-    showReferenceOption,
     actionabilityChoice,
     setActionabilityChoice,
     twoMinuteChoice,
     setTwoMinuteChoice,
     executionChoice,
     setExecutionChoice,
-    showScheduleFields,
     scheduleFields,
     visibleScheduleFieldKeys,
     delegateWho,
@@ -149,43 +118,9 @@ export function InboxProcessingQuickPanel({
     delegateFollowUp,
     setDelegateFollowUp,
     onSendDelegateRequest,
-    selectedContexts,
-    contextsDraft,
-    selectedTags,
-    tagsDraft,
-    selectedEnergyLevel,
-    setSelectedEnergyLevel,
-    selectedAssignedTo,
-    setSelectedAssignedTo,
-    personOptions,
     onCreatePerson,
-    selectedTimeEstimate,
-    setSelectedTimeEstimate,
-    timeEstimateOptions,
-    showContextsField,
-    showTagsField,
-    showEnergyLevelField,
-    showAssignedToField,
-    showTimeEstimateField,
-    showPriorityField,
-    selectedPriority,
-    setSelectedPriority,
-    onContextsInputChange,
-    onTagsInputChange,
     toggleContext,
     toggleTag,
-    suggestedContexts,
-    suggestedTags,
-    allContexts,
-    allTags,
-    projects,
-    areas,
-    selectedProjectId,
-    setSelectedProjectId,
-    selectedAreaId,
-    setSelectedAreaId,
-    showProjectField,
-    showAreaField,
     convertToProject,
     setConvertToProject,
     projectTitleDraft,
@@ -195,6 +130,53 @@ export function InboxProcessingQuickPanel({
     addProject,
     onSubmit,
 }: InboxProcessingQuickPanelProps) {
+    const {
+        allContexts,
+        allTags,
+        areas,
+        personOptions,
+        projects,
+        suggestedContexts,
+        suggestedTags,
+        timeEstimateOptions,
+    } = options;
+    const {
+        showAreaField,
+        showAssignedToField,
+        showContextsField,
+        showEnergyLevelField,
+        showPriorityField,
+        showProjectField,
+        showReferenceOption,
+        showScheduleFields,
+        showTagsField,
+        showTimeEstimateField,
+    } = visibility;
+    // The body keeps its own names for the draft fields: one alias block beats
+    // rewriting every reference (and re-growing the prop list to do it).
+    const processingTitle = draft.title;
+    const processingDescription = draft.description;
+    const contextsDraft = draft.contexts;
+    const tagsDraft = draft.tags;
+    const selectedContexts = parseContextsInput(draft.contexts);
+    const selectedTags = parseTagsInput(draft.tags);
+    const selectedEnergyLevel = draft.energyLevel || undefined;
+    const selectedAssignedTo = draft.assignedTo;
+    const selectedPriority = draft.priority || undefined;
+    const selectedTimeEstimate = draft.timeEstimate || undefined;
+    const selectedProjectId = draft.projectId || null;
+    const selectedAreaId = draft.areaId || null;
+    const setProcessingTitle = (value: string) => setField('title', value);
+    const setProcessingDescription = (value: string) => setField('description', value);
+    const onContextsInputChange = (value: string) => setField('contexts', value);
+    const onTagsInputChange = (value: string) => setField('tags', value);
+    const setSelectedEnergyLevel = (value: Task['energyLevel']) => setField('energyLevel', value ?? '');
+    const setSelectedAssignedTo = (value: string) => setField('assignedTo', value);
+    const setSelectedPriority = (value: TaskPriority | undefined) => setField('priority', value ?? '');
+    const setSelectedTimeEstimate = (value: TimeEstimate | undefined) => setField('timeEstimate', value ?? '');
+    const setSelectedProjectId = (value: string | null) => setField('projectId', value ?? '');
+    const setSelectedAreaId = (value: string | null) => setField('areaId', value ?? '');
+
     const showActionFields = actionabilityChoice === 'actionable';
     const showLaterFields = actionabilityChoice === 'later';
     const showDecisionFields = showActionFields && twoMinuteChoice === 'no';

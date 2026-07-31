@@ -1,4 +1,4 @@
-import { normalizeClockTimeInput } from '@mindwtr/core';
+import { normalizeClockTimeInput, type Area, type Project, type TimeEstimate } from '@mindwtr/core';
 import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
 
 export const parseTokenListInput = (value: string, prefix: '@' | '#'): string[] => Array.from(
@@ -11,6 +11,13 @@ export const parseTokenListInput = (value: string, prefix: '@' | '#'): string[] 
             .map((part) => `${prefix}${part}`)
     )
 );
+
+export const formatTokenListInput = (tokens: string[]): string => tokens.join(', ');
+
+/** Contexts and tags live in the draft as the raw input text; every reader
+ *  parses them the same way so a prefix can never drift between surfaces. */
+export const parseContextsInput = (value: string): string[] => parseTokenListInput(value, '@');
+export const parseTagsInput = (value: string): string[] => parseTokenListInput(value, '#');
 
 export const mergeSuggestedTokens = (...groups: string[][]): string[] =>
     Array.from(new Set(groups.flat()));
@@ -49,4 +56,33 @@ export const buildDateTimeUpdate = (
     const normalized = normalizeTimeInput(timeDraft);
     const resolvedTime = normalized === null ? committedTime : normalized;
     return joinDateTime(date, resolvedTime);
+};
+
+/**
+ * Which fields the processing panels render. Derived once from the task-editor
+ * layout settings so the wizard and the quick panel cannot disagree.
+ */
+export type InboxProcessingVisibility = {
+    showProjectField: boolean;
+    showAreaField: boolean;
+    showContextsField: boolean;
+    showTagsField: boolean;
+    showPriorityField: boolean;
+    showEnergyLevelField: boolean;
+    showAssignedToField: boolean;
+    showTimeEstimateField: boolean;
+    showScheduleFields: boolean;
+    showReferenceOption: boolean;
+};
+
+/** The lists both panels choose values from. */
+export type InboxProcessingOptionLists = {
+    projects: Project[];
+    areas: Area[];
+    allContexts: string[];
+    allTags: string[];
+    suggestedContexts: string[];
+    suggestedTags: string[];
+    personOptions: string[];
+    timeEstimateOptions: TimeEstimate[];
 };

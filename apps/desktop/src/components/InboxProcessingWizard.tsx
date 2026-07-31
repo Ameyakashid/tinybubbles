@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ArrowRight, BookOpen, Check, CheckCircle, ChevronLeft, ClipboardList, Clock, Trash2, User, X } from 'lucide-react';
-import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
+import { DEFAULT_PROJECT_COLOR, filterProjectsBySelectedArea, formatTimeEstimateLabel, safeFormatDate, safeParseDate, tFallback, type Area, type Project, type Task, type TaskDraft, type TaskDraftSetter, type TaskPriority, type TimeEstimate } from '@mindwtr/core';
 
 import { cn } from '../lib/utils';
 import {
@@ -8,6 +8,12 @@ import {
     type InboxProcessingScheduleFieldKey,
     type InboxProcessingScheduleFieldsControls,
 } from './InboxProcessingScheduleFields';
+import {
+    parseContextsInput,
+    parseTagsInput,
+    type InboxProcessingOptionLists,
+    type InboxProcessingVisibility,
+} from './views/inbox/inbox-processing-utils';
 import { TokenAutocompleteInput } from './Task/TokenAutocompleteInput';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { AreaSelector } from './ui/AreaSelector';
@@ -23,10 +29,11 @@ export type InboxProcessingWizardProps = {
     processingMode: 'guided' | 'quick';
     onModeChange: (mode: 'guided' | 'quick') => void;
     processingStep: ProcessingStep;
-    processingTitle: string;
-    processingDescription: string;
-    setProcessingTitle: (value: string) => void;
-    setProcessingDescription: (value: string) => void;
+    /** The task fields being clarified, and the one write path into them. */
+    draft: TaskDraft;
+    setField: TaskDraftSetter;
+    visibility: InboxProcessingVisibility;
+    options: InboxProcessingOptionLists;
     setIsProcessing: (value: boolean) => void;
     canGoBack: boolean;
     onBack: () => void;
@@ -36,7 +43,6 @@ export type InboxProcessingWizardProps = {
     handleLater: () => void;
     handleActionable: () => void;
     showDoneNowShortcut: boolean;
-    showReferenceOption: boolean;
     handleProjectCheckNo: () => void;
     handleProjectCheckYes: () => void;
     handleTwoMinDone: () => void;
@@ -51,27 +57,7 @@ export type InboxProcessingWizardProps = {
     handleSendDelegateRequest: () => void;
     handleConfirmWaiting: () => void;
     handleConfirmReference: () => void;
-    selectedContexts: string[];
-    selectedTags: string[];
-    selectedEnergyLevel?: Task['energyLevel'];
-    setSelectedEnergyLevel: (value: Task['energyLevel']) => void;
-    selectedAssignedTo: string;
-    setSelectedAssignedTo: (value: string) => void;
-    personOptions: string[];
     onCreatePerson: (name: string) => void | Promise<void>;
-    selectedTimeEstimate?: TimeEstimate;
-    setSelectedTimeEstimate: (value: TimeEstimate | undefined) => void;
-    timeEstimateOptions: TimeEstimate[];
-    showContextsField: boolean;
-    showTagsField: boolean;
-    showEnergyLevelField: boolean;
-    showAssignedToField: boolean;
-    showTimeEstimateField: boolean;
-    showPriorityField: boolean;
-    selectedPriority?: TaskPriority;
-    setSelectedPriority: (value: TaskPriority | undefined) => void;
-    allContexts: string[];
-    allTags: string[];
     customContext: string;
     setCustomContext: (value: string) => void;
     addCustomContext: (value?: string) => void;
@@ -80,8 +66,6 @@ export type InboxProcessingWizardProps = {
     addCustomTag: (value?: string) => void;
     toggleContext: (ctx: string) => void;
     toggleTag: (tag: string) => void;
-    suggestedContexts: string[];
-    suggestedTags: string[];
     handleConfirmContexts: () => void;
     convertToProject: boolean;
     setConvertToProject: (value: boolean) => void;
@@ -94,8 +78,6 @@ export type InboxProcessingWizardProps = {
     handleConvertToProject: () => void;
     projectSearch: string;
     setProjectSearch: (value: string) => void;
-    projects: Project[];
-    areas: Area[];
     filteredProjects: Project[];
     addProject: (title: string, color: string, initialProps?: Partial<Project>) => Promise<Project | null>;
     handleSetProject: (projectId: string | null) => void;
@@ -103,13 +85,6 @@ export type InboxProcessingWizardProps = {
     areaById: Map<string, Area>;
     remainingCount: number;
     showProjectInRefine: boolean;
-    selectedProjectId: string | null;
-    setSelectedProjectId: (value: string | null) => void;
-    selectedAreaId: string | null;
-    setSelectedAreaId: (value: string | null) => void;
-    showProjectField: boolean;
-    showAreaField: boolean;
-    showScheduleFields: boolean;
     scheduleFields: InboxProcessingScheduleFieldsControls;
     visibleScheduleFieldKeys: InboxProcessingScheduleFieldKey[];
 };
@@ -124,10 +99,10 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     processingMode,
     onModeChange,
     processingStep,
-    processingTitle,
-    processingDescription,
-    setProcessingTitle,
-    setProcessingDescription,
+    draft,
+    setField,
+    visibility,
+    options,
     setIsProcessing,
     canGoBack,
     onBack,
@@ -137,7 +112,6 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     handleLater,
     handleActionable,
     showDoneNowShortcut,
-    showReferenceOption,
     handleProjectCheckNo,
     handleProjectCheckYes,
     handleTwoMinDone,
@@ -152,27 +126,7 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     handleSendDelegateRequest,
     handleConfirmWaiting,
     handleConfirmReference,
-    selectedContexts,
-    selectedTags,
-    selectedEnergyLevel,
-    setSelectedEnergyLevel,
-    selectedAssignedTo,
-    setSelectedAssignedTo,
-    personOptions,
     onCreatePerson,
-    selectedTimeEstimate,
-    setSelectedTimeEstimate,
-    timeEstimateOptions,
-    showContextsField,
-    showTagsField,
-    showEnergyLevelField,
-    showAssignedToField,
-    showTimeEstimateField,
-    showPriorityField,
-    selectedPriority,
-    setSelectedPriority,
-    allContexts,
-    allTags,
     customContext,
     setCustomContext,
     addCustomContext,
@@ -181,8 +135,6 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     addCustomTag,
     toggleContext,
     toggleTag,
-    suggestedContexts,
-    suggestedTags,
     handleConfirmContexts,
     convertToProject,
     setConvertToProject,
@@ -195,8 +147,6 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     handleConvertToProject,
     projectSearch,
     setProjectSearch,
-    projects,
-    areas,
     filteredProjects,
     addProject,
     handleSetProject,
@@ -204,16 +154,52 @@ export const InboxProcessingWizard = memo(function InboxProcessingWizard({
     areaById,
     remainingCount,
     showProjectInRefine,
-    selectedProjectId,
-    setSelectedProjectId,
-    selectedAreaId,
-    setSelectedAreaId,
-    showProjectField,
-    showAreaField,
-    showScheduleFields,
     scheduleFields,
     visibleScheduleFieldKeys,
 }: InboxProcessingWizardProps) {
+    const {
+        allContexts,
+        allTags,
+        areas,
+        personOptions,
+        projects,
+        suggestedContexts,
+        suggestedTags,
+        timeEstimateOptions,
+    } = options;
+    const {
+        showAreaField,
+        showAssignedToField,
+        showContextsField,
+        showEnergyLevelField,
+        showPriorityField,
+        showProjectField,
+        showReferenceOption,
+        showScheduleFields,
+        showTagsField,
+        showTimeEstimateField,
+    } = visibility;
+    // The body keeps its own names for the draft fields: one alias block beats
+    // rewriting every reference (and re-growing the prop list to do it).
+    const processingTitle = draft.title;
+    const processingDescription = draft.description;
+    const selectedContexts = parseContextsInput(draft.contexts);
+    const selectedTags = parseTagsInput(draft.tags);
+    const selectedEnergyLevel = draft.energyLevel || undefined;
+    const selectedAssignedTo = draft.assignedTo;
+    const selectedPriority = draft.priority || undefined;
+    const selectedTimeEstimate = draft.timeEstimate || undefined;
+    const selectedProjectId = draft.projectId || null;
+    const selectedAreaId = draft.areaId || null;
+    const setProcessingTitle = (value: string) => setField('title', value);
+    const setProcessingDescription = (value: string) => setField('description', value);
+    const setSelectedEnergyLevel = (value: Task['energyLevel']) => setField('energyLevel', value ?? '');
+    const setSelectedAssignedTo = (value: string) => setField('assignedTo', value);
+    const setSelectedPriority = (value: TaskPriority | undefined) => setField('priority', value ?? '');
+    const setSelectedTimeEstimate = (value: TimeEstimate | undefined) => setField('timeEstimate', value ?? '');
+    const setSelectedProjectId = (value: string | null) => setField('projectId', value ?? '');
+    const setSelectedAreaId = (value: string | null) => setField('areaId', value ?? '');
+
     // After a long step is submitted the view is left scrolled to the bottom;
     // bring the panel top (title of the next task) back into view on advance.
     const panelRef = useRef<HTMLDivElement | null>(null);

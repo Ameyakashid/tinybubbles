@@ -67,7 +67,10 @@ describe('useInboxProcessingController session reconciliation', () => {
 
 describe('useInboxProcessingController not-actionable destinations', () => {
     const tasks = [makeTask('one')];
-    const projects = [{ id: 'p1', title: 'Project', status: 'active' } as Project];
+    const projects = [
+        { id: 'p1', title: 'Project', status: 'active' } as Project,
+        { id: 'p2', title: 'Work Project', status: 'active', areaId: 'area-1' } as Project,
+    ];
     const areas: never[] = [];
     const tokens: string[] = [];
     const settings = {};
@@ -107,7 +110,7 @@ describe('useInboxProcessingController not-actionable destinations', () => {
         });
 
         act(() => {
-            result.current.wizardProps.setSelectedProjectId('p1');
+            result.current.wizardProps.setField('projectId', 'p1');
         });
         await act(async () => {
             await commit(result.current.wizardProps);
@@ -128,7 +131,7 @@ describe('useInboxProcessingController not-actionable destinations', () => {
         });
 
         act(() => {
-            result.current.wizardProps.setSelectedProjectId('p1');
+            result.current.wizardProps.setField('projectId', 'p1');
             result.current.wizardProps.toggleContext('@work');
             result.current.wizardProps.toggleTag('#follow-up');
         });
@@ -142,5 +145,77 @@ describe('useInboxProcessingController not-actionable destinations', () => {
             contexts: ['@work'],
             tags: ['#follow-up'],
         }));
+    });
+});
+
+describe('useInboxProcessingController draft writes', () => {
+    const tasks = [makeTask('one')];
+    const projects = [
+        { id: 'p1', title: 'Project', status: 'active' } as Project,
+        { id: 'p2', title: 'Work Project', status: 'active', areaId: 'area-1' } as Project,
+    ];
+
+    const renderController = () => renderHook(() => {
+        const [isProcessing, setIsProcessing] = useState(true);
+        return useInboxProcessingController({
+            t: (key) => key,
+            tasks,
+            projects,
+            areas: [],
+            settings: {},
+            addProject: async () => null,
+            addTask: async () => ({ success: true }),
+            updateTask: async () => ({ success: true }),
+            deleteTask: async () => ({ success: true }),
+            allContexts: [],
+            allTags: [],
+            isProcessing,
+            setIsProcessing,
+        });
+    });
+
+    const openFirstTask = async (result: ReturnType<typeof renderController>['result']) => {
+        await waitFor(() => {
+            expect(result.current.wizardProps.processingTask?.id).toBe('one');
+        });
+    };
+
+    it('routes field writes through the core draft reducer', async () => {
+        const { result } = renderController();
+        await openFirstTask(result);
+
+        act(() => {
+            result.current.wizardProps.setField('title', 'Clarified');
+        });
+        const draft = result.current.wizardProps.draft;
+        expect(draft.title).toBe('Clarified');
+
+        // The reducer hands back the same draft when the value is unchanged; a
+        // hand-rolled spread would allocate a new one on every keystroke.
+        act(() => {
+            result.current.wizardProps.setField('title', 'Clarified');
+        });
+        expect(result.current.wizardProps.draft).toBe(draft);
+    });
+
+    it('drops a project that lives outside a newly picked area, and keeps one inside it', async () => {
+        const { result } = renderController();
+        await openFirstTask(result);
+
+        act(() => {
+            result.current.wizardProps.setField('projectId', 'p1');
+        });
+        act(() => {
+            result.current.wizardProps.setField('areaId', 'area-1');
+        });
+        expect(result.current.wizardProps.draft).toMatchObject({ areaId: 'area-1', projectId: '' });
+
+        act(() => {
+            result.current.wizardProps.setField('projectId', 'p2');
+        });
+        act(() => {
+            result.current.wizardProps.setField('areaId', 'area-1');
+        });
+        expect(result.current.wizardProps.draft).toMatchObject({ areaId: 'area-1', projectId: 'p2' });
     });
 });
