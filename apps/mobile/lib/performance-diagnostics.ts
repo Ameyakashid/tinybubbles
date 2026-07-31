@@ -26,7 +26,6 @@ type MobilePerformanceInput = {
   listItemCount?: number;
   visibleItemCount?: number;
   filterCount?: number;
-  instanceId?: number;
   rowRenderCount?: number;
 };
 

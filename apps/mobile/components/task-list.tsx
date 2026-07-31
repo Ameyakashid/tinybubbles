@@ -118,7 +118,6 @@ const PROJECT_REORDER_ANIMATION_CONFIG = {
 } as const;
 const SLOW_TASK_LIST_DERIVE_MS = 250;
 const SLOW_TASK_LIST_COMMIT_MS = 500;
-let nextTaskListInstanceId = 0;
 
 type AddTaskOptions = {
   openAfterCreate?: boolean;
@@ -244,14 +243,6 @@ function TaskListComponent({
 }: TaskListProps) {
   const taskListRenderStartedAt = Date.now();
   const rowRenderCountAtRenderStart = readTaskRowRenderCount();
-  // rc.5 logs showed two overlapping commits per task action on the same route:
-  // either one list rendering twice or two mounted lists doing the same work.
-  // The mount ordinal tells them apart in a shared log (#766).
-  const instanceIdRef = useRef(0);
-  if (instanceIdRef.current === 0) {
-    nextTaskListInstanceId += 1;
-    instanceIdRef.current = nextTaskListInstanceId;
-  }
   const { isDark } = useTheme();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
@@ -731,7 +722,6 @@ function TaskListComponent({
         elapsedMs: taskListDeriveMs,
         listItemCount: listItemCountForDiagnostics,
         filterCount: totalFilterActiveCount,
-        instanceId: instanceIdRef.current,
       });
     }
     if (taskListCommitMs >= SLOW_TASK_LIST_COMMIT_MS) {
@@ -741,7 +731,6 @@ function TaskListComponent({
         elapsedMs: taskListCommitMs,
         listItemCount: listItemCountForDiagnostics,
         filterCount: totalFilterActiveCount,
-        instanceId: instanceIdRef.current,
         rowRenderCount: readTaskRowRenderCount() - rowRenderCountAtRenderStart,
       });
     }

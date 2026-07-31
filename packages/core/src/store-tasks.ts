@@ -656,7 +656,6 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                         notifyTimedMs: String(Math.round(notifyProfile.timedTotalMs)),
                         notifyMaxMs: String(Math.round(notifyProfile.maxMs)),
                         notifyTop5Ms: notifyProfile.top5Ms.map(Math.round).join(','),
-                        notifyDerivedRebuildMs: String(Math.round(notifyProfile.derivedRebuildMs)),
                     } : {}),
                 },
             });

@@ -26,7 +26,7 @@ import {
 import { DEFAULT_TOMBSTONE_RETENTION_DAYS, purgeExpiredTombstones } from './sync-tombstones';
 import { buildLoadContext, runAutoArchive, runLoadMigrations } from './store-load-migrations';
 import { createSeedGettingStartedAction } from './getting-started-seed';
-import { beginNotifyProfile, endNotifyProfile, recordDerivedRebuildMs, type NotifyProfile } from './store-notify-profiler';
+import { beginNotifyProfile, endNotifyProfile, type NotifyProfile } from './store-notify-profiler';
 
 const STORAGE_TIMEOUT_MS = 15_000;
 // Runtime diagnostic threshold: loads slower than this get a phase-breakdown log line.
@@ -373,7 +373,6 @@ export const createSettingsActions = ({
                             notifyTimedMs: String(Math.round(notifyProfile.timedTotalMs)),
                             notifyMaxMs: String(Math.round(notifyProfile.maxMs)),
                             notifyTop5Ms: notifyProfile.top5Ms.map(Math.round).join(','),
-                            notifyDerivedRebuildMs: String(Math.round(notifyProfile.derivedRebuildMs)),
                         } : {}),
                         tasksReplaced,
                         projectsReplaced,
@@ -541,7 +540,6 @@ export const createSettingsActions = ({
         ) {
             return derivedCache.value;
         }
-        const rebuildStartedAt = Date.now();
         const previous = derivedCache?.value;
         const taskDerived =
             derivedCache
@@ -583,7 +581,6 @@ export const createSettingsActions = ({
             projectLookupRef: state._projectsById,
             value: derived,
         };
-        recordDerivedRebuildMs(Date.now() - rebuildStartedAt);
         return derived;
     },
 

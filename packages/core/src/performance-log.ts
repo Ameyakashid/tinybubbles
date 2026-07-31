@@ -34,10 +34,6 @@ export type PerformanceLogInput = {
     listItemCount?: number;
     visibleItemCount?: number;
     filterCount?: number;
-    // Mount ordinal of the emitting list; two ordinals in one burst mean two
-    // mounted lists doing the same work, one repeated means one list rendering
-    // twice (#766).
-    instanceId?: number;
     // Task rows that actually re-rendered during this commit. A count near the
     // list length means row memoization is not holding and the whole window
     // re-renders per store change (#766).
@@ -55,7 +51,6 @@ export type PerformanceLogMeasurementFinishInput = Partial<Pick<PerformanceLogIn
     | 'listItemCount'
     | 'visibleItemCount'
     | 'filterCount'
-    | 'instanceId'
     | 'rowRenderCount'
     | 'platform'
     | 'appVersion'
@@ -108,7 +103,6 @@ export const PERFORMANCE_LOG_CONTEXT_KEYS: readonly string[] = [
     'listItemCount',
     'visibleItemCount',
     'filterCount',
-    'instanceId',
     'rowRenderCount',
     'platform',
     'appVersion',
@@ -193,7 +187,6 @@ export function buildPerformanceLogContext(input: PerformanceLogInput): Record<s
     addCount(context, 'listItemCount', input.listItemCount);
     addCount(context, 'visibleItemCount', input.visibleItemCount);
     addCount(context, 'filterCount', input.filterCount);
-    addCount(context, 'instanceId', input.instanceId);
     addCount(context, 'rowRenderCount', input.rowRenderCount);
 
     if (isPerformancePlatform(input.platform)) {
@@ -248,7 +241,6 @@ const mergeMeasurementInput = (
     areaCount: finishInput?.areaCount ?? input.areaCount,
     sectionCount: finishInput?.sectionCount ?? input.sectionCount,
     listItemCount: finishInput?.listItemCount ?? input.listItemCount,
-    instanceId: finishInput?.instanceId ?? input.instanceId,
     rowRenderCount: finishInput?.rowRenderCount ?? input.rowRenderCount,
     visibleItemCount: finishInput?.visibleItemCount ?? input.visibleItemCount,
     filterCount: finishInput?.filterCount ?? input.filterCount,

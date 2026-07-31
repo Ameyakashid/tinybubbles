@@ -4,12 +4,10 @@ export type NotifyProfile = {
     timedTotalMs: number;
     maxMs: number;
     top5Ms: number[];
-    derivedRebuildMs: number;
 };
 
 type ProfileCollection = {
     durations: number[];
-    derivedRebuildMs: number;
 };
 
 type InstrumentableStore = {
@@ -78,18 +76,7 @@ export const instrumentStoreSubscribe = <TStore extends InstrumentableStore>(
 };
 
 export const beginNotifyProfile = (): void => {
-    currentProfile = { durations: [], derivedRebuildMs: 0 };
-};
-
-/**
- * Records a derived-state rebuild that happened inside the profiled notify.
- * The rebuild is cached by data identity, so the first subscriber to ask pays
- * for all of them and shows up alone at the top of `top5Ms` — this says how
- * much of that listener was the rebuild rather than the listener's own work
- * (#766). A no-op when no profile is running.
- */
-export const recordDerivedRebuildMs = (durationMs: number): void => {
-    if (currentProfile) currentProfile.derivedRebuildMs += durationMs;
+    currentProfile = { durations: [] };
 };
 
 export const endNotifyProfile = (): NotifyProfile | null => {
@@ -107,6 +94,5 @@ export const endNotifyProfile = (): NotifyProfile | null => {
         ),
         maxMs: profile.durations[0] ?? 0,
         top5Ms: profile.durations.slice(0, 5),
-        derivedRebuildMs: profile.derivedRebuildMs,
     };
 };
