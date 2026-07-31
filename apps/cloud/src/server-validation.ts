@@ -4,7 +4,7 @@ import {
     normalizeRelativeStartOffset,
     normalizeRepeatReminderMinutes,
     normalizeTimeSpentMinutes,
-    searchAll,
+    filterTasksBySearch,
     taskMatchesQuery,
     TASK_SORT_BY_VALUE_SET,
     TASK_STATUS_VALUES,
@@ -456,7 +456,9 @@ export function pickTaskList(
         isFocusedToday: opts.isFocusedToday,
     }));
     if (opts.query && opts.query.trim()) {
-        const matchingTaskIds = new Set(searchAll(tasks, filterNotDeleted(data.projects), opts.query).tasks.map((task) => task.id));
+        // filterTasksBySearch, not searchAll: searchAll slices to SEARCH_RESULT_LIMIT (200)
+        // before this route paginates, silently capping totals — same fix as /v1/search.
+        const matchingTaskIds = new Set(filterTasksBySearch(tasks, filterNotDeleted(data.projects), opts.query).map((task) => task.id));
         tasks = tasks.filter((task) => matchingTaskIds.has(task.id));
     }
     return tasks;

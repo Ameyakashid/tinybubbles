@@ -2398,6 +2398,36 @@ describe('cloud server api', () => {
         );
     });
 
+    test('/v1/tasks?query= reports the true total and pages correctly past 200 matches', async () => {
+        // Same truncation class as /v1/search above: pickTaskList used to intersect against
+        // searchAll()'s 200-capped result, so a query with more than 200 matches lost the
+        // tail before the route ever paginated. It now uses filterTasksBySearch (unsliced).
+        const iso = '2026-01-01T00:00:00.000Z';
+        const tasks = Array.from({ length: 250 }, (_, index) => ({
+            id: `tasks-query-total-${String(index).padStart(3, '0')}`,
+            title: `Beta Task ${String(index).padStart(3, '0')}`,
+            status: 'inbox',
+            createdAt: iso,
+            updatedAt: iso,
+        }));
+        const seedResponse = await fetch(`${baseUrl}/v1/data`, {
+            method: 'PUT',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: JSON.stringify({ tasks, projects: [], sections: [], areas: [], settings: {} }),
+        });
+        expect(seedResponse.status).toBe(200);
+
+        const pastLimitResponse = await fetch(`${baseUrl}/v1/tasks?query=Beta&offset=200&limit=100`, {
+            headers: authHeaders,
+        });
+        expect(pastLimitResponse.status).toBe(200);
+        const pastLimitBody = await pastLimitResponse.json();
+        expect(pastLimitBody.total).toBe(250);
+        expect((pastLimitBody.tasks as Array<{ id: string }>).map((task) => task.id)).toEqual(
+            tasks.slice(200).map((task) => task.id),
+        );
+    });
+
     test('rejects invalid /v1/search pagination parameters', async () => {
         const response = await fetch(`${baseUrl}/v1/search?query=Alpha&limit=0`, {
             headers: authHeaders,
