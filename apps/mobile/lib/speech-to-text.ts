@@ -11,6 +11,7 @@ import {
   buildSpeechToTaskPrompt,
   normalizeSpeechLanguage,
   OPENAI_DEFAULT_MODEL,
+  openAITranscribeLanguageFieldName,
   parseSpeechToTaskResult,
   resolveGeminiModel,
   resolveOpenAITranscribeEndpoint,
@@ -84,8 +85,11 @@ const LOCAL_WHISPER_BITS_PER_SAMPLE = 16;
 const LOCAL_WHISPER_MIN_DURATION_MS = 150;
 const LOCAL_WHISPER_UNSUPPORTED_AUDIO_ERROR =
   'Local Whisper can only transcribe 16 kHz mono PCM WAV audio.';
-const DEFAULT_OPENAI_STT_MODEL = 'gpt-4o-transcribe';
-const DEFAULT_GEMINI_STT_MODEL = 'gemini-3.6-flash';
+// Exported so the settings screen offers the same defaults this runtime
+// resolves — the two hardcoding their own copies is how the screen kept
+// offering retired gemini-2.5 ids after the catalog refresh.
+export const DEFAULT_OPENAI_STT_MODEL = 'gpt-transcribe';
+export const DEFAULT_GEMINI_STT_MODEL = 'gemini-3.6-flash';
 const DEFAULT_WHISPER_STT_MODEL = 'whisper-tiny';
 const WHISPER_STT_MODEL_IDS = new Set([
   'whisper-tiny',
@@ -488,7 +492,7 @@ const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) =>
       }
       form.append('model', config.model);
       if (language !== 'auto') {
-        form.append('language', language);
+        form.append(openAITranscribeLanguageFieldName(config.model), language);
       }
       form.append('response_format', 'json');
 

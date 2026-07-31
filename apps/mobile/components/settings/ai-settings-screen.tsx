@@ -21,6 +21,7 @@ import {
 } from '@mindwtr/core';
 
 import { loadAIKey, saveAIKey } from '@/lib/ai-config';
+import { DEFAULT_GEMINI_STT_MODEL, DEFAULT_OPENAI_STT_MODEL } from '@/lib/speech-to-text';
 import { useToast } from '@/contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { logSettingsError, logSettingsWarn } from '@/lib/settings-utils';
@@ -81,9 +82,9 @@ export function AISettingsScreen() {
     const speechProvider = (configuredSpeechProvider === 'parakeet' ? 'whisper' : configuredSpeechProvider) as 'openai' | 'gemini' | 'whisper';
     const speechModel = speechSettings.model ?? (
         speechProvider === 'openai'
-            ? 'gpt-4o-transcribe'
+            ? DEFAULT_OPENAI_STT_MODEL
             : speechProvider === 'gemini'
-                ? 'gemini-2.5-flash'
+                ? DEFAULT_GEMINI_STT_MODEL
                 : DEFAULT_WHISPER_MODEL
     );
     const speechBaseUrl = speechSettings.baseUrl ?? '';
@@ -93,9 +94,9 @@ export function AISettingsScreen() {
     const speechModelOptions = isFossBuild
         ? WHISPER_MODELS.map((model) => model.id)
         : speechProvider === 'openai'
-            ? ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1']
+            ? ['gpt-transcribe', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1']
             : speechProvider === 'gemini'
-                ? ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']
+                ? ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']
                 : WHISPER_MODELS.map((model) => model.id);
 
     const aiSettings = settings.ai;
@@ -310,9 +311,9 @@ export function AISettingsScreen() {
         updateSpeechSettings({
             provider,
             model: provider === 'openai'
-                ? 'gpt-4o-transcribe'
+                ? DEFAULT_OPENAI_STT_MODEL
                 : provider === 'gemini'
-                    ? 'gemini-2.5-flash'
+                    ? DEFAULT_GEMINI_STT_MODEL
                     : DEFAULT_WHISPER_MODEL,
             offlineModelPath: provider === 'whisper'
                 ? whisperModelStore.getPreferredModelUri(DEFAULT_WHISPER_MODEL)

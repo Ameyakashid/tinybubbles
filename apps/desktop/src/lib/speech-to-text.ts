@@ -7,6 +7,7 @@ import {
     buildSpeechToTaskPrompt,
     GEMINI_DEFAULT_MODEL,
     normalizeSpeechLanguage,
+    openAITranscribeLanguageFieldName,
     parseSpeechToTaskResult,
     resolveGeminiModel,
     resolveOpenAITranscribeEndpoint,
@@ -48,7 +49,7 @@ export async function resolveSpeechCapture(settings: AiSettings | undefined): Pr
     const speech = settings?.speechToText;
     const provider = speech?.provider ?? 'gemini';
     const model = speech?.model ?? (
-        provider === 'openai' ? 'gpt-4o-transcribe'
+        provider === 'openai' ? 'gpt-transcribe'
             : provider === 'gemini' ? GEMINI_DEFAULT_MODEL
                 : provider === 'parakeet' ? DEFAULT_PARAKEET_MODEL
                     : DEFAULT_WHISPER_MODEL
@@ -183,7 +184,7 @@ const transcribeOpenAI = async (audio: AudioInput, config: SpeechToTextConfig) =
     form.append('model', config.model);
     const language = normalizeSpeechLanguage(config.language);
     if (language !== 'auto') {
-        form.append('language', language);
+        form.append(openAITranscribeLanguageFieldName(config.model), language);
     }
     form.append('response_format', 'json');
 

@@ -631,4 +631,33 @@ describe('processAudioCapture openai transcription against a custom base URL', (
     const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
     expect(init.headers.Authorization).toBe('Bearer secret-key');
   });
+
+  // gpt-transcribe-generation models take a `languages` array; earlier
+  // models keep the singular `language` field (#984).
+  it('sends languages[] for gpt-transcribe and language for earlier models', async () => {
+    const fetchMock = stubFetch();
+
+    await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'gpt-transcribe',
+      apiKey: 'secret-key',
+      language: 'en',
+      mode: 'transcribe_only',
+    });
+    await processAudioCapture('file:///tmp/audio.wav', {
+      provider: 'openai',
+      model: 'whisper-1',
+      apiKey: 'secret-key',
+      language: 'en',
+      mode: 'transcribe_only',
+    });
+
+    const newModelForm = (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as FormData;
+    expect(newModelForm.get('languages[]')).toBe('en');
+    expect(newModelForm.get('language')).toBeNull();
+
+    const legacyModelForm = (fetchMock.mock.calls[1] as [string, RequestInit])[1].body as FormData;
+    expect(legacyModelForm.get('language')).toBe('en');
+    expect(legacyModelForm.get('languages[]')).toBeNull();
+  });
 });

@@ -75,6 +75,14 @@ export const resolveOpenAITranscribeEndpoint = (baseUrl?: string): string => {
     return `${normalized}${OPENAI_TRANSCRIBE_PATH}`;
 };
 
+// gpt-transcribe-generation models take a `languages` array (multipart field
+// `languages[]`); earlier models (whisper-1, gpt-4o-*-transcribe) take a
+// singular `language`. Desktop and mobile both build this form, so the choice
+// lives once here.
+export const openAITranscribeLanguageFieldName = (model: string): 'languages[]' | 'language' => (
+    model.startsWith('gpt-transcribe') ? 'languages[]' : 'language'
+);
+
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => (
     typeof value === 'object' && value !== null && !Array.isArray(value)
 );

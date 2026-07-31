@@ -3,6 +3,7 @@ import {
     buildAIConfig,
     buildCopilotConfig,
     formatOpenAIExtraBodyParams,
+    openAITranscribeLanguageFieldName,
     parseOpenAIExtraBodyParamsInput,
     resolveOpenAITranscribeEndpoint,
 } from './ai-config';
@@ -153,5 +154,17 @@ describe('resolveOpenAITranscribeEndpoint', () => {
     it('does not double-append when the base URL already ends in the transcription path', () => {
         expect(resolveOpenAITranscribeEndpoint('http://localhost:8000/v1/audio/transcriptions/'))
             .toBe('http://localhost:8000/v1/audio/transcriptions');
+    });
+});
+
+describe('openAITranscribeLanguageFieldName', () => {
+    it('uses the languages array field for gpt-transcribe-generation models', () => {
+        expect(openAITranscribeLanguageFieldName('gpt-transcribe')).toBe('languages[]');
+    });
+
+    it('keeps the singular language field for earlier models', () => {
+        expect(openAITranscribeLanguageFieldName('whisper-1')).toBe('language');
+        expect(openAITranscribeLanguageFieldName('gpt-4o-transcribe')).toBe('language');
+        expect(openAITranscribeLanguageFieldName('gpt-4o-mini-transcribe')).toBe('language');
     });
 });

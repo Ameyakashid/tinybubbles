@@ -15,3 +15,4 @@ _None yet._
 - Mobile: editing or completing one task no longer re-renders every visible row, cutting the per-action lag in large projects. (#766)
 - Mobile: task rows no longer stay stuck mid-air after a drag ends in Task order mode, which left permanent gaps and overlapping cards in long lists. (#784)
 - Feedback form: the email field now says it is how you get a reply, instead of showing an example address.
+- Voice capture: OpenAI's new `gpt-transcribe` model is available and is the default for new OpenAI speech-to-text setups — noticeably better accuracy on accents, numbers, and noisy audio. Existing model choices are unchanged. The mobile Gemini speech model list also offers the current Gemini 3.x models again. (#984)

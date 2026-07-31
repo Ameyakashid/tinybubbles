@@ -37,6 +37,7 @@ export const PARAKEET_REQUIRED_FILES = [
 ] as const;
 
 export const OPENAI_SPEECH_MODELS = [
+    'gpt-transcribe',
     'gpt-4o-mini-transcribe',
     'gpt-4o-transcribe',
     'whisper-1',
