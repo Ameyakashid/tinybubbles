@@ -25,6 +25,10 @@ import {
     TASK_CONTENT_COMPARISON_EXCLUDED_KEYS,
 } from '../packages/core/src/sync-signatures';
 import { CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS } from '../apps/cloud/src/server-config';
+// task-write-field-exclusions.ts's only import is `import type` (erased before execution), so
+// unlike its sibling task-write-fields.ts (which needs `@mindwtr/core/task-sync-schema`, a
+// package-style specifier requiring `bun install`) this one resolves fine in this job.
+import { TASK_WRITE_FIELD_EXCLUSIONS } from '../apps/mcp-server/src/task-write-field-exclusions';
 import cloudKitProductionSchema from '../packages/core/src/cloudkit-production-schema.json';
 
 // Stable releases must not ship a CloudKit-mapped field that isn't confirmed live in
@@ -691,6 +695,23 @@ failures.push(...requireSourcePattern(
     'MCP project projection',
     mcpQueries,
     /const BASE_PROJECT_COLUMNS = \[\.\.\.PROJECT_SQLITE_COLUMNS\];/,
+));
+
+// Check: MCP's write-surface exclusion list (apps/mcp-server/src/task-write-fields.ts derives
+// TASK_CREATE_FIELD_NAMES/TASK_PATCH_FIELD_NAMES from TASK_SYNC_FIELD_SCHEMA minus this list)
+// must not go stale — every excluded key has to still name a field the schema currently marks
+// client-writable. An exclusion for a renamed or since-removed field would otherwise silently
+// stop meaning anything, and nobody would notice. (The derivation's actual field-name output
+// can't be checked here too — task-write-fields.ts needs `@mindwtr/core/task-sync-schema`,
+// which requires `bun install`, unlike this script's own zero-install TASK_SYNC_FIELD_SCHEMA
+// import; task-field-schemas.test.ts is where that gets independently cross-checked, including
+// against the real Zod tool schemas.)
+failures.push(...assertSuperset(
+    'MCP TASK_WRITE_FIELD_EXCLUSIONS',
+    TASK_SYNC_FIELD_SCHEMA
+        .filter((field) => field.cloudWrite === 'create-patch' || field.cloudWrite === 'patch')
+        .map((field) => field.name),
+    Object.keys(TASK_WRITE_FIELD_EXCLUSIONS),
 ));
 
 for (const entity of ENTITIES) {

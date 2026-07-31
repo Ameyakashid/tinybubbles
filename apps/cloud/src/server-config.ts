@@ -6,6 +6,10 @@ import type { Area, Project, Section, Task } from '@mindwtr/core';
 import { TASK_SYNC_FIELD_SCHEMA } from '../../../packages/core/src/task-sync-schema';
 import { PROJECT_SYNC_FIELD_SCHEMA } from '../../../packages/core/src/project-sync-schema';
 import { SECTION_SYNC_FIELD_SCHEMA } from '../../../packages/core/src/section-sync-schema';
+import {
+    AREA_NAME_MAX_LENGTH as SHARED_AREA_NAME_MAX_LENGTH,
+    LIST_PAGE_MAX_LIMIT as SHARED_LIST_PAGE_MAX_LIMIT,
+} from '../../../packages/core/src/shared-api-write-limits';
 
 type Flags = Record<string, string | boolean>;
 type LogLevel = 'info' | 'warn' | 'error';
@@ -74,6 +78,13 @@ const maxTaskQuickAddLengthValue = Number(process.env.MINDWTR_CLOUD_MAX_TASK_QUI
 export const MAX_TASK_QUICK_ADD_LENGTH = Number.isFinite(maxTaskQuickAddLengthValue) && maxTaskQuickAddLengthValue > 0
     ? Math.floor(maxTaskQuickAddLengthValue)
     : 2000;
+// Aligned with apps/mcp-server's area-name cap (packages/core/src/shared-api-write-limits.ts)
+// — this used to reuse MAX_TASK_TITLE_LENGTH (500), letting a cloud-created area name run
+// 2.5x longer than the same call through MCP or the desktop/mobile apps for no reason.
+const maxAreaNameLengthValue = Number(process.env.MINDWTR_CLOUD_MAX_AREA_NAME_LENGTH || SHARED_AREA_NAME_MAX_LENGTH);
+export const MAX_AREA_NAME_LENGTH = Number.isFinite(maxAreaNameLengthValue) && maxAreaNameLengthValue > 0
+    ? Math.floor(maxAreaNameLengthValue)
+    : SHARED_AREA_NAME_MAX_LENGTH;
 const maxItemsPerCollectionValue = Number(process.env.MINDWTR_CLOUD_MAX_ITEMS_PER_COLLECTION || 50_000);
 export const MAX_ITEMS_PER_COLLECTION = Number.isFinite(maxItemsPerCollectionValue) && maxItemsPerCollectionValue > 0
     ? Math.floor(maxItemsPerCollectionValue)
@@ -82,10 +93,12 @@ const listDefaultLimitValue = Number(process.env.MINDWTR_CLOUD_LIST_DEFAULT_LIMI
 export const LIST_DEFAULT_LIMIT = Number.isFinite(listDefaultLimitValue) && listDefaultLimitValue > 0
     ? Math.floor(listDefaultLimitValue)
     : 200;
-const listMaxLimitValue = Number(process.env.MINDWTR_CLOUD_LIST_MAX_LIMIT || 1000);
+// Aligned with apps/mcp-server's page-size cap (packages/core/src/shared-api-write-limits.ts)
+// — this used to default to 1000 while MCP capped the same kind of request at 500.
+const listMaxLimitValue = Number(process.env.MINDWTR_CLOUD_LIST_MAX_LIMIT || SHARED_LIST_PAGE_MAX_LIMIT);
 export const LIST_MAX_LIMIT = Number.isFinite(listMaxLimitValue) && listMaxLimitValue > 0
     ? Math.floor(listMaxLimitValue)
-    : 1000;
+    : SHARED_LIST_PAGE_MAX_LIMIT;
 const rateLimitMaxKeysValue = Number(process.env.MINDWTR_CLOUD_RATE_MAX_KEYS || 10_000);
 export const RATE_LIMIT_MAX_KEYS = Number.isFinite(rateLimitMaxKeysValue) && rateLimitMaxKeysValue > 0
     ? Math.floor(rateLimitMaxKeysValue)
@@ -161,7 +174,14 @@ export function parseArgs(argv: string[]) {
     for (let i = 0; i < argv.length; i += 1) {
         const arg = argv[i];
         if (!arg || !arg.startsWith('--')) continue;
-        const key = arg.slice(2);
+        const keyValue = arg.slice(2);
+        const equalsIndex = keyValue.indexOf('=');
+        if (equalsIndex > 0) {
+            const key = keyValue.slice(0, equalsIndex);
+            flags[key] = keyValue.slice(equalsIndex + 1);
+            continue;
+        }
+        const key = keyValue;
         const next = argv[i + 1];
         if (next && !next.startsWith('--')) {
             flags[key] = next;

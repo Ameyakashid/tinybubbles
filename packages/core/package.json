@@ -9,6 +9,8 @@
     "./task-draft": "./src/task-draft.ts",
     "./process-inbox-workflow": "./src/process-inbox-workflow.ts",
     "./task-sync-schema": "./src/task-sync-schema.ts",
+    "./task-recurrence-fields": "./src/task-recurrence-fields.ts",
+    "./shared-api-write-limits": "./src/shared-api-write-limits.ts",
     "./project-sync-schema": "./src/project-sync-schema.ts",
     "./section-sync-schema": "./src/section-sync-schema.ts",
     "./i18n": "./src/i18n/index.ts",

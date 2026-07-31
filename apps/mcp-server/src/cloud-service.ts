@@ -1,13 +1,28 @@
-import { CloudHttpError, cloudGetJson, cloudRequestJson, normalizeCloudUrl, PRIORITY_RANK, type AppData } from '@mindwtr/core';
+import {
+  CloudHttpError,
+  cloudGetJson,
+  cloudRequestJson,
+  normalizeCloudUrl,
+  PRIORITY_RANK,
+  type AppData,
+  type RelativeStartOffset,
+} from '@mindwtr/core';
 
 import { NotFoundError, ValidationError } from './errors.js';
 import { filterUndefined } from './filter-undefined.js';
 import {
+  MAX_TASK_LIST_LIMIT,
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
   normalizeNullableTaskRecurrence,
+  normalizeNullableTaskRelativeStartOffset,
+  normalizeNullableTaskRepeatReminderMinutes,
+  normalizeNullableTaskTimeSpentMinutes,
   normalizeNullableTaskTokens,
   normalizeOptionalTaskRecurrence,
+  normalizeOptionalTaskRelativeStartOffset,
+  normalizeOptionalTaskRepeatReminderMinutes,
+  normalizeOptionalTaskTimeSpentMinutes,
   normalizeOptionalTaskTokens,
 } from './input-validation.js';
 import type {
@@ -39,6 +54,7 @@ import type {
   TaskRow,
   UpdateTaskInput,
 } from './queries.js';
+import { pickDefinedTaskFields, TASK_CREATE_FIELD_NAMES, TASK_PATCH_FIELD_NAMES } from './task-write-fields.js';
 
 export type CloudServiceOptions = {
   url: string;
@@ -75,7 +91,7 @@ const normalizeCloudData = (data: AppData | null): CloudData => ({
 });
 
 const normalizeLimit = (value: number | undefined): number => (
-  Number.isFinite(value) ? Math.max(1, Math.min(500, value as number)) : 200
+  Number.isFinite(value) ? Math.max(1, Math.min(MAX_TASK_LIST_LIMIT, value as number)) : 200
 );
 
 const normalizeOffset = (value: number | undefined): number => (
@@ -271,6 +287,11 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
         throw new ValidationError(`Quick-add input too long (max ${MAX_TASK_QUICK_ADD_LENGTH} characters)`);
       }
       const props = filterUndefined({
+        // Every other create-writable Task field (checklist, areaId, reviewAt,
+        // isFocusedToday, taskMode, ...) is derived from TASK_CREATE_FIELD_NAMES — see
+        // task-write-fields.ts. Spread first so the explicit, semantically-normalized
+        // overrides below win for the three fields that need more than a raw pass-through.
+        ...pickDefinedTaskFields(TASK_CREATE_FIELD_NAMES, input),
         status: input.status,
         projectId: input.projectId,
         sectionId: input.sectionId,
@@ -284,6 +305,9 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
         energyLevel: input.energyLevel,
         assignedTo: input.assignedTo,
         timeEstimate: input.timeEstimate,
+        relativeStartOffset: normalizeOptionalTaskRelativeStartOffset(input.relativeStartOffset),
+        timeSpentMinutes: normalizeOptionalTaskTimeSpentMinutes(input.timeSpentMinutes),
+        repeatReminderMinutes: normalizeOptionalTaskRepeatReminderMinutes(input.repeatReminderMinutes),
       });
       const body = hasQuickAdd ? { input: input.quickAdd, props } : { title: input.title, props };
       const result = await request<{ task: AppData['tasks'][number] }>('POST', '/tasks', body);
@@ -308,8 +332,22 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
       if (input.energyLevel !== undefined) patch.energyLevel = input.energyLevel;
       if (input.assignedTo !== undefined) patch.assignedTo = input.assignedTo;
       if (input.timeEstimate !== undefined) patch.timeEstimate = input.timeEstimate;
-      if (input.reviewAt !== undefined) patch.reviewAt = input.reviewAt;
-      if (input.isFocusedToday !== undefined) patch.isFocusedToday = input.isFocusedToday;
+      // Every other patch-writable Task field (reviewAt, isFocusedToday, checklist, areaId,
+      // order, boardOrder, focusOrder, ...) is derived from TASK_PATCH_FIELD_NAMES — see
+      // task-write-fields.ts. Adding a synced field there needs no edit here.
+      for (const name of TASK_PATCH_FIELD_NAMES) {
+        const value = (input as Record<string, unknown>)[name];
+        if (value === undefined) continue;
+        if (name === 'relativeStartOffset') {
+          patch.relativeStartOffset = normalizeNullableTaskRelativeStartOffset(value as RelativeStartOffset | null);
+        } else if (name === 'timeSpentMinutes') {
+          patch.timeSpentMinutes = normalizeNullableTaskTimeSpentMinutes(value as number | null);
+        } else if (name === 'repeatReminderMinutes') {
+          patch.repeatReminderMinutes = normalizeNullableTaskRepeatReminderMinutes(value as number | null);
+        } else {
+          patch[name] = value;
+        }
+      }
       const result = await request<{ task: AppData['tasks'][number] }>('PATCH', `/tasks/${encodeURIComponent(input.id)}`, patch);
       return mapTask(result.task);
     },

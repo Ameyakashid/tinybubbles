@@ -7,6 +7,7 @@ import {
     normalizeTimeSpentMinutes,
     searchAll,
     TASK_SORT_BY_VALUE_SET,
+    TASK_STATUS_VALUES,
     type Area,
     type AppData,
     type Project,
@@ -14,6 +15,11 @@ import {
     type Task,
     type TaskStatus,
 } from '@mindwtr/core';
+// Relative path (not '@mindwtr/core/...'): TASK_RECURRENCE_FIELD_KEYS is the shared home for
+// the recurrence object's field-key allowlist (see that file's header). This file isn't part
+// of the native-schema CI job's zero-install import chain, but the relative path is harmless
+// here and keeps the pattern consistent with task-sync-schema.ts's sibling imports below.
+import { TASK_RECURRENCE_FIELD_KEYS } from '../../../packages/core/src/task-recurrence-fields';
 import {
     CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS,
@@ -36,22 +42,7 @@ const hasOwnField = (value: object, field: PropertyKey): boolean => (
     Object.prototype.hasOwnProperty.call(value, field)
 );
 
-const CLOUD_RECURRENCE_ALLOWED_KEYS = new Set([
-    'rule',
-    'seriesId',
-    'strategy',
-    'byDay',
-    'byMonthDay',
-    'weekStart',
-    'count',
-    'until',
-    'completedOccurrences',
-    'anchorDay',
-    'startAnchorDay',
-    'dueAnchorDay',
-    'reviewAnchorDay',
-    'rrule',
-]);
+const CLOUD_RECURRENCE_ALLOWED_KEYS = new Set(TASK_RECURRENCE_FIELD_KEYS);
 
 function validateTaskRepeatReminderMinutes(value: Record<string, unknown>): string | null {
     if (!hasOwnField(value, 'repeatReminderMinutes')) return null;
@@ -166,7 +157,7 @@ export function validateAppData(
         if (task.id.trim().length === 0 || task.title.trim().length === 0) {
             return { ok: false, error: 'Invalid data: each task must include non-empty id and title' };
         }
-        if (typeof task.status !== 'string' || !['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived'].includes(task.status)) {
+        if (typeof task.status !== 'string' || !(TASK_STATUS_VALUES as readonly string[]).includes(task.status)) {
             return { ok: false, error: 'Invalid data: task status must be a valid value' };
         }
         if (!isValidIsoTimestamp(task.createdAt) || !isValidIsoTimestamp(task.updatedAt)) {
@@ -384,8 +375,7 @@ export function validateAppData(
 
 export function asStatus(value: unknown): TaskStatus | null {
     if (typeof value !== 'string') return null;
-    const allowed: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived'];
-    return allowed.includes(value as TaskStatus) ? (value as TaskStatus) : null;
+    return (TASK_STATUS_VALUES as readonly string[]).includes(value) ? (value as TaskStatus) : null;
 }
 
 type EntityPropsMap = { task: Task; project: Project; section: Section; area: Area };

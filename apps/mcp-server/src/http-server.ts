@@ -9,7 +9,12 @@ import { parseBooleanFlag, readFlagValue, readStringFlag, type FlagEnv, type Fla
 
 export const DEFAULT_HTTP_HOST = '127.0.0.1';
 export const DEFAULT_HTTP_PORT = 8722;
-export const MIN_HTTP_TOKEN_LENGTH = 16;
+// Aligned with cloud's own bearer-token floor (apps/cloud/src/server-config.ts's
+// BEARER_TOKEN_PATTERN, `{20,512}`) — that pattern must stay a regex literal (pinned
+// byte-for-byte against core's CLOUD_SYNC_TOKEN_PATTERN by a server.test.ts assertion), so it
+// isn't sourced from a shared numeric constant; this was previously 16, letting an MCP HTTP
+// token be weaker than the floor the rest of the app enforces for the same kind of secret.
+export const MIN_HTTP_TOKEN_LENGTH = 20;
 export const MAX_HTTP_BODY_BYTES = 1024 * 1024; // 1 MiB
 
 export type HttpServerConfig = {

@@ -9,7 +9,32 @@ import {
     CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS,
     CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS,
+    MAX_AREA_NAME_LENGTH,
+    parseArgs,
 } from './server-config';
+
+describe('parseArgs', () => {
+    // apps/mcp-server/src/flags.ts's parseArgs already accepted this form; cloud's own copy
+    // silently ignored it (a `--port=8787` in an env/script invocation was read as if `--port`
+    // had no value at all, falling back to the default instead of erroring or applying it).
+    it('accepts --key=value flags alongside the existing --key value form', () => {
+        expect(parseArgs(['--port=9000', '--host', '0.0.0.0', '--verbose'])).toEqual({
+            port: '9000',
+            host: '0.0.0.0',
+            verbose: true,
+        });
+    });
+
+    it('treats an empty --key= as an explicit empty string, not "flag with no value"', () => {
+        expect(parseArgs(['--token='])).toEqual({ token: '' });
+    });
+});
+
+describe('area name length limit', () => {
+    it('is aligned with apps/mcp-server (200), not the old reused 500-char task-title cap', () => {
+        expect(MAX_AREA_NAME_LENGTH).toBe(200);
+    });
+});
 
 const sorted = (values: Iterable<string>): string[] => Array.from(values).sort();
 

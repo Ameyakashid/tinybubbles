@@ -169,4 +169,100 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
       expect(ids).toContain('t-report');
     });
   });
+
+  // core-adapter.ts used to throw a plain Error for a missing id on update/delete/rename,
+  // which fell through getMindwtrToolErrorCode to 'internal_error' — while cloud-service.ts's
+  // mapCloudError already mapped its own 404s to NotFoundError ('not_found'). Same user
+  // mistake (editing a task that doesn't exist), two different reported codes. This pins both
+  // adapters returning the same code now.
+  describe('not-found errors share the same code across both real adapters (core-adapter error taxonomy)', () => {
+    test('local: updating a missing task yields code not_found', async () => {
+      await expect(local.updateTask({ id: 'does-not-exist', title: 'x' }))
+        .rejects.toMatchObject({ code: 'not_found' });
+    });
+
+    test('cloud: updating a missing task yields code not_found', async () => {
+      const notFoundCloud = createCloudService({
+        url: 'https://mindwtr.example.com',
+        token: 'conformance-test-token',
+        fetcher: async () => new Response(JSON.stringify({ error: 'Task not found' }), { status: 404 }),
+      });
+      await expect(notFoundCloud.updateTask({ id: 'does-not-exist', title: 'x' }))
+        .rejects.toMatchObject({ code: 'not_found' });
+    });
+  });
+
+  // Before this task, service.ts's addTask only forwarded a fixed, hand-written field list to
+  // core.addTask — checklist/areaId/reviewAt weren't in it, so they were silently dropped even
+  // though nothing in the type system stopped a caller from passing them. This is the concrete
+  // fixture the handoff's acceptance criteria names: a task created with these three fields
+  // must land correctly through BOTH the local core adapter and the cloud adapter. Uses its
+  // own services (not the shared `local`/`cloud` above) so writing a task here can't leak
+  // state into the read-only listTasks fixtures elsewhere in this file.
+  describe('mindwtr_add_task write-surface: checklist + areaId + reviewAt reach both adapters', () => {
+    let writeTempDir = '';
+    let writeLocal: MindwtrService;
+
+    beforeAll(() => {
+      writeTempDir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-write-fixture-'));
+      const seedData: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
+      writeFileSync(join(writeTempDir, 'data.json'), JSON.stringify(seedData));
+      writeLocal = createService({ dbPath: join(writeTempDir, 'mindwtr.db'), readonly: false });
+    });
+
+    afterAll(async () => {
+      await writeLocal.close();
+      rmSync(writeTempDir, { recursive: true, force: true });
+    });
+
+    test('local: round-trips checklist, areaId, and reviewAt through the real SQLite-backed core store', async () => {
+      // addTask's container resolution checks a referenced areaId against the live store, so
+      // the area has to exist through the same service instance first — a bootstrap-JSON area
+      // isn't guaranteed visible by the time this runs.
+      const area = await writeLocal.addArea({ name: 'Errands' });
+      const task = await writeLocal.addTask({
+        title: 'Renew passport',
+        checklist: [{ id: 'item-1', title: 'Book appointment', isCompleted: false }],
+        areaId: area.id,
+        reviewAt: '2026-04-01',
+      });
+      expect(task.checklist).toEqual([{ id: 'item-1', title: 'Book appointment', isCompleted: false }]);
+      expect(task.areaId).toBe(area.id);
+      expect(task.reviewAt).toBe('2026-04-01');
+    });
+
+    test('cloud: forwards checklist, areaId, and reviewAt in the POST /tasks props bag', async () => {
+      let capturedBody: { title?: string; props?: Record<string, unknown> } | undefined;
+      const writeCloud = createCloudService({
+        url: 'https://mindwtr.example.com',
+        token: 'conformance-test-token',
+        fetcher: async (_input, init) => {
+          if ((init?.method ?? 'GET') !== 'POST') return new Response(JSON.stringify(fixtureData), { status: 200 });
+          capturedBody = JSON.parse(String(init?.body));
+          return new Response(JSON.stringify({
+            task: {
+              id: 'task-new', title: capturedBody?.title, status: 'inbox', tags: [], contexts: [],
+              createdAt: iso('01'), updatedAt: iso('01'), ...capturedBody?.props,
+            },
+          }), { status: 201 });
+        },
+      });
+
+      const task = await writeCloud.addTask({
+        title: 'Renew passport',
+        checklist: [{ id: 'item-1', title: 'Book appointment', isCompleted: false }],
+        areaId: 'area-fixture',
+        reviewAt: '2026-04-01',
+      });
+
+      expect(capturedBody?.props).toMatchObject({
+        checklist: [{ id: 'item-1', title: 'Book appointment', isCompleted: false }],
+        areaId: 'area-fixture',
+        reviewAt: '2026-04-01',
+      });
+      expect(task.checklist).toEqual([{ id: 'item-1', title: 'Book appointment', isCompleted: false }]);
+      expect(task.areaId).toBe('area-fixture');
+      expect(task.reviewAt).toBe('2026-04-01');
+    });
+  });
 });

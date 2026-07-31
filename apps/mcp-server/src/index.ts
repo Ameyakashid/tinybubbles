@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { TASK_STATUS_VALUES } from '@mindwtr/core';
 import * as z from 'zod';
 
 import { createCloudService } from './cloud-service.js';
@@ -17,16 +18,32 @@ import {
   type HttpServerConfig,
 } from './http-server.js';
 import {
-  ISO_DATE_LIKE_PATTERN,
+  isoDateLikeSchema,
+  MAX_AREA_NAME_LENGTH,
+  MAX_TASK_LIST_LIMIT,
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
   normalizeNullableTaskRecurrence,
+  normalizeNullableTaskRelativeStartOffset,
+  normalizeNullableTaskRepeatReminderMinutes,
+  normalizeNullableTaskTimeSpentMinutes,
   normalizeNullableTaskTokens,
   normalizeOptionalTaskRecurrence,
+  normalizeOptionalTaskRelativeStartOffset,
+  normalizeOptionalTaskRepeatReminderMinutes,
+  normalizeOptionalTaskTimeSpentMinutes,
   normalizeOptionalTaskTokens,
   taskRecurrenceInputSchema,
 } from './input-validation.js';
 import { createService, type MindwtrService } from './service.js';
+import type {
+  AddTaskInput,
+  TaskGeneratedCreateFields,
+  TaskGeneratedPatchFields,
+  TaskStatus,
+  UpdateTaskInput,
+} from './queries.js';
+import { buildTaskCreateFieldsShape, buildTaskUpdateFieldsShape } from './task-field-schemas.js';
 
 export { parseArgs, parseBooleanFlag } from './flags.js';
 export { isAuthorizedBearerToken, resolveHttpConfig, type HttpServerConfig } from './http-server.js';
@@ -180,24 +197,23 @@ export const resolveServerConfig = (
   };
 };
 
-const taskStatusSchema = z.enum(['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived']);
-const taskStatusOrAllSchema = z.enum(['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived', 'all']);
+// Derived from core's own TASK_STATUS_VALUES (task-status.ts) rather than hand-written, so
+// this can't drift from the status list core, the cloud API, and every other status check
+// share (server-validation.ts's asStatus/validateAppData use the same export).
+const taskStatusSchema = z.enum(TASK_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]);
+const taskStatusOrAllSchema = z.enum(
+  [...TASK_STATUS_VALUES, 'all'] as unknown as [TaskStatus | 'all', ...(TaskStatus | 'all')[]]
+);
 const projectStatusSchema = z.enum(['active', 'someday', 'waiting', 'archived']);
 const taskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 const timeEstimateSchema = z.enum(['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+']);
 const taskTokenSchema = z.string().trim().min(1).max(MAX_TASK_TITLE_LENGTH);
-const isoDateLikeSchema = z
-  .string()
-  .regex(
-    ISO_DATE_LIKE_PATTERN,
-    'Expected ISO date (YYYY-MM-DD) or ISO datetime'
-  );
 
 const listTasksSchema = z.object({
   status: taskStatusOrAllSchema.optional(),
   projectId: z.string().optional(),
   includeDeleted: z.boolean().optional(),
-  limit: z.number().int().min(1).max(500).optional(),
+  limit: z.number().int().min(1).max(MAX_TASK_LIST_LIMIT).optional(),
   offset: z.number().int().min(0).max(100000).optional(),
   search: z.string().max(512).optional(),
   dueDateFrom: isoDateLikeSchema.optional(),
@@ -208,7 +224,7 @@ const listTasksSchema = z.object({
 });
 
 // Note: Don't use .refine() as it breaks MCP SDK's JSON schema conversion
-const addTaskSchema = z.object({
+export const addTaskSchema = z.object({
   title: z.string().max(MAX_TASK_TITLE_LENGTH).optional().describe('Task title'),
   quickAdd: z.string().optional().describe('Quick-add string with natural language parsing (e.g. "Buy milk @errands #shopping /due:tomorrow +ProjectName")'),
   status: taskStatusSchema.optional().describe('Task status: inbox, next, waiting, someday, reference, done, archived'),
@@ -224,6 +240,11 @@ const addTaskSchema = z.object({
   energyLevel: z.enum(['low', 'medium', 'high']).optional().describe('Energy level: low, medium, high'),
   assignedTo: z.string().optional().describe('Person this task is assigned to or waiting for'),
   timeEstimate: timeEstimateSchema.optional().describe('Time estimate: 5min, 10min, 15min, 30min, 1hr, 2hr, 3hr, 4hr, 4hr+'),
+  // Every other create-writable Task field (checklist, areaId, reviewAt, isFocusedToday,
+  // taskMode, relativeStartOffset, location, ...) is derived from TASK_SYNC_FIELD_SCHEMA —
+  // see task-write-fields.ts/task-field-schemas.ts. Adding a synced field there needs no
+  // edit here.
+  ...buildTaskCreateFieldsShape(),
 });
 const normalizeAddTaskInput = (data: z.infer<typeof addTaskSchema>) => {
   const hasTitle = typeof data.title === 'string' && data.title.trim().length > 0;
@@ -240,18 +261,27 @@ const normalizeAddTaskInput = (data: z.infer<typeof addTaskSchema>) => {
   if (hasQuickAdd && data.quickAdd!.trim().length > MAX_TASK_QUICK_ADD_LENGTH) {
     throw new ValidationError(`Quick-add input too long (max ${MAX_TASK_QUICK_ADD_LENGTH} characters)`);
   }
+  // buildTaskCreateFieldsShape() returns a generic Record<string, ZodTypeAny>, so z.infer
+  // can't see the specific generated field names/types it spreads into addTaskSchema — cast
+  // once to the explicit parallel TS type (queries.ts) that names them. Zod validates these
+  // fields correctly at runtime regardless; this only restores static typing for the access
+  // below.
+  const generated = data as unknown as Partial<TaskGeneratedCreateFields>;
   return {
     ...data,
     recurrence: normalizeOptionalTaskRecurrence(data.recurrence),
     contexts: normalizeOptionalTaskTokens('contexts', data.contexts),
     tags: normalizeOptionalTaskTokens('tags', data.tags),
+    relativeStartOffset: normalizeOptionalTaskRelativeStartOffset(generated.relativeStartOffset),
+    timeSpentMinutes: normalizeOptionalTaskTimeSpentMinutes(generated.timeSpentMinutes),
+    repeatReminderMinutes: normalizeOptionalTaskRepeatReminderMinutes(generated.repeatReminderMinutes),
   };
 };
 
 const completeTaskSchema = z.object({
   id: z.string(),
 });
-const updateTaskSchema = z.object({
+export const updateTaskSchema = z.object({
   id: z.string(),
   title: z.string().max(MAX_TASK_TITLE_LENGTH).optional(),
   status: taskStatusSchema.optional(),
@@ -267,16 +297,26 @@ const updateTaskSchema = z.object({
   energyLevel: z.enum(['low', 'medium', 'high']).nullable().optional(),
   assignedTo: z.string().nullable().optional(),
   timeEstimate: timeEstimateSchema.nullable().optional(),
-  reviewAt: isoDateLikeSchema.nullable().optional(),
-  isFocusedToday: z.boolean().optional(),
+  // Every other patch-writable Task field (reviewAt, isFocusedToday, checklist, areaId,
+  // order, boardOrder, focusOrder, ...) is derived from TASK_SYNC_FIELD_SCHEMA — see
+  // task-write-fields.ts/task-field-schemas.ts. Adding a synced field there needs no edit
+  // here.
+  ...buildTaskUpdateFieldsShape(),
 });
 
-const normalizeUpdateTaskInput = (data: z.infer<typeof updateTaskSchema>) => ({
-  ...data,
-  recurrence: normalizeNullableTaskRecurrence(data.recurrence),
-  contexts: normalizeNullableTaskTokens('contexts', data.contexts),
-  tags: normalizeNullableTaskTokens('tags', data.tags),
-});
+const normalizeUpdateTaskInput = (data: z.infer<typeof updateTaskSchema>) => {
+  // See the matching comment in normalizeAddTaskInput.
+  const generated = data as unknown as Partial<{ [K in keyof TaskGeneratedPatchFields]: TaskGeneratedPatchFields[K] | null }>;
+  return {
+    ...data,
+    recurrence: normalizeNullableTaskRecurrence(data.recurrence),
+    contexts: normalizeNullableTaskTokens('contexts', data.contexts),
+    tags: normalizeNullableTaskTokens('tags', data.tags),
+    relativeStartOffset: normalizeNullableTaskRelativeStartOffset(generated.relativeStartOffset),
+    timeSpentMinutes: normalizeNullableTaskTimeSpentMinutes(generated.timeSpentMinutes),
+    repeatReminderMinutes: normalizeNullableTaskRepeatReminderMinutes(generated.repeatReminderMinutes),
+  };
+};
 
 const deleteTaskSchema = z.object({
   id: z.string(),
@@ -362,13 +402,13 @@ const deleteSectionSchema = z.object({
   id: z.string(),
 });
 const addAreaSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(MAX_AREA_NAME_LENGTH),
   color: z.string().optional(),
   icon: z.string().optional(),
 });
 const updateAreaSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(MAX_AREA_NAME_LENGTH).optional(),
   color: z.string().nullable().optional(),
   icon: z.string().nullable().optional(),
 });
@@ -376,19 +416,19 @@ const deleteAreaSchema = z.object({
   id: z.string(),
 });
 const addPersonSchema = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(MAX_AREA_NAME_LENGTH),
   note: z.string().nullable().optional(),
   referenceLink: z.string().nullable().optional(),
 });
 const updatePersonSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(MAX_AREA_NAME_LENGTH).optional(),
   note: z.string().nullable().optional(),
   referenceLink: z.string().nullable().optional(),
 });
 const renamePersonSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(MAX_AREA_NAME_LENGTH),
   updateTasks: z.boolean().optional(),
 });
 const deletePersonSchema = z.object({
@@ -515,9 +555,13 @@ export const registerMindwtrTools = (
     },
     withReadonlyMcpErrorHandling('mindwtr_add_task', async (input) => {
       const normalizedInput = normalizeAddTaskInput(input);
+      // buildTaskCreateFieldsShape()'s generic Record<string, ZodTypeAny> return type erases
+      // the specific generated field names from z.infer (see normalizeAddTaskInput above), so
+      // the merged object needs one cast back to the real shape at this boundary. Zod already
+      // validated every field's runtime shape.
       const task = await service.addTask({
         ...normalizedInput,
-      });
+      } as AddTaskInput);
       return createMcpTextResponse({ task });
     }),
   );
@@ -529,9 +573,10 @@ export const registerMindwtrTools = (
       inputSchema: updateTaskSchema,
     },
     withReadonlyMcpErrorHandling('mindwtr_update_task', async (input) => {
+      // See the matching comment on mindwtr_add_task above.
       const task = await service.updateTask({
         ...normalizeUpdateTaskInput(input),
-      });
+      } as UpdateTaskInput);
       return createMcpTextResponse({ task });
     }),
   );

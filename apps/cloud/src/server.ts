@@ -8,6 +8,8 @@ import {
     compactPurgedProjectSectionTombstone,
     compactPurgedProjectTombstone,
     filterNotDeleted,
+    filterProjectsBySearch,
+    filterTasksBySearch,
     generateUUID,
     isTaskFinished,
     mergeAppDataWithStats,
@@ -15,7 +17,6 @@ import {
     parseQuickAdd,
     repairMergedSyncReferences,
     resolveCaptureStatusForStart,
-    searchAll,
     type Area,
     type AppData,
     type Project,
@@ -44,6 +45,7 @@ import {
     logInfo,
     logWarn,
     LIST_MAX_LIMIT,
+    MAX_AREA_NAME_LENGTH,
     MAX_TASK_QUICK_ADD_LENGTH,
     MAX_TASK_TITLE_LENGTH,
     normalizeRevision,
@@ -754,8 +756,8 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
             if (!validatedProps.ok) return errorResponse(validatedProps.error, 400);
             const name = typeof bodyRecord.name === 'string' ? bodyRecord.name.trim() : '';
             if (!name) return errorResponse('Missing area name');
-            if (name.length > MAX_TASK_TITLE_LENGTH) {
-                return errorResponse(`Area name too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
+            if (name.length > MAX_AREA_NAME_LENGTH) {
+                return errorResponse(`Area name too long (max ${MAX_AREA_NAME_LENGTH} characters)`, 400);
             }
             const props = validatedProps.props as Record<string, unknown>;
             const rawOrder = props.order;
@@ -776,8 +778,8 @@ const ENTITY_ROUTES: Array<EntityRouteDefinition<any>> = [
             if (!validatedPatch.ok) return errorResponse(validatedPatch.error, 400);
             const updates = validatedPatch.props;
             if (typeof updates.name === 'string' && !updates.name.trim()) return errorResponse('Missing area name');
-            if (typeof updates.name === 'string' && updates.name.length > MAX_TASK_TITLE_LENGTH) {
-                return errorResponse(`Area name too long (max ${MAX_TASK_TITLE_LENGTH} characters)`, 400);
+            if (typeof updates.name === 'string' && updates.name.length > MAX_AREA_NAME_LENGTH) {
+                return errorResponse(`Area name too long (max ${MAX_AREA_NAME_LENGTH} characters)`, 400);
             }
             return {
                 ...existing,
@@ -1061,12 +1063,22 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             const data = loadAppData(ctx.filePath);
                             const tasks = filterNotDeleted(data.tasks);
                             const projects = filterNotDeleted(data.projects);
-                            const results = searchAll(tasks, projects, query);
-                            const taskTotal = results.tasks.length;
-                            const projectTotal = results.projects.length;
+                            // filterTasksBySearch/filterProjectsBySearch are the same matchers
+                            // searchAll() composes, called directly here (rather than through
+                            // searchAll) because searchAll internally slices its result to
+                            // core's SEARCH_RESULT_LIMIT (200) before returning — computing
+                            // taskTotal/projectTotal from that sliced array reported at most
+                            // 200 even when there were more true matches, and made
+                            // taskOffset/projectOffset past 200 always return empty. This
+                            // endpoint does its own offset/limit slicing below (bounded by
+                            // LIST_MAX_LIMIT), so it doesn't need searchAll's fixed 200 cap.
+                            const matchedTasks = filterTasksBySearch(tasks, projects, query);
+                            const matchedProjects = filterProjectsBySearch(projects, query);
+                            const taskTotal = matchedTasks.length;
+                            const projectTotal = matchedProjects.length;
                             return jsonResponse({
-                                tasks: results.tasks.slice(taskOffset, taskOffset + taskLimit),
-                                projects: results.projects.slice(projectOffset, projectOffset + projectLimit),
+                                tasks: matchedTasks.slice(taskOffset, taskOffset + taskLimit),
+                                projects: matchedProjects.slice(projectOffset, projectOffset + projectLimit),
                                 taskTotal,
                                 projectTotal,
                                 limit: pagination.limit,

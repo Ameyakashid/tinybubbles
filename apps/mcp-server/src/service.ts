@@ -8,6 +8,7 @@ import {
   type Person as CorePerson,
   type Project as CoreProject,
   type Section as CoreSection,
+  type RelativeStartOffset,
 } from '@mindwtr/core';
 
 import { closeDb, openMindwtrDb, type DbOptions } from './db.js';
@@ -18,8 +19,14 @@ import {
   MAX_TASK_QUICK_ADD_LENGTH,
   MAX_TASK_TITLE_LENGTH,
   normalizeNullableTaskRecurrence,
+  normalizeNullableTaskRelativeStartOffset,
+  normalizeNullableTaskRepeatReminderMinutes,
+  normalizeNullableTaskTimeSpentMinutes,
   normalizeNullableTaskTokens,
   normalizeOptionalTaskRecurrence,
+  normalizeOptionalTaskRelativeStartOffset,
+  normalizeOptionalTaskRepeatReminderMinutes,
+  normalizeOptionalTaskTimeSpentMinutes,
   normalizeOptionalTaskTokens,
 } from './input-validation.js';
 import {
@@ -49,6 +56,7 @@ import {
   type UpdateTaskInput,
 } from './queries.js';
 import { runCoreService } from './core-adapter.js';
+import { pickDefinedTaskFields, TASK_CREATE_FIELD_NAMES, TASK_PATCH_FIELD_NAMES } from './task-write-fields.js';
 
 type ServiceDeps = {
   openMindwtrDb: typeof openMindwtrDb;
@@ -184,8 +192,21 @@ const validateAddTaskInput = (input: AddTaskInput): AddTaskInput => {
     ...input,
     contexts: normalizeOptionalTaskTokens('contexts', input.contexts),
     tags: normalizeOptionalTaskTokens('tags', input.tags),
+    relativeStartOffset: normalizeOptionalTaskRelativeStartOffset(input.relativeStartOffset),
+    timeSpentMinutes: normalizeOptionalTaskTimeSpentMinutes(input.timeSpentMinutes),
+    repeatReminderMinutes: normalizeOptionalTaskRepeatReminderMinutes(input.repeatReminderMinutes),
   };
 };
+
+// Fields already normalized onto `normalizedInput` by validateAddTaskInput (contexts, tags,
+// relativeStartOffset, timeSpentMinutes, repeatReminderMinutes) plus every other
+// create-writable field TASK_CREATE_FIELD_NAMES derives (checklist, areaId, reviewAt,
+// isFocusedToday, taskMode, ...) — recurrence is handled by its own call site above since it
+// needs `core`-scoped normalization timing the others don't. Adding a synced field to
+// TASK_CREATE_FIELD_NAMES needs no edit here.
+const generatedCreateTaskProps = (input: AddTaskInput): Partial<Task> => (
+  pickDefinedTaskFields(TASK_CREATE_FIELD_NAMES, input)
+);
 
 const buildTaskUpdates = (input: UpdateTaskInput): Partial<Task> => {
   const updates: Partial<Task> = {};
@@ -205,8 +226,27 @@ const buildTaskUpdates = (input: UpdateTaskInput): Partial<Task> => {
   if (input.energyLevel !== undefined) updates.energyLevel = input.energyLevel ?? undefined;
   if (input.assignedTo !== undefined) updates.assignedTo = input.assignedTo ?? undefined;
   if (input.timeEstimate !== undefined) updates.timeEstimate = input.timeEstimate ?? undefined;
-  if (input.reviewAt !== undefined) updates.reviewAt = input.reviewAt ?? undefined;
-  if (input.isFocusedToday !== undefined) updates.isFocusedToday = input.isFocusedToday;
+  // Every other patch-writable Task field (reviewAt, isFocusedToday, checklist, areaId,
+  // order, boardOrder, focusOrder, ...) is derived from TASK_PATCH_FIELD_NAMES — see
+  // task-write-fields.ts. Adding a synced field there needs no edit here.
+  for (const name of TASK_PATCH_FIELD_NAMES) {
+    const value = input[name as keyof UpdateTaskInput];
+    if (value === undefined) continue;
+    if (name === 'relativeStartOffset') {
+      updates.relativeStartOffset = normalizeNullableTaskRelativeStartOffset(value as RelativeStartOffset | null) ?? undefined;
+    } else if (name === 'timeSpentMinutes') {
+      updates.timeSpentMinutes = normalizeNullableTaskTimeSpentMinutes(value as number | null) ?? undefined;
+    } else if (name === 'repeatReminderMinutes') {
+      updates.repeatReminderMinutes = normalizeNullableTaskRepeatReminderMinutes(value as number | null) ?? undefined;
+    } else if (typeof value === 'boolean') {
+      // Booleans (showFutureRecurrence/isFocusedToday/suppressMindwtrReminders) have no
+      // "clear it" state distinct from false, so — unlike every other generated field —
+      // they're never nullable on input (see task-field-schemas.ts) and pass through as-is.
+      (updates as Record<string, unknown>)[name] = value;
+    } else {
+      (updates as Record<string, unknown>)[name] = value ?? undefined;
+    }
+  }
   return updates;
 };
 
@@ -414,6 +454,7 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
               energyLevel: normalizedInput.energyLevel,
               assignedTo: normalizedInput.assignedTo,
               timeEstimate: normalizedInput.timeEstimate,
+              ...generatedCreateTaskProps(normalizedInput),
             }),
           }, {
             addProject: (title, color, initialProps) => core.addProject({
@@ -452,6 +493,7 @@ export const createService = (options: DbOptions, deps: ServiceDeps = defaultSer
             energyLevel: normalizedInput.energyLevel,
             assignedTo: normalizedInput.assignedTo,
             timeEstimate: normalizedInput.timeEstimate,
+            ...generatedCreateTaskProps(normalizedInput),
           }),
         });
       });

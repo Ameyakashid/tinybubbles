@@ -20,6 +20,7 @@ import {
 } from '@mindwtr/core';
 import type { DbClient } from './db.js';
 import { NotFoundError } from './errors.js';
+import { MAX_TASK_LIST_LIMIT } from './input-validation.js';
 import type { TaskRecurrenceInput } from './input-validation.js';
 
 export type TaskStatus = CoreTaskStatus;
@@ -52,6 +53,28 @@ export type ListTasksInput = {
   sortOrder?: 'asc' | 'desc';
 };
 
+// Task fields shared 1:1 between AddTaskInput/UpdateTaskInput and core's own Task type — these
+// are exactly the fields task-write-fields.ts derives from TASK_SYNC_FIELD_SCHEMA (everything
+// generated, minus the hand-typed ones above that need a different pre-normalization shape:
+// recurrence's raw TaskRecurrenceInput vs Task's normalized Recurrence).
+export type TaskGeneratedCreateFields = Pick<CoreTask,
+  | 'taskMode'
+  | 'relativeStartOffset'
+  | 'showFutureRecurrence'
+  | 'pushCount'
+  | 'checklist'
+  | 'textDirection'
+  | 'location'
+  | 'areaId'
+  | 'isFocusedToday'
+  | 'timeSpentMinutes'
+  | 'suppressMindwtrReminders'
+  | 'repeatReminderMinutes'
+  | 'reviewAt'
+>;
+
+export type TaskGeneratedPatchFields = TaskGeneratedCreateFields & Pick<CoreTask, 'order' | 'boardOrder' | 'focusOrder'>;
+
 export type AddTaskInput = {
   title?: string;
   quickAdd?: string;
@@ -68,7 +91,7 @@ export type AddTaskInput = {
   energyLevel?: CoreTaskEnergyLevel;
   assignedTo?: string;
   timeEstimate?: CoreTimeEstimate;
-};
+} & Partial<TaskGeneratedCreateFields>;
 
 export type TaskRow = Task;
 
@@ -259,7 +282,7 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
     params.push(input.isFocusedToday ? 1 : 0);
   }
 
-  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(500, input.limit as number)) : 200;
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(MAX_TASK_LIST_LIMIT, input.limit as number)) : 200;
   const offset = Number.isFinite(input.offset) ? Math.max(0, input.offset as number) : 0;
 
   // Validate and apply sorting
@@ -511,6 +534,10 @@ export function getPerson(db: DbClient, input: GetPersonInput): Person {
   return personFromSqliteRow(row);
 }
 
+// Booleans have no "clear it" state distinct from false (see task-field-schemas.ts), so they
+// stay plain-optional here rather than nullable like every other generated patch field.
+type NullableExceptBooleans<T> = { [K in keyof T]?: T[K] extends boolean | undefined ? T[K] : T[K] | null };
+
 export type UpdateTaskInput = {
   id: string;
   title?: string;
@@ -527,6 +554,4 @@ export type UpdateTaskInput = {
   energyLevel?: CoreTaskEnergyLevel | null;
   assignedTo?: string | null;
   timeEstimate?: CoreTimeEstimate | null;
-  reviewAt?: string | null;
-  isFocusedToday?: boolean;
-};
+} & NullableExceptBooleans<TaskGeneratedPatchFields>;
