@@ -17,6 +17,7 @@ const taskListHeaderPropsSpy = vi.hoisted(() => vi.fn());
 const flatListPropsSpy = vi.hoisted(() => vi.fn());
 const flatListScrollToIndexMock = vi.hoisted(() => vi.fn());
 const flatListScrollToOffsetMock = vi.hoisted(() => vi.fn());
+const rowRenderSpy = vi.hoisted(() => vi.fn());
 const taskListSelectionState = vi.hoisted(() => ({
   current: {
     bulkActionLabel: 'Move',
@@ -194,7 +195,13 @@ vi.mock('./list-empty-state', () => ({
 }));
 
 vi.mock('./swipeable-task-item', () => ({
-  SwipeableTaskItem: (props: any) => React.createElement('SwipeableTaskItem', props),
+  // The spy stands in for the real module's render counter (#766): it fires
+  // exactly where `SwipeableTaskItem` increments `taskRowRenderCount`, so a row
+  // that memoises away never reaches it.
+  SwipeableTaskItem: (props: any) => {
+    rowRenderSpy(props.task?.id);
+    return React.createElement('SwipeableTaskItem', props);
+  },
   readTaskRowRenderCount: () => 0,
 }));
 
@@ -910,6 +917,46 @@ describe('TaskList project quick add', () => {
     const row = tree.root.findByType('SwipeableTaskItem' as unknown as React.ElementType);
     expect(row.props.rowContext.focusedCount).toBe(0);
     expect(storeState.getDerivedState).toHaveBeenCalled();
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  it('re-renders only the row whose task changed, not every mounted row (#766)', async () => {
+    const listProps = (taskSource: Task[]) => ({
+      allowAdd: false,
+      showHeader: false,
+      statusFilter: 'next' as const,
+      taskSource,
+      title: 'Next',
+    });
+    const tasks = Array.from({ length: 30 }, (_, index) => makeTask(`row-${index}`, `Task ${index}`));
+    storeState.tasks = tasks;
+    storeState._allTasks = tasks;
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<TaskList {...listProps(tasks)} />);
+    });
+    expect(new Set(rowRenderSpy.mock.calls.map(([id]) => id)).size).toBe(30);
+
+    // What a single task edit looks like from the list's side: a fresh tasks
+    // array in which exactly one task object was replaced.
+    const editedTasks = tasks.map((task, index) => (
+      index === 7 ? { ...task, title: 'Task 7 (edited)' } : task
+    ));
+    storeState.tasks = editedTasks;
+    storeState._allTasks = editedTasks;
+    rowRenderSpy.mockClear();
+
+    await act(async () => {
+      tree.update(<TaskList {...listProps(editedTasks)} />);
+    });
+
+    const rerenderedIds = rowRenderSpy.mock.calls.map(([id]) => id);
+    expect(new Set(rerenderedIds)).toEqual(new Set(['row-7']));
+    expect(rerenderedIds.length).toBeLessThan(5);
 
     act(() => {
       tree.unmount();

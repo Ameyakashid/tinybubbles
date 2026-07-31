@@ -44,7 +44,7 @@ import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
 
 import { buildTaskGroupSections, getTaskGroupByLabel, type TaskGroupBy } from '@/lib/task-group-sections';
-import { useThemeColors } from '@/hooks/use-theme-colors';
+import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useToast } from '@/contexts/toast-context';
@@ -196,7 +196,81 @@ interface TaskListCapabilityProps {
 export interface TaskListProps
   extends TaskListContentProps, TaskListScrollProps, TaskListChromeProps, TaskListCapabilityProps {}
 
-// ... inside TaskList component
+/** Everything a row can mutate, on one object that never changes identity. */
+type TaskRowActions = {
+  edit: (task: Task) => void;
+  changeStatus: (taskId: string, status: TaskStatus) => void | Promise<unknown>;
+  remove: (taskId: string) => void | Promise<unknown>;
+  toggleSelect: (taskId: string) => void;
+};
+
+interface MemoizedTaskRowProps {
+  task: Task;
+  tc: ThemeColors;
+  isDark: boolean;
+  actions: TaskRowActions;
+  rowContext: SwipeableTaskItemRowContext;
+  selectionEnabled: boolean;
+  selectionMode: boolean;
+  isMultiSelected: boolean;
+  isHighlighted: boolean;
+  statusBadgeAsIcon: boolean;
+  hideChecklistProgress: boolean;
+  hideProjectMeta: boolean;
+  sequenceCue?: ProjectSequenceTaskCue;
+  sequenceLabel?: string;
+  onProjectPress?: (projectId: string) => void;
+}
+
+// The memo boundary for a single row (#766). Any store change re-renders the
+// list, but a row re-renders only when the task object it draws — or one of the
+// flags it draws — actually changed. The per-row callbacks are built in here,
+// from task.id and the stable `actions`, so their identity churn stays inside
+// the boundary instead of invalidating every mounted row.
+const MemoizedTaskRow = React.memo(function MemoizedTaskRow({
+  actions,
+  hideChecklistProgress,
+  hideProjectMeta,
+  isDark,
+  isHighlighted,
+  isMultiSelected,
+  onProjectPress,
+  rowContext,
+  selectionEnabled,
+  selectionMode,
+  sequenceCue,
+  sequenceLabel,
+  statusBadgeAsIcon,
+  task,
+  tc,
+}: MemoizedTaskRowProps) {
+  return (
+    <ErrorBoundary>
+      <SwipeableTaskItem
+        task={task}
+        isDark={isDark}
+        tc={tc}
+        onPress={() => actions.edit(task)}
+        selectionMode={selectionMode}
+        isMultiSelected={isMultiSelected}
+        onToggleSelect={selectionEnabled ? () => actions.toggleSelect(task.id) : undefined}
+        onStatusChange={(status) => actions.changeStatus(task.id, status)}
+        onDelete={() => actions.remove(task.id)}
+        isHighlighted={isHighlighted}
+        statusBadgeAsIcon={statusBadgeAsIcon}
+        hideChecklistProgress={hideChecklistProgress}
+        hideProjectMeta={hideProjectMeta}
+        sequenceCue={sequenceCue}
+        sequenceLabel={sequenceLabel}
+        rowContext={rowContext}
+        onProjectPress={onProjectPress}
+        onContextPress={openContextsScreen}
+        onTagPress={openContextsScreen}
+      />
+    </ErrorBoundary>
+  );
+});
+
 function TaskListComponent({
   statusFilter,
   title,
@@ -1360,50 +1434,67 @@ function TaskListComponent({
     return result;
   }, [listItemCountForDiagnostics, performanceRoute, updateTask]);
 
-  const renderTask = useCallback(({ item }: { item: Task }) => {
-    const sequenceCue = getTaskSequenceCue?.(item);
-    const sequenceLabel = sequenceCue ? sequenceCueLabels?.[sequenceCue] : undefined;
-
-    return (
-      <ErrorBoundary>
-        <SwipeableTaskItem
-          task={item}
-          isDark={isDark}
-          tc={themeColorsMemo}
-          onPress={() => handleEditTask(item)}
-          selectionMode={enableBulkActions ? selectionMode : false}
-          isMultiSelected={enableBulkActions && multiSelectedIds.has(item.id)}
-          onToggleSelect={enableBulkActions ? () => toggleMultiSelect(item.id, { visibleTaskIds: orderedTaskIds }) : undefined}
-          onStatusChange={(status) => handleTaskStatusChange(item.id, status as TaskStatus)}
-          onDelete={() => deleteTask(item.id)}
-          isHighlighted={item.id === highlightTaskId}
-          statusBadgeAsIcon={statusBadgeAsIconForList}
-          hideChecklistProgress={hideChecklistProgressForList}
-          hideProjectMeta={Boolean(projectId)}
-          sequenceCue={sequenceCue}
-          sequenceLabel={sequenceLabel}
-          rowContext={rowContext}
-          onProjectPress={projectId ? undefined : openProjectScreen}
-          onContextPress={openContextsScreen}
-          onTagPress={openContextsScreen}
-        />
-      </ErrorBoundary>
-    );
-  }, [
+  // The row handlers are rebuilt on every render because they close over the
+  // current list (orderedTaskIds above all), so rows reach them through one
+  // object that never changes identity and reads the latest closures from a ref
+  // (#766). A row that captured an old orderedTaskIds would break range select.
+  const rowActionSourcesRef = useRef({
     deleteTask,
-    enableBulkActions,
-    getTaskSequenceCue,
     handleEditTask,
     handleTaskStatusChange,
+    orderedTaskIds,
+    toggleMultiSelect,
+  });
+  rowActionSourcesRef.current = {
+    deleteTask,
+    handleEditTask,
+    handleTaskStatusChange,
+    orderedTaskIds,
+    toggleMultiSelect,
+  };
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: (task) => rowActionSourcesRef.current.handleEditTask(task),
+    changeStatus: (taskId, status) => rowActionSourcesRef.current.handleTaskStatusChange(taskId, status),
+    remove: (taskId) => rowActionSourcesRef.current.deleteTask(taskId),
+    toggleSelect: (taskId) => {
+      const sources = rowActionSourcesRef.current;
+      sources.toggleMultiSelect(taskId, { visibleTaskIds: sources.orderedTaskIds });
+    },
+  }), []);
+
+  const renderTask = useCallback(({ item }: { item: Task }) => {
+    const sequenceCue = getTaskSequenceCue?.(item);
+
+    return (
+      <MemoizedTaskRow
+        actions={rowActions}
+        hideChecklistProgress={hideChecklistProgressForList}
+        hideProjectMeta={Boolean(projectId)}
+        isDark={isDark}
+        isHighlighted={item.id === highlightTaskId}
+        isMultiSelected={enableBulkActions && multiSelectedIds.has(item.id)}
+        onProjectPress={projectId ? undefined : openProjectScreen}
+        rowContext={rowContext}
+        selectionEnabled={enableBulkActions}
+        selectionMode={enableBulkActions ? selectionMode : false}
+        sequenceCue={sequenceCue}
+        sequenceLabel={sequenceCue ? sequenceCueLabels?.[sequenceCue] : undefined}
+        statusBadgeAsIcon={statusBadgeAsIconForList}
+        task={item}
+        tc={themeColorsMemo}
+      />
+    );
+  }, [
+    enableBulkActions,
+    getTaskSequenceCue,
     highlightTaskId,
     isDark,
     multiSelectedIds,
-    orderedTaskIds,
+    rowActions,
     selectionMode,
     hideChecklistProgressForList,
     statusBadgeAsIconForList,
     themeColorsMemo,
-    toggleMultiSelect,
     projectId,
     sequenceCueLabels,
     rowContext,
