@@ -1,5 +1,8 @@
+diff --git a/node_modules/react-native-draggable-flatlist/.bun-tag-6d440f704aab95d2 b/.bun-tag-6d440f704aab95d2
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/src/components/CellRendererComponent.tsx b/src/components/CellRendererComponent.tsx
-index e4e861a6663ae59838af08c965ab6782fc41f8b0..4bd0d3e2ab9de90b4534701ddacc22829f7ea25b 100644
+index e4e861a6663ae59838af08c965ab6782fc41f8b0..44bb09da4ffd9ab287f8c6f6a5d8550dde3b83b1 100644
 --- a/src/components/CellRendererComponent.tsx
 +++ b/src/components/CellRendererComponent.tsx
 @@ -3,6 +3,7 @@ import {
@@ -10,7 +13,9 @@ index e4e861a6663ae59838af08c965ab6782fc41f8b0..4bd0d3e2ab9de90b4534701ddacc2282
    StyleProp,
    ViewStyle,
  } from "react-native";
-@@ -107,6 +108,6 @@ function CellRendererComponent<T>(props: Props<T>) {
+@@ -105,14 +106,28 @@ function CellRendererComponent<T>(props: Props<T>) {
+   });
+ 
    useEffect(() => {
 -    if (isWeb) {
 -      // onLayout isn't called on web when the cell index changes, so we manually re-measure
@@ -19,3 +24,23 @@ index e4e861a6663ae59838af08c965ab6782fc41f8b0..4bd0d3e2ab9de90b4534701ddacc2282
        requestAnimationFrame(() => {
          onCellLayout();
        });
+     }
+   }, [index, onCellLayout]);
+ 
++  const prevActiveKeyRef = useRef<string | null>(activeKey);
++  useEffect(() => {
++    // The held translate above is only cleared by onCellLayout, and a cell
++    // whose index did not change gets no onLayout after a drag ends — it
++    // stays displaced until some later layout pass, which on a quiet list is
++    // never (permanent gap/overlap). Reset every cell when the drag clears.
++    if (prevActiveKeyRef.current !== null && activeKey === null && !isWeb) {
++      requestAnimationFrame(() => {
++        onCellLayout();
++      });
++    }
++    prevActiveKeyRef.current = activeKey;
++  }, [activeKey, onCellLayout]);
++
+   const baseStyle = useMemo(() => {
+     return {
+       elevation: isActive ? 1 : 0,

@@ -12,3 +12,5 @@ _None yet._
 - Desktop: Windows sync verifies TLS through the Windows certificate engine again, so setups behind corporate TLS interception (for example Zscaler) sync like they did before 1.1.6. macOS and Linux keep the 1.1.6 TLS 1.3 support. (#663)
 - Desktop: the collapsed Plan next actions panel can be expanded again at any window size — narrow windows show a labeled row instead of hiding it, and the wide-window side rail accepts clicks along its full height. (#977)
 - Mobile: the Area chip in the Add Task options row shows its icon like the Contexts and Project chips. (#632)
+- Mobile: editing or completing one task no longer re-renders every visible row, cutting the per-action lag in large projects. (#766)
+- Mobile: task rows no longer stay stuck mid-air after a drag ends in Task order mode, which left permanent gaps and overlapping cards in long lists. (#784)
