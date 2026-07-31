@@ -77,7 +77,7 @@ const sharedCases: ConformanceCase[] = [
     expected: ['t-06'],
   },
   {
-    name: 'limit clamps above 500 down to 500 (fixture only has 7 rows)',
+    name: 'limit clamps above 1000 down to 1000 (fixture only has 7 rows)',
     input: { sortBy: 'title', sortOrder: 'asc', limit: 10_000 },
     expected: allIdsByTitleAsc,
   },
@@ -189,6 +189,27 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
       });
       await expect(notFoundCloud.updateTask({ id: 'does-not-exist', title: 'x' }))
         .rejects.toMatchObject({ code: 'not_found' });
+    });
+  });
+
+  // core-adapter.ts used to map this the same wrong way: a bogus areaId reference on addTask
+  // is an input-validation mistake (nothing about the NEW task is "not found"), and cloud
+  // already reported that as validation_error via its 400 response. Pins both adapters
+  // agreeing now.
+  describe('a bogus areaId reference on addTask is validation_error on both adapters (not not_found)', () => {
+    test('local: addTask with a nonexistent areaId yields code validation_error', async () => {
+      await expect(local.addTask({ title: 'Task', areaId: 'does-not-exist' }))
+        .rejects.toMatchObject({ code: 'validation_error' });
+    });
+
+    test('cloud: addTask with a nonexistent areaId yields code validation_error', async () => {
+      const invalidAreaCloud = createCloudService({
+        url: 'https://mindwtr.example.com',
+        token: 'conformance-test-token',
+        fetcher: async () => new Response(JSON.stringify({ error: 'Area not found' }), { status: 400 }),
+      });
+      await expect(invalidAreaCloud.addTask({ title: 'Task', areaId: 'does-not-exist' }))
+        .rejects.toMatchObject({ code: 'validation_error' });
     });
   });
 

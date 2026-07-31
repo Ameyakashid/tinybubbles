@@ -377,7 +377,7 @@ export type MindwtrService = {
    *   both directions.
    * - Equal sort keys break ties by `id` ascending, and that tie-break does not flip with
    *   `sortOrder` (a stable sort shouldn't reverse just because the primary key did).
-   * - `limit`/`offset` clamp to 1..500 / >=0 identically on both adapters.
+   * - `limit`/`offset` clamp to 1..1000 / >=0 identically on both adapters.
    * - `search` is an intentional capability difference, not a bug: local matches via SQLite
    *   FTS5 (token/prefix semantics) when available, cloud matches via a JS substring check.
    *   A query that matches mid-word on one adapter may not match on the other — this is

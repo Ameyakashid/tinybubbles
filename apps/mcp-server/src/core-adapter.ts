@@ -129,17 +129,31 @@ const loadCoreModules = async (): Promise<CoreModule> => {
 };
 
 const getErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-// Every caller of ensureActionSucceeded acts on an id that must already exist (update/delete/
-// rename/complete — never add*, which fails a different way; see the throwCreateFailed calls
-// below). Every such core store action in packages/core (store-tasks.ts, store-projects/*)
-// rejects a missing id with `{success:false, error:'<Entity> not found'}` and never fails for
-// any other reason, so a `success:false` result here is always a not-found — mapping it that
-// way is what lets the local and cloud MCP adapters return the same `code` for the same
-// mistake (getMindwtrToolErrorCode maps NotFoundError to 'not_found').
-const ensureActionSucceeded = (action: string, result: CoreActionResult) => {
-  if (!result.success) {
-    throw new NotFoundError(result.error || `Failed to ${action}.`);
+// The exact, closed set of messages packages/core's update/delete/rename store actions
+// (store-tasks.ts:524, store-projects/*'s mutateEntities/update*/delete* helpers) emit ONLY
+// when the id being acted on doesn't exist — a genuine lookup miss. Update actions can also
+// fail for OTHER reasons on an id that DOES exist (store-tasks.ts's updateTask: a focus-cap
+// hit -> "Maximum of N focused tasks allowed", or preparedUpdates.error for a bad patch) —
+// those are user-input mistakes, not not-found, and must not match this set.
+//
+// The identical strings ('Area not found' etc.) are ALSO produced by task-container-rules.ts
+// when addTask references a nonexistent projectId/sectionId/areaId at CREATE time — that's a
+// bad-input problem too (nothing exists yet to "not find"), which is why ensureActionSucceeded
+// below never checks this set for the 'create task' action regardless of message text.
+const LOOKUP_MISS_MESSAGES = new Set([
+  'Task not found', 'Project not found', 'Section not found', 'Area not found', 'Person not found',
+]);
+
+// isLookupContext defaults to true because every non-writeTask caller below acts on an id that
+// must already exist (update/delete/rename — never add*, which uses throwCreateFailed
+// instead). writeTask passes false for its 'create task' action explicitly (see below).
+const ensureActionSucceeded = (action: string, result: CoreActionResult, isLookupContext = true) => {
+  if (result.success) return;
+  const message = result.error || `Failed to ${action}.`;
+  if (isLookupContext && LOOKUP_MISS_MESSAGES.has(message)) {
+    throw new NotFoundError(message);
   }
+  throw new ValidationError(message);
 };
 // add* actions return null/undefined for a validation failure (empty title/name, or a
 // reference to a missing parent id) — a user mistake, not a "not found" lookup failure.
@@ -210,7 +224,7 @@ export const createCorePersistenceService = (core: CoreModule): PersistenceContr
     } catch (error) {
       throw toStorageError(error);
     }
-    ensureActionSucceeded(action, tracked.result);
+    ensureActionSucceeded(action, tracked.result, action !== 'create task');
 
     const task = findTask();
     if (!task) throw new NotFoundError(notFoundMessage);

@@ -17,6 +17,7 @@ import {
   isAuthorizedBearerToken,
   MAX_HTTP_BODY_BYTES,
   MIN_HTTP_TOKEN_LENGTH,
+  RECOMMENDED_HTTP_TOKEN_LENGTH,
   resolveHttpConfig,
   startHttpServer,
 } from './http-server.js';
@@ -42,6 +43,19 @@ describe('resolveHttpConfig', () => {
   test('accepts a token exactly at the minimum length', () => {
     const token = 'a'.repeat(MIN_HTTP_TOKEN_LENGTH);
     expect(resolveHttpConfig(parseArgs(['--http', '--http-token', token]), {})?.token).toBe(token);
+  });
+
+  test('a token between the minimum and recommended length still starts, with a warning', () => {
+    const token = 'a'.repeat(MIN_HTTP_TOKEN_LENGTH);
+    const config = resolveHttpConfig(parseArgs(['--http', '--http-token', token]), {});
+    expect(config?.token).toBe(token);
+    expect(config?.weakTokenWarning).toContain(String(RECOMMENDED_HTTP_TOKEN_LENGTH));
+  });
+
+  test('a token at the recommended length has no warning', () => {
+    const token = 'a'.repeat(RECOMMENDED_HTTP_TOKEN_LENGTH);
+    const config = resolveHttpConfig(parseArgs(['--http', '--http-token', token]), {});
+    expect(config?.weakTokenWarning).toBeUndefined();
   });
 
   test('defaults host and port when only --http and a token are given', () => {

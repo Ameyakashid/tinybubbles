@@ -753,3 +753,71 @@ describe('mcp service', () => {
     }
   });
 });
+
+// core-adapter.ts's ensureActionSucceeded used to map EVERY core store failure to
+// NotFoundError, so a plain input-validation problem (a bogus areaId reference, a focus-cap
+// hit) reported code 'not_found' instead of 'validation_error' through the local adapter --
+// while cloud-service.ts's mapCloudError already reported 'validation_error' for the same kind
+// of mistake. These pin the fix: only a genuine "<Entity> not found" lookup miss (or a
+// post-mutation findTask miss) is NotFoundError; everything else is ValidationError.
+describe('mcp service error taxonomy (local core adapter)', () => {
+  const seedRealService = (extraTasks: Record<string, unknown>[] = []) => {
+    const dir = createTempDir();
+    writeFileSync(
+      join(dir, 'data.json'),
+      JSON.stringify({
+        tasks: extraTasks,
+        projects: [],
+        sections: [],
+        areas: [],
+        people: [],
+        settings: {},
+      }),
+    );
+    return createService({ dbPath: join(dir, 'mindwtr.db'), readonly: false });
+  };
+
+  test('addTask with a bogus areaId is a validation error, not not_found', async () => {
+    const service = seedRealService();
+    try {
+      await expect(service.addTask({ title: 'Task', areaId: 'does-not-exist' }))
+        .rejects.toMatchObject({ code: 'validation_error', message: 'Area not found' });
+    } finally {
+      await service.close();
+    }
+  });
+
+  test('updateTask hitting the focus-task cap is a validation error, not not_found', async () => {
+    // Built up through live addTask/updateTask calls on one service session (like the "persists
+    // write operations" test above), not a multi-task bootstrap-JSON seed: a bootstrap seed of
+    // several already-focused tasks proved unreliable back-to-back with that other real-core-
+    // backed test in this same file (core-adapter.ts's module-level store singleton doesn't
+    // cleanly rehydrate between two independently-bootstrapped databases in one test process) --
+    // a test-isolation quirk, not a bug in the fix under test here.
+    const service = seedRealService();
+    try {
+      const t1 = await service.addTask({ title: 't-1', status: 'next' });
+      await service.updateTask({ id: t1.id, isFocusedToday: true });
+      const t2 = await service.addTask({ title: 't-2', status: 'next' });
+      await service.updateTask({ id: t2.id, isFocusedToday: true });
+      const t3 = await service.addTask({ title: 't-3', status: 'next' });
+      await service.updateTask({ id: t3.id, isFocusedToday: true });
+      const t4 = await service.addTask({ title: 't-4', status: 'next' });
+
+      await expect(service.updateTask({ id: t4.id, isFocusedToday: true }))
+        .rejects.toMatchObject({ code: 'validation_error', message: 'Maximum of 3 focused tasks allowed' });
+    } finally {
+      await service.close();
+    }
+  });
+
+  test('updateTask on a missing id is still not_found (regression pin)', async () => {
+    const service = seedRealService();
+    try {
+      await expect(service.updateTask({ id: 'does-not-exist', title: 'x' }))
+        .rejects.toMatchObject({ code: 'not_found', message: 'Task not found' });
+    } finally {
+      await service.close();
+    }
+  });
+});

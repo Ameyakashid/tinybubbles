@@ -10,7 +10,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { TASK_RECURRENCE_FIELD_KEYS } from '@mindwtr/core';
 
-import { TASK_RECURRENCE_INPUT_FIELD_KEYS } from './input-validation.js';
+import {
+  normalizeNullableTaskTimeSpentMinutes,
+  normalizeOptionalTaskTimeSpentMinutes,
+  TASK_RECURRENCE_INPUT_FIELD_KEYS,
+} from './input-validation.js';
 
 // Mutation-test evidence: temporarily dropping 'rrule' from
 // input-validation.ts's recurrenceObjectSchema while developing this test made the assertion
@@ -28,5 +32,27 @@ describe('recurrence field-key consolidation (single shared list, two consumers)
 
   test("core's shared TASK_RECURRENCE_FIELD_KEYS matches the same pinned list", () => {
     expect([...TASK_RECURRENCE_FIELD_KEYS].sort()).toEqual([...PINNED_RECURRENCE_FIELD_KEYS].sort());
+  });
+});
+
+// normalizeTimeSpentMinutes(0) (core) returns undefined -- 0 rounds to "absent" -- so the
+// round-trip check `normalizeTimeSpentMinutes(value) !== value` used to fail for the one value
+// (0) that should always be allowed and just clears the field, exactly like
+// repeatReminderMinutes's own 0 shortcut already did.
+describe('timeSpentMinutes: 0 is a valid "no time logged" value, not a validation error', () => {
+  test('create: 0 passes through unchanged', () => {
+    expect(normalizeOptionalTaskTimeSpentMinutes(0)).toBe(0);
+  });
+
+  test('update: 0 passes through unchanged (clears the field)', () => {
+    expect(normalizeNullableTaskTimeSpentMinutes(0)).toBe(0);
+  });
+
+  test('update: null still clears the field', () => {
+    expect(normalizeNullableTaskTimeSpentMinutes(null)).toBe(null);
+  });
+
+  test('a genuinely invalid non-zero value still throws', () => {
+    expect(() => normalizeOptionalTaskTimeSpentMinutes(-5)).toThrow('Invalid task timeSpentMinutes');
   });
 });

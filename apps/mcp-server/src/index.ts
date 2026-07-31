@@ -851,6 +851,9 @@ export async function startMcpServer(argv: string[] = process.argv.slice(2)) {
       httpServer.close();
     });
     await startHttpServer(httpServer, httpConfig);
+    if (httpConfig.weakTokenWarning) {
+      logInfo(`Warning: ${httpConfig.weakTokenWarning}`);
+    }
     logInfo('HTTP MCP transport listening', {
       host: httpConfig.host,
       port: httpConfig.port,

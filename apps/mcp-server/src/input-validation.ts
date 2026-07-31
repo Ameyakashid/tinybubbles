@@ -271,7 +271,12 @@ const checklistItemInputSchema = z.object({
 
 export const taskChecklistInputSchema = z.array(checklistItemInputSchema);
 
+// Mirrors normalizeTaskRepeatReminderMinutesValue below (and cloud's
+// validateTaskTimeSpentMinutes): 0 always means "no time logged" and needs no round-trip
+// check — normalizeTimeSpentMinutes(0) returns undefined (0 is <= 0, "absent"), which would
+// otherwise make a perfectly valid `timeSpentMinutes: 0` fail its own round-trip check.
 const normalizeTaskTimeSpentMinutesValue = (value: number): number => {
+  if (value === 0) return value;
   if (normalizeTimeSpentMinutes(value) !== value) {
     throw new ValidationError('Invalid task timeSpentMinutes');
   }

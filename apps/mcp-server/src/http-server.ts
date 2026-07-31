@@ -9,18 +9,22 @@ import { parseBooleanFlag, readFlagValue, readStringFlag, type FlagEnv, type Fla
 
 export const DEFAULT_HTTP_HOST = '127.0.0.1';
 export const DEFAULT_HTTP_PORT = 8722;
-// Aligned with cloud's own bearer-token floor (apps/cloud/src/server-config.ts's
-// BEARER_TOKEN_PATTERN, `{20,512}`) — that pattern must stay a regex literal (pinned
-// byte-for-byte against core's CLOUD_SYNC_TOKEN_PATTERN by a server.test.ts assertion), so it
-// isn't sourced from a shared numeric constant; this was previously 16, letting an MCP HTTP
-// token be weaker than the floor the rest of the app enforces for the same kind of secret.
-export const MIN_HTTP_TOKEN_LENGTH = 20;
+// Kept at 16 (not raised to cloud's 20-char bearer-token floor, apps/cloud/src/server-config.ts's
+// BEARER_TOKEN_PATTERN): an existing self-hosted MCP HTTP deployment with a 16-19 char token
+// must not be refused at startup on upgrade — that's a breaking change to something already
+// running in production, not a validation bug. RECOMMENDED_HTTP_TOKEN_LENGTH below carries the
+// stronger number instead, surfaced as a startup warning (see resolveHttpConfig) rather than
+// a hard failure.
+export const MIN_HTTP_TOKEN_LENGTH = 16;
+export const RECOMMENDED_HTTP_TOKEN_LENGTH = 20;
 export const MAX_HTTP_BODY_BYTES = 1024 * 1024; // 1 MiB
 
 export type HttpServerConfig = {
   host: string;
   port: number;
   token: string;
+  /** Set when the token is valid but shorter than RECOMMENDED_HTTP_TOKEN_LENGTH; the caller logs it. */
+  weakTokenWarning?: string;
 };
 
 const parseHttpPort = (raw: string | undefined): number | undefined => {
@@ -60,6 +64,9 @@ export const resolveHttpConfig = (flags: FlagMap, env: FlagEnv = process.env): H
     host: host || DEFAULT_HTTP_HOST,
     port: parseHttpPort(portRaw) ?? DEFAULT_HTTP_PORT,
     token,
+    ...(token.length < RECOMMENDED_HTTP_TOKEN_LENGTH ? {
+      weakTokenWarning: `--http-token is ${token.length} characters; ${RECOMMENDED_HTTP_TOKEN_LENGTH}+ is recommended. Generate a stronger one with: openssl rand -hex 32`,
+    } : {}),
   };
 };
 
