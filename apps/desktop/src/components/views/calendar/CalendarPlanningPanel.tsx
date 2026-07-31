@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { safeFormatDate, safeParseDueDate, type Task } from '@mindwtr/core';
 
 import { cn } from '../../../lib/utils';
@@ -52,18 +52,25 @@ export function CalendarPlanningPanel({
 
     if (isCollapsed) {
         return (
-            // Below xl the panel stacks under the calendar, where the collapsed
-            // rail renders as a wide, nearly empty strip (#977) — hide it there;
-            // the expanded panel still stacks normally.
-            <aside className="hidden rounded-lg border border-border bg-card p-2 shadow-sm xl:block">
+            // The collapse button shows at every width, so the collapsed state
+            // must be expandable at every width too — hiding this below xl left
+            // no way back without widening the window (#977). Stacked below xl
+            // it is a labeled disclosure row, not a bare strip; at xl+ it is the
+            // side rail, with the button filling the full rail height so the
+            // whole strip is the click target.
+            <aside className="rounded-lg border border-border bg-card p-2 shadow-sm">
                 <button
                     type="button"
                     onClick={() => onCollapsedChange(false)}
-                    className="inline-flex h-10 w-full items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 xl:h-full xl:min-h-10"
                     aria-label={expandLabel}
                     title={expandLabel}
                 >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-sm font-medium xl:hidden">
+                        {resolveText('calendar.planningTitle', 'Plan next actions')}
+                    </span>
+                    <ChevronDown className="h-4 w-4 xl:hidden" aria-hidden="true" />
+                    <ChevronLeft className="hidden h-4 w-4 xl:block" aria-hidden="true" />
                 </button>
             </aside>
         );
