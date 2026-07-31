@@ -1,5 +1,5 @@
 import type { Attachment } from '@mindwtr/core';
-import { ModalPortal } from '../ModalPortal';
+import { Dialog, DialogBody } from '../ui/Dialog';
 import { AttachmentImage } from './AttachmentImage';
 
 type ImageAttachmentModalProps = {
@@ -19,26 +19,8 @@ export function ImageAttachmentModal({
 }: ImageAttachmentModalProps) {
     if (!attachment) return null;
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            role="button"
-            tabIndex={0}
-            aria-label={t('common.close')}
-            onClick={onClose}
-            onKeyDown={(event) => {
-                if (event.key !== 'Escape') return;
-                if (event.currentTarget !== event.target) return;
-                event.preventDefault();
-                onClose();
-            }}
-        >
-            <div
-                className="w-full max-w-3xl bg-popover text-popover-foreground rounded-xl border shadow-2xl p-4 space-y-3"
-                role="dialog"
-                aria-modal="true"
-                onClick={(event) => event.stopPropagation()}
-            >
+        <Dialog onClose={onClose} label={attachment.title || t('attachments.title')} panelClassName="max-w-3xl">
+            <DialogBody className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{attachment.title || t('attachments.title')}</div>
                     <div className="flex items-center gap-3">
@@ -65,8 +47,7 @@ export function ImageAttachmentModal({
                         className="block max-w-full h-auto mx-auto"
                     />
                 </div>
-            </div>
-        </div>
-        </ModalPortal>
+            </DialogBody>
+        </Dialog>
     );
 }

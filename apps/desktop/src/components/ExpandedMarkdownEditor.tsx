@@ -4,8 +4,8 @@ import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { MarkdownFormatToolbar } from './MarkdownFormatToolbar';
 import { MarkdownReferenceAutocompleteMenu, useMarkdownReferenceAutocomplete } from './MarkdownReferenceAutocomplete';
-import { ModalPortal } from './ModalPortal';
 import { RichMarkdown } from './RichMarkdown';
+import { Dialog, DialogHeader } from './ui/Dialog';
 import type { MarkdownSelection, MarkdownToolbarActionId, MarkdownToolbarResult } from '@mindwtr/core';
 
 type ExpandedMarkdownEditorProps = {
@@ -52,10 +52,8 @@ export function ExpandedMarkdownEditor({
     currentTaskId,
 }: ExpandedMarkdownEditorProps) {
     const [mode, setMode] = useState<'edit' | 'preview'>(initialMode);
-    const modalRef = useRef<HTMLDivElement | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-    const lastActiveElement = useRef<HTMLElement | null>(null);
     const titleId = useId();
     const resolvedHeaderTitle = (headerTitle || '').trim() || title;
     const autocomplete = useMarkdownReferenceAutocomplete({
@@ -71,30 +69,13 @@ export function ExpandedMarkdownEditor({
 
     const isRtl = direction === 'rtl';
 
-    const getFocusable = () => {
-        const root = modalRef.current;
-        if (!root) return [];
-        return Array.from(
-            root.querySelectorAll<HTMLElement>(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-            ),
-        ).filter((element) => !element.hasAttribute('disabled') && !element.getAttribute('aria-hidden'));
-    };
-
     const handleClose = useCallback(() => {
         onCommit?.();
         onClose();
     }, [onClose, onCommit]);
 
     useEffect(() => {
-        if (!isOpen) {
-            if (lastActiveElement.current) {
-                lastActiveElement.current.focus();
-                lastActiveElement.current = null;
-            }
-            return;
-        }
-        lastActiveElement.current = document.activeElement as HTMLElement | null;
+        if (!isOpen) return;
         setMode(initialMode);
     }, [initialMode, isOpen]);
 
@@ -113,148 +94,106 @@ export function ExpandedMarkdownEditor({
     if (!isOpen) return null;
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            onMouseDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                handleClose();
-            }}
+        <Dialog
+            onClose={handleClose}
+            labelledBy={titleId}
+            overlayClassName="z-[70] p-4"
+            // Sized rather than capped: the editor deliberately fills the window
+            // and its edit/preview region owns the scrolling.
+            panelClassName="h-[min(92vh,960px)] w-[min(1200px,96vw)] max-w-none max-h-[none] rounded-2xl border-border bg-card"
         >
-            <div
-                ref={modalRef}
-                className="flex h-[min(92vh,960px)] w-[min(1200px,96vw)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => {
-                    if (event.defaultPrevented) return;
-                    if (event.key === 'Escape') {
-                        event.preventDefault();
-                        handleClose();
-                        return;
-                    }
-                    if (event.key !== 'Tab') return;
-                    const focusable = getFocusable();
-                    if (focusable.length === 0) return;
-                    const first = focusable[0];
-                    const last = focusable[focusable.length - 1];
-                    const active = document.activeElement as HTMLElement | null;
-
-                    if (!active || !focusable.includes(active)) {
-                        event.preventDefault();
-                        first.focus();
-                        return;
-                    }
-
-                    if (event.shiftKey && active === first) {
-                        event.preventDefault();
-                        last.focus();
-                        return;
-                    }
-
-                    if (!event.shiftKey && active === last) {
-                        event.preventDefault();
-                        first.focus();
-                    }
-                }}
-            >
-                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-                    <div className="min-w-0">
-                        <h2 id={titleId} className="truncate text-sm font-semibold">
-                            {resolvedHeaderTitle}
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setMode((prev) => (prev === 'edit' ? 'preview' : 'edit'))}
-                            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40"
-                        >
-                            {mode === 'edit' ? t('markdown.preview') : t('markdown.edit')}
-                        </button>
-                        <button
-                            ref={closeButtonRef}
-                            type="button"
-                            onClick={handleClose}
-                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-                            aria-label={t('markdown.collapse')}
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    </div>
+            <DialogHeader className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="min-w-0">
+                    <h2 id={titleId} className="truncate text-sm font-semibold">
+                        {resolvedHeaderTitle}
+                    </h2>
                 </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setMode((prev) => (prev === 'edit' ? 'preview' : 'edit'))}
+                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40"
+                    >
+                        {mode === 'edit' ? t('markdown.preview') : t('markdown.edit')}
+                    </button>
+                    <button
+                        ref={closeButtonRef}
+                        type="button"
+                        onClick={handleClose}
+                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                        aria-label={t('markdown.collapse')}
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            </DialogHeader>
 
-                <div className="flex-1 min-h-0 p-4">
-                    {mode === 'edit' ? (
-                        <div className="flex h-full flex-col gap-3">
-                            <MarkdownFormatToolbar
-                                textareaRef={textareaRef}
-                                t={t}
-                                canUndo={canUndo}
-                                onUndo={onUndo}
-                                onApplyAction={onApplyAction}
+            <div className="flex-1 min-h-0 p-4">
+                {mode === 'edit' ? (
+                    <div className="flex h-full flex-col gap-3">
+                        <MarkdownFormatToolbar
+                            textareaRef={textareaRef}
+                            t={t}
+                            canUndo={canUndo}
+                            onUndo={onUndo}
+                            onApplyAction={onApplyAction}
+                        />
+                        <div className="relative flex min-h-0 flex-1 flex-col">
+                            <textarea
+                                ref={textareaRef}
+                                value={value}
+                                onChange={(event) => {
+                                    onChange(event.target.value);
+                                    onSelectionChange({
+                                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+                                    });
+                                }}
+                                onSelect={(event) => {
+                                    onSelectionChange({
+                                        start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                                        end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+                                    });
+                                }}
+                                onKeyDown={(event) => {
+                                    if (autocomplete.handleKeyDown(event)) {
+                                        return;
+                                    }
+                                    onEditorKeyDown?.(event);
+                                }}
+                                onPaste={onEditorPaste}
+                                placeholder={placeholder}
+                                spellCheck={true}
+                                dir={direction}
+                                className={cn(
+                                    'min-h-0 flex-1 resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30',
+                                    isRtl && 'text-right',
+                                )}
                             />
-                            <div className="relative flex min-h-0 flex-1 flex-col">
-                                <textarea
-                                    ref={textareaRef}
-                                    value={value}
-                                    onChange={(event) => {
-                                        onChange(event.target.value);
-                                        onSelectionChange({
-                                            start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                                            end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-                                        });
-                                    }}
-                                    onSelect={(event) => {
-                                        onSelectionChange({
-                                            start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-                                            end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-                                        });
-                                    }}
-                                    onKeyDown={(event) => {
-                                        if (autocomplete.handleKeyDown(event)) {
-                                            return;
-                                        }
-                                        onEditorKeyDown?.(event);
-                                    }}
-                                    onPaste={onEditorPaste}
-                                    placeholder={placeholder}
-                                    spellCheck={true}
-                                    dir={direction}
-                                    className={cn(
-                                        'min-h-0 flex-1 resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm leading-6 focus:outline-none focus:ring-2 focus:ring-primary/30',
-                                        isRtl && 'text-right',
-                                    )}
-                                />
-                                <MarkdownReferenceAutocompleteMenu
-                                    isOpen={autocomplete.isOpen}
-                                    suggestions={autocomplete.suggestions}
-                                    selectedIndex={autocomplete.selectedIndex}
-                                    setSelectedIndex={autocomplete.setSelectedIndex}
-                                    applySuggestion={autocomplete.applySuggestion}
-                                    menuRef={autocomplete.menuRef}
-                                    position={autocomplete.position}
-                                    t={t}
-                                />
-                            </div>
+                            <MarkdownReferenceAutocompleteMenu
+                                isOpen={autocomplete.isOpen}
+                                suggestions={autocomplete.suggestions}
+                                selectedIndex={autocomplete.selectedIndex}
+                                setSelectedIndex={autocomplete.setSelectedIndex}
+                                applySuggestion={autocomplete.applySuggestion}
+                                menuRef={autocomplete.menuRef}
+                                position={autocomplete.position}
+                                t={t}
+                            />
                         </div>
-                    ) : (
-                        <div
-                            dir={direction}
-                            className={cn(
-                                'h-full overflow-y-auto rounded-xl border border-border bg-background px-4 py-3',
-                                isRtl && 'text-right',
-                            )}
-                        >
-                            <RichMarkdown markdown={value} />
-                        </div>
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <div
+                        dir={direction}
+                        className={cn(
+                            'h-full overflow-y-auto rounded-xl border border-border bg-background px-4 py-3',
+                            isRtl && 'text-right',
+                        )}
+                    >
+                        <RichMarkdown markdown={value} />
+                    </div>
+                )}
             </div>
-        </div>
-        </ModalPortal>
+        </Dialog>
     );
 }

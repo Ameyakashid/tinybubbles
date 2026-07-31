@@ -115,7 +115,9 @@ describe('GlobalSearch', () => {
             await vi.advanceTimersByTimeAsync(50);
         });
 
-        const panel = screen.getByRole('dialog').firstElementChild as HTMLElement;
+        // role="dialog" sits on the Dialog panel itself; the scrim around it is
+        // presentational.
+        const panel = screen.getByRole('dialog');
         expect(panel.className).toContain('max-h-[76vh]');
 
         await act(async () => {

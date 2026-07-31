@@ -4,7 +4,7 @@ import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel } from '@mi
 
 import { TaskInput } from '../../Task/TaskInput';
 import { TaskItem } from '../../TaskItem';
-import { ModalPortal } from '../../ModalPortal';
+import { Dialog, DialogBody } from '../../ui/Dialog';
 import { QuickAddSyntaxHint } from '../../ui/QuickAddSyntaxHint';
 import { cn } from '../../../lib/utils';
 import { DESKTOP_GRID_SNAP_MINUTES, combineDateAndTime } from './calendar-primitives';
@@ -59,40 +59,36 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
     if (!openTask) return null;
 
     return (
-        <ModalPortal>
-        {/* Every other modal in the app either centres itself or pairs items-start
-            with a deliberate pt-[Nvh]; this one had neither, so the task editor sat
-            flush against the top of the window covering the page heading while the
-            space below it went unused. my-auto centres it when there is room and
-            collapses to zero when the editor is taller than the viewport, so a long
-            task never has its top cut off — which plain items-center would do. */}
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" role="dialog" aria-modal="true">
-            <div
-                className="fixed inset-0"
-                onClick={closeOpenTask}
-            />
-            <div className="relative my-auto w-full max-w-3xl bg-background border border-border rounded-xl shadow-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold">{t('taskEdit.editTask') || 'Task'}</h3>
-                    <button
-                        type="button"
-                        onClick={closeOpenTask}
-                        className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground"
-                    >
-                        {t('common.close')}
-                    </button>
-                </div>
-                <TaskItem
-                    task={openTask}
-                    project={openProject}
-                    showQuickDone={false}
-                    readOnly={false}
-                    compactMetaEnabled={true}
-                    editorPresentation="inline"
-                />
+        // my-auto centres the panel when there is room and collapses to zero
+        // when the editor is taller than the viewport, so a long task never has
+        // its top cut off — which plain items-center would do. The scrim itself
+        // scrolls here rather than the panel.
+        <Dialog
+            onClose={closeOpenTask}
+            label={t('taskEdit.editTask') || 'Task'}
+            placement="top"
+            overlayClassName="overflow-y-auto p-4"
+            panelClassName="my-auto max-w-3xl max-h-[none] bg-background rounded-xl border-border shadow-xl p-4"
+        >
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold">{t('taskEdit.editTask') || 'Task'}</h3>
+                <button
+                    type="button"
+                    onClick={closeOpenTask}
+                    className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground"
+                >
+                    {t('common.close')}
+                </button>
             </div>
-        </div>
-        </ModalPortal>
+            <TaskItem
+                task={openTask}
+                project={openProject}
+                showQuickDone={false}
+                readOnly={false}
+                compactMetaEnabled={true}
+                editorPresentation="inline"
+            />
+        </Dialog>
     );
 }
 
@@ -121,20 +117,23 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
     if (!taskComposer) return null;
 
     return (
-        <ModalPortal>
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-            <div
-                className="absolute inset-0"
-                onClick={closeTaskComposer}
-            />
+        <Dialog
+            onClose={closeTaskComposer}
+            label={resolveText('calendar.addToCalendar', 'Add to calendar')}
+            placement="top"
+            overlayClassName="p-4"
+            // Capped under the 10vh offset so the date/time grid can never push
+            // Save off a short window (#957).
+            panelClassName="mt-[10vh] max-w-xl max-h-[80vh] border-border"
+        >
             <form
-                className="relative mt-[10vh] w-full max-w-xl rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+                className="flex min-h-0 flex-col"
                 onSubmit={(event) => {
                     event.preventDefault();
                     void saveTaskComposer();
                 }}
             >
-                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="shrink-0 flex items-center justify-between border-b border-border px-4 py-3">
                     <div>
                         <h3 className="text-base font-semibold">{resolveText('calendar.addToCalendar', 'Add to calendar')}</h3>
                         <p className="text-xs text-muted-foreground">
@@ -150,7 +149,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                         <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
-                <div className="space-y-4 p-4">
+                <DialogBody className="space-y-4 p-4">
                     <div className="inline-flex rounded-md border border-border bg-muted/40 p-1">
                         <button
                             type="button"
@@ -297,8 +296,8 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                             {taskComposerError}
                         </div>
                     )}
-                </div>
-                <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+                </DialogBody>
+                <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border px-4 py-3">
                     <button
                         type="button"
                         onClick={closeTaskComposer}
@@ -315,7 +314,6 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                     </button>
                 </div>
             </form>
-        </div>
-        </ModalPortal>
+        </Dialog>
     );
 }

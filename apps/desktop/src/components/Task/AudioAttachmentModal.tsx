@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { translateWithFallback, type Attachment } from '@mindwtr/core';
-import { ModalPortal } from '../ModalPortal';
+import { Dialog, DialogBody } from '../ui/Dialog';
 
 type AudioAttachmentModalProps = {
     attachment: Attachment | null;
@@ -34,26 +34,8 @@ export function AudioAttachmentModal({
         return translateWithFallback(t, key, fallback);
     };
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            role="button"
-            tabIndex={0}
-            aria-label={t('common.close')}
-            onClick={onClose}
-            onKeyDown={(event) => {
-                if (event.key !== 'Escape') return;
-                if (event.currentTarget !== event.target) return;
-                event.preventDefault();
-                onClose();
-            }}
-        >
-            <div
-                className="w-full max-w-md bg-popover text-popover-foreground rounded-xl border shadow-2xl p-4 space-y-3"
-                role="dialog"
-                aria-modal="true"
-                onClick={(event) => event.stopPropagation()}
-            >
+        <Dialog onClose={onClose} label={attachment.title || t('quickAdd.audioNoteTitle')}>
+            <DialogBody className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{attachment.title || t('quickAdd.audioNoteTitle')}</div>
                     <button
@@ -100,8 +82,7 @@ export function AudioAttachmentModal({
                         {audioTranscriptionError}
                     </div>
                 ) : null}
-            </div>
-        </div>
-        </ModalPortal>
+            </DialogBody>
+        </Dialog>
     );
 }

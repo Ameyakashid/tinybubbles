@@ -20,6 +20,7 @@ import {
     flushPendingSave,
     getAnnouncementDismissalStorageKey,
     isSupportedLanguage,
+    isTaskFinished,
     recordDonationPromptShown,
     recordDonationPromptSupportClicked,
     recordUpdateReminderChecked,
@@ -41,7 +42,7 @@ import { GlobalSearch } from './components/GlobalSearch';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StartupPromptModal, type StartupPromptPresentation } from './components/StartupPromptModal';
 import { DesktopOnboardingFlow } from './components/DesktopOnboardingFlow';
-import { ModalPortal } from './components/ModalPortal';
+import { Dialog, DialogBody, DialogFooter } from './components/ui/Dialog';
 import { useLanguage } from './contexts/language-context';
 import { KeybindingProvider } from './contexts/keybinding-context';
 import { QuickAddModal } from './components/QuickAddModal';
@@ -301,7 +302,7 @@ function App() {
     const focusTaskTitles = useTaskStore((state) => (
         sortTasksByFocusOrder(
             state.tasks.filter((task) => (
-                task.isFocusedToday && task.status !== 'done' && task.status !== 'archived'
+                task.isFocusedToday && !isTaskFinished(task)
             ))
         ).map((task) => task.title).join(FOCUS_TITLE_SEPARATOR)
     ));
@@ -1698,68 +1699,62 @@ function App() {
                         prompts={startupPrompts}
                     />
                     {externalSyncChange && (
-                        <ModalPortal>
-                        <div
-                            className="fixed inset-0 bg-black/50 flex items-start justify-center pt-[20vh] z-50"
-                            role="dialog"
-                            aria-modal="true"
-                            onClick={() => !resolvingExternalSync && setExternalSyncChange(null)}
+                        <Dialog
+                            onClose={() => !resolvingExternalSync && setExternalSyncChange(null)}
+                            labelledBy="external-sync-change-title"
+                            placement="top"
+                            overlayClassName="pt-[20vh]"
+                            panelClassName="max-w-lg max-h-[70vh]"
                         >
-                            <div
-                                className="w-full max-w-lg bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
-                                onClick={(event) => event.stopPropagation()}
-                            >
-                                <div className="px-4 py-3 border-b">
-                                    <h3 className="font-semibold">
-                                        {translateOrFallback('settings.externalSyncChangeTitle', 'External sync change detected')}
-                                    </h3>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {translateOrFallback(
-                                            'settings.externalSyncChangeBody',
-                                            'The sync file changed while local edits were pending. Choose how to continue.'
-                                        )}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                        {translateOrFallback('settings.lastSync', 'Last sync')}: {externalSyncChange.lastSyncAt || translateOrFallback('settings.lastSyncNever', 'Never')}
-                                    </p>
-                                </div>
-                                <div className="p-4 flex flex-wrap justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setExternalSyncChange(null)}
-                                        disabled={resolvingExternalSync}
-                                        className="px-3 py-1.5 rounded-md text-sm bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {translateOrFallback('common.reviewLater', 'Review later')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => resolveExternalSync('use-external')}
-                                        disabled={resolvingExternalSync}
-                                        className="px-3 py-1.5 rounded-md text-sm bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {translateOrFallback('settings.useExternal', 'Use external')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => resolveExternalSync('merge')}
-                                        disabled={resolvingExternalSync}
-                                        className="px-3 py-1.5 rounded-md text-sm bg-secondary text-secondary-foreground hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {translateOrFallback('settings.mergeChanges', 'Merge')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => resolveExternalSync('keep-local')}
-                                        disabled={resolvingExternalSync}
-                                        className="px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {translateOrFallback('settings.keepLocal', 'Keep local')}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        </ModalPortal>
+                            <DialogBody className="px-4 py-3 border-b">
+                                <h3 id="external-sync-change-title" className="font-semibold">
+                                    {translateOrFallback('settings.externalSyncChangeTitle', 'External sync change detected')}
+                                </h3>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {translateOrFallback(
+                                        'settings.externalSyncChangeBody',
+                                        'The sync file changed while local edits were pending. Choose how to continue.'
+                                    )}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    {translateOrFallback('settings.lastSync', 'Last sync')}: {externalSyncChange.lastSyncAt || translateOrFallback('settings.lastSyncNever', 'Never')}
+                                </p>
+                            </DialogBody>
+                            <DialogFooter className="p-4 flex flex-wrap justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setExternalSyncChange(null)}
+                                    disabled={resolvingExternalSync}
+                                    className="px-3 py-1.5 rounded-md text-sm bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {translateOrFallback('common.reviewLater', 'Review later')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => resolveExternalSync('use-external')}
+                                    disabled={resolvingExternalSync}
+                                    className="px-3 py-1.5 rounded-md text-sm bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {translateOrFallback('settings.useExternal', 'Use external')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => resolveExternalSync('merge')}
+                                    disabled={resolvingExternalSync}
+                                    className="px-3 py-1.5 rounded-md text-sm bg-secondary text-secondary-foreground hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {translateOrFallback('settings.mergeChanges', 'Merge')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => resolveExternalSync('keep-local')}
+                                    disabled={resolvingExternalSync}
+                                    className="px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {translateOrFallback('settings.keepLocal', 'Keep local')}
+                                </button>
+                            </DialogFooter>
+                        </Dialog>
                     )}
                 </Layout>
             </KeybindingProvider>

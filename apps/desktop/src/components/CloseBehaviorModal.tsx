@@ -1,5 +1,6 @@
-import { ModalPortal } from './ModalPortal';
+import { useId } from 'react';
 import { Button } from './ui/Button';
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from './ui/Dialog';
 
 type CloseBehaviorModalProps = {
     isOpen: boolean;
@@ -30,43 +31,43 @@ export function CloseBehaviorModal({
     onQuit,
     onCancel,
 }: CloseBehaviorModalProps) {
+    const titleId = useId();
     if (!isOpen) return null;
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            role="dialog"
-            aria-modal="true"
+        <Dialog
+            onClose={onCancel}
+            labelledBy={titleId}
+            // Quitting is the user's decision to make: only the buttons and
+            // Escape dismiss this one, never a stray click on the scrim.
+            closeOnBackdrop={false}
+            panelClassName="mx-4 bg-card rounded-lg border-border shadow-xl"
         >
-            <div className="bg-card border border-border rounded-lg shadow-xl max-w-md w-full mx-4">
-                <div className="p-6 border-b border-border">
-                    <h3 className="text-lg font-semibold">{title}</h3>
-                    <p className="text-sm text-muted-foreground mt-2">{description}</p>
-                </div>
-                <div className="p-6">
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <input
-                            type="checkbox"
-                            checked={remember}
-                            onChange={(e) => onRememberChange(e.target.checked)}
-                            className="h-4 w-4 accent-primary"
-                        />
-                        {rememberLabel}
-                    </label>
-                </div>
-                <div className="p-6 border-t border-border flex flex-wrap gap-3 justify-end">
-                    <Button variant="secondary" size="lg" onClick={onCancel}>
-                        {cancelLabel}
-                    </Button>
-                    <Button variant="ghost" size="lg" onClick={onStay}>
-                        {stayLabel}
-                    </Button>
-                    <Button variant="destructive" size="lg" onClick={onQuit}>
-                        {quitLabel}
-                    </Button>
-                </div>
-            </div>
-        </div>
-        </ModalPortal>
+            <DialogHeader className="p-6 border-b border-border">
+                <h3 id={titleId} className="text-lg font-semibold">{title}</h3>
+                <p className="text-sm text-muted-foreground mt-2">{description}</p>
+            </DialogHeader>
+            <DialogBody className="p-6">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                        type="checkbox"
+                        checked={remember}
+                        onChange={(e) => onRememberChange(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
+                    />
+                    {rememberLabel}
+                </label>
+            </DialogBody>
+            <DialogFooter className="p-6 border-t border-border flex flex-wrap gap-3 justify-end">
+                <Button variant="secondary" size="lg" onClick={onCancel}>
+                    {cancelLabel}
+                </Button>
+                <Button variant="ghost" size="lg" onClick={onStay}>
+                    {stayLabel}
+                </Button>
+                <Button variant="destructive" size="lg" onClick={onQuit}>
+                    {quitLabel}
+                </Button>
+            </DialogFooter>
+        </Dialog>
     );
 }

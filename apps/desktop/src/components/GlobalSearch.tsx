@@ -20,8 +20,8 @@ import {
 } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
-import { ModalPortal } from './ModalPortal';
 import { PromptModal } from './PromptModal';
+import { Dialog } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
 import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from '@mindwtr/core/global-search-filter';
 import { resolveTaskNavigationView } from '../lib/task-navigation';
@@ -426,369 +426,357 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     }
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-background/80 backdrop-blur-sm animate-in fade-in-0"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={dialogTitleId}
+        <Dialog
+            onClose={() => setIsOpen(false)}
+            labelledBy={dialogTitleId}
+            placement="top"
+            overlayClassName="pt-[20vh] bg-background/80 backdrop-blur-sm animate-in fade-in-0"
+            // Escape stays with the window listener that also owns Cmd+K.
+            closeOnEscape={false}
             onKeyDown={handleDialogKeyDown}
+            // Capped so the panel always fits under the 20vh offset above it;
+            // without it an expanded filter panel ran off the bottom of a short
+            // window with nothing to scroll (#957). Every region below the search
+            // input shrinks and scrolls instead of pushing the panel past the cap.
+            panelClassName="max-w-lg max-h-[76vh] animate-in zoom-in-95 duration-100"
         >
-            <div
-                // Capped so the panel always fits under the 20vh offset above it;
-                // without it an expanded filter panel ran off the bottom of a short
-                // window with nothing to scroll (#957). Every region below the search
-                // input shrinks and scrolls instead of pushing the panel past the cap.
-                className="w-full max-w-lg max-h-[76vh] bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-100"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h2 id={dialogTitleId} className="sr-only">{t('search.title')}</h2>
-                <div className="shrink-0 flex items-center border-b px-4 py-3 gap-3">
-                    <Search className="w-5 h-5 text-muted-foreground" />
-                    <input
-                        ref={inputRef}
-                        aria-label={t('search.title')}
-                        value={query}
-                        onChange={e => {
-                            setQuery(e.target.value);
-                            setSelectedIndex(0);
-                        }}
-                        onKeyDown={handleListKeyDown}
-                        placeholder={t('search.placeholder') || "Search tasks and projects..."}
-                        className="min-w-0 flex-1 bg-transparent border-none outline-none text-lg placeholder:text-muted-foreground"
-                    />
-                    {canSave && (
-                        <button
-                            onClick={handleSaveSearch}
-                            className="flex items-center gap-1 whitespace-nowrap rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
-                            title={t('search.saveSearch')}
-                        >
-                            <Save className="w-3 h-3" />
-                            {t('search.saveSearch')}
-                        </button>
-                    )}
-                    <div className="text-xs text-muted-foreground border rounded px-1.5 py-0.5 hidden sm:inline-block">
-                        ESC
-                    </div>
+            <h2 id={dialogTitleId} className="sr-only">{t('search.title')}</h2>
+            <div className="shrink-0 flex items-center border-b px-4 py-3 gap-3">
+                <Search className="w-5 h-5 text-muted-foreground" />
+                <input
+                    ref={inputRef}
+                    aria-label={t('search.title')}
+                    value={query}
+                    onChange={e => {
+                        setQuery(e.target.value);
+                        setSelectedIndex(0);
+                    }}
+                    onKeyDown={handleListKeyDown}
+                    placeholder={t('search.placeholder') || "Search tasks and projects..."}
+                    className="min-w-0 flex-1 bg-transparent border-none outline-none text-lg placeholder:text-muted-foreground"
+                />
+                {canSave && (
                     <button
-                        type="button"
-                        aria-label={t('filters.label')}
-                        aria-expanded={filtersOpen}
-                        onClick={() => setFiltersOpen((prev) => !prev)}
-                        className={cn(
-                            "p-1.5 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
-                            filtersOpen && "bg-muted/60 text-foreground"
-                        )}
+                        onClick={handleSaveSearch}
+                        className="flex items-center gap-1 whitespace-nowrap rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                        title={t('search.saveSearch')}
                     >
-                        <SlidersHorizontal className="w-4 h-4" />
+                        <Save className="w-3 h-3" />
+                        {t('search.saveSearch')}
                     </button>
+                )}
+                <div className="text-xs text-muted-foreground border rounded px-1.5 py-0.5 hidden sm:inline-block">
+                    ESC
                 </div>
-                {activeChips.length > 0 && (
-                    <div className="shrink-0 px-4 py-2 border-b flex flex-wrap gap-2">
-                        {activeChips.map((chip) => (
-                            <button
-                                key={chip.key}
-                                type="button"
-                                onClick={chip.onRemove}
-                                className="flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60"
-                            >
-                                <span>{chip.label}</span>
-                                <X className="w-3 h-3" />
-                            </button>
-                        ))}
-                    </div>
-                )}
-                {filtersOpen && (
-                    <div className="min-h-0 overflow-y-auto px-4 py-3 border-b space-y-3 text-xs">
-                        <div className="space-y-2">
-                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">State</div>
-                            <div className="flex flex-wrap gap-2">
-                                {(['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived'] as TaskStatus[]).map((status) => (
-                                    <button
-                                        key={status}
-                                        type="button"
-                                        onClick={() => toggleStatus(status)}
-                                        className={cn(
-                                            "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                            selectedStatuses.includes(status)
-                                                ? "bg-primary/15 text-primary border-primary/40"
-                                                : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                        )}
-                                    >
-                                        {t(`status.${status}`) ?? status}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Scope</div>
-                            <div className="flex flex-wrap gap-2">
-                                {[
-                                    { id: 'all', label: 'All' },
-                                    { id: 'projects', label: 'Projects only' },
-                                    { id: 'tasks', label: 'Tasks only' },
-                                    { id: 'project_tasks', label: 'Tasks in projects' },
-                                ].map((option) => (
-                                    <button
-                                        key={option.id}
-                                        type="button"
-                                        onClick={() => setScope(option.id as typeof scope)}
-                                        className={cn(
-                                            "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                            scope === option.id
-                                                ? "bg-primary/15 text-primary border-primary/40"
-                                                : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                        )}
-                                    >
-                                        {option.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Area</div>
-                                <select
-                                    aria-label={t('taskEdit.areaLabel') || 'Area'}
-                                    value={selectedArea}
-                                    onChange={(event) => setSelectedArea(event.target.value)}
-                                    className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
-                                >
-                                    <option value="all">{t('projects.allAreas') || 'All areas'}</option>
-                                    <option value="none">{t('taskEdit.noAreaOption') || 'No area'}</option>
-                                    {areas.map((area) => (
-                                        <option key={area.id} value={area.id}>{area.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Due</div>
-                                <select
-                                    aria-label={t('taskEdit.dueDateLabel') || 'Due'}
-                                    value={duePreset}
-                                    onChange={(event) => setDuePreset(event.target.value as DuePreset)}
-                                    className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
-                                >
-                                    <option value="any">Any</option>
-                                    <option value="overdue">Overdue</option>
-                                    <option value="today">Today</option>
-                                    <option value="tomorrow">Tomorrow</option>
-                                    <option value="this_week">This week</option>
-                                    <option value="next_week">Next week</option>
-                                    <option value="none">No due date</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
-                                {t('taskEdit.locationLabel') || 'Location'}
-                            </div>
-                            <input
-                                type="text"
-                                aria-label={t('taskEdit.locationLabel') || 'Location'}
-                                value={locationQuery}
-                                onChange={(event) => setLocationQuery(event.target.value)}
-                                placeholder={t('taskEdit.locationPlaceholder') || 'e.g. Office'}
-                                className="w-full rounded border border-border bg-muted/40 px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Contexts & Tags</div>
-                            <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
-                                {allTokens.map((token) => (
-                                    <button
-                                        key={token}
-                                        type="button"
-                                        onClick={() => toggleToken(token)}
-                                        className={cn(
-                                            "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                            selectedTokens.includes(token)
-                                                ? "bg-primary/15 text-primary border-primary/40"
-                                                : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                        )}
-                                    >
-                                        {token}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <button
-                                type="button"
-                                aria-pressed={includeCompleted}
-                                onClick={() => setIncludeCompleted((prev) => !prev)}
-                                className={cn(
-                                    "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                    includeCompleted
-                                        ? "bg-primary/15 text-primary border-primary/40"
-                                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                )}
-                            >
-                                {includeCompletedText}
-                            </button>
-                            <button
-                                type="button"
-                                aria-pressed={includeReference}
-                                onClick={() => setIncludeReference((prev) => !prev)}
-                                className={cn(
-                                    "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                    includeReference
-                                        ? "bg-primary/15 text-primary border-primary/40"
-                                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                )}
-                            >
-                                {includeReferenceText}
-                            </button>
-                            <button
-                                type="button"
-                                aria-pressed={hideFutureTasks}
-                                onClick={() => setHideFutureTasks((prev) => !prev)}
-                                className={cn(
-                                    "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
-                                    hideFutureTasks
-                                        ? "bg-primary/15 text-primary border-primary/40"
-                                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
-                                )}
-                            >
-                                {hideFutureTasksText}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedStatuses([]);
-                                    setSelectedArea('all');
-                                    setSelectedTokens([]);
-                                    setLocationQuery('');
-                                    setDuePreset('any');
-                                    setScope('all');
-                                    setIncludeCompleted(false);
-                                    setIncludeReference(true);
-                                    setHideFutureTasks(false);
-                                }}
-                                className="text-xs text-muted-foreground hover:text-foreground"
-                            >
-                                Clear filters
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div ref={resultsRef} className="min-h-0 max-h-[60vh] overflow-y-auto p-2">
-                    {isTruncated && (
-                        <div className="px-3 pb-2 text-xs text-muted-foreground">
-                            {t('search.showingFirst')
-                                .replace('{shown}', String(results.length))
-                                .replace('{total}', totalResultsLabel)}
-                        </div>
+                <button
+                    type="button"
+                    aria-label={t('filters.label')}
+                    aria-expanded={filtersOpen}
+                    onClick={() => setFiltersOpen((prev) => !prev)}
+                    className={cn(
+                        "p-1.5 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+                        filtersOpen && "bg-muted/60 text-foreground"
                     )}
-                    {ftsLoading && trimmedQuery !== '' && (
-                        <div className="py-3" role="status" aria-live="polite">
-                            <div className="mb-2 text-center text-muted-foreground text-xs">
-                                {t('search.searching')}
-                            </div>
-                            <div className="space-y-2 animate-pulse">
-                                {Array.from({ length: 4 }).map((_, index) => (
-                                    <div key={index} className="px-3 py-2.5 rounded-lg border border-border/60 bg-muted/30">
-                                        <div className="h-3.5 w-2/3 rounded bg-muted-foreground/20" />
-                                        <div className="mt-2 h-2.5 w-1/3 rounded bg-muted-foreground/15" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {!ftsLoading && results.length === 0 && hasActiveSearch && (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                            {trimmedQuery
-                                ? `${t('search.noResults')} "${trimmedQuery}"`
-                                : t('search.noResults')}
-                        </div>
-                    )}
-
-                    {/*
-                      * The hint costs ~100px, which the capped panel would otherwise take
-                      * off the filter panel and make it scroll while this region sits
-                      * empty (#957). The search field's own placeholder says the same
-                      * thing, so it only earns its space when the filters are closed.
-                      */}
-                    {!ftsLoading && results.length === 0 && !hasActiveSearch && !filtersOpen && (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                            {t('search.typeToSearch')}
-                        </div>
-                    )}
-
-                    {results.map((result, index) => (
+                >
+                    <SlidersHorizontal className="w-4 h-4" />
+                </button>
+            </div>
+            {activeChips.length > 0 && (
+                <div className="shrink-0 px-4 py-2 border-b flex flex-wrap gap-2">
+                    {activeChips.map((chip) => (
                         <button
-                            key={`${result.type}-${result.item.id}`}
-                            onClick={() => handleSelect(result)}
-                            className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors",
-                                index === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-                            )}
-                            onMouseEnter={() => setSelectedIndex(index)}
-                            data-search-index={index}
+                            key={chip.key}
+                            type="button"
+                            onClick={chip.onRemove}
+                            className="flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/60"
                         >
-                            {result.type === 'project' ? (
-                                <FileText className="w-4 h-4 text-info" />
-                            ) : (
-                                <CheckCircle className={cn("w-4 h-4", (result.item as SearchTaskResult).status === 'done' ? "text-success" : "text-muted-foreground")} />
-                            )}
-
-                            <div className="flex-1 flex flex-col overflow-hidden">
-                                <span className="truncate font-medium">
-                                    {renderHighlighted(result.item.title)}
-                                </span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                    {result.type === 'project' ? t('search.resultProject') : t('search.resultTask')}
-                                    {result.type === 'task' && (result.item as SearchTaskResult).projectId ? ` • ${t('search.inProjectSuffix')}` : ''}
-                                </span>
-                            </div>
-
-                            {index === selectedIndex && (
-                                <span className="text-xs text-muted-foreground">↵</span>
-                            )}
+                            <span>{chip.label}</span>
+                            <X className="w-3 h-3" />
                         </button>
                     ))}
-
-                    {trimmedQuery !== '' && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border mt-2">
-                            {t('search.helpOperators')}
-                        </div>
-                    )}
                 </div>
+            )}
+            {filtersOpen && (
+                <div className="min-h-0 overflow-y-auto px-4 py-3 border-b space-y-3 text-xs">
+                    <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">State</div>
+                        <div className="flex flex-wrap gap-2">
+                            {(['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived'] as TaskStatus[]).map((status) => (
+                                <button
+                                    key={status}
+                                    type="button"
+                                    onClick={() => toggleStatus(status)}
+                                    className={cn(
+                                        "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                        selectedStatuses.includes(status)
+                                            ? "bg-primary/15 text-primary border-primary/40"
+                                            : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                                    )}
+                                >
+                                    {t(`status.${status}`) ?? status}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Scope</div>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { id: 'all', label: 'All' },
+                                { id: 'projects', label: 'Projects only' },
+                                { id: 'tasks', label: 'Tasks only' },
+                                { id: 'project_tasks', label: 'Tasks in projects' },
+                            ].map((option) => (
+                                <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => setScope(option.id as typeof scope)}
+                                    className={cn(
+                                        "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                        scope === option.id
+                                            ? "bg-primary/15 text-primary border-primary/40"
+                                            : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                                    )}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Area</div>
+                            <select
+                                aria-label={t('taskEdit.areaLabel') || 'Area'}
+                                value={selectedArea}
+                                onChange={(event) => setSelectedArea(event.target.value)}
+                                className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
+                            >
+                                <option value="all">{t('projects.allAreas') || 'All areas'}</option>
+                                <option value="none">{t('taskEdit.noAreaOption') || 'No area'}</option>
+                                {areas.map((area) => (
+                                    <option key={area.id} value={area.id}>{area.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Due</div>
+                            <select
+                                aria-label={t('taskEdit.dueDateLabel') || 'Due'}
+                                value={duePreset}
+                                onChange={(event) => setDuePreset(event.target.value as DuePreset)}
+                                className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
+                            >
+                                <option value="any">Any</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="today">Today</option>
+                                <option value="tomorrow">Tomorrow</option>
+                                <option value="this_week">This week</option>
+                                <option value="next_week">Next week</option>
+                                <option value="none">No due date</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                            {t('taskEdit.locationLabel') || 'Location'}
+                        </div>
+                        <input
+                            type="text"
+                            aria-label={t('taskEdit.locationLabel') || 'Location'}
+                            value={locationQuery}
+                            onChange={(event) => setLocationQuery(event.target.value)}
+                            placeholder={t('taskEdit.locationPlaceholder') || 'e.g. Office'}
+                            className="w-full rounded border border-border bg-muted/40 px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Contexts & Tags</div>
+                        <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                            {allTokens.map((token) => (
+                                <button
+                                    key={token}
+                                    type="button"
+                                    onClick={() => toggleToken(token)}
+                                    className={cn(
+                                        "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                        selectedTokens.includes(token)
+                                            ? "bg-primary/15 text-primary border-primary/40"
+                                            : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                                    )}
+                                >
+                                    {token}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            aria-pressed={includeCompleted}
+                            onClick={() => setIncludeCompleted((prev) => !prev)}
+                            className={cn(
+                                "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                includeCompleted
+                                    ? "bg-primary/15 text-primary border-primary/40"
+                                    : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                            )}
+                        >
+                            {includeCompletedText}
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={includeReference}
+                            onClick={() => setIncludeReference((prev) => !prev)}
+                            className={cn(
+                                "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                includeReference
+                                    ? "bg-primary/15 text-primary border-primary/40"
+                                    : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                            )}
+                        >
+                            {includeReferenceText}
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={hideFutureTasks}
+                            onClick={() => setHideFutureTasks((prev) => !prev)}
+                            className={cn(
+                                "whitespace-nowrap rounded-full border px-2 py-1 text-xs transition-colors",
+                                hideFutureTasks
+                                    ? "bg-primary/15 text-primary border-primary/40"
+                                    : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/60"
+                            )}
+                        >
+                            {hideFutureTasksText}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedStatuses([]);
+                                setSelectedArea('all');
+                                setSelectedTokens([]);
+                                setLocationQuery('');
+                                setDuePreset('any');
+                                setScope('all');
+                                setIncludeCompleted(false);
+                                setIncludeReference(true);
+                                setHideFutureTasks(false);
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                            Clear filters
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div ref={resultsRef} className="min-h-0 max-h-[60vh] overflow-y-auto p-2">
+                {isTruncated && (
+                    <div className="px-3 pb-2 text-xs text-muted-foreground">
+                        {t('search.showingFirst')
+                            .replace('{shown}', String(results.length))
+                            .replace('{total}', totalResultsLabel)}
+                    </div>
+                )}
+                {ftsLoading && trimmedQuery !== '' && (
+                    <div className="py-3" role="status" aria-live="polite">
+                        <div className="mb-2 text-center text-muted-foreground text-xs">
+                            {t('search.searching')}
+                        </div>
+                        <div className="space-y-2 animate-pulse">
+                            {Array.from({ length: 4 }).map((_, index) => (
+                                <div key={index} className="px-3 py-2.5 rounded-lg border border-border/60 bg-muted/30">
+                                    <div className="h-3.5 w-2/3 rounded bg-muted-foreground/20" />
+                                    <div className="mt-2 h-2.5 w-1/3 rounded bg-muted-foreground/15" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {!ftsLoading && results.length === 0 && hasActiveSearch && (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                        {trimmedQuery
+                            ? `${t('search.noResults')} "${trimmedQuery}"`
+                            : t('search.noResults')}
+                    </div>
+                )}
+
+                {/*
+                  * The hint costs ~100px, which the capped panel would otherwise take
+                  * off the filter panel and make it scroll while this region sits
+                  * empty (#957). The search field's own placeholder says the same
+                  * thing, so it only earns its space when the filters are closed.
+                  */}
+                {!ftsLoading && results.length === 0 && !hasActiveSearch && !filtersOpen && (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                        {t('search.typeToSearch')}
+                    </div>
+                )}
+
+                {results.map((result, index) => (
+                    <button
+                        key={`${result.type}-${result.item.id}`}
+                        onClick={() => handleSelect(result)}
+                        className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors",
+                            index === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
+                        )}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                        data-search-index={index}
+                    >
+                        {result.type === 'project' ? (
+                            <FileText className="w-4 h-4 text-info" />
+                        ) : (
+                            <CheckCircle className={cn("w-4 h-4", (result.item as SearchTaskResult).status === 'done' ? "text-success" : "text-muted-foreground")} />
+                        )}
+
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <span className="truncate font-medium">
+                                {renderHighlighted(result.item.title)}
+                            </span>
+                            <span className="truncate text-xs text-muted-foreground">
+                                {result.type === 'project' ? t('search.resultProject') : t('search.resultTask')}
+                                {result.type === 'task' && (result.item as SearchTaskResult).projectId ? ` • ${t('search.inProjectSuffix')}` : ''}
+                            </span>
+                        </div>
+
+                        {index === selectedIndex && (
+                            <span className="text-xs text-muted-foreground">↵</span>
+                        )}
+                    </button>
+                ))}
+
+                {trimmedQuery !== '' && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border mt-2">
+                        {t('search.helpOperators')}
+                    </div>
+                )}
             </div>
 
-            <PromptModal
-                isOpen={showSavePrompt}
-                title={t('search.saveSearch')}
-                description={t('search.saveSearchPrompt')}
-                placeholder={t('search.saveSearch')}
-                defaultValue={savePromptDefault}
-                confirmLabel={t('common.save')}
-                cancelLabel={t('common.cancel')}
-                onCancel={() => setShowSavePrompt(false)}
-                onConfirm={async (value) => {
-                    const name = value.trim();
-                    if (!name) return;
-                    const newSearch: SavedSearch = {
-                        id: generateUUID(),
-                        name,
-                        query: trimmedQuery,
-                    };
-                    await updateSettings({ savedSearches: [...savedSearches, newSearch] });
-                    setShowSavePrompt(false);
-                    setIsOpen(false);
-                    onNavigate(`savedSearch:${newSearch.id}`);
-                }}
-            />
-
-            {/* Click backdrop to close */}
-            <button
-                type="button"
-                className="absolute inset-0 -z-10"
-                aria-label={t('common.close')}
-                onClick={() => setIsOpen(false)}
-            />
-        </div>
-        </ModalPortal>
+        <PromptModal
+            isOpen={showSavePrompt}
+            title={t('search.saveSearch')}
+            description={t('search.saveSearchPrompt')}
+            placeholder={t('search.saveSearch')}
+            defaultValue={savePromptDefault}
+            confirmLabel={t('common.save')}
+            cancelLabel={t('common.cancel')}
+            onCancel={() => setShowSavePrompt(false)}
+            onConfirm={async (value) => {
+                const name = value.trim();
+                if (!name) return;
+                const newSearch: SavedSearch = {
+                    id: generateUUID(),
+                    name,
+                    query: trimmedQuery,
+                };
+                await updateSettings({ savedSearches: [...savedSearches, newSearch] });
+                setShowSavePrompt(false);
+                setIsOpen(false);
+                onNavigate(`savedSearch:${newSearch.id}`);
+            }}
+        />
+        </Dialog>
     );
 }

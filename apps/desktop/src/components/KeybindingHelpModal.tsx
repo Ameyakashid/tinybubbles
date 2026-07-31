@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { KeybindingStyle } from '../contexts/keybinding-context';
-import { ModalPortal } from './ModalPortal';
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from './ui/Dialog';
 import {
     type GlobalQuickAddShortcutSetting,
     formatGlobalQuickAddShortcutForDisplay,
@@ -160,89 +160,74 @@ export function KeybindingHelpModal({
     };
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                    event.preventDefault();
-                    onClose();
-                }
-            }}
+        <Dialog
+            onClose={onClose}
+            labelledBy={titleId}
+            panelClassName="max-w-2xl mx-4 max-h-[80vh] bg-card rounded-lg border-border shadow-xl"
         >
-            <div className="absolute inset-0" aria-hidden="true" onClick={onClose} />
-            <div
-                className="relative bg-card border border-border rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="p-6 border-b border-border flex items-center justify-between">
-                    <div>
-                        <h3 id={titleId} className="text-xl font-semibold">{t('keybindings.helpTitle')}</h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            {t('keybindings.helpSubtitle')}
-                        </p>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                        {t('keybindings.styleLabel')}: <span className="font-medium text-foreground">{t(`keybindings.style.${style}`)}</span>
-                    </div>
-                </div>
-
-                <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                    <div>
-                        <h4 className="font-medium mb-3">{t('keybindings.section.global')}</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {globalItems.map((item, index) => (
-                                <div key={`${item.labelKey}-${index}`} className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
-                                    <code className="text-xs bg-muted px-2 py-0.5 rounded">{item.keys}</code>
-                                    <span className="text-sm">{resolveItemLabel(item)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h4 className="font-medium mb-3">{t('keybindings.section.taskList')}</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {listItems.map((item) => (
-                                <div key={item.keys} className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
-                                    <code className="text-xs bg-muted px-2 py-0.5 rounded">{item.keys}</code>
-                                    <span className="text-sm">{resolveItemLabel(item)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h4 className="font-medium mb-3">{t('keybindings.section.quickAddSyntax')}</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {quickAddSyntax.map((item) => (
-                                <div key={item.keys} className="flex items-center justify-between gap-3 bg-muted/30 rounded-md px-3 py-2">
-                                    <code className="text-xs bg-muted px-2 py-0.5 rounded whitespace-nowrap overflow-x-auto">{item.keys}</code>
-                                    <span className="text-sm text-right shrink-0">{resolveItemLabel(item)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground">
-                        {t('nav.settings')}: {t('keybindings.styleLabel')} • {t('keybindings.style.standard')} / {t('keybindings.style.vim')} / {t('keybindings.style.emacs')} ({currentView})
+            <DialogHeader className="p-6 border-b border-border flex items-center justify-between">
+                <div>
+                    <h3 id={titleId} className="text-xl font-semibold">{t('keybindings.helpTitle')}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        {t('keybindings.helpSubtitle')}
                     </p>
                 </div>
-
-                <div className="p-4 border-t border-border flex justify-end">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2 rounded-md text-sm font-medium bg-muted hover:bg-muted/80 transition-colors"
-                    >
-                        Esc
-                    </button>
+                <div className="text-sm text-muted-foreground">
+                    {t('keybindings.styleLabel')}: <span className="font-medium text-foreground">{t(`keybindings.style.${style}`)}</span>
                 </div>
-            </div>
-        </div>
-        </ModalPortal>
+            </DialogHeader>
+
+            <DialogBody className="p-6 flex-1 space-y-6">
+                <div>
+                    <h4 className="font-medium mb-3">{t('keybindings.section.global')}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {globalItems.map((item, index) => (
+                            <div key={`${item.labelKey}-${index}`} className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
+                                <code className="text-xs bg-muted px-2 py-0.5 rounded">{item.keys}</code>
+                                <span className="text-sm">{resolveItemLabel(item)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <h4 className="font-medium mb-3">{t('keybindings.section.taskList')}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {listItems.map((item) => (
+                            <div key={item.keys} className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
+                                <code className="text-xs bg-muted px-2 py-0.5 rounded">{item.keys}</code>
+                                <span className="text-sm">{resolveItemLabel(item)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <h4 className="font-medium mb-3">{t('keybindings.section.quickAddSyntax')}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {quickAddSyntax.map((item) => (
+                            <div key={item.keys} className="flex items-center justify-between gap-3 bg-muted/30 rounded-md px-3 py-2">
+                                <code className="text-xs bg-muted px-2 py-0.5 rounded whitespace-nowrap overflow-x-auto">{item.keys}</code>
+                                <span className="text-sm text-right shrink-0">{resolveItemLabel(item)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                    {t('nav.settings')}: {t('keybindings.styleLabel')} • {t('keybindings.style.standard')} / {t('keybindings.style.vim')} / {t('keybindings.style.emacs')} ({currentView})
+                </p>
+            </DialogBody>
+
+            <DialogFooter className="p-4 border-t border-border flex justify-end">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-muted hover:bg-muted/80 transition-colors"
+                >
+                    Esc
+                </button>
+            </DialogFooter>
+        </Dialog>
     );
 }

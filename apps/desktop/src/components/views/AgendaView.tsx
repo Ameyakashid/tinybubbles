@@ -20,6 +20,7 @@ import { useLanguage } from '../../contexts/language-context';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
 import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
@@ -42,7 +43,6 @@ import {
     type NextGroupBy,
 } from './list/next-grouping';
 import { PromptModal } from '../PromptModal';
-import { ConfirmModal } from '../ConfirmModal';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { FocusStarIcon } from '../FocusStarIcon';
 import { useLocalDayKey } from '../../hooks/useLocalDayKey';
@@ -256,6 +256,7 @@ export function AgendaView() {
     const getDerivedState = useTaskStore((state) => state.getDerivedState);
     const { activeTasksByStatus, projectMap, sequentialProjectIds, sequentialWithinSectionProjectIds, tasksById } = getDerivedState();
     const { t } = useLanguage();
+    const { requestConfirmation, confirmModal } = useConfirmDialog();
     const localDayKey = useLocalDayKey();
     const { showListDetails, nextGroupBy, top3Only, setListOptions, collapseAllTaskDetails, setProjectView, showToast } = useUiStore((state) => ({
         showListDetails: state.listOptions.showDetails,
@@ -280,7 +281,6 @@ export function AgendaView() {
     const [activeSavedFilterId, setActiveSavedFilterId] = useState<string | null>(null);
     const [focusSortBy, setFocusSortBy] = useState<SortField>(DEFAULT_FOCUS_SORT_BY);
     const [saveFilterPromptOpen, setSaveFilterPromptOpen] = useState(false);
-    const [filterPendingDelete, setFilterPendingDelete] = useState<SavedFilter | null>(null);
     const filterInputRef = useRef<HTMLInputElement | null>(null);
     const [persistedViewState, setPersistedViewState] = usePersistedViewState(
         FOCUS_VIEW_STATE_STORAGE_KEY,
@@ -670,17 +670,21 @@ export function AgendaView() {
             setActiveSavedFilterId(nextFilter.id);
         }).catch(() => undefined);
     }, [canSaveFocusPerspective, currentFilterCriteria, effectiveNextGroupBy, focusSortBy, settings?.savedFilters, updateSettings]);
-    const handleDeleteSavedFilterConfirm = useCallback(() => {
-        if (!filterPendingDelete) return;
-        const deleteId = filterPendingDelete.id;
-        const nextFilters = markSavedFilterDeleted(settings?.savedFilters, deleteId);
+    const handleDeleteSavedFilter = useCallback(async (filter: SavedFilter) => {
+        const confirmed = await requestConfirmation({
+            title: resolveText('savedFilters.deleteTitle', 'Delete saved filter?'),
+            description: filter.name,
+            confirmLabel: resolveText('common.delete', 'Delete'),
+            cancelLabel: t('common.cancel'),
+        });
+        if (!confirmed) return;
+        const nextFilters = markSavedFilterDeleted(settings?.savedFilters, filter.id);
         void updateSettings({ savedFilters: nextFilters }).then(() => {
-            if (activeSavedFilterId === deleteId) {
+            if (activeSavedFilterId === filter.id) {
                 setActiveSavedFilterId(null);
             }
-            setFilterPendingDelete(null);
         }).catch(() => undefined);
-    }, [activeSavedFilterId, filterPendingDelete, settings?.savedFilters, updateSettings]);
+    }, [activeSavedFilterId, requestConfirmation, resolveText, settings?.savedFilters, t, updateSettings]);
     useEffect(() => {
         if (!showPriorityFilters && selectedPriorities.length > 0) {
             setSelectedPriorities([]);
@@ -1127,7 +1131,7 @@ export function AgendaView() {
                                 {isActive && (
                                     <button
                                         type="button"
-                                        onClick={() => setFilterPendingDelete(filter)}
+                                        onClick={() => void handleDeleteSavedFilter(filter)}
                                         aria-label={`${resolveText('common.delete', 'Delete')} ${resolveText('savedFilters.label', 'saved filter')} ${filter.name}`}
                                         title={`${resolveText('common.delete', 'Delete')} ${filter.name}`}
                                         className="inline-flex h-[30px] w-7 shrink-0 items-center justify-center rounded-l-none rounded-r-full border border-l-0 border-primary bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
@@ -1410,15 +1414,7 @@ export function AgendaView() {
                 onConfirm={handleSaveFilterConfirm}
                 onCancel={() => setSaveFilterPromptOpen(false)}
             />
-            <ConfirmModal
-                isOpen={Boolean(filterPendingDelete)}
-                title={resolveText('savedFilters.deleteTitle', 'Delete saved filter?')}
-                description={filterPendingDelete?.name}
-                confirmLabel={resolveText('common.delete', 'Delete')}
-                cancelLabel={t('common.cancel')}
-                onConfirm={handleDeleteSavedFilterConfirm}
-                onCancel={() => setFilterPendingDelete(null)}
-            />
+            {confirmModal}
             </div>
         </ErrorBoundary>
     );

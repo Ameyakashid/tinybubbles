@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listMergeConflictSamples, safeFormatDate, summarizeMergeStats, useTaskStore } from '@mindwtr/core';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { useConfirmDialog } from '../../../../hooks/useConfirmDialog';
 import { cn } from '../../../../lib/utils';
 import { Switch } from '../../../ui/Switch';
-import { ConfirmModal } from '../../../ConfirmModal';
 import { formatClockSkew } from './sync-page-utils';
 import { SettingRow } from '../SettingRow';
 import type { SettingsSyncPageProps, SyncPreferences } from './types';
@@ -147,7 +147,17 @@ export function SyncStatusSection({
     const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
     const [syncHistoryOpen, setSyncHistoryOpen] = useState(false);
     const [snapshotsOpen, setSnapshotsOpen] = useState(false);
-    const [snapshotToRestore, setSnapshotToRestore] = useState<string | null>(null);
+    const { requestConfirmation, confirmModal } = useConfirmDialog();
+    const handleRestoreSnapshot = async (snapshot: string) => {
+        const confirmed = await requestConfirmation({
+            title: t.recoverySnapshotsConfirmTitle,
+            description: t.recoverySnapshotsConfirm.replace('{snapshot}', snapshot),
+            confirmLabel: t.recoverySnapshotsRestore,
+            cancelLabel: t.recoverySnapshotsConfirmCancel,
+        });
+        if (!confirmed) return;
+        void onRestoreSnapshot(snapshot);
+    };
     const renderSyncToggle = (key: keyof SyncPreferences, label: string, hint?: string) => {
         const checked = syncPrefs[key] === true;
         return (
@@ -334,7 +344,7 @@ export function SyncStatusSection({
                                         <button
                                             type="button"
                                             disabled={isRestoringSnapshot}
-                                            onClick={() => setSnapshotToRestore(snapshot)}
+                                            onClick={() => void handleRestoreSnapshot(snapshot)}
                                             className="px-2 py-1 rounded border border-border text-foreground hover:bg-muted/70 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {t.recoverySnapshotsRestore}
@@ -347,20 +357,7 @@ export function SyncStatusSection({
                 </div>
             </div>
 
-            <ConfirmModal
-                isOpen={snapshotToRestore !== null}
-                title={t.recoverySnapshotsConfirmTitle}
-                description={snapshotToRestore ? t.recoverySnapshotsConfirm.replace('{snapshot}', snapshotToRestore) : undefined}
-                confirmLabel={t.recoverySnapshotsRestore}
-                cancelLabel={t.recoverySnapshotsConfirmCancel}
-                onCancel={() => setSnapshotToRestore(null)}
-                onConfirm={() => {
-                    if (!snapshotToRestore) return;
-                    const nextSnapshot = snapshotToRestore;
-                    setSnapshotToRestore(null);
-                    void onRestoreSnapshot(nextSnapshot);
-                }}
-            />
+            {confirmModal}
         </section>
     );
 }

@@ -7,10 +7,10 @@ import {
     parseDateTimeLocalDate,
     splitDateTimeLocal,
 } from '../lib/datetime-local-value';
-import { ModalPortal } from './ModalPortal';
 import { DateField } from './Task/TaskItemFieldRenderer';
 import { AutocompleteTextInput } from './ui/AutocompleteTextInput';
 import { Button } from './ui/Button';
+import { Dialog, DialogBody, DialogHeader } from './ui/Dialog';
 
 interface PromptModalNumericField {
     label: string;
@@ -117,180 +117,175 @@ export function PromptModal({
     const keepInputFocus = (event: MouseEvent<HTMLButtonElement>) => event.preventDefault();
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-start justify-center pt-[20vh] z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={description ? descriptionId : undefined}
-            onClick={onCancel}
+        <Dialog
+            onClose={onCancel}
+            labelledBy={titleId}
+            describedBy={description ? descriptionId : undefined}
+            placement="top"
+            overlayClassName="pt-[20vh]"
+            // Capped under the 20vh offset so a numeric field or a validation
+            // line can never push the footer buttons off a short window (#957).
+            panelClassName="max-h-[70vh]"
         >
-            <div
-                className="w-full max-w-md bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="px-4 py-3 border-b">
-                    <h3 id={titleId} className="font-semibold">{title}</h3>
-                    {description && (
-                        <p id={descriptionId} className="text-xs text-muted-foreground mt-1">
-                            {description}
-                        </p>
-                    )}
-                </div>
-                <div className="p-4 space-y-3">
-                    {inputType === 'datetime-local' ? (
-                        // Completion time uses the same calendar and quick-date chips as the
-                        // editor's start/due/review fields rather than the WebView's own
-                        // control, so date entry looks and behaves the same everywhere (#944).
-                        // Enter reaches the dialog by bubbling out of the date input,
-                        // which DateField does not forward itself. Escape is deliberately
-                        // left to DateField: it closes the calendar popover first.
-                        <div onKeyDown={handleFieldKeyDown}>
-                        <DateField
-                            autoFocus
-                            t={t}
-                            // The modal header already names the dialog; labelling the
-                            // field "Date" avoids saying the same thing twice.
-                            label={tFallback(t, 'calendar.date', 'Date')}
-                            dateAriaLabel={tFallback(t, 'calendar.date', 'Date')}
-                            dateValue={dateParts.date}
-                            selectedDate={parseDateTimeLocalDate(value)}
-                            dateFormatSetting={dateFormatSetting}
-                            nativeDateInputLocale={nativeDateInputLocale}
-                            dateInputClassName="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
-                            hasValue={false}
-                            onClear={() => undefined}
-                            onDateChange={(nextDate) => {
-                                setHasInteracted(true);
-                                setValue(joinDateTimeLocal({ date: nextDate, time: dateParts.time }));
-                            }}
-                            timeInput={(
-                                <input
-                                    type="time"
-                                    aria-label={tFallback(t, 'calendar.time', 'Time')}
-                                    value={dateParts.time}
-                                    onKeyDown={handleFieldKeyDown}
-                                    onChange={(event) => {
-                                        setHasInteracted(true);
-                                        setValue(joinDateTimeLocal({
-                                            date: dateParts.date,
-                                            time: event.target.value,
-                                        }));
-                                    }}
-                                    className="w-28 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
-                                />
-                            )}
-                        />
-                        </div>
-                    ) : (
-                        <AutocompleteTextInput
-                            autoFocus
-                            type={inputType}
-                            value={value}
-                            suggestions={suggestions ?? []}
-                            createLabel={createLabel}
-                            onCreate={onCreate}
-                            onChange={(next) => {
-                                setValue(next);
-                                if (!hasInteracted) {
+            <DialogHeader className="px-4 py-3 border-b">
+                <h3 id={titleId} className="font-semibold">{title}</h3>
+                {description && (
+                    <p id={descriptionId} className="text-xs text-muted-foreground mt-1">
+                        {description}
+                    </p>
+                )}
+            </DialogHeader>
+            <DialogBody className="p-4 space-y-3">
+                {inputType === 'datetime-local' ? (
+                    // Completion time uses the same calendar and quick-date chips as the
+                    // editor's start/due/review fields rather than the WebView's own
+                    // control, so date entry looks and behaves the same everywhere (#944).
+                    // Enter reaches the dialog by bubbling out of the date input,
+                    // which DateField does not forward itself. Escape is deliberately
+                    // left to DateField: it closes the calendar popover first.
+                    <div onKeyDown={handleFieldKeyDown}>
+                    <DateField
+                        autoFocus
+                        t={t}
+                        // The modal header already names the dialog; labelling the
+                        // field "Date" avoids saying the same thing twice.
+                        label={tFallback(t, 'calendar.date', 'Date')}
+                        dateAriaLabel={tFallback(t, 'calendar.date', 'Date')}
+                        dateValue={dateParts.date}
+                        selectedDate={parseDateTimeLocalDate(value)}
+                        dateFormatSetting={dateFormatSetting}
+                        nativeDateInputLocale={nativeDateInputLocale}
+                        dateInputClassName="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                        hasValue={false}
+                        onClear={() => undefined}
+                        onDateChange={(nextDate) => {
+                            setHasInteracted(true);
+                            setValue(joinDateTimeLocal({ date: nextDate, time: dateParts.time }));
+                        }}
+                        timeInput={(
+                            <input
+                                type="time"
+                                aria-label={tFallback(t, 'calendar.time', 'Time')}
+                                value={dateParts.time}
+                                onKeyDown={handleFieldKeyDown}
+                                onChange={(event) => {
                                     setHasInteracted(true);
-                                }
-                            }}
-                            onBlur={() => setHasInteracted(true)}
+                                    setValue(joinDateTimeLocal({
+                                        date: dateParts.date,
+                                        time: event.target.value,
+                                    }));
+                                }}
+                                className="w-28 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                            />
+                        )}
+                    />
+                    </div>
+                ) : (
+                    <AutocompleteTextInput
+                        autoFocus
+                        type={inputType}
+                        value={value}
+                        suggestions={suggestions ?? []}
+                        createLabel={createLabel}
+                        onCreate={onCreate}
+                        onChange={(next) => {
+                            setValue(next);
+                            if (!hasInteracted) {
+                                setHasInteracted(true);
+                            }
+                        }}
+                        onBlur={() => setHasInteracted(true)}
+                        onKeyDown={handleFieldKeyDown}
+                        placeholder={placeholder}
+                        aria-invalid={showValidation}
+                        aria-describedby={showValidation ? validationId : undefined}
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                    />
+                )}
+                {showValidation && (
+                    <p id={validationId} className="text-xs text-destructive">
+                        {t('common.validationRequired')}
+                    </p>
+                )}
+                {numericField && (
+                    <div className="flex flex-col gap-1">
+                        <label htmlFor={numericFieldId} className="text-xs font-medium text-muted-foreground">
+                            {numericField.label}
+                        </label>
+                        <input
+                            id={numericFieldId}
+                            // Same control as the task editor's Time Spent field
+                            // (type/min/step), so arrow keys and the spinner adjust it
+                            // the same way in both places.
+                            type="number"
+                            min={0}
+                            step={1}
+                            inputMode="numeric"
+                            value={numericDraft}
+                            // The number input already refuses non-numeric text, and
+                            // confirm runs the draft through normalizeTimeSpentMinutes
+                            // (which rounds and clamps). Stripping to digits here would
+                            // instead read "2.5" as 25.
+                            onChange={(e) => setNumericDraft(e.target.value)}
                             onKeyDown={handleFieldKeyDown}
-                            placeholder={placeholder}
-                            aria-invalid={showValidation}
-                            aria-describedby={showValidation ? validationId : undefined}
+                            placeholder={numericField.placeholder}
+                            aria-label={numericField.label}
                             className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
                         />
-                    )}
-                    {showValidation && (
-                        <p id={validationId} className="text-xs text-destructive">
-                            {t('common.validationRequired')}
-                        </p>
-                    )}
-                    {numericField && (
-                        <div className="flex flex-col gap-1">
-                            <label htmlFor={numericFieldId} className="text-xs font-medium text-muted-foreground">
-                                {numericField.label}
-                            </label>
-                            <input
-                                id={numericFieldId}
-                                // Same control as the task editor's Time Spent field
-                                // (type/min/step), so arrow keys and the spinner adjust it
-                                // the same way in both places.
-                                type="number"
-                                min={0}
-                                step={1}
-                                inputMode="numeric"
-                                value={numericDraft}
-                                // The number input already refuses non-numeric text, and
-                                // confirm runs the draft through normalizeTimeSpentMinutes
-                                // (which rounds and clamps). Stripping to digits here would
-                                // instead read "2.5" as 25.
-                                onChange={(e) => setNumericDraft(e.target.value)}
-                                onKeyDown={handleFieldKeyDown}
-                                placeholder={numericField.placeholder}
-                                aria-label={numericField.label}
-                                className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
-                            />
-                        </div>
-                    )}
-                    <div className="flex justify-end gap-2">
-                        {browseLabel && onBrowse && (
-                            <Button
-                                variant="secondary"
-                                className="mr-auto"
-                                onMouseDown={keepInputFocus}
-                                onClick={() => {
-                                    void onBrowse().then((picked) => {
-                                        if (typeof picked === 'string' && picked) {
-                                            setValue(picked);
-                                            setHasInteracted(true);
-                                        }
-                                    });
-                                }}
-                            >
-                                {browseLabel}
-                            </Button>
-                        )}
-                        {secondaryLabel && onSecondary && (
-                            <Button
-                                variant="secondary"
-                                onMouseDown={keepInputFocus}
-                                onClick={() => {
-                                    if (canConfirm) {
-                                        onSecondary(value);
-                                    } else {
+                    </div>
+                )}
+                <div className="flex justify-end gap-2">
+                    {browseLabel && onBrowse && (
+                        <Button
+                            variant="secondary"
+                            className="mr-auto"
+                            onMouseDown={keepInputFocus}
+                            onClick={() => {
+                                void onBrowse().then((picked) => {
+                                    if (typeof picked === 'string' && picked) {
+                                        setValue(picked);
                                         setHasInteracted(true);
                                     }
-                                }}
-                                disabled={!canConfirm}
-                            >
-                                {secondaryLabel}
-                            </Button>
-                        )}
-                        <Button variant="secondary" onMouseDown={keepInputFocus} onClick={onCancel}>
-                            {cancelLabel}
+                                });
+                            }}
+                        >
+                            {browseLabel}
                         </Button>
+                    )}
+                    {secondaryLabel && onSecondary && (
                         <Button
+                            variant="secondary"
                             onMouseDown={keepInputFocus}
                             onClick={() => {
                                 if (canConfirm) {
-                                    confirmWithValue();
+                                    onSecondary(value);
                                 } else {
                                     setHasInteracted(true);
                                 }
                             }}
                             disabled={!canConfirm}
                         >
-                            {confirmLabel}
+                            {secondaryLabel}
                         </Button>
-                    </div>
+                    )}
+                    <Button variant="secondary" onMouseDown={keepInputFocus} onClick={onCancel}>
+                        {cancelLabel}
+                    </Button>
+                    <Button
+                        onMouseDown={keepInputFocus}
+                        onClick={() => {
+                            if (canConfirm) {
+                                confirmWithValue();
+                            } else {
+                                setHasInteracted(true);
+                            }
+                        }}
+                        disabled={!canConfirm}
+                    >
+                        {confirmLabel}
+                    </Button>
                 </div>
-            </div>
-        </div>
-        </ModalPortal>
+            </DialogBody>
+        </Dialog>
     );
 }

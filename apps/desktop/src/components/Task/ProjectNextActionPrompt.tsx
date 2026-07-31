@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { translateWithFallback, type Task } from '@mindwtr/core';
-import { ModalPortal } from '../ModalPortal';
 import { Button } from '../ui/Button';
+import { Dialog, DialogBody, DialogHeader } from '../ui/Dialog';
 
 type ProjectNextActionPromptProps = {
     candidates: Task[];
@@ -51,94 +51,89 @@ export function ProjectNextActionPrompt({
     if (!isOpen) return null;
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-start justify-center pt-[16vh] z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            onClick={onCancel}
+        <Dialog
+            onClose={onCancel}
+            labelledBy={titleId}
+            describedBy={descriptionId}
+            placement="top"
+            overlayClassName="pt-[16vh]"
+            // Capped under the 16vh offset so the candidate list scrolls rather
+            // than pushing the Add/Skip buttons off a short window (#957).
+            panelClassName="max-w-lg max-h-[70vh]"
         >
-            <div
-                className="w-full max-w-lg bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <div className="px-4 py-3 border-b">
-                    <h3 id={titleId} className="font-semibold">
-                        {resolveText('projects.nextActionPromptTitle', "What's the next action?")}
-                    </h3>
-                    <p id={descriptionId} className="text-xs text-muted-foreground mt-1">
-                        {description}
-                    </p>
-                </div>
-                <div className="p-4 space-y-4">
-                    {candidates.length > 0 && (
-                        <div className="space-y-2">
-                            <p id={candidateLabelId} className="text-xs font-medium text-muted-foreground">
-                                {resolveText('projects.nextActionPromptChooseExisting', 'Choose an existing task')}
-                            </p>
-                            <div className="max-h-52 overflow-y-auto space-y-2" role="list" aria-labelledby={candidateLabelId}>
-                                {candidates.map((candidate) => (
-                                    <button
-                                        key={candidate.id}
-                                        type="button"
-                                        className="w-full rounded-lg border border-border bg-card px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                        onClick={() => onChooseTask(candidate.id)}
-                                    >
-                                        <span className="block text-sm font-medium">{candidate.title}</span>
-                                        <span className="block text-xs text-muted-foreground mt-0.5">
-                                            {t(`status.${candidate.status}`)}
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
+            <DialogHeader className="px-4 py-3 border-b">
+                <h3 id={titleId} className="font-semibold">
+                    {resolveText('projects.nextActionPromptTitle', "What's the next action?")}
+                </h3>
+                <p id={descriptionId} className="text-xs text-muted-foreground mt-1">
+                    {description}
+                </p>
+            </DialogHeader>
+            <DialogBody className="p-4 space-y-4">
+                {candidates.length > 0 && (
                     <div className="space-y-2">
-                        <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
-                            {resolveText('projects.nextActionPromptAddNew', 'Add a new next action')}
-                        </label>
-                        <input
-                            id={inputId}
-                            autoFocus
-                            type="text"
-                            value={newTitle}
-                            onChange={(event) => onNewTitleChange(event.target.value)}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Escape') {
-                                    event.preventDefault();
-                                    onCancel();
-                                }
-                                if (event.key === 'Enter' && canAddTask) {
-                                    event.preventDefault();
-                                    onAddTask();
-                                }
-                            }}
-                            placeholder={resolveText('projects.nextActionPromptPlaceholder', 'New next action...')}
-                            className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
-                        />
-                    </div>
-
-                    <div className="flex justify-between items-center gap-2">
-                        {scope === 'section' ? <span /> : (
-                            <Button variant="ghost" onClick={onCompleteProject}>
-                                {resolveText('projects.nextActionPromptComplete', 'Complete project')}
-                            </Button>
-                        )}
-                        <div className="flex gap-2">
-                            <Button variant="secondary" onClick={onCancel}>
-                                {resolveText('common.skip', 'Skip')}
-                            </Button>
-                            <Button onClick={onAddTask} disabled={!canAddTask}>
-                                {resolveText('projects.nextActionPromptAddButton', 'Add next action')}
-                            </Button>
+                        <p id={candidateLabelId} className="text-xs font-medium text-muted-foreground">
+                            {resolveText('projects.nextActionPromptChooseExisting', 'Choose an existing task')}
+                        </p>
+                        <div className="max-h-52 overflow-y-auto space-y-2" role="list" aria-labelledby={candidateLabelId}>
+                            {candidates.map((candidate) => (
+                                <button
+                                    key={candidate.id}
+                                    type="button"
+                                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    onClick={() => onChooseTask(candidate.id)}
+                                >
+                                    <span className="block text-sm font-medium">{candidate.title}</span>
+                                    <span className="block text-xs text-muted-foreground mt-0.5">
+                                        {t(`status.${candidate.status}`)}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
                     </div>
+                )}
+
+                <div className="space-y-2">
+                    <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
+                        {resolveText('projects.nextActionPromptAddNew', 'Add a new next action')}
+                    </label>
+                    <input
+                        id={inputId}
+                        autoFocus
+                        type="text"
+                        value={newTitle}
+                        onChange={(event) => onNewTitleChange(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                                event.preventDefault();
+                                onCancel();
+                            }
+                            if (event.key === 'Enter' && canAddTask) {
+                                event.preventDefault();
+                                onAddTask();
+                            }
+                        }}
+                        placeholder={resolveText('projects.nextActionPromptPlaceholder', 'New next action...')}
+                        className="w-full rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary"
+                    />
                 </div>
-            </div>
-        </div>
-        </ModalPortal>
+
+                <div className="flex justify-between items-center gap-2">
+                    {scope === 'section' ? <span /> : (
+                        <Button variant="ghost" onClick={onCompleteProject}>
+                            {resolveText('projects.nextActionPromptComplete', 'Complete project')}
+                        </Button>
+                    )}
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={onCancel}>
+                            {resolveText('common.skip', 'Skip')}
+                        </Button>
+                        <Button onClick={onAddTask} disabled={!canAddTask}>
+                            {resolveText('projects.nextActionPromptAddButton', 'Add next action')}
+                        </Button>
+                    </div>
+                </div>
+            </DialogBody>
+        </Dialog>
     );
 }

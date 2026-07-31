@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
-import { ModalPortal } from './ModalPortal';
 import { Button } from './ui/Button';
+import { Dialog, DialogBody, DialogFooter } from './ui/Dialog';
 
 interface ConfirmModalProps {
     isOpen: boolean;
@@ -22,101 +22,49 @@ export function ConfirmModal({
     onCancel,
 }: ConfirmModalProps) {
     const confirmRef = useRef<HTMLButtonElement>(null);
-    const modalRef = useRef<HTMLDivElement>(null);
-    const lastActiveElement = useRef<HTMLElement | null>(null);
     const titleId = useId();
     const descriptionId = useId();
 
-    const getFocusable = () => {
-        const root = modalRef.current;
-        if (!root) return [];
-        return Array.from(
-            root.querySelectorAll<HTMLElement>(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-            ),
-        ).filter((el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
-    };
-
     useEffect(() => {
-        if (isOpen) {
-            lastActiveElement.current = document.activeElement as HTMLElement | null;
-            setTimeout(() => confirmRef.current?.focus(), 50);
-        } else if (lastActiveElement.current) {
-            lastActiveElement.current.focus();
-            lastActiveElement.current = null;
-        }
+        if (!isOpen) return;
+        const timer = window.setTimeout(() => confirmRef.current?.focus(), 50);
+        return () => window.clearTimeout(timer);
     }, [isOpen]);
 
     if (!isOpen) return null;
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-start justify-center pt-[20vh] z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={description ? descriptionId : undefined}
-            onClick={onCancel}
+        <Dialog
+            onClose={onCancel}
+            labelledBy={titleId}
+            describedBy={description ? descriptionId : undefined}
+            placement="top"
+            overlayClassName="pt-[20vh]"
+            // Capped at the space left below the 20vh top offset: callers pass
+            // user content as the title (Trash confirms with the task title),
+            // so an unbounded card pushed the buttons off-screen (#947).
+            panelClassName="max-h-[60vh]"
         >
-            <div
-                ref={modalRef}
-                // Capped at the space left below the 20vh top offset: callers pass
-                // user content as the title (Trash confirms with the task title),
-                // so an unbounded card pushed the buttons off-screen (#947).
-                className="w-full max-w-md max-h-[60vh] bg-popover text-popover-foreground rounded-xl border shadow-2xl overflow-hidden flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                        e.preventDefault();
-                        onCancel();
-                        return;
-                    }
-                    if (e.key === 'Tab') {
-                        const focusable = getFocusable();
-                        if (focusable.length === 0) return;
-                        const first = focusable[0];
-                        const last = focusable[focusable.length - 1];
-                        const active = document.activeElement as HTMLElement | null;
-
-                        if (!active || !focusable.includes(active)) {
-                            e.preventDefault();
-                            first.focus();
-                            return;
-                        }
-
-                        if (e.shiftKey && active === first) {
-                            e.preventDefault();
-                            last.focus();
-                        } else if (!e.shiftKey && active === last) {
-                            e.preventDefault();
-                            first.focus();
-                        }
-                    }
-                }}
-            >
-                {/* Header scrolls as one block so the buttons below stay pinned
-                    and reachable no matter how long the title or description is. */}
-                <div className="min-h-0 overflow-y-auto px-4 py-3 border-b">
-                    <h3 id={titleId} className="font-semibold break-words">{title}</h3>
-                    {description && (
-                        <p
-                            id={descriptionId}
-                            className="mt-1 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground"
-                        >
-                            {description}
-                        </p>
-                    )}
-                </div>
-                <div className="shrink-0 p-4 flex justify-end gap-2">
-                    <Button variant="secondary" onClick={onCancel}>
-                        {cancelLabel}
-                    </Button>
-                    <Button ref={confirmRef} onClick={onConfirm}>
-                        {confirmLabel}
-                    </Button>
-                </div>
-            </div>
-        </div>
-        </ModalPortal>
+            {/* Header scrolls as one block so the buttons below stay pinned
+                and reachable no matter how long the title or description is. */}
+            <DialogBody className="px-4 py-3 border-b">
+                <h3 id={titleId} className="font-semibold break-words">{title}</h3>
+                {description && (
+                    <p
+                        id={descriptionId}
+                        className="mt-1 whitespace-pre-line break-words text-xs leading-relaxed text-muted-foreground"
+                    >
+                        {description}
+                    </p>
+                )}
+            </DialogBody>
+            <DialogFooter className="p-4 flex justify-end gap-2">
+                <Button variant="secondary" onClick={onCancel}>
+                    {cancelLabel}
+                </Button>
+                <Button ref={confirmRef} onClick={onConfirm}>
+                    {confirmLabel}
+                </Button>
+            </DialogFooter>
+        </Dialog>
     );
 }

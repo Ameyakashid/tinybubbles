@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent } from 'react';
 import {
     executeCaptureTransaction,
@@ -46,7 +46,7 @@ import { appendAudioChunkWithLimit, getMaxAudioSamples, MAX_AUDIO_RECORDING_SECO
 import { getPreferredDesktopAudioCaptureBackend } from '../lib/audio-capture-backend';
 import { processAudioCapture, resolveSpeechCapture, type SpeechToTextResult } from '../lib/speech-to-text';
 import { dispatchNavigateEvent } from '../lib/navigation-events';
-import { ModalPortal } from './ModalPortal';
+import { Dialog, DialogBody } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
 import {
     QUICK_ADD_NATIVE_TARGET_MAIN,
@@ -144,6 +144,7 @@ async function readTextFile(file: File): Promise<string> {
 }
 
 export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) {
+    const titleId = useId();
     const getDerivedState = useTaskStore((state) => state.getDerivedState);
     const { addTask, addTasks, addProject, projects, areas, settings, setHighlightTask } = useTaskStore(
         (state) => ({
@@ -1126,49 +1127,25 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
     if (!isOpen) return null;
 
     return (
-        <ModalPortal>
-        {/* Backdrop stays out of the tab order: Escape closes via the window
-            keydown listener, so no focusable wrapper is needed (#869). */}
-        <div
-            className={cn(
-                'fixed inset-0 flex items-start justify-center z-50',
-                standaloneWindow ? 'bg-popover' : 'bg-black/50 pt-[20vh]',
+        <>
+        <Dialog
+            onClose={handleClose}
+            labelledBy={titleId}
+            // Escape stays with the window keydown listener, which also has to
+            // close the standalone capture window (#869).
+            closeOnEscape={false}
+            placement="top"
+            overlayClassName={cn(standaloneWindow ? 'bg-popover' : 'pt-[20vh]')}
+            // Uncapped on purpose: the title field's suggestion menus are
+            // absolutely positioned and have to escape the panel.
+            panelClassName={cn(
+                'overflow-visible max-h-[none]',
+                standaloneWindow ? 'max-w-none rounded-none border-0 shadow-none' : 'max-w-lg',
             )}
-            role="presentation"
-            onClick={handleClose}
+            panelRef={modalRef}
         >
-            <div
-                ref={modalRef}
-                className={cn(
-                    'w-full bg-popover text-popover-foreground overflow-visible flex flex-col',
-                    standaloneWindow ? 'max-w-none' : 'max-w-lg rounded-xl border shadow-2xl'
-                )}
-                role="dialog"
-                aria-modal="true"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(event) => {
-                    if (event.key !== 'Tab') return;
-                    const container = modalRef.current;
-                    if (!container) return;
-                    const focusable = Array.from(
-                        container.querySelectorAll<HTMLElement>(
-                            'button, [href], input, select, textarea, [tabindex]'
-                        )
-                    ).filter((el) => el.tabIndex >= 0 && !el.hasAttribute('disabled'));
-                    if (focusable.length === 0) return;
-                    const first = focusable[0];
-                    const last = focusable[focusable.length - 1];
-                    if (!event.shiftKey && document.activeElement === last) {
-                        event.preventDefault();
-                        first.focus();
-                    } else if (event.shiftKey && document.activeElement === first) {
-                        event.preventDefault();
-                        last.focus();
-                    }
-                }}
-            >
                 <div className="px-4 py-3 border-b flex items-center justify-between">
-                    <h3 className="font-semibold">{t('nav.addTask')}</h3>
+                    <h3 id={titleId} className="font-semibold">{t('nav.addTask')}</h3>
                     <button
                         onClick={handleClose}
                         tabIndex={-1}
@@ -1421,23 +1398,19 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                         </div>
                     </div>
                 )}
-            </div>
-        </div>
+        </Dialog>
         {bulkQuickAddLines ? (
-            <div
-                className="fixed inset-0 bg-black/50 flex items-start justify-center pt-[22vh] z-[60]"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="quick-add-bulk-title"
-                onClick={() => {
+            <Dialog
+                onClose={() => {
                     setBulkQuickAddLines(null);
                     setBulkQuickAddError(null);
                 }}
+                labelledBy="quick-add-bulk-title"
+                placement="top"
+                overlayClassName="z-[60] pt-[22vh]"
+                panelClassName="max-h-[70vh]"
             >
-                <div
-                    className="w-full max-w-md rounded-xl border bg-popover p-4 text-popover-foreground shadow-2xl"
-                    onClick={(event) => event.stopPropagation()}
-                >
+                <DialogBody className="p-4">
                     <h4 id="quick-add-bulk-title" className="text-sm font-semibold">
                         {bulkConfirmTitle}
                     </h4>
@@ -1481,9 +1454,9 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                             {tFallback(t, 'quickAdd.bulkConfirmCreate', 'Create tasks')}
                         </button>
                     </div>
-                </div>
-            </div>
+                </DialogBody>
+            </Dialog>
         ) : null}
-        </ModalPortal>
+        </>
     );
 }

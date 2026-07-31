@@ -3,8 +3,8 @@ import { formatOpenAIExtraBodyParams, parseOpenAIExtraBodyParamsInput } from '@m
 
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useConfirmDialog } from '../../../hooks/useConfirmDialog';
 import { cn } from '../../../lib/utils';
-import { ConfirmModal } from '../../ConfirmModal';
 import { Switch } from '../../ui/Switch';
 import { SettingField, SettingRow } from './SettingRow';
 
@@ -198,12 +198,12 @@ export function SettingsAiPage({
     onDownloadWhisperModel,
     onDeleteWhisperModel,
 }: SettingsAiPageProps) {
+    const { requestConfirmation, confirmModal } = useConfirmDialog();
     const [aiOpen, setAiOpen] = useState(false);
     const [speechOpen, setSpeechOpen] = useState(false);
     const [openAIExtraOpen, setOpenAIExtraOpen] = useState(false);
     const [openAIExtraDraft, setOpenAIExtraDraft] = useState(() => formatOpenAIExtraBodyParams(aiOpenAIExtraBodyParams));
     const [openAIExtraError, setOpenAIExtraError] = useState<string | null>(null);
-    const [showAiConsentModal, setShowAiConsentModal] = useState(false);
     const selectedProviderLabel = aiProvider === 'gemini'
         ? t.aiProviderGemini
         : aiProvider === 'anthropic'
@@ -264,7 +264,16 @@ export function SettingsAiPage({
             onUpdateAISettings({ enabled: false });
             return;
         }
-        setShowAiConsentModal(true);
+        void requestConfirmation({
+            title: t.aiConsentTitle,
+            description: aiConsentDescription,
+            confirmLabel: t.aiConsentAgree,
+            cancelLabel: t.aiConsentCancel,
+        }).then((confirmed) => {
+            if (confirmed) {
+                onUpdateAISettings({ enabled: true });
+            }
+        });
     };
 
     return (
@@ -750,18 +759,7 @@ export function SettingsAiPage({
                 )}
             </div>
             </div>
-            <ConfirmModal
-                isOpen={showAiConsentModal}
-                title={t.aiConsentTitle}
-                description={aiConsentDescription}
-                confirmLabel={t.aiConsentAgree}
-                cancelLabel={t.aiConsentCancel}
-                onConfirm={() => {
-                    onUpdateAISettings({ enabled: true });
-                    setShowAiConsentModal(false);
-                }}
-                onCancel={() => setShowAiConsentModal(false)}
-            />
+            {confirmModal}
         </>
     );
 }

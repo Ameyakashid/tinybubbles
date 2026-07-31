@@ -16,6 +16,7 @@ import {
     tFallback,
     collectFocusEligibilityTasks,
     getFocusStarBlockedText,
+    isTaskActionable,
     resolveFocusStarAction,
     parseQuickAddDateCommands,
     parseProjectNextActionInput,
@@ -40,6 +41,7 @@ import { releaseTaskEditSession, tryClaimTaskEditSession } from './Task/task-edi
 import { TaskItemOverlays } from './Task/TaskItemOverlays';
 import { ProjectNextActionPrompt } from './Task/ProjectNextActionPrompt';
 import { PromptModal } from './PromptModal';
+import { getDialogFocusableElements } from './ui/Dialog';
 import { deleteTaskWithUndo, duplicateTaskAndReveal, TaskQuickActionMenuHost } from './Task/useTaskQuickActionMenuProps';
 import {
     getRecurrenceRuleValue,
@@ -629,7 +631,7 @@ export const TaskItem = memo(function TaskItem({
         toggle: toggleDescriptionPreview,
         editSource: editDescriptionFromPreview,
     }), [showDescriptionPreview, toggleDescriptionPreview, editDescriptionFromPreview]);
-    const canCompleteFromEditor = task.status !== 'done' && task.status !== 'archived' && task.status !== 'reference';
+    const canCompleteFromEditor = isTaskActionable(task);
     const requestEditorBackdatedComplete = useCallback(() => setCompletedAtPrompt('editor-complete'), []);
     const editorActions = useMemo(() => ({
         openCustomRecurrence,
@@ -1018,7 +1020,7 @@ export const TaskItem = memo(function TaskItem({
         task.status,
     ]);
     const handleEditorMarkDone = useCallback(() => {
-        if (task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
+        if (!isTaskActionable(task)) return;
         const previousStatus = task.status;
         const wasFocusedToday = task.isFocusedToday === true;
         void handleSubmit(undefined, { statusOverride: 'done' })
@@ -1038,15 +1040,6 @@ export const TaskItem = memo(function TaskItem({
     const resolvedEditorPresentation: TaskEditorPresentation = editorPresentation
         ?? (taskEditorPresentationSetting === 'modal' ? 'modal' : 'inline');
     const isModalEditor = resolvedEditorPresentation === 'modal';
-    const getModalFocusableElements = useCallback((): HTMLElement[] => {
-        const root = modalEditorRef.current;
-        if (!root) return [];
-        return Array.from(
-            root.querySelectorAll<HTMLElement>(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-            ),
-        ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
-    }, []);
     useEffect(() => {
         if (!(isEditing && isModalEditor)) {
             if (lastFocusedBeforeModalRef.current) {
@@ -1062,7 +1055,7 @@ export const TaskItem = memo(function TaskItem({
             if (active && modalEditorRef.current?.contains(active)) {
                 return;
             }
-            const focusable = getModalFocusableElements();
+            const focusable = getDialogFocusableElements(modalEditorRef.current);
             if (focusable.length > 0) {
                 focusable[0].focus();
                 return;
@@ -1070,7 +1063,7 @@ export const TaskItem = memo(function TaskItem({
             modalEditorRef.current?.focus();
         }, 0);
         return () => clearTimeout(timer);
-    }, [getModalFocusableElements, isEditing, isModalEditor]);
+    }, [isEditing, isModalEditor]);
     const handleEditorCancel = useCallback(() => {
         if (hasPendingEdits()) {
             setShowDiscardConfirm(true);
@@ -1408,7 +1401,6 @@ export const TaskItem = memo(function TaskItem({
 
                     <TaskItemEditorSurface
                         editorAriaLabel={t('taskEdit.editTask') || 'Edit task'}
-                        getModalFocusableElements={getModalFocusableElements}
                         isEditing={isEditing}
                         isModalEditor={isModalEditor}
                         modalEditorRef={modalEditorRef}

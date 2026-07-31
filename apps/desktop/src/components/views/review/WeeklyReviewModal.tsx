@@ -30,7 +30,7 @@ import {
 import { Archive, ArrowRight, Calendar, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, History, Layers, MapPin, RefreshCw, X, type LucideIcon } from 'lucide-react';
 
 import { TaskItem } from '../../TaskItem';
-import { ModalPortal } from '../../ModalPortal';
+import { Dialog, DialogHeader } from '../../ui/Dialog';
 import { MindSweepLauncher } from '../../MindSweepModal';
 import { PromptModal } from '../../PromptModal';
 import { InboxProcessor } from '../InboxProcessor';
@@ -982,76 +982,68 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
     };
 
     return (
-        <ModalPortal>
-        <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('review.title')}
-            onClick={onClose}
+        <Dialog
+            onClose={onClose}
+            label={t('review.title')}
+            panelClassName="max-w-4xl mx-4 max-h-[85vh] bg-card rounded-lg border-border shadow-xl"
         >
-            <div
-                className="bg-card border border-border rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[85vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                    <h3 className="text-[15px] font-semibold flex items-center gap-2.5">
-                        <RefreshCw className="w-4 h-4 text-primary" />
-                        {t('review.title')}
-                    </h3>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={t('common.close')}
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+            <DialogHeader className="px-5 py-4 border-b border-border flex items-center justify-between">
+                <h3 className="text-[15px] font-semibold flex items-center gap-2.5">
+                    <RefreshCw className="w-4 h-4 text-primary" />
+                    {t('review.title')}
+                </h3>
+                <button
+                    onClick={onClose}
+                    className="p-1.5 rounded-md hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={t('common.close')}
+                >
+                    <X className="w-4 h-4" />
+                </button>
+            </DialogHeader>
+
+            <div className="p-5 flex flex-col flex-1 min-h-0">
+                <div className="mb-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <h1 className="text-lg font-semibold flex items-center gap-2">
+                            {(() => {
+                                const Icon = steps[safeStepIndex].icon;
+                                return Icon && <Icon className="w-[18px] h-[18px] text-primary" />;
+                            })()}
+                            {steps[safeStepIndex].title}
+                        </h1>
+                        <span className="text-xs text-muted-foreground">
+                            {t('review.step')} {safeStepIndex + 1} {t('review.of')} {steps.length}
+                        </span>
+                    </div>
+                    <div className="h-1 bg-muted rounded-full overflow-hidden">
+                        <div
+                            className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-300 ease-out motion-reduce:transition-none"
+                            style={{ transform: `scaleX(${progress / 100})` }}
+                        />
+                    </div>
+                    {renderStepRail()}
                 </div>
 
-                <div className="p-5 flex flex-col flex-1 min-h-0">
-                    <div className="mb-5">
-                        <div className="flex items-center justify-between mb-3">
-                            <h1 className="text-lg font-semibold flex items-center gap-2">
-                                {(() => {
-                                    const Icon = steps[safeStepIndex].icon;
-                                    return Icon && <Icon className="w-[18px] h-[18px] text-primary" />;
-                                })()}
-                                {steps[safeStepIndex].title}
-                            </h1>
-                            <span className="text-xs text-muted-foreground">
-                                {t('review.step')} {safeStepIndex + 1} {t('review.of')} {steps.length}
-                            </span>
-                        </div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                                className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-300 ease-out motion-reduce:transition-none"
-                                style={{ transform: `scaleX(${progress / 100})` }}
-                            />
-                        </div>
-                        {renderStepRail()}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto pr-2">
-                        {renderStepContent()}
-                    </div>
-
-                    {displayedStep !== 'completed' && (
-                        <div className="flex justify-between items-center pt-3.5 border-t border-border mt-5">
-                            <button
-                                onClick={prevStep}
-                                className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                <ChevronLeft className="w-3.5 h-3.5" /> {t('review.back')}
-                            </button>
-                            <button
-                                onClick={nextStep}
-                                className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
-                            >
-                                {t('review.nextStepBtn')} <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                    )}
+                <div className="flex-1 overflow-y-auto pr-2">
+                    {renderStepContent()}
                 </div>
+
+                {displayedStep !== 'completed' && (
+                    <div className="flex justify-between items-center pt-3.5 border-t border-border mt-5">
+                        <button
+                            onClick={prevStep}
+                            className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <ChevronLeft className="w-3.5 h-3.5" /> {t('review.back')}
+                        </button>
+                        <button
+                            onClick={nextStep}
+                            className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
+                        >
+                            {t('review.nextStepBtn')} <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
             </div>
             <PromptModal
                 isOpen={Boolean(projectTaskPrompt)}
@@ -1066,7 +1058,6 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
                 onCancel={() => setProjectTaskPrompt(null)}
                 onConfirm={confirmProjectTaskPrompt}
             />
-        </div>
-        </ModalPortal>
+        </Dialog>
     );
 }
