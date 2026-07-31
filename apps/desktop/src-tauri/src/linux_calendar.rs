@@ -250,9 +250,6 @@ mod imp {
 
     struct EdsApi {
         _ecal: Library,
-        _eds: Library,
-        _glib: Library,
-        _gobject: Library,
         registry_new_sync: RegistryNewSync,
         registry_list_enabled: RegistryListEnabled,
         registry_ref_source: RegistryRefSource,
@@ -285,10 +282,18 @@ mod imp {
 
     impl EdsApi {
         fn load() -> Result<Self, String> {
+            // Load ONLY libecal and resolve every symbol (including libedataserver,
+            // glib, and gobject ones) through its handle: dlsym on a handle searches
+            // the library's whole dependency chain, so all symbols come from the one
+            // EDS stack libecal was linked against. Opening libedataserver by its own
+            // pinned SONAME here loaded a SECOND copy when the two names resolved to
+            // different builds (Flatpak: bundled /app/lib vs GNOME runtime), and two
+            // libedataserver instances abort GLib type registration at runtime
+            // ("cannot register existing type 'ESourceRegistry'", #575).
             let ecal = open_library(&["libecal-2.0.so.3"])?;
-            let eds = open_library(&["libedataserver-1.2.so.27"])?;
-            let glib = open_library(&["libglib-2.0.so.0"])?;
-            let gobject = open_library(&["libgobject-2.0.so.0"])?;
+            let eds = &ecal;
+            let glib = &ecal;
+            let gobject = &ecal;
 
             unsafe {
                 Ok(Self {
@@ -354,9 +359,6 @@ mod imp {
                     list_free: load_symbol(&glib, b"g_list_free\0")?,
                     slist_free: load_symbol(&glib, b"g_slist_free\0")?,
                     _ecal: ecal,
-                    _eds: eds,
-                    _glib: glib,
-                    _gobject: gobject,
                 })
             }
         }
