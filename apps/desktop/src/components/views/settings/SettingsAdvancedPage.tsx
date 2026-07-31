@@ -117,6 +117,7 @@ export function SettingsAdvancedPage({
                                 onClick={() => setNetworkProxyOpen((open) => !open)}
                                 aria-expanded={networkProxyOpen}
                                 data-settings-key="networkProxyUrl"
+                                data-settings-section="network"
                                 className="flex w-full items-center justify-between gap-4 p-4 text-left"
                             >
                                 <div className="min-w-0">

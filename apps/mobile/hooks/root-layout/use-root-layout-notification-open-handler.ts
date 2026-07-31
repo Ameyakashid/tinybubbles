@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { useTaskStore } from '@mindwtr/core';
+import { isTaskActionable, useTaskStore } from '@mindwtr/core';
 
 import { setNotificationOpenHandler } from '@/lib/notification-service';
 import { consumePendingNotificationOpenPayload } from '@/modules/notification-open-intents';
@@ -71,7 +71,7 @@ export function useRootLayoutNotificationOpenHandler({
 
             const state = useTaskStore.getState();
             const task = state._tasksById?.get(taskId) ?? state.tasks?.find((item) => item.id === taskId);
-            if (!task || task.deletedAt || task.status === 'done' || task.status === 'archived' || task.status === 'reference') return;
+            if (!task || task.deletedAt || !isTaskActionable(task)) return;
             state.updateTask(taskId, { status: 'done', isFocusedToday: false }).catch(() => undefined);
             return;
         }
