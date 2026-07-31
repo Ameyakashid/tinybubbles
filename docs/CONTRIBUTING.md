@@ -198,9 +198,13 @@ If you use LLM/coding agents for contributions, follow these rules:
    Define the bug/feature, expected behavior, and intended implementation before prompting.
 4. Avoid over-engineering.
    Prefer small, maintainable changes that match Mindwtr's "simple by default" philosophy.
-5. Always review and validate generated code.
-   Run relevant tests and verify behavior on real devices/platforms to catch regressions.
-6. Keep security in scope.
+5. YOU review the output before opening a non-Draft PR.
+   Do not request review until you have read and understood every generated change, run relevant tests, and verified behavior on real devices/platforms. You are responsible for the code you submit, not the tool.
+6. Remove verbosity and blathering.
+   Strip filler from code comments, documentation, PR descriptions, and commit messages. All of these — including names — should be concise, clear, and contain useful information, nothing more.
+7. Remove and deduplicate redundant code, tests, and explanations.
+   Explicitness and clarity are good; verbosity, over-explanation, and redundancy are bad.
+8. Keep security in scope.
    Do not introduce insecure defaults, unsafe parsing, token leaks, or new attack surfaces.
 
 ## Pull request guidelines
