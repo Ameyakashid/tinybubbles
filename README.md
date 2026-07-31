@@ -317,8 +317,14 @@ Thanks to these monthly sponsors for supporting Mindwtr.
   <a href="https://github.com/danhs" title="@danhs">
     <img src="docs/assets/sponsors/danhs.png" width="60" height="60" alt="@danhs" />
   </a>
+  <a href="https://github.com/NikoScotch" title="@NikoScotch">
+    <img src="docs/assets/sponsors/nikoscotch.png" width="60" height="60" alt="@NikoScotch" />
+  </a>
+  <a href="https://github.com/nicopico-dev" title="@nicopico-dev">
+    <img src="docs/assets/sponsors/nicopico-dev.png" width="60" height="60" alt="@nicopico-dev" />
+  </a>
 </p>
 
 <p align="center">
-  <sub><a href="https://github.com/jarrydstan">@jarrydstan</a> · <a href="https://github.com/ronmolenda">@ronmolenda</a> · <a href="https://github.com/karl1990">@karl1990</a> · <a href="https://github.com/srijan">@srijan</a> · <a href="https://github.com/davibicudo">@davibicudo</a> · <a href="https://github.com/PLPeeters">@PLPeeters</a> · <a href="https://github.com/danhs">@danhs</a></sub>
+  <sub><a href="https://github.com/jarrydstan">@jarrydstan</a> · <a href="https://github.com/ronmolenda">@ronmolenda</a> · <a href="https://github.com/karl1990">@karl1990</a> · <a href="https://github.com/srijan">@srijan</a> · <a href="https://github.com/davibicudo">@davibicudo</a> · <a href="https://github.com/PLPeeters">@PLPeeters</a> · <a href="https://github.com/danhs">@danhs</a> · <a href="https://github.com/NikoScotch">@NikoScotch</a> · <a href="https://github.com/nicopico-dev">@nicopico-dev</a></sub>
 </p>
