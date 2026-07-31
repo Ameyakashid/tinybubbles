@@ -196,12 +196,17 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
         persistCalendars(next);
     }, [externalCalendars, persistCalendars]);
 
-    const handleCalendarColorChange = useCallback((id: string, color: string) => {
-        const normalized = normalizeExternalCalendarColor(color);
-        if (!normalized) return;
-        const next = externalCalendars.map((calendar) => (
-            calendar.id === id ? { ...calendar, color: normalized } : calendar
-        ));
+    const handleCalendarColorChange = useCallback((id: string, color: string | undefined) => {
+        // `undefined` is the Auto swatch: drop the pick so the feed hint or
+        // the assigned default applies again (#974).
+        const normalized = color === undefined ? undefined : normalizeExternalCalendarColor(color);
+        if (color !== undefined && !normalized) return;
+        const next = externalCalendars.map((calendar) => {
+            if (calendar.id !== id) return calendar;
+            if (normalized) return { ...calendar, color: normalized };
+            const { color: _cleared, ...rest } = calendar;
+            return rest;
+        });
         persistCalendars(next);
     }, [externalCalendars, persistCalendars]);
 

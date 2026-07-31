@@ -7,8 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     EXTERNAL_CALENDAR_COLORS,
     generateUUID,
+    hasExplicitExternalCalendarColor,
     normalizeExternalCalendarColor,
-    resolveExternalCalendarColor,
     tFallback,
     type ExternalCalendarSubscription,
     useTaskStore,
@@ -467,10 +467,17 @@ export function CalendarSettingsScreen() {
         await updateSettings({ externalCalendars: next });
     };
 
-    const handleCalendarColorChange = async (id: string, color: string) => {
-        const normalized = normalizeExternalCalendarColor(color);
-        if (!normalized) return;
-        const next = externalCalendars.map((c) => (c.id === id ? { ...c, color: normalized } : c));
+    const handleCalendarColorChange = async (id: string, color: string | undefined) => {
+        // `undefined` is the Auto swatch: drop the pick so the feed hint or
+        // the assigned default applies again (#974).
+        const normalized = color === undefined ? undefined : normalizeExternalCalendarColor(color);
+        if (color !== undefined && !normalized) return;
+        const next = externalCalendars.map((c) => {
+            if (c.id !== id) return c;
+            if (normalized) return { ...c, color: normalized };
+            const { color: _cleared, ...rest } = c;
+            return rest;
+        });
         setExternalCalendars(next);
         await saveExternalCalendars(next);
         await updateSettings({ externalCalendars: next });
@@ -919,9 +926,26 @@ export function CalendarSettingsScreen() {
                                             {maskCalendarUrl(calendar.url)}
                                         </Text>
                                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                                            <TouchableOpacity
+                                                accessibilityRole="button"
+                                                accessibilityState={{ selected: !hasExplicitExternalCalendarColor(calendar.id, calendar.color) }}
+                                                accessibilityLabel={`${calendar.name} ${t('taskEdit.textDirection.auto')}`}
+                                                onPress={() => void handleCalendarColorChange(calendar.id, undefined)}
+                                                style={{
+                                                    width: 22,
+                                                    height: 22,
+                                                    borderRadius: 11,
+                                                    backgroundColor: tc.cardBg,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderWidth: hasExplicitExternalCalendarColor(calendar.id, calendar.color) ? 1 : 3,
+                                                    borderColor: hasExplicitExternalCalendarColor(calendar.id, calendar.color) ? tc.border : tc.tint,
+                                                }}
+                                            >
+                                                <Ionicons name="ban-outline" size={12} color={tc.secondaryText} />
+                                            </TouchableOpacity>
                                             {EXTERNAL_CALENDAR_COLORS.map((color) => {
-                                                const selectedColor = resolveExternalCalendarColor(calendar.id, calendar.color, calendar.feedColor);
-                                                const selected = selectedColor === color;
+                                                const selected = hasExplicitExternalCalendarColor(calendar.id, calendar.color) && calendar.color === color;
                                                 return (
                                                     <TouchableOpacity
                                                         key={color}

@@ -13,6 +13,7 @@ type Labels = {
     calendarAdd: string;
     calendarChooseLocalFile: string;
     calendarRemove: string;
+    calendarColorAuto: string;
     externalCalendars: string;
     calendarSystemTitle: string;
     calendarSystemDesc: string;
@@ -103,7 +104,7 @@ type SettingsIntegrationsPageProps = {
     onAddCalendar: () => void;
     onChooseLocalCalendarFile: () => Promise<void> | void;
     onToggleCalendar: (id: string, enabled: boolean) => void;
-    onCalendarColorChange: (id: string, color: string) => void;
+    onCalendarColorChange: (id: string, color: string | undefined) => void;
     onRemoveCalendar: (id: string) => void;
     onRequestSystemCalendarPermission: () => void;
     onToggleCalendarPush: (enabled: boolean) => Promise<void> | void;

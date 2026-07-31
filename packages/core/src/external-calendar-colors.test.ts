@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     EXTERNAL_CALENDAR_COLORS,
     getExternalCalendarColorForId,
+    hasExplicitExternalCalendarColor,
     normalizeDerivedIcsColor,
     normalizeExternalCalendarColor,
     resolveExternalCalendarColor,
@@ -63,5 +64,21 @@ describe('external calendar colors', () => {
         // Picking any other swatch still wins outright, feed hint or not.
         const otherSwatch = EXTERNAL_CALENDAR_COLORS.find((color) => color !== hash)!;
         expect(resolveExternalCalendarColor(sourceId, otherSwatch, '#123456')).toBe(otherSwatch);
+    });
+
+    it('reports whether a stored color counts as a deliberate pick (#974)', () => {
+        const sourceId = 'some-calendar';
+        const hash = getExternalCalendarColorForId(sourceId);
+        const otherSwatch = EXTERNAL_CALENDAR_COLORS.find((color) => color !== hash)!;
+
+        // Unset, and stored-equal-to-hash-default, are both "auto".
+        expect(hasExplicitExternalCalendarColor(sourceId)).toBe(false);
+        expect(hasExplicitExternalCalendarColor(sourceId, hash)).toBe(false);
+        expect(hasExplicitExternalCalendarColor(sourceId, otherSwatch)).toBe(true);
+
+        // Must agree with the resolver: explicit wins over a feed hint,
+        // auto yields to it.
+        expect(resolveExternalCalendarColor(sourceId, otherSwatch, '#123456')).toBe(otherSwatch);
+        expect(resolveExternalCalendarColor(sourceId, hash, '#123456')).toBe('#123456');
     });
 });

@@ -1,10 +1,10 @@
 import type { SystemCalendarPermissionStatus, SystemCalendarPushTarget } from '../../../lib/system-calendar';
 import {
     EXTERNAL_CALENDAR_COLORS,
-    resolveExternalCalendarColor,
+    hasExplicitExternalCalendarColor,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
-import { ExternalLink } from 'lucide-react';
+import { Ban, ExternalLink } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
 import { Switch } from '../../ui/Switch';
@@ -19,6 +19,7 @@ type Labels = {
     calendarAdd: string;
     calendarChooseLocalFile: string;
     calendarRemove: string;
+    calendarColorAuto: string;
     externalCalendars: string;
     calendarSystemTitle: string;
     calendarSystemDesc: string;
@@ -56,7 +57,7 @@ type SettingsCalendarPageProps = {
     onAddCalendar: () => void;
     onChooseLocalCalendarFile?: () => Promise<void> | void;
     onToggleCalendar: (id: string, enabled: boolean) => void;
-    onCalendarColorChange: (id: string, color: string) => void;
+    onCalendarColorChange: (id: string, color: string | undefined) => void;
     onRemoveCalendar: (id: string) => void;
     onRequestSystemCalendarPermission: () => void;
     onToggleCalendarPush: (enabled: boolean) => Promise<void> | void;
@@ -248,26 +249,47 @@ export function SettingsCalendarPage({
                                     <div className="text-sm font-medium truncate">{calendar.name}</div>
                                             <div className="text-xs text-muted-foreground truncate mt-1">{maskCalendarUrl(calendar.url)}</div>
                                             <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`${calendar.name} color`}>
-                                                {EXTERNAL_CALENDAR_COLORS.map((color) => {
-                                                    const selectedColor = resolveExternalCalendarColor(calendar.id, calendar.color, calendar.feedColor);
-                                                    const selected = selectedColor === color;
+                                                {(() => {
+                                                    const explicit = hasExplicitExternalCalendarColor(calendar.id, calendar.color);
                                                     return (
-                                                        <button
-                                                            key={color}
-                                                            type="button"
-                                                            aria-label={`${calendar.name} ${color}`}
-                                                            aria-pressed={selected}
-                                                            onClick={() => onCalendarColorChange(calendar.id, color)}
-                                                            className={cn(
-                                                                "h-5 w-5 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary/40",
-                                                                selected
-                                                                    ? "border-background ring-2 ring-primary ring-offset-2 ring-offset-background"
-                                                                    : "border-border hover:border-foreground/40"
-                                                            )}
-                                                            style={{ backgroundColor: color }}
-                                                        />
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                aria-label={`${calendar.name} ${t.calendarColorAuto}`}
+                                                                aria-pressed={!explicit}
+                                                                title={t.calendarColorAuto}
+                                                                onClick={() => onCalendarColorChange(calendar.id, undefined)}
+                                                                className={cn(
+                                                                    "flex h-5 w-5 items-center justify-center rounded-full border bg-card transition focus:outline-none focus:ring-2 focus:ring-primary/40",
+                                                                    !explicit
+                                                                        ? "border-background ring-2 ring-primary ring-offset-2 ring-offset-background"
+                                                                        : "border-border hover:border-foreground/40"
+                                                                )}
+                                                            >
+                                                                <Ban className="h-3 w-3 text-muted-foreground" />
+                                                            </button>
+                                                            {EXTERNAL_CALENDAR_COLORS.map((color) => {
+                                                                const selected = explicit && calendar.color === color;
+                                                                return (
+                                                                    <button
+                                                                        key={color}
+                                                                        type="button"
+                                                                        aria-label={`${calendar.name} ${color}`}
+                                                                        aria-pressed={selected}
+                                                                        onClick={() => onCalendarColorChange(calendar.id, color)}
+                                                                        className={cn(
+                                                                            "h-5 w-5 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-primary/40",
+                                                                            selected
+                                                                                ? "border-background ring-2 ring-primary ring-offset-2 ring-offset-background"
+                                                                                : "border-border hover:border-foreground/40"
+                                                                        )}
+                                                                        style={{ backgroundColor: color }}
+                                                                    />
+                                                                );
+                                                            })}
+                                                        </>
                                                     );
-                                                })}
+                                                })()}
                                             </div>
                                 </div>
                                 <div className="flex items-center gap-3">

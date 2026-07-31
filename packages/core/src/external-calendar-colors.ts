@@ -68,7 +68,18 @@ export function resolveExternalCalendarColor(
     explicitColor?: string,
     feedColor?: string,
 ): string {
-    const hashDefault = getExternalCalendarColorForId(sourceId || 'calendar');
-    if (explicitColor && explicitColor !== hashDefault) return explicitColor;
-    return normalizeDerivedIcsColor(feedColor) ?? explicitColor ?? hashDefault;
+    if (hasExplicitExternalCalendarColor(sourceId, explicitColor)) return explicitColor as string;
+    return normalizeDerivedIcsColor(feedColor)
+        ?? explicitColor
+        ?? getExternalCalendarColorForId(sourceId || 'calendar');
+}
+
+/**
+ * Whether a stored color counts as a deliberate pick for
+ * `resolveExternalCalendarColor` — a stored color equal to the hash default is
+ * treated as unset (see the resolver note above). The settings screens use
+ * this to mark the Auto swatch as the active one.
+ */
+export function hasExplicitExternalCalendarColor(sourceId: string, explicitColor?: string): boolean {
+    return Boolean(explicitColor) && explicitColor !== getExternalCalendarColorForId(sourceId || 'calendar');
 }
