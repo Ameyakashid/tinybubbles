@@ -71,6 +71,7 @@ function getProjectedRecurrenceDisplayLabel(task: Task, projectedLabel: string):
 export function CalendarView() {
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
     const [timelineScrollbarWidth, setTimelineScrollbarWidth] = useState(0);
+    const [timelineHeight, setTimelineHeight] = useState<number | null>(null);
     const [isPlanningPanelCollapsed, setIsPlanningPanelCollapsed] = useState(readPlanningPanelCollapsedPreference);
     const controller = useDesktopCalendarController();
     const {
@@ -250,6 +251,32 @@ export function CalendarView() {
         // WebKit does not reliably mirror scrollbar-gutter on non-scrolling rows.
         setTimelineScrollbarWidth(Math.max(0, scroller.offsetWidth - scroller.clientWidth));
     }, [timelineScrollKey]);
+
+    useLayoutEffect(() => {
+        const scroller = timelineScrollRef.current;
+        const main = scroller?.closest('main');
+        if (!timelineScrollKey || !scroller || !main) return;
+        // Size the hour grid to the space the window actually leaves it instead
+        // of guessing the surrounding chrome with a constant: every chrome
+        // change (the #955 search row, the #977 end gap) silently broke the
+        // `100vh - 20rem` budget and put a second scrollbar on the view.
+        const measure = () => {
+            const top = scroller.getBoundingClientRect().top
+                - main.getBoundingClientRect().top
+                + main.scrollTop;
+            // 26rem floor keeps ~6.5 hours visible in short windows while still
+            // fitting 768px-tall laptops; 48rem cap matches the old clamp.
+            // Reserve LIST_END_GAP (1rem) plus the card's bottom border and
+            // sub-pixel rounding below the scroller.
+            setTimelineHeight(Math.min(768, Math.max(416, Math.floor(main.clientHeight - top - 18))));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(main);
+        // The card around the scroller re-measures when the all-day row grows.
+        if (scroller.parentElement) observer.observe(scroller.parentElement);
+        return () => observer.disconnect();
+    }, [timelineScrollKey, externalError, externalCalendars.length, visibleSearchMatchCount]);
 
     useEffect(() => {
         if (!timelineScrollKey) return;
@@ -656,7 +683,10 @@ export function CalendarView() {
                                     onClick={() => selectCalendarDate(day)}
                                     className={cn(
                                         "border-r border-border p-2 text-left last:border-r-0 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40",
-                                        isToday(day) && "bg-primary/5"
+                                        // With one visible day the tint marks nothing and just
+                                        // makes the lone column look off; the date bubble
+                                        // already says "today".
+                                        timelineDays.length > 1 && isToday(day) && "bg-primary/5"
                                     )}
                                 >
                                     <div className="text-xs font-medium text-muted-foreground">
@@ -747,7 +777,7 @@ export function CalendarView() {
                         <div
                             ref={timelineScrollRef}
                             className="overflow-y-auto"
-                            style={{ height: 'clamp(28rem, calc(100vh - 20rem), 48rem)' }}
+                            style={{ height: timelineHeight ?? 'clamp(28rem, calc(100vh - 20rem), 48rem)' }}
                         >
                             <div className="grid" style={{ gridTemplateColumns: `4rem repeat(${timelineDays.length}, minmax(0, 1fr))` }}>
                                 <div className="relative border-r border-border bg-muted/20" style={{ height: (DESKTOP_DAY_END_HOUR - DESKTOP_DAY_START_HOUR) * DESKTOP_HOUR_HEIGHT }}>
@@ -769,7 +799,7 @@ export function CalendarView() {
                                         <div
                                             key={dayKey(day)}
                                             data-calendar-timed-drop-date={dayKey(day)}
-                                            className={cn("relative border-r border-border last:border-r-0", isToday(day) && "bg-primary/5")}
+                                            className={cn("relative border-r border-border last:border-r-0", timelineDays.length > 1 && isToday(day) && "bg-primary/5")}
                                             style={{ height: (DESKTOP_DAY_END_HOUR - DESKTOP_DAY_START_HOUR) * DESKTOP_HOUR_HEIGHT }}
                                             onDragOver={handleCalendarTaskDragOver}
                                             onDrop={(event) => handleDropOnTimelineSlot(event, day)}

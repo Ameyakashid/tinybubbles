@@ -52,7 +52,10 @@ export function CalendarPlanningPanel({
 
     if (isCollapsed) {
         return (
-            <aside className="rounded-lg border border-border bg-card p-2 shadow-sm">
+            // Below xl the panel stacks under the calendar, where the collapsed
+            // rail renders as a wide, nearly empty strip (#977) — hide it there;
+            // the expanded panel still stacks normally.
+            <aside className="hidden rounded-lg border border-border bg-card p-2 shadow-sm xl:block">
                 <button
                     type="button"
                     onClick={() => onCollapsedChange(false)}
