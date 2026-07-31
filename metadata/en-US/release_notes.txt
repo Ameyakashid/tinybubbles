@@ -1,4 +1,4 @@
-- Projects remember their task sorting, and Focus ordering and filters sync across devices.
-- Large task libraries save and sync faster, with safer backups and restores.
-- Quick capture recognizes more date formats, and Shortcuts apply the same capture commands as the app.
-- iCloud preserves Focus stars and project settings, while recurrence and completion-date workflows are more reliable.
+- Add to Mindwtr accepts start and due dates; Get Mindwtr Tasks feeds tasks into Shortcuts, and iOS 18+ shows them in Spotlight.
+- Merge Backup combines a backup with current data.
+- Calendar keeps feed colors, splits category feeds, and can show completed work.
+- Full-text search and fallback storage protect iOS changes during database errors.

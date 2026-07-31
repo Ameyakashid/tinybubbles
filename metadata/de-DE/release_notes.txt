@@ -1,4 +1,4 @@
-- Projekte merken sich ihre Aufgabensortierung; Fokus-Reihenfolge und Filter werden synchronisiert.
-- Große Aufgabenbibliotheken speichern und synchronisieren schneller, mit sichereren Backups und Wiederherstellungen.
-- Schnellerfassung erkennt mehr Datumsformate; Kurzbefehle nutzen dieselben Erfassungsbefehle wie die App.
-- iCloud behält Fokus-Sterne und Projekteinstellungen; Wiederholungen und Abschlussdaten sind zuverlässiger.
+- „Zu Mindwtr hinzufügen“ übernimmt Start- und Fälligkeitsdaten; „Mindwtr-Aufgaben abrufen“ liefert Aufgaben an Kurzbefehle, und iOS 18+ zeigt sie in Spotlight.
+- „Backup zusammenführen“ verbindet Sicherung und lokale Daten.
+- Kalender übernehmen Feed-Farben, trennen Kategorien und zeigen erledigte Aufgaben.
+- Volltextsuche und Ersatzspeicher sichern iOS-Änderungen bei Datenbankfehlern.

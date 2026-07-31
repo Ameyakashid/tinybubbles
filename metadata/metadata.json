@@ -30,7 +30,7 @@
           "列表、日历与看板视图，支持提醒与重复任务",
           "免费开源、无广告"
         ],
-        "ReleaseNotes": "• 项目会记住任务排序，专注顺序、筛选、完成日期分组和批量移除标签让规划更顺手。\n• 可把任务拖到日历或侧栏，把文件拖入编辑器；窗口位置和安静启动会保留。\n• 退出前会完成待处理写入，备份恢复可覆盖同步数据，WebDAV 与代理错误更清楚。\n• 邮件捕捉和自托管语音转文字扩展了收件箱捕捉，并保留 WebView2 默认设置。",
+        "ReleaseNotes": "• 归档新增筛选、排序、分组、可折叠标题和只读任务详情。\n• 日历可显示已完成任务、保留订阅颜色、按类别拆分并适应窗口。\n• 设置搜索可找到每个选项；对话框会在小窗口内保留焦点和操作按钮。\n• “合并备份”会合并数据，TLS 1.3 同步和窗口位置修复让桌面使用更稳。",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -82,7 +82,7 @@
           "List, calendar, and kanban views with reminders and repeating tasks",
           "Free and open source, no ads"
         ],
-        "ReleaseNotes": "• Projects remember task sorting; Focus ordering, filters, completion groups, and bulk tag removal improve planning.\n• Drag tasks to the calendar or sidebar and files into the editor; window geometry and quiet startup persist.\n• Pending writes flush on exit, backup restore wins after sync, and WebDAV and proxy errors are clearer.\n• Email capture and self-hosted speech to text expand Inbox capture while WebView2 defaults stay intact.",
+        "ReleaseNotes": "• Archive adds filters, sorting, grouping, collapsible headers, and read-only task details.\n• Calendar can show completed work, preserve feed colors, split category feeds, and fit the window.\n• Settings search finds each option; dialogs keep focus and actions inside short windows.\n• Merge Backup combines data, while TLS 1.3 sync and window geometry fixes improve desktop use.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -131,7 +131,7 @@
           "Listen-, Kalender- und Kanban-Ansichten mit Erinnerungen und Wiederholungen",
           "Kostenlos und Open Source, ohne Werbung"
         ],
-        "ReleaseNotes": "• Projekte merken sich die Sortierung; Fokus-Reihenfolge, Filter, Abschlussgruppen und das Entfernen von Tags verbessern die Planung.\n• Aufgaben lassen sich auf Kalender oder Seitenleiste und Dateien in den Editor ziehen; Fensterposition und ruhiger Autostart bleiben erhalten.\n• Offene Schreibvorgänge enden vor dem Beenden, Backup-Wiederherstellung gewinnt nach der Synchronisierung, WebDAV- und Proxy-Fehler sind klarer.\n• E-Mail-Erfassung und selbst gehostete Spracherkennung erweitern den Posteingang; WebView2-Standards bleiben erhalten.",
+        "ReleaseNotes": "• Das Archiv bietet Filter, Sortierung, Gruppen, einklappbare Überschriften und schreibgeschützte Aufgabendetails.\n• Der Kalender zeigt Erledigtes, übernimmt Feed-Farben, trennt Kategorien und passt ins Fenster.\n• Die Einstellungssuche findet jede Option; Dialoge halten Fokus und Aktionen in kleinen Fenstern.\n• „Backup zusammenführen“, TLS-1.3-Sync und Fensterkorrekturen verbessern die Desktop-Nutzung.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -161,7 +161,7 @@
           "Vues liste, calendrier et kanban, rappels et tâches répétées",
           "Gratuit et open source, sans publicité"
         ],
-        "ReleaseNotes": "• Les projets mémorisent le tri; ordre Focus, filtres, groupes par date de fin et suppression d’étiquettes améliorent la planification.\n• Glissez les tâches vers le calendrier ou la barre latérale et les fichiers dans l’éditeur; position de fenêtre et démarrage discret persistent.\n• Les écritures se terminent avant la fermeture, la restauration prévaut après synchronisation, et les erreurs WebDAV et proxy sont plus claires.\n• Capture d’e-mails et transcription auto-hébergée enrichissent la boîte de réception sans perdre les réglages WebView2.",
+        "ReleaseNotes": "• Archive ajoute filtres, tri, groupes, en-têtes repliables et détails de tâche en lecture seule.\n• Calendrier affiche les tâches finies, garde les couleurs, sépare les catégories et s’adapte à la fenêtre.\n• La recherche trouve chaque réglage; les boîtes de dialogue gardent focus et actions dans les petites fenêtres.\n• Fusion de sauvegarde, sync TLS 1.3 et corrections de fenêtre améliorent l’usage du bureau.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -190,7 +190,7 @@
           "Vistas de lista, calendario y kanban, con recordatorios y tareas repetidas",
           "Gratis y de código abierto, sin anuncios"
         ],
-        "ReleaseNotes": "• Los proyectos recuerdan el orden; Enfoque, filtros, grupos por finalización y quitar etiquetas mejoran la planificación.\n• Arrastra tareas al calendario o la barra lateral y archivos al editor; la posición de ventana y el inicio discreto se conservan.\n• Las escrituras terminan antes de salir, la restauración prevalece tras sincronizar y los errores WebDAV y proxy son más claros.\n• La captura por correo y la voz a texto autoalojada amplían la bandeja sin perder los valores de WebView2.",
+        "ReleaseNotes": "• Archivo añade filtros, orden, grupos, encabezados plegables y detalles de tarea de solo lectura.\n• Calendario muestra tareas completadas, conserva colores, separa categorías y se ajusta a la ventana.\n• La búsqueda encuentra cada ajuste; los diálogos mantienen el foco y las acciones en ventanas pequeñas.\n• Fusionar copia, la sincronización TLS 1.3 y los arreglos de ventana mejoran el escritorio.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
