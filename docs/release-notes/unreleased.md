@@ -16,3 +16,4 @@ _None yet._
 - Mobile: task rows no longer stay stuck mid-air after a drag ends in Task order mode, which left permanent gaps and overlapping cards in long lists. (#784)
 - Feedback form: the email field now says it is how you get a reply, instead of showing an example address.
 - Voice capture: OpenAI's new `gpt-transcribe` model is available and is the default for new OpenAI speech-to-text setups — noticeably better accuracy on accents, numbers, and noisy audio. Existing model choices are unchanged. The mobile Gemini speech model list also offers the current Gemini 3.x models again. (#984)
+- AI assistant: the model suggestions now include OpenAI's GPT-5.6 family (the default for new OpenAI setups) and Claude Opus 5. Saved model choices are unchanged, and older ids still work when typed. (#985)

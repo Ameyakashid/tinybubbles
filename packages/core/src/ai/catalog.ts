@@ -1,12 +1,14 @@
 import type { AIProviderConfig, AIProviderId, AIReasoningEffort } from './types';
 
-// GPT-5.4/5.5 family (current as of 2026-07). mini is the cost-efficient default
-// for well-defined task work, nano the fast/high-frequency tier (copilot metadata),
-// and 5.5 the smart tier for harder planning. Older gpt-4o/gpt-5 ids still work if a
-// user types them into the model field — they are just no longer suggested.
-export const OPENAI_DEFAULT_MODEL = 'gpt-5.4-mini';
-export const OPENAI_FAST_MODEL = 'gpt-5.4-nano';
-export const OPENAI_SMART_MODEL = 'gpt-5.5';
+// GPT-5.6 family (current as of 2026-07-31): terra balances intelligence and
+// cost (assistant default), luna is the cost/latency tier (copilot), and
+// gpt-5.6 (alias of gpt-5.6-sol) the frontier tier for harder planning. The
+// mini/nano naming is gone with this generation. Older gpt-5.x/gpt-4o ids are
+// NOT retired (no deprecation listed as of 2026-07) and still work if a user
+// types them — they are just no longer suggested.
+export const OPENAI_DEFAULT_MODEL = 'gpt-5.6-terra';
+export const OPENAI_FAST_MODEL = 'gpt-5.6-luna';
+export const OPENAI_SMART_MODEL = 'gpt-5.6';
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-5';
 export const OPENAI_COPILOT_DEFAULT_MODEL = OPENAI_FAST_MODEL;
@@ -17,7 +19,6 @@ export const DEFAULT_ANTHROPIC_THINKING_BUDGET = 0;
 
 export const OPENAI_MODEL_OPTIONS = [
     OPENAI_SMART_MODEL,
-    'gpt-5.4',
     OPENAI_DEFAULT_MODEL,
     OPENAI_FAST_MODEL,
 ];
@@ -26,12 +27,15 @@ export const GEMINI_MODEL_OPTIONS = [
     'gemini-3.5-flash',
     GEMINI_COPILOT_DEFAULT_MODEL,
 ];
+// Fable/Mythos stay deliberately excluded (pricing/retention profile is wrong
+// for a consumer task app). claude-opus-5 ships at Opus 4.8 pricing, so it
+// replaces claude-opus-4-7 (two generations back, still typable) in the list.
 export const ANTHROPIC_MODEL_OPTIONS = [
     ANTHROPIC_DEFAULT_MODEL,
     'claude-sonnet-4-6',
     'claude-haiku-4-5',
+    'claude-opus-5',
     'claude-opus-4-8',
-    'claude-opus-4-7',
 ];
 
 

@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
     ANTHROPIC_DEFAULT_MODEL,
+    ANTHROPIC_MODEL_OPTIONS,
     GEMINI_COPILOT_DEFAULT_MODEL,
     GEMINI_DEFAULT_MODEL,
+    OPENAI_COPILOT_DEFAULT_MODEL,
+    OPENAI_DEFAULT_MODEL,
+    OPENAI_MODEL_OPTIONS,
     resolveAnthropicModel,
     resolveGeminiModel,
 } from './catalog';
+
+describe('current model lineup (#985)', () => {
+    it('offers the GPT-5.6 tiers with terra as the default and luna as copilot', () => {
+        expect(OPENAI_DEFAULT_MODEL).toBe('gpt-5.6-terra');
+        expect(OPENAI_COPILOT_DEFAULT_MODEL).toBe('gpt-5.6-luna');
+        expect(OPENAI_MODEL_OPTIONS).toEqual(['gpt-5.6', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+    });
+
+    it('offers claude-opus-5 alongside the existing Anthropic tiers', () => {
+        expect(ANTHROPIC_MODEL_OPTIONS).toContain('claude-opus-5');
+        expect(ANTHROPIC_MODEL_OPTIONS).toContain(ANTHROPIC_DEFAULT_MODEL);
+        expect(ANTHROPIC_MODEL_OPTIONS).toContain('claude-haiku-4-5');
+    });
+});
 
 describe('retired model remaps', () => {
     it('remaps retired Gemini ids to the current tier', () => {
