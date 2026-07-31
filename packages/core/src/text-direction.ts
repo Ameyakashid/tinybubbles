@@ -2,7 +2,7 @@ import type { Language } from './i18n/i18n-types';
 import type { Task, TextDirection } from './types';
 
 const RTL_CHAR_REGEX = /[\u0591-\u07FF\uFB1D-\uFDFD\uFE70-\uFEFC]/;
-const RTL_LANGUAGES = new Set<Language>(['ar']);
+const RTL_LANGUAGES = new Set<Language>(['ar', 'fa']);
 
 export function detectTextDirection(text: string): 'ltr' | 'rtl' {
     return RTL_CHAR_REGEX.test(text) ? 'rtl' : 'ltr';

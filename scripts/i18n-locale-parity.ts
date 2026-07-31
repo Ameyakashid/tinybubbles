@@ -12,8 +12,13 @@ type LocaleTarget = {
     fullParity?: boolean;
 };
 
+// Hand-maintained mirror of packages/core/src/i18n/i18n-locales.ts's LOCALES table
+// (the zh entry there maps to two files, so a mechanical derivation isn't 1:1). A
+// locale missing here is SILENTLY skipped by this script — fa was, once — though
+// locale-parity.test.ts (which does derive from the real table) still covers it.
 const LOCALES: LocaleTarget[] = [
     { locale: 'ar', path: 'packages/core/src/i18n/locales/ar.ts' },
+    { locale: 'fa', path: 'packages/core/src/i18n/locales/fa.ts' },
     { locale: 'cs', path: 'packages/core/src/i18n/locales/cs.ts' },
     { locale: 'de', path: 'packages/core/src/i18n/locales/de.ts' },
     { locale: 'es', path: 'packages/core/src/i18n/locales/es.ts' },

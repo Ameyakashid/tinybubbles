@@ -222,6 +222,18 @@ export const LOCALES = {
         nonLatin: false,
         coverageFloor: 22,
     },
+    fa: {
+        loadSync: () => require('./locales/fa') as typeof import('./locales/fa'),
+        loadAsync: () => import('./locales/fa'),
+        export: 'faOverrides',
+        mode: 'overrides',
+        native: 'فارسی',
+        nonLatin: true,
+        // Full key parity measured at add time (2227/2227 = 100%); mode stays
+        // 'overrides' (not 'full') to mirror ar's shape per the add-persian
+        // handoff, but the floor reflects the real, complete translation.
+        coverageFloor: 100,
+    },
 } as const satisfies Record<string, LocaleDescriptor>;
 
 /** Every locale code except 'en' (see the header comment for why English lives outside this table). */

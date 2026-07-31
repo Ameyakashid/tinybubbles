@@ -50,6 +50,14 @@ export const allowedEnglishMirrorKeysByLocale: Record<string, readonly string[]>
         'settings.eink',
         'settings.feedbackEmailPlaceholder',
     ],
+    fa: [
+        // Persian tech writing keeps "E-Ink" in Latin (it's a display-technology
+        // brand name), the example address has no localized convention, and
+        // "Apple Reminders" is the Apple product's proper name.
+        'settings.eink',
+        'settings.feedbackEmailPlaceholder',
+        'settings.appleRemindersImport.appleReminders',
+    ],
     fr: [
         'calendar.date',
         'keybindings.style.standard',

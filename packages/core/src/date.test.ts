@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    canUseJalaliCalendar,
     configureDateFormatting,
     formatCalendarInputDate,
     getQuickDate,
@@ -74,6 +75,22 @@ describe('date utils', () => {
             dateFormat: 'system',
             calendarSystem: 'jalali',
             systemLocale: 'fa-IR',
+        })).toBe('fa-IR-u-ca-persian');
+    });
+
+    // add-persian-20260730-14: pins that selecting Persian as the APP LANGUAGE
+    // (not just an already-Persian system locale) flows through to Jalali date
+    // resolution. System locale is deliberately English here so this fails if
+    // 'fa' language support were ever dropped from isPersianLocaleTag/date
+    // locale resolution while system-locale-driven detection kept working.
+    it('flows the Persian app language into Jalali date-locale resolution', () => {
+        expect(canUseJalaliCalendar({ language: 'fa', systemLocale: 'en-US' })).toBe(true);
+        expect(resolveCalendarSystemSetting('jalali', { language: 'fa', systemLocale: 'en-US' })).toBe('jalali');
+        expect(resolveDateLocaleTag({
+            language: 'fa',
+            dateFormat: 'system',
+            calendarSystem: 'jalali',
+            systemLocale: 'en-US',
         })).toBe('fa-IR-u-ca-persian');
     });
 

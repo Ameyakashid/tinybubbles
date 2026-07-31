@@ -4,6 +4,7 @@ import { csOverrides } from './locales/cs';
 import { deOverrides } from './locales/de';
 import { en } from './locales/en';
 import { esOverrides } from './locales/es';
+import { faOverrides } from './locales/fa';
 import { frOverrides } from './locales/fr';
 import { hiOverrides } from './locales/hi';
 import { itOverrides } from './locales/it';
@@ -28,7 +29,7 @@ import { LOCALES, MIXED_ENGLISH_COVERAGE_CEILING, type Locale } from './i18n-loc
 // an independent list of the same locale set and is now derived from LOCALES below.
 const translationsByLocale: Record<Locale, Record<string, string>> = {
     zh: zhHans, 'zh-Hant': zhHant,
-    ar: arOverrides, cs: csOverrides, de: deOverrides, es: esOverrides, fr: frOverrides,
+    ar: arOverrides, cs: csOverrides, de: deOverrides, es: esOverrides, fa: faOverrides, fr: frOverrides,
     hi: hiOverrides, it: itOverrides, ja: jaOverrides, ko: koOverrides, nl: nlOverrides,
     pl: plOverrides, pt: ptOverrides, ru: ruOverrides, tr: trOverrides, vi: viOverrides,
 };

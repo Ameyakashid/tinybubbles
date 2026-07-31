@@ -102,6 +102,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 
 ## Languages
 
+- Mindwtr speaks Persian (فارسی): a complete translation of every interface string, selectable from the language picker on desktop and mobile. Choosing Persian also unlocks the Jalali calendar option for every date in the app, and Persian task text is detected as right-to-left the same way Arabic already is.
 - Interface strings can no longer appear as raw internal identifiers like `bulk.deleting`: a sweep found 71 strings — including the Pomodoro panel, bulk actions, and several error messages — whose translation key didn't exist, and a broken fallback pattern at 228 call sites that silently showed the key instead of its English text. Every key now exists, every site falls back to real English, and Czech, Vietnamese, Korean, and both Chinese variants gained the missing translations. Two new checks keep both bug classes out for good.
 - Korean gesture help now explains each action, and search-match text once again includes the result count. (#943)
 
