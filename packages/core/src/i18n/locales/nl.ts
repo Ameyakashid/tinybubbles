@@ -204,7 +204,7 @@ export const nlOverrides: Record<string, string> = {
         'settings.feedbackWhereNotifications': 'Meldingen',
         'settings.feedbackWhereOther': 'Anders',
         'settings.feedbackEmail': 'Antwoordmail (optioneel)',
-        'settings.feedbackEmailPlaceholder': 'jij@example.com',
+        'settings.feedbackEmailPlaceholder': 'Voeg een e-mailadres toe om antwoord te krijgen',
         'settings.feedbackIncludeDiagnostics': 'Recente diagnose toevoegen',
         'settings.feedbackIncludeDiagnosticsDesc': 'Voegt recente opgeschoonde app-logboeken toe. Taakgegevens, back-ups en schermafbeeldingen worden niet meegestuurd.',
         'settings.feedbackPrivacy': 'Dit verstuurt je bericht, appversie, platform en alleen diagnosegegevens als je die toevoegt. Een antwoordmail wordt alleen verstuurd als je een e-mailadres invult. Taakinhoud wordt niet meegestuurd.',

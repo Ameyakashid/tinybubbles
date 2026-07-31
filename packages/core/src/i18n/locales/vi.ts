@@ -1812,7 +1812,7 @@ export const viOverrides: Record<string, string> = {
         'settings.feedbackWhereNotifications': 'Thông báo',
         'settings.feedbackWhereOther': 'Khác',
         'settings.feedbackEmail': 'Email trả lời (tùy chọn)',
-        'settings.feedbackEmailPlaceholder': 'ban@example.com',
+        'settings.feedbackEmailPlaceholder': 'Thêm email để nhận phản hồi',
         'settings.feedbackIncludeDiagnostics': 'Bao gồm chẩn đoán gần đây',
         'settings.feedbackIncludeDiagnosticsDesc': 'Thêm nhật ký ứng dụng đã làm sạch gần đây. Dữ liệu nhiệm vụ, sao lưu và ảnh chụp màn hình không được đính kèm.',
         'settings.feedbackPrivacy': 'Điều này gửi tin nhắn, phiên bản ứng dụng, nền tảng và chẩn đoán của bạn chỉ nếu bạn chọn bao gồm chúng. Email trả lời chỉ được gửi nếu bạn nhập. Nội dung nhiệm vụ không được đính kèm.',

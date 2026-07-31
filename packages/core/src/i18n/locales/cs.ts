@@ -1605,7 +1605,7 @@ export const csOverrides: Record<string, string> = {
         'settings.feedbackWhereNotifications': 'Oznámení',
         'settings.feedbackWhereOther': 'Jiné',
         'settings.feedbackEmail': 'E-mail pro odpověď (volitelné)',
-        'settings.feedbackEmailPlaceholder': 'vy@example.com',
+        'settings.feedbackEmailPlaceholder': 'Zadejte e-mail, pokud chcete odpověď',
         'settings.feedbackIncludeDiagnostics': 'Přiložit nedávnou diagnostiku',
         'settings.feedbackIncludeDiagnosticsDesc': 'Přidá nedávné očištěné protokoly aplikace. Data úkolů, zálohy ani snímky obrazovky se nepřikládají.',
         'settings.feedbackPrivacy': 'Odešle se vaše zpráva, verze aplikace, platforma a diagnostika jen pokud ji přiložíte. Odpověď e-mailem přijde jen, když e-mail vyplníte. Obsah úkolů se nepřikládá.',

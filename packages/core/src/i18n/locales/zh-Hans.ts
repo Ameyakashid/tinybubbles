@@ -1558,7 +1558,7 @@ export const zhHans: Record<string, string> = {
         'settings.feedbackWhereNotifications': '通知',
         'settings.feedbackWhereOther': '其他',
         'settings.feedbackEmail': '回复邮箱（可选）',
-        'settings.feedbackEmailPlaceholder': 'name@example.com',
+        'settings.feedbackEmailPlaceholder': '填写邮箱才能收到回复',
         'settings.feedbackIncludeDiagnostics': '包含最近诊断信息',
         'settings.feedbackIncludeDiagnosticsDesc': '附加最近的已清理应用日志。不会附加任务数据、备份或截图。',
         'settings.feedbackPrivacy': '这会发送你的反馈内容、应用版本、平台，以及你选择包含的诊断信息。只有你填写回复邮箱时才会发送邮箱。不会附加任务内容。',

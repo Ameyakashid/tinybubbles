@@ -1568,7 +1568,7 @@ export const frOverrides: Record<string, string> = {
 'settings.feedbackWhereNotifications': 'Notifications',
 'settings.feedbackWhereOther': 'Autre',
 'settings.feedbackEmail': 'E-mail de réponse (facultatif)',
-'settings.feedbackEmailPlaceholder': 'vous@exemple.com',
+'settings.feedbackEmailPlaceholder': 'Ajoutez un e-mail pour recevoir une réponse',
 'settings.feedbackIncludeDiagnostics': 'Inclure les diagnostics récents',
 'settings.feedbackIncludeDiagnosticsDesc': 'Ajoute les journaux récents anonymisés de l’application. Les données de tâches, sauvegardes et captures d’écran ne sont pas jointes.',
 'settings.feedbackPrivacy': 'Cela envoie votre message, la version de l’application, la plateforme et les diagnostics uniquement si vous choisissez de les inclure. Un e-mail de réponse n’est envoyé que si vous en saisissez un. Le contenu des tâches n’est pas joint.',

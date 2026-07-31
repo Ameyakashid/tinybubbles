@@ -45,17 +45,13 @@ export const allowedEnglishMirrorKeysByLocale: Record<string, readonly string[]>
         'keybindings.style.standard',
     ],
     ko: [
-        // Korean UI writes the e-ink theme in Latin, and there is no localized
-        // convention for an example address.
+        // Korean UI writes the e-ink theme in Latin.
         'settings.eink',
-        'settings.feedbackEmailPlaceholder',
     ],
     fa: [
         // Persian tech writing keeps "E-Ink" in Latin (it's a display-technology
-        // brand name), the example address has no localized convention, and
-        // "Apple Reminders" is the Apple product's proper name.
+        // brand name), and "Apple Reminders" is the Apple product's proper name.
         'settings.eink',
-        'settings.feedbackEmailPlaceholder',
         'settings.appleRemindersImport.appleReminders',
     ],
     fr: [

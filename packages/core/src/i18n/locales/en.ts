@@ -1686,7 +1686,7 @@ export const en: Record<string, string> = {
         'settings.feedbackWhereNotifications': 'Notifications',
         'settings.feedbackWhereOther': 'Other',
         'settings.feedbackEmail': 'Reply email (optional)',
-        'settings.feedbackEmailPlaceholder': 'you@example.com',
+        'settings.feedbackEmailPlaceholder': 'Add an email to get a reply',
         'settings.feedbackIncludeDiagnostics': 'Include recent diagnostics',
         'settings.feedbackIncludeDiagnosticsDesc': 'Adds recent sanitized app logs. Task data, backups, and screenshots are not attached.',
         'settings.feedbackPrivacy': 'This sends your message, app version, platform, and diagnostics only if you choose to include them. A reply email is sent only if you enter one. Task content is not attached.',

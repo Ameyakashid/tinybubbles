@@ -1652,7 +1652,7 @@ export const faOverrides: Record<string, string> = {
         'settings.feedbackWhereNotifications': 'اعلان‌ها',
         'settings.feedbackWhereOther': 'موارد دیگر',
         'settings.feedbackEmail': 'ایمیل پاسخ (اختیاری)',
-        'settings.feedbackEmailPlaceholder': 'you@example.com',
+        'settings.feedbackEmailPlaceholder': 'برای دریافت پاسخ، ایمیل وارد کنید',
         'settings.feedbackIncludeDiagnostics': 'شامل عیب‌یابی‌های اخیر',
         'settings.feedbackIncludeDiagnosticsDesc': 'گزارش‌های اخیر پاک‌سازی‌شده برنامه را اضافه می‌کند. داده کار، پشتیبان‌ها و اسکرین‌شات‌ها پیوست نمی‌شوند.',
         'settings.feedbackPrivacy': 'این پیام شما، نسخه برنامه، پلتفرم و عیب‌یابی را فقط در صورتی که انتخاب کنید شامل شوند، ارسال می‌کند. ایمیل پاسخ فقط در صورت وارد کردن ارسال می‌شود. محتوای کار پیوست نمی‌شود.',

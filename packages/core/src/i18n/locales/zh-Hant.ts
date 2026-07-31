@@ -1558,7 +1558,7 @@ export const zhHant: Record<string, string> = {
         'settings.feedbackWhereNotifications': '通知',
         'settings.feedbackWhereOther': '其他',
         'settings.feedbackEmail': '回覆郵箱（可選）',
-        'settings.feedbackEmailPlaceholder': 'name@example.com',
+        'settings.feedbackEmailPlaceholder': '填寫信箱才能收到回覆',
         'settings.feedbackIncludeDiagnostics': '包含最近診斷信息',
         'settings.feedbackIncludeDiagnosticsDesc': '附加最近的已清理應用日誌。不會附加任務數據、備份或截圖。',
         'settings.feedbackPrivacy': '這會發送你的反饋內容、應用版本、平台，以及你選擇包含的診斷信息。只有你填寫回覆郵箱時才會發送郵箱。不會附加任務內容。',

@@ -1677,7 +1677,7 @@ export const koOverrides: Record<string, string> = {
         'settings.feedbackWhereNotifications': '알림',
         'settings.feedbackWhereOther': '기타',
         'settings.feedbackEmail': '회신 이메일 (선택 사항)',
-        'settings.feedbackEmailPlaceholder': 'you@example.com',
+        'settings.feedbackEmailPlaceholder': '답변을 받으려면 이메일을 입력하세요',
         'settings.feedbackIncludeDiagnostics': '최근 진단 데이터 포함',
         'settings.feedbackIncludeDiagnosticsDesc': '최근 앱 로그가 정리되어 추가됩니다. 할 일 데이터, 백업 및 스크린샷은 첨부되지 않습니다.',
         'settings.feedbackPrivacy': '메시지, 앱 버전, 플랫폼 및 진단 데이터는 선택한 경우에만 전송됩니다. 회신 이메일을 입력한 경우에만 회신 이메일이 전송됩니다. 할 일 내용은 첨부되지 않습니다.',
