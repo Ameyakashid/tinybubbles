@@ -251,6 +251,9 @@ export const styles = StyleSheet.create({
     },
     nextActionActions: {
         flexDirection: 'row',
+        // Three buttons don't fit a 375pt screen (or long locales) on one
+        // line; without wrap the primary button renders past the card edge.
+        flexWrap: 'wrap',
         gap: 10,
         justifyContent: 'flex-end',
     },

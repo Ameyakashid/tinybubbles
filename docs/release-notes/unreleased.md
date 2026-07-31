@@ -25,6 +25,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Mobile bulk **Add tag** leaves existing tags untouched and uses the same tag ordering as desktop. (#949)
 - The iOS Add task sheet keeps the title field pinned in place while the **More** panel scrolls, so returning to the title no longer jumps it off the top of the screen. (#887)
 - The "enable a speech-to-text model in Settings" notice now appears over the mobile Add task sheet the moment you tap the mic, instead of waiting until the sheet is closed. (#886)
+- The **What's the next action?** prompt keeps its buttons inside the dialog on small phones like the iPhone SE, wrapping **Add next action** onto its own line instead of drawing it past the card edge.
 
 ## Calendar
 
