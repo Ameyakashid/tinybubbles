@@ -1,5 +1,6 @@
 import { isAfter } from 'date-fns';
 import { hasTimeComponent, safeParseDate } from './date';
+import { isTaskActionable } from './task-status';
 import { stripMarkdown } from './markdown';
 import type { NotificationSettings, Project, Task } from './types';
 
@@ -55,12 +56,7 @@ function parseExplicitReminderDate(value: string | undefined | null): Date | nul
 }
 
 function isInactiveTask(task: Task): boolean {
-    return Boolean(
-        task.deletedAt
-        || task.status === 'done'
-        || task.status === 'archived'
-        || task.status === 'reference',
-    );
+    return Boolean(task.deletedAt) || !isTaskActionable(task);
 }
 
 function getNextTaskReminderIntent(

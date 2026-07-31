@@ -1,5 +1,6 @@
 import {
     flushPendingSave,
+    isTaskFinished,
     parseQuickAdd,
     searchAll,
     setStorageAdapter,
@@ -150,7 +151,7 @@ export async function createMindwtrAutomationService(options: AutomationServiceO
             const state = await refreshState();
             let tasks = state._allTasks.filter((task) => includeDeleted || !task.deletedAt);
             if (!includeAll) {
-                tasks = tasks.filter((task) => task.status !== 'done' && task.status !== 'archived');
+                tasks = tasks.filter((task) => !isTaskFinished(task));
             }
             if (status) {
                 tasks = tasks.filter((task) => task.status === status);

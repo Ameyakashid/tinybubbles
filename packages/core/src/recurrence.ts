@@ -3,6 +3,7 @@ import { addDays, addMonths, addWeeks, format } from 'date-fns';
 import { safeFormatDate, safeParseDate } from './date';
 import { generateUUID as uuidv4 } from './uuid';
 import { computeRelativeStartTime } from './task-relative-start';
+import { isTaskActionable } from './task-status';
 import type { Recurrence, RecurrenceByDay, RecurrenceRule, RecurrenceStrategy, RecurrenceWeekday, Task, TaskStatus, ChecklistItem, Attachment } from './types';
 
 export const RECURRENCE_RULES: RecurrenceRule[] = ['daily', 'weekly', 'monthly', 'yearly'];
@@ -876,7 +877,7 @@ export function createProjectedRecurringTask(
 ): ProjectedRecurringTask | null {
     if (!task.showFutureRecurrence) return null;
     if (isProjectedRecurringTask(task)) return null;
-    if (task.deletedAt || task.status === 'done' || task.status === 'archived' || task.status === 'reference') {
+    if (task.deletedAt || !isTaskActionable(task)) {
         return null;
     }
 
@@ -987,7 +988,7 @@ export function createCurrentRecurringCalendarTask(
 ): Task | null {
     if (!task.showFutureRecurrence) return null;
     if (isProjectedRecurringTask(task)) return null;
-    if (task.deletedAt || task.status === 'done' || task.status === 'archived' || task.status === 'reference') {
+    if (task.deletedAt || !isTaskActionable(task)) {
         return null;
     }
     if (task.startTime || task.dueDate || task.reviewAt) return null;
