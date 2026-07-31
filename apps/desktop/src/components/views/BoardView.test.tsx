@@ -366,6 +366,95 @@ describe('BoardView', () => {
         expect(queryByText('Home task')).not.toBeInTheDocument();
     });
 
+    it('cycles a board token chip included → excluded → neutral', () => {
+        setBoardStoreState({
+            tasks: [
+                {
+                    id: 'work-task',
+                    title: 'Work task',
+                    status: 'next',
+                    contexts: ['@work'],
+                    tags: [],
+                    createdAt: '2026-05-18T12:00:00.000Z',
+                    updatedAt: '2026-05-18T12:00:00.000Z',
+                },
+                {
+                    id: 'home-task',
+                    title: 'Home task',
+                    status: 'next',
+                    contexts: ['@home'],
+                    tags: ['#chore'],
+                    createdAt: '2026-05-18T12:00:00.000Z',
+                    updatedAt: '2026-05-18T12:00:00.000Z',
+                },
+            ],
+            projects: [],
+            areas: [],
+            settings: {},
+        });
+
+        const { getByRole, getByText, queryByText } = renderWithProviders();
+        fireEvent.click(getByRole('button', { name: /^show$/i }));
+
+        fireEvent.click(getByRole('button', { name: '@work' }));
+        expect(useUiStore.getState().boardFilters.criteria.contexts).toEqual(['@work']);
+
+        // Included → excluded: the token switches sides, never sitting on both.
+        fireEvent.click(getByRole('button', { name: '@work' }));
+        const excludedCriteria = useUiStore.getState().boardFilters.criteria;
+        expect(excludedCriteria.excludedContexts).toEqual(['@work']);
+        expect(excludedCriteria.contexts).toBeUndefined();
+        const excludedChip = getByRole('button', { name: '@work (Excluded)' });
+        expect(excludedChip).toHaveAttribute('aria-pressed', 'mixed');
+        expect(excludedChip).toHaveClass('line-through');
+        expect(getByText('Home task')).toBeInTheDocument();
+        expect(queryByText('Work task')).not.toBeInTheDocument();
+
+        // Excluded → neutral.
+        fireEvent.click(excludedChip);
+        expect(useUiStore.getState().boardFilters.criteria.excludedContexts).toBeUndefined();
+        expect(getByText('Work task')).toBeInTheDocument();
+        expect(getByText('Home task')).toBeInTheDocument();
+    });
+
+    it('excludes a tag chip through the excludedTags criteria', () => {
+        setBoardStoreState({
+            tasks: [
+                {
+                    id: 'chore-task',
+                    title: 'Chore task',
+                    status: 'next',
+                    contexts: [],
+                    tags: ['#chore'],
+                    createdAt: '2026-05-18T12:00:00.000Z',
+                    updatedAt: '2026-05-18T12:00:00.000Z',
+                },
+                {
+                    id: 'plain-task',
+                    title: 'Plain task',
+                    status: 'next',
+                    contexts: [],
+                    tags: [],
+                    createdAt: '2026-05-18T12:00:00.000Z',
+                    updatedAt: '2026-05-18T12:00:00.000Z',
+                },
+            ],
+            projects: [],
+            areas: [],
+            settings: {},
+        });
+
+        const { getByRole, getByText, queryByText } = renderWithProviders();
+        fireEvent.click(getByRole('button', { name: /^show$/i }));
+
+        fireEvent.click(getByRole('button', { name: '#chore' }));
+        fireEvent.click(getByRole('button', { name: '#chore' }));
+
+        expect(useUiStore.getState().boardFilters.criteria.excludedTags).toEqual(['#chore']);
+        expect(getByText('Plain task')).toBeInTheDocument();
+        expect(queryByText('Chore task')).not.toBeInTheDocument();
+    });
+
     it('uses the selected task sort instead of manual board order when non-default sort is selected', () => {
         const baseTask = {
             status: 'next' as const,

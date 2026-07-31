@@ -1,4 +1,5 @@
 import { Filter } from 'lucide-react';
+import { tFallback } from '@mindwtr/core';
 import { cn } from '../../../lib/utils';
 import type { TaskPriority, TimeEstimate } from '@mindwtr/core';
 
@@ -8,6 +9,7 @@ interface ListFiltersPanelProps {
     onClearFilters: () => void;
     allTokens: string[];
     selectedTokens: string[];
+    excludedTokens: string[];
     tokenCounts: Record<string, number>;
     onToggleToken: (token: string) => void;
     showPriorityFilters: boolean;
@@ -27,6 +29,7 @@ export function ListFiltersPanel({
     onClearFilters,
     allTokens,
     selectedTokens,
+    excludedTokens,
     tokenCounts,
     onToggleToken,
     showPriorityFilters,
@@ -39,6 +42,7 @@ export function ListFiltersPanel({
     onToggleEstimate,
     formatEstimate,
 }: ListFiltersPanelProps) {
+    const excludedStateLabel = tFallback(t, 'filters.excluded', 'Excluded');
     return (
         <div id="list-filters-panel" className="bg-card border border-border rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
@@ -61,18 +65,23 @@ export function ListFiltersPanel({
                     <div className="text-xs text-muted-foreground uppercase tracking-wide">{t('filters.contexts')}</div>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                         {allTokens.map((token) => {
-                            const isActive = selectedTokens.includes(token);
+                            const isIncluded = selectedTokens.includes(token);
+                            const isExcluded = excludedTokens.includes(token);
                             return (
                                 <button
                                     key={token}
                                     type="button"
                                     onClick={() => onToggleToken(token)}
-                                    aria-pressed={isActive}
+                                    // Three states can't ride a boolean: 'mixed' marks excluded.
+                                    aria-pressed={isExcluded ? 'mixed' : isIncluded}
+                                    aria-label={isExcluded ? `${token} (${excludedStateLabel})` : undefined}
                                     className={cn(
                                         "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-                                        isActive
-                                            ? "bg-primary text-primary-foreground"
-                                            : "bg-muted hover:bg-muted/80 text-muted-foreground",
+                                        isExcluded
+                                            ? "border border-destructive bg-destructive/10 text-destructive line-through"
+                                            : isIncluded
+                                                ? "bg-primary text-primary-foreground"
+                                                : "bg-muted hover:bg-muted/80 text-muted-foreground",
                                     )}
                                 >
                                     {token}

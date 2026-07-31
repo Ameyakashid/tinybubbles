@@ -11,7 +11,7 @@ const EMPTY_ESTIMATES: TimeEstimate[] = [];
  * empty array as active, so leaving it behind keeps the "filtered" chip lit
  * with nothing selected.
  */
-export function withListFilterValue<K extends keyof Pick<FilterCriteria, 'contexts' | 'tags' | 'priority' | 'timeEstimates'>>(
+export function withListFilterValue<K extends keyof Pick<FilterCriteria, 'contexts' | 'tags' | 'excludedContexts' | 'excludedTags' | 'priority' | 'timeEstimates'>>(
     criteria: FilterCriteria,
     key: K,
     values: NonNullable<FilterCriteria[K]>,
@@ -41,16 +41,29 @@ export function useListFilterControls() {
     const criteria = listFilters.criteria;
     const selections = useMemo(() => selectionsFromCriteria(criteria), [criteria]);
     const selectedTokens = selections.tokens;
+    const excludedTokens = selections.excludedTokens;
     const selectedPriorities = selections.priorities;
     const selectedTimeEstimates = criteria.timeEstimates ?? EMPTY_ESTIMATES;
 
     const toggleToken = useCallback((token: string) => {
-        const key = token.trim().startsWith('#') ? 'tags' : 'contexts';
-        const current = criteria[key] ?? [];
-        const nextValues = current.includes(token)
-            ? current.filter((item) => item !== token)
-            : [...current, token];
-        setListFilters({ criteria: withListFilterValue(criteria, key, nextValues) });
+        const isTag = token.trim().startsWith('#');
+        const includeKey = isTag ? 'tags' : 'contexts';
+        const excludeKey = isTag ? 'excludedTags' : 'excludedContexts';
+        const included = criteria[includeKey] ?? [];
+        const excluded = criteria[excludeKey] ?? [];
+        // Tri-state cycle: neutral → included → excluded → neutral, same as
+        // Focus and mobile. A token is only ever on one side, so each
+        // transition clears the other.
+        let next = criteria;
+        if (included.includes(token)) {
+            next = withListFilterValue(next, includeKey, included.filter((item) => item !== token));
+            next = withListFilterValue(next, excludeKey, [...excluded, token]);
+        } else if (excluded.includes(token)) {
+            next = withListFilterValue(next, excludeKey, excluded.filter((item) => item !== token));
+        } else {
+            next = withListFilterValue(next, includeKey, [...included, token]);
+        }
+        setListFilters({ criteria: next });
     }, [criteria, setListFilters]);
 
     const togglePriority = useCallback((priority: TaskPriority) => {
@@ -75,6 +88,7 @@ export function useListFilterControls() {
         criteria,
         filtersOpen: listFilters.open,
         selectedTokens,
+        excludedTokens,
         selectedPriorities,
         selectedTimeEstimates,
         toggleToken,

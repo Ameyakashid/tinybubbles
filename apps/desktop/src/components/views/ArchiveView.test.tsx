@@ -382,7 +382,8 @@ describe('ArchiveView', () => {
         // The criteria are one selection shared by every desktop list (#956), so
         // a token picked in Next can be active here while matching nothing
         // archived. Without the union the panel would list no chip to switch it
-        // back off and the archive would look empty for no visible reason.
+        // back off and the archive would look empty for no visible reason. That
+        // holds for both sides of the tri-state cycle (#982).
         it('offers a token set in another view even when nothing archived matches it', () => {
             useUiStore.setState((state) => ({
                 listFilters: { ...state.listFilters, criteria: { contexts: ['@office'] } },
@@ -392,9 +393,28 @@ describe('ArchiveView', () => {
             expect(rowTitles()).toEqual([]);
 
             fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            // Included → excluded: nothing archived carries @office, so both
+            // rows come back, and the chip is still listed under its excluded
+            // name so the last click can clear it.
             fireEvent.click(screen.getByRole('button', { name: /@office/ }));
-
             expect(rowTitles()).toHaveLength(2);
+            expect(useUiStore.getState().listFilters.criteria.excludedContexts).toEqual(['@office']);
+
+            fireEvent.click(screen.getByRole('button', { name: '@office (Excluded)' }));
+            expect(rowTitles()).toHaveLength(2);
+            expect(useUiStore.getState().listFilters.criteria).toEqual({});
+        });
+
+        it('subtracts archived tasks carrying an excluded context (#982)', () => {
+            renderWithBoth();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+            const chip = () => screen.getByRole('button', { name: /^@home/ });
+            fireEvent.click(chip());
+            fireEvent.click(chip());
+
+            expect(screen.getByText('Archived task')).toBeInTheDocument();
+            expect(screen.queryByText('Tidy the garage')).not.toBeInTheDocument();
         });
 
         it('defaults to newest completion first and re-sorts by title on request', () => {

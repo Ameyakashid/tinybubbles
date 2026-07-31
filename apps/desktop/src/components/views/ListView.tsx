@@ -194,6 +194,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         criteria: listFilterCriteria,
         filtersOpen,
         selectedTokens,
+        excludedTokens,
         selectedPriorities,
         selectedTimeEstimates,
         toggleToken: toggleTokenFilter,
@@ -708,6 +709,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             prioritiesEnabled ? '1' : '0',
             timeEstimatesEnabled ? '1' : '0',
             selectedTokens.join('|'),
+            excludedTokens.join('|'),
             selectedPriorities.join('|'),
             selectedTimeEstimates.join('|'),
             selectedWaitingPerson,
@@ -824,6 +826,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const filterSummary = [
         ...(normalizedSearchQuery ? [`${t('common.search')}: ${searchQuery.trim()}`] : []),
         ...selectedTokens,
+        ...excludedTokens.map((token) => `${resolveText('filters.excluded', 'Excluded')}: ${token}`),
         ...(showPriorityFilters ? selectedPriorities.map((priority) => t(`priority.${priority}`)) : []),
         ...(showTimeEstimateFilters ? selectedTimeEstimates.map(formatEstimate) : []),
         ...(selectedWaitingPerson ? [`${t('process.delegateWhoLabel')}: ${selectedWaitingPerson}`] : []),
@@ -1119,6 +1122,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             onClearFilters={clearFilters}
                             allTokens={allTokens}
                             selectedTokens={selectedTokens}
+                            excludedTokens={excludedTokens}
                             tokenCounts={tokenCounts}
                             onToggleToken={toggleTokenFilter}
                             showPriorityFilters={showPriorityFilters}

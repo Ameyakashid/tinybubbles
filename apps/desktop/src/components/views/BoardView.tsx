@@ -234,6 +234,8 @@ export function BoardView() {
     const showFiltersPanel = persistedViewState.filtersOpen;
     const selectedContexts = criteria.contexts ?? [];
     const selectedTags = criteria.tags ?? [];
+    const excludedContexts = criteria.excludedContexts ?? [];
+    const excludedTags = criteria.excludedTags ?? [];
     const selectedProjectIds = criteria.projects ?? [];
     const selectedDuePreset = criteria.dueDateRange && 'preset' in criteria.dueDateRange
         ? criteria.dueDateRange.preset
@@ -284,7 +286,24 @@ export function BoardView() {
         updateCriteria({ ...criteria, [key]: next.length > 0 ? next : undefined });
     };
     const toggleToken = (token: string) => {
-        toggleStringValue(token.trim().startsWith('#') ? 'tags' : 'contexts', token);
+        const isTag = token.trim().startsWith('#');
+        const includeKey = isTag ? 'tags' : 'contexts';
+        const excludeKey = isTag ? 'excludedTags' : 'excludedContexts';
+        const included = criteria[includeKey] ?? [];
+        const excluded = criteria[excludeKey] ?? [];
+        // Tri-state cycle: neutral → included → excluded → neutral, same as
+        // Focus, the shared list panel and mobile. A token is only ever on one
+        // side, so each transition clears the other.
+        const next = included.includes(token)
+            ? { include: included.filter((item) => item !== token), exclude: [...excluded, token] }
+            : excluded.includes(token)
+                ? { include: included, exclude: excluded.filter((item) => item !== token) }
+                : { include: [...included, token], exclude: excluded };
+        updateCriteria({
+            ...criteria,
+            [includeKey]: next.include.length > 0 ? next.include : undefined,
+            [excludeKey]: next.exclude.length > 0 ? next.exclude : undefined,
+        });
     };
     const toggleProjectFilter = (projectId: string) => {
         toggleStringValue('projects', projectId);
@@ -441,6 +460,7 @@ export function BoardView() {
     const resolveText = React.useCallback((key: string, fallback: string) => {
         return translateWithFallback(t, key, fallback);
     }, [t]);
+    const excludedStateLabel = resolveText('filters.excluded', 'Excluded');
 
     const openQuickAdd = (status: TaskStatus) => {
         window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
@@ -547,19 +567,27 @@ export function BoardView() {
                                     </div>
                                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                                         {allTokens.map((token) => {
-                                            const isActive = token.trim().startsWith('#')
+                                            const isTag = token.trim().startsWith('#');
+                                            const isIncluded = isTag
                                                 ? selectedTags.includes(token)
                                                 : selectedContexts.includes(token);
+                                            const isExcluded = isTag
+                                                ? excludedTags.includes(token)
+                                                : excludedContexts.includes(token);
                                             return (
                                                 <button
                                                     key={token}
                                                     type="button"
                                                     onClick={() => toggleToken(token)}
-                                                    aria-pressed={isActive}
+                                                    // Three states can't ride a boolean: 'mixed' marks excluded.
+                                                    aria-pressed={isExcluded ? 'mixed' : isIncluded}
+                                                    aria-label={isExcluded ? `${token} (${excludedStateLabel})` : undefined}
                                                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                                                        isActive
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                                                        isExcluded
+                                                            ? "border border-destructive bg-destructive/10 text-destructive line-through"
+                                                            : isIncluded
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "bg-muted hover:bg-muted/80 text-muted-foreground"
                                                     }`}
                                                 >
                                                     {token}

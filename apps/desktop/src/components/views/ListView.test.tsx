@@ -615,6 +615,45 @@ describe('ListView', () => {
     });
   });
 
+  it('cycles a Filters panel chip to excluded and subtracts matching tasks (#982)', async () => {
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('1', { title: 'Computer task', contexts: ['@computer'] }),
+        makeTask('2', { title: 'Errand task', contexts: ['@errands'] }),
+      ],
+      lastDataChangeAt: 1,
+    });
+
+    const { queryByText } = renderListView();
+    act(() => {
+      useUiStore.getState().setListFilters({ open: true });
+    });
+    const panel = () => within(document.getElementById('list-filters-panel') as HTMLElement);
+
+    fireEvent.click(panel().getByRole('button', { name: /^@computer/ }));
+    await waitFor(() => {
+      expect(queryByText('Computer task')).toBeInTheDocument();
+      expect(queryByText('Errand task')).not.toBeInTheDocument();
+    });
+
+    // Included → excluded: the chip subtracts instead of narrowing.
+    fireEvent.click(panel().getByRole('button', { name: /^@computer/ }));
+    await waitFor(() => {
+      expect(queryByText('Computer task')).not.toBeInTheDocument();
+      expect(queryByText('Errand task')).toBeInTheDocument();
+    });
+    expect(useUiStore.getState().listFilters.criteria.excludedContexts).toEqual(['@computer']);
+    expect(panel().getByRole('button', { name: '@computer (Excluded)' })).toHaveAttribute('aria-pressed', 'mixed');
+
+    // Excluded → neutral.
+    fireEvent.click(panel().getByRole('button', { name: '@computer (Excluded)' }));
+    await waitFor(() => {
+      expect(queryByText('Computer task')).toBeInTheDocument();
+      expect(queryByText('Errand task')).toBeInTheDocument();
+    });
+    expect(useUiStore.getState().listFilters.criteria).not.toHaveProperty('excludedContexts');
+  });
+
   it('selects and clears all visible tasks from the shared list toolbar', async () => {
     useTaskStore.setState({
       _allTasks: [

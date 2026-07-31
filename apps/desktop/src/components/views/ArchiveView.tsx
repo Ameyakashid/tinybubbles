@@ -180,6 +180,7 @@ export function ArchiveView() {
         criteria: listFilterCriteria,
         filtersOpen,
         selectedTokens,
+        excludedTokens,
         selectedPriorities,
         selectedTimeEstimates,
         toggleToken,
@@ -258,10 +259,10 @@ export function ArchiveView() {
         // picked in Next can be active here while matching nothing archived.
         // Union it in or the panel would offer no way to switch it back off.
         return {
-            allTokens: [...new Set([...Object.keys(counts), ...selectedTokens])].sort(),
+            allTokens: [...new Set([...Object.keys(counts), ...selectedTokens, ...excludedTokens])].sort(),
             tokenCounts: counts,
         };
-    }, [archivedBaseTasks, selectedTokens]);
+    }, [archivedBaseTasks, excludedTokens, selectedTokens]);
 
     const archivedTasks = useMemo(() => {
         const criteriaPredicate = hasActiveFilterCriteria(activeFilterCriteria)
@@ -469,6 +470,7 @@ export function ArchiveView() {
     const filterSummary = [
         ...(searchQuery.trim() ? [`${t('common.search')}: ${searchQuery.trim()}`] : []),
         ...selectedTokens,
+        ...excludedTokens.map((token) => `${tFallback(t, 'filters.excluded', 'Excluded')}: ${token}`),
         ...(showPriorityFilters ? selectedPriorities.map((priority) => t(`priority.${priority}`)) : []),
         ...(showTimeEstimateFilters ? selectedTimeEstimates.map(formatEstimate) : []),
     ];
@@ -578,6 +580,7 @@ export function ArchiveView() {
                     onClearFilters={clearFilters}
                     allTokens={allTokens}
                     selectedTokens={selectedTokens}
+                    excludedTokens={excludedTokens}
                     tokenCounts={tokenCounts}
                     onToggleToken={toggleToken}
                     showPriorityFilters={showPriorityFilters}

@@ -50,6 +50,7 @@ Changes collected after `v1.1.5` and before the next version tag.
 - Desktop group headers collapse on every grouped list, not only Focus and Reference. Each list remembers which groups are folded per grouping mode on that device, including when switching directly between status lists. (#963)
 - Mobile grouping headings fold too — tap one on Inbox, Done, Reference, or Archive. Each list remembers its folded groups per grouping mode on that device, and a folded group's rows leave **Select all** and bulk actions the same way they do on desktop. A task shown under several tag groups counts once for selection. (#970)
 - Desktop Inbox now exposes the shared Filters panel, so filters chosen in another list remain visible and removable. (#956)
+- Context and tag chips in the desktop Filters panel and on the Board now cycle through included, excluded, and off, the same as Today's Focus and mobile. An excluded chip is struck through and hides every task carrying that token. (#982)
 - Saving a task in a large desktop project no longer scrolls the pinned project row past the list and leaves a blank screen. (#916)
 - Mobile stops re-rendering project screens behind the current route, reducing multi-second updates in large libraries while preserving each screen's state. (#766)
 - iOS no longer draws duplicated rows or crashes when a long list shrinks, which happened when filtering Done by a tag or context or removing a tag in bulk. (#949, #969)
