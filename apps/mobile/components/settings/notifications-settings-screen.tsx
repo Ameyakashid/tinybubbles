@@ -3,15 +3,13 @@ import { Modal, Platform, Pressable, ScrollView, Text, TouchableOpacity, View } 
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-    areDueDateRemindersEnabled,
+import { areDueDateRemindersEnabled,
     areStartDateRemindersEnabled,
     areTaskRemindersEnabled,
     isWeeklyReviewReminderEnabled,
     normalizeDateFormatSetting,
     resolveDateLocaleTag,
-    useTaskStore,
-} from '@mindwtr/core';
+    useTaskStore, tFallback, } from '@mindwtr/core';
 
 import { requestNotificationPermission, startMobileNotifications } from '@/lib/notification-service';
 import {
@@ -91,9 +89,9 @@ export function NotificationsSettingsScreen() {
         readPersistentCaptureEnabled().then(setPersistentCaptureEnabled).catch(console.error);
     }, []);
     const persistentCaptureStrings = useCallback(() => ({
-        title: t('captureNotification.title') || 'Quick capture',
-        text: t('captureNotification.text') || 'Tap to capture to your Inbox',
-        channelName: t('captureNotification.channelName') || 'Quick capture',
+        title: tFallback(t, 'captureNotification.title', 'Quick capture'),
+        text: tFallback(t, 'captureNotification.text', 'Tap to capture to your Inbox'),
+        channelName: tFallback(t, 'captureNotification.channelName', 'Quick capture'),
     }), [t]);
     const togglePersistentCapture = useCallback((value: boolean) => {
         if (!value) {
@@ -414,12 +412,12 @@ export function NotificationsSettingsScreen() {
                                 <View style={[styles.timePickerActions, { borderTopColor: tc.border }]}>
                                     <TouchableOpacity onPress={closeDigestTimePicker} style={styles.timePickerActionButton}>
                                         <Text style={[styles.timePickerActionText, { color: tc.secondaryText }]}>
-                                            {t('common.cancel') || 'Cancel'}
+                                            {tFallback(t, 'common.cancel', 'Cancel')}
                                         </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={saveDigestTimePicker} style={styles.timePickerActionButton}>
                                         <Text style={[styles.timePickerActionText, { color: tc.tint }]}>
-                                            {t('common.done') || 'Done'}
+                                            {tFallback(t, 'common.done', 'Done')}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -463,12 +461,12 @@ export function NotificationsSettingsScreen() {
                                 <View style={[styles.timePickerActions, { borderTopColor: tc.border }]}>
                                     <TouchableOpacity onPress={closeWeeklyReviewTimePicker} style={styles.timePickerActionButton}>
                                         <Text style={[styles.timePickerActionText, { color: tc.secondaryText }]}>
-                                            {t('common.cancel') || 'Cancel'}
+                                            {tFallback(t, 'common.cancel', 'Cancel')}
                                         </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={saveWeeklyReviewTimePicker} style={styles.timePickerActionButton}>
                                         <Text style={[styles.timePickerActionText, { color: tc.tint }]}>
-                                            {t('common.done') || 'Done'}
+                                            {tFallback(t, 'common.done', 'Done')}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>

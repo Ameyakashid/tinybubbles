@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Folder } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { projectMatchesAreaFilter } from '@mindwtr/core';
+import { projectMatchesAreaFilter, tFallback } from '@mindwtr/core';
 import type { Area, AreaFilterValue, Project } from '@mindwtr/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
@@ -55,7 +55,7 @@ export function DeferredProjectsSection({
   return (
     <View style={[styles.projectSection, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
       <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-        {t('projects.title') || 'Projects'}
+        {tFallback(t, 'projects.title', 'Projects')}
       </Text>
       {projects.map((project) => {
         const projectArea = project.areaId ? areaById.get(project.areaId) : undefined;

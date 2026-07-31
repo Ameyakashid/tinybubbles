@@ -120,11 +120,11 @@ export function CompletedAtPicker({
                         <Pressable
                             onPress={onCancel}
                             accessibilityRole="button"
-                            accessibilityLabel={t('common.cancel') || 'Cancel'}
+                            accessibilityLabel={tFallback(t, 'common.cancel', 'Cancel')}
                             style={styles.actionButton}
                         >
                             <Text style={[styles.actionText, { color: tc.secondaryText }]}>
-                                {t('common.cancel') || 'Cancel'}
+                                {tFallback(t, 'common.cancel', 'Cancel')}
                             </Text>
                         </Pressable>
                         <Pressable
@@ -135,11 +135,11 @@ export function CompletedAtPicker({
                                     : undefined
                             )}
                             accessibilityRole="button"
-                            accessibilityLabel={t('common.save') || 'Save'}
+                            accessibilityLabel={tFallback(t, 'common.save', 'Save')}
                             style={styles.actionButton}
                         >
                             <Text style={[styles.actionText, { color: tc.tint }]}>
-                                {t('common.save') || 'Save'}
+                                {tFallback(t, 'common.save', 'Save')}
                             </Text>
                         </Pressable>
                     </View>

@@ -77,7 +77,7 @@ const ArchiveProjectRow = memo(function ArchiveProjectRow({
 }: ArchiveProjectRowProps) {
     const handleRestore = useCallback(() => onRestore(project.id), [onRestore, project.id]);
     const handleDelete = useCallback(() => onDelete(project), [onDelete, project]);
-    const archivedText = `${t('list.done') || 'Completed'}: ${project.updatedAt ? safeFormatDate(project.updatedAt, 'Pp', project.updatedAt) : 'Unknown'}`;
+    const archivedText = `${tFallback(t, 'list.done', 'Completed')}: ${project.updatedAt ? safeFormatDate(project.updatedAt, 'Pp', project.updatedAt) : 'Unknown'}`;
 
     return (
         <div className="rounded-lg px-3 py-3 flex items-center justify-between group hover:bg-muted/50 transition-colors">
@@ -424,7 +424,7 @@ export function ArchiveView() {
                 title: t('bulk.confirmDeleteTitle'),
                 description: t('bulk.confirmDeleteBody'),
                 confirmLabel: t('common.delete'),
-                cancelLabel: t('common.cancel') || 'Cancel',
+                cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
             }),
         });
     }, [deleteSelectedTasks, requestConfirmation, t]);
@@ -438,7 +438,7 @@ export function ArchiveView() {
             title: project.title,
             description: t('projects.deleteConfirm'),
             confirmLabel: t('common.delete'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
         await deleteProject(project.id);

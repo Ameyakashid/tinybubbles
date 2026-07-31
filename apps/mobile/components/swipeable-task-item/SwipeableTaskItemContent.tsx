@@ -317,7 +317,7 @@ export function SwipeableTaskItemContent({
                     <CompactText
                         style={[styles.metaText, { color: tc.secondaryText }]}
                     >
-                        {`${t('list.done') || 'Completed'}: ${completionLabel}`}
+                        {`${tFallback(t, 'list.done', 'Completed')}: ${completionLabel}`}
                     </CompactText>
                 ),
             }),

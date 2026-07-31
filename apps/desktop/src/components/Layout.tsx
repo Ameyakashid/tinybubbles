@@ -224,7 +224,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                         : 'bg-success';
     const fullSyncTimestamp = lastSyncAt ? safeFormatDate(lastSyncAt, 'PPpp', lastSyncAt) : t('settings.lastSyncNever');
     const syncTooltip = !isOnline
-        ? (t('common.offline') || 'Offline')
+        ? (tFallback(t, 'common.offline', 'Offline'))
         : lastSyncStatus === 'error' && lastSyncError
             ? `${tFallback(t, 'settings.lastSyncError', 'Sync failed')}: ${lastSyncError}\n${tFallback(t, 'settings.lastSync', 'Last sync')}: ${fullSyncTimestamp}`
             : lastSyncStatus === 'conflict'
@@ -309,7 +309,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const navSections = useMemo<NavSection[]>(() => ([
         {
             key: 'focus',
-            label: t('nav.sectionFocus') || 'Focus',
+            label: tFallback(t, 'nav.sectionFocus', 'Focus'),
             items: [
                 { id: 'agenda', labelKey: 'nav.agenda', icon: Target, tone: 'primary' },
                 { id: 'inbox', labelKey: 'nav.inbox', icon: Inbox, count: inboxCount, tone: 'primary' },
@@ -317,7 +317,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         },
         {
             key: 'lists',
-            label: t('nav.sectionLists') || 'Lists',
+            label: tFallback(t, 'nav.sectionLists', 'Lists'),
             items: [
                 { id: 'projects', labelKey: 'nav.projects', icon: Folder, tone: 'primary' },
                 { id: 'someday', labelKey: 'nav.someday', icon: Clock3 },
@@ -327,7 +327,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         },
         {
             key: 'organize',
-            label: t('nav.sectionOrganize') || 'Organize',
+            label: tFallback(t, 'nav.sectionOrganize', 'Organize'),
             items: [
                 { id: 'calendar', labelKey: 'nav.calendar', icon: Calendar },
                 { id: 'review', labelKey: 'nav.review', icon: CheckCircle2 },
@@ -340,7 +340,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         },
         {
             key: 'archive',
-            label: t('nav.sectionArchive') || 'Archive',
+            label: tFallback(t, 'nav.sectionArchive', 'Archive'),
             items: [
                 { id: 'done', labelKey: 'nav.done', icon: CheckSquare, tone: 'recessed' },
                 { id: 'archived', labelKey: 'nav.archived', icon: Archive, tone: 'recessed' },

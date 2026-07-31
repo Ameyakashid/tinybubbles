@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Modal, Animated, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-    Task,
+import { Task,
     TaskEditorFieldId,
     useTaskStore,
     type Attachment,
@@ -16,8 +15,7 @@ import {
     getLocalizedWeekdayButtons,
     getLocalizedWeekdayLabels,
     normalizeClockTimeInput,
-    shallow,
-} from '@mindwtr/core';
+    shallow, tFallback, } from '@mindwtr/core';
 import { taskDraftToUpdatePatch } from '@mindwtr/core/task-draft';
 import { useLanguage } from '../contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -149,8 +147,8 @@ function TaskEditModalInner({
     const resetCopilotStateRef = useRef<() => void>(() => {});
     const descriptionToolbarInteractionUntilRef = useRef(0);
     const showTaskWriteError = useCallback((message?: string) => showToast({
-        title: t('common.error') || 'Error',
-        message: message || t('task.updateFailed') || 'Could not update task.',
+        title: tFallback(t, 'common.error', 'Error'),
+        message: message || tFallback(t, 'task.updateFailed', 'Could not update task.'),
         tone: 'error',
         durationMs: 4200,
     }), [showToast, t]);

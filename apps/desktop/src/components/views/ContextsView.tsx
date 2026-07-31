@@ -302,10 +302,10 @@ export function ContextsView() {
     const handleBatchDelete = async () => {
         await deleteSelectedTasks({
             confirm: () => requestConfirmation({
-                title: t('common.delete') || 'Delete',
-                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-                confirmLabel: t('common.delete') || 'Delete',
-                cancelLabel: t('common.cancel') || 'Cancel',
+                title: tFallback(t, 'common.delete', 'Delete'),
+                description: tFallback(t, 'list.confirmBatchDelete', 'Delete selected tasks?'),
+                confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+                cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
             }),
         });
     };
@@ -353,7 +353,7 @@ export function ContextsView() {
     const tokenPickerPlaceholder = bulkTokenPicker?.field === 'tags' ? '#tag' : '@context';
 
     const statusOptions: Array<{ value: TaskStatus | 'all'; label: string }> = [
-        { value: 'all', label: t('common.all') || 'All' },
+        { value: 'all', label: tFallback(t, 'common.all', 'All') },
         { value: 'inbox', label: t('status.inbox') },
         { value: 'next', label: t('status.next') },
         { value: 'waiting', label: t('status.waiting') },

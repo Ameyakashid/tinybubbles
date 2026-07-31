@@ -856,7 +856,7 @@ describe('TaskItemDisplay', () => {
         );
 
         expect(queryByText('Click to toggle details / Double-click to edit')).not.toBeInTheDocument();
-        expect(getByRole('button', { name: 'task.toggleDetails' })).toHaveAttribute(
+        expect(getByRole('button', { name: 'Toggle task details' })).toHaveAttribute(
             'title',
             'Click to toggle details / Double-click to edit',
         );
@@ -1181,7 +1181,7 @@ describe('TaskItemDisplay', () => {
 
         expect(getByRole('img', { name: 'Sunset' })).toBeInTheDocument();
 
-        fireEvent.click(getByRole('button', { name: 'attachments.open: Sunset' }));
+        fireEvent.click(getByRole('button', { name: 'Open: Sunset' }));
 
         expect(openAttachment).toHaveBeenCalledWith(imageAttachment);
     });

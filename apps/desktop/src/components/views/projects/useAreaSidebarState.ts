@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useSensor, useSensors, PointerSensor, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Area, AppData } from '@mindwtr/core';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, resolveAreaFilter } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, resolveAreaFilter, tFallback } from '@mindwtr/core';
 import { reportError } from '../../../lib/report-error';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 import {
@@ -72,7 +72,7 @@ export function useAreaSidebarState({
         const reordered = arrayMove(sortedAreas, oldIndex, newIndex).map((area) => area.id);
         void Promise.resolve(reorderAreas(reordered)).catch((error) => {
             reportError('Failed to reorder areas', error);
-            showToast?.(t('projects.areaReorderFailed') || 'Failed to reorder areas', 'error');
+            showToast?.(tFallback(t, 'projects.areaReorderFailed', 'Failed to reorder areas'), 'error');
         });
     };
 
@@ -83,8 +83,8 @@ export function useAreaSidebarState({
             description: areaDeleteConfirm === 'areas.deleteConfirm'
                 ? 'Delete this area? Projects and tasks in this area will be kept and moved to unassigned.'
                 : areaDeleteConfirm,
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+            confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (confirmed) {
             deleteArea(areaId);

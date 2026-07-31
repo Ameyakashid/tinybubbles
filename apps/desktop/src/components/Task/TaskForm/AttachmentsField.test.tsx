@@ -33,7 +33,7 @@ describe('AttachmentsField', () => {
 
         expect(getByRole('img', { name: 'github-share.png' })).toBeInTheDocument();
 
-        fireEvent.click(getByRole('button', { name: 'attachments.open: github-share.png' }));
+        fireEvent.click(getByRole('button', { name: 'Open: github-share.png' }));
 
         expect(openAttachment).toHaveBeenCalledWith(attachment);
     });

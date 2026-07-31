@@ -1,5 +1,5 @@
 import { BookOpen, Edit3, Link2, Paperclip } from 'lucide-react';
-import type { Attachment } from '@mindwtr/core';
+import { tFallback, type Attachment } from '@mindwtr/core';
 import { useBareFileReferenceCheck } from '../../../lib/attachment-reference';
 import { getAttachmentDisplayTitle } from '../../../lib/attachment-utils';
 import { isImageAttachment } from '../task-item-attachment-utils';
@@ -103,7 +103,7 @@ export function AttachmentsField({
                                             }}
                                             className="block w-full text-left"
                                             title={fullTitle || displayTitle}
-                                            aria-label={`${t('attachments.open') || 'Open'}: ${displayTitle}`}
+                                            aria-label={`${tFallback(t, 'attachments.open', 'Open')}: ${displayTitle}`}
                                         >
                                             <AttachmentImage
                                                 attachment={attachment}

@@ -157,7 +157,7 @@ export function TrashView() {
             title: t('trash.deleteConfirm'),
             description: t('trash.deleteConfirmBody'),
             confirmLabel: t('trash.deletePermanently'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
         const taskIds = Array.from(selectedTaskIds);
@@ -177,7 +177,7 @@ export function TrashView() {
                 ? t('trash.clearAllConfirmBodyWithProjects')
                 : t('trash.clearAllConfirmBody'),
             confirmLabel: t('trash.clearAll'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
         await Promise.all([purgeDeletedTasks(), purgeDeletedProjects()]);
@@ -190,7 +190,7 @@ export function TrashView() {
             title: task.title,
             description: t('trash.deleteConfirmBody'),
             confirmLabel: t('common.delete'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
         purgeTask(taskId);
@@ -201,7 +201,7 @@ export function TrashView() {
             title: project.title,
             description: t('trash.deleteConfirmBody'),
             confirmLabel: t('common.delete'),
-            cancelLabel: t('common.cancel') || 'Cancel',
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
         purgeProject(project.id);

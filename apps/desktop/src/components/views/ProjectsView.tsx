@@ -557,7 +557,7 @@ export function ProjectsView() {
     const handleProjectDragEnd = useCallback((section: ProjectAreaSection, event: DragEndEvent) => {
         const failProjectMove = (error: unknown) => {
             reportError('Failed to move project between areas', error);
-            showToast(t('projects.moveProjectFailed') || 'Failed to move project', 'error');
+            showToast(tFallback(t, 'projects.moveProjectFailed', 'Failed to move project'), 'error');
         };
         const { active, over } = event;
         if (!over || active.id === over.id) return;
@@ -701,7 +701,7 @@ export function ProjectsView() {
             setNewProjectAreaId(selectedArea !== ALL_AREAS && selectedArea !== NO_AREA ? selectedArea : '');
         } catch (error) {
             reportError('Failed to create project', error);
-            showToast(t('projects.createFailed') || 'Failed to create project', 'error');
+            showToast(tFallback(t, 'projects.createFailed', 'Failed to create project'), 'error');
         } finally {
             setIsCreatingProject(false);
         }
@@ -879,7 +879,7 @@ export function ProjectsView() {
                                 setNewAreaName('');
                             } catch (error) {
                                 reportError('Failed to create area', error);
-                                showToast(t('projects.createAreaFailed') || 'Failed to create area', 'error');
+                                showToast(tFallback(t, 'projects.createAreaFailed', 'Failed to create area'), 'error');
                             } finally {
                                 setIsAreaCreating(false);
                             }
@@ -920,7 +920,7 @@ export function ProjectsView() {
                             }
                         } catch (error) {
                             reportError('Failed to create quick area', error);
-                            showToast(t('projects.createAreaFailed') || 'Failed to create area', 'error');
+                            showToast(tFallback(t, 'projects.createAreaFailed', 'Failed to create area'), 'error');
                         } finally {
                             setIsAreaCreating(false);
                             setShowQuickAreaPrompt(false);

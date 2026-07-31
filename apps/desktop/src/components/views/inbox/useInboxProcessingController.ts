@@ -665,7 +665,7 @@ export function useInboxProcessingController({
             }
         } catch (error) {
             reportError('Failed to create project from inbox processing', error);
-            showToast(t('projects.createFailed') || 'Failed to create project', 'error');
+            showToast(tFallback(t, 'projects.createFailed', 'Failed to create project'), 'error');
         }
     }, [
         addProject,

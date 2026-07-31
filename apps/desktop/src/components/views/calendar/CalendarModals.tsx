@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { Check, Search, X } from 'lucide-react';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel, safeParseDate } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel, safeParseDate, tFallback } from '@mindwtr/core';
 
 import { TaskInput } from '../../Task/TaskInput';
 import { TaskItem } from '../../TaskItem';
@@ -67,13 +67,13 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
         // scrolls here rather than the panel.
         <Dialog
             onClose={closeOpenTask}
-            label={t('taskEdit.editTask') || 'Task'}
+            label={tFallback(t, 'taskEdit.editTask', 'Task')}
             placement="top"
             overlayClassName="overflow-y-auto p-4"
             panelClassName="my-auto max-w-3xl max-h-[none] bg-background rounded-xl border-border shadow-xl p-4"
         >
             <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold">{t('taskEdit.editTask') || 'Task'}</h3>
+                <h3 className="text-lg font-semibold">{tFallback(t, 'taskEdit.editTask', 'Task')}</h3>
                 <button
                     type="button"
                     onClick={closeOpenTask}

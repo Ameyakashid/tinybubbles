@@ -1,7 +1,6 @@
 import { useState, useEffect, useId, useMemo, useRef } from 'react';
 import { Search, FileText, CheckCircle, Save, SlidersHorizontal, X } from 'lucide-react';
-import {
-    shallow,
+import { shallow,
     useTaskStore,
     Task,
     Project,
@@ -16,8 +15,7 @@ import {
     AREA_FILTER_ALL,
     resolveAreaFilter,
     taskMatchesAreaFilter,
-    projectMatchesAreaFilter,
-} from '@mindwtr/core';
+    projectMatchesAreaFilter, tFallback, } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
 import { PromptModal } from './PromptModal';
@@ -354,7 +352,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     });
     if (selectedArea !== 'all') {
         const label = selectedArea === 'none'
-            ? (t('taskEdit.noAreaOption') || 'No area')
+            ? (tFallback(t, 'taskEdit.noAreaOption', 'No area'))
             : (areas.find((area) => area.id === selectedArea)?.name ?? selectedArea);
         activeChips.push({
             key: `area:${selectedArea}`,
@@ -372,7 +370,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     if (locationQuery.trim()) {
         activeChips.push({
             key: 'location',
-            label: `${t('taskEdit.locationLabel') || 'Location'}: ${locationQuery.trim()}`,
+            label: `${tFallback(t, 'taskEdit.locationLabel', 'Location')}: ${locationQuery.trim()}`,
             onRemove: () => setLocationQuery(''),
         });
     }
@@ -452,7 +450,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                         setSelectedIndex(0);
                     }}
                     onKeyDown={handleListKeyDown}
-                    placeholder={t('search.placeholder') || "Search tasks and projects..."}
+                    placeholder={tFallback(t, 'search.placeholder', "Search tasks and projects...")}
                     className="min-w-0 flex-1 bg-transparent border-none outline-none text-lg placeholder:text-muted-foreground"
                 />
                 {canSave && (
@@ -547,13 +545,13 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                         <div className="space-y-2">
                             <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Area</div>
                             <select
-                                aria-label={t('taskEdit.areaLabel') || 'Area'}
+                                aria-label={tFallback(t, 'taskEdit.areaLabel', 'Area')}
                                 value={selectedArea}
                                 onChange={(event) => setSelectedArea(event.target.value)}
                                 className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
                             >
-                                <option value="all">{t('projects.allAreas') || 'All areas'}</option>
-                                <option value="none">{t('taskEdit.noAreaOption') || 'No area'}</option>
+                                <option value="all">{tFallback(t, 'projects.allAreas', 'All areas')}</option>
+                                <option value="none">{tFallback(t, 'taskEdit.noAreaOption', 'No area')}</option>
                                 {areas.map((area) => (
                                     <option key={area.id} value={area.id}>{area.name}</option>
                                 ))}
@@ -562,7 +560,7 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                         <div className="space-y-2">
                             <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">Due</div>
                             <select
-                                aria-label={t('taskEdit.dueDateLabel') || 'Due'}
+                                aria-label={tFallback(t, 'taskEdit.dueDateLabel', 'Due')}
                                 value={duePreset}
                                 onChange={(event) => setDuePreset(event.target.value as DuePreset)}
                                 className="w-full rounded border border-border bg-muted/40 px-2 py-1 text-xs"
@@ -579,14 +577,14 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                     </div>
                     <div className="space-y-2">
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
-                            {t('taskEdit.locationLabel') || 'Location'}
+                            {tFallback(t, 'taskEdit.locationLabel', 'Location')}
                         </div>
                         <input
                             type="text"
-                            aria-label={t('taskEdit.locationLabel') || 'Location'}
+                            aria-label={tFallback(t, 'taskEdit.locationLabel', 'Location')}
                             value={locationQuery}
                             onChange={(event) => setLocationQuery(event.target.value)}
-                            placeholder={t('taskEdit.locationPlaceholder') || 'e.g. Office'}
+                            placeholder={tFallback(t, 'taskEdit.locationPlaceholder', 'e.g. Office')}
                             className="w-full rounded border border-border bg-muted/40 px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
                         />
                     </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ban } from 'lucide-react-native';
-import type { Area, Project } from '@mindwtr/core';
+import { tFallback, type Area, type Project } from '@mindwtr/core';
 
 import { projectsScreenStyles as styles } from './projects-screen.styles';
 import { useAndroidKeyboardInset } from '../../lib/use-android-keyboard-inset';
@@ -194,8 +194,8 @@ export function ProjectAreaModals({
                                                         onPress={() => {
                                                             if (inUse) {
                                                                 onShowToast({
-                                                                    title: t('common.notice') || 'Notice',
-                                                                    message: t('projects.areaInUse') || 'Area has projects.',
+                                                                    title: tFallback(t, 'common.notice', 'Notice'),
+                                                                    message: tFallback(t, 'projects.areaInUse', 'Area has projects.'),
                                                                     tone: 'warning',
                                                                 });
                                                                 return;
@@ -213,7 +213,7 @@ export function ProjectAreaModals({
                                             {isExpanded ? (
                                                 <View style={styles.areaColorPickerRow}>
                                                     <TouchableOpacity
-                                                        accessibilityLabel={t('projects.colorNone') || 'None'}
+                                                        accessibilityLabel={tFallback(t, 'projects.colorNone', 'None')}
                                                         style={[
                                                             styles.colorOption,
                                                             styles.colorOptionNone,

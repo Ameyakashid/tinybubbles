@@ -1,4 +1,4 @@
-import { Area, Project, translateWithFallback, type TranslateFn } from '@mindwtr/core';
+import { Area, Project, translateWithFallback, type TranslateFn, tFallback } from '@mindwtr/core';
 import { ActionSheetIOS, Alert, Keyboard, Platform } from 'react-native';
 
 import type { ToastOptions } from '@/contexts/toast-context';
@@ -214,7 +214,7 @@ export const openProjectAreaPicker = ({
                 if (manageIndex === 2) {
                     if (sortedAreas.length === 0) {
                         showToast({
-                            title: t('common.notice') || 'Notice',
+                            title: tFallback(t, 'common.notice', 'Notice'),
                             message: t('projects.noArea'),
                             tone: 'warning',
                         });
@@ -248,8 +248,8 @@ export const openProjectAreaPicker = ({
                 const deletableAreas = sortedAreas.filter((area) => (areaUsage.get(area.id) || 0) === 0);
                 if (deletableAreas.length === 0) {
                     showToast({
-                        title: t('common.notice') || 'Notice',
-                        message: t('projects.areaInUse') || 'Area has projects.',
+                        title: tFallback(t, 'common.notice', 'Notice'),
+                        message: tFallback(t, 'projects.areaInUse', 'Area has projects.'),
                         tone: 'warning',
                     });
                     return;

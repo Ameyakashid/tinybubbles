@@ -521,12 +521,12 @@ export default function ArchivedScreen() {
 
     const handleDelete = useCallback((taskId: string) => {
         Alert.alert(
-            t('common.delete') || 'Delete',
-            t('task.deleteConfirmBody') || 'Move this task to Trash?',
+            tFallback(t, 'common.delete', 'Delete'),
+            tFallback(t, 'task.deleteConfirmBody', 'Move this task to Trash?'),
             [
-                { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+                { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
                 {
-                    text: t('common.delete') || 'Delete',
+                    text: tFallback(t, 'common.delete', 'Delete'),
                     style: 'destructive',
                     onPress: () => {
                         void deleteTask(taskId);
@@ -543,12 +543,12 @@ export default function ArchivedScreen() {
     const handleDeleteProject = useCallback((projectId: string) => {
         const project = projects.find((item) => item.id === projectId);
         Alert.alert(
-            project?.title || t('common.delete') || 'Delete',
-            t('projects.deleteConfirm') || 'Delete this project? Tasks in this project will be kept and moved to unassigned.',
+            project?.title || tFallback(t, 'common.delete', 'Delete'),
+            tFallback(t, 'projects.deleteConfirm', 'Delete this project? Tasks in this project will be kept and moved to unassigned.'),
             [
-                { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+                { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
                 {
-                    text: t('common.delete') || 'Delete',
+                    text: tFallback(t, 'common.delete', 'Delete'),
                     style: 'destructive',
                     onPress: () => {
                         void deleteProject(projectId);
@@ -574,9 +574,9 @@ export default function ArchivedScreen() {
             onOpen={() => openProjectScreen(item.id)}
             onRestore={() => handleRestoreProject(item.id)}
             onDelete={() => handleDeleteProject(item.id)}
-            completedLabel={t('list.done') || 'Completed'}
-            restoreLabel={t('trash.restore') || 'Restore'}
-            deleteLabel={t('common.delete') || 'Delete'}
+            completedLabel={tFallback(t, 'list.done', 'Completed')}
+            restoreLabel={tFallback(t, 'trash.restore', 'Restore')}
+            deleteLabel={tFallback(t, 'common.delete', 'Delete')}
         />
     ), [tc, areaById, handleRestoreProject, handleDeleteProject, t]);
 
@@ -589,11 +589,11 @@ export default function ArchivedScreen() {
             onDelete={() => handleDelete(item.id)}
             onEditCompletedAt={() => setCompletedAtTaskId(item.id)}
             onToggleSelect={() => toggleMultiSelect(item.id)}
-            completedLabel={t('list.done') || 'Completed'}
+            completedLabel={tFallback(t, 'list.done', 'Completed')}
             editCompletedAtLabel={tFallback(t, 'task.editCompletedAt', 'Edit completion time')}
             selectLabel={tFallback(t, 'bulk.select', 'Select')}
-            restoreLabel={t('trash.restore') || 'Restore'}
-            deleteLabel={t('common.delete') || 'Delete'}
+            restoreLabel={tFallback(t, 'trash.restore', 'Restore')}
+            deleteLabel={tFallback(t, 'common.delete', 'Delete')}
             selectionMode={selectionMode}
             isSelected={selectedIds.has(item.id)}
             isHighlighted={item.id === highlightTaskId}
@@ -644,7 +644,7 @@ export default function ArchivedScreen() {
                 <View style={styles.segmentRow}>
                     {(['tasks', 'projects'] as ArchiveSegment[]).map((value) => {
                         const selected = segment === value;
-                        const label = value === 'tasks' ? (t('common.tasks') || 'Tasks') : (t('projects.title') || 'Projects');
+                        const label = value === 'tasks' ? (tFallback(t, 'common.tasks', 'Tasks')) : (tFallback(t, 'projects.title', 'Projects'));
                         return (
                             <Pressable
                                 key={value}
@@ -704,7 +704,7 @@ export default function ArchivedScreen() {
                 {segment === 'tasks' && archivedTasks.length > 0 && (
                     <View style={styles.summaryRow}>
                         <Text style={[styles.summaryText, { color: tc.secondaryText }]}>
-                            {archivedTasks.length} {t('common.tasks') || 'tasks'}
+                            {archivedTasks.length} {tFallback(t, 'common.tasks', 'tasks')}
                         </Text>
                         <Pressable
                             onPress={selectionMode ? exitSelectionMode : () => setSelectionMode(true)}
@@ -721,7 +721,7 @@ export default function ArchivedScreen() {
                 {segment === 'projects' && archivedProjects.length > 0 && (
                     <View style={styles.summaryRow}>
                         <Text style={[styles.summaryText, { color: tc.secondaryText }]}>
-                            {archivedProjects.length} {t('projects.title') || 'projects'}
+                            {archivedProjects.length} {tFallback(t, 'projects.title', 'projects')}
                         </Text>
                     </View>
                 )}
@@ -813,12 +813,12 @@ export default function ArchivedScreen() {
                             <Text style={[styles.emptyTitle, { color: tc.text }]}>
                                 {selections.hasActive
                                     ? tFallback(t, 'filters.noMatch', 'No tasks match these filters.')
-                                    : (t('archived.empty') || 'No archived tasks')}
+                                    : (tFallback(t, 'archived.empty', 'No archived tasks'))}
                             </Text>
                             <Text style={[styles.emptyText, { color: tc.secondaryText }]}>
                                 {selections.hasActive
                                     ? selections.chips.slice(0, 3).map((chip) => chip.label).join(', ')
-                                    : (t('archived.emptyHint') || 'Tasks you archive will appear here')}
+                                    : (tFallback(t, 'archived.emptyHint', 'Tasks you archive will appear here'))}
                             </Text>
                             {selections.hasActive ? (
                                 <Pressable

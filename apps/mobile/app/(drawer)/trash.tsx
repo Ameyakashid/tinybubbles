@@ -339,12 +339,12 @@ export default function TrashScreen() {
   const handleBulkPurge = useCallback(() => {
     if (selectionCount === 0) return;
     Alert.alert(
-      t('trash.deleteConfirm') || 'Delete permanently?',
-      t('trash.deleteConfirmBody') || 'This action cannot be undone.',
+      tFallback(t, 'trash.deleteConfirm', 'Delete permanently?'),
+      tFallback(t, 'trash.deleteConfirmBody', 'This action cannot be undone.'),
       [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+        { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
         {
-          text: t('trash.deletePermanently') || 'Delete',
+          text: tFallback(t, 'trash.deletePermanently', 'Delete'),
           style: 'destructive',
           onPress: async () => {
             const taskIds = Array.from(selectedTaskIds);
@@ -385,12 +385,12 @@ export default function TrashScreen() {
 
   const handleDeleteTask = (taskId: string) => {
     Alert.alert(
-      t('trash.deleteConfirm') || 'Delete Permanently?',
-      t('trash.deleteConfirmBody') || 'This action cannot be undone.',
+      tFallback(t, 'trash.deleteConfirm', 'Delete Permanently?'),
+      tFallback(t, 'trash.deleteConfirmBody', 'This action cannot be undone.'),
       [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+        { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
         {
-          text: t('trash.deletePermanently') || 'Delete',
+          text: tFallback(t, 'trash.deletePermanently', 'Delete'),
           style: 'destructive',
           onPress: () => purgeTask(taskId),
         },
@@ -400,12 +400,12 @@ export default function TrashScreen() {
 
   const handleDeleteProject = (projectId: string) => {
     Alert.alert(
-      t('trash.deleteConfirm') || 'Delete Permanently?',
-      t('trash.deleteConfirmBody') || 'This action cannot be undone.',
+      tFallback(t, 'trash.deleteConfirm', 'Delete Permanently?'),
+      tFallback(t, 'trash.deleteConfirmBody', 'This action cannot be undone.'),
       [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+        { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
         {
-          text: t('trash.deletePermanently') || 'Delete',
+          text: tFallback(t, 'trash.deletePermanently', 'Delete'),
           style: 'destructive',
           onPress: () => purgeProject(projectId),
         },
@@ -416,12 +416,12 @@ export default function TrashScreen() {
   const handleClearAll = () => {
     if (trashItems.length === 0) return;
     Alert.alert(
-      t('trash.clearAllConfirm') || 'Clear trash?',
-      t('trash.clearAllConfirmBodyWithProjects') || 'This will permanently delete all trashed tasks and projects.',
+      tFallback(t, 'trash.clearAllConfirm', 'Clear trash?'),
+      tFallback(t, 'trash.clearAllConfirmBodyWithProjects', 'This will permanently delete all trashed tasks and projects.'),
       [
-        { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+        { text: tFallback(t, 'common.cancel', 'Cancel'), style: 'cancel' },
         {
-          text: t('trash.clearAll') || 'Clear Trash',
+          text: tFallback(t, 'trash.clearAll', 'Clear Trash'),
           style: 'destructive',
           onPress: () => {
             void purgeDeletedTasks();
@@ -438,7 +438,7 @@ export default function TrashScreen() {
         {trashItems.length > 0 && (
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryText, { color: tc.secondaryText }]}>
-              {trashedTasks.length} {t('common.tasks') || 'tasks'} · {trashedProjects.length} {t('projects.title') || 'projects'}
+              {trashedTasks.length} {tFallback(t, 'common.tasks', 'tasks')} · {trashedProjects.length} {tFallback(t, 'projects.title', 'projects')}
             </Text>
             <View style={styles.summaryActions}>
               <Pressable
@@ -456,7 +456,7 @@ export default function TrashScreen() {
                 style={[styles.clearButton, { borderColor: tc.border, backgroundColor: tc.cardBg }]}
               >
                 <Text style={[styles.clearButtonText, { color: tc.secondaryText }]}>
-                  {t('trash.clearAll') || 'Clear Trash'}
+                  {tFallback(t, 'trash.clearAll', 'Clear Trash')}
                 </Text>
               </Pressable>
             </View>
@@ -521,10 +521,10 @@ export default function TrashScreen() {
                   selectLabel={tFallback(t, 'bulk.select', 'Select')}
                   selectionMode={selectionMode}
                   isSelected={selectedProjectIds.has(item.project.id)}
-                  typeLabel={t('trash.projectType') || 'Project'}
-                  deletedLabel={t('trash.deletedAt') || 'Deleted'}
-                  restoreLabel={t('trash.restore') || 'Restore'}
-                  deleteLabel={t('common.delete') || 'Delete'}
+                  typeLabel={tFallback(t, 'trash.projectType', 'Project')}
+                  deletedLabel={tFallback(t, 'trash.deletedAt', 'Deleted')}
+                  restoreLabel={tFallback(t, 'trash.restore', 'Restore')}
+                  deleteLabel={tFallback(t, 'common.delete', 'Delete')}
                 />
               )
               : (
@@ -538,10 +538,10 @@ export default function TrashScreen() {
                   selectionMode={selectionMode}
                   isSelected={selectedTaskIds.has(item.task.id)}
                   isHighlighted={item.task.id === highlightTaskId}
-                  typeLabel={t('trash.taskType') || 'Task'}
-                  deletedLabel={t('trash.deletedAt') || 'Deleted'}
-                  restoreLabel={t('trash.restore') || 'Restore'}
-                  deleteLabel={t('common.delete') || 'Delete'}
+                  typeLabel={tFallback(t, 'trash.taskType', 'Task')}
+                  deletedLabel={tFallback(t, 'trash.deletedAt', 'Deleted')}
+                  restoreLabel={tFallback(t, 'trash.restore', 'Restore')}
+                  deleteLabel={tFallback(t, 'common.delete', 'Delete')}
                 />
               )
           )}
@@ -562,9 +562,9 @@ export default function TrashScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🗑️</Text>
               <Text style={[styles.emptyTitle, { color: tc.text }]}>
-                {t('trash.empty') || 'Trash is empty'}
+                {tFallback(t, 'trash.empty', 'Trash is empty')}
               </Text>
-              <Text style={[styles.emptyText, { color: tc.secondaryText }]}>{t('trash.emptyHintWithProjects') || 'Deleted tasks and projects will appear here'}</Text>
+              <Text style={[styles.emptyText, { color: tc.secondaryText }]}>{tFallback(t, 'trash.emptyHintWithProjects', 'Deleted tasks and projects will appear here')}</Text>
             </View>
           }
         />

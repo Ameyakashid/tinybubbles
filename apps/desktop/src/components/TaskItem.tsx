@@ -1400,7 +1400,7 @@ export const TaskItem = memo(function TaskItem({
                     )}
 
                     <TaskItemEditorSurface
-                        editorAriaLabel={t('taskEdit.editTask') || 'Edit task'}
+                        editorAriaLabel={tFallback(t, 'taskEdit.editTask', 'Edit task')}
                         isEditing={isEditing}
                         isModalEditor={isModalEditor}
                         modalEditorRef={modalEditorRef}

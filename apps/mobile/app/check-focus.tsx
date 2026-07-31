@@ -99,7 +99,7 @@ export default function FocusChecklistPage() {
                     onPress={() => router.back()}
                     style={styles.backBtn}
                     accessibilityRole="button"
-                    accessibilityLabel={t('common.back') || 'Back'}
+                    accessibilityLabel={tFallback(t, 'common.back', 'Back')}
                 >
                     <Ionicons name="chevron-back" color="#000" size={24} />
                 </TouchableOpacity>

@@ -60,8 +60,8 @@ describe('useProjectSectionActions', () => {
         expect(requestConfirmation).toHaveBeenCalledWith({
             title: 'projects.sectionsLabel',
             description: 'projects.deleteSectionConfirm',
-            confirmLabel: 'common.delete',
-            cancelLabel: 'common.cancel',
+            confirmLabel: 'Delete',
+            cancelLabel: 'Cancel',
         });
         expect(params.deleteSection).not.toHaveBeenCalled();
     });

@@ -310,7 +310,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                 onClick={(event) => handleProjectClick(event, project.id)}
                 onKeyDown={(event) => handleProjectKeyDown(event, project.id)}
                 className="inline-flex metadata-badge--interactive"
-                aria-label={`${t('projects.title') || 'Project'}: ${project.title}`}
+                aria-label={`${tFallback(t, 'projects.title', 'Project')}: ${project.title}`}
             >
                 <MetadataBadge
                     variant="project"
@@ -690,7 +690,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             isRtl && "text-right"
                         )}
                         aria-expanded={isViewOpen}
-                        aria-label={t('task.toggleDetails') || 'Toggle task details'}
+                        aria-label={tFallback(t, 'task.toggleDetails', 'Toggle task details')}
                         title={!selectionMode && !readOnly && showHoverHint ? hoverHintText : undefined}
                         dir={resolvedDirection}
                     >
@@ -763,7 +763,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             {visibleAttachments.length > 0 && (
                                 <div className="mt-2 space-y-2 text-xs text-muted-foreground">
                                     <Paperclip className="w-3 h-3" aria-hidden="true" />
-                                    <span className="sr-only">{t('attachments.title') || 'Attachments'}</span>
+                                    <span className="sr-only">{tFallback(t, 'attachments.title', 'Attachments')}</span>
                                     {imageAttachments.length > 0 ? (
                                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                                             {imageAttachments.map((attachment) => {
@@ -781,7 +781,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                                                         }}
                                                         className="group rounded-lg border border-border bg-card overflow-hidden text-left hover:border-primary/40 hover:bg-muted/20 transition-colors"
                                                         title={fullTitle || displayTitle}
-                                                        aria-label={`${t('attachments.open') || 'Open'}: ${displayTitle}`}
+                                                        aria-label={`${tFallback(t, 'attachments.open', 'Open')}: ${displayTitle}`}
                                                     >
                                                         <AttachmentImage
                                                             attachment={attachment}
@@ -818,7 +818,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                                                     }}
                                                     className="truncate hover:underline"
                                                     title={fullTitle || displayTitle}
-                                                    aria-label={`${t('attachments.open') || 'Open'}: ${displayTitle}`}
+                                                    aria-label={`${tFallback(t, 'attachments.open', 'Open')}: ${displayTitle}`}
                                                 >
                                                     {displayTitle}
                                                 </button>

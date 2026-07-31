@@ -1,4 +1,5 @@
 import { Filter, List } from 'lucide-react';
+import { tFallback } from '@mindwtr/core';
 
 import { GroupBySelect } from '../list/GroupBySelect';
 import { ToolbarButton } from '../list/list-toolbar';
@@ -36,8 +37,8 @@ export function AgendaHeader({
     const filtersActive = filtersOpen || filterCount > 0;
     const filtersLabel = resolveText('filters.label', 'Filters');
     const detailsLabel = showListDetails
-        ? (t('list.details') || 'Details')
-        : (t('list.detailsOff') || 'Details off');
+        ? (tFallback(t, 'list.details', 'Details'))
+        : (tFallback(t, 'list.detailsOff', 'Details off'));
 
     return (
         <header className="flex flex-wrap items-start justify-between gap-3">
@@ -46,7 +47,7 @@ export function AgendaHeader({
                     {t('agenda.title')}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    {nextActionsCount} {t('list.next') || t('agenda.nextActions')}
+                    {nextActionsCount} {tFallback(t, 'list.next', t('agenda.nextActions'))}
                 </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -73,7 +74,7 @@ export function AgendaHeader({
                     active={showListDetails}
                     onClick={onToggleDetails}
                     aria-pressed={showListDetails}
-                    title={showListDetails ? (t('list.details') || 'Details on') : (t('list.detailsOff') || 'Details off')}
+                    title={showListDetails ? (tFallback(t, 'list.details', 'Details on')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >
                     {detailsLabel}

@@ -19,7 +19,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { TaskItem } from '../TaskItem';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, isTaskInActiveProject, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
+import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, isTaskInActiveProject, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
 import { resolveBoardDragEnd } from './board-view-dnd';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
@@ -55,7 +55,7 @@ function sanitizeBoardViewState(value: unknown, fallback: BoardPersistedViewStat
 const COLUMN_STATUSES: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
 
 const getColumns = (t: (key: string) => string): { id: TaskStatus; label: string }[] => [
-    { id: 'inbox', label: t('list.inbox') || 'Inbox' },
+    { id: 'inbox', label: tFallback(t, 'list.inbox', 'Inbox') },
     { id: 'next', label: t('list.next') },
     { id: 'waiting', label: t('list.waiting') },
     { id: 'someday', label: t('list.someday') },
@@ -452,39 +452,39 @@ export function BoardView() {
         switch (status) {
             case 'inbox':
                 return {
-                    title: t('list.inbox') || 'Inbox',
+                    title: tFallback(t, 'list.inbox', 'Inbox'),
                     body: resolveText('inbox.emptyAddHint', 'Inbox is clear. Capture something new.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
             case 'next':
                 return {
-                    title: t('list.next') || 'Next Actions',
+                    title: tFallback(t, 'list.next', 'Next Actions'),
                     body: resolveText('list.noTasks', 'No next actions yet.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
             case 'waiting':
                 return {
-                    title: resolveText('waiting.empty', t('list.waiting') || 'Waiting'),
+                    title: resolveText('waiting.empty', tFallback(t, 'list.waiting', 'Waiting')),
                     body: resolveText('waiting.emptyHint', 'Track delegated or pending items.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
             case 'someday':
                 return {
-                    title: resolveText('someday.empty', t('list.someday') || 'Someday'),
+                    title: resolveText('someday.empty', tFallback(t, 'list.someday', 'Someday')),
                     body: resolveText('someday.emptyHint', 'Store ideas for later.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
             case 'done':
                 return {
-                    title: t('list.done') || 'Done',
+                    title: tFallback(t, 'list.done', 'Done'),
                     body: resolveText('list.noTasks', 'Completed tasks appear here.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
             default:
                 return {
-                    title: t('list.inbox') || 'Inbox',
+                    title: tFallback(t, 'list.inbox', 'Inbox'),
                     body: resolveText('list.noTasks', 'No tasks yet.'),
-                    action: t('common.add') || 'Add',
+                    action: tFallback(t, 'common.add', 'Add'),
                 };
         }
     };
@@ -652,7 +652,7 @@ export function BoardView() {
                                     tasks={getColumnTasks(col.id)}
                                     emptyState={getEmptyState(col.id)}
                                     onQuickAdd={openQuickAdd}
-                                    dragLabel={t('board.dragTask') || 'Drag task'}
+                                    dragLabel={tFallback(t, 'board.dragTask', 'Drag task')}
                                     compact={isDense}
                                 />
                             ))}

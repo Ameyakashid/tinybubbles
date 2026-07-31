@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus } from '@mindwtr/core';
+import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, tFallback } from '@mindwtr/core';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { TaskEditModal } from '@/components/task-edit-modal';
@@ -74,7 +74,7 @@ export default function SavedSearchScreen() {
     if (!savedSearch) return;
     Alert.alert(
       t('common.delete'),
-      t('search.deleteConfirm') || `Delete "${savedSearch.name}"?`,
+      tFallback(t, 'search.deleteConfirm', `Delete "${savedSearch.name}"?`),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {

@@ -1362,7 +1362,7 @@ export function ProjectDetailModal({
 
                                         <View style={[styles.reviewContainer, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
                                             <View style={styles.projectMetadataRow}>
-                                                <Text style={[styles.reviewLabel, { color: tc.text }]}>{t('taskEdit.dueDateLabel') || 'Due Date'}</Text>
+                                                <Text style={[styles.reviewLabel, { color: tc.text }]}>{tFallback(t, 'taskEdit.dueDateLabel', 'Due Date')}</Text>
                                                 <View style={styles.projectMetadataControls}>
                                                     <TouchableOpacity
                                                         style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
@@ -1376,7 +1376,7 @@ export function ProjectDetailModal({
                                                     {!!selectedProject.dueDate ? (
                                                         <TouchableOpacity
                                                             accessibilityRole="button"
-                                                            accessibilityLabel={`${t('common.clear')} ${t('taskEdit.dueDateLabel') || 'Due Date'}`}
+                                                            accessibilityLabel={`${t('common.clear')} ${tFallback(t, 'taskEdit.dueDateLabel', 'Due Date')}`}
                                                             style={styles.projectMetadataClearButton}
                                                             onPress={() => {
                                                                 updateProject(selectedProject.id, { dueDate: undefined });
@@ -1404,7 +1404,7 @@ export function ProjectDetailModal({
                                                 />
                                             ) : null}
                                             <View style={[styles.projectMetadataRow, styles.projectMetadataRowDivider, { borderTopColor: tc.border }]}>
-                                                <Text style={[styles.reviewLabel, { color: tc.text }]}>{t('projects.reviewAt') || 'Review Date'}</Text>
+                                                <Text style={[styles.reviewLabel, { color: tc.text }]}>{tFallback(t, 'projects.reviewAt', 'Review Date')}</Text>
                                                 <View style={styles.projectMetadataControls}>
                                                     <TouchableOpacity
                                                         style={[styles.projectMetadataValueButton, { backgroundColor: tc.inputBg, borderColor: tc.border }]}
@@ -1418,7 +1418,7 @@ export function ProjectDetailModal({
                                                     {!!selectedProject.reviewAt ? (
                                                         <TouchableOpacity
                                                             accessibilityRole="button"
-                                                            accessibilityLabel={`${t('common.clear')} ${t('projects.reviewAt') || 'Review Date'}`}
+                                                            accessibilityLabel={`${t('common.clear')} ${tFallback(t, 'projects.reviewAt', 'Review Date')}`}
                                                             style={styles.projectMetadataClearButton}
                                                             onPress={() => {
                                                                 updateProject(selectedProject.id, { reviewAt: undefined });
@@ -1473,7 +1473,7 @@ export function ProjectDetailModal({
                                         style={styles.backButton}
                                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                         accessibilityRole="button"
-                                        accessibilityLabel={t('common.back') || 'Back'}
+                                        accessibilityLabel={tFallback(t, 'common.back', 'Back')}
                                     >
                                         <Ionicons name="chevron-back" size={24} color={tc.tint} />
                                     </TouchableOpacity>

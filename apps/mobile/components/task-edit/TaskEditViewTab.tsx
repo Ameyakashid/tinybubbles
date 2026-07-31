@@ -143,11 +143,11 @@ function TaskEditViewTabComponent({
   const area = areas.find((a) => a.id === mergedTask.areaId);
   const checklist = mergedTask.checklist || [];
 
-  const statusLabel = mergedTask.status ? (t(`status.${mergedTask.status}`) || mergedTask.status) : undefined;
+  const statusLabel = mergedTask.status ? (tFallback(t, `status.${mergedTask.status}`, mergedTask.status)) : undefined;
   const isReference = mergedTask.status === 'reference';
-  const priorityLabel = mergedTask.priority ? (t(`priority.${mergedTask.priority}`) || mergedTask.priority) : undefined;
+  const priorityLabel = mergedTask.priority ? (tFallback(t, `priority.${mergedTask.priority}`, mergedTask.priority)) : undefined;
   const energyLevelLabel = mergedTask.energyLevel
-    ? (t(`energyLevel.${mergedTask.energyLevel}`) || mergedTask.energyLevel)
+    ? (tFallback(t, `energyLevel.${mergedTask.energyLevel}`, mergedTask.energyLevel))
     : undefined;
   const timeEstimateLabel = mergedTask.timeEstimate
     ? (formatTimeEstimateLabel(mergedTask.timeEstimate as TimeEstimate) || String(mergedTask.timeEstimate))

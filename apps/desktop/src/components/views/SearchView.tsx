@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, tFallback } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
@@ -186,10 +186,10 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const handleBatchDelete = useCallback(async () => {
         await deleteSelectedTasks({
             confirm: () => requestConfirmation({
-                title: t('common.delete') || 'Delete',
-                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-                confirmLabel: t('common.delete') || 'Delete',
-                cancelLabel: t('common.cancel') || 'Cancel',
+                title: tFallback(t, 'common.delete', 'Delete'),
+                description: tFallback(t, 'list.confirmBatchDelete', 'Delete selected tasks?'),
+                confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+                cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
             }),
         });
     }, [deleteSelectedTasks, requestConfirmation, t]);
@@ -224,10 +224,10 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const handleDelete = useCallback(async () => {
         if (!savedSearch) return;
         const confirmed = await requestConfirmation({
-            title: t('common.delete') || 'Delete',
-            description: t('search.deleteConfirm') || `Delete "${savedSearch.name}"?`,
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+            title: tFallback(t, 'common.delete', 'Delete'),
+            description: tFallback(t, 'search.deleteConfirm', `Delete "${savedSearch.name}"?`),
+            confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (!confirmed) return;
 
@@ -267,7 +267,7 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
                         <button
                             onClick={handleDelete}
                             className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            title={t('common.delete') || 'Delete'}
+                            title={tFallback(t, 'common.delete', 'Delete')}
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>

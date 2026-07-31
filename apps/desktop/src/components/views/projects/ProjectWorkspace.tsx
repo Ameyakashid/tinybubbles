@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect, type Key, type ReactNode, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-    Attachment,
+import { Attachment,
     Task,
     collectBulkTaskTokens,
     compareTasksByProjectOrder,
@@ -14,8 +13,7 @@ import {
     type TaskSortBy,
     generateUUID,
     sortTasksBy,
-    splitCompletedTasks,
-} from '@mindwtr/core';
+    splitCompletedTasks, tFallback, } from '@mindwtr/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, FileText, Folder, PanelLeftOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -742,10 +740,10 @@ export function ProjectWorkspace({
     const handleBatchDelete = useCallback(async () => {
         await deleteSelectedTasks({
             confirm: () => requestConfirmation({
-                title: t('common.delete') || 'Delete',
-                description: t('list.confirmBatchDelete') || 'Delete selected tasks?',
-                confirmLabel: t('common.delete') || 'Delete',
-                cancelLabel: t('common.cancel') || 'Cancel',
+                title: tFallback(t, 'common.delete', 'Delete'),
+                description: tFallback(t, 'list.confirmBatchDelete', 'Delete selected tasks?'),
+                confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+                cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
             }),
         });
     }, [deleteSelectedTasks, requestConfirmation, t]);
@@ -1274,7 +1272,7 @@ export function ProjectWorkspace({
             await Promise.resolve(updateProject(selectedProject.id, { status: 'archived' }));
         } catch (error) {
             reportError('Failed to archive project', error);
-            showToast(t('projects.archiveFailed') || 'Failed to archive project', 'error');
+            showToast(tFallback(t, 'projects.archiveFailed', 'Failed to archive project'), 'error');
         }
     };
 
@@ -1284,10 +1282,10 @@ export function ProjectWorkspace({
         const projectTitle = selectedProject.title;
         try {
             const confirmed = await requestConfirmation({
-                title: t('common.delete') || 'Delete',
+                title: tFallback(t, 'common.delete', 'Delete'),
                 description: t('projects.deleteConfirm'),
-                confirmLabel: t('common.delete') || 'Delete',
-                cancelLabel: t('common.cancel') || 'Cancel',
+                confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+                cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
             });
             if (confirmed) {
                 setIsProjectDeleting(true);
@@ -1453,7 +1451,7 @@ export function ProjectWorkspace({
                         >
                             {(isCreatingProject || isProjectDeleting || isAreaCreating) && (
                                 <div className="mb-4 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                                    {t('common.loading') || 'Loading...'}
+                                    {tFallback(t, 'common.loading', 'Loading...')}
                                 </div>
                             )}
                             <ProjectDetailsHeader
@@ -1474,7 +1472,7 @@ export function ProjectWorkspace({
                                 onReactivate={() => {
                                     Promise.resolve(updateProject(selectedProject.id, { status: 'active' })).catch((error) => {
                                         reportError('Failed to reactivate project', error);
-                                        showToast(t('projects.reactivateFailed') || 'Failed to reactivate project', 'error');
+                                        showToast(tFallback(t, 'projects.reactivateFailed', 'Failed to reactivate project'), 'error');
                                     });
                                 }}
                                 onDelete={handleDeleteProject}

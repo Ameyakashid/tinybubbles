@@ -14,7 +14,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, criteriaFromSelections, removeAdvancedFilterCriteriaChip, selectionsFromCriteria, formatFocusTaskLimitText,
-    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, hasActiveFilterCriteria, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback } from '@mindwtr/core';
+    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, hasActiveFilterCriteria, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@mindwtr/core';
 import type { FilterCriteria, MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
 import { cn } from '../../lib/utils';
@@ -1259,7 +1259,7 @@ export function AgendaView() {
                     <div className="space-y-6">
                         {sections.schedule.length > 0 && (
                             <AgendaCollapsibleSection
-                                title={t('focus.schedule') || t('agenda.dueToday')}
+                                title={tFallback(t, 'focus.schedule', t('agenda.dueToday'))}
                                 icon={Clock}
                                 color="text-warning"
                                 count={sections.schedule.length}
@@ -1363,7 +1363,7 @@ export function AgendaView() {
 
                         {sections.reviewDue.length > 0 && (
                             <AgendaCollapsibleSection
-                                title={t('agenda.reviewDue') || 'Review Due'}
+                                title={tFallback(t, 'agenda.reviewDue', 'Review Due')}
                                 icon={Clock}
                                 color="text-status-someday"
                                 count={sections.reviewDue.length}
@@ -1381,7 +1381,7 @@ export function AgendaView() {
                         )}
 
                         <AgendaProjectSection
-                            title={t('agenda.reviewDueProjects') || 'Projects to review'}
+                            title={tFallback(t, 'agenda.reviewDueProjects', 'Projects to review')}
                             icon={Folder}
                             onProjectPress={handleOpenReviewProject}
                             projects={reviewDueProjects}

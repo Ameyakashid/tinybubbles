@@ -314,10 +314,10 @@ export function useTaskEditActions({
         );
         if (!deleted) return;
         showToast({
-            title: t('common.notice') || 'Notice',
-            message: t('list.taskDeleted') || 'Task deleted',
+            title: tFallback(t, 'common.notice', 'Notice'),
+            message: tFallback(t, 'list.taskDeleted', 'Task deleted'),
             tone: 'info',
-            actionLabel: t('common.undo') || 'Undo',
+            actionLabel: tFallback(t, 'common.undo', 'Undo'),
             onAction: async () => {
                 await runStoreAction(
                     () => restoreTask(task.id),

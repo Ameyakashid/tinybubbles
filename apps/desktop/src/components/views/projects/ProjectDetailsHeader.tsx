@@ -80,7 +80,7 @@ export function ProjectDetailsHeader({
         {
             key: 'status',
             icon: Signal,
-            label: t(`status.${project.status}`) || project.status,
+            label: tFallback(t, `status.${project.status}`, project.status),
         },
         ...(areaLabel ? [{
             key: 'area',

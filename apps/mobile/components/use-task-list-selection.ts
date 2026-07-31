@@ -144,8 +144,8 @@ export function useTaskListSelection({
   const handleBatchDelete = useCallback(async () => {
     if (!hasSelection || bulkActionLoading) return;
     Alert.alert(
-      t('bulk.confirmDeleteTitle') || t('common.delete'),
-      t('bulk.confirmDeleteBody') || t('list.confirmBatchDelete'),
+      tFallback(t, 'bulk.confirmDeleteTitle', t('common.delete')),
+      tFallback(t, 'bulk.confirmDeleteBody', t('list.confirmBatchDelete')),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {

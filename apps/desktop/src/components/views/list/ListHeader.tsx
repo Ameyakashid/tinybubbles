@@ -1,5 +1,5 @@
 import { CheckSquare, ChevronsUpDown, Filter, List, SlidersHorizontal } from 'lucide-react';
-import type { TaskSortBy } from '@mindwtr/core';
+import { tFallback, type TaskSortBy } from '@mindwtr/core';
 import { FOCUS_AXES, type TaskListGroupBy } from './next-grouping';
 import { GroupBySelect } from './GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list-toolbar';
@@ -141,10 +141,10 @@ export function ListHeader({
                     active={showListDetails}
                     onClick={onToggleDetails}
                     aria-pressed={showListDetails}
-                    title={showListDetails ? (t('list.details') || 'Details on') : (t('list.detailsOff') || 'Details off')}
+                    title={showListDetails ? (tFallback(t, 'list.details', 'Details on')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >
-                    {showListDetails ? (t('list.details') || 'Details') : (t('list.detailsOff') || 'Details off')}
+                    {showListDetails ? (tFallback(t, 'list.details', 'Details')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
                 </ToolbarButton>
                 <ToolbarButton
                     active={densityMode !== 'comfortable'}

@@ -733,7 +733,7 @@ export function TaskEditScheduleField({
                                     onPress={() => openDatePicker('start-time')}
                                 >
                                     <Text style={[styles.clearDateText, { color: tc.secondaryText }]}>
-                                        {hasTime && timeOnly ? timeOnly : (t('calendar.changeTime') || 'Add time')}
+                                        {hasTime && timeOnly ? timeOnly : (tFallback(t, 'calendar.changeTime', 'Add time'))}
                                     </Text>
                                 </TouchableOpacity>
                             )}
@@ -895,7 +895,7 @@ export function TaskEditScheduleField({
                                     onPress={() => openDatePicker('due-time')}
                                 >
                                     <Text style={[styles.clearDateText, { color: tc.secondaryText }]}>
-                                        {hasTime && timeOnly ? timeOnly : (t('calendar.changeTime') || 'Add time')}
+                                        {hasTime && timeOnly ? timeOnly : (tFallback(t, 'calendar.changeTime', 'Add time'))}
                                     </Text>
                                 </TouchableOpacity>
                             )}

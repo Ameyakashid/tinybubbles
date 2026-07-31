@@ -1,8 +1,7 @@
 import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, Folder, HelpCircle } from 'lucide-react';
-import {
-    buildProjectOrderMap,
+import { buildProjectOrderMap,
     compareTasksByProjectThenOrder,
     createTaskFilterPredicate,
     DEFAULT_AREA_COLOR,
@@ -24,8 +23,7 @@ import {
     TaskPriority,
     TimeEstimate,
     translateWithFallback as translateTextWithFallback,
-    useTaskStore,
-} from '@mindwtr/core';
+    useTaskStore, tFallback, } from '@mindwtr/core';
 import type { FilterCriteria, Task, TaskStatus } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
 import type { TaskSortBy } from '@mindwtr/core';
@@ -626,7 +624,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         updateProject(projectId, { status: 'active' })
             .catch((error) => {
                 reportError('Failed to reactivate project', error);
-                showToast(t('projects.reactivateFailed') || 'Failed to reactivate project', 'error');
+                showToast(tFallback(t, 'projects.reactivateFailed', 'Failed to reactivate project'), 'error');
             });
     }, [showToast, t, updateProject]);
 
@@ -806,7 +804,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             }
         } catch (error) {
             reportError('Failed to add task from quick add', error);
-            showToast(t('task.addFailed') || 'Failed to add task', 'error');
+            showToast(tFallback(t, 'task.addFailed', 'Failed to add task'), 'error');
         }
     };
 
@@ -862,38 +860,38 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         switch (statusFilter) {
             case 'inbox':
                 return {
-                    title: t('list.inbox') || 'Inbox',
+                    title: tFallback(t, 'list.inbox', 'Inbox'),
                     body: resolveText('inbox.emptyAddHint', 'Inbox is clear. Capture something new.'),
-                    action: t('nav.addTask') || 'Add task',
+                    action: tFallback(t, 'nav.addTask', 'Add task'),
                 };
             case 'next':
                 return {
-                    title: t('list.next') || 'Next Actions',
+                    title: tFallback(t, 'list.next', 'Next Actions'),
                     body: resolveText('list.noTasks', 'No next actions yet.'),
                 };
             case 'waiting':
                 return {
-                    title: resolveText('waiting.empty', t('list.waiting') || 'Waiting'),
+                    title: resolveText('waiting.empty', tFallback(t, 'list.waiting', 'Waiting')),
                     body: resolveText('waiting.emptyHint', 'Track delegated or pending items.'),
                 };
             case 'someday':
                 return {
-                    title: resolveText('someday.empty', t('list.someday') || 'Someday'),
+                    title: resolveText('someday.empty', tFallback(t, 'list.someday', 'Someday')),
                     body: resolveText('someday.emptyHint', 'Store ideas for later.'),
                 };
             case 'reference':
                 return {
-                    title: resolveText('reference.empty', t('list.reference') || 'Reference'),
+                    title: resolveText('reference.empty', tFallback(t, 'list.reference', 'Reference')),
                     body: resolveText('reference.emptyHint', 'Reference holds info you might want later — no action required.'),
                 };
             case 'done':
                 return {
-                    title: t('list.done') || 'Done',
+                    title: tFallback(t, 'list.done', 'Done'),
                     body: resolveText('done.emptyHint', 'Completed tasks land here — a running log of what you finished.'),
                 };
             default:
                 return {
-                    title: t('list.tasks') || 'Tasks',
+                    title: tFallback(t, 'list.tasks', 'Tasks'),
                     body: resolveText('list.noTasks', 'No tasks yet.'),
                 };
         }
@@ -962,7 +960,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
 
                     {isBatchDeleting && (
                         <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                            {t('bulk.deleting') || 'Deleting selected tasks...'}
+                            {tFallback(t, 'bulk.deleting', 'Deleting selected tasks...')}
                         </div>
                     )}
 
@@ -1014,7 +1012,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     {showDeferredProjectSection && (
                         <div className="rounded-lg border border-border bg-card/50 p-4">
                             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                {t('projects.title') || 'Projects'}
+                                {tFallback(t, 'projects.title', 'Projects')}
                             </div>
                             <div className="mt-3 space-y-2">
                                 {deferredProjects.map((project) => {
@@ -1028,7 +1026,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                                                 type="button"
                                                 onClick={() => handleOpenProject(project.id)}
                                                 className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-primary"
-                                                aria-label={`${t('projects.title') || 'Project'}: ${project.title}`}
+                                                aria-label={`${tFallback(t, 'projects.title', 'Project')}: ${project.title}`}
                                             >
                                                 <Folder className="h-4 w-4 shrink-0" style={{ color: project.color }} />
                                                 <span className="truncate text-sm font-medium text-foreground">{project.title}</span>
@@ -1209,11 +1207,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 ref={listScrollRef}
                 className="flex-1 min-h-0 overflow-y-auto pt-3"
                 role="list"
-                aria-label={t('list.tasks') || 'Task list'}
+                aria-label={tFallback(t, 'list.tasks', 'Task list')}
             >
                 {isFiltering && (
                     <div className="px-3 pb-2 text-xs text-muted-foreground">
-                        {t('list.filtering') || 'Filtering...'}
+                        {tFallback(t, 'list.filtering', 'Filtering...')}
                     </div>
                 )}
                 {showEmptyState ? (

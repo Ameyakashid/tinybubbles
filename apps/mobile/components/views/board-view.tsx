@@ -936,7 +936,7 @@ export function BoardView() {
           <Column
             key={col.id}
             columnIndex={index}
-            label={t(col.labelKey) || col.label}
+            label={tFallback(t, col.labelKey, col.label)}
             color={resolveColumnColor(col.id, tc)}
             tasks={tasksByStatus[col.id] || []}
             tc={tc}

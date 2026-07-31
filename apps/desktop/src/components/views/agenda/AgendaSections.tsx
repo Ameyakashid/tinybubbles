@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { safeFormatDate, type Project } from '@mindwtr/core';
+import { safeFormatDate, type Project, tFallback } from '@mindwtr/core';
 import { ChevronDown, ChevronRight, Folder, type LucideIcon } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
@@ -85,7 +85,7 @@ export function AgendaProjectSection({
                     <button
                         key={project.id}
                         type="button"
-                        aria-label={`${t('common.open') || 'Open'} ${project.title}`}
+                        aria-label={`${tFallback(t, 'common.open', 'Open')} ${project.title}`}
                         onClick={() => onProjectPress(project.id)}
                         className={cn(
                             'flex w-full items-center justify-between rounded-lg border border-border bg-card/80 px-3 py-2 text-left',

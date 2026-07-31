@@ -276,10 +276,10 @@ function SwipeableTaskItemInner({
                     // Completing mirrors deleting: immediate, with an undo toast
                     // instead of a confirmation (matches the desktop undo).
                     showToast({
-                        title: t('common.notice') || 'Notice',
+                        title: tFallback(t, 'common.notice', 'Notice'),
                         message: (tFallback(t, 'task.markedDone', '{title} marked Done')).replace('{title}', task.title),
                         tone: 'info',
-                        actionLabel: t('common.undo') || 'Undo',
+                        actionLabel: tFallback(t, 'common.undo', 'Undo'),
                         onAction: () => {
                             void undoTaskCompletion(task.id, previousStatus, wasFocusedToday)
                                 .catch(() => undefined);
@@ -387,7 +387,7 @@ function SwipeableTaskItemInner({
             const blockedText = getFocusStarBlockedText(t, action, focusTaskLimit);
             if (blockedText) {
                 showToast({
-                    title: t('digest.focus') || 'Focus',
+                    title: tFallback(t, 'digest.focus', 'Focus'),
                     message: blockedText,
                     tone: 'warning',
                 });
@@ -412,15 +412,15 @@ function SwipeableTaskItemInner({
     // Status-aware left swipe action
     const getLeftAction = (): { label: string; color: string; action: TaskStatus } => {
         if (task.status === 'done') {
-            return { label: t('archived.restoreToInbox') || 'Restore', color: statusColors.inbox.text, action: 'inbox' };
+            return { label: tFallback(t, 'archived.restoreToInbox', 'Restore'), color: statusColors.inbox.text, action: 'inbox' };
         } else if (task.status === 'next') {
-            return { label: t('common.done') || 'Done', color: statusColors.done.text, action: 'done' };
+            return { label: tFallback(t, 'common.done', 'Done'), color: statusColors.done.text, action: 'done' };
         } else if (task.status === 'waiting' || task.status === 'someday' || task.status === 'reference') {
-            return { label: t('status.next') || 'Next', color: statusColors.next.text, action: 'next' };
+            return { label: tFallback(t, 'status.next', 'Next'), color: statusColors.next.text, action: 'next' };
         } else if (task.status === 'inbox') {
-            return { label: t('status.next') || 'Next', color: statusColors.next.text, action: 'next' };
+            return { label: tFallback(t, 'status.next', 'Next'), color: statusColors.next.text, action: 'next' };
         } else {
-            return { label: t('common.done') || 'Done', color: statusColors.done.text, action: 'done' };
+            return { label: tFallback(t, 'common.done', 'Done'), color: statusColors.done.text, action: 'done' };
         }
     };
 
@@ -473,7 +473,7 @@ function SwipeableTaskItemInner({
                 swipeableRef.current?.close();
                 handleDelete();
             }}
-            accessibilityLabel={t('task.aria.delete') || 'Delete task'}
+            accessibilityLabel={tFallback(t, 'task.aria.delete', 'Delete task')}
             accessibilityRole="button"
         >
             <Trash2 size={20} color="#FFFFFF" />
@@ -532,10 +532,10 @@ function SwipeableTaskItemInner({
                     return;
                 }
                 showToast({
-                    title: t('common.notice') || 'Notice',
-                    message: t('list.taskDeleted') || 'Task deleted',
+                    title: tFallback(t, 'common.notice', 'Notice'),
+                    message: tFallback(t, 'list.taskDeleted', 'Task deleted'),
                     tone: 'info',
-                    actionLabel: t('common.undo') || 'Undo',
+                    actionLabel: tFallback(t, 'common.undo', 'Undo'),
                     onAction: () => {
                         let restorePromise: Promise<unknown>;
                         try {
@@ -569,14 +569,14 @@ function SwipeableTaskItemInner({
     };
 
     const accessibilityActions = interactionDisabled ? [] : [
-        { name: 'activate', label: t('common.edit') || 'Edit' },
+        { name: 'activate', label: tFallback(t, 'common.edit', 'Edit') },
         ...(!selectionMode
             ? [
                 { name: 'changeStatus', label: leftAction.label },
                 ...(onLongPressAction && onLongPressActionLabel
                     ? [{ name: 'longPressAction', label: onLongPressActionLabel }]
                     : []),
-                { name: 'delete', label: t('common.delete') || 'Delete' },
+                { name: 'delete', label: tFallback(t, 'common.delete', 'Delete') },
             ]
             : []),
     ];

@@ -90,7 +90,9 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Español',
         nonLatin: false,
-        coverageFloor: 62,
+        // Re-pinned 62->60 (i18n-fallback-20260730-12): 71 new en.ts keys grew the
+        // denominator; es's numerator (translated count) is unchanged.
+        coverageFloor: 60,
     },
     hi: {
         loadSync: () => require('./locales/hi') as typeof import('./locales/hi'),
@@ -99,7 +101,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'हिन्दी',
         nonLatin: true,
-        coverageFloor: 65,
+        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 62,
     },
     ar: {
         loadSync: () => require('./locales/ar') as typeof import('./locales/ar'),
@@ -108,7 +111,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'العربية',
         nonLatin: true,
-        coverageFloor: 66,
+        // Re-pinned 66->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 64,
     },
     de: {
         loadSync: () => require('./locales/de') as typeof import('./locales/de'),
@@ -117,7 +121,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Deutsch',
         nonLatin: false,
-        coverageFloor: 66,
+        // Re-pinned 66->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 64,
     },
     ru: {
         loadSync: () => require('./locales/ru') as typeof import('./locales/ru'),
@@ -126,7 +131,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Русский',
         nonLatin: true,
-        coverageFloor: 65,
+        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 62,
     },
     ja: {
         loadSync: () => require('./locales/ja') as typeof import('./locales/ja'),
@@ -135,7 +141,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: '日本語',
         nonLatin: true,
-        coverageFloor: 65,
+        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 62,
     },
     fr: {
         loadSync: () => require('./locales/fr') as typeof import('./locales/fr'),
@@ -153,7 +160,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Português',
         nonLatin: false,
-        coverageFloor: 67,
+        // Re-pinned 67->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 64,
     },
     pl: {
         loadSync: () => require('./locales/pl') as typeof import('./locales/pl'),
@@ -162,7 +170,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Polski',
         nonLatin: false,
-        coverageFloor: 66,
+        // Re-pinned 66->63 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 63,
     },
     cs: {
         loadSync: () => require('./locales/cs') as typeof import('./locales/cs'),
@@ -191,7 +200,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Italiano',
         nonLatin: false,
-        coverageFloor: 71,
+        // Re-pinned 71->69 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 69,
     },
     tr: {
         loadSync: () => require('./locales/tr') as typeof import('./locales/tr'),
@@ -200,7 +210,8 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Türkçe',
         nonLatin: false,
-        coverageFloor: 67,
+        // Re-pinned 67->65 (i18n-fallback-20260730-12): denominator growth only, see es above.
+        coverageFloor: 65,
     },
     nl: {
         loadSync: () => require('./locales/nl') as typeof import('./locales/nl'),

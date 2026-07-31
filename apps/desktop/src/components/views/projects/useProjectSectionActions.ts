@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Project, Section } from '@mindwtr/core';
+import { tFallback, type Project, type Section } from '@mindwtr/core';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 
 type UseProjectSectionActionsParams = {
@@ -42,8 +42,8 @@ export function useProjectSectionActions({
         const confirmed = await requestConfirmation({
             title: t('projects.sectionsLabel'),
             description: t('projects.deleteSectionConfirm'),
-            confirmLabel: t('common.delete') || 'Delete',
-            cancelLabel: t('common.cancel') || 'Cancel',
+            confirmLabel: tFallback(t, 'common.delete', 'Delete'),
+            cancelLabel: tFallback(t, 'common.cancel', 'Cancel'),
         });
         if (confirmed) {
             deleteSection(section.id);

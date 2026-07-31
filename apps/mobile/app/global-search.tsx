@@ -13,8 +13,7 @@ import {
     Platform,
     Pressable,
 } from 'react-native';
-import {
-    useTaskStore,
+import { useTaskStore,
     generateUUID,
     SavedSearch,
     SearchProjectResult,
@@ -26,8 +25,7 @@ import {
     PRESET_CONTEXTS,
     PRESET_TAGS,
     shallow,
-    translateWithFallback,
-} from '@mindwtr/core';
+    translateWithFallback, tFallback, } from '@mindwtr/core';
 import { computeGlobalSearchResults } from '@mindwtr/core/global-search-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useLanguage } from '../contexts/language-context';
@@ -309,7 +307,7 @@ export default function SearchScreen() {
     selectedStatuses.forEach((status) => {
         activeChips.push({
             key: `status:${status}`,
-            label: t(`status.${status}`) || status,
+            label: tFallback(t, `status.${status}`, status),
             onPress: () => toggleStatus(status),
         });
     });
@@ -340,7 +338,7 @@ export default function SearchScreen() {
     if (duePreset !== 'any') {
         activeChips.push({
             key: `due:${duePreset}`,
-            label: `${t('taskEdit.dueDateLabel') || 'Due'}: ${dueLabels[duePreset]}`,
+            label: `${tFallback(t, 'taskEdit.dueDateLabel', 'Due')}: ${dueLabels[duePreset]}`,
             onPress: () => setDuePreset('any'),
         });
     }
@@ -362,7 +360,7 @@ export default function SearchScreen() {
     if (!includeReference) {
         activeChips.push({
             key: 'hideReference',
-            label: `${hideLabel}: ${t('status.reference') || 'Reference'}`,
+            label: `${hideLabel}: ${tFallback(t, 'status.reference', 'Reference')}`,
             onPress: () => setIncludeReference(true),
         });
     }
@@ -503,7 +501,7 @@ export default function SearchScreen() {
                             showsVerticalScrollIndicator={false}
                         >
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('search.due.label') || 'Due date'}
+                                {tFallback(t, 'search.due.label', 'Due date')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {(['any', 'overdue', 'today', 'tomorrow', 'this_week', 'next_week', 'none'] as const).map((value) =>
@@ -512,29 +510,29 @@ export default function SearchScreen() {
                             </View>
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('taskEdit.locationLabel') || 'Location'}
+                                {tFallback(t, 'taskEdit.locationLabel', 'Location')}
                             </Text>
                             <TextInput
-                                accessibilityLabel={t('taskEdit.locationLabel') || 'Location'}
+                                accessibilityLabel={tFallback(t, 'taskEdit.locationLabel', 'Location')}
                                 autoCapitalize="none"
                                 autoCorrect={false}
                                 style={[styles.filterInput, { color: tc.text, borderColor: tc.border, backgroundColor: tc.filterBg }]}
                                 value={locationQuery}
                                 onChangeText={setLocationQuery}
-                                placeholder={t('taskEdit.locationPlaceholder') || 'e.g. Office'}
+                                placeholder={tFallback(t, 'taskEdit.locationPlaceholder', 'e.g. Office')}
                                 placeholderTextColor={tc.secondaryText}
                                 returnKeyType="done"
                             />
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('filters.contexts') || 'Contexts & tags'}
+                                {tFallback(t, 'filters.contexts', 'Contexts & tags')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {allTokens.map((token) => renderChip(token, selectedTokens.includes(token), () => toggleToken(token)))}
                             </View>
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('search.include.label') || 'Include'}
+                                {tFallback(t, 'search.include.label', 'Include')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {renderChip(
@@ -555,12 +553,12 @@ export default function SearchScreen() {
                             </View>
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('taskEdit.statusLabel') || 'Status'}
+                                {tFallback(t, 'taskEdit.statusLabel', 'Status')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {statusOptions.map((status) =>
                                     renderChip(
-                                        t(`status.${status}`) || status,
+                                        tFallback(t, `status.${status}`, status),
                                         selectedStatuses.includes(status),
                                         () => toggleStatus(status)
                                     )
@@ -568,7 +566,7 @@ export default function SearchScreen() {
                             </View>
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('search.scope.label') || 'Scope'}
+                                {tFallback(t, 'search.scope.label', 'Scope')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {(['all', 'projects', 'tasks', 'project_tasks'] as const).map((value) =>
@@ -577,16 +575,16 @@ export default function SearchScreen() {
                             </View>
 
                             <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>
-                                {t('taskEdit.areaLabel') || 'Area'}
+                                {tFallback(t, 'taskEdit.areaLabel', 'Area')}
                             </Text>
                             <View style={styles.chipRow}>
                                 {renderChip(
-                                    `${t('common.all')} ${t('taskEdit.areaLabel') || 'Area'}`,
+                                    `${t('common.all')} ${tFallback(t, 'taskEdit.areaLabel', 'Area')}`,
                                     selectedArea === 'all',
                                     () => setSelectedArea('all')
                                 )}
                                 {renderChip(
-                                    t('taskEdit.noAreaOption') || 'No Area',
+                                    tFallback(t, 'taskEdit.noAreaOption', 'No Area'),
                                     selectedArea === 'none',
                                     () => setSelectedArea('none')
                                 )}

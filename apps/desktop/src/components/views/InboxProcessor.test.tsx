@@ -183,7 +183,7 @@ describe('InboxProcessor', () => {
             expect(useUiStore.getState().toasts).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
-                        message: 'projects.createFailed',
+                        message: 'Failed to create project',
                         tone: 'error',
                     }),
                 ]),

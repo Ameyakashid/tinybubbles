@@ -1116,7 +1116,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             : t('quickAdd.audioCaptureLabel');
     const pastedImageLabel = pastedImageAttachments.length === 1
         ? tFallback(t, 'quickAdd.pastedImageAttached', '1 image attached')
-        : tFallback(t, 'quickAdd.pastedImagesAttached', `${pastedImageAttachments.length} images attached`);
+        : tFallback(t, 'quickAdd.pastedImagesAttached', '{{count}} images attached').replace('{{count}}', String(pastedImageAttachments.length));
     const saveDisabled = isPastingImage || (!value.trim() && pastedImageAttachments.length === 0);
     const bulkTaskCount = bulkQuickAddLines?.length ?? 0;
     const bulkConfirmTitle = tFallback(t, 'quickAdd.bulkConfirmTitle', 'Create {{count}} tasks?')
