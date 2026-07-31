@@ -234,6 +234,17 @@ export const LOCALES = {
         // handoff, but the floor reflects the real, complete translation.
         coverageFloor: 100,
     },
+    sv: {
+        loadSync: () => require('./locales/sv') as typeof import('./locales/sv'),
+        loadAsync: () => import('./locales/sv'),
+        export: 'svOverrides',
+        mode: 'overrides',
+        native: 'Svenska',
+        nonLatin: false,
+        // Full key parity measured at add time (2227/2227 = 100%); mode stays
+        // 'overrides' (not 'full') to mirror fa/ar's shape.
+        coverageFloor: 100,
+    },
 } as const satisfies Record<string, LocaleDescriptor>;
 
 /** Every locale code except 'en' (see the header comment for why English lives outside this table). */

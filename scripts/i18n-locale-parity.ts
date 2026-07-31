@@ -31,6 +31,7 @@ const LOCALES: LocaleTarget[] = [
     { locale: 'pl', path: 'packages/core/src/i18n/locales/pl.ts' },
     { locale: 'pt', path: 'packages/core/src/i18n/locales/pt.ts' },
     { locale: 'ru', path: 'packages/core/src/i18n/locales/ru.ts' },
+    { locale: 'sv', path: 'packages/core/src/i18n/locales/sv.ts' },
     { locale: 'tr', path: 'packages/core/src/i18n/locales/tr.ts' },
     { locale: 'vi', path: 'packages/core/src/i18n/locales/vi.ts' },
     { locale: 'zh-Hans', path: 'packages/core/src/i18n/locales/zh-Hans.ts', fullParity: true },

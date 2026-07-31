@@ -14,6 +14,7 @@ import { nlOverrides } from './locales/nl';
 import { plOverrides } from './locales/pl';
 import { ptOverrides } from './locales/pt';
 import { ruOverrides } from './locales/ru';
+import { svOverrides } from './locales/sv';
 import { trOverrides } from './locales/tr';
 import { viOverrides } from './locales/vi';
 import { zhHans } from './locales/zh-Hans';
@@ -31,7 +32,7 @@ const translationsByLocale: Record<Locale, Record<string, string>> = {
     zh: zhHans, 'zh-Hant': zhHant,
     ar: arOverrides, cs: csOverrides, de: deOverrides, es: esOverrides, fa: faOverrides, fr: frOverrides,
     hi: hiOverrides, it: itOverrides, ja: jaOverrides, ko: koOverrides, nl: nlOverrides,
-    pl: plOverrides, pt: ptOverrides, ru: ruOverrides, tr: trOverrides, vi: viOverrides,
+    pl: plOverrides, pt: ptOverrides, ru: ruOverrides, sv: svOverrides, tr: trOverrides, vi: viOverrides,
 };
 
 const locales = Object.entries(LOCALES) as Array<[Locale, (typeof LOCALES)[Locale]]>;

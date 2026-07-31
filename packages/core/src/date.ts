@@ -15,7 +15,7 @@ import {
     startOfMonth as startOfGregorianMonth,
     type Locale,
 } from 'date-fns';
-import { ar, cs, de, enGB, enUS, es, faIR, fr, hi, it, ja, ko, nl, pl, ptBR, ru, tr, vi, zhCN, zhTW } from 'date-fns/locale';
+import { ar, cs, de, enGB, enUS, es, faIR, fr, hi, it, ja, ko, nl, pl, ptBR, ru, sv, tr, vi, zhCN, zhTW } from 'date-fns/locale';
 import {
     addMonths as addJalaliMonths,
     endOfMonth as endOfJalaliMonth,
@@ -63,6 +63,7 @@ const DATE_LOCALE_BY_LANGUAGE: Record<Language, Locale> = {
     tr,
     nl,
     fa: faIR,
+    sv,
 };
 const LOCALE_TAG_BY_LANGUAGE: Record<Language, string> = {
     en: 'en-US',
@@ -84,6 +85,7 @@ const LOCALE_TAG_BY_LANGUAGE: Record<Language, string> = {
     it: 'it-IT',
     tr: 'tr-TR',
     nl: 'nl-NL',
+    sv: 'sv-SE',
 };
 
 let activeLocale: Locale = DEFAULT_LOCALE;

@@ -54,6 +54,32 @@ export const allowedEnglishMirrorKeysByLocale: Record<string, readonly string[]>
         'settings.eink',
         'settings.appleRemindersImport.appleReminders',
     ],
+    sv: [
+        // Swedish shares these words with English identically (loanwords or
+        // Latin-derived cognates spelled the same way in both languages), or the
+        // term is a proper noun/brand kept in Latin per the add-swedish handoff.
+        'keybindings.style.standard',
+        'settings.gtdMobile.standard',
+        'taskEdit.start',
+        'calendar.start',
+        'taskEdit.statusLabel',
+        'projects.statusLabel',
+        'bulk.organizeStatus',
+        'settings.dropboxStatus',
+        'taskEdit.relativeStartMinutesShort',
+        'taskEdit.repeatReminderMinutesShort',
+        'settings.system',
+        'settings.eink',
+        'settings.sepia',
+        'settings.version',
+        'settings.data',
+        'settings.captureDefaultText',
+        'settings.syncHistoryBackend',
+        'settings.rendering',
+        'settings.localApiPort',
+        'settings.emailCapturePort',
+        'settings.appleRemindersImport.appleReminders',
+    ],
     fr: [
         'calendar.date',
         'keybindings.style.standard',

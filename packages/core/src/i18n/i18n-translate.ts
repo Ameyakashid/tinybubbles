@@ -706,6 +706,10 @@ const translationPairs: Record<Language, Array<[string, string]>> = {
         en: [],
         zh: [],
         'zh-Hant': [],
+        // Swedish is Latin-script and fully covered by locales/sv.ts; this
+        // supplementary word-substitution table (used for stray English text
+        // outside the normal key set) is left empty like en/zh/zh-Hant above.
+        sv: [],
         es: [
             ['Settings', 'Ajustes'],
             ['General', 'General'],
