@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getModelOptions } from '@mindwtr/core';
 import type { AppData } from '@mindwtr/core';
 
 import { useAiSettings } from './useAiSettings';
@@ -25,6 +26,25 @@ const tauriCoreMocks = vi.hoisted(() => ({
 
 const eventMocks = vi.hoisted(() => ({
     listen: vi.fn(),
+}));
+
+const coreMocks = vi.hoisted(() => ({
+    fetchProviderModelsCached: vi.fn(),
+}));
+
+const aiConfigMocks = vi.hoisted(() => ({
+    loadAIKey: vi.fn(async (_provider: string) => ''),
+    saveAIKey: vi.fn(async () => undefined),
+}));
+
+vi.mock('../../../lib/ai-config', () => ({
+    loadAIKey: aiConfigMocks.loadAIKey,
+    saveAIKey: aiConfigMocks.saveAIKey,
+}));
+
+vi.mock('@mindwtr/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@mindwtr/core')>(),
+    fetchProviderModelsCached: coreMocks.fetchProviderModelsCached,
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -67,6 +87,7 @@ describe('useAiSettings speech provider changes', () => {
         pathMocks.join.mockImplementation(async (...parts: string[]) => parts.join('/'));
         tauriCoreMocks.invoke.mockResolvedValue(null);
         eventMocks.listen.mockResolvedValue(vi.fn());
+        coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
     });
 
     it('does not reuse a Whisper model file path when switching to Parakeet', () => {
@@ -334,5 +355,166 @@ describe('useAiSettings speech provider changes', () => {
             },
         });
         expect(showSaved).toHaveBeenCalled();
+    });
+});
+
+describe('useAiSettings live model lists', () => {
+    // A base URL is the credential-free trigger (self-hosted servers, #930), so
+    // these render without waiting for the async key load.
+    const localOpenAiSettings = (
+        extra: Partial<NonNullable<AppData['settings']['ai']>> = {}
+    ): AppData['settings'] => ({
+        ai: {
+            provider: 'openai',
+            baseUrl: 'http://localhost:1234/v1',
+            model: 'my-local-model',
+            ...extra,
+        },
+    });
+
+    function Probe({ settings }: { settings: AppData['settings'] }) {
+        const result = useAiSettings({
+            isTauri: false,
+            settings,
+            updateSettings: vi.fn(async () => undefined),
+            showSaved: vi.fn(),
+        });
+        return (
+            <output data-testid="options">
+                {JSON.stringify({
+                    model: result.aiModelOptions,
+                    copilot: result.aiCopilotOptions,
+                    speech: result.speechModelOptions,
+                })}
+            </output>
+        );
+    }
+
+    const read = () => JSON.parse(screen.getByTestId('options').textContent ?? '{}');
+
+    // The fetch effects debounce, so nothing is in flight until the timer runs —
+    // and a key that arrives asynchronously only schedules its timer on the
+    // render after it lands, hence two passes.
+    const settle = async () => {
+        for (let pass = 0; pass < 2; pass += 1) {
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(600);
+            });
+        }
+    };
+
+    const renderOptions = async (settings: AppData['settings']) => {
+        const view = render(<Probe settings={settings} />);
+        await settle();
+        return view;
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.useFakeTimers();
+        fsMocks.exists.mockResolvedValue(false);
+        fsMocks.size.mockResolvedValue(0);
+        pathMocks.join.mockImplementation(async (...parts: string[]) => parts.join('/'));
+        eventMocks.listen.mockResolvedValue(vi.fn());
+        coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
+        aiConfigMocks.loadAIKey.mockImplementation(async () => '');
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('offers the fetched chat models, keeping a listed selection in place', async () => {
+        coreMocks.fetchProviderModelsCached.mockResolvedValue(['live-a', 'live-b']);
+
+        await renderOptions(localOpenAiSettings({ copilotModel: 'live-b' }));
+
+        expect(read().model).toEqual(['my-local-model', 'live-a', 'live-b']);
+        expect(read().copilot).toEqual(['live-a', 'live-b']);
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith('openai', {
+            apiKey: '',
+            baseUrl: 'http://localhost:1234/v1',
+            kind: 'chat',
+        });
+    });
+
+    it('keeps the static catalog when the fetch fails', async () => {
+        coreMocks.fetchProviderModelsCached.mockRejectedValue(new Error('offline'));
+
+        await renderOptions(localOpenAiSettings());
+
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalled();
+        expect(read().model).toEqual(['my-local-model', ...getModelOptions('openai')]);
+    });
+
+    it('keeps the static catalog when the provider lists nothing', async () => {
+        coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
+
+        await renderOptions(localOpenAiSettings());
+
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalled();
+        expect(read().model).toEqual(['my-local-model', ...getModelOptions('openai')]);
+    });
+
+    it('fetches transcription models for a self-hosted speech server', async () => {
+        coreMocks.fetchProviderModelsCached.mockResolvedValue(['live-whisper']);
+
+        await renderOptions(localOpenAiSettings({
+            speechToText: { provider: 'openai', model: 'whisper-1', baseUrl: 'http://localhost:9000/v1' },
+        }));
+
+        expect(read().speech).toEqual(['whisper-1', 'live-whisper']);
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith('openai', {
+            apiKey: '',
+            baseUrl: 'http://localhost:9000/v1',
+            kind: 'transcription',
+        });
+    });
+
+    it('never fetches for the local Whisper and Parakeet catalogs', async () => {
+        coreMocks.fetchProviderModelsCached.mockResolvedValue(['live-a']);
+
+        await renderOptions(localOpenAiSettings({
+            speechToText: { provider: 'whisper', model: 'whisper-tiny' },
+        }));
+
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledTimes(1);
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith('openai', expect.objectContaining({ kind: 'chat' }));
+        expect(coreMocks.fetchProviderModelsCached).not.toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ kind: 'transcription' })
+        );
+    });
+
+    it('does not call any provider without a key or base URL', async () => {
+        await renderOptions({ ai: { provider: 'gemini' } });
+
+        expect(coreMocks.fetchProviderModelsCached).not.toHaveBeenCalled();
+        expect(read().model).toEqual(getModelOptions('gemini'));
+    });
+
+    it('waits for the new provider key instead of reusing the previous one', async () => {
+        aiConfigMocks.loadAIKey.mockImplementation(async (provider: string) => {
+            // Gemini's key never arrives, so a stale OpenAI key is the only one
+            // the fetch could possibly reach for.
+            if (provider !== 'openai') return await new Promise<string>(() => {});
+            return 'sk-openai';
+        });
+
+        const { rerender } = await renderOptions({ ai: { provider: 'openai' } });
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith(
+            'openai',
+            expect.objectContaining({ apiKey: 'sk-openai' })
+        );
+
+        coreMocks.fetchProviderModelsCached.mockClear();
+        rerender(<Probe settings={{ ai: { provider: 'gemini' } }} />);
+        await settle();
+
+        expect(coreMocks.fetchProviderModelsCached).not.toHaveBeenCalledWith(
+            'gemini',
+            expect.objectContaining({ apiKey: 'sk-openai' })
+        );
+        expect(coreMocks.fetchProviderModelsCached).not.toHaveBeenCalled();
     });
 });

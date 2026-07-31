@@ -4,10 +4,12 @@ import {
     DEFAULT_ANTHROPIC_THINKING_BUDGET,
     DEFAULT_GEMINI_THINKING_BUDGET,
     DEFAULT_REASONING_EFFORT,
+    fetchProviderModelsCached,
     getDefaultAIConfig,
     getDefaultCopilotModel,
     getCopilotModelOptions,
     getModelOptions,
+    mergeModelOptions,
 } from '@mindwtr/core';
 import { exists, remove, size } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
@@ -36,6 +38,15 @@ type UseAiSettingsOptions = {
     enabled?: boolean;
 };
 
+// Typing a key by hand would otherwise fire one list request per keystroke.
+const MODEL_FETCH_DEBOUNCE_MS = 400;
+
+// A loaded key belongs to the provider it was loaded for. Effects in one commit
+// all see that commit's values, so a bare `key` string would still be the old
+// provider's secret on the render where the provider flipped — tagging it lets
+// the fetch gate itself off until the matching key arrives.
+type LoadedKey = { provider: string; value: string };
+
 type AiSettingsUpdate = Partial<AiSettings>;
 type SpeechSettings = NonNullable<AiSettings['speechToText']>;
 type SpeechSettingsUpdate = Partial<SpeechSettings>;
@@ -48,17 +59,22 @@ type SpeechDownloadProgress = {
 };
 
 export function useAiSettings({ isTauri, settings, updateSettings, showSaved, enabled = true }: UseAiSettingsOptions) {
-    const [aiApiKey, setAiApiKey] = useState('');
-    const [speechApiKey, setSpeechApiKey] = useState('');
+    const [aiKey, setAiKey] = useState<LoadedKey>({ provider: '', value: '' });
+    const [speechKey, setSpeechKey] = useState<LoadedKey>({ provider: '', value: '' });
     const [speechDownloadState, setSpeechDownloadState] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
     const [speechDownloadError, setSpeechDownloadError] = useState<string | null>(null);
     const [speechOfflinePath, setSpeechOfflinePath] = useState<string | null>(null);
     const [speechOfflineSize, setSpeechOfflineSize] = useState<number | null>(null);
     const [speechOfflineReadyState, setSpeechOfflineReadyState] = useState(false);
     const [speechDownloadProgress, setSpeechDownloadProgress] = useState<SpeechDownloadProgress | null>(null);
+    // Live provider model lists (#986). null = nothing fetched yet or the fetch
+    // failed, which mergeModelOptions degrades to the static catalog.
+    const [fetchedChatModels, setFetchedChatModels] = useState<string[] | null>(null);
+    const [fetchedSpeechModels, setFetchedSpeechModels] = useState<string[] | null>(null);
     const showToast = useUiStore((state) => state.showToast);
 
     const aiProvider = (settings?.ai?.provider ?? 'openai') as AIProviderId;
+    const aiApiKey = aiKey.provider === aiProvider ? aiKey.value : '';
     const aiEnabled = settings?.ai?.enabled === true;
     const aiDefaults = getDefaultAIConfig(aiProvider);
     const aiModel = settings?.ai?.model ?? aiDefaults.model;
@@ -67,12 +83,13 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     const aiReasoningEffort = (settings?.ai?.reasoningEffort ?? DEFAULT_REASONING_EFFORT) as AIReasoningEffort;
     const aiThinkingBudget = settings?.ai?.thinkingBudget ?? aiDefaults.thinkingBudget ?? DEFAULT_GEMINI_THINKING_BUDGET;
     const anthropicThinkingEnabled = aiProvider === 'anthropic' && aiThinkingBudget > 0;
-    const aiModelOptions = getModelOptions(aiProvider);
+    const aiModelOptions = mergeModelOptions(fetchedChatModels, getModelOptions(aiProvider), aiModel);
     const aiCopilotModel = settings?.ai?.copilotModel ?? getDefaultCopilotModel(aiProvider);
-    const aiCopilotOptions = getCopilotModelOptions(aiProvider);
+    const aiCopilotOptions = mergeModelOptions(fetchedChatModels, getCopilotModelOptions(aiProvider), aiCopilotModel);
 
     const speechSettings = settings?.ai?.speechToText ?? {};
     const speechProvider = speechSettings.provider ?? 'gemini';
+    const speechApiKey = speechKey.provider === speechProvider ? speechKey.value : '';
     const speechEnabled = speechSettings.enabled === true;
     const speechModel = speechSettings.model ?? (
         speechProvider === 'openai'
@@ -87,13 +104,14 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     const speechLanguage = speechSettings.language ?? '';
     const speechMode = (speechSettings.mode ?? 'smart_parse') as AudioCaptureMode;
     const speechFieldStrategy = (speechSettings.fieldStrategy ?? 'smart') as AudioFieldStrategy;
-    const speechModelOptions = speechProvider === 'openai'
+    const staticSpeechModelOptions = speechProvider === 'openai'
         ? OPENAI_SPEECH_MODELS
         : speechProvider === 'gemini'
             ? GEMINI_SPEECH_MODELS
             : speechProvider === 'parakeet'
                 ? PARAKEET_MODELS.map((model) => model.id)
                 : WHISPER_MODELS.map((model) => model.id);
+    const speechModelOptions = mergeModelOptions(fetchedSpeechModels, staticSpeechModelOptions, speechModel);
 
     const selectedLocalSpeechModelSize = speechProvider === 'whisper'
         ? WHISPER_MODELS.find((model) => model.id === speechModel)?.sizeBytes ?? null
@@ -134,7 +152,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     }, [anthropicThinkingEnabled, updateAISettings]);
 
     const handleAiApiKeyChange = useCallback((value: string) => {
-        setAiApiKey(value);
+        setAiKey({ provider: aiProvider, value });
         saveAIKey(aiProvider, value).catch((error) => reportError('Failed to save AI key', error));
     }, [aiProvider, enabled]);
 
@@ -157,7 +175,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     }, [speechSettings.offlineModelPath, speechSettings.provider, updateSpeechSettings]);
 
     const handleSpeechApiKeyChange = useCallback((value: string) => {
-        setSpeechApiKey(value);
+        setSpeechKey({ provider: speechProvider, value });
         if (speechProvider !== 'whisper' && speechProvider !== 'parakeet') {
             saveAIKey(speechProvider as AIProviderId, value).catch((error) => reportError('Failed to save speech API key', error));
         }
@@ -193,10 +211,10 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         markSettingsOpenTrace('ai-settings-load-provider-key', { provider: aiProvider });
         measureSettingsOpenStep(`ai-load-key:${aiProvider}`, () => loadAIKey(aiProvider))
             .then((key) => {
-                if (active) setAiApiKey(key);
+                if (active) setAiKey({ provider: aiProvider, value: key });
             })
             .catch(() => {
-                if (active) setAiApiKey('');
+                if (active) setAiKey({ provider: aiProvider, value: '' });
             });
         return () => {
             active = false;
@@ -211,7 +229,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
             };
         }
         if (speechProvider === 'whisper' || speechProvider === 'parakeet') {
-            setSpeechApiKey('');
+            setSpeechKey({ provider: speechProvider, value: '' });
             return () => {
                 active = false;
             };
@@ -219,15 +237,70 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         markSettingsOpenTrace('ai-settings-load-speech-key', { provider: speechProvider });
         measureSettingsOpenStep(`ai-load-speech-key:${speechProvider}`, () => loadAIKey(speechProvider as AIProviderId))
             .then((key) => {
-                if (active) setSpeechApiKey(key);
+                if (active) setSpeechKey({ provider: speechProvider, value: key });
             })
             .catch(() => {
-                if (active) setSpeechApiKey('');
+                if (active) setSpeechKey({ provider: speechProvider, value: '' });
             });
         return () => {
             active = false;
         };
     }, [speechProvider]);
+
+    // Live assistant/copilot model list (#986). The keys above arrive
+    // asynchronously, so this reruns once aiApiKey lands. Any failure keeps the
+    // static catalog — the pickers must never break on a bad network.
+    useEffect(() => {
+        setFetchedChatModels(null);
+        const apiKey = aiApiKey.trim();
+        const baseUrl = aiBaseUrl.trim();
+        // A self-hosted OpenAI-compatible server needs no key (#930); official
+        // endpoints list nothing without one, so don't bother asking.
+        if (!enabled || (!apiKey && !(aiProvider === 'openai' && baseUrl))) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            fetchProviderModelsCached(aiProvider, { apiKey, baseUrl, kind: 'chat' })
+                .then((models) => {
+                    if (!cancelled) setFetchedChatModels(models);
+                })
+                .catch(() => {
+                    // Static catalog stays; nothing to tell the user.
+                });
+        }, MODEL_FETCH_DEBOUNCE_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [aiApiKey, aiBaseUrl, aiProvider, enabled]);
+
+    // Live speech model list (#986). Whisper/Parakeet are local sha256-pinned
+    // catalogs — never fetched.
+    useEffect(() => {
+        setFetchedSpeechModels(null);
+        const apiKey = speechApiKey.trim();
+        const baseUrl = speechBaseUrl.trim();
+        const remote = speechProvider === 'openai' || speechProvider === 'gemini';
+        if (!enabled || !remote || (!apiKey && !(speechProvider === 'openai' && baseUrl))) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            fetchProviderModelsCached(speechProvider, {
+                apiKey,
+                baseUrl,
+                // Gemini transcribes with its regular generateContent models.
+                kind: speechProvider === 'openai' ? 'transcription' : 'chat',
+            })
+                .then((models) => {
+                    if (!cancelled) setFetchedSpeechModels(models);
+                })
+                .catch(() => {
+                    // Static list stays.
+                });
+        }, MODEL_FETCH_DEBOUNCE_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [enabled, speechApiKey, speechBaseUrl, speechProvider]);
 
     useEffect(() => {
         if (!enabled || !isTauri) {

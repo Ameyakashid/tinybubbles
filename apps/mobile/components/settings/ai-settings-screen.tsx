@@ -8,11 +8,13 @@ import {
     DEFAULT_ANTHROPIC_THINKING_BUDGET,
     DEFAULT_GEMINI_THINKING_BUDGET,
     DEFAULT_REASONING_EFFORT,
+    fetchProviderModelsCached,
     formatOpenAIExtraBodyParams,
     getCopilotModelOptions,
     getDefaultAIConfig,
     getDefaultCopilotModel,
     getModelOptions,
+    mergeModelOptions,
     parseOpenAIExtraBodyParamsInput,
     type AIProviderId,
     type AIReasoningEffort,
@@ -44,6 +46,15 @@ import { SettingsTopBar } from './settings.shell';
 import { styles } from './settings.styles';
 
 
+// Typing a key by hand would otherwise fire one list request per keystroke.
+const MODEL_FETCH_DEBOUNCE_MS = 400;
+
+// A loaded key belongs to the provider it was loaded for. Effects in one commit
+// all see that commit's values, so a bare `key` string would still be the old
+// provider's secret on the render where the provider flipped — tagging it lets
+// the fetch gate itself off until the matching key arrives.
+type LoadedKey = { provider: string; value: string };
+
 export function AISettingsScreen() {
     const tc = useThemeColors();
     const { showToast } = useToast();
@@ -53,8 +64,8 @@ export function AISettingsScreen() {
     const extraConfig = Constants.expoConfig?.extra as MobileExtraConfig | undefined;
     const isFossBuild = extraConfig?.isFossBuild === true || extraConfig?.isFossBuild === 'true';
     const isExpoGo = Constants.appOwnership === 'expo';
-    const [aiApiKey, setAiApiKey] = useState('');
-    const [speechApiKey, setSpeechApiKey] = useState('');
+    const [aiKey, setAiKey] = useState<LoadedKey>({ provider: '', value: '' });
+    const [speechKey, setSpeechKey] = useState<LoadedKey>({ provider: '', value: '' });
     const [whisperDownloadState, setWhisperDownloadState] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
     const [whisperDownloadError, setWhisperDownloadError] = useState('');
     const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
@@ -64,22 +75,30 @@ export function AISettingsScreen() {
         formatOpenAIExtraBodyParams(settings.ai?.openAIExtraBodyParams)
     );
     const [openAIExtraParamsError, setOpenAIExtraParamsError] = useState('');
+    // Live provider model lists (#986). null = nothing fetched yet or the fetch
+    // failed, which mergeModelOptions degrades to the static catalog.
+    const [fetchedChatModels, setFetchedChatModels] = useState<string[] | null>(null);
+    const [fetchedSpeechModels, setFetchedSpeechModels] = useState<string[] | null>(null);
 
     const aiProvider = (isFossBuild ? 'openai' : (settings.ai?.provider ?? 'openai')) as AIProviderId;
+    const aiApiKey = aiKey.provider === aiProvider ? aiKey.value : '';
     const aiEnabled = settings.ai?.enabled === true;
-    const aiModelOptions = isFossBuild ? FOSS_LOCAL_LLM_MODEL_OPTIONS : getModelOptions(aiProvider);
+    const staticAiModelOptions = isFossBuild ? FOSS_LOCAL_LLM_MODEL_OPTIONS : getModelOptions(aiProvider);
     const aiModel = settings.ai?.model ?? (isFossBuild ? FOSS_LOCAL_LLM_MODEL_OPTIONS[0] : getDefaultAIConfig(aiProvider).model);
+    const aiModelOptions = mergeModelOptions(fetchedChatModels, staticAiModelOptions, aiModel);
     const aiBaseUrl = settings.ai?.baseUrl ?? '';
     const aiOpenAIExtraBodyParams = settings.ai?.openAIExtraBodyParams;
     const aiReasoningEffort = (settings.ai?.reasoningEffort ?? DEFAULT_REASONING_EFFORT) as AIReasoningEffort;
     const aiThinkingBudget = settings.ai?.thinkingBudget ?? getDefaultAIConfig(aiProvider).thinkingBudget ?? 0;
-    const aiCopilotOptions = isFossBuild ? FOSS_LOCAL_LLM_COPILOT_OPTIONS : getCopilotModelOptions(aiProvider);
+    const staticAiCopilotOptions = isFossBuild ? FOSS_LOCAL_LLM_COPILOT_OPTIONS : getCopilotModelOptions(aiProvider);
     const aiCopilotModel = settings.ai?.copilotModel ?? (isFossBuild ? FOSS_LOCAL_LLM_COPILOT_OPTIONS[0] : getDefaultCopilotModel(aiProvider));
+    const aiCopilotOptions = mergeModelOptions(fetchedChatModels, staticAiCopilotOptions, aiCopilotModel);
     const anthropicThinkingEnabled = aiProvider === 'anthropic' && aiThinkingBudget > 0;
     const speechSettings = settings.ai?.speechToText ?? {};
     const speechEnabled = speechSettings.enabled === true;
     const configuredSpeechProvider = isFossBuild ? 'whisper' : (speechSettings.provider ?? 'gemini');
     const speechProvider = (configuredSpeechProvider === 'parakeet' ? 'whisper' : configuredSpeechProvider) as 'openai' | 'gemini' | 'whisper';
+    const speechApiKey = speechKey.provider === speechProvider ? speechKey.value : '';
     const speechModel = speechSettings.model ?? (
         speechProvider === 'openai'
             ? DEFAULT_OPENAI_STT_MODEL
@@ -91,13 +110,14 @@ export function AISettingsScreen() {
     const speechLanguage = speechSettings.language ?? 'auto';
     const speechMode = speechSettings.mode ?? 'smart_parse';
     const speechFieldStrategy = speechSettings.fieldStrategy ?? 'smart';
-    const speechModelOptions = isFossBuild
+    const staticSpeechModelOptions = isFossBuild
         ? WHISPER_MODELS.map((model) => model.id)
         : speechProvider === 'openai'
             ? ['gpt-transcribe', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1']
             : speechProvider === 'gemini'
                 ? ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']
                 : WHISPER_MODELS.map((model) => model.id);
+    const speechModelOptions = mergeModelOptions(fetchedSpeechModels, staticSpeechModelOptions, speechModel);
 
     const aiSettings = settings.ai;
     const updateAISettings = useCallback((next: Partial<NonNullable<AppSettings['ai']>>) => {
@@ -240,16 +260,80 @@ export function AISettingsScreen() {
     }, [isFossBuild, settings.ai?.speechToText?.model, settings.ai?.speechToText?.provider, updateSpeechSettings]);
 
     useEffect(() => {
-        loadAIKey(aiProvider).then(setAiApiKey).catch(logSettingsError);
+        loadAIKey(aiProvider)
+            .then((value) => setAiKey({ provider: aiProvider, value }))
+            .catch(logSettingsError);
     }, [aiProvider]);
 
     useEffect(() => {
         if (speechProvider === 'whisper') {
-            setSpeechApiKey('');
+            setSpeechKey({ provider: speechProvider, value: '' });
             return;
         }
-        loadAIKey(speechProvider).then(setSpeechApiKey).catch(logSettingsError);
+        loadAIKey(speechProvider)
+            .then((value) => setSpeechKey({ provider: speechProvider, value }))
+            .catch(logSettingsError);
     }, [speechProvider]);
+
+    // Live assistant/copilot model list (#986). The keys above arrive
+    // asynchronously, so this reruns once aiApiKey lands. Any failure keeps the
+    // static catalog — the pickers must never break on a bad network.
+    useEffect(() => {
+        setFetchedChatModels(null);
+        const apiKey = aiApiKey.trim();
+        const baseUrl = aiBaseUrl.trim();
+        // FOSS builds only ever talk to the user's own server, so a base URL is
+        // required and no key is; elsewhere a self-hosted OpenAI-compatible
+        // server needs no key either (#930), while the official endpoints list
+        // nothing without one.
+        const canFetch = isFossBuild
+            ? Boolean(baseUrl)
+            : Boolean(apiKey) || (aiProvider === 'openai' && Boolean(baseUrl));
+        if (!canFetch) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            fetchProviderModelsCached(aiProvider, { apiKey, baseUrl, kind: 'chat' })
+                .then((models) => {
+                    if (!cancelled) setFetchedChatModels(models);
+                })
+                .catch(() => {
+                    // Static catalog stays; nothing to tell the user.
+                });
+        }, MODEL_FETCH_DEBOUNCE_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [aiApiKey, aiBaseUrl, aiProvider, isFossBuild]);
+
+    // Live speech model list (#986). Whisper is a local sha256-pinned catalog —
+    // never fetched, which also covers FOSS builds (Whisper is their only STT).
+    useEffect(() => {
+        setFetchedSpeechModels(null);
+        const apiKey = speechApiKey.trim();
+        const baseUrl = speechBaseUrl.trim();
+        if (speechProvider === 'whisper') return;
+        if (!apiKey && !(speechProvider === 'openai' && baseUrl)) return;
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            fetchProviderModelsCached(speechProvider, {
+                apiKey,
+                baseUrl,
+                // Gemini transcribes with its regular generateContent models.
+                kind: speechProvider === 'openai' ? 'transcription' : 'chat',
+            })
+                .then((models) => {
+                    if (!cancelled) setFetchedSpeechModels(models);
+                })
+                .catch(() => {
+                    // Static list stays.
+                });
+        }, MODEL_FETCH_DEBOUNCE_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [speechApiKey, speechBaseUrl, speechProvider]);
 
     const handleAIProviderChange = (provider: AIProviderId) => {
         if (provider === aiProvider) return;
@@ -275,7 +359,7 @@ export function AISettingsScreen() {
     };
 
     const handleAiApiKeyChange = useCallback((value: string) => {
-        setAiApiKey(value);
+        setAiKey({ provider: aiProvider, value });
         saveAIKey(aiProvider, value).catch(logSettingsError);
     }, [aiProvider]);
 
@@ -322,7 +406,7 @@ export function AISettingsScreen() {
     }, [updateSpeechSettings]);
 
     const handleSpeechApiKeyChange = useCallback((value: string) => {
-        setSpeechApiKey(value);
+        setSpeechKey({ provider: speechProvider, value });
         if (speechProvider === 'whisper') return;
         saveAIKey(speechProvider, value).catch(logSettingsError);
     }, [speechProvider]);
