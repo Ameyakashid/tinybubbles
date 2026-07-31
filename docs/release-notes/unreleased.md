@@ -14,3 +14,4 @@ _None yet._
 - Mobile: the Area chip in the Add Task options row shows its icon like the Contexts and Project chips. (#632)
 - Mobile: editing or completing one task no longer re-renders every visible row, cutting the per-action lag in large projects. (#766)
 - Mobile: task rows no longer stay stuck mid-air after a drag ends in Task order mode, which left permanent gaps and overlapping cards in long lists. (#784)
+- Feedback form: the email field now says it is how you get a reply, instead of showing an example address.
