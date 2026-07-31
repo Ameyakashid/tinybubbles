@@ -16,10 +16,21 @@ const NATIVE_HTTP_TIMEOUT_SECS: u64 = 30;
 // The saved Proxy URL must reach every native request: env vars
 // (HTTP_PROXY/HTTPS_PROXY) still apply as reqwest defaults when no proxy is
 // configured in the app (#864).
+// TLS backend split (#663, #973): Windows must use native-tls (schannel) —
+// corporate TLS interception like Zscaler needs the OS chain engine
+// (intermediate/enterprise cert stores, AIA fetching), which rustls with
+// native roots cannot do, so it fails with "UnknownIssuer" where curl works.
+// macOS must use rustls — Secure Transport never gained TLS 1.3, so
+// TLS-1.3-only servers reject it with "bad protocol version". Linux keeps
+// rustls with native roots (covers private CAs in the system store).
+// Known ceiling: schannel on Windows 10 has no TLS 1.3, matching 1.1.0-1.1.5.
 fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Client, String> {
-    let mut builder = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS))
-        .use_rustls_tls();
+    let builder = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS));
+    #[cfg(target_os = "windows")]
+    let mut builder = builder.use_native_tls();
+    #[cfg(not(target_os = "windows"))]
+    let mut builder = builder.use_rustls_tls();
     if let Some(url) = proxy_url.map(str::trim).filter(|url| !url.is_empty()) {
         let proxy = reqwest::Proxy::all(url)
             .map_err(|error| format!("Invalid proxy URL ({url}): {error}"))?;
