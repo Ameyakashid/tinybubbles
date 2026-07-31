@@ -8,4 +8,4 @@ _None yet._
 
 ## Full Change List
 
-_None yet._
+- Mobile: adding a task from a project opened via the Projects tab returns to that project again instead of dropping back to the projects list. (#766)

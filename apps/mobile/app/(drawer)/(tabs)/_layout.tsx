@@ -17,7 +17,7 @@ import { useThemeTokens } from '@/hooks/use-theme-tokens';
 import { MOBILE_HOME_TAB_ROUTE } from '@/lib/home-route';
 import { useLanguage } from '../../../contexts/language-context';
 import { QuickCaptureSheet } from '@/components/quick-capture-sheet';
-import { QuickCaptureProvider } from '../../../contexts/quick-capture-context';
+import { QuickCaptureProvider, useQuickCapture, type QuickCaptureOptions } from '../../../contexts/quick-capture-context';
 import { getDefaultTaskAreaMode, useTaskStore, type MobileQuickAccessView, type SavedSearch, type Task } from '@mindwtr/core';
 import {
   coerceMobileQuickAccessView,
@@ -558,6 +558,8 @@ export default function TabLayout() {
   const { t } = useLanguage();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // The root layout's provider, which presents capture as a pushed route.
+  const { openQuickCapture: openRouteQuickCapture } = useQuickCapture();
   const settings = useTaskStore((state) => state.settings);
   const { selectedAreaIdForNewTasks } = useMobileAreaFilter();
   const defaultAreaMode = getDefaultTaskAreaMode(settings);
@@ -598,7 +600,16 @@ export default function TabLayout() {
     return Object.keys(nextInitialProps).length > 0 ? nextInitialProps : undefined;
   }, [defaultAreaMode, selectedAreaIdForNewTasks]);
 
-  const openQuickCapture = useCallback((options?: { initialValue?: string; initialProps?: Partial<Task>; autoRecord?: boolean }) => {
+  const openQuickCapture = useCallback((options?: QuickCaptureOptions) => {
+    // A capture that promises to return somewhere (project quick add, #938)
+    // needs a real route change: its caller dismisses UI and restores it on
+    // the focus event when capture pops. The tab sheet opens in place — no
+    // blur, no focus — so returnTo captures go through the root capture
+    // screen instead of stranding the caller on its base screen.
+    if (options?.returnTo) {
+      openRouteQuickCapture({ ...options, initialProps: withSelectedArea(options.initialProps) });
+      return;
+    }
     setCaptureState((prev) => ({
       visible: true,
       openRequestId: prev.openRequestId + 1,
@@ -606,7 +617,7 @@ export default function TabLayout() {
       initialProps: withSelectedArea(options?.initialProps) ?? null,
       autoRecord: options?.autoRecord ?? false,
     }));
-  }, [withSelectedArea]);
+  }, [openRouteQuickCapture, withSelectedArea]);
 
   const closeQuickCapture = useCallback(() => {
     setCaptureState((prev) => ({

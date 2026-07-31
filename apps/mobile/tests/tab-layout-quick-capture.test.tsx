@@ -9,6 +9,10 @@ import { unstable_settings as drawerLayoutSettings } from '../app/(drawer)/_layo
 import TabLayout from '../app/(drawer)/(tabs)/_layout';
 
 const mockRouterPush = vi.hoisted(() => vi.fn());
+const mockRouteQuickCapture = vi.hoisted(() => vi.fn());
+const tabProviderValue = vi.hoisted(() => ({
+  current: null as null | { openQuickCapture: (options?: Record<string, unknown>) => void },
+}));
 const mockRestorableRoute = vi.hoisted(() => ({
   current: null as null | { pathname: string; params?: Record<string, string> },
 }));
@@ -181,7 +185,11 @@ vi.mock('../contexts/language-context', () => ({
 }));
 
 vi.mock('../contexts/quick-capture-context', () => ({
-  QuickCaptureProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  QuickCaptureProvider: ({ value, children }: { value: unknown; children: React.ReactNode }) => {
+    tabProviderValue.current = value as typeof tabProviderValue.current;
+    return <>{children}</>;
+  },
+  useQuickCapture: () => ({ openQuickCapture: mockRouteQuickCapture }),
 }));
 
 vi.mock('react-native-safe-area-context', () => ({
@@ -357,6 +365,8 @@ const getMoreSheetMenu = (tree: ReturnType<typeof create>) => {
 describe('mobile tab quick capture', () => {
   beforeEach(() => {
     mockRouterPush.mockClear();
+    mockRouteQuickCapture.mockClear();
+    tabProviderValue.current = null;
     mockUseTaskStore.mockImplementation((selector?: (state: { settings: typeof mockTaskSettings }) => unknown) => {
       const state = { settings: mockTaskSettings };
       return selector ? selector(state) : state;
@@ -415,6 +425,38 @@ describe('mobile tab quick capture', () => {
     sheets = getQuickCaptureSheets(tree);
     expect(sheets).toHaveLength(1);
     expect(sheets[0]?.props.visible).toBe(true);
+  });
+
+  it('routes a returnTo capture through the root capture screen instead of the tab sheet', () => {
+    // The tab sheet opens in place with no route change, so a caller that
+    // dismissed its own UI expecting a focus event on return (project quick
+    // add, #938) would be stranded on its base screen.
+    let tree!: ReturnType<typeof create>;
+
+    act(() => {
+      tree = create(<TabLayout />);
+    });
+
+    act(() => {
+      tabProviderValue.current?.openQuickCapture({
+        initialProps: { projectId: 'project-1', status: 'next' },
+        returnTo: '/projects-screen?projectId=project-1',
+      });
+    });
+
+    expect(mockRouteQuickCapture).toHaveBeenCalledWith(expect.objectContaining({
+      initialProps: { projectId: 'project-1', status: 'next' },
+      returnTo: '/projects-screen?projectId=project-1',
+    }));
+    expect(getQuickCaptureSheets(tree)).toHaveLength(0);
+
+    // A plain capture still uses the in-place sheet.
+    act(() => {
+      tabProviderValue.current?.openQuickCapture();
+    });
+
+    expect(getQuickCaptureSheets(tree)).toHaveLength(1);
+    expect(mockRouteQuickCapture).toHaveBeenCalledTimes(1);
   });
 
   it('passes the selected area filter into quick capture initial props in active area mode', () => {
