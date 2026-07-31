@@ -109,7 +109,9 @@ describe('i18n fallback idiom ratchet', () => {
         }
 
         expect(violations).toEqual([]);
-    });
+        // Walking every apps/ source file takes ~9s on slower CI runners, well past
+        // vitest's 5s default.
+    }, 60_000);
 
     it('keeps every statically-referenced i18n key present in en.ts', () => {
         // Static analysis boundary: only literal-string keys are checkable this way.
@@ -147,5 +149,6 @@ describe('i18n fallback idiom ratchet', () => {
 
         const report = [...missing.entries()].map(([key, site]) => `${key} (${site})`);
         expect(report).toEqual([]);
-    });
+        // Same slow-runner allowance as the idiom scan above.
+    }, 60_000);
 });

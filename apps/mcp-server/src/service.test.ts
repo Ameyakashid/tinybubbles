@@ -796,6 +796,15 @@ describe('mcp service error taxonomy (local core adapter)', () => {
     // a test-isolation quirk, not a bug in the fix under test here.
     const service = seedRealService();
     try {
+      // The core store behind core-adapter.ts is a process-wide singleton, so
+      // depending on test-file order (CI's coverage run differs from a local
+      // `bun test`) tasks focused by earlier real-core-backed tests can still
+      // count toward the cap here. Unfocus any leftovers so the three setup
+      // stars below always land under the cap.
+      const leftovers = await service.listTasks({ status: 'all', isFocusedToday: true });
+      for (const leftover of leftovers) {
+        await service.updateTask({ id: leftover.id, isFocusedToday: false });
+      }
       const t1 = await service.addTask({ title: 't-1', status: 'next' });
       await service.updateTask({ id: t1.id, isFocusedToday: true });
       const t2 = await service.addTask({ title: 't-2', status: 'next' });
