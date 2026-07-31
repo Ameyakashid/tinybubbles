@@ -794,27 +794,24 @@ describe('mcp service error taxonomy (local core adapter)', () => {
     // backed test in this same file (core-adapter.ts's module-level store singleton doesn't
     // cleanly rehydrate between two independently-bootstrapped databases in one test process) --
     // a test-isolation quirk, not a bug in the fix under test here.
+    // core-adapter.ts's store is a process-wide singleton, so earlier real-core-backed
+    // test files can leave focused tasks in the in-memory store that this session still
+    // counts toward the cap — and a listTasks-based cleanup can't see them, because SQL
+    // reads hit this session's fresh database while store writes validate against the
+    // stale memory. Don't assume a clean slate: drive TO the cap by focusing new tasks
+    // until one rejects, and assert that first rejection is the validation error.
     const service = seedRealService();
     try {
-      // The core store behind core-adapter.ts is a process-wide singleton, so
-      // depending on test-file order (CI's coverage run differs from a local
-      // `bun test`) tasks focused by earlier real-core-backed tests can still
-      // count toward the cap here. Unfocus any leftovers so the three setup
-      // stars below always land under the cap.
-      const leftovers = await service.listTasks({ status: 'all', isFocusedToday: true });
-      for (const leftover of leftovers) {
-        await service.updateTask({ id: leftover.id, isFocusedToday: false });
+      let capError: { code?: string; message?: string } | null = null;
+      for (let i = 0; i < 6 && capError === null; i += 1) {
+        const task = await service.addTask({ title: `t-${i}`, status: 'next' });
+        try {
+          await service.updateTask({ id: task.id, isFocusedToday: true });
+        } catch (error) {
+          capError = error as { code?: string; message?: string };
+        }
       }
-      const t1 = await service.addTask({ title: 't-1', status: 'next' });
-      await service.updateTask({ id: t1.id, isFocusedToday: true });
-      const t2 = await service.addTask({ title: 't-2', status: 'next' });
-      await service.updateTask({ id: t2.id, isFocusedToday: true });
-      const t3 = await service.addTask({ title: 't-3', status: 'next' });
-      await service.updateTask({ id: t3.id, isFocusedToday: true });
-      const t4 = await service.addTask({ title: 't-4', status: 'next' });
-
-      await expect(service.updateTask({ id: t4.id, isFocusedToday: true }))
-        .rejects.toMatchObject({ code: 'validation_error', message: 'Maximum of 3 focused tasks allowed' });
+      expect(capError).toMatchObject({ code: 'validation_error', message: 'Maximum of 3 focused tasks allowed' });
     } finally {
       await service.close();
     }
