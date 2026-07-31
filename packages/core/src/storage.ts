@@ -6,6 +6,7 @@ export type TaskQueryOptions = {
     excludeStatuses?: TaskStatus[];
     includeArchived?: boolean;
     includeDeleted?: boolean;
+    isFocusedToday?: boolean;
 };
 
 export type SearchTaskResult = Pick<

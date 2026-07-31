@@ -2235,6 +2235,15 @@ pub(crate) fn query_tasks(
     options: TaskQueryOptions,
 ) -> Result<Vec<Value>, String> {
     let conn = open_sqlite(&app)?;
+    query_tasks_with_connection(&conn, &options)
+}
+
+// Lifted out of the #[tauri::command] closure so it's callable from a test with a plain
+// in-memory Connection - the command itself needs an AppHandle just to open the real db.
+fn query_tasks_with_connection(
+    conn: &Connection,
+    options: &TaskQueryOptions,
+) -> Result<Vec<Value>, String> {
     let mut where_clauses: Vec<String> = Vec::new();
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
 
@@ -2268,6 +2277,13 @@ pub(crate) fn query_tasks(
     if let Some(project_id) = options.project_id.as_ref() {
         where_clauses.push("projectId = ?".to_string());
         params.push(Box::new(project_id.clone()));
+    }
+
+    // COALESCE, not `= ?`: the column is nullable, and rows written before the field
+    // existed store NULL rather than 0 (mirrors buildTaskWhere in packages/core).
+    if let Some(is_focused_today) = options.is_focused_today {
+        where_clauses.push("COALESCE(isFocusedToday, 0) = ?".to_string());
+        params.push(Box::new(if is_focused_today { 1i64 } else { 0i64 }));
     }
 
     let sql = if where_clauses.is_empty() {
@@ -2461,6 +2477,69 @@ mod tests {
             &mapped, fixture,
             "Rust Task mapper must preserve every shared fixture value"
         );
+    }
+
+    /// Mirrors `packages/core/src/task-query.test.ts` and `local_api.rs`'s
+    /// fixture test against the SAME (tasks, query) -> expected ids table.
+    /// Unlike local_api's HTTP-query-param filter, this Tauri command takes a
+    /// JSON body shaped exactly like core's `TaskQueryOptions`, so every case
+    /// in the fixture is expressible here - none are skipped.
+    #[test]
+    fn query_tasks_with_connection_matches_task_query_fixture() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/task-query.fixtures.json"
+        ))
+        .expect("valid task query fixture");
+        let cases = cases.as_array().expect("fixture array");
+        assert!(!cases.is_empty(), "expected at least one fixture case");
+
+        for test_case in cases {
+            let name = test_case
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unnamed task query case");
+            let conn = Connection::open_in_memory().expect("should open in-memory db");
+            conn.execute_batch(SQLITE_SCHEMA)
+                .expect("should create schema");
+            // No upsert_project_row helper exists (this file only writes tasks) - the
+            // "projectId filters to one project" case references projects that are never
+            // inserted, so drop FK enforcement for this test the same way the exhaustive
+            // single-task fixture test above does.
+            conn.execute_batch("PRAGMA foreign_keys = OFF;")
+                .expect("should disable fixture foreign keys");
+
+            for task in test_case
+                .get("tasks")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("missing tasks array for {name}"))
+            {
+                upsert_task_row(&conn, task)
+                    .unwrap_or_else(|error| panic!("seeding task failed for {name}: {error}"));
+            }
+
+            let options: TaskQueryOptions = serde_json::from_value(
+                test_case.get("query").cloned().unwrap_or(serde_json::json!({})),
+            )
+            .unwrap_or_else(|error| panic!("invalid query descriptor for {name}: {error}"));
+            let expected_ids: Vec<String> = test_case
+                .get("expectedIds")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("missing expectedIds for {name}"))
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect();
+
+            let filtered = query_tasks_with_connection(&conn, &options)
+                .unwrap_or_else(|error| panic!("query_tasks_with_connection failed for {name}: {error}"));
+            let mut ids: Vec<String> = filtered
+                .iter()
+                .filter_map(|task| task.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect();
+            ids.sort();
+            let mut expected_ids = expected_ids;
+            expected_ids.sort();
+            assert_eq!(ids, expected_ids, "{name}");
+        }
     }
 
     #[test]

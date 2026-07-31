@@ -764,13 +764,14 @@ struct DropboxTokenResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TaskQueryOptions {
     status: Option<String>,
     project_id: Option<String>,
     exclude_statuses: Option<Vec<String>>,
     include_deleted: Option<bool>,
     include_archived: Option<bool>,
+    is_focused_today: Option<bool>,
 }
 
 struct QuickAddPending(Mutex<Option<String>>);

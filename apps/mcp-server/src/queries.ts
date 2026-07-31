@@ -3,6 +3,7 @@ import {
   PROJECT_SQLITE_COLUMNS,
   TASK_SQLITE_COLUMNS,
   areaFromSqliteRow,
+  buildTaskWhere,
   mapSqliteTaskRow,
   parseQuickAdd as parseQuickAddCore,
   personFromSqliteRow,
@@ -234,21 +235,26 @@ function mapTaskRow(row: TaskSqliteRow): TaskRow {
 }
 
 export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
-  const where: string[] = [];
-  const params: unknown[] = [];
   const { selectColumns } = getTaskColumns(db);
 
-  if (!input.includeDeleted) {
-    where.push('deletedAt IS NULL');
+  // A database predating this column cannot contain a focused row. Keep `true`
+  // narrow while treating every pre-column row as not focused for `false`.
+  if (input.isFocusedToday === true && !selectColumns.includes('isFocusedToday')) {
+    return [];
   }
-  if (input.status && input.status !== 'all') {
-    where.push('status = ?');
-    params.push(input.status);
-  }
-  if (input.projectId) {
-    where.push('projectId = ?');
-    params.push(input.projectId);
-  }
+  // mindwtr_list_tasks has no default done/archived hiding (unlike the cloud REST
+  // API's GET /v1/tasks) - opt out of buildTaskWhere's archived default explicitly
+  // via includeArchived rather than special-casing this surface's own default.
+  const { sql: coreWhere, params: coreParams } = buildTaskWhere({
+    status: input.status,
+    projectId: input.projectId,
+    includeDeleted: input.includeDeleted,
+    includeArchived: true,
+    isFocusedToday: selectColumns.includes('isFocusedToday') ? input.isFocusedToday : undefined,
+  });
+  const where: string[] = coreWhere ? [coreWhere] : [];
+  const params: unknown[] = [...coreParams];
+
   if (input.search) {
     const ftsQuery = buildTasksFtsQuery(input.search);
     if (ftsQuery && hasTasksFts(db)) {
@@ -269,17 +275,6 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
   if (input.dueDateTo) {
     where.push('date(dueDate) <= date(?)');
     params.push(input.dueDateTo);
-  }
-  // A database predating this column cannot contain a focused row. Keep `true`
-  // narrow while treating every pre-column row as not focused for `false`.
-  if (input.isFocusedToday === true && !selectColumns.includes('isFocusedToday')) {
-    return [];
-  }
-  // COALESCE, not `= ?`: the column is nullable, and rows written before the field existed
-  // store NULL rather than 0, which `isFocusedToday = 0` would drop from the false case.
-  if (input.isFocusedToday !== undefined && selectColumns.includes('isFocusedToday')) {
-    where.push('COALESCE(isFocusedToday, 0) = ?');
-    params.push(input.isFocusedToday ? 1 : 0);
   }
 
   const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(MAX_TASK_LIST_LIMIT, input.limit as number)) : 200;

@@ -4,6 +4,7 @@ import {
   cloudRequestJson,
   normalizeCloudUrl,
   PRIORITY_RANK,
+  taskMatchesQuery,
   type AppData,
   type RelativeStartOffset,
 } from '@mindwtr/core';
@@ -228,15 +229,20 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
       const data = await readData();
       const dueDateFrom = dateKey(input.dueDateFrom);
       const dueDateTo = dateKey(input.dueDateTo);
+      // mindwtr_list_tasks has no default done/archived hiding (unlike the cloud REST
+      // API's GET /v1/tasks) - opt out of taskMatchesQuery's archived default explicitly
+      // via includeArchived rather than special-casing this surface's own default.
       const filtered = data.tasks.filter((task) => {
-        if (!input.includeDeleted && !isLive(task)) return false;
-        if (input.status && input.status !== 'all' && task.status !== input.status) return false;
-        if (input.projectId && task.projectId !== input.projectId) return false;
+        if (!taskMatchesQuery(task, {
+          status: input.status,
+          projectId: input.projectId,
+          includeDeleted: input.includeDeleted,
+          includeArchived: true,
+          isFocusedToday: input.isFocusedToday,
+        })) return false;
         const due = dateKey(task.dueDate);
         if (dueDateFrom && (!due || due < dueDateFrom)) return false;
         if (dueDateTo && (!due || due > dueDateTo)) return false;
-        // Coerce: synced payloads carry booleans as true or 1, so `=== true` would drop rows.
-        if (input.isFocusedToday !== undefined && Boolean(task.isFocusedToday) !== input.isFocusedToday) return false;
         return matchesSearch(task, input.search);
       });
       const offset = normalizeOffset(input.offset);

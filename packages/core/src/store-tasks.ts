@@ -1,6 +1,7 @@
 import { collectFocusEligibilityTasks, resolveFocusStarAction, type FocusStarAction } from './focus-star';
 import type { AppData, PendingRemoteAttachmentDelete, Task, TaskStatus } from './types';
 import type { StorageAdapter, TaskQueryOptions } from './storage';
+import { taskMatchesQuery } from './task-query';
 import type { StoreActionResult, TaskStore } from './store-types';
 import {
     applyTaskUpdates,
@@ -363,25 +364,6 @@ const prepareTaskUpdatesForStore = ({
             ...adjustedUpdates,
             ...containerPatch.updates,
         },
-    };
-};
-
-const createTaskQueryMatcher = (
-    options: TaskQueryOptions,
-    { checkVisibility }: { checkVisibility: boolean }
-): ((task: Task) => boolean) => {
-    const statusFilter = options.status;
-    const excludeStatuses = options.excludeStatuses ?? [];
-    const includeArchived = options.includeArchived === true;
-    const includeDeleted = options.includeDeleted === true;
-    const projectId = options.projectId;
-
-    return (task) => {
-        if (checkVisibility && !isTaskVisible(task, { includeArchived, includeDeleted })) return false;
-        if (statusFilter && statusFilter !== 'all' && task.status !== statusFilter) return false;
-        if (excludeStatuses.length > 0 && excludeStatuses.includes(task.status)) return false;
-        if (projectId && task.projectId !== projectId) return false;
-        return true;
     };
 };
 
@@ -1223,8 +1205,11 @@ export const createTaskActions = ({ set, get, getStorage, debouncedSave, trackIm
                 : statusFilter && statusFilter !== 'all'
                     ? derived.activeTasksByStatus.get(statusFilter) ?? []
                     : state.tasks;
-            return indexedTasks.filter(createTaskQueryMatcher(options, { checkVisibility: false }));
+            // indexedTasks are already visible (deleted/archived excluded by whichever
+            // derived index produced them), so taskMatchesQuery's own visibility check
+            // here is redundant but harmless - cheaper than a second matcher variant.
+            return indexedTasks.filter((task) => taskMatchesQuery(task, options));
         }
-        return get()._allTasks.filter(createTaskQueryMatcher(options, { checkVisibility: true }));
+        return get()._allTasks.filter((task) => taskMatchesQuery(task, options));
     },
 });

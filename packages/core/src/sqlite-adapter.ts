@@ -8,6 +8,7 @@ export type CalendarSyncEntry = {
     lastSyncedAt: string;
 };
 import { SEARCH_RESULT_LIMIT, type SearchProjectResult, type SearchResults, type SearchTaskResult, type TaskQueryOptions } from './storage';
+import { buildTaskWhere } from './task-query';
 import { FTS_MAINTENANCE_TRIGGERS, SQLITE_BASE_SCHEMA, SQLITE_FTS_SCHEMA, SQLITE_INDEX_SCHEMA } from './sqlite-schema';
 import { normalizeTaskStatus } from './task-status';
 import { normalizeRecurrenceForLoad } from './recurrence';
@@ -947,31 +948,8 @@ export class SqliteAdapter {
 
     async queryTasks(options: TaskQueryOptions): Promise<Task[]> {
         await this.ensureSchema();
-        const where: string[] = [];
-        const params: unknown[] = [];
-        const includeDeleted = options.includeDeleted === true;
-        const includeArchived = options.includeArchived === true;
-
-        if (!includeDeleted) {
-            where.push('deletedAt IS NULL');
-        }
-        if (!includeArchived) {
-            where.push("status != 'archived'");
-        }
-        if (options.status && options.status !== 'all') {
-            where.push('status = ?');
-            params.push(options.status);
-        }
-        if (options.excludeStatuses && options.excludeStatuses.length > 0) {
-            where.push(`status NOT IN (${options.excludeStatuses.map(() => '?').join(', ')})`);
-            params.push(...options.excludeStatuses);
-        }
-        if (options.projectId) {
-            where.push('projectId = ?');
-            params.push(options.projectId);
-        }
-
-        const sql = `SELECT * FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+        const { sql: where, params } = buildTaskWhere(options);
+        const sql = `SELECT * FROM tasks ${where ? `WHERE ${where}` : ''}`;
         const rows = await this.client.all<Record<string, unknown>>(sql, params);
         return rows.map((row) => this.mapTaskRow(row));
     }

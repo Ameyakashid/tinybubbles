@@ -1982,6 +1982,66 @@ mod tests {
         }
     }
 
+    /// Mirrors `packages/core/src/task-query.test.ts` against the SAME
+    /// (tasks, query) -> expected ids fixture table. `filter_tasks`'s query
+    /// param shape can't express every case the JS/SQL sides cover
+    /// (`excludeStatuses` lists, `projectId`, or "hide archived but keep
+    /// done" independently of `done`) - those cases carry `rustQuery: null`
+    /// and are skipped here; the TS test is the one asserting the full
+    /// fixture-name roster hasn't shrunk.
+    #[test]
+    fn local_api_filter_tasks_matches_task_query_fixture() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/task-query.fixtures.json"
+        ))
+        .expect("valid task query fixture");
+        let cases = cases.as_array().expect("fixture array");
+        let mut ran = 0;
+
+        for test_case in cases {
+            let name = test_case
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unnamed task query case");
+            let Some(rust_query) = test_case.get("rustQuery").and_then(Value::as_object) else {
+                continue;
+            };
+            let tasks = test_case
+                .get("tasks")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("missing tasks array for {name}"))
+                .clone();
+            let expected_ids: Vec<String> = test_case
+                .get("expectedIds")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("missing expectedIds for {name}"))
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect();
+            let query: HashMap<String, String> = rust_query
+                .iter()
+                .filter_map(|(key, value)| value.as_str().map(|v| (key.clone(), v.to_string())))
+                .collect();
+
+            let filtered = filter_tasks(tasks, &query).unwrap_or_else(|error| {
+                panic!("filter_tasks failed for {name}: {error}")
+            });
+            let mut ids: Vec<String> = filtered
+                .iter()
+                .filter_map(|task| task.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect();
+            ids.sort();
+            let mut expected_ids = expected_ids;
+            expected_ids.sort();
+            assert_eq!(ids, expected_ids, "{name}");
+            ran += 1;
+        }
+
+        // Sanity check on the check itself: if every case ever became
+        // `rustQuery: null`, the loop above would pass vacuously.
+        assert!(ran > 0, "expected at least one Rust-expressible fixture case");
+    }
+
     #[test]
     fn local_api_requires_bearer_token() {
         let mut headers = HashMap::new();

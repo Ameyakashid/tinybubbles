@@ -1,4 +1,4 @@
-import { AppData, mergeAppDataWithStats, SqliteAdapter, searchAll, splitSqlStatements, type SqliteClient, type CalendarSyncEntry, StorageAdapter, type Task } from '@mindwtr/core';
+import { AppData, mergeAppDataWithStats, SqliteAdapter, searchAll, splitSqlStatements, taskMatchesQuery, type SqliteClient, type CalendarSyncEntry, StorageAdapter, type Task } from '@mindwtr/core';
 import { AppState, NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1317,18 +1317,7 @@ const createStorage = (): StorageAdapter => {
                     warnPreferJsonBackup();
                 }
                 const data = await mobileStorage.getData();
-                const statusFilter = options.status;
-                const excludeStatuses = options.excludeStatuses ?? [];
-                const includeArchived = options.includeArchived === true;
-                const includeDeleted = options.includeDeleted === true;
-                return data.tasks.filter((task) => {
-                    if (!includeDeleted && task.deletedAt) return false;
-                    if (!includeArchived && task.status === 'archived') return false;
-                    if (statusFilter && statusFilter !== 'all' && task.status !== statusFilter) return false;
-                    if (excludeStatuses.length > 0 && excludeStatuses.includes(task.status)) return false;
-                    if (options.projectId && task.projectId !== options.projectId) return false;
-                    return true;
-                });
+                return data.tasks.filter((task) => taskMatchesQuery(task, options));
             }
             try {
                 await awaitQueuedSqliteWrites('query_tasks');
@@ -1349,18 +1338,7 @@ const createStorage = (): StorageAdapter => {
                 logStorageWarn('[Storage] SQLite query failed, falling back to in-memory filter', error);
             }
             const data = await mobileStorage.getData();
-            const statusFilter = options.status;
-            const excludeStatuses = options.excludeStatuses ?? [];
-            const includeArchived = options.includeArchived === true;
-            const includeDeleted = options.includeDeleted === true;
-            return data.tasks.filter((task) => {
-                if (!includeDeleted && task.deletedAt) return false;
-                if (!includeArchived && task.status === 'archived') return false;
-                if (statusFilter && statusFilter !== 'all' && task.status !== statusFilter) return false;
-                if (excludeStatuses.length > 0 && excludeStatuses.includes(task.status)) return false;
-                if (options.projectId && task.projectId !== options.projectId) return false;
-                return true;
-            });
+            return data.tasks.filter((task) => taskMatchesQuery(task, options));
         },
         searchAll: async (query: string) => {
             if (jsonIsReadAuthority()) {
