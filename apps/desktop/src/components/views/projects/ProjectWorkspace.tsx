@@ -6,6 +6,7 @@ import {
     collectBulkTaskTokens,
     compareTasksByProjectOrder,
     getSequentialProjectTaskCues,
+    isTaskFinished,
     type BulkOrganizeTaskUpdateInput,
     type Project,
     type ProjectSequenceTaskCue,
@@ -330,7 +331,7 @@ export function shouldShowProjectWorkspaceTask(
     if (!project) return false;
     if (task.deletedAt || task.projectId !== project.id) return false;
     if (task.status === 'reference') return false;
-    if (project.status === 'archived') return task.status === 'done' || task.status === 'archived';
+    if (project.status === 'archived') return isTaskFinished(task);
     if (task.status === 'done') return showCompletedTasks;
     return task.status !== 'archived';
 }
@@ -1230,7 +1231,7 @@ export function ProjectWorkspace({
     const projectProgress = (() => {
         if (!selectedProjectId) return null;
         if (isArchivedProject) {
-            const completedCount = projectAllTasks.filter((task) => task.status === 'done' || task.status === 'archived').length;
+            const completedCount = projectAllTasks.filter((task) => isTaskFinished(task)).length;
             return {
                 doneCount: completedCount,
                 remainingCount: 0,

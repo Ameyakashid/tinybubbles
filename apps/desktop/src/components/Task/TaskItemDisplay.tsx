@@ -1,6 +1,6 @@
 import { AlertTriangle, Calendar as CalendarIcon, Tag, Trash2, ArrowRight, Repeat, Check, Clock, Timer, Link2, Paperclip, RotateCcw, Copy, MapPin, History, Hourglass, Play, Zap, MoreHorizontal } from 'lucide-react';
 import type { Area, Attachment, Project, RangeSelectionOptions, Task, TaskStatus, RecurrenceRule, RecurrenceStrategy, Language } from '@mindwtr/core';
-import { DEFAULT_AREA_COLOR, formatRecurrenceLabel, formatTimeEstimateLabel, formatTimeSpentLabel, getChecklistProgress, getContextColor, getInlineMarkdownPreview, getRecurringTaskPreviewDate, getTaskAgeLabel, getTaskDateCoherenceIssues, getTaskStaleness, getTaskUrgency, hasTimeComponent, safeFormatDate, resolveTaskTextDirection, tFallback } from '@mindwtr/core';
+import { DEFAULT_AREA_COLOR, formatRecurrenceLabel, formatTimeEstimateLabel, formatTimeSpentLabel, getChecklistProgress, getContextColor, getInlineMarkdownPreview, getRecurringTaskPreviewDate, getTaskAgeLabel, getTaskDateCoherenceIssues, getTaskStaleness, getTaskUrgency, hasTimeComponent, isTaskActionable, isTaskFinished, safeFormatDate, resolveTaskTextDirection, tFallback } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { useBareFileReferenceCheck } from '../../lib/attachment-reference';
 import { getAttachmentDisplayTitle } from '../../lib/attachment-utils';
@@ -166,10 +166,9 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     // off completed rows — archived as well as done, which Archive started showing
     // when its rows became the shared read-only row (#968).
     const showAgeBadge = showTaskAge
-        && task.status !== 'done'
-        && task.status !== 'archived'
+        && !isTaskFinished(task)
         && Boolean(ageLabel);
-    const completionTimestamp = task.status === 'done' || task.status === 'archived'
+    const completionTimestamp = isTaskFinished(task)
         ? task.completedAt || task.updatedAt
         : undefined;
     const completionLabel = completionTimestamp
@@ -373,9 +372,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     const showQuickDoneButton = showQuickDone
         && !selectionMode
         && !readOnly
-        && task.status !== 'done'
-        && task.status !== 'archived'
-        && task.status !== 'reference';
+        && isTaskActionable(task);
     const canEditCompletedAt = Boolean(completionLabel && onEditCompletedAt) && !selectionMode;
     // A read-only row restores to where the task belongs: an archived task goes
     // back to the Inbox to be re-clarified, which is what Archive's bulk action
@@ -703,7 +700,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                                 dense ? "text-sm" : "text-base",
                                 // Archived work is finished work, so it reads struck
                                 // through the same way Done does.
-                                (task.status === 'done' || task.status === 'archived') && "line-through text-muted-foreground",
+                                isTaskFinished(task) && "line-through text-muted-foreground",
                                 actionsOverlay && "pr-20",
                                 (overlayDragHandle || overlayQuickDone) && "pl-12"
                             )}

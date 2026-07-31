@@ -1,6 +1,7 @@
 import { createElement, useCallback, useMemo } from 'react';
 import {
     DEFAULT_PROJECT_COLOR,
+    isTaskFinished,
     normalizeWeekStartSetting,
     shallow,
     tFallback,
@@ -94,7 +95,7 @@ export async function duplicateTaskAndReveal(
         if (task.projectId) {
             useUiStore.getState().setProjectView({ selectedProjectId: task.projectId });
             dispatchNavigateEvent('projects');
-        } else if (task.status === 'done' || task.status === 'archived') {
+        } else if (isTaskFinished(task)) {
             // The copy goes to the Inbox to be re-clarified, so it is never in the
             // Done/Archived list it was made from. Without this the duplicate
             // succeeds somewhere the user cannot see and the click reads as a
