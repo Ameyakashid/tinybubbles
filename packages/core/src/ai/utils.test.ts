@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseJson } from './utils';
+import { filterReviewSuggestionsToKnownIds, parseJson } from './utils';
 
 describe('parseJson', () => {
     it('extracts valid JSON from surrounding model text', () => {
@@ -67,5 +67,32 @@ describe('parseJson', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+});
+
+describe('filterReviewSuggestionsToKnownIds', () => {
+    const suggestion = (id: string) => ({ id, action: 'archive', reason: 'stale' });
+
+    it('keeps suggestions whose id was among the analyzed items', () => {
+        const kept = suggestion('task-1');
+        expect(filterReviewSuggestionsToKnownIds([kept], ['task-1', 'task-2'])).toEqual([kept]);
+    });
+
+    it('drops suggestions for ids that were never sent', () => {
+        const kept = suggestion('task-1');
+        expect(filterReviewSuggestionsToKnownIds([kept, suggestion('task-9')], ['task-1'])).toEqual([kept]);
+    });
+
+    it('keeps project-prefixed ids, which share the analyzed item list', () => {
+        const kept = suggestion('project:p1');
+        expect(filterReviewSuggestionsToKnownIds([kept, suggestion('project:p9')], ['project:p1'])).toEqual([kept]);
+    });
+
+    it('returns empty for an empty suggestion list', () => {
+        expect(filterReviewSuggestionsToKnownIds([], ['task-1'])).toEqual([]);
+    });
+
+    it('drops everything when no ids were analyzed', () => {
+        expect(filterReviewSuggestionsToKnownIds([suggestion('task-1')], [])).toEqual([]);
     });
 });

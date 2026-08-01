@@ -151,6 +151,21 @@ export function normalizeTimeEstimate(value?: string): string | undefined {
     return TIME_ESTIMATE_MAP[key];
 }
 
+/**
+ * Drops review suggestions whose id was not among the analyzed items. The model
+ * is free to echo any string back, and both platforms map suggestion ids
+ * straight into a status write, so only ids we actually sent may reach one.
+ * Ids keep the shape `getStaleItems` emitted (`project:<id>` for projects), so
+ * the item list is a complete allow-list for task and project suggestions alike.
+ */
+export function filterReviewSuggestionsToKnownIds<T extends { id: string }>(
+    suggestions: readonly T[],
+    knownIds: Iterable<string>
+): T[] {
+    const allowed = new Set(knownIds);
+    return suggestions.filter((suggestion) => allowed.has(suggestion.id));
+}
+
 export function normalizeTags(tags?: string[] | null): string[] {
     if (!tags || tags.length === 0) return [];
     const normalized = tags

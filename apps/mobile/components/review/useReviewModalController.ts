@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     buildReviewSteps,
     createAIProvider,
+    filterReviewSuggestionsToKnownIds,
     getExternalCalendarDaySummaries,
     getStaleItems,
     getWeeklyReviewBuckets,
@@ -315,7 +316,12 @@ export function useReviewModalController({
         try {
             const provider = createAIProvider(buildAIConfig(settings, apiKey));
             const response = await provider.analyzeReview({ items: staleItems });
-            const suggestions = response.suggestions || [];
+            // Filter here, not in the apply path, so what is displayed and what
+            // can be written never diverge.
+            const suggestions = filterReviewSuggestionsToKnownIds(
+                response.suggestions || [],
+                staleItems.map((item) => item.id),
+            );
             setAiSuggestions(suggestions);
             const defaultSelected = new Set(
                 suggestions.filter(isActionableSuggestion).map((suggestion) => suggestion.id),

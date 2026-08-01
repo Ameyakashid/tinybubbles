@@ -3,6 +3,7 @@ import {
     buildReviewSteps,
     createAIProvider,
     DEFAULT_AREA_COLOR,
+    filterReviewSuggestionsToKnownIds,
     formatI18nTemplate,
     getExternalCalendarDaySummaries,
     getPersonOptionNames,
@@ -336,9 +337,15 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
         try {
             const provider = createAIProvider(await buildAIConfig(settings, apiKey));
             const response = await provider.analyzeReview({ items: staleItems });
-            setAiSuggestions(response.suggestions || []);
+            // Filter here, not in the apply path, so what is displayed and what
+            // can be written never diverge.
+            const suggestions = filterReviewSuggestionsToKnownIds(
+                response.suggestions || [],
+                staleItems.map((item) => item.id),
+            );
+            setAiSuggestions(suggestions);
             const defaultSelected = new Set(
-                (response.suggestions || [])
+                suggestions
                     .filter(isActionableSuggestion)
                     .map((suggestion) => suggestion.id),
             );

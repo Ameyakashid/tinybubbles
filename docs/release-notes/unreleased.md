@@ -26,3 +26,5 @@ _None yet._
 - With an Area selected, the project picker's search now finds every project, not just the selected area's — the list still suggests the area's projects until you type. Applies to the task editor, inbox processing, and quick panels on desktop and mobile. (#987)
 - Sync (Local File Sync): setting up file sync in a fresh folder no longer fails with "TypeError: undefined is not an object" on every attempt — the first sync now completes and writes the sync file. (#990)
 - Russian: "No area" is now translated as «Нет области» instead of the literal «Нет площади».
+- Desktop: the file holding your saved passwords, sync tokens, and API keys is now readable only by your own user account. On a shared computer, other accounts could previously read it. If you have used Mindwtr on a machine you share, rotate those credentials.
+- Weekly review: the AI review step now ignores any suggestion that does not match one of the items it was asked to review, so nothing outside that list can be archived or moved to Someday.
