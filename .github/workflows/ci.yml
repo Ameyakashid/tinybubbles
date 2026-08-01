@@ -238,6 +238,10 @@ jobs:
           path: apps/desktop/coverage
           if-no-files-found: ignore
 
+      - name: Run Rust tests
+        timeout-minutes: 20
+        run: bun run native:test
+
       - name: Build Tauri app (debug, no bundle)
         timeout-minutes: 20
         run: cd apps/desktop && bunx tauri build --debug --no-bundle
