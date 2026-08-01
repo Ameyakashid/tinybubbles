@@ -235,6 +235,42 @@ describe('runSharedSyncCycle', () => {
         }), expect.anything());
     });
 
+    it('completes a fresh file sync when the remote payload is missing sections and people (#990)', async () => {
+        const local = createData([createTask('t-local', 'Local task')]);
+        // Exact synthetic "no remote yet" payload Rust's read_sync_file returns
+        // for a brand-new sync folder (apps/desktop/src-tauri/src/sync.rs)
+        // before the #990 fix — missing `sections` and `people`.
+        const remote = { tasks: [], projects: [], areas: [], settings: {} } as unknown as AppData;
+        const { harness, hooks, run } = createHarness({ local, remote, backend: 'file' });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(hooks.finalizeErrorStatus).not.toHaveBeenCalled();
+        expect(harness.persisted.settings.lastSyncHistory?.at(-1)).toMatchObject({ status: 'success' });
+    });
+
+    it('normalizes a partial remote payload before the pre-write remote comparison (#990 guard)', async () => {
+        const local = createData([createTask('t-local', 'Local task')]);
+        const partialRemote = { tasks: [], projects: [], areas: [], settings: {} } as unknown as AppData;
+        const { io, run } = createHarness({
+            local,
+            backend: 'file',
+            io: { readRemote: vi.fn(async () => partialRemote) },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        // writeRemoteForCycle computes a throwaway sanitized copy of the raw
+        // remote snapshot to compare against the merged payload before
+        // writing; on the un-normalized partial remote this used to throw
+        // inside sanitizeAppDataForRemote/compactSectionsForPurgedProjects
+        // before ever reaching writeRemote.
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+    });
+
     it('skips the second run as unchanged via the recorded fast-sync state', async () => {
         const { harness, io, run } = createHarness({ fastSyncScope: 'scope-1' });
 

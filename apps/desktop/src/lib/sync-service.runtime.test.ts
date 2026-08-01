@@ -475,6 +475,7 @@ describe('desktop sync-service runtime', () => {
             projects: [],
             sections: [],
             areas: [],
+            people: [],
             settings: {},
         };
         const mergedCloudData: AppData = {
@@ -1113,6 +1114,7 @@ describe('desktop sync-service runtime', () => {
             projects: [],
             sections: [],
             areas: [],
+            people: [],
             settings: {},
         };
         const localDropboxData: AppData = {

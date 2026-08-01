@@ -24,3 +24,4 @@ _None yet._
 - Desktop (Linux): the window's minimize/maximize/close buttons respond again on Wayland when the app starts unmaximized or is reopened from the tray, without needing to maximize the window first. (#988)
 - Nord theme: context dots and calendar colors now use Nord-flavored colors instead of the default palette — calendars follow the mapping contributed in the issue thread, and every stored color stays unchanged, so nothing re-syncs or moves. (#974)
 - With an Area selected, the project picker's search now finds every project, not just the selected area's — the list still suggests the area's projects until you type. Applies to the task editor, inbox processing, and quick panels on desktop and mobile. (#987)
+- Sync (Local File Sync): setting up file sync in a fresh folder no longer fails with "TypeError: undefined is not an object" on every attempt — the first sync now completes and writes the sync file. (#990)

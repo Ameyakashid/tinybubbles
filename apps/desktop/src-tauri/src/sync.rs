@@ -1475,6 +1475,21 @@ mod tests {
         );
         release_sync_lock(&first);
     }
+
+    #[test]
+    fn empty_remote_app_data_includes_every_app_data_array_surface() {
+        // Regression for #990: a fresh sync folder handed the JS sync cycle a
+        // partial remote (missing `sections`/`people`), which crashed
+        // downstream code that assumes every AppData array is present.
+        let payload = empty_remote_app_data();
+        for field in ["tasks", "projects", "sections", "areas", "people"] {
+            assert!(
+                payload.get(field).and_then(|value| value.as_array()).is_some(),
+                "empty_remote_app_data is missing AppData array surface {field:?}"
+            );
+        }
+        assert!(payload.get("settings").and_then(|value| value.as_object()).is_some());
+    }
 }
 
 #[tauri::command]
@@ -1617,6 +1632,21 @@ fn release_sync_lock(lock_path: &Path) {
     let _ = fs::remove_file(lock_path);
 }
 
+/// The "no remote yet" payload for a fresh sync folder. Must include every
+/// array/object surface on core `AppData` (packages/core/src/types.ts) —
+/// omitting one here hands the JS sync cycle a partial remote payload that
+/// crashes downstream code assuming every array is present (#990).
+fn empty_remote_app_data() -> serde_json::Value {
+    serde_json::json!({
+        "tasks": [],
+        "projects": [],
+        "sections": [],
+        "areas": [],
+        "people": [],
+        "settings": {}
+    })
+}
+
 #[tauri::command]
 pub(crate) fn read_sync_file(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let sync_dir =
@@ -1686,12 +1716,7 @@ pub(crate) fn read_sync_file(app: tauri::AppHandle) -> Result<serde_json::Value,
         if let Some(result) = read_seed_or_legacy_file() {
             return result;
         }
-        return Ok(serde_json::json!({
-            "tasks": [],
-            "projects": [],
-            "areas": [],
-            "settings": {}
-        }));
+        return Ok(empty_remote_app_data());
     }
 
     match read_json_with_retries(&sync_file, 5) {

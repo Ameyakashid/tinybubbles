@@ -309,12 +309,20 @@ class SharedSyncRunMachine {
         }
         await this.ensureNetwork();
         try {
-            const data = await this.requireIo().readRemote();
+            const raw = await this.requireIo().readRemote();
+            // Normalize once, here, at the single point every backend's remote
+            // payload enters the cycle: a backend can hand back a partial
+            // object (e.g. a fresh file-sync folder's synthesized "no remote
+            // yet" payload) missing an AppData array. Downstream code
+            // (sanitizeAppDataForRemote, tombstone checks, the merge itself)
+            // all assume every array is present (#990). A genuinely absent
+            // remote (`raw` null/undefined) stays null — merge-neutral.
+            const data = raw ? normalizeAppData(raw) : null;
             if (this.backend === 'webdav') {
                 this.state.webdavRemoteCorrupted = false;
             }
-            this.state.remoteDataForCompare = data ?? null;
-            return data ?? null;
+            this.state.remoteDataForCompare = data;
+            return data;
         } catch (error) {
             if (this.backend === 'webdav' && isWebdavInvalidJsonError(error)) {
                 this.state.webdavRemoteCorrupted = true;
