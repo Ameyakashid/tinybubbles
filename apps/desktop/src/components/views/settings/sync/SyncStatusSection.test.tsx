@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SyncStatusSection } from './SyncStatusSection';
@@ -7,7 +7,7 @@ const labels = new Proxy<Record<string, string>>({}, {
     get: (_target, key) => String(key),
 });
 
-function renderStatus(syncLastResultAt: string) {
+function renderStatus(syncLastResultAt: string, overrides: Record<string, unknown> = {}) {
     return render(
         <SyncStatusSection
             {...({
@@ -31,6 +31,7 @@ function renderStatus(syncLastResultAt: string) {
                 syncPreferences: {},
                 syncQueued: false,
                 t: labels,
+                ...overrides,
             } as any)}
         />
     );
@@ -53,5 +54,18 @@ describe('SyncStatusSection', () => {
         });
 
         expect(queryByText('lastSyncSuccess')).not.toBeInTheDocument();
+    });
+
+    it('disables snapshot restore while sync is active', () => {
+        const snapshot = 'data.2026-07-31T12-00-00.123456789.1.snapshot.json';
+        const { getByRole, queryByText } = renderStatus(new Date().toISOString(), {
+            isSyncing: true,
+            snapshots: [snapshot],
+        });
+
+        fireEvent.click(getByRole('button', { name: 'recoverySnapshots' }));
+
+        expect(getByRole('button', { name: 'recoverySnapshotsRestore' })).toBeDisabled();
+        expect(queryByText(snapshot)).not.toBeInTheDocument();
     });
 });

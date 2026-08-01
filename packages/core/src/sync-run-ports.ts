@@ -98,7 +98,7 @@ export interface SyncRunStorage {
     readPersistedLocal(): Promise<AppData>;
     /** Durably persist the merged snapshot locally. Implementations must mark
      *  the write as self-written for every watcher the platform runs. */
-    persistLocal(data: AppData): Promise<void>;
+    persistLocal(data: AppData): Promise<AppData | void>;
     /** Desktop only: apply persisted data to the in-memory store immediately
      *  after each local write (the machine then refreshes its change-tracking
      *  from the store). Mobile refreshes once at cycle end instead. */

@@ -358,8 +358,6 @@ export function CalendarView() {
     searchCandidates,
     selectCalendarComposerTask,
     selectedDate,
-    selectedDateAllDayEvents,
-    selectedDateAllDayScheduledTasks,
     selectedDateDeadlines,
     selectedDateExternalEvents,
     selectedDateLongLabel,
@@ -945,6 +943,13 @@ export function CalendarView() {
   );
 
   if (viewMode === 'day' && selectedDate && selectedDayStart && selectedDayEnd) {
+    const allDayItems = getCalendarItemsForDate(selectedDate)
+      .filter((item) => (
+        item.kind === 'deadline'
+        || item.kind === 'completed'
+        || (item.kind === 'scheduled' && isAllDayScheduledTask(item.task))
+        || (item.kind === 'event' && item.event.allDay)
+      ));
     const handleDayTimelinePress = (event: GestureResponderEvent) => {
       const dayMinutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
       const defaultDurationMinutes = 30;
@@ -1001,27 +1006,26 @@ export function CalendarView() {
               onScroll={handleTimelineScroll}
               scrollEventThrottle={16}
             >
-            {(selectedDateAllDayScheduledTasks.length > 0 || selectedDateAllDayEvents.length > 0) && (
+            {allDayItems.length > 0 && (
               <View style={[styles.allDayCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
                 <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>{t('calendar.allDay')}</Text>
-                {selectedDateAllDayScheduledTasks.slice(0, 6).map((task) => {
-                  const projected = isProjectedRecurringTask(task);
-                  const projectedDisplayLabel = projected
+                {allDayItems.slice(0, 12).map((item) => {
+                  const task = item.kind === 'event' ? null : item.task;
+                  const projected = task ? isProjectedRecurringTask(task) : false;
+                  const projectedDisplayLabel = projected && task
                     ? getProjectedRecurrenceDisplayLabel(task, tr('calendar.projectedRecurrence'))
                     : '';
                   return (
-                    <Pressable key={task.id} onPress={() => openTaskActions(task.id)} style={styles.allDayPressable}>
+                    <Pressable
+                      key={item.id}
+                      onPress={() => {
+                        if (item.kind === 'event') openExternalEvent(item.event);
+                        else openTaskActions(item.task.id);
+                      }}
+                      style={styles.allDayPressable}
+                    >
                       <Text style={[styles.allDayItem, { color: projected ? tc.tint : tc.text }]} numberOfLines={1}>
-                        {projected ? `${task.title} · ${projectedDisplayLabel}` : task.title}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-                {selectedDateAllDayEvents.slice(0, 6).map((event) => {
-                  return (
-                    <Pressable key={event.id} onPress={() => openExternalEvent(event)} style={styles.allDayPressable}>
-                      <Text style={[styles.allDayItem, { color: tc.text }]} numberOfLines={1}>
-                        {event.title}
+                        {projected ? `${item.title} · ${projectedDisplayLabel}` : item.title}
                       </Text>
                     </Pressable>
                   );

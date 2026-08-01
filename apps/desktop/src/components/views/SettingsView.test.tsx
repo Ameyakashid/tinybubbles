@@ -8,6 +8,9 @@ const calendarHookTracker = {
     mounts: 0,
     unmounts: 0,
 };
+const aiHookTracker = {
+    enabled: [] as boolean[],
+};
 let calendarHookUseEffect: typeof import('react').useEffect | null = null;
 
 vi.mock('../../hooks/usePerformanceMonitor', () => ({
@@ -112,7 +115,10 @@ vi.mock('./settings/SettingsIntegrationsPage', () => ({
 }));
 
 vi.mock('./settings/useAiSettings', () => ({
-    useAiSettings: () => ({ aiEnabled: false }),
+    useAiSettings: ({ enabled }: { enabled?: boolean }) => {
+        aiHookTracker.enabled.push(enabled ?? true);
+        return { aiEnabled: false };
+    },
 }));
 
 vi.mock('./settings/useSyncSettings', () => ({
@@ -151,6 +157,7 @@ describe('SettingsView', () => {
         window.localStorage.clear();
         calendarHookTracker.mounts = 0;
         calendarHookTracker.unmounts = 0;
+        aiHookTracker.enabled = [];
         calendarHookUseEffect = (await import('react')).useEffect;
         Object.defineProperty(window, 'requestAnimationFrame', {
             writable: true,
@@ -178,6 +185,24 @@ describe('SettingsView', () => {
             settings: {},
             updateSettings: vi.fn().mockResolvedValue(undefined),
         }));
+    });
+
+    it('activates AI loading only while the AI settings page is open', async () => {
+        const { getByRole } = render(
+            <LanguageProvider>
+                <KeybindingProvider currentView="settings" onNavigate={() => undefined}>
+                    <SettingsView />
+                </KeybindingProvider>
+            </LanguageProvider>
+        );
+
+        expect(aiHookTracker.enabled[aiHookTracker.enabled.length - 1]).toBe(false);
+
+        fireEvent.click(getByRole('button', { name: 'ai' }));
+
+        await waitFor(() => {
+            expect(aiHookTracker.enabled[aiHookTracker.enabled.length - 1]).toBe(true);
+        });
     });
 
     it('keeps integrations state mounted across parent rerenders', async () => {

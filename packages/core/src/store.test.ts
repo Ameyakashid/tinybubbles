@@ -1940,6 +1940,88 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState().error).toBe('Failed to fetch data: Database needs repair');
     });
 
+    it('acknowledges only a storage snapshot that fetchData applied', async () => {
+        const nowIso = '2026-07-31T12:00:00.000Z';
+        vi.setSystemTime(new Date(nowIso));
+        const persistedData: AppData = {
+            tasks: [],
+            projects: [],
+            sections: [],
+            areas: [],
+            settings: {
+                deviceId: 'device-a',
+                migrations: {
+                    version: 9999,
+                    lastAutoArchiveAt: nowIso,
+                    lastTombstoneCleanupAt: nowIso,
+                },
+                gtd: {
+                    taskEditor: { defaultsVersion: 9999 },
+                    focusGroupByDefaultsVersion: 1,
+                },
+            },
+        };
+        const acknowledgeDataLoad = vi.fn();
+        mockStorage.acknowledgeDataLoad = acknowledgeDataLoad;
+        mockStorage.getData = vi.fn().mockResolvedValue(persistedData);
+
+        await useTaskStore.getState().fetchData({ silent: true });
+
+        expect(acknowledgeDataLoad).toHaveBeenCalledOnce();
+        expect(acknowledgeDataLoad).toHaveBeenCalledWith(persistedData);
+
+        await useTaskStore.getState().fetchData({
+            silent: true,
+            preloadedData: persistedData,
+        });
+
+        expect(acknowledgeDataLoad).toHaveBeenCalledOnce();
+    });
+
+    it('does not acknowledge a fetched snapshot when sync bookkeeping queued a save during the read', async () => {
+        const nowIso = '2026-07-31T12:00:00.000Z';
+        vi.setSystemTime(new Date(nowIso));
+        const settledSettings: AppData['settings'] = {
+            deviceId: 'device-a',
+            lastSyncStatus: 'idle',
+            migrations: {
+                version: 9999,
+                lastAutoArchiveAt: nowIso,
+                lastTombstoneCleanupAt: nowIso,
+            },
+            gtd: {
+                taskEditor: { defaultsVersion: 9999 },
+                focusGroupByDefaultsVersion: 1,
+            },
+        };
+        const persistedData: AppData = {
+            tasks: [],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: settledSettings,
+        };
+        let resolveFetch: ((data: AppData) => void) | undefined;
+        mockStorage.getData = vi.fn(() => new Promise<AppData>((resolve) => {
+            resolveFetch = resolve;
+        }));
+        mockStorage.acknowledgeDataLoad = vi.fn();
+        useTaskStore.setState({ settings: settledSettings, lastDataChangeAt: 123 });
+
+        const fetchPromise = useTaskStore.getState().fetchData({ silent: true });
+        await waitForExpectation(() => {
+            expect(mockStorage.getData).toHaveBeenCalledOnce();
+        });
+
+        await useTaskStore.getState().updateSettings({ lastSyncStatus: 'success' });
+        expect(useTaskStore.getState().lastDataChangeAt).toBe(123);
+        resolveFetch?.(persistedData);
+        await fetchPromise;
+
+        expect(mockStorage.acknowledgeDataLoad).not.toHaveBeenCalled();
+    });
+
     it('tombstones duplicate active area names in current-version data during fetch', async () => {
         const nowIso = '2026-06-12T12:00:00.000Z';
         vi.setSystemTime(new Date(nowIso));
@@ -1990,6 +2072,10 @@ describe('TaskStore', () => {
     });
 
     it('does not overwrite local task edits made during an in-flight fetch', async () => {
+        const nowIso = '2026-07-31T12:00:00.000Z';
+        vi.setSystemTime(new Date(nowIso));
+        const acknowledgeDataLoad = vi.fn();
+        mockStorage.acknowledgeDataLoad = acknowledgeDataLoad;
         const persistedData = {
             tasks: [
                 {
@@ -2005,7 +2091,18 @@ describe('TaskStore', () => {
             projects: [],
             sections: [],
             areas: [],
-            settings: {},
+            settings: {
+                deviceId: 'device-a',
+                migrations: {
+                    version: 9999,
+                    lastAutoArchiveAt: nowIso,
+                    lastTombstoneCleanupAt: nowIso,
+                },
+                gtd: {
+                    taskEditor: { defaultsVersion: 9999 },
+                    focusGroupByDefaultsVersion: 1,
+                },
+            },
         };
         let resolveFetch: ((value: typeof persistedData) => void) | null = null;
         mockStorage.getData = vi.fn()
@@ -2032,6 +2129,7 @@ describe('TaskStore', () => {
 
         const currentTask = useTaskStore.getState()._allTasks.find((task) => task.id === 'task-1');
         expect(currentTask?.title).toBe('Edited during sync');
+        expect(acknowledgeDataLoad).toHaveBeenCalledOnce();
 
         const saveCalls = (mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls;
         const lastSaved = saveCalls[saveCalls.length - 1]?.[0];

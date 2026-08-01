@@ -143,6 +143,10 @@ describe('fetchProviderModels: gemini', () => {
             models: [
                 { name: 'models/gemini-3.6-flash', supportedGenerationMethods: ['generateContent'] },
                 { name: 'models/gemini-3.5-flash', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/gemini-2.5-flash-preview-tts', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/gemini-2.5-flash-native-audio-latest', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/gemini-2.0-flash-live-001', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/lyria-realtime-exp', supportedGenerationMethods: ['generateContent'] },
                 { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
                 { name: 'models/imagen-3.0', supportedGenerationMethods: ['generateContent'] },
                 { name: 'models/aqa-001', supportedGenerationMethods: ['generateContent'] },
@@ -154,6 +158,23 @@ describe('fetchProviderModels: gemini', () => {
         expect(models).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash']);
         expect(calls[0].url).toContain('key=g-key');
         expect(calls[0].url).toContain('pageSize=1000');
+    });
+
+    it('uses the same general multimodal models for transcription without audio-output models', async () => {
+        const { fetchImpl } = captureFetch(() => jsonResponse({
+            models: [
+                { name: 'models/gemini-3.6-flash', supportedGenerationMethods: ['generateContent'] },
+                { name: 'models/gemini-2.5-pro-preview-tts', supportedGenerationMethods: ['generateContent'] },
+            ],
+        }));
+
+        const models = await fetchProviderModels('gemini', {
+            fetchImpl,
+            apiKey: 'g-key',
+            kind: 'transcription',
+        });
+
+        expect(models).toEqual(['gemini-3.6-flash']);
     });
 
     it('throws without fetching when the API key is empty', async () => {

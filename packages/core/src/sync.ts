@@ -777,8 +777,8 @@ const getClockSkewWarning = (stats: MergeResult['stats']): ClockSkewWarning | un
 export function mergeAppDataWithStats(local: AppData, incoming: AppData, options: MergeAppDataOptions = {}): MergeResult {
     const nowIso = isValidTimestamp(options.nowIso) ? options.nowIso : new Date().toISOString();
     const signatureMemo = createSyncSignatureMemo();
-    const localSections = compactSectionsForPurgedProjects(local.sections || [], local.projects || []);
-    const incomingSections = compactSectionsForPurgedProjects(incoming.sections || [], incoming.projects || []);
+    const localSections = compactSectionsForPurgedProjects(local.sections || [], local.projects || [], true);
+    const incomingSections = compactSectionsForPurgedProjects(incoming.sections || [], incoming.projects || [], true);
     const localNormalized = {
         ...local,
         tasks: (local.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso, true))),
@@ -1250,10 +1250,11 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
         pendingRemoteWriteMeta?.pendingAt ?? nowIso,
         pendingRemoteWriteMeta?.attempts,
     );
-    const persistedFinalData = clearPendingRemoteWriteFlag(finalDataWithPendingRemoteWrite);
     io.onStep?.('write-local');
     await yieldToUi();
-    await io.writeLocal(finalDataWithPendingRemoteWrite);
+    const canonicalWithPendingRemoteWrite = await io.writeLocal(finalDataWithPendingRemoteWrite)
+        ?? finalDataWithPendingRemoteWrite;
+    const persistedFinalData = clearPendingRemoteWriteFlag(canonicalWithPendingRemoteWrite);
 
     io.onStep?.('write-remote');
     await yieldToUi();
@@ -1264,7 +1265,7 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
             await io.clearPendingRemoteWriteAfterLocalAbort?.(finalDataWithPendingRemoteWrite.settings.pendingRemoteWriteAt as string);
             throw error;
         }
-        const localDataWithRetry = withPendingRemoteWriteRetry(finalDataWithPendingRemoteWrite, nowIso, error);
+        const localDataWithRetry = withPendingRemoteWriteRetry(canonicalWithPendingRemoteWrite, nowIso, error);
         io.onStep?.('write-local');
         await yieldToUi();
         await io.writeLocal(localDataWithRetry);
@@ -1274,20 +1275,19 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
     io.onStep?.('write-local');
     await yieldToUi();
     try {
-        await io.writeLocal(persistedFinalData);
+        const canonicalPersistedData = await io.writeLocal(persistedFinalData) ?? persistedFinalData;
+        return {
+            data: canonicalPersistedData,
+            stats: mergeResult.stats,
+            status: nextSyncStatus,
+            clockSkewWarning: mergeResult.clockSkewWarning,
+        };
     } catch (error) {
         if (isLocalSyncAbortError(error)) {
             await io.clearPendingRemoteWriteAfterLocalAbort?.(finalDataWithPendingRemoteWrite.settings.pendingRemoteWriteAt as string);
         }
         throw error;
     }
-
-    return {
-        data: persistedFinalData,
-        stats: mergeResult.stats,
-        status: nextSyncStatus,
-        clockSkewWarning: mergeResult.clockSkewWarning,
-    };
 }
 
 export async function performSyncCycle(io: SyncCycleIO): Promise<SyncCycleResult> {

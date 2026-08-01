@@ -276,19 +276,20 @@ class SharedSyncRunMachine {
         return data;
     }
 
-    private async persistLocalDataWithTracking(data: AppData): Promise<void> {
-        await this.storage.persistLocal(data);
-        this.ensureLocalSnapshotFresh(data);
+    private async persistLocalDataWithTracking(data: AppData): Promise<AppData> {
+        const persisted = await this.storage.persistLocal(data) ?? data;
+        this.ensureLocalSnapshotFresh(persisted);
         if (this.storage.applyDataToStore) {
-            this.storage.applyDataToStore(data);
+            this.storage.applyDataToStore(persisted);
             const currentChangeAt = this.store.getLastDataChangeAt();
             this.state.localSnapshotChangeAt = currentChangeAt;
             this.state.localDataCache = {
                 changeAt: currentChangeAt,
-                data: normalizeAppData(data),
+                data: normalizeAppData(persisted),
             };
         }
         this.state.wroteLocal = true;
+        return persisted;
     }
 
     private async persistPreSyncedDataAfterAbort(): Promise<void> {
@@ -641,7 +642,7 @@ class SharedSyncRunMachine {
                     step: this.state.step,
                 });
                 this.ensureLocalSnapshotFresh(data);
-                await this.persistLocalDataWithTracking(data);
+                return this.persistLocalDataWithTracking(data);
             },
             clearPendingRemoteWriteAfterLocalAbort: async (pendingAt) => {
                 const current = this.store.getInMemorySnapshot();

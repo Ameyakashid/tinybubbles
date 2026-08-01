@@ -8,7 +8,13 @@ import {
     type ImportRunnerLog,
 } from './import-runner';
 import { SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
-import { createMockTask, mockAppData } from './sync-test-utils';
+import {
+    createMockArea,
+    createMockProject,
+    createMockSection,
+    createMockTask,
+    mockAppData,
+} from './sync-test-utils';
 import type { ParsedTodoistProject } from './todoist-import';
 import type { AppData } from './types';
 
@@ -114,13 +120,13 @@ describe('runImport', () => {
         const backup = mockAppData([
             { ...createMockTask('shared', '2026-01-20T00:00:00.000Z'), title: 'From backup' },
             { ...createMockTask('newer-local', '2026-01-01T00:00:00.000Z'), title: 'From backup' },
-            createMockTask('deleted-locally', '2026-01-01T00:00:00.000Z'),
+            createMockTask('deleted-locally', '2026-02-01T00:00:00.000Z'),
             createMockTask('backup-only', '2026-01-15T00:00:00.000Z'),
         ]);
         return { local, backup };
     };
 
-    it('merges a backup with sync semantics instead of replacing local data', async () => {
+    it('merges a backup additively instead of replacing local data', async () => {
         const { local, backup } = buildDivergedData();
         const { boundaries, persisted } = buildBoundaries(local);
         const { log, infoCalls } = buildLog();
@@ -132,8 +138,8 @@ describe('runImport', () => {
         expect(byId.get('backup-only')).toBeDefined();
         expect(byId.get('shared')?.title).toBe('From backup');
         expect(byId.get('newer-local')?.title).toBe('Task newer-local');
-        // The whole point of merge mode: a task this device deleted stays deleted even though
-        // the backup still holds a live (older) copy of it.
+        // The whole point of additive merge mode: a task this device deleted stays deleted
+        // even when the backup holds a newer live copy of it.
         expect(byId.get('deleted-locally')?.deletedAt).toBe('2026-01-10T00:00:00.000Z');
         // Merge must not re-stamp revisions the way restore does, or every merged record would
         // outrank other devices' tombstones on the next sync.
@@ -150,6 +156,90 @@ describe('runImport', () => {
             source: 'backup-merge',
             tasksAdded: '1',
             tasksUpdated: '1',
+        });
+    });
+
+    it('keeps live local entities when a newer backup contains their tombstones', async () => {
+        const localUpdatedAt = '2026-01-01T00:00:00.000Z';
+        const deletedAt = '2026-02-01T00:00:00.000Z';
+        const local = {
+            ...mockAppData(
+                [{ ...createMockTask('task', localUpdatedAt), rev: 1 }],
+                [{ ...createMockProject('project', localUpdatedAt), rev: 1 }],
+                [{ ...createMockSection('section', 'project', localUpdatedAt), rev: 1 }],
+            ),
+            areas: [{ ...createMockArea('area', localUpdatedAt), rev: 1 }],
+        };
+        const backup = {
+            ...mockAppData(
+                [{ ...createMockTask('task', deletedAt), purgedAt: deletedAt, rev: 2 }],
+                [{ ...createMockProject('project', deletedAt, deletedAt), rev: 2 }],
+                [{ ...createMockSection('section', 'project', deletedAt, deletedAt), rev: 2 }],
+            ),
+            areas: [{ ...createMockArea('area', deletedAt, deletedAt), rev: 2 }],
+        };
+        const { boundaries, persisted } = buildBoundaries(local);
+        const { log } = buildLog();
+
+        await runImport('backup-merge', backup, boundaries, log);
+
+        expect({
+            task: persisted[0].tasks[0]?.deletedAt,
+            project: persisted[0].projects[0]?.deletedAt,
+            section: persisted[0].sections[0]?.deletedAt,
+            area: persisted[0].areas[0]?.deletedAt,
+        }).toEqual({ task: undefined, project: undefined, section: undefined, area: undefined });
+    });
+
+    it('keeps live local attachments when a backup contains attachment tombstones', async () => {
+        const localUpdatedAt = '2026-01-01T00:00:00.000Z';
+        const deletedAt = '2026-02-01T00:00:00.000Z';
+        const liveAttachment = {
+            id: 'attachment',
+            kind: 'file' as const,
+            title: 'Local attachment',
+            uri: 'file:///local/attachment.txt',
+            createdAt: localUpdatedAt,
+            updatedAt: localUpdatedAt,
+        };
+        const deletedAttachment = { ...liveAttachment, updatedAt: deletedAt, deletedAt };
+        const locallyDeletedAttachment = {
+            ...liveAttachment,
+            id: 'deleted-locally',
+            updatedAt: '2026-01-10T00:00:00.000Z',
+            deletedAt: '2026-01-10T00:00:00.000Z',
+        };
+        const newerBackupAttachment = {
+            ...liveAttachment,
+            id: 'deleted-locally',
+            title: 'Newer backup attachment',
+            updatedAt: deletedAt,
+        };
+        const local = mockAppData(
+            [{ ...createMockTask('task', localUpdatedAt), attachments: [liveAttachment, locallyDeletedAttachment], rev: 1 }],
+            [{ ...createMockProject('project', localUpdatedAt), attachments: [liveAttachment, locallyDeletedAttachment], rev: 1 }],
+        );
+        const backup = mockAppData(
+            [{ ...createMockTask('task', deletedAt), attachments: [deletedAttachment, newerBackupAttachment], rev: 2 }],
+            [{ ...createMockProject('project', deletedAt), attachments: [deletedAttachment, newerBackupAttachment], rev: 2 }],
+        );
+        const { boundaries, persisted } = buildBoundaries(local);
+        const { log } = buildLog();
+
+        await runImport('backup-merge', backup, boundaries, log);
+
+        const taskAttachments = new Map(persisted[0].tasks[0]?.attachments?.map((item) => [item.id, item]));
+        const projectAttachments = new Map(persisted[0].projects[0]?.attachments?.map((item) => [item.id, item]));
+        expect({
+            task: taskAttachments.get('attachment')?.deletedAt,
+            project: projectAttachments.get('attachment')?.deletedAt,
+            locallyDeletedTask: taskAttachments.get('deleted-locally')?.deletedAt,
+            locallyDeletedProject: projectAttachments.get('deleted-locally')?.deletedAt,
+        }).toEqual({
+            task: undefined,
+            project: undefined,
+            locallyDeletedTask: '2026-01-10T00:00:00.000Z',
+            locallyDeletedProject: '2026-01-10T00:00:00.000Z',
         });
     });
 

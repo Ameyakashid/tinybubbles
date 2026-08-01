@@ -132,7 +132,7 @@ export function SyncStatusSection({
         return t.lastSyncError;
     };
     const formatSnapshotLabel = (fileName: string) => {
-        const match = fileName.match(/^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})\.snapshot\.json$/);
+        const match = fileName.match(/^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})(?:\.\d{9}(?:\.\d+)?)?\.snapshot\.json$/);
         if (!match) return fileName;
         const [, day, hh, mm, ss] = match;
         const [year, month, date] = day.split('-').map((part) => Number.parseInt(part, 10));
@@ -343,7 +343,7 @@ export function SyncStatusSection({
                                         <span className="text-muted-foreground font-mono truncate">{formatSnapshotLabel(snapshot)}</span>
                                         <button
                                             type="button"
-                                            disabled={isRestoringSnapshot}
+                                            disabled={isRestoringSnapshot || isSyncing}
                                             onClick={() => void handleRestoreSnapshot(snapshot)}
                                             className="px-2 py-1 rounded border border-border text-foreground hover:bg-muted/70 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >

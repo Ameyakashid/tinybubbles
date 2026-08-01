@@ -49,7 +49,11 @@ export const getReferenceTaskFieldClears = (): Partial<Task> => ({
     priority: undefined,
     timeEstimate: undefined,
     suppressMindwtrReminders: undefined,
+    repeatReminderMinutes: undefined,
+    showFutureRecurrence: undefined,
     isFocusedToday: false,
+    focusOrder: undefined,
+    boardOrder: undefined,
     pushCount: 0,
 });
 

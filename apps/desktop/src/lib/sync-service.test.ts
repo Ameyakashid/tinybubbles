@@ -160,6 +160,94 @@ describe('SyncService testability hooks', () => {
         expect(invoke).toHaveBeenCalledWith('get_sync_backend', undefined);
     });
 
+    it('holds snapshot restore behind pending saves through the refresh', async () => {
+        const events: string[] = [];
+        let releaseFlush!: () => void;
+        const flushPendingSave = vi.fn(() => {
+            events.push('flush');
+            return new Promise<void>((resolve) => {
+                releaseFlush = resolve;
+            });
+        });
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'get_data') {
+                return { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
+            }
+            return true;
+        });
+        const fetchData = vi.fn(async () => {
+            events.push('fetch');
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            flushPendingSave,
+            getStoreState: () => ({ fetchData, lastDataChangeAt: 0 }) as any,
+        });
+
+        const restore = SyncService.restoreDataSnapshot('data.2026-07-31.snapshot.json');
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(events).toEqual(['flush']);
+
+        releaseFlush();
+        await expect(restore).resolves.toEqual({ success: true });
+        expect(events).toEqual(['flush', 'get_data', 'restore_data_snapshot', 'fetch']);
+        expect(invoke).toHaveBeenCalledWith('restore_data_snapshot', {
+            snapshotFileName: 'data.2026-07-31.snapshot.json',
+        });
+    });
+
+    it('waits for an active sync write window before restoring a snapshot', async () => {
+        const events: string[] = [];
+        let releaseSync!: () => void;
+        const activeSync = __syncServiceTestUtils.runSyncRestoreExclusiveForTests(async () => {
+            events.push('sync:start');
+            await new Promise<void>((resolve) => {
+                releaseSync = resolve;
+            });
+            events.push('sync:end');
+        });
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'get_data') {
+                return { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
+            }
+            return true;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            flushPendingSave: vi.fn(async () => {
+                events.push('flush');
+            }),
+            getStoreState: () => ({
+                fetchData: vi.fn(async () => {
+                    events.push('fetch');
+                }),
+                lastDataChangeAt: 0,
+            }) as any,
+        });
+
+        const restore = SyncService.restoreDataSnapshot('data.2026-07-31.snapshot.json');
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(events).toEqual(['sync:start']);
+
+        releaseSync();
+        await activeSync;
+        await expect(restore).resolves.toEqual({ success: true });
+        expect(events).toEqual([
+            'sync:start',
+            'sync:end',
+            'flush',
+            'get_data',
+            'restore_data_snapshot',
+            'fetch',
+        ]);
+    });
+
     it.each([
         {
             name: 'sync backend',

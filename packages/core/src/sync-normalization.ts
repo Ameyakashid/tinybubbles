@@ -9,8 +9,11 @@ import { dedupeLiveAreasByName } from './area-utils';
 import {
     compactPurgedProjectForLocalStorage,
     compactPurgedProjectTombstone,
+    compactSectionsForPurgedProjects,
     compactPurgedTaskForLocalStorage,
     compactPurgedTaskTombstone,
+    hasUncompactedPurgedProjectTombstone,
+    hasUncompactedPurgedTaskTombstone,
 } from './tombstone-compaction';
 
 export const normalizeAppData = (data: AppData): AppData => ({
@@ -160,9 +163,12 @@ export const normalizeTaskForSyncMerge = (
     preserveLocalCleanupMetadata = false,
 ): Task => {
     if (task.purgedAt) {
-        return preserveLocalCleanupMetadata
+        const compacted = preserveLocalCleanupMetadata
             ? compactPurgedTaskForLocalStorage(task)
             : compactPurgedTaskTombstone(task);
+        return hasUncompactedPurgedTaskTombstone(task, preserveLocalCleanupMetadata)
+            ? { ...compacted, rev: nextRevision(task.rev), revBy: SYNC_REPAIR_REV_BY }
+            : compacted;
     }
     const normalized = normalizeTaskForLoad(task, nowIso);
     const hasRecurrence = normalized.recurrence !== undefined && normalized.recurrence !== null;
@@ -221,9 +227,12 @@ export const normalizeProjectForSyncMerge = (
     preserveLocalCleanupMetadata = false,
 ): Project => {
     if (project.purgedAt) {
-        return preserveLocalCleanupMetadata
+        const compacted = preserveLocalCleanupMetadata
             ? compactPurgedProjectForLocalStorage(project)
             : compactPurgedProjectTombstone(project);
+        return hasUncompactedPurgedProjectTombstone(project, preserveLocalCleanupMetadata)
+            ? { ...compacted, rev: nextRevision(project.rev), revBy: SYNC_REPAIR_REV_BY }
+            : compacted;
     }
     return {
         ...project,
@@ -349,10 +358,21 @@ export const repairMergedSyncReferences = (data: AppData, nowIso: string): AppDa
             .filter((project) => hasDeletedAt(project))
             .map((project) => project.id)
     );
+    const purgedProjectsById = new Map(
+        repairedProjects
+            .filter((project): project is Project & { purgedAt: string } => Boolean(project.purgedAt))
+            .map((project) => [project.id, project] as const)
+    );
 
     const repairedSections = data.sections.map((section) => {
-        if (hasDeletedAt(section) || liveProjectIds.has(section.projectId) || !deletedProjectIds.has(section.projectId)) {
+        if (liveProjectIds.has(section.projectId) || !deletedProjectIds.has(section.projectId)) {
             return section;
+        }
+        if (hasDeletedAt(section)) {
+            const purgedProject = purgedProjectsById.get(section.projectId);
+            return purgedProject
+                ? compactSectionsForPurgedProjects([section], [purgedProject], true)[0] ?? section
+                : section;
         }
         return {
             ...withRepairRevision(section),

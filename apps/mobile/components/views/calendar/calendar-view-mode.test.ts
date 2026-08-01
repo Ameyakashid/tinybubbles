@@ -11,6 +11,7 @@ import {
   getCalendarWeekInitialScrollX,
   getCalendarWeekInitialVisibleDayIndex,
   getInitialCalendarSelectedDate,
+  shiftCalendarVisibleMonth,
   needsCalendarSelectedDate,
 } from './calendar-view-mode';
 
@@ -37,6 +38,12 @@ describe('calendar view mode helpers', () => {
     expect(getInitialCalendarSelectedDate('week', today)?.toISOString()).toBe('2026-05-01T12:00:00.000Z');
     expect(getInitialCalendarSelectedDate('schedule', today)?.toISOString()).toBe('2026-05-01T12:00:00.000Z');
     expect(getInitialCalendarSelectedDate('month', today)).toBeNull();
+  });
+
+  it('moves between Jalali months without rebuilding them as Gregorian months', () => {
+    const next = shiftCalendarVisibleMonth(new Date(2026, 6, 23, 12), 1, 'jalali');
+
+    expect([next.getFullYear(), next.getMonth(), next.getDate()]).toEqual([2026, 7, 23]);
   });
 
   it('does not reset the day timeline default scroll when the selected date changes', () => {

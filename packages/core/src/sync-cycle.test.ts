@@ -193,6 +193,29 @@ describe('performSyncCycle', () => {
         expect(result.stats.tasks.conflicts).toBe(0);
     });
 
+    it('publishes and returns the canonical snapshot accepted by local persistence', async () => {
+        const concurrentTask = createMockTask('task-concurrent', '2026-03-28T00:00:01.000Z');
+        let localWriteCount = 0;
+        let wroteRemote: AppData | null = null;
+
+        const result = await performSyncCycle({
+            readLocal: async () => mockAppData([createMockTask('task-local', '2026-03-28T00:00:00.000Z')]),
+            readRemote: async () => mockAppData(),
+            writeLocal: async (data) => {
+                localWriteCount += 1;
+                return localWriteCount === 1
+                    ? { ...data, tasks: [...data.tasks, concurrentTask] }
+                    : data;
+            },
+            writeRemote: async (data) => {
+                wroteRemote = data;
+            },
+        });
+
+        expect(wroteRemote?.tasks.map((task) => task.id).sort()).toEqual(['task-concurrent', 'task-local']);
+        expect(result.data.tasks.map((task) => task.id).sort()).toEqual(['task-concurrent', 'task-local']);
+    });
+
     it('preserves the live task during an ambiguous delete-vs-live sync cycle', async () => {
         const deletedTask = {
             ...createMockTask('task-1', '2026-04-01T00:00:00.000Z', '2026-04-01T00:00:00.000Z'),

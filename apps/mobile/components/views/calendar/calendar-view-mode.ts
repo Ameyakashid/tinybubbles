@@ -1,3 +1,9 @@
+import {
+  addCalendarMonths,
+  startOfCalendarMonth,
+  type CalendarSystemSetting,
+} from '@mindwtr/core';
+
 export type CalendarViewMode = 'month' | 'day' | 'week' | 'schedule';
 
 export const CALENDAR_WEEK_VISIBLE_DAYS_MIN = 2;
@@ -33,6 +39,15 @@ export const getInitialCalendarSelectedDate = (
   today: Date = new Date(),
 ): Date | null => (
   needsCalendarSelectedDate(viewMode) ? new Date(today) : null
+);
+
+export const shiftCalendarVisibleMonth = (
+  visibleMonth: Date,
+  months: number,
+  calendarSystem: CalendarSystemSetting,
+): Date => startOfCalendarMonth(
+  addCalendarMonths(visibleMonth, months, calendarSystem),
+  calendarSystem,
 );
 
 export const getCalendarTimelineDefaultScrollKey = ({

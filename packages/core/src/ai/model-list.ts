@@ -105,7 +105,7 @@ async function fetchOpenAIModels(options: ResolvedOptions): Promise<string[]> {
 // --- Gemini ----------------------------------------------------------------
 
 const GEMINI_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_EXCLUDE = /(embedding|aqa|imagen|veo)/i;
+const GEMINI_EXCLUDE = /(embedding|aqa|imagen|veo|tts|native[-_ ]?audio|live|music|lyria)/i;
 
 async function fetchGeminiModels(options: ResolvedOptions): Promise<string[]> {
     const apiKey = String(options.apiKey || '').trim();

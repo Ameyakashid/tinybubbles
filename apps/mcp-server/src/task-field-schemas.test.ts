@@ -8,6 +8,7 @@
 // actually carry every derived field, not just that the derivation constants look right in
 // isolation.
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { TASK_SYNC_FIELD_SCHEMA } from '@mindwtr/core/task-sync-schema';
 
 import { addTaskSchema, updateTaskSchema } from './index.js';
@@ -72,6 +73,21 @@ describe('MCP task write-surface derivation (TASK_SYNC_FIELD_SCHEMA -> Zod tool 
     for (const name of TASK_PATCH_FIELD_NAMES) {
       expect(shapeKeys.has(name)).toBe(true);
     }
+  });
+
+  test('task write schemas accept positive custom time estimates', () => {
+    expect(addTaskSchema.safeParse({ title: 'Task', timeEstimate: 'custom:42.5' }).success).toBe(true);
+    expect(updateTaskSchema.safeParse({ id: 'task-1', timeEstimate: 'custom:0' }).success).toBe(false);
+    expect(updateTaskSchema.safeParse({ id: 'task-1', timeEstimate: 'custom:0x10' }).success).toBe(false);
+  });
+
+  test('the canonical README lists every generated task write field', () => {
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+    const addSection = readme.slice(readme.indexOf('- `mindwtr_add_task`'), readme.indexOf('- `mindwtr_update_task`'));
+    const updateSection = readme.slice(readme.indexOf('- `mindwtr_update_task`'), readme.indexOf('- `mindwtr_complete_task`'));
+
+    for (const name of TASK_CREATE_FIELD_NAMES) expect(addSection).toContain(`${name}?`);
+    for (const name of TASK_PATCH_FIELD_NAMES) expect(updateSection).toContain(`${name}?`);
   });
 
   // Mutation-test evidence (per the consolidation law): manually removing 'checklist' from

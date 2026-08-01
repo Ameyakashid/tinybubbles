@@ -1,4 +1,24 @@
 import type { Attachment, Project, Section, Task } from './types';
+import { nextRevision } from './sync-revision';
+import { SYNC_REPAIR_REV_BY } from './sync-types';
+
+const SQLITE_NEUTRAL_FALSE_FIELDS = new Set([
+    'showFutureRecurrence',
+    'isFocusedToday',
+    'suppressMindwtrReminders',
+    'isSequential',
+    'isFocused',
+    'isCollapsed',
+]);
+
+const hasValuesOutsideCompactedTombstone = (
+    value: Record<string, unknown>,
+    compacted: Record<string, unknown>,
+): boolean => Object.entries(value).some(([key, item]) => (
+    item !== undefined
+    && !(item === false && compacted[key] === undefined && SQLITE_NEUTRAL_FALSE_FIELDS.has(key))
+    && JSON.stringify(item) !== JSON.stringify(compacted[key])
+));
 
 // Keep only conflict metadata plus neutral fields required by each entity schema.
 export const compactPurgedTaskTombstone = (task: Task): Task => {
@@ -54,6 +74,7 @@ export const compactPurgedProjectSectionTombstone = (
 export const compactSectionsForPurgedProjects = (
     sections: readonly Section[],
     projects: readonly Project[],
+    stampCompactionRevision = false,
 ): Section[] => {
     const purgedAtByProjectId = new Map(
         projects
@@ -62,7 +83,17 @@ export const compactSectionsForPurgedProjects = (
     );
     return sections.map((section) => {
         const purgedAt = purgedAtByProjectId.get(section.projectId);
-        return purgedAt ? compactPurgedProjectSectionTombstone(section, purgedAt) : section;
+        if (!purgedAt) return section;
+        const compacted = compactPurgedProjectSectionTombstone(section, purgedAt);
+        if (!stampCompactionRevision || !hasValuesOutsideCompactedTombstone(
+            section as unknown as Record<string, unknown>,
+            compacted as unknown as Record<string, unknown>,
+        )) return compacted;
+        return {
+            ...compacted,
+            rev: nextRevision(section.rev),
+            revBy: SYNC_REPAIR_REV_BY,
+        };
     });
 };
 
@@ -100,24 +131,43 @@ export const compactPurgedProjectForLocalStorage = (project: Project): Project =
         : project
 );
 
-const hasValuesOutsideCompactedTombstone = (
-    value: Record<string, unknown>,
-    compacted: Record<string, unknown>,
-): boolean => Object.entries(value).some(([key, item]) => (
-    item !== undefined && JSON.stringify(item) !== JSON.stringify(compacted[key])
-));
+export const hasUncompactedPurgedTaskTombstone = (
+    task: Task,
+    preserveLocalCleanupMetadata = false,
+): boolean => {
+    if (!task.purgedAt) return false;
+    const localCompacted = compactPurgedTaskForLocalStorage(task);
+    const compacted = preserveLocalCleanupMetadata
+        || JSON.stringify(task.attachments) === JSON.stringify(localCompacted.attachments)
+        ? localCompacted
+        : compactPurgedTaskTombstone(task);
+    return hasValuesOutsideCompactedTombstone(
+        task as unknown as Record<string, unknown>,
+        compacted as unknown as Record<string, unknown>,
+    );
+};
+
+export const hasUncompactedPurgedProjectTombstone = (
+    project: Project,
+    preserveLocalCleanupMetadata = false,
+): boolean => {
+    if (!project.purgedAt) return false;
+    const localCompacted = compactPurgedProjectForLocalStorage(project);
+    const compacted = preserveLocalCleanupMetadata
+        || JSON.stringify(project.attachments) === JSON.stringify(localCompacted.attachments)
+        ? localCompacted
+        : compactPurgedProjectTombstone(project);
+    return hasValuesOutsideCompactedTombstone(
+        project as unknown as Record<string, unknown>,
+        compacted as unknown as Record<string, unknown>,
+    );
+};
 
 export const hasUncompactedPurgedTombstones = (
     data: { tasks: readonly Task[]; projects: readonly Project[]; sections: readonly Section[] },
 ): boolean => {
-    if (data.tasks.some((task) => task.purgedAt && hasValuesOutsideCompactedTombstone(
-        task as unknown as Record<string, unknown>,
-        compactPurgedTaskTombstone(task) as unknown as Record<string, unknown>,
-    ))) return true;
-    if (data.projects.some((project) => project.purgedAt && hasValuesOutsideCompactedTombstone(
-        project as unknown as Record<string, unknown>,
-        compactPurgedProjectTombstone(project) as unknown as Record<string, unknown>,
-    ))) return true;
+    if (data.tasks.some((task) => hasUncompactedPurgedTaskTombstone(task))) return true;
+    if (data.projects.some((project) => hasUncompactedPurgedProjectTombstone(project))) return true;
 
     const compactSections = compactSectionsForPurgedProjects(data.sections, data.projects);
     return data.sections.some((section, index) => (

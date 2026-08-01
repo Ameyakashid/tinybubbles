@@ -21,6 +21,14 @@ const emptyStats = {
     areas: { mergedTotal: 0, conflicts: 0, conflictIds: [], maxClockSkewMs: 0, timestampAdjustments: 0 },
 };
 
+const entityIds = (tasks: string[] = []) => ({
+    tasks,
+    projects: [],
+    sections: [],
+    areas: [],
+    people: [],
+});
+
 const localData: AppData = {
     tasks: [
         {
@@ -124,6 +132,8 @@ const syncServiceModulePromise = import('./sync-service');
 
 describe('desktop sync-service runtime', () => {
     beforeEach(async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        await syncServiceModule.SyncService.resetForTests();
         vi.clearAllMocks();
 
         storeStateRef.current = {
@@ -207,7 +217,6 @@ describe('desktop sync-service runtime', () => {
             return { status: 'success', stats: emptyStats, data: merged };
         });
 
-        const syncServiceModule = await syncServiceModulePromise;
         syncServiceModule.__syncServiceTestUtils.resetDependenciesForTests();
         syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
             isTauriRuntime: () => true,
@@ -230,7 +239,6 @@ describe('desktop sync-service runtime', () => {
             readRemoteCloudKit: readRemoteCloudKitMock as typeof readRemoteCloudKitMock,
             writeRemoteCloudKit: writeRemoteCloudKitMock as typeof writeRemoteCloudKitMock,
         });
-        await syncServiceModule.SyncService.resetForTests();
     }, 30_000);
 
     it('persists pre-synced attachment metadata when local changes abort the sync', async () => {
@@ -242,6 +250,14 @@ describe('desktop sync-service runtime', () => {
         expect(markLocalWriteMock).toHaveBeenCalledTimes(1);
         expect(markLocalSqliteWriteMock).toHaveBeenCalledTimes(2);
         expect(invokeMock).toHaveBeenCalledWith('save_data', {
+            baselineEntities: {
+                settings: {},
+                tasks: [expect.objectContaining({
+                    id: 'task-1',
+                    attachments: [expect.objectContaining({ id: 'att-1' })],
+                })],
+                observedEntityIds: entityIds(['task-1']),
+            },
             data: expect.objectContaining({
                 tasks: [
                     expect.objectContaining({
@@ -528,6 +544,10 @@ describe('desktop sync-service runtime', () => {
             }),
         });
         expect(invokeMock).toHaveBeenCalledWith('save_data', {
+            baselineEntities: {
+                settings: {},
+                observedEntityIds: entityIds(),
+            },
             data: expect.objectContaining({
                 tasks: expect.arrayContaining([
                     expect.objectContaining({
@@ -652,6 +672,14 @@ describe('desktop sync-service runtime', () => {
         expect(result).toEqual({ success: true, skipped: 'requeued' });
         expect(performSyncCycleMock).not.toHaveBeenCalled();
         expect(invokeMock).toHaveBeenCalledWith('save_data', {
+            baselineEntities: {
+                settings: {},
+                tasks: [expect.objectContaining({
+                    id: 'task-1',
+                    attachments: [expect.objectContaining({ id: 'att-1' })],
+                })],
+                observedEntityIds: entityIds(['task-1']),
+            },
             data: expect.objectContaining({
                 tasks: [
                     expect.objectContaining({
@@ -1156,7 +1184,12 @@ describe('desktop sync-service runtime', () => {
                 'Recovered Dropbox remote read via browser fetch fallback',
                 expect.objectContaining({ scope: 'sync' }),
             );
-            expect(invokeMock).toHaveBeenCalledWith('save_data', { data: dropboxRemoteData });
+            expect(invokeMock).toHaveBeenCalledWith('save_data', {
+                data: dropboxRemoteData,
+                baselineEntities: {
+                    observedEntityIds: entityIds(),
+                },
+            });
         } finally {
             globalThis.fetch = originalFetch;
             localStorage.removeItem('mindwtr-cloud-provider');

@@ -105,6 +105,56 @@ describe('recurrence updates', () => {
     });
 });
 
+describe('reference task invariants', () => {
+    it('clears actionable scheduling, reminder, and focus state', () => {
+        const task = createTask('reference', undefined, undefined, {
+            status: 'next',
+            startTime: '2026-08-01',
+            dueDate: '2026-08-02',
+            relativeStartOffset: { amount: -1, unit: 'day' },
+            reviewAt: '2026-08-03',
+            recurrence: { rule: 'daily' },
+            priority: 'high',
+            timeEstimate: '30min',
+            suppressMindwtrReminders: true,
+            repeatReminderMinutes: 15,
+            showFutureRecurrence: true,
+            isFocusedToday: true,
+            focusOrder: 2,
+            boardOrder: 4,
+            pushCount: 3,
+        });
+
+        const { updatedTask } = applyTaskUpdates(
+            task,
+            { status: 'reference' },
+            '2026-07-31T12:00:00.000Z',
+        );
+
+        expect(updatedTask).toMatchObject({
+            status: 'reference',
+            isFocusedToday: false,
+            pushCount: 0,
+        });
+        for (const field of [
+            'startTime',
+            'dueDate',
+            'relativeStartOffset',
+            'reviewAt',
+            'recurrence',
+            'priority',
+            'timeEstimate',
+            'suppressMindwtrReminders',
+            'repeatReminderMinutes',
+            'showFutureRecurrence',
+            'focusOrder',
+            'boardOrder',
+        ] as const) {
+            expect(updatedTask[field]).toBeUndefined();
+        }
+    });
+});
+
 describe('relative start updates', () => {
     it('recomputes startTime from the stored due-date offset when dueDate changes', () => {
         const task = createTask('t1', undefined, undefined, {

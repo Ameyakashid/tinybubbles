@@ -206,7 +206,16 @@ const taskStatusOrAllSchema = z.enum(
 );
 const projectStatusSchema = z.enum(['active', 'someday', 'waiting', 'archived']);
 const taskPrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
-const timeEstimateSchema = z.enum(['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+']);
+const timeEstimateSchema = z.union([
+  z.enum(['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+']),
+  z.string().refine((value) => {
+    const minutes = value.startsWith('custom:') ? value.slice('custom:'.length) : '';
+    const parsed = Number(minutes);
+    return /^\+?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(minutes)
+      && Number.isFinite(parsed)
+      && parsed >= 1;
+  }, 'Custom time estimates must use custom:<positive minutes>'),
+]);
 const taskTokenSchema = z.string().trim().min(1).max(MAX_TASK_TITLE_LENGTH);
 
 const listTasksSchema = z.object({
@@ -239,7 +248,7 @@ export const addTaskSchema = z.object({
   priority: taskPrioritySchema.optional().describe('Priority level: low, medium, high, urgent'),
   energyLevel: z.enum(['low', 'medium', 'high']).optional().describe('Energy level: low, medium, high'),
   assignedTo: z.string().optional().describe('Person this task is assigned to or waiting for'),
-  timeEstimate: timeEstimateSchema.optional().describe('Time estimate: 5min, 10min, 15min, 30min, 1hr, 2hr, 3hr, 4hr, 4hr+'),
+  timeEstimate: timeEstimateSchema.optional().describe('Time estimate preset or custom:<positive minutes>'),
   // Every other create-writable Task field (checklist, areaId, reviewAt, isFocusedToday,
   // taskMode, relativeStartOffset, location, ...) is derived from TASK_SYNC_FIELD_SCHEMA —
   // see task-write-fields.ts/task-field-schemas.ts. Adding a synced field there needs no

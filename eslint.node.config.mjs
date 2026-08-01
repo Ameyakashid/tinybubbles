@@ -44,6 +44,7 @@ export default [
       ...tsPlugin.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-redeclare': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -53,6 +54,7 @@ export default [
         },
       ],
       'no-undef': 'off',
+      'no-redeclare': 'off',
     },
   },
 ];

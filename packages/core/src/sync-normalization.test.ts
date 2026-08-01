@@ -61,13 +61,22 @@ const normalizeForMerge = (data: AppData, nowIso = NOW): AppData => {
 };
 
 describe('sync normalization', () => {
-    it('compacts purged content before resolving same-revision conflicts', () => {
+    it('stamps purged-content compaction once so a legacy peer cannot republish the full tombstone', () => {
         const purgedAt = '2025-12-31T23:00:00.000Z';
         const full = mockAppData(
             [{
                 ...createMockTask('task-1', purgedAt, purgedAt),
                 title: 'Private task',
                 description: 'Private task notes',
+                attachments: [{
+                    id: 'attachment-1',
+                    kind: 'file',
+                    title: 'Private attachment',
+                    uri: 'file:///private/attachment.txt',
+                    mimeType: 'text/plain',
+                    createdAt: purgedAt,
+                    updatedAt: purgedAt,
+                }],
                 purgedAt,
                 rev: 7,
                 revBy: 'device-a',
@@ -76,6 +85,14 @@ describe('sync normalization', () => {
                 ...createMockProject('project-1', purgedAt, purgedAt),
                 title: 'Private project',
                 supportNotes: 'Private project notes',
+                attachments: [{
+                    id: 'attachment-2',
+                    kind: 'file',
+                    title: 'Private project attachment',
+                    uri: 'file:///private/project.txt',
+                    createdAt: purgedAt,
+                    updatedAt: purgedAt,
+                }],
                 purgedAt,
                 rev: 8,
                 revBy: 'device-a',
@@ -89,6 +106,21 @@ describe('sync normalization', () => {
             }],
         );
         const compact = mergeAppData(full, mockAppData(), { nowIso: NOW });
+        const sqliteRoundTrip = {
+            ...compact,
+            tasks: compact.tasks.map((task) => ({
+                ...task,
+                isFocusedToday: false,
+                suppressMindwtrReminders: false,
+                showFutureRecurrence: false,
+            })),
+            projects: compact.projects.map((project) => ({
+                ...project,
+                isSequential: false,
+                isFocused: false,
+            })),
+            sections: compact.sections.map((section) => ({ ...section, isCollapsed: false })),
+        };
 
         expect(compact.tasks[0]).toMatchObject({ title: '(deleted)', purgedAt });
         expect(compact.tasks[0].description).toBeUndefined();
@@ -96,16 +128,36 @@ describe('sync normalization', () => {
         expect(compact.projects[0].supportNotes).toBeUndefined();
         expect(compact.sections[0]).toMatchObject({ title: '', deletedAt: purgedAt });
         expect(compact.sections[0].description).toBeUndefined();
+        expect([
+            [compact.tasks[0].rev, compact.tasks[0].revBy],
+            [compact.projects[0].rev, compact.projects[0].revBy],
+            [compact.sections[0].rev, compact.sections[0].revBy],
+        ]).toEqual([
+            [8, SYNC_REPAIR_REV_BY],
+            [9, SYNC_REPAIR_REV_BY],
+            [10, SYNC_REPAIR_REV_BY],
+        ]);
 
+        const legacyReplay = mergeAppData(compact, full, { nowIso: NOW });
+        const secondCurrentMerge = mergeAppData(compact, legacyReplay, { nowIso: NOW });
         for (const merged of [
             mergeAppData(full, compact, { nowIso: NOW }),
-            mergeAppData(compact, full, { nowIso: NOW }),
+            legacyReplay,
             mergeAppData(compact, compact, { nowIso: NOW }),
+            mergeAppData(sqliteRoundTrip, sqliteRoundTrip, { nowIso: NOW }),
+            secondCurrentMerge,
         ]) {
             expect(merged.tasks).toEqual(compact.tasks);
             expect(merged.projects).toEqual(compact.projects);
             expect(merged.sections).toEqual(compact.sections);
         }
+
+        const semanticFalse = normalizeTaskForSyncMerge({
+            ...compact.tasks[0],
+            isFocusedTodayBeforeProjectArchive: false,
+        }, NOW);
+        expect(semanticFalse.rev).toBe((compact.tasks[0].rev ?? 0) + 1);
+        expect(semanticFalse.isFocusedTodayBeforeProjectArchive).toBeUndefined();
     });
 
     it('compacts a retained section when its project is purged on the other side', () => {
@@ -134,7 +186,48 @@ describe('sync normalization', () => {
             { nowIso: NOW },
         );
 
-        expect(merged.sections[0]).toMatchObject({ title: '', deletedAt: purgedAt });
+        expect(merged.sections[0]).toMatchObject({
+            title: '',
+            deletedAt: purgedAt,
+            rev: 2,
+            revBy: SYNC_REPAIR_REV_BY,
+        });
+        expect(merged.sections[0].description).toBeUndefined();
+    });
+
+    it('stamps a retained soft-deleted section when its project is purged on the other side', () => {
+        const purgedAt = '2025-12-31T23:00:00.000Z';
+        const project = {
+            ...createMockProject('project-1', '2025-12-30T23:00:00.000Z'),
+            rev: 1,
+            revBy: 'device-a',
+        };
+        const merged = mergeAppData(
+            mockAppData([], [project], [{
+                ...createMockSection('section-1', project.id, purgedAt, purgedAt),
+                title: 'Private section',
+                description: 'Private section notes',
+                deletedAt: purgedAt,
+                rev: 4,
+                revBy: 'device-a',
+            }]),
+            mockAppData([], [{
+                ...project,
+                deletedAt: purgedAt,
+                purgedAt,
+                updatedAt: purgedAt,
+                rev: 2,
+                revBy: 'device-b',
+            }]),
+            { nowIso: NOW },
+        );
+
+        expect(merged.sections[0]).toMatchObject({
+            title: '',
+            deletedAt: purgedAt,
+            rev: 5,
+            revBy: SYNC_REPAIR_REV_BY,
+        });
         expect(merged.sections[0].description).toBeUndefined();
     });
 

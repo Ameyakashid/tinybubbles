@@ -95,6 +95,7 @@ type SettingsActionContext = {
     debouncedSave: (data: AppData, onError?: (msg: string) => void) => void;
     flushPendingSave: () => Promise<void>;
     hasPendingSaveWork: () => boolean;
+    getSaveGeneration: () => number;
     getStorage: () => StorageAdapter;
 };
 
@@ -106,6 +107,7 @@ export const createSettingsActions = ({
     debouncedSave,
     flushPendingSave,
     hasPendingSaveWork,
+    getSaveGeneration,
     getStorage,
 }: SettingsActionContext): SettingsActions => ({
     seedGettingStarted: createSeedGettingStartedAction(set, debouncedSave),
@@ -129,6 +131,7 @@ export const createSettingsActions = ({
         } else {
             markCoreStartupPhase('core.fetch_data.flush_pending_save.skipped', { reason: 'no_pending_work' });
         }
+        const saveGenerationAtFetchStart = getSaveGeneration();
         if (options?.silent) {
             set((state) => state.error === null ? state : { error: null });
         } else {
@@ -154,9 +157,10 @@ export const createSettingsActions = ({
             // same load pipeline, and the lastDataChangeAt guard below still discards
             // it if local edits landed in the meantime.
             const storageReadStartedAt = Date.now();
+            const sourceStorage = options?.preloadedData ? undefined : getStorage();
             const data = options?.preloadedData
                 ?? await measureCoreStartupPhase('core.fetch_data.storage_get_data', async () =>
-                    withTimeout(getStorage().getData(), STORAGE_TIMEOUT_MS, 'Storage request timed out')
+                    withTimeout(sourceStorage!.getData(), STORAGE_TIMEOUT_MS, 'Storage request timed out')
                 );
             storageReadMs = options?.preloadedData ? 0 : Date.now() - storageReadStartedAt;
             const postProcessStartedAt = Date.now();
@@ -401,6 +405,18 @@ export const createSettingsActions = ({
                     },
                 });
                 return;
+            }
+
+            // Storage may quarantine writes until the foreground store has
+            // replaced a potentially stale snapshot. Only acknowledge the exact
+            // object returned by this direct read after it was actually applied;
+            // preloaded/background sync snapshots do not prove that lineage.
+            // Deliberately count every full-snapshot enqueue, including a load
+            // migration. That can require one more clean reload, but releasing a
+            // recovery barrier while an unacknowledged snapshot is queued could
+            // let that save erase the data the reload just recovered.
+            if (getSaveGeneration() === saveGenerationAtFetchStart) {
+                sourceStorage?.acknowledgeDataLoad?.(data);
             }
 
             markCoreStartupPhase('core.fetch_data.end');

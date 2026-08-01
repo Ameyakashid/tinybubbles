@@ -19,6 +19,7 @@ import {
     normalizeAppData,
     normalizeWebdavUrl,
     normalizeCloudUrl,
+    runDataTransferTransactionWithoutSnapshot,
     createSyncBackendIO,
     runSharedSyncCycle,
     sanitizeAppDataForRemote,
@@ -36,6 +37,7 @@ import {
     isRetryableWebdavReadError,
     appendSyncHistory,
     createSyncOrchestrator,
+    createSerializedAsyncQueue,
     formatSyncErrorMessage,
     getInMemoryAppDataSnapshot,
     createAbortableFetch,
@@ -63,6 +65,7 @@ import { useUiStore } from '../store/ui-store';
 import { markLocalSqliteWrite, markLocalWrite } from './local-data-watcher';
 import { ExternalCalendarService } from './external-calendar-service';
 import { webStorage } from './storage-adapter-web';
+import { buildChangedEntityBaseline } from './storage-save-baseline';
 import {
     cleanupAttachmentTempFiles,
     cleanupOrphanedAttachments,
@@ -250,6 +253,10 @@ let syncServiceDependencies: SyncServiceDependencies = {
 const isTauriRuntimeEnv = () => syncServiceDependencies.isTauriRuntime();
 const getStoreState = () => syncServiceDependencies.getStoreState();
 const fallbackSyncTranslations = getTranslationsSync('en');
+const syncRestoreQueue = createSerializedAsyncQueue();
+const runSyncRestoreExclusive = <T>(operation: () => Promise<T>): Promise<T> => (
+    syncRestoreQueue.run(operation)
+);
 
 const resolveSyncText = (key: string, fallback: string): string => {
     const language = getStoreState().settings?.language;
@@ -452,19 +459,24 @@ const mergeLocalSyncStatus = (data: AppData): AppData => {
 };
 
 // Sync should start from persisted data so startup sync cannot overwrite settings with an unhydrated store snapshot.
+let lastObservedPersistedDataForSync: AppData | null = null;
+
 const readLocalDataForSync = async (): Promise<AppData> => {
     if (isTauriRuntimeEnv()) {
         try {
             const persisted = await tauriInvoke<AppData>('get_data');
+            lastObservedPersistedDataForSync = persisted;
             return mergeLocalSyncStatus(normalizeAppData(persisted));
         } catch (error) {
             logSyncWarning('Failed to read persisted local data for sync; using in-memory snapshot', error);
         }
     } else {
         const persisted = await webStorage.getData();
+        lastObservedPersistedDataForSync = null;
         return normalizeAppData(persisted);
     }
 
+    lastObservedPersistedDataForSync = null;
     const state = getStoreState();
     return normalizeAppData({
         tasks: [...state._allTasks],
@@ -480,11 +492,32 @@ async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): 
     return syncServiceDependencies.invoke<T>(command, args);
 }
 
-async function persistLocalDataForSync(data: AppData): Promise<void> {
+type LocalDataSaveOptions = {
+    baseline?: AppData;
+    mode?: 'exact';
+};
+
+async function persistLocalDataForSync(
+    data: AppData,
+    options: LocalDataSaveOptions = {},
+): Promise<AppData> {
     syncServiceDependencies.markLocalWrite(data);
     syncServiceDependencies.markLocalSqliteWrite();
-    await tauriInvoke('save_data', { data });
+    const baseline = options.baseline ?? lastObservedPersistedDataForSync;
+    const baselineEntities = options.mode
+        ? undefined
+        : baseline
+            ? buildChangedEntityBaseline(baseline, data)
+            : undefined;
+    const args: Record<string, unknown> = { data };
+    if (baselineEntities) args.baselineEntities = baselineEntities;
+    if (options.mode) args.mode = options.mode;
+    const canonical = await tauriInvoke<AppData>('save_data', args);
+    // The sync store receives this target. Do not make canonical-only,
+    // concurrently added rows eligible for omission before a persisted read.
+    lastObservedPersistedDataForSync = data;
     syncServiceDependencies.markLocalSqliteWrite();
+    return canonical;
 }
 
 async function persistSyncSettings(updates: Partial<AppSettings>): Promise<void> {
@@ -770,6 +803,11 @@ export class SyncService {
     }
 
     static async resetForTests(): Promise<void> {
+        // A requeued sync may already have entered the serialized restore queue.
+        // Detach it from the orchestrator, then wait for it to finish before a
+        // following test replaces the service dependencies underneath it.
+        SyncService.syncOrchestrator.reset();
+        await runSyncRestoreExclusive(async () => undefined);
         await SyncService.stopFileWatcher();
         SyncService.didMigrate = false;
         SyncService.syncOrchestrator.reset();
@@ -1445,7 +1483,7 @@ export class SyncService {
 
             await syncServiceDependencies.flushPendingSave();
             const externalData = normalizeAppData(await tauriInvoke<AppData>('read_sync_file'));
-            await persistLocalDataForSync(externalData);
+            await persistLocalDataForSync(externalData, { mode: 'exact' });
             await getStoreState().fetchData({ silent: true });
             const now = new Date().toISOString();
             const nextHistory = appendSyncHistory(getStoreState().settings, {
@@ -1628,7 +1666,7 @@ export class SyncService {
             { ensureLocalSnapshotFresh },
         );
         ensureLocalSnapshotFresh();
-        await persistLocalDataForSync(cleaned);
+        await persistLocalDataForSync(cleaned, { baseline: data });
         await getStoreState().fetchData({ silent: true });
     }
 
@@ -1655,8 +1693,17 @@ export class SyncService {
     static async restoreDataSnapshot(snapshotFileName: string): Promise<{ success: boolean; error?: string }> {
         if (!isTauriRuntimeEnv()) return { success: false, error: 'Desktop runtime is required.' };
         try {
-            await tauriInvoke<boolean>('restore_data_snapshot', { snapshotFileName });
-            await getStoreState().fetchData({ silent: true });
+            await runSyncRestoreExclusive(() => runDataTransferTransactionWithoutSnapshot({
+                operation: 'restoreDataSnapshot',
+                flushPendingSave: syncServiceDependencies.flushPendingSave,
+                getCurrentChangeAt: () => getStoreState().lastDataChangeAt,
+                readCurrentData: () => tauriInvoke<AppData>('get_data'),
+                apply: (data) => ({ data, result: null }),
+                persistData: async () => {
+                    await tauriInvoke<boolean>('restore_data_snapshot', { snapshotFileName });
+                },
+                refreshData: () => getStoreState().fetchData({ silent: true }),
+            }));
             return { success: true };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1678,12 +1725,16 @@ export class SyncService {
         return SyncService.syncOrchestrator.run(options);
     }
 
-    private static async runSyncCycle(options: SyncRunOptions): Promise<SyncRunResult> {
+    private static runSyncCycle(options: SyncRunOptions): Promise<SyncRunResult> {
+        return runSyncRestoreExclusive(() => SyncService.runSyncCycleExclusive(options));
+    }
+
+    private static async runSyncCycleExclusive(options: SyncRunOptions): Promise<SyncRunResult> {
         SyncService.queuedSyncOptions = null;
         const context = createDesktopSyncCycleContext();
-        const persistLocalData = async (data: AppData): Promise<void> => {
+        const persistLocalData = async (data: AppData): Promise<AppData | void> => {
             if (isTauriRuntimeEnv()) {
-                await persistLocalDataForSync(data);
+                return persistLocalDataForSync(data);
             } else {
                 await webStorage.saveData(data);
             }
@@ -1870,9 +1921,13 @@ export const __syncServiceTestUtils = {
         syncServiceDependencies = {
             ...defaultSyncServiceDependencies,
         };
+        lastObservedPersistedDataForSync = null;
     },
     async persistLocalDataForTests(data: AppData) {
         await persistLocalDataForSync(data);
+    },
+    runSyncRestoreExclusiveForTests<T>(operation: () => Promise<T>) {
+        return runSyncRestoreExclusive(operation);
     },
     clearWebdavDownloadBackoff() {
         clearAttachmentSyncState();

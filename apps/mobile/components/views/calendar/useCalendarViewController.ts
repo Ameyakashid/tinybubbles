@@ -88,6 +88,7 @@ import {
   getCalendarTimelineScrollYForMinutes,
   getInitialCalendarSelectedDate,
   needsCalendarSelectedDate,
+  shiftCalendarVisibleMonth,
   type CalendarViewMode,
 } from './calendar-view-mode';
 import {
@@ -95,7 +96,6 @@ import {
   buildScheduledTasksByDate,
   calendarDateKey,
   compactHourLabel,
-  isAllDayScheduledTask,
   isTimedScheduledTask,
 } from './calendar-task-items';
 import {
@@ -215,8 +215,7 @@ export function useCalendarViewController() {
   const initialViewMode = coerceCalendarViewMode(calendarSettings?.viewMode);
   const calendarWeekVisibleDays = coerceCalendarWeekVisibleDays(calendarSettings?.weekVisibleDays);
   const showCompleted = calendarSettings?.showCompleted === true;
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [visibleMonthDate, setVisibleMonthDate] = useState(today);
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => getInitialCalendarSelectedDate(initialViewMode, today));
   const [viewMode, setViewModeState] = useState<CalendarViewMode>(() => initialViewMode);
   const pendingViewModeSaveRef = useRef<CalendarViewMode | null>(null);
@@ -257,8 +256,7 @@ export function useCalendarViewController() {
     const nextDate = new Date();
     selectedDateRef.current = nextDate;
     setSelectedDate(nextDate);
-    setCurrentMonth(nextDate.getMonth());
-    setCurrentYear(nextDate.getFullYear());
+    setVisibleMonthDate(nextDate);
   }, []);
   const setViewMode = (nextMode: CalendarViewMode) => {
     ensureSelectedDateForViewMode(nextMode);
@@ -307,8 +305,8 @@ export function useCalendarViewController() {
 
   const weekStartIndex = getWeekStartsOnIndex(settings?.weekStart);
   const currentMonthDate = useMemo(
-    () => startOfCalendarMonth(new Date(currentYear, currentMonth, 1), calendarSystem),
-    [calendarSystem, currentMonth, currentYear],
+    () => startOfCalendarMonth(visibleMonthDate, calendarSystem),
+    [calendarSystem, visibleMonthDate],
   );
   const monthDates = useMemo(
     () => getCalendarMonthDates(currentMonthDate, calendarSystem),
@@ -741,8 +739,7 @@ export function useCalendarViewController() {
       setScheduleQuery('');
       if (start) {
         setSelectedDate(start);
-        setCurrentMonth(start.getMonth());
-        setCurrentYear(start.getFullYear());
+        setVisibleMonthDate(start);
         setPendingScrollMinutes((start.getHours() * 60 + start.getMinutes()) - DAY_START_HOUR * 60);
       }
       setViewMode('day');
@@ -860,15 +857,13 @@ export function useCalendarViewController() {
     const next = new Date(selectedDate);
     next.setDate(next.getDate() + daysDelta);
     setSelectedDate(next);
-    setCurrentMonth(next.getMonth());
-    setCurrentYear(next.getFullYear());
+    setVisibleMonthDate(next);
   };
 
   const handleToday = () => {
     const next = new Date();
     setSelectedDate(next);
-    setCurrentMonth(next.getMonth());
-    setCurrentYear(next.getFullYear());
+    setVisibleMonthDate(next);
     if (viewMode === 'day' || viewMode === 'week') {
       setPendingScrollMinutes((next.getHours() * 60 + next.getMinutes()) - DAY_START_HOUR * 60);
     }
@@ -1007,8 +1002,7 @@ export function useCalendarViewController() {
       const nextDate = safeParseDate(initialProps.startTime ?? initialProps.dueDate ?? event.start);
       if (nextDate) {
         setSelectedDate(nextDate);
-        setCurrentMonth(nextDate.getMonth());
-        setCurrentYear(nextDate.getFullYear());
+        setVisibleMonthDate(nextDate);
       }
       showToast({
         title: t('calendar.eventTaskCreatedTitle'),
@@ -1048,18 +1042,12 @@ export function useCalendarViewController() {
     Alert.alert(event.title || t('calendar.eventFallbackTitle'), undefined, buttons, { cancelable: true });
   };
 
-  const setVisibleMonth = (date: Date) => {
-    const nextMonth = startOfCalendarMonth(date, calendarSystem);
-    setCurrentMonth(nextMonth.getMonth());
-    setCurrentYear(nextMonth.getFullYear());
-  };
-
   const handlePrevMonth = () => {
-    setVisibleMonth(addCalendarSystemMonths(currentMonthDate, -1, calendarSystem));
+    setVisibleMonthDate(shiftCalendarVisibleMonth(currentMonthDate, -1, calendarSystem));
   };
 
   const handleNextMonth = () => {
-    setVisibleMonth(addCalendarSystemMonths(currentMonthDate, 1, calendarSystem));
+    setVisibleMonthDate(shiftCalendarVisibleMonth(currentMonthDate, 1, calendarSystem));
   };
 
   const calendarDays: (Date | null)[] = [];
@@ -1077,19 +1065,6 @@ export function useCalendarViewController() {
   const selectedDateScheduled = useMemo(
     () => (selectedDate ? getScheduledForDate(selectedDate) : []),
     [getScheduledForDate, selectedDate],
-  );
-  const selectedDateAllDayEvents = useMemo(
-    () => selectedDateExternalEvents.filter((event) => event.allDay),
-    [selectedDateExternalEvents],
-  );
-  const selectedDateAllDayScheduledTasks = useMemo(
-    () => selectedDateScheduled.filter((task) =>
-      isAllDayScheduledTask(task)
-      && !task.deletedAt
-      && task.status !== 'done'
-      && task.status !== 'reference'
-    ),
-    [selectedDateScheduled],
   );
   const selectedDateTimedEvents = useMemo(
     () => selectedDateExternalEvents.filter((event) => !event.allDay),
@@ -1174,8 +1149,6 @@ export function useCalendarViewController() {
     closeCalendarComposer,
     closeEditingTask,
     commitTaskDrag,
-    currentMonth,
-    currentYear,
     dayNames,
     editingTask,
     externalCalendars,
@@ -1210,8 +1183,6 @@ export function useCalendarViewController() {
     scheduleTaskOnSelectedDate,
     searchCandidates,
     selectedDate,
-    selectedDateAllDayEvents,
-    selectedDateAllDayScheduledTasks,
     selectedDateDeadlines,
     selectedDateExternalEvents,
     selectedDateLongLabel,
@@ -1236,8 +1207,6 @@ export function useCalendarViewController() {
     setCalendarWeekVisibleDays,
     showCompleted,
     toggleShowCompleted,
-    setCurrentMonth,
-    setCurrentYear,
     setEditingTask,
     setScheduleQuery,
     setSelectedDate,

@@ -1,4 +1,5 @@
 use crate::*;
+use std::collections::HashSet;
 
 const PORTABLE_MARKER_FILE_NAME: &str = "portable.txt";
 const PORTABLE_PROFILE_DIR_NAME: &str = "profile";
@@ -217,11 +218,33 @@ fn data_json_backup_path(data_path: &Path) -> PathBuf {
     data_path.with_extension("json.bak")
 }
 
-fn data_json_tmp_path(data_path: &Path) -> PathBuf {
-    data_path.with_extension("json.tmp")
+fn data_json_publication_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
 }
 
-fn cleanup_stale_data_json_backup(data_path: &Path) -> Result<(), String> {
+fn lock_data_json_publication() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    data_json_publication_lock()
+        .lock()
+        .map_err(|error| format!("Failed to lock data.json publication: {error}"))
+}
+
+fn sync_parent_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let parent = path
+            .parent()
+            .ok_or_else(|| "Failed to resolve parent directory".to_string())?;
+        File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+fn cleanup_stale_data_json_backup_unlocked(data_path: &Path) -> Result<(), String> {
     if !cfg!(windows) {
         return Ok(());
     }
@@ -239,31 +262,48 @@ fn cleanup_stale_data_json_backup(data_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn cleanup_stale_data_json_backup(data_path: &Path) -> Result<(), String> {
+    let _publication_guard = lock_data_json_publication()?;
+    cleanup_stale_data_json_backup_unlocked(data_path)
+}
+
 fn write_data_json_file(data_path: &Path, data: &Value) -> Result<(), String> {
+    // Incremental saves publish after releasing SQLite's writer lock. Keep the
+    // Windows backup dance and final rename serialized within this process;
+    // every writer still uses a unique temp so no publisher can truncate or
+    // rename another publisher's in-progress file.
+    let _publication_guard = lock_data_json_publication()?;
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    cleanup_stale_data_json_backup(data_path)?;
+    cleanup_stale_data_json_backup_unlocked(data_path)?;
     let backup_path = data_json_backup_path(data_path);
-    let tmp_path = data_json_tmp_path(data_path);
     let content = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
-    {
-        let mut file = File::create(&tmp_path).map_err(|e| e.to_string())?;
-        file.write_all(content.as_bytes())
-            .map_err(|e| e.to_string())?;
-        file.sync_all().map_err(|e| e.to_string())?;
-    }
+    let parent = data_path
+        .parent()
+        .ok_or_else(|| "Failed to resolve data.json parent directory".to_string())?;
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".mindwtr-data-")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(|e| e.to_string())?;
+    temp_file
+        .write_all(content.as_bytes())
+        .and_then(|_| temp_file.as_file().sync_all())
+        .map_err(|e| e.to_string())?;
+    // Close the handle before rename so Windows can move it.
+    let temp_path = temp_file.into_temp_path();
 
     if cfg!(windows) && data_path.exists() {
         fs::rename(data_path, &backup_path).map_err(|e| e.to_string())?;
-        match fs::rename(&tmp_path, data_path) {
+        match fs::rename(&temp_path, data_path) {
             Ok(()) => {
                 let _ = fs::remove_file(&backup_path);
+                sync_parent_directory(data_path)?;
                 return Ok(());
             }
             Err(rename_err) => {
                 let restore_err = fs::rename(&backup_path, data_path).err();
-                let _ = fs::remove_file(&tmp_path);
                 return match restore_err {
                     Some(error) => Err(format!(
                         "Failed to replace data file: {rename_err}; original data kept at {} but restore also failed: {error}",
@@ -275,8 +315,55 @@ fn write_data_json_file(data_path: &Path, data: &Value) -> Result<(), String> {
         }
     }
 
-    fs::rename(&tmp_path, data_path).map_err(|e| e.to_string())?;
+    fs::rename(&temp_path, data_path).map_err(|e| e.to_string())?;
+    sync_parent_directory(data_path)?;
     Ok(())
+}
+
+fn write_initial_data_json_file(data_path: &Path, data: &Value) -> Result<bool, String> {
+    let _publication_guard = lock_data_json_publication()?;
+    let parent = data_path
+        .parent()
+        .ok_or_else(|| "Failed to resolve data.json parent directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    cleanup_stale_data_json_backup_unlocked(data_path)?;
+
+    if data_path.exists() {
+        if read_json_with_retries(data_path, 1).is_ok() {
+            return Ok(false);
+        }
+        // A legacy direct write may have crashed after creating a partial
+        // final file. Quarantine it under an unlisted unique temp name for the
+        // duration of this publication so mere existence cannot suppress a
+        // valid bootstrap retry.
+        let quarantine = tempfile::Builder::new()
+            .prefix(".mindwtr-invalid-data-")
+            .suffix(".tmp")
+            .tempfile_in(parent)
+            .map_err(|e| e.to_string())?
+            .into_temp_path();
+        fs::remove_file(&quarantine).map_err(|e| e.to_string())?;
+        fs::rename(data_path, &quarantine).map_err(|e| e.to_string())?;
+    }
+
+    let content = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".mindwtr-data-bootstrap-")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(|e| e.to_string())?;
+    temp_file
+        .write_all(content.as_bytes())
+        .and_then(|_| temp_file.as_file().sync_all())
+        .map_err(|e| e.to_string())?;
+    match temp_file.persist_noclobber(data_path) {
+        Ok(_) => {
+            sync_parent_directory(data_path)?;
+            Ok(true)
+        }
+        Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error.error.to_string()),
+    }
 }
 
 const ENTITY_TABLES: [&str; 5] = ["tasks", "projects", "sections", "areas", "people"];
@@ -304,12 +391,19 @@ fn sqlite_entity_count(conn: &Connection) -> Result<i64, String> {
     Ok(total)
 }
 
-// A save that would replace existing entities with a document containing no
-// entities at all is never legitimate: real mass-deletions keep tombstoned
-// rows, so an all-empty payload over live data means the caller lost its
-// in-memory state. Refuse instead of wiping both stores (#852).
-fn refuse_empty_snapshot_overwrite(conn: &Connection, data: &Value) -> Result<(), String> {
-    if count_incoming_entities(data) == 0 && sqlite_entity_count(conn)? > 0 {
+// An unguarded save that would replace existing entities with an all-empty
+// document means the caller likely lost its in-memory state (#852). A compacted
+// snapshot may legitimately be empty when the caller opts into transactional
+// CAS semantics: only explicitly supplied observed rows can then be removed.
+fn refuse_empty_snapshot_overwrite(
+    conn: &Connection,
+    data: &Value,
+    baseline_entities: Option<&Value>,
+) -> Result<(), String> {
+    if count_incoming_entities(data) == 0
+        && baseline_entities.is_none()
+        && sqlite_entity_count(conn)? > 0
+    {
         return Err(
             "Refusing to overwrite existing data with an empty snapshot; local data left untouched"
                 .to_string(),
@@ -318,22 +412,98 @@ fn refuse_empty_snapshot_overwrite(conn: &Connection, data: &Value) -> Result<()
     Ok(())
 }
 
-fn persist_data_snapshot(app: &tauri::AppHandle, data: &Value) -> Result<(), String> {
+fn persist_data_snapshot(
+    app: &tauri::AppHandle,
+    data: &Value,
+    baseline_entities: Option<&Value>,
+) -> Result<Value, String> {
     ensure_data_file(app)?;
     let mut conn = open_sqlite(app)?;
-    refuse_empty_snapshot_overwrite(&conn, data)?;
-    migrate_json_to_sqlite(&mut conn, data)?;
-    write_data_json_file(&get_data_path(app), data)?;
-    Ok(())
+    refuse_empty_snapshot_overwrite(&conn, data, baseline_entities)?;
+    let canonical = merge_json_to_sqlite(&mut conn, data, baseline_entities)?;
+    // SQLite has committed and is canonical at this point. data.json is a
+    // secondary recovery copy: failing to refresh it must not report the
+    // already-committed write as failed (a caller retry could duplicate a
+    // create). Always derive the copy from SQLite, never the stale caller
+    // snapshot that may have lost a revision race above.
+    Ok(refresh_data_json_from_sqlite(&conn, &get_data_path(app)).unwrap_or(canonical))
+}
+
+fn persist_data_snapshot_exact(app: &tauri::AppHandle, data: &Value) -> Result<Value, String> {
+    ensure_data_file(app)?;
+    let mut conn = open_sqlite(app)?;
+    let canonical = replace_json_in_sqlite(&mut conn, data)?;
+    Ok(refresh_data_json_from_sqlite(&conn, &get_data_path(app)).unwrap_or(canonical))
+}
+
+fn refresh_data_json_from_sqlite(conn: &Connection, data_path: &Path) -> Option<Value> {
+    // SQLite is already committed. Read a transactionally consistent snapshot
+    // without taking a second writer lock, then use data_version repair if a
+    // later writer commits while pretty JSON serialization/fsync/rename runs.
+    match stable_sqlite_snapshot_with_version(conn) {
+        Ok((canonical, data_version)) => Some(publish_task_data_json(
+            conn,
+            data_path,
+            canonical,
+            data_version,
+        )),
+        Err(error) => {
+            log::warn!(
+                "SQLite save committed but canonical data.json snapshot could not be read: {error}"
+            );
+            None
+        }
+    }
+}
+
+fn write_data_json_best_effort(data_path: &Path, canonical: &Value) {
+    if let Err(error) = write_data_json_file(data_path, canonical) {
+        log::warn!("SQLite save committed but data.json refresh failed: {error}");
+    }
+}
+
+fn with_sqlite_read_transaction<T, F>(
+    conn: &Connection,
+    lock_writers: bool,
+    read: F,
+) -> Result<T, String>
+where
+    F: FnOnce(&Connection) -> Result<T, String>,
+{
+    conn.execute_batch(if lock_writers {
+        "BEGIN IMMEDIATE"
+    } else {
+        "BEGIN"
+    })
+    .map_err(|e| e.to_string())?;
+    let result = read(conn);
+    match result {
+        Ok(value) => {
+            if let Err(error) = conn.execute_batch("COMMIT") {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(error.to_string());
+            }
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+fn read_sqlite_snapshot(conn: &Connection) -> Result<Value, String> {
+    with_sqlite_read_transaction(conn, false, read_sqlite_data)
 }
 
 pub(crate) fn persist_data_snapshot_with_retries(
     app: &tauri::AppHandle,
     data: &Value,
-) -> Result<(), String> {
+    baseline_entities: Option<&Value>,
+) -> Result<Value, String> {
     for attempt in 0..STORAGE_RETRY_ATTEMPTS {
-        match persist_data_snapshot(app, data) {
-            Ok(()) => return Ok(()),
+        match persist_data_snapshot(app, data, baseline_entities) {
+            Ok(canonical) => return Ok(canonical),
             Err(error) => {
                 let can_retry =
                     is_retryable_storage_error(&error) && attempt + 1 < STORAGE_RETRY_ATTEMPTS;
@@ -347,6 +517,28 @@ pub(crate) fn persist_data_snapshot_with_retries(
         }
     }
     Err("Failed to save data".to_string())
+}
+
+fn persist_data_snapshot_exact_with_retries(
+    app: &tauri::AppHandle,
+    data: &Value,
+) -> Result<Value, String> {
+    for attempt in 0..STORAGE_RETRY_ATTEMPTS {
+        match persist_data_snapshot_exact(app, data) {
+            Ok(canonical) => return Ok(canonical),
+            Err(error) => {
+                let can_retry =
+                    is_retryable_storage_error(&error) && attempt + 1 < STORAGE_RETRY_ATTEMPTS;
+                if can_retry {
+                    let delay = STORAGE_RETRY_BASE_DELAY_MS * (attempt as u64 + 1);
+                    std::thread::sleep(Duration::from_millis(delay));
+                    continue;
+                }
+                return Err(error);
+            }
+        }
+    }
+    Err("Failed to replace data".to_string())
 }
 
 fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
@@ -503,6 +695,13 @@ fn ensure_tasks_organization_indexes(conn: &Connection) -> Result<(), String> {
         [],
     )
     .map_err(|e| e.to_string())?;
+    if has_column(conn, "tasks", "isFocusedToday")? {
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tasks_focus_today ON tasks(isFocusedToday, status, deletedAt)",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -750,12 +949,50 @@ fn json_str_or_default(value: Option<&Value>, default: &str) -> String {
 }
 
 fn upsert_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
+    upsert_task_row_at(conn, task, OffsetDateTime::now_utc().unix_timestamp_nanos())
+}
+
+fn upsert_task_row_at(conn: &Connection, task: &Value, merge_now: i128) -> Result<(), String> {
+    let task_id = task
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| "Task id is required".to_string())?;
+    let current = conn
+        .query_row(
+            "SELECT * FROM tasks WHERE id = ?1",
+            [task_id],
+            row_to_task_value,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if current
+        .as_ref()
+        .is_some_and(|current| !incoming_entity_wins_at(current, task, merge_now))
+    {
+        return Ok(());
+    }
+    replace_task_row(conn, task)
+}
+
+// Mutations derived from the canonical row while holding BEGIN IMMEDIATE are
+// already validated against the only row they can replace. They must bypass
+// stale-snapshot arbitration: at a saturated revision, a future-dated old row
+// can otherwise defeat a legitimate local patch and turn a 200 response into
+// a silent no-op.
+fn replace_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
+    task.get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| "Task id is required".to_string())?;
     let tags_json = json_str_or_default(task.get("tags"), "[]");
     let contexts_json = json_str_or_default(task.get("contexts"), "[]");
     let relative_start_offset_json = json_str(task.get("relativeStartOffset"));
     let recurrence_json = json_str(task.get("recurrence"));
     let checklist_json = json_str(task.get("checklist"));
     let attachments_json = json_str(task.get("attachments"));
+    let normalized_rev = normalized_revision_for_storage(task.get("rev"));
+    let normalized_rev_by = normalized_rev_by(task.get("revBy"));
     conn.execute(
         "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressMindwtrReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
         params![
@@ -804,8 +1041,8 @@ fn upsert_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
                 .and_then(|v| v.as_bool())
                 .map(|v| v as i32),
             task.get("projectArchivedAt").and_then(|v| v.as_str()),
-            task.get("rev").and_then(|v| v.as_i64()),
-            task.get("revBy").and_then(|v| v.as_str()),
+            normalized_rev,
+            normalized_rev_by.as_deref(),
             task.get("createdAt").and_then(|v| v.as_str()).unwrap_or_default(),
             task.get("updatedAt").and_then(|v| v.as_str()).unwrap_or_default(),
             task.get("deletedAt").and_then(|v| v.as_str()),
@@ -1353,8 +1590,519 @@ fn sanitize_dangling_container_references(data: &mut Value) -> Vec<(&'static str
     issues
 }
 
-fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), String> {
-    let mut data = data.clone();
+fn entity_revision(value: &Value) -> i64 {
+    const MAX_CORE_REVISION: i64 = 2_147_483_647;
+    value
+        .get("rev")
+        .and_then(|revision| {
+            revision
+                .as_i64()
+                .map(|revision| revision.clamp(0, MAX_CORE_REVISION))
+                .or_else(|| {
+                    revision
+                        .as_u64()
+                        .map(|revision| revision.min(MAX_CORE_REVISION as u64) as i64)
+                })
+        })
+        .unwrap_or(0)
+}
+
+fn normalized_revision_for_storage(value: Option<&Value>) -> Option<i64> {
+    let value = value?;
+    if value.as_i64().is_some_and(|revision| revision < 0) {
+        return None;
+    }
+    let revision = value.as_i64().or_else(|| {
+        value
+            .as_u64()
+            .map(|revision| revision.min(i64::MAX as u64) as i64)
+    })?;
+    Some(revision.min(2_147_483_647))
+}
+
+fn normalized_rev_by(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|rev_by| !rev_by.is_empty())
+        .map(str::to_string)
+}
+
+const DELETE_VS_LIVE_AMBIGUOUS_WINDOW_NANOS: i128 = 30_000_000_000;
+const CLOCK_SKEW_THRESHOLD_NANOS: i128 = 5 * 60 * 1_000_000_000;
+
+fn entity_has_revision(value: &Value) -> bool {
+    entity_revision(value) > 0
+        || value
+            .get("revBy")
+            .and_then(Value::as_str)
+            .is_some_and(|rev_by| !rev_by.trim().is_empty())
+}
+
+fn entity_is_deleted(value: &Value) -> bool {
+    ["deletedAt", "purgedAt"].iter().any(|key| {
+        value
+            .get(*key)
+            .and_then(Value::as_str)
+            .is_some_and(|timestamp| !timestamp.is_empty())
+    })
+}
+
+fn parse_entity_timestamp(value: Option<&Value>) -> Option<i128> {
+    value
+        .and_then(Value::as_str)
+        .and_then(|timestamp| {
+            OffsetDateTime::parse(timestamp, &time::format_description::well_known::Rfc3339)
+                .ok()
+                .or_else(|| {
+                    let bytes = timestamp.as_bytes();
+                    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
+                        return None;
+                    }
+                    let year = timestamp[0..4].parse::<i32>().ok()?;
+                    let month = timestamp[5..7].parse::<u8>().ok()?;
+                    let day = timestamp[8..10].parse::<u8>().ok()?;
+                    time::Date::from_calendar_date(year, time::Month::try_from(month).ok()?, day)
+                        .ok()
+                        .map(|date| date.midnight().assume_utc())
+                })
+        })
+        .map(OffsetDateTime::unix_timestamp_nanos)
+}
+
+#[derive(Clone, Copy)]
+struct EntityTimestampInfo {
+    raw: Option<i128>,
+    safe: Option<i128>,
+    was_clamped: bool,
+}
+
+fn entity_timestamp_info(value: Option<&Value>, merge_now: i128) -> EntityTimestampInfo {
+    let raw = parse_entity_timestamp(value);
+    let future_limit = merge_now.saturating_add(CLOCK_SKEW_THRESHOLD_NANOS);
+    let was_clamped = raw.is_some_and(|timestamp| timestamp > future_limit);
+    EntityTimestampInfo {
+        raw,
+        safe: raw.map(|timestamp| if was_clamped { merge_now } else { timestamp }),
+        was_clamped,
+    }
+}
+
+fn entity_timestamp_order(
+    current: EntityTimestampInfo,
+    incoming: EntityTimestampInfo,
+) -> std::cmp::Ordering {
+    incoming.safe.cmp(&current.safe).then_with(|| {
+        if current.was_clamped && incoming.was_clamped {
+            incoming.raw.cmp(&current.raw)
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    })
+}
+
+fn entity_operation_time(value: &Value, merge_now: i128) -> Option<i128> {
+    ["updatedAt", "deletedAt", "purgedAt"]
+        .iter()
+        .filter_map(|key| entity_timestamp_info(value.get(*key), merge_now).safe)
+        .max()
+}
+
+fn incoming_delete_vs_live_wins_at(
+    current: &Value,
+    incoming: &Value,
+    merge_now: i128,
+) -> Option<bool> {
+    let current_deleted = entity_is_deleted(current);
+    let incoming_deleted = entity_is_deleted(incoming);
+    if current_deleted == incoming_deleted {
+        return None;
+    }
+
+    let current_operation_time = entity_operation_time(current, merge_now);
+    let incoming_operation_time = entity_operation_time(incoming, merge_now);
+    let within_ambiguity_window = match (current_operation_time, incoming_operation_time) {
+        (Some(current), Some(incoming)) => {
+            incoming.abs_diff(current) <= DELETE_VS_LIVE_AMBIGUOUS_WINDOW_NANOS as u128
+        }
+        (None, None) => true,
+        _ => false,
+    };
+
+    if within_ambiguity_window {
+        let has_revision = entity_has_revision(current) || entity_has_revision(incoming);
+        let revision_order = entity_revision(incoming).cmp(&entity_revision(current));
+        if has_revision && !revision_order.is_eq() {
+            return Some(revision_order.is_gt());
+        }
+        // ADR 0007: revisioned records preserve the live side inside the
+        // ambiguity window. Legacy records without revisions retain the old
+        // tombstone preference so replicas still converge deterministically.
+        return Some(if has_revision {
+            !incoming_deleted
+        } else {
+            incoming_deleted
+        });
+    }
+
+    match (current_operation_time, incoming_operation_time) {
+        (Some(current), Some(incoming)) if incoming != current => Some(incoming > current),
+        (None, Some(_)) => Some(true),
+        (Some(_), None) => Some(false),
+        // Equal/unparseable non-ambiguous operation times finish with the
+        // core merge contract's deterministic delete preference.
+        _ => Some(incoming_deleted),
+    }
+}
+
+fn entity_signature_value(value: &Value, include_ignored_keys: bool) -> Option<Value> {
+    match value {
+        Value::Null => None,
+        Value::Array(values) => {
+            let comparable = values
+                .iter()
+                .filter_map(|value| entity_signature_value(value, include_ignored_keys))
+                .collect::<Vec<_>>();
+            (!comparable.is_empty()).then_some(Value::Array(comparable))
+        }
+        Value::Object(values) => {
+            let kind_is_file = values.get("kind").and_then(Value::as_str) == Some("file");
+            let mut keys = values.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            let mut comparable = Map::new();
+            for key in keys {
+                if matches!(
+                    key.as_str(),
+                    "statusBeforeProjectArchive"
+                        | "completedAtBeforeProjectArchive"
+                        | "isFocusedTodayBeforeProjectArchive"
+                        | "deletedAtBeforeProjectArchive"
+                        | "projectArchivedAt"
+                ) {
+                    continue;
+                }
+                if !include_ignored_keys
+                    && matches!(
+                        key.as_str(),
+                        "rev"
+                            | "revBy"
+                            | "updatedAt"
+                            | "createdAt"
+                            | "localStatus"
+                            | "purgedAt"
+                            | "order"
+                            | "orderNum"
+                            | "boardOrder"
+                            | "focusOrder"
+                    )
+                {
+                    continue;
+                }
+                if !include_ignored_keys && key == "uri" && kind_is_file {
+                    continue;
+                }
+                if let Some(value) = entity_signature_value(&values[key], include_ignored_keys) {
+                    comparable.insert(key.clone(), value);
+                }
+            }
+            (!comparable.is_empty()).then_some(Value::Object(comparable))
+        }
+        Value::String(value) => {
+            let trimmed = value.trim();
+            (!trimmed.is_empty()).then(|| Value::String(trimmed.to_string()))
+        }
+        value => Some(value.clone()),
+    }
+}
+
+fn entity_tie_break_json(value: &Value, include_ignored_keys: bool) -> String {
+    serde_json::to_string(&entity_signature_value(value, include_ignored_keys)).unwrap_or_default()
+}
+
+fn normalize_entity_signature_pair(current: &Value, incoming: &Value) -> (Value, Value) {
+    let mut current = current.as_object().cloned().unwrap_or_default();
+    let mut incoming = incoming.as_object().cloned().unwrap_or_default();
+    for entity in [&mut current, &mut incoming] {
+        match normalized_revision_for_storage(entity.get("rev")) {
+            Some(revision) => {
+                entity.insert("rev".to_string(), Value::Number(revision.into()));
+            }
+            None => {
+                entity.remove("rev");
+            }
+        }
+        match normalized_rev_by(entity.get("revBy")) {
+            Some(rev_by) => {
+                entity.insert("revBy".to_string(), Value::String(rev_by));
+            }
+            None => {
+                entity.remove("revBy");
+            }
+        }
+    }
+    for key in [
+        "showFutureRecurrence",
+        "isFocusedToday",
+        "suppressMindwtrReminders",
+        "isSequential",
+        "isFocused",
+        "isCollapsed",
+    ] {
+        if current.contains_key(key) || incoming.contains_key(key) {
+            current.entry(key.to_string()).or_insert(Value::Bool(false));
+            incoming
+                .entry(key.to_string())
+                .or_insert(Value::Bool(false));
+        }
+    }
+    (Value::Object(current), Value::Object(incoming))
+}
+
+fn entity_tie_break_order(current: &Value, incoming: &Value) -> std::cmp::Ordering {
+    let (current, incoming) = normalize_entity_signature_pair(current, incoming);
+    entity_tie_break_json(&incoming, false)
+        .cmp(&entity_tie_break_json(&current, false))
+        .then_with(|| {
+            entity_tie_break_json(&incoming, true).cmp(&entity_tie_break_json(&current, true))
+        })
+}
+
+#[cfg(test)]
+fn incoming_entity_wins(current: &Value, incoming: &Value) -> bool {
+    incoming_entity_wins_at(
+        current,
+        incoming,
+        OffsetDateTime::now_utc().unix_timestamp_nanos(),
+    )
+}
+
+fn incoming_entity_wins_at(current: &Value, incoming: &Value, merge_now: i128) -> bool {
+    if let Some(incoming_wins) = incoming_delete_vs_live_wins_at(current, incoming, merge_now) {
+        return incoming_wins;
+    }
+    let has_revision = entity_has_revision(current) || entity_has_revision(incoming);
+    let current_rev_by = current
+        .get("revBy")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    let incoming_rev_by = incoming
+        .get("revBy")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    let current_timestamp = entity_timestamp_info(current.get("updatedAt"), merge_now);
+    let incoming_timestamp = entity_timestamp_info(incoming.get("updatedAt"), merge_now);
+    let raw_timestamp_order = entity_timestamp_order(current_timestamp, incoming_timestamp);
+    let timestamp_order = match (current_timestamp.safe, incoming_timestamp.safe) {
+        // Core deliberately ignores small timestamp differences on legacy
+        // rows: without a revision they are plausible clock skew, not a safe
+        // causal order. Content signatures make every replica converge.
+        (Some(current), Some(incoming))
+            if !has_revision
+                && !current_timestamp.was_clamped
+                && !incoming_timestamp.was_clamped
+                && incoming.abs_diff(current) <= CLOCK_SKEW_THRESHOLD_NANOS as u128 =>
+        {
+            std::cmp::Ordering::Equal
+        }
+        _ => raw_timestamp_order,
+    };
+    let order = entity_revision(incoming)
+        .cmp(&entity_revision(current))
+        .then(timestamp_order)
+        // Match core: revBy resolves an otherwise equal revision/time only
+        // when both clients supplied it. A legacy row with no revBy falls
+        // through to the deterministic content signature instead.
+        .then_with(
+            || match (current_rev_by.is_empty(), incoming_rev_by.is_empty()) {
+                (false, false) => incoming_rev_by.cmp(current_rev_by),
+                _ => std::cmp::Ordering::Equal,
+            },
+        )
+        .then_with(|| entity_tie_break_order(current, incoming));
+    // Core's deterministic winner selects the incoming value on an exact
+    // comparable + full-signature tie. This also permits otherwise ignored
+    // archive-bookkeeping differences to flow through without oscillation.
+    !order.is_lt()
+}
+
+fn entities_by_id(entities: &[Value]) -> HashMap<&str, &Value> {
+    entities
+        .iter()
+        .filter_map(|entity| {
+            entity
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| (id, entity))
+        })
+        .collect()
+}
+
+fn merge_entity_snapshots(
+    current: &[Value],
+    incoming: &[Value],
+    changed_baseline: &[Value],
+    observed_ids: &HashSet<&str>,
+    merge_now: i128,
+) -> Vec<Value> {
+    let incoming_by_id = entities_by_id(incoming);
+    let baseline_by_id = entities_by_id(changed_baseline);
+    let current_ids: HashMap<&str, ()> = current
+        .iter()
+        .filter_map(|entity| entity.get("id").and_then(Value::as_str).map(|id| (id, ())))
+        .collect();
+    let mut merged = Vec::with_capacity(current.len().max(incoming.len()));
+
+    for canonical in current {
+        let Some(id) = canonical.get("id").and_then(Value::as_str) else {
+            merged.push(canonical.clone());
+            continue;
+        };
+        let baseline_matches = baseline_by_id
+            .get(id)
+            .is_some_and(|baseline| *baseline == canonical);
+
+        match incoming_by_id.get(id) {
+            // A caller may replace a row exactly (including pruning nested
+            // attachment tombstones without bumping the task rev) only when
+            // the row it originally observed is still canonical. The CAS
+            // never authorizes rolling the entity revision backward.
+            Some(target) if baseline_matches => {
+                if entity_revision(target) >= entity_revision(canonical) {
+                    merged.push((*target).clone());
+                } else {
+                    merged.push(canonical.clone());
+                }
+            }
+            Some(target) if incoming_entity_wins_at(canonical, target, merge_now) => {
+                merged.push((*target).clone())
+            }
+            Some(_) => merged.push(canonical.clone()),
+            // Omission is a physical removal only when it is a CAS against
+            // the exact row the caller observed. Unseen/concurrently changed
+            // rows remain intact.
+            None if baseline_matches => {}
+            None => merged.push(canonical.clone()),
+        }
+    }
+
+    for entity in incoming {
+        let Some(id) = entity.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        // A row absent from the canonical snapshot may have been removed by
+        // an exact restore after this caller observed it. Sparse changed-row
+        // baselines alone cannot distinguish that stale row from a genuine
+        // local create, so the caller also sends the IDs it observed. Existing
+        // changed-baseline rows count as observed for older callers.
+        if !current_ids.contains_key(id)
+            && !observed_ids.contains(id)
+            && !baseline_by_id.contains_key(id)
+        {
+            merged.push(entity.clone());
+        }
+    }
+    merged
+}
+
+fn merge_data_snapshots(
+    current: &Value,
+    incoming: &Value,
+    baseline_entities: Option<&Value>,
+) -> Value {
+    let mut merged = incoming.as_object().cloned().unwrap_or_default();
+    let merge_now = OffsetDateTime::now_utc().unix_timestamp_nanos();
+    for key in ENTITY_TABLES {
+        let current_entities = current
+            .get(key)
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let incoming_entities = incoming
+            .get(key)
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let changed_baseline = baseline_entities
+            .and_then(|baseline| baseline.get(key))
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let observed_ids = baseline_entities
+            .and_then(|baseline| baseline.get("observedEntityIds"))
+            .and_then(|observed| observed.get(key))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect::<HashSet<_>>();
+        merged.insert(
+            key.to_string(),
+            Value::Array(merge_entity_snapshots(
+                current_entities,
+                incoming_entities,
+                changed_baseline,
+                &observed_ids,
+                merge_now,
+            )),
+        );
+    }
+    // Settings are one explicit, unsynced document rather than revisioned
+    // entities. Legacy/migration callers without a baseline retain replacement
+    // behavior. Normal saves must compare-and-swap the exact settings document
+    // they observed; an absent/stale baseline cannot overwrite a concurrent
+    // settings update.
+    let incoming_settings_are_accepted = incoming.get("settings").is_some_and(Value::is_object)
+        && match baseline_entities {
+            None => true,
+            Some(baseline) => baseline
+                .get("settings")
+                .zip(current.get("settings"))
+                .is_some_and(|(observed, canonical)| observed == canonical),
+        };
+    if !incoming_settings_are_accepted {
+        merged.insert(
+            "settings".to_string(),
+            current
+                .get("settings")
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new())),
+        );
+    }
+    Value::Object(merged)
+}
+
+fn normalize_revision_metadata_in_data(data: &mut Value) {
+    for collection in ENTITY_TABLES {
+        let Some(entities) = data.get_mut(collection).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for entity in entities {
+            let Some(entity) = entity.as_object_mut() else {
+                continue;
+            };
+            match normalized_revision_for_storage(entity.get("rev")) {
+                Some(revision) => {
+                    entity.insert("rev".to_string(), Value::Number(revision.into()));
+                }
+                None => {
+                    entity.remove("rev");
+                }
+            }
+            match normalized_rev_by(entity.get("revBy")) {
+                Some(rev_by) => {
+                    entity.insert("revBy".to_string(), Value::String(rev_by));
+                }
+                None => {
+                    entity.remove("revBy");
+                }
+            }
+        }
+    }
+}
+
+fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Value, String> {
     let issues = sanitize_dangling_container_references(&mut data);
     if !issues.is_empty() {
         log::warn!(
@@ -1367,20 +2115,20 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
                 .join(", ")
         );
     }
+    normalize_revision_metadata_in_data(&mut data);
     let data = &data;
 
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM tasks", [])
+    conn.execute("DELETE FROM tasks", [])
         .map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM projects", [])
+    conn.execute("DELETE FROM projects", [])
         .map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM areas", [])
+    conn.execute("DELETE FROM areas", [])
         .map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM sections", [])
+    conn.execute("DELETE FROM sections", [])
         .map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM people", [])
+    conn.execute("DELETE FROM people", [])
         .map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM settings", [])
+    conn.execute("DELETE FROM settings", [])
         .map_err(|e| e.to_string())?;
 
     // Insert order is parent-before-child so each row's FK references
@@ -1403,7 +2151,7 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
         .cloned()
         .unwrap_or_default();
     for area in areas {
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO areas (id, name, color, icon, orderNum, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 area.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1432,7 +2180,7 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
     for project in projects {
         let tag_ids_json = json_str_or_default(project.get("tagIds"), "[]");
         let attachments_json = json_str(project.get("attachments"));
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO projects (id, title, status, color, orderNum, tagIds, isSequential, sequentialScope, taskSortBy, isFocused, supportNotes, attachments, dueDate, reviewAt, areaId, areaTitle, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             params![
                 project.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1468,7 +2216,7 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
         .cloned()
         .unwrap_or_default();
     for section in sections {
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO sections (id, projectId, title, description, orderNum, isCollapsed, rev, revBy, createdAt, updatedAt, deletedAt, deletedAtBeforeProjectArchive, projectArchivedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 section.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1503,7 +2251,7 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
         let recurrence_json = json_str(task.get("recurrence"));
         let checklist_json = json_str(task.get("checklist"));
         let attachments_json = json_str(task.get("attachments"));
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressMindwtrReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
             params![
                 task.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1569,7 +2317,7 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
         .cloned()
         .unwrap_or_default();
     for person in people {
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO people (id, name, note, referenceLink, rev, revBy, createdAt, updatedAt, deletedAt) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 person.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1587,14 +2335,74 @@ fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), Str
     }
 
     let settings_json = json_str(data.get("settings"));
-    tx.execute(
+    conn.execute(
         "INSERT INTO settings (id, data) VALUES (1, ?1)",
         params![settings_json.unwrap_or_else(|| "{}".to_string())],
     )
     .map_err(|e| e.to_string())?;
 
-    tx.commit().map_err(|e| e.to_string())?;
-    Ok(())
+    read_sqlite_data(conn)
+}
+
+fn merge_json_to_sqlite(
+    conn: &mut Connection,
+    data: &Value,
+    baseline_entities: Option<&Value>,
+) -> Result<Value, String> {
+    // Acquire the cross-process writer lock before reloading. A stale whole
+    // snapshot can then merge with canonical rows without erasing an MCP,
+    // CLI, or Local API write committed after the snapshot was captured.
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result: Result<Value, String> = (|| {
+        let current = read_sqlite_data(conn)?;
+        let merged = merge_data_snapshots(&current, data, baseline_entities);
+        let canonical = replace_data_in_transaction(conn, merged)?;
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(canonical)
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
+}
+
+fn migrate_json_to_sqlite(conn: &mut Connection, data: &Value) -> Result<(), String> {
+    merge_json_to_sqlite(conn, data, None).map(|_| ())
+}
+
+fn replace_json_in_sqlite(conn: &mut Connection, data: &Value) -> Result<Value, String> {
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let canonical = replace_data_in_transaction(conn, data.clone())?;
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(canonical)
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
+}
+
+#[cfg(test)]
+fn mutate_data_in_transaction<T, F>(conn: &Connection, mutate: &mut F) -> Result<(T, Value), String>
+where
+    F: FnMut(&mut Value) -> Result<T, String>,
+{
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let mut data = read_sqlite_data(&conn)?;
+        let output = mutate(&mut data)?;
+        let canonical = replace_data_in_transaction(&conn, data)?;
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok((output, canonical))
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
 }
 
 pub(crate) fn read_sqlite_data(conn: &Connection) -> Result<Value, String> {
@@ -1875,24 +2683,28 @@ fn bootstrap_storage_layout(app: &tauri::AppHandle) -> Result<(), String> {
     let data_path = get_data_path(app);
     cleanup_stale_data_json_backup(&data_path)?;
     if !data_path.exists() {
+        let mut legacy_sources = Vec::new();
         if let Some(custom_path) = legacy_config.data_file_path.as_ref() {
-            let custom_path = PathBuf::from(custom_path);
-            if custom_path.exists() {
-                fs::copy(&custom_path, &data_path).map_err(|e| e.to_string())?;
-                return Ok(());
+            legacy_sources.push(PathBuf::from(custom_path));
+        }
+        legacy_sources.push(config_dir.join(DATA_FILE_NAME));
+        legacy_sources.push(get_legacy_data_json_path(app));
+        for source in legacy_sources {
+            if !source.exists() {
+                continue;
             }
-        }
-
-        let legacy_config_data_path = config_dir.join(DATA_FILE_NAME);
-        if legacy_config_data_path.exists() {
-            fs::copy(&legacy_config_data_path, &data_path).map_err(|e| e.to_string())?;
-            return Ok(());
-        }
-
-        let legacy_data_path = get_legacy_data_json_path(app);
-        if legacy_data_path.exists() {
-            fs::copy(&legacy_data_path, &data_path).map_err(|e| e.to_string())?;
-            return Ok(());
+            match read_json_with_retries(&source, 2) {
+                Ok(value) => {
+                    write_initial_data_json_file(&data_path, &value)?;
+                    return Ok(());
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Skipping invalid legacy data file {} during bootstrap: {error}",
+                        source.display()
+                    );
+                }
+            }
         }
 
         let initial_data = serde_json::json!({
@@ -1900,11 +2712,7 @@ fn bootstrap_storage_layout(app: &tauri::AppHandle) -> Result<(), String> {
             "projects": [],
             "settings": {}
         });
-        fs::write(
-            &data_path,
-            serde_json::to_string_pretty(&initial_data).unwrap(),
-        )
-        .map_err(|e| e.to_string())?;
+        write_initial_data_json_file(&data_path, &initial_data)?;
     }
 
     Ok(())
@@ -1943,31 +2751,12 @@ pub(crate) fn load_data_snapshot(app: &tauri::AppHandle) -> Result<Value, String
         }
     }
 
-    match read_sqlite_data(&conn) {
-        Ok(mut value) => {
-            let settings_empty = value
-                .get("settings")
-                .and_then(|v| v.as_object())
-                .map(|obj| obj.is_empty())
-                .unwrap_or(true);
-            if settings_empty && data_path.exists() {
-                if let Ok(json_value) = read_json_with_retries(&data_path, 2) {
-                    if let Some(json_settings) =
-                        json_value.get("settings").and_then(|v| v.as_object())
-                    {
-                        if !json_settings.is_empty() {
-                            if let Some(map) = value.as_object_mut() {
-                                map.insert(
-                                    "settings".to_string(),
-                                    Value::Object(json_settings.clone()),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            Ok(value)
-        }
+    match read_sqlite_snapshot(&conn) {
+        // Once SQLite has any canonical data, even an empty settings object is
+        // authoritative: it can be an intentional reset. data.json is only a
+        // first-load/failure fallback and must not resurrect stale settings if
+        // its best-effort refresh failed after that reset committed.
+        Ok(value) => Ok(value),
         Err(primary_err) => {
             if data_path.exists() {
                 if let Ok(value) = read_json_with_retries(&data_path, 2) {
@@ -1988,7 +2777,8 @@ pub(crate) fn load_data_snapshot(app: &tauri::AppHandle) -> Result<Value, String
 pub(crate) async fn read_data_json(app: tauri::AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let data_path = get_data_path(&app);
-        cleanup_stale_data_json_backup(&data_path)?;
+        let _publication_guard = lock_data_json_publication()?;
+        cleanup_stale_data_json_backup_unlocked(&data_path)?;
         read_json_with_retries(&data_path, 2).map_err(|e| e.to_string())
     })
     .await
@@ -1996,30 +2786,641 @@ pub(crate) async fn read_data_json(app: tauri::AppHandle) -> Result<Value, Strin
 }
 
 #[tauri::command]
-pub(crate) async fn save_data(app: tauri::AppHandle, data: Value) -> Result<bool, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        persist_data_snapshot_with_retries(&app, &data)?;
-        Ok(true)
+pub(crate) async fn save_data(
+    app: tauri::AppHandle,
+    data: Value,
+    baseline_entities: Option<Value>,
+    mode: Option<String>,
+) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || match mode.as_deref() {
+        None | Some("merge") => {
+            persist_data_snapshot_with_retries(&app, &data, baseline_entities.as_ref())
+        }
+        Some("exact") => persist_data_snapshot_exact_with_retries(&app, &data),
+        Some(unsupported) => Err(format!("Unsupported save_data mode: {unsupported}")),
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-pub(crate) async fn save_task(app: tauri::AppHandle, task: Value) -> Result<bool, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let conn = open_sqlite(&app)?;
-        conn.execute_batch("BEGIN IMMEDIATE")
+pub(crate) const TASK_MUTATION_FOCUSED_COUNT_KEY: &str = "_localApiFocusedTaskCount";
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct TaskMutationReadScope {
+    task_id: Option<String>,
+    project_id: Option<String>,
+    section_id: Option<String>,
+    area_id: Option<String>,
+    include_target_containers: bool,
+    include_focus_context: bool,
+}
+
+impl TaskMutationReadScope {
+    pub(crate) fn existing(task_id: &str, include_target_containers: bool) -> Self {
+        Self {
+            task_id: Some(task_id.to_string()),
+            include_target_containers,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn create(
+        project_id: Option<&str>,
+        section_id: Option<&str>,
+        area_id: Option<&str>,
+        include_focus_context: bool,
+    ) -> Self {
+        let normalize = |value: Option<&str>| {
+            value
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        };
+        Self {
+            project_id: normalize(project_id),
+            section_id: normalize(section_id),
+            area_id: normalize(area_id),
+            include_focus_context,
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct TaskMutationReadStats {
+    statements: usize,
+    rows: usize,
+    task_rows: usize,
+}
+
+fn push_unique_entity(entities: &mut Vec<Value>, entity: Value) {
+    let Some(id) = entity.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    if entities
+        .iter()
+        .any(|existing| existing.get("id").and_then(Value::as_str) == Some(id))
+    {
+        return;
+    }
+    entities.push(entity);
+}
+
+fn push_unique_id(ids: &mut Vec<String>, id: Option<&str>) {
+    let Some(id) = id.map(str::trim).filter(|id| !id.is_empty()) else {
+        return;
+    };
+    if !ids.iter().any(|existing| existing == id) {
+        ids.push(id.to_string());
+    }
+}
+
+fn read_scoped_task(
+    conn: &Connection,
+    task_id: &str,
+    stats: &mut TaskMutationReadStats,
+) -> Result<Option<Value>, String> {
+    stats.statements += 1;
+    let task = conn
+        .query_row(
+            "SELECT * FROM tasks WHERE id = ?1",
+            [task_id],
+            row_to_task_value,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if task.is_some() {
+        stats.rows += 1;
+        stats.task_rows += 1;
+    }
+    Ok(task)
+}
+
+fn load_scoped_project(
+    conn: &Connection,
+    project_id: &str,
+    projects: &mut Vec<Value>,
+    stats: &mut TaskMutationReadStats,
+) -> Result<(), String> {
+    if projects
+        .iter()
+        .any(|project| project.get("id").and_then(Value::as_str) == Some(project_id))
+    {
+        return Ok(());
+    }
+    stats.statements += 1;
+    let project = conn
+        .query_row(
+            "SELECT * FROM projects WHERE id = ?1",
+            [project_id],
+            row_to_project_value,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some(project) = project {
+        stats.rows += 1;
+        projects.push(project);
+    }
+    Ok(())
+}
+
+fn load_scoped_section(
+    conn: &Connection,
+    section_id: &str,
+    sections: &mut Vec<Value>,
+    stats: &mut TaskMutationReadStats,
+) -> Result<Option<String>, String> {
+    if let Some(section) = sections
+        .iter()
+        .find(|section| section.get("id").and_then(Value::as_str) == Some(section_id))
+    {
+        return Ok(section
+            .get("projectId")
+            .and_then(Value::as_str)
+            .map(str::to_string));
+    }
+    stats.statements += 1;
+    let section = conn
+        .query_row(
+            "SELECT * FROM sections WHERE id = ?1",
+            [section_id],
+            row_to_section_value,
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some(section) = section {
+        stats.rows += 1;
+        let project_id = section
+            .get("projectId")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        sections.push(section);
+        return Ok(project_id);
+    }
+    Ok(None)
+}
+
+fn load_scoped_area(
+    conn: &Connection,
+    area_id: &str,
+    areas: &mut Vec<Value>,
+    stats: &mut TaskMutationReadStats,
+) -> Result<(), String> {
+    if areas
+        .iter()
+        .any(|area| area.get("id").and_then(Value::as_str) == Some(area_id))
+    {
+        return Ok(());
+    }
+    stats.statements += 1;
+    let area = conn
+        .query_row(
+            "SELECT id, deletedAt FROM areas WHERE id = ?1",
+            [area_id],
+            |row| {
+                let mut area = Map::new();
+                area.insert("id".to_string(), Value::String(row.get("id")?));
+                if let Some(deleted_at) = row.get::<_, Option<String>>("deletedAt")? {
+                    area.insert("deletedAt".to_string(), Value::String(deleted_at));
+                }
+                Ok(Value::Object(area))
+            },
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if let Some(area) = area {
+        stats.rows += 1;
+        areas.push(area);
+    }
+    Ok(())
+}
+
+fn append_scoped_task_rows<P>(
+    conn: &Connection,
+    sql: &str,
+    params: P,
+    tasks: &mut Vec<Value>,
+    stats: &mut TaskMutationReadStats,
+) -> Result<(), String>
+where
+    P: rusqlite::Params,
+{
+    stats.statements += 1;
+    let mut statement = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map(params, row_to_task_value)
+        .map_err(|e| e.to_string())?;
+    for row in rows {
+        stats.rows += 1;
+        stats.task_rows += 1;
+        push_unique_entity(tasks, row.map_err(|e| e.to_string())?);
+    }
+    Ok(())
+}
+
+fn read_task_mutation_data(
+    conn: &Connection,
+    scope: &TaskMutationReadScope,
+) -> Result<(Value, TaskMutationReadStats), String> {
+    let mut stats = TaskMutationReadStats::default();
+    let mut tasks = Vec::new();
+    let mut projects = Vec::new();
+    let mut sections = Vec::new();
+    let mut areas = Vec::new();
+
+    let target = if let Some(task_id) = scope.task_id.as_deref() {
+        let task = read_scoped_task(conn, task_id, &mut stats)?;
+        if let Some(task) = task.as_ref() {
+            tasks.push(task.clone());
+        }
+        task
+    } else {
+        None
+    };
+
+    let mut project_ids = Vec::new();
+    let mut section_ids = Vec::new();
+    let mut area_ids = Vec::new();
+    push_unique_id(&mut project_ids, scope.project_id.as_deref());
+    push_unique_id(&mut section_ids, scope.section_id.as_deref());
+    push_unique_id(&mut area_ids, scope.area_id.as_deref());
+    if scope.include_target_containers {
+        if let Some(task) = target.as_ref() {
+            push_unique_id(
+                &mut project_ids,
+                task.get("projectId").and_then(Value::as_str),
+            );
+            push_unique_id(
+                &mut section_ids,
+                task.get("sectionId").and_then(Value::as_str),
+            );
+            push_unique_id(&mut area_ids, task.get("areaId").and_then(Value::as_str));
+        }
+    }
+
+    let mut section_project_ids = Vec::new();
+    for section_id in &section_ids {
+        let project_id = load_scoped_section(conn, section_id, &mut sections, &mut stats)?;
+        push_unique_id(&mut section_project_ids, project_id.as_deref());
+    }
+    for project_id in section_project_ids {
+        push_unique_id(&mut project_ids, Some(&project_id));
+    }
+    for project_id in &project_ids {
+        load_scoped_project(conn, project_id, &mut projects, &mut stats)?;
+    }
+    for area_id in &area_ids {
+        load_scoped_area(conn, area_id, &mut areas, &mut stats)?;
+    }
+
+    stats.statements += 1;
+    let settings_raw: Option<String> = conn
+        .query_row("SELECT data FROM settings WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .optional()
+        .map_err(|e| e.to_string())?;
+    if settings_raw.is_some() {
+        stats.rows += 1;
+    }
+    let settings = parse_json_value(settings_raw)
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    let mut focused_count = None;
+    if scope.include_focus_context {
+        stats.statements += 1;
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM (
+                   SELECT 1 FROM tasks
+                   WHERE isFocusedToday = 1
+                     AND (deletedAt IS NULL OR trim(deletedAt) = '')
+                     AND status NOT IN ('done', 'reference')
+                   LIMIT 10
+                 )",
+                [],
+                |row| row.get(0),
+            )
             .map_err(|e| e.to_string())?;
-        if let Err(error) = upsert_task_row(&conn, &task) {
-            let _ = conn.execute_batch("ROLLBACK");
-            return Err(error);
+        stats.rows += 1;
+        focused_count = Some(count.max(0) as u64);
+
+        let focus_project_id = scope.project_id.as_deref().or_else(|| {
+            scope.section_id.as_deref().and_then(|section_id| {
+                sections
+                    .iter()
+                    .find(|section| section.get("id").and_then(Value::as_str) == Some(section_id))
+                    .and_then(|section| section.get("projectId"))
+                    .and_then(Value::as_str)
+            })
+        });
+        if let Some(project_id) = focus_project_id {
+            if let Some(project) = projects
+                .iter()
+                .find(|project| project.get("id").and_then(Value::as_str) == Some(project_id))
+            {
+                if project.get("isSequential").and_then(Value::as_bool) == Some(true) {
+                    let section_scoped =
+                        project.get("sequentialScope").and_then(Value::as_str) == Some("section");
+                    if section_scoped {
+                        if let Some(section_id) = scope.section_id.as_deref() {
+                            append_scoped_task_rows(
+                                conn,
+                                "SELECT * FROM tasks
+                                 WHERE projectId = ?1 AND sectionId = ?2
+                                   AND (deletedAt IS NULL OR trim(deletedAt) = '')
+                                   AND status IN ('inbox', 'next', 'waiting', 'someday')
+                                   AND (isFocusedToday = 1 OR status = 'next' OR reviewAt IS NOT NULL)",
+                                params![project_id, section_id],
+                                &mut tasks,
+                                &mut stats,
+                            )?;
+                        } else {
+                            append_scoped_task_rows(
+                                conn,
+                                "SELECT * FROM tasks
+                                 WHERE projectId = ?1 AND sectionId IS NULL
+                                   AND (deletedAt IS NULL OR trim(deletedAt) = '')
+                                   AND status IN ('inbox', 'next', 'waiting', 'someday')
+                                   AND (isFocusedToday = 1 OR status = 'next' OR reviewAt IS NOT NULL)",
+                                [project_id],
+                                &mut tasks,
+                                &mut stats,
+                            )?;
+                        }
+                    } else {
+                        append_scoped_task_rows(
+                            conn,
+                            "SELECT * FROM tasks
+                             WHERE projectId = ?1
+                               AND (deletedAt IS NULL OR trim(deletedAt) = '')
+                               AND status IN ('inbox', 'next', 'waiting', 'someday')
+                               AND (isFocusedToday = 1 OR status = 'next' OR reviewAt IS NOT NULL)",
+                            [project_id],
+                            &mut tasks,
+                            &mut stats,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut data = serde_json::json!({
+        "tasks": tasks,
+        "projects": projects,
+        "sections": sections,
+        "areas": areas,
+        "people": [],
+        "settings": Value::Object(settings),
+    });
+    if let Some(count) = focused_count {
+        data.as_object_mut()
+            .expect("scoped task data is an object")
+            .insert(
+                TASK_MUTATION_FOCUSED_COUNT_KEY.to_string(),
+                Value::Number(count.into()),
+            );
+    }
+    Ok((data, stats))
+}
+
+fn ensure_task_mutation_storage_ready(app: &tauri::AppHandle) -> Result<(), String> {
+    ensure_data_file(app)?;
+    let conn = open_sqlite(app)?;
+    let needs_first_load = !sqlite_has_any_data(&conn)?;
+    drop(conn);
+    if needs_first_load {
+        load_data_snapshot(app)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn mutate_task_rows_with_retries<T, F>(
+    app: &tauri::AppHandle,
+    scope: TaskMutationReadScope,
+    mut mutate: F,
+) -> Result<(T, Value), String>
+where
+    F: FnMut(&mut Value) -> Result<(T, Vec<Value>), String>,
+{
+    // Bootstrap/migrate once before entering the retry loop. Steady-state
+    // mutations do not read the whole store here; each retry loads only the
+    // task and supporting rows described by `scope` under BEGIN IMMEDIATE.
+    ensure_task_mutation_storage_ready(app)?;
+    let data_path = get_data_path(app);
+    for attempt in 0..STORAGE_RETRY_ATTEMPTS {
+        let conn = open_sqlite(app)?;
+        match commit_task_row_mutation(&conn, &scope, &mut mutate) {
+            Ok((result, fallback, _read_stats)) => {
+                let canonical = match stable_sqlite_snapshot_with_version(&conn) {
+                    Ok((canonical, data_version)) => {
+                        publish_task_data_json(&conn, &data_path, canonical, data_version)
+                    }
+                    Err(error) => {
+                        // The rows are durably committed. `fallback` is only a
+                        // scoped response snapshot, so never publish it as the
+                        // full recovery document; leave the previous data.json
+                        // intact and avoid turning success into a caller retry.
+                        log::warn!(
+                            "Task mutation committed but canonical recovery refresh failed: {error}"
+                        );
+                        fallback
+                    }
+                };
+                return Ok((result, canonical));
+            }
+            Err(error) => {
+                let can_retry =
+                    is_retryable_storage_error(&error) && attempt + 1 < STORAGE_RETRY_ATTEMPTS;
+                if can_retry {
+                    let delay = STORAGE_RETRY_BASE_DELAY_MS * (attempt as u64 + 1);
+                    std::thread::sleep(Duration::from_millis(delay));
+                    continue;
+                }
+                return Err(error);
+            }
+        }
+    }
+    Err("Failed to mutate task rows".to_string())
+}
+
+fn commit_task_row_mutation<T, F>(
+    conn: &Connection,
+    scope: &TaskMutationReadScope,
+    mutate: &mut F,
+) -> Result<(T, Value, TaskMutationReadStats), String>
+where
+    F: FnMut(&mut Value) -> Result<(T, Vec<Value>), String>,
+{
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let (mut canonical, read_stats) = read_task_mutation_data(conn, scope)?;
+        let (result, changed_tasks) = mutate(&mut canonical)?;
+        let mut written_ids = HashSet::new();
+        for task in changed_tasks {
+            let task_id = task
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| "Task id is required".to_string())?;
+            if written_ids.insert(task_id.to_string()) {
+                replace_task_row(conn, &task)?;
+            }
         }
         conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-        Ok(true)
+        Ok((result, canonical, read_stats))
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
+}
+
+#[tauri::command]
+pub(crate) async fn save_task(
+    app: tauri::AppHandle,
+    task: Value,
+    baseline_task: Option<Value>,
+) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = open_sqlite(&app)?;
+        persist_task_snapshot(&conn, &task, &get_data_path(&app), baseline_task.as_ref())
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+fn persist_task_snapshot(
+    conn: &Connection,
+    task: &Value,
+    data_path: &Path,
+    baseline_task: Option<&Value>,
+) -> Result<Value, String> {
+    commit_task_snapshot(conn, task, baseline_task)?;
+    let (canonical, data_version) = stable_sqlite_snapshot_with_version(conn)?;
+    Ok(publish_task_data_json(
+        conn,
+        data_path,
+        canonical,
+        data_version,
+    ))
+}
+
+fn commit_task_snapshot(
+    conn: &Connection,
+    task: &Value,
+    baseline_task: Option<&Value>,
+) -> Result<(), String> {
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result: Result<(), String> = (|| {
+        let task_id = task.get("id").and_then(Value::as_str);
+        let was_observed = task_id.is_some()
+            && task_id
+                == baseline_task
+                    .and_then(|baseline| baseline.get("id"))
+                    .and_then(Value::as_str);
+        let canonical_exists = if let Some(task_id) = task_id.filter(|_| was_observed) {
+            conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1)",
+                [task_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|e| e.to_string())?
+        } else {
+            true
+        };
+        if canonical_exists {
+            upsert_task_row(conn, task)?;
+        }
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
+}
+
+fn sqlite_data_version(conn: &Connection) -> Result<i64, String> {
+    conn.query_row("PRAGMA data_version", [], |row| row.get(0))
+        .map_err(|e| e.to_string())
+}
+
+fn stable_sqlite_snapshot_with_version(conn: &Connection) -> Result<(Value, i64), String> {
+    stable_snapshot_with_version_readers(
+        || sqlite_data_version(conn),
+        || read_sqlite_snapshot(conn),
+    )
+}
+
+fn stable_snapshot_with_version_readers<V, S>(
+    mut read_version: V,
+    mut read_snapshot: S,
+) -> Result<(Value, i64), String>
+where
+    V: FnMut() -> Result<i64, String>,
+    S: FnMut() -> Result<Value, String>,
+{
+    let mut last_read = None;
+    for _ in 0..STORAGE_RETRY_ATTEMPTS {
+        let before = read_version()?;
+        let canonical = read_snapshot()?;
+        let after = read_version()?;
+        if before == after {
+            return Ok((canonical, after));
+        }
+        // The snapshot is still transactionally consistent even when another
+        // connection committed around it. Keep it as a successful post-commit
+        // return value; using the older version as the publication expectation
+        // forces data.json repair to retry rather than mistaking it for current.
+        last_read = Some((canonical, before));
+    }
+    last_read.ok_or_else(|| "Could not read canonical SQLite snapshot".to_string())
+}
+
+fn publish_task_data_json(
+    conn: &Connection,
+    data_path: &Path,
+    mut canonical: Value,
+    mut expected_data_version: i64,
+) -> Value {
+    // Serialization, fsync, and atomic replacement happen after COMMIT, so an
+    // incremental task save does one canonical read and never holds SQLite's
+    // writer lock across filesystem I/O. If another connection commits before
+    // publication finishes, reload and republish its newer canonical snapshot.
+    write_data_json_best_effort(data_path, &canonical);
+    for attempt in 0..STORAGE_RETRY_ATTEMPTS {
+        let current_data_version = match sqlite_data_version(conn) {
+            Ok(version) => version,
+            Err(error) => {
+                log::warn!("Could not verify data.json after task save: {error}");
+                return canonical;
+            }
+        };
+        if current_data_version == expected_data_version {
+            return canonical;
+        }
+        if attempt + 1 == STORAGE_RETRY_ATTEMPTS {
+            log::warn!("SQLite kept changing while refreshing data.json after task save");
+            return canonical;
+        }
+        let (latest, latest_data_version) = match stable_sqlite_snapshot_with_version(conn) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                log::warn!("Could not reload data.json after concurrent task save: {error}");
+                return canonical;
+            }
+        };
+        canonical = latest;
+        write_data_json_best_effort(data_path, &canonical);
+        expected_data_version = latest_data_version;
+    }
+    canonical
 }
 
 fn get_snapshot_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -2034,16 +3435,56 @@ fn is_snapshot_file_name(name: &str) -> bool {
     name.starts_with("data.") && name.ends_with(".snapshot.json")
 }
 
-fn format_snapshot_file_name(now: OffsetDateTime) -> String {
+fn format_snapshot_file_name(now: OffsetDateTime, collision: u32) -> String {
+    let collision_suffix = if collision == 0 {
+        String::new()
+    } else {
+        format!(".{collision}")
+    };
     format!(
-        "data.{:04}-{:02}-{:02}T{:02}-{:02}-{:02}.snapshot.json",
+        "data.{:04}-{:02}-{:02}T{:02}-{:02}-{:02}.{:09}{}.snapshot.json",
         now.year(),
         u8::from(now.month()),
         now.day(),
         now.hour(),
         now.minute(),
-        now.second()
+        now.second(),
+        now.nanosecond(),
+        collision_suffix
     )
+}
+
+fn write_new_data_snapshot(
+    snapshot_dir: &Path,
+    canonical: &Value,
+    now: OffsetDateTime,
+) -> Result<String, String> {
+    let content = serde_json::to_string_pretty(canonical).map_err(|e| e.to_string())?;
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".mindwtr-snapshot-")
+        .suffix(".tmp")
+        .tempfile_in(snapshot_dir)
+        .map_err(|e| e.to_string())?;
+    temp_file
+        .write_all(content.as_bytes())
+        .and_then(|_| temp_file.as_file().sync_all())
+        .map_err(|e| e.to_string())?;
+
+    for collision in 0..u32::MAX {
+        let file_name = format_snapshot_file_name(now, collision);
+        let snapshot_path = snapshot_dir.join(&file_name);
+        match temp_file.persist_noclobber(&snapshot_path) {
+            Ok(_) => {
+                sync_parent_directory(&snapshot_path)?;
+                return Ok(file_name);
+            }
+            Err(error) if error.error.kind() == io::ErrorKind::AlreadyExists => {
+                temp_file = error.file;
+            }
+            Err(error) => return Err(error.error.to_string()),
+        }
+    }
+    Err("Failed to allocate a unique snapshot file name".to_string())
 }
 
 fn list_snapshot_entries(snapshot_dir: &Path) -> Vec<(String, PathBuf, SystemTime)> {
@@ -2149,45 +3590,36 @@ fn prune_data_snapshots(snapshot_dir: &Path) {
     }
 }
 
-fn files_are_identical(left: &Path, right: &Path) -> bool {
-    let left_meta = match fs::metadata(left) {
-        Ok(meta) => meta,
-        Err(_) => return false,
-    };
-    let right_meta = match fs::metadata(right) {
-        Ok(meta) => meta,
-        Err(_) => return false,
-    };
-    if left_meta.len() != right_meta.len() {
-        return false;
+fn snapshot_matches_data(snapshot_path: &Path, canonical: &Value) -> bool {
+    read_json_with_retries(snapshot_path, 1).is_ok_and(|snapshot| snapshot == *canonical)
+}
+
+fn create_data_snapshot_from_connection(
+    conn: &Connection,
+    snapshot_dir: &Path,
+    now: OffsetDateTime,
+) -> Result<String, String> {
+    let canonical = read_sqlite_snapshot(conn)?;
+
+    fs::create_dir_all(snapshot_dir).map_err(|e| e.to_string())?;
+    if let Some((latest_name, latest_path, _)) = list_snapshot_entries(snapshot_dir).first() {
+        if snapshot_matches_data(latest_path, &canonical) {
+            prune_data_snapshots(snapshot_dir);
+            return Ok(latest_name.clone());
+        }
     }
-    match (fs::read(left), fs::read(right)) {
-        (Ok(left_bytes), Ok(right_bytes)) => left_bytes == right_bytes,
-        _ => false,
-    }
+
+    let file_name = write_new_data_snapshot(snapshot_dir, &canonical, now)?;
+    prune_data_snapshots(snapshot_dir);
+    Ok(file_name)
 }
 
 #[tauri::command]
 pub(crate) fn create_data_snapshot(app: tauri::AppHandle) -> Result<String, String> {
-    ensure_data_file(&app)?;
-    let data_path = get_data_path(&app);
-    if !data_path.exists() {
-        return Err("Local data file not found".to_string());
-    }
+    load_data_snapshot(&app)?;
+    let conn = open_sqlite(&app)?;
     let snapshot_dir = get_snapshot_dir(&app)?;
-    fs::create_dir_all(&snapshot_dir).map_err(|e| e.to_string())?;
-    if let Some((latest_name, latest_path, _)) = list_snapshot_entries(&snapshot_dir).first() {
-        if files_are_identical(&data_path, latest_path) {
-            prune_data_snapshots(&snapshot_dir);
-            return Ok(latest_name.clone());
-        }
-    }
-    let now = OffsetDateTime::now_utc();
-    let file_name = format_snapshot_file_name(now);
-    let snapshot_path = snapshot_dir.join(&file_name);
-    fs::copy(&data_path, &snapshot_path).map_err(|e| e.to_string())?;
-    prune_data_snapshots(&snapshot_dir);
-    Ok(file_name)
+    create_data_snapshot_from_connection(&conn, &snapshot_dir, OffsetDateTime::now_utc())
 }
 
 #[tauri::command]
@@ -2225,7 +3657,7 @@ pub(crate) fn restore_data_snapshot(
     }
 
     let data = read_json_with_retries(&snapshot_path, 2)?;
-    persist_data_snapshot_with_retries(&app, &data)?;
+    persist_data_snapshot_exact_with_retries(&app, &data)?;
     Ok(true)
 }
 
@@ -2584,6 +4016,37 @@ mod tests {
     }
 
     #[test]
+    fn bootstrap_publication_replaces_partial_but_preserves_valid_data() {
+        let temp = tempfile::tempdir().expect("data directory");
+        let partial_path = temp.path().join("partial.json");
+        fs::write(&partial_path, b"{\"tasks\":[").expect("partial legacy write");
+        let initial = serde_json::json!({
+            "tasks": [], "projects": [], "sections": [], "areas": [], "people": [],
+            "settings": { "theme": "dark" }
+        });
+
+        assert!(write_initial_data_json_file(&partial_path, &initial)
+            .expect("replace partial atomically"));
+        assert_eq!(
+            read_json_with_retries(&partial_path, 1).expect("valid replacement"),
+            initial
+        );
+
+        let existing_path = temp.path().join("existing.json");
+        let existing = serde_json::json!({
+            "tasks": [], "projects": [], "sections": [], "areas": [], "people": [],
+            "settings": { "theme": "light" }
+        });
+        write_data_json_file(&existing_path, &existing).expect("existing valid data");
+        assert!(!write_initial_data_json_file(&existing_path, &initial)
+            .expect("valid final wins no-clobber race"));
+        assert_eq!(
+            read_json_with_retries(&existing_path, 1).expect("preserved existing"),
+            existing
+        );
+    }
+
+    #[test]
     fn detect_storage_mode_returns_portable_when_marker_exists() {
         let exe_dir = tempfile::tempdir().expect("should create temp exe dir");
         let marker_path = exe_dir.path().join(PORTABLE_MARKER_FILE_NAME);
@@ -2730,7 +4193,7 @@ mod tests {
             "projects": [],
             "settings": {"theme": "dark"}
         });
-        let result = refuse_empty_snapshot_overwrite(&conn, &empty);
+        let result = refuse_empty_snapshot_overwrite(&conn, &empty, None);
         assert!(result.is_err(), "empty payload over live data must be refused");
 
         // Mass deletions keep tombstoned rows, so a payload that still carries
@@ -2746,8 +4209,14 @@ mod tests {
             }],
             "projects": []
         });
-        refuse_empty_snapshot_overwrite(&conn, &tombstoned)
+        refuse_empty_snapshot_overwrite(&conn, &tombstoned, None)
             .expect("tombstone-carrying payload should pass");
+
+        let baseline = serde_json::json!({ "tasks": [task] });
+        refuse_empty_snapshot_overwrite(&conn, &empty, Some(&baseline))
+            .expect("an observed omission is guarded by the transactional row CAS");
+        refuse_empty_snapshot_overwrite(&conn, &empty, Some(&serde_json::json!({})))
+            .expect("an empty CAS baseline cannot remove unobserved canonical rows");
     }
 
     #[test]
@@ -2761,7 +4230,7 @@ mod tests {
             "projects": [],
             "settings": {"language": "en"}
         });
-        refuse_empty_snapshot_overwrite(&conn, &empty)
+        refuse_empty_snapshot_overwrite(&conn, &empty, None)
             .expect("settings-only save on a fresh database should pass");
     }
 
@@ -3426,6 +4895,1515 @@ mod tests {
         assert_eq!(person["revBy"], "device-1");
         assert_eq!(person["createdAt"], "2026-05-25T00:00:00.000Z");
         assert_eq!(person["updatedAt"], "2026-05-26T00:00:00.000Z");
+    }
+
+    #[test]
+    fn stale_snapshot_preserves_newer_and_missing_sqlite_tasks() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+
+        let current = serde_json::json!({
+            "tasks": [
+                {
+                    "id": "task-shared",
+                    "title": "Newer API edit",
+                    "status": "next",
+                    "tags": [],
+                    "contexts": [],
+                    "rev": 5,
+                    "revBy": "desktop-local-api",
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T12:00:00Z"
+                },
+                {
+                    "id": "task-api-only",
+                    "title": "Created after UI snapshot",
+                    "status": "inbox",
+                    "tags": [],
+                    "contexts": [],
+                    "rev": 1,
+                    "revBy": "desktop-local-api",
+                    "createdAt": "2026-07-31T12:01:00Z",
+                    "updatedAt": "2026-07-31T12:01:00Z"
+                }
+            ],
+            "projects": [],
+            "areas": [],
+            "sections": [],
+            "people": [],
+            "settings": { "deviceId": "device-a" }
+        });
+        migrate_json_to_sqlite(&mut conn, &current).expect("should seed current sqlite data");
+
+        let stale_ui_snapshot = serde_json::json!({
+            "tasks": [{
+                "id": "task-shared",
+                "title": "Stale UI edit",
+                "status": "next",
+                "tags": [],
+                "contexts": [],
+                "rev": 4,
+                "revBy": "desktop-ui",
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T11:00:00Z"
+            }],
+            "projects": [],
+            "areas": [],
+            "sections": [],
+            "people": [],
+            "settings": { "deviceId": "device-a" }
+        });
+        migrate_json_to_sqlite(&mut conn, &stale_ui_snapshot)
+            .expect("stale snapshot should merge safely");
+
+        let persisted = read_sqlite_data(&conn).expect("should read merged sqlite data");
+        let tasks = persisted["tasks"].as_array().expect("tasks");
+        assert_eq!(
+            tasks.len(),
+            2,
+            "absence is not deletion; deletions use tombstones"
+        );
+        let shared = tasks
+            .iter()
+            .find(|task| task["id"] == "task-shared")
+            .expect("shared task");
+        assert_eq!(shared["title"], "Newer API edit");
+        assert_eq!(shared["rev"], 5);
+        assert!(tasks.iter().any(|task| task["id"] == "task-api-only"));
+
+        let deletion = serde_json::json!({
+            "tasks": [{
+                "id": "task-shared",
+                "title": "Newer API edit",
+                "status": "next",
+                "tags": [],
+                "contexts": [],
+                "rev": 6,
+                "revBy": "desktop-ui",
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T13:00:00Z",
+                "deletedAt": "2026-07-31T13:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "deviceId": "device-a" }
+        });
+        migrate_json_to_sqlite(&mut conn, &deletion).expect("revisioned tombstone should merge");
+        let persisted = read_sqlite_data(&conn).expect("should read tombstone");
+        let shared = persisted["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|task| task["id"] == "task-shared"))
+            .expect("shared task tombstone");
+        assert_eq!(shared["rev"], 6);
+        assert_eq!(shared["deletedAt"], "2026-07-31T13:00:00Z");
+    }
+
+    #[test]
+    fn locked_mutation_reloads_reapplies_and_rolls_back_errors() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let current = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Concurrent writer", "status": "next",
+                "tags": [], "contexts": [], "rev": 5, "revBy": "mcp",
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        migrate_json_to_sqlite(&mut conn, &current).expect("seed current data");
+
+        let mut patch = |data: &mut Value| {
+            let task = data["tasks"][0].as_object_mut().expect("task object");
+            assert_eq!(task.get("rev"), Some(&Value::Number(5.into())));
+            task.insert(
+                "title".to_string(),
+                Value::String("Reapplied patch".to_string()),
+            );
+            task.insert("rev".to_string(), Value::Number(6.into()));
+            Ok(())
+        };
+        let (_, canonical) =
+            mutate_data_in_transaction(&conn, &mut patch).expect("locked mutation should persist");
+        assert_eq!(canonical["tasks"][0]["title"], "Reapplied patch");
+        assert_eq!(canonical["tasks"][0]["rev"], 6);
+
+        let mut fail = |data: &mut Value| -> Result<(), String> {
+            data["tasks"][0]["title"] = Value::String("Must roll back".to_string());
+            Err("validation failed".to_string())
+        };
+        assert!(mutate_data_in_transaction(&conn, &mut fail).is_err());
+        assert_eq!(
+            read_sqlite_data(&conn).expect("rolled-back data")["tasks"][0]["title"],
+            "Reapplied patch"
+        );
+    }
+
+    #[test]
+    fn read_transaction_prevents_cross_table_torn_snapshot() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let reader = Connection::open(&db_path).expect("open reader");
+        reader.execute_batch(SQLITE_SCHEMA).expect("create schema");
+        let mut writer = Connection::open(&db_path).expect("open writer");
+        writer
+            .execute_batch(SQLITE_SCHEMA)
+            .expect("configure writer");
+        let committed = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Committed together", "status": "next",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+            }],
+            "projects": [{
+                "id": "project-1", "title": "Committed together", "status": "active",
+                "color": "#2563EB", "order": 0, "tagIds": [],
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+            }],
+            "areas": [], "sections": [], "people": [], "settings": {}
+        });
+
+        let observed = with_sqlite_read_transaction(&reader, false, |conn| {
+            let tasks_before: i64 = conn
+                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
+            migrate_json_to_sqlite(&mut writer, &committed)?;
+            let projects_after_commit: i64 = conn
+                .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
+                .map_err(|e| e.to_string())?;
+            Ok((tasks_before, projects_after_commit))
+        })
+        .expect("read one SQLite snapshot");
+
+        assert_eq!(observed, (0, 0));
+        let latest = read_sqlite_snapshot(&reader).expect("read post-commit snapshot");
+        assert_eq!(latest["tasks"].as_array().map(Vec::len), Some(1));
+        assert_eq!(latest["projects"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn equal_revision_snapshot_uses_update_metadata_not_arrival_order() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let snapshot = |title: &str, updated_at: &str, rev_by: &str| {
+            serde_json::json!({
+                "tasks": [{
+                    "id": "task-1",
+                    "title": title,
+                    "status": "next",
+                    "tags": [],
+                    "contexts": [],
+                    "rev": 3,
+                    "revBy": rev_by,
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": updated_at
+                }],
+                "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+            })
+        };
+
+        migrate_json_to_sqlite(
+            &mut conn,
+            &snapshot("Newer content", "2026-07-31T12:00:00Z", "writer-b"),
+        )
+        .expect("should seed");
+        migrate_json_to_sqlite(
+            &mut conn,
+            &snapshot("Older content", "2026-07-31T11:00:00Z", "writer-a"),
+        )
+        .expect("should merge equal revision");
+
+        let persisted = read_sqlite_data(&conn).expect("should read merged data");
+        assert_eq!(persisted["tasks"][0]["title"], "Newer content");
+    }
+
+    #[test]
+    fn equal_revision_compares_timestamp_instants_and_invalid_fallbacks() {
+        let entity = |title: &str, updated_at: &str| {
+            serde_json::json!({
+                "id": "task-1", "title": title, "status": "next",
+                "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": updated_at
+            })
+        };
+        let lexical_later_but_earlier_instant =
+            entity("Earlier instant", "2026-07-31T10:30:00+02:00");
+        let lexical_earlier_but_later_instant = entity("Later instant", "2026-07-31T09:00:00Z");
+
+        assert!(incoming_entity_wins(
+            &lexical_later_but_earlier_instant,
+            &lexical_earlier_but_later_instant
+        ));
+        assert!(!incoming_entity_wins(
+            &lexical_earlier_but_later_instant,
+            &lexical_later_but_earlier_instant
+        ));
+
+        let invalid = entity("Invalid timestamp", "not-a-date");
+        assert!(incoming_entity_wins(
+            &invalid,
+            &lexical_earlier_but_later_instant
+        ));
+        assert!(!incoming_entity_wins(
+            &lexical_earlier_but_later_instant,
+            &invalid
+        ));
+    }
+
+    #[test]
+    fn equal_revision_treats_iso_date_updated_at_as_utc_midnight() {
+        let current = serde_json::json!({
+            "id": "task-1", "title": "Current", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-30T10:00:00Z", "updatedAt": "2026-07-31"
+        });
+        let incoming = serde_json::json!({
+            "id": "task-1", "title": "Incoming", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-30T10:00:00Z", "updatedAt": "2026-07-30T23:00:00Z"
+        });
+
+        assert!(!incoming_entity_wins(&current, &incoming));
+        assert!(incoming_entity_wins(&incoming, &current));
+    }
+
+    #[test]
+    fn missing_rev_by_uses_deterministic_content_tie_break() {
+        let legacy = serde_json::json!({
+            "id": "task-1", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [], "rev": 3,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        let revisioned = serde_json::json!({
+            "id": "task-1", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-z",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        assert!(entity_tie_break_json(&legacy, false) > entity_tie_break_json(&revisioned, false));
+        assert!(!incoming_entity_wins(&legacy, &revisioned));
+        assert!(incoming_entity_wins(&revisioned, &legacy));
+    }
+
+    #[test]
+    fn equal_metadata_snapshot_tie_break_is_arrival_order_independent() {
+        let snapshot = |title: &str| {
+            serde_json::json!({
+                "tasks": [{
+                    "id": "task-1",
+                    "title": title,
+                    "status": "next",
+                    "tags": [],
+                    "contexts": [],
+                    "rev": 3,
+                    "revBy": "same-writer",
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T12:00:00Z"
+                }],
+                "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+            })
+        };
+        let mut left = Connection::open_in_memory().expect("left db");
+        let mut right = Connection::open_in_memory().expect("right db");
+        left.execute_batch(SQLITE_SCHEMA).expect("left schema");
+        right.execute_batch(SQLITE_SCHEMA).expect("right schema");
+
+        migrate_json_to_sqlite(&mut left, &snapshot("Alpha")).expect("left first");
+        migrate_json_to_sqlite(&mut left, &snapshot("Zulu")).expect("left second");
+        migrate_json_to_sqlite(&mut right, &snapshot("Zulu")).expect("right first");
+        migrate_json_to_sqlite(&mut right, &snapshot("Alpha")).expect("right second");
+
+        assert_eq!(
+            read_sqlite_data(&left).expect("left data")["tasks"],
+            read_sqlite_data(&right).expect("right data")["tasks"]
+        );
+    }
+
+    #[test]
+    fn revisionless_rows_inside_clock_skew_use_deterministic_content() {
+        let alpha = serde_json::json!({
+            "id": "task-1", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:01:00Z"
+        });
+        let zulu = serde_json::json!({
+            "id": "task-1", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+
+        assert!(incoming_entity_wins(&alpha, &zulu));
+        assert!(!incoming_entity_wins(&zulu, &alpha));
+    }
+
+    #[test]
+    fn exact_deterministic_signature_tie_chooses_incoming() {
+        let current = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z",
+            "statusBeforeProjectArchive": "inbox"
+        });
+        let incoming = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z",
+            "statusBeforeProjectArchive": "waiting"
+        });
+
+        assert_eq!(
+            entity_tie_break_order(&current, &incoming),
+            std::cmp::Ordering::Equal
+        );
+        assert!(incoming_entity_wins(&current, &incoming));
+    }
+
+    #[test]
+    fn oversized_revisions_are_clamped_to_the_core_maximum() {
+        let oversized = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [], "rev": 9_000_000_000_i64, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        let capped = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [], "rev": 2_147_483_647_i64, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+
+        assert_eq!(entity_revision(&oversized), 2_147_483_647);
+        assert_eq!(entity_revision(&serde_json::json!({ "rev": -1 })), 0);
+        assert_eq!(
+            entity_tie_break_order(&oversized, &capped),
+            std::cmp::Ordering::Equal
+        );
+        assert!(incoming_entity_wins(&oversized, &capped));
+
+        let capped_newer = serde_json::json!({
+            "id": "task-1", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [], "rev": 2_147_483_647_i64, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T13:00:00Z"
+        });
+        assert!(incoming_entity_wins(&oversized, &capped_newer));
+    }
+
+    #[test]
+    fn revision_metadata_is_normalized_for_signatures_and_storage() {
+        let invalid = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [], "rev": -1, "revBy": "   ",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        let absent = serde_json::json!({
+            "id": "task-1", "title": "Same", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        assert_eq!(
+            entity_tie_break_order(&invalid, &absent),
+            std::cmp::Ordering::Equal
+        );
+
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let data = serde_json::json!({
+            "tasks": [
+                invalid,
+                {
+                    "id": "task-2", "title": "Capped", "status": "next",
+                    "tags": [], "contexts": [], "rev": 9_000_000_000_i64,
+                    "revBy": " writer-a ",
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T12:00:00Z"
+                }
+            ],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        let persisted = replace_data_in_transaction(&conn, data).expect("normalized write");
+        let tasks = persisted["tasks"].as_array().expect("tasks");
+        let first = tasks
+            .iter()
+            .find(|task| task["id"] == "task-1")
+            .expect("first");
+        let second = tasks
+            .iter()
+            .find(|task| task["id"] == "task-2")
+            .expect("second");
+        assert!(!first.as_object().expect("task").contains_key("rev"));
+        assert!(!first.as_object().expect("task").contains_key("revBy"));
+        assert_eq!(second["rev"], 2_147_483_647_i64);
+        assert_eq!(second["revBy"], "writer-a");
+    }
+
+    #[test]
+    fn future_clock_poison_is_clamped_before_conflict_ordering() {
+        let merge_now = OffsetDateTime::parse(
+            "2026-07-31T12:00:00Z",
+            &time::format_description::well_known::Rfc3339,
+        )
+        .expect("merge now")
+        .unix_timestamp_nanos();
+        let future_live = serde_json::json!({
+            "id": "task-1", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2099-01-01T00:00:00Z"
+        });
+        let current_live = serde_json::json!({
+            "id": "task-1", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        assert!(incoming_entity_wins_at(
+            &future_live,
+            &current_live,
+            merge_now
+        ));
+
+        let future_tombstone = serde_json::json!({
+            "id": "task-1", "title": "Deleted", "status": "next",
+            "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+            "createdAt": "2026-07-31T10:00:00Z",
+            "updatedAt": "2099-01-01T00:00:00Z",
+            "deletedAt": "2099-01-01T00:00:00Z"
+        });
+        assert!(incoming_entity_wins_at(
+            &future_tombstone,
+            &current_live,
+            merge_now
+        ));
+
+        let legacy_current = serde_json::json!({
+            "id": "legacy", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T11:59:00Z"
+        });
+        let legacy_one_clamped = serde_json::json!({
+            "id": "legacy", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2099-01-01T00:00:00Z"
+        });
+        assert!(incoming_entity_wins_at(
+            &legacy_current,
+            &legacy_one_clamped,
+            merge_now
+        ));
+
+        let legacy_both_clamped = serde_json::json!({
+            "id": "legacy", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [],
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2100-01-01T00:00:00Z"
+        });
+        assert!(incoming_entity_wins_at(
+            &legacy_one_clamped,
+            &legacy_both_clamped,
+            merge_now
+        ));
+    }
+
+    #[test]
+    fn settings_absence_preserves_but_present_empty_object_resets() {
+        let current = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "dark", "deviceId": "device-a" }
+        });
+        let absent = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": []
+        });
+        let reset = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": {}
+        });
+
+        assert_eq!(
+            merge_data_snapshots(&current, &absent, None)["settings"],
+            current["settings"]
+        );
+        assert_eq!(
+            merge_data_snapshots(&current, &reset, None)["settings"],
+            serde_json::json!({})
+        );
+
+        let matching_baseline = serde_json::json!({
+            "settings": current["settings"].clone()
+        });
+        assert_eq!(
+            merge_data_snapshots(&current, &reset, Some(&matching_baseline))["settings"],
+            serde_json::json!({}),
+            "a matching settings baseline authorizes the reset"
+        );
+        assert_eq!(
+            merge_data_snapshots(&current, &reset, Some(&serde_json::json!({})))["settings"],
+            current["settings"],
+            "an entity-only baseline cannot authorize a settings write"
+        );
+        let stale_baseline = serde_json::json!({
+            "settings": { "theme": "light", "deviceId": "device-a" }
+        });
+        assert_eq!(
+            merge_data_snapshots(&current, &reset, Some(&stale_baseline))["settings"],
+            current["settings"],
+            "a concurrent canonical settings change wins the CAS"
+        );
+    }
+
+    #[test]
+    fn changed_entity_baseline_allows_safe_pruning_and_preserves_concurrent_rows() {
+        let current = serde_json::json!({
+            "tasks": [
+                {
+                    "id": "task-prune-attachment", "title": "Prune", "status": "next",
+                    "tags": [], "contexts": [], "attachments": [
+                        { "id": "attachment-old", "deletedAt": "2026-06-01T00:00:00Z" }
+                    ],
+                    "rev": 4, "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-06-01T00:00:00Z"
+                },
+                {
+                    "id": "task-expired-tombstone", "title": "Expired", "status": "next",
+                    "tags": [], "contexts": [], "rev": 2,
+                    "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-06-01T00:00:00Z",
+                    "deletedAt": "2026-06-01T00:00:00Z"
+                },
+                {
+                    "id": "task-concurrent", "title": "Concurrent edit", "status": "next",
+                    "tags": [], "contexts": [], "rev": 3,
+                    "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-07-31T12:00:00Z"
+                },
+                {
+                    "id": "task-unseen", "title": "Created later", "status": "inbox",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-07-31T12:01:00Z",
+                    "updatedAt": "2026-07-31T12:01:00Z"
+                }
+            ],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        let target = serde_json::json!({
+            "tasks": [
+                {
+                    "id": "task-prune-attachment", "title": "Prune", "status": "next",
+                    "tags": [], "contexts": [], "attachments": [], "rev": 4,
+                    "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-06-01T00:00:00Z"
+                },
+                {
+                    "id": "task-concurrent", "title": "Stale edit", "status": "next",
+                    "tags": [], "contexts": [], "rev": 2,
+                    "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-07-31T11:00:00Z"
+                },
+                {
+                    "id": "task-new", "title": "New target", "status": "inbox",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-07-31T13:00:00Z",
+                    "updatedAt": "2026-07-31T13:00:00Z"
+                }
+            ],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        let baseline_entities = serde_json::json!({
+            "tasks": [
+                current["tasks"][0].clone(),
+                current["tasks"][1].clone(),
+                {
+                    "id": "task-concurrent", "title": "Originally observed", "status": "next",
+                    "tags": [], "contexts": [], "rev": 2,
+                    "createdAt": "2026-05-01T00:00:00Z",
+                    "updatedAt": "2026-07-31T11:00:00Z"
+                }
+            ]
+        });
+
+        let merged = merge_data_snapshots(&current, &target, Some(&baseline_entities));
+        let tasks = merged["tasks"].as_array().expect("tasks");
+        let task = |id: &str| tasks.iter().find(|task| task["id"] == id);
+        assert_eq!(
+            task("task-prune-attachment").expect("pruned task")["attachments"],
+            serde_json::json!([]),
+            "a nested tombstone can be pruned without an entity revision bump"
+        );
+        assert!(task("task-expired-tombstone").is_none());
+        assert_eq!(
+            task("task-concurrent").expect("concurrent task")["title"],
+            "Concurrent edit"
+        );
+        assert!(task("task-unseen").is_some());
+        assert!(task("task-new").is_some());
+    }
+
+    #[test]
+    fn observed_ids_prevent_resurrection_after_exact_restore_but_allow_new_rows() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let observed_task = serde_json::json!({
+            "id": "task-observed", "title": "Observed", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        });
+        let observed = serde_json::json!({
+            "tasks": [observed_task.clone()],
+            "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "light" }
+        });
+        migrate_json_to_sqlite(&mut conn, &observed).expect("seed observed data");
+        let baseline = serde_json::json!({
+            "observedEntityIds": {
+                "tasks": ["task-observed"],
+                "projects": [], "areas": [], "sections": [], "people": []
+            },
+            "settings": observed["settings"].clone()
+        });
+
+        let restored = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "light" }
+        });
+        replace_json_in_sqlite(&mut conn, &restored).expect("external exact restore");
+        let target = serde_json::json!({
+            "tasks": [
+                observed_task,
+                {
+                    "id": "task-new", "title": "Created locally", "status": "inbox",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-07-31T11:00:00Z", "updatedAt": "2026-07-31T11:00:00Z"
+                }
+            ],
+            "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "dark" }
+        });
+
+        let canonical =
+            merge_json_to_sqlite(&mut conn, &target, Some(&baseline)).expect("guarded save");
+
+        let tasks = canonical["tasks"].as_array().expect("tasks");
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["id"], "task-new");
+        assert_eq!(canonical["settings"]["theme"], "dark");
+    }
+
+    #[test]
+    fn matching_baseline_never_authorizes_an_entity_revision_rollback() {
+        let current = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Canonical", "status": "next",
+                "tags": [], "contexts": [], "rev": 5,
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T12:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        let target = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Rolled back", "status": "next",
+                "tags": [], "contexts": [], "rev": 4,
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T13:00:00Z",
+                "deletedAt": "2026-07-31T13:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        let baseline = serde_json::json!({ "tasks": [current["tasks"][0].clone()] });
+
+        let merged = merge_data_snapshots(&current, &target, Some(&baseline));
+
+        assert_eq!(merged["tasks"][0]["title"], "Canonical");
+        assert_eq!(merged["tasks"][0]["rev"], 5);
+    }
+
+    #[test]
+    fn snapshot_materializes_and_semantically_deduplicates_canonical_sqlite() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let initial = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Canonical SQLite", "status": "next",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T10:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "dark" }
+        });
+        migrate_json_to_sqlite(&mut conn, &initial).expect("seed canonical SQLite");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let snapshot_dir = temp.path().join("snapshots");
+        fs::write(
+            temp.path().join("data.json"),
+            br#"{"tasks":[{"id":"stale-json","title":"Stale JSON"}]}"#,
+        )
+        .expect("write stale recovery copy");
+        let first_time = OffsetDateTime::from_unix_timestamp(1_700_000_000).expect("timestamp");
+
+        let first_name = create_data_snapshot_from_connection(&conn, &snapshot_dir, first_time)
+            .expect("create canonical snapshot");
+        let first_path = snapshot_dir.join(&first_name);
+        let first_snapshot = read_json_with_retries(&first_path, 1).expect("read snapshot");
+        assert_eq!(first_snapshot["tasks"][0]["title"], "Canonical SQLite");
+        assert!(first_snapshot["tasks"]
+            .as_array()
+            .expect("tasks")
+            .iter()
+            .all(|task| task["id"] != "stale-json"));
+
+        // Byte formatting is not identity: a semantically equal latest
+        // snapshot must still deduplicate against canonical SQLite.
+        fs::write(
+            &first_path,
+            serde_json::to_vec(&first_snapshot).expect("serialize compact snapshot"),
+        )
+        .expect("rewrite snapshot with different formatting");
+        let deduped_name = create_data_snapshot_from_connection(
+            &conn,
+            &snapshot_dir,
+            first_time + time::Duration::seconds(1),
+        )
+        .expect("deduplicate snapshot");
+        assert_eq!(deduped_name, first_name);
+        assert_eq!(list_snapshot_entries(&snapshot_dir).len(), 1);
+
+        let changed = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "New canonical", "status": "next",
+                "tags": [], "contexts": [], "rev": 2,
+                "createdAt": "2026-07-31T10:00:00Z",
+                "updatedAt": "2026-07-31T11:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "dark" }
+        });
+        migrate_json_to_sqlite(&mut conn, &changed).expect("update canonical SQLite");
+        let second_name = create_data_snapshot_from_connection(&conn, &snapshot_dir, first_time)
+            .expect("create changed snapshot at the same instant");
+        assert_ne!(second_name, first_name);
+        assert_eq!(list_snapshot_entries(&snapshot_dir).len(), 2);
+        assert_eq!(
+            read_json_with_retries(&snapshot_dir.join(second_name), 1)
+                .expect("read collision-safe snapshot")["tasks"][0]["title"],
+            "New canonical"
+        );
+    }
+
+    #[test]
+    fn snapshot_temp_files_are_never_listed_as_recovery_points() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let snapshot_dir = temp.path().join("snapshots");
+        fs::create_dir(&snapshot_dir).expect("snapshot dir");
+        let partial = snapshot_dir.join(".mindwtr-snapshot-partial.tmp");
+        fs::write(&partial, b"{\"tasks\":[").expect("partial temp");
+
+        assert!(list_snapshot_entries(&snapshot_dir).is_empty());
+
+        let canonical = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": { "theme": "dark" }
+        });
+        let now = OffsetDateTime::from_unix_timestamp(1_700_000_000).expect("timestamp");
+        let file_name =
+            write_new_data_snapshot(&snapshot_dir, &canonical, now).expect("atomic snapshot");
+        let entries = list_snapshot_entries(&snapshot_dir);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, file_name);
+        assert_eq!(
+            read_json_with_retries(&snapshot_dir.join(file_name), 1).expect("complete snapshot"),
+            canonical
+        );
+    }
+
+    #[test]
+    fn concurrent_data_json_publications_never_share_a_temp_file() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = std::sync::Arc::new(temp.path().join("data.json"));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let mut writers = Vec::new();
+        for writer in 0..8 {
+            let data_path = std::sync::Arc::clone(&data_path);
+            let barrier = std::sync::Arc::clone(&barrier);
+            writers.push(std::thread::spawn(move || {
+                barrier.wait();
+                for sequence in 0..10 {
+                    write_data_json_file(
+                        &data_path,
+                        &serde_json::json!({
+                            "writer": writer,
+                            "sequence": sequence,
+                            "payload": "x".repeat(4_096)
+                        }),
+                    )?;
+                }
+                Ok::<(), String>(())
+            }));
+        }
+        for writer in writers {
+            writer.join().expect("writer thread").expect("publication");
+        }
+
+        let final_value = read_json_with_retries(&data_path, 1).expect("valid final recovery copy");
+        assert!(final_value.get("writer").and_then(Value::as_i64).is_some());
+        assert!(final_value
+            .get("sequence")
+            .and_then(Value::as_i64)
+            .is_some());
+        assert!(!data_json_backup_path(&data_path).exists());
+        assert!(fs::read_dir(temp.path())
+            .expect("data directory")
+            .flatten()
+            .all(|entry| !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".mindwtr-data-")));
+    }
+
+    #[test]
+    fn exact_replace_removes_rows_even_when_target_is_empty() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let current = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Existing", "status": "next",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        migrate_json_to_sqlite(&mut conn, &current).expect("seed current data");
+        let empty = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": {}
+        });
+
+        let canonical = replace_json_in_sqlite(&mut conn, &empty).expect("exact replacement");
+
+        assert_eq!(canonical["tasks"], serde_json::json!([]));
+        assert_eq!(
+            read_sqlite_data(&conn).expect("persisted")["tasks"],
+            serde_json::json!([])
+        );
+    }
+
+    #[test]
+    fn observed_last_tombstone_can_be_physically_pruned() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let current = serde_json::json!({
+            "tasks": [{
+                "id": "task-old", "title": "Expired", "status": "next",
+                "tags": [], "contexts": [], "rev": 2,
+                "createdAt": "2026-05-01T00:00:00Z",
+                "updatedAt": "2026-06-01T00:00:00Z",
+                "deletedAt": "2026-06-01T00:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        migrate_json_to_sqlite(&mut conn, &current).expect("seed tombstone");
+        let canonical = read_sqlite_data(&conn).expect("canonical baseline");
+        let baseline = serde_json::json!({ "tasks": [canonical["tasks"][0].clone()] });
+        let empty = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "sections": [], "people": [],
+            "settings": {}
+        });
+
+        refuse_empty_snapshot_overwrite(&conn, &empty, Some(&baseline))
+            .expect("CAS baseline permits intentional pruning");
+        let persisted =
+            merge_json_to_sqlite(&mut conn, &empty, Some(&baseline)).expect("prune last tombstone");
+
+        assert_eq!(persisted["tasks"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn delete_live_resolution_matches_adr_0007_and_counts_purged_rows_as_deleted() {
+        let live = |updated_at: &str, rev: Option<i64>| {
+            let mut value = serde_json::json!({
+                "id": "task-1", "updatedAt": updated_at
+            });
+            if let Some(rev) = rev {
+                value["rev"] = Value::Number(rev.into());
+            }
+            value
+        };
+        let tombstone = |updated_at: &str, deleted_at: &str, rev: Option<i64>| {
+            let mut value = live(updated_at, rev);
+            value["deletedAt"] = Value::String(deleted_at.to_string());
+            value
+        };
+
+        let delete_near = tombstone("2026-07-31T12:00:00Z", "2026-07-31T12:00:15Z", Some(3));
+        let live_same_rev = live("2026-07-31T12:00:00Z", Some(3));
+        assert!(incoming_entity_wins(&delete_near, &live_same_rev));
+        assert!(!incoming_entity_wins(&live_same_rev, &delete_near));
+
+        let higher_rev_delete = tombstone("2026-07-31T12:00:00Z", "2026-07-31T12:00:15Z", Some(4));
+        assert!(incoming_entity_wins(&live_same_rev, &higher_rev_delete));
+
+        let delete_later = tombstone("2026-07-31T12:00:00Z", "2026-07-31T12:00:31Z", Some(3));
+        assert!(incoming_entity_wins(&live_same_rev, &delete_later));
+        let live_later = live("2026-07-31T12:01:02Z", Some(3));
+        assert!(incoming_entity_wins(&delete_later, &live_later));
+
+        let legacy_live = live("2026-07-31T12:00:00Z", None);
+        let legacy_delete = tombstone("2026-07-31T12:00:00Z", "2026-07-31T12:00:00Z", None);
+        assert!(incoming_entity_wins(&legacy_live, &legacy_delete));
+        assert!(!incoming_entity_wins(&legacy_delete, &legacy_live));
+
+        let zero_rev_live = live("2026-07-31T12:00:00Z", Some(0));
+        let zero_rev_delete = tombstone("2026-07-31T12:00:00Z", "2026-07-31T12:00:00Z", Some(0));
+        assert!(incoming_entity_wins(&zero_rev_live, &zero_rev_delete));
+        let mut revisioned_live = zero_rev_live.clone();
+        revisioned_live["revBy"] = Value::String("device-a".to_string());
+        assert!(incoming_entity_wins(&zero_rev_delete, &revisioned_live));
+
+        let mut purged = live("2026-07-31T12:00:00Z", Some(3));
+        purged["purgedAt"] = Value::String("2026-07-31T12:00:10Z".to_string());
+        assert!(entity_is_deleted(&purged));
+        assert!(incoming_entity_wins(&purged, &live_same_rev));
+    }
+
+    #[test]
+    fn deterministic_entity_winner_compares_content_before_metadata() {
+        let current = serde_json::json!({
+            "id": "task-1", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [], "rev": 3,
+            "createdAt": "z", "updatedAt": "invalid"
+        });
+        let incoming = serde_json::json!({
+            "id": "task-1", "title": "Zulu", "status": "next",
+            "tags": [], "contexts": [], "rev": 3,
+            "createdAt": "a", "updatedAt": "invalid"
+        });
+
+        assert!(incoming_entity_wins(&current, &incoming));
+        assert!(!incoming_entity_wins(&incoming, &current));
+
+        let metadata_only = serde_json::json!({
+            "id": "task-1", "title": "Alpha", "status": "next",
+            "tags": [], "contexts": [], "rev": 3,
+            "createdAt": "zz", "updatedAt": "invalid"
+        });
+        assert!(incoming_entity_wins(&current, &metadata_only));
+    }
+
+    #[test]
+    fn data_json_refresh_failure_does_not_change_committed_sqlite_data() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let data = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Committed", "status": "next",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+            }],
+            "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+        });
+        migrate_json_to_sqlite(&mut conn, &data).expect("sqlite commit");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let unwritable_file = temp.path().join("data.json");
+        fs::create_dir(&unwritable_file).expect("directory blocks file replacement");
+
+        let canonical = read_sqlite_data(&conn).expect("canonical data");
+        write_data_json_best_effort(&unwritable_file, &canonical);
+
+        assert_eq!(
+            read_sqlite_data(&conn).expect("sqlite data")["tasks"][0]["title"],
+            "Committed"
+        );
+    }
+
+    #[test]
+    fn incremental_task_save_refreshes_data_json_from_canonical_sqlite() {
+        let conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        let task = serde_json::json!({
+            "id": "task-1", "title": "Incremental edit", "status": "next",
+            "tags": [], "contexts": [], "rev": 2,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+
+        let canonical =
+            persist_task_snapshot(&conn, &task, &data_path, None).expect("incremental task save");
+        let mirrored: Value =
+            serde_json::from_slice(&fs::read(&data_path).expect("data.json should be refreshed"))
+                .expect("valid data.json");
+
+        assert_eq!(canonical["tasks"][0]["title"], "Incremental edit");
+        assert_eq!(mirrored, canonical);
+    }
+
+    #[test]
+    fn repeated_snapshot_version_churn_returns_the_last_consistent_read() {
+        let version_reads = std::cell::Cell::new(0_i64);
+        let snapshot_reads = std::cell::Cell::new(0_i64);
+
+        let (canonical, expected_version) = stable_snapshot_with_version_readers(
+            || {
+                let next = version_reads.get() + 1;
+                version_reads.set(next);
+                Ok(next)
+            },
+            || {
+                let next = snapshot_reads.get() + 1;
+                snapshot_reads.set(next);
+                Ok(serde_json::json!({ "read": next }))
+            },
+        )
+        .expect("post-commit churn must not become a false save failure");
+
+        assert_eq!(snapshot_reads.get(), STORAGE_RETRY_ATTEMPTS as i64);
+        assert_eq!(canonical["read"], STORAGE_RETRY_ATTEMPTS as i64);
+        assert_eq!(expected_version, version_reads.get() - 1);
+    }
+
+    #[test]
+    fn task_snapshot_commit_releases_writer_before_data_json_publication() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let first = Connection::open(&db_path).expect("open first connection");
+        first.execute_batch(SQLITE_SCHEMA).expect("create schema");
+        let second = Connection::open(&db_path).expect("open second connection");
+        second
+            .execute_batch(SQLITE_SCHEMA)
+            .expect("configure second connection");
+        let task = serde_json::json!({
+            "id": "task-1", "title": "Incremental edit", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        });
+
+        commit_task_snapshot(&first, &task, None).expect("commit task snapshot");
+
+        assert!(first.is_autocommit());
+        second
+            .execute_batch("BEGIN IMMEDIATE; ROLLBACK;")
+            .expect("another writer can start before data.json publication");
+        let (canonical, data_version) =
+            stable_sqlite_snapshot_with_version(&first).expect("canonical snapshot after commit");
+        let data_path = temp.path().join("data.json");
+        let published = publish_task_data_json(&first, &data_path, canonical, data_version);
+        assert_eq!(
+            read_json_with_retries(&data_path, 1).expect("recovery copy"),
+            published
+        );
+    }
+
+    #[test]
+    fn task_row_mutation_writes_only_changed_rows_and_releases_writer() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let first = Connection::open(&db_path).expect("first connection");
+        first.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let tasks = (0..1_000)
+            .map(|index| {
+                serde_json::json!({
+                    "id": format!("task-{index}"),
+                    "title": format!("Task {index}"),
+                    "status": "next", "tags": [], "contexts": [],
+                    "rev": 1, "revBy": "writer-a",
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T10:00:00Z"
+                })
+            })
+            .collect::<Vec<_>>();
+        replace_data_in_transaction(
+            &first,
+            serde_json::json!({
+                "tasks": tasks,
+                "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+            }),
+        )
+        .expect("seed large store");
+        let unrelated_rowid: i64 = first
+            .query_row("SELECT rowid FROM tasks WHERE id = 'task-999'", [], |row| {
+                row.get(0)
+            })
+            .expect("unrelated rowid");
+        let changes_before: i64 = first
+            .query_row("SELECT total_changes()", [], |row| row.get(0))
+            .expect("changes before");
+        let mut mutation = |data: &mut Value| {
+            let task = data["tasks"]
+                .as_array_mut()
+                .expect("tasks")
+                .iter_mut()
+                .find(|task| task["id"] == "task-0")
+                .expect("target");
+            task["title"] = Value::String("Edited".to_string());
+            task["rev"] = Value::Number(2.into());
+            task["updatedAt"] = Value::String("2026-07-31T12:00:00Z".to_string());
+            Ok::<_, String>(((), vec![task.clone()]))
+        };
+
+        let scope = TaskMutationReadScope::existing("task-0", false);
+        let (_, _, read_stats) =
+            commit_task_row_mutation(&first, &scope, &mut mutation).expect("row-scoped commit");
+
+        assert!(first.is_autocommit());
+        assert_eq!(read_stats.statements, 2);
+        assert_eq!(read_stats.rows, 2);
+        assert_eq!(read_stats.task_rows, 1);
+        let changes_after: i64 = first
+            .query_row("SELECT total_changes()", [], |row| row.get(0))
+            .expect("changes after");
+        assert!(changes_after - changes_before < 50);
+        assert_eq!(
+            first
+                .query_row("SELECT rowid FROM tasks WHERE id = 'task-999'", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .expect("unrelated rowid after"),
+            unrelated_rowid
+        );
+        assert_eq!(
+            first
+                .query_row("SELECT title FROM tasks WHERE id = 'task-999'", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .expect("unrelated title"),
+            "Task 999"
+        );
+        let second = Connection::open(&db_path).expect("second connection");
+        second
+            .execute_batch("BEGIN IMMEDIATE; ROLLBACK;")
+            .expect("writer lock released before recovery publication");
+    }
+
+    #[test]
+    fn focused_create_scope_reads_only_referenced_context_and_sequential_candidates() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let mut tasks = (0..1_000)
+            .map(|index| {
+                serde_json::json!({
+                    "id": format!("unrelated-{index}"),
+                    "title": format!("Unrelated {index}"),
+                    "status": "inbox", "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T10:00:00Z"
+                })
+            })
+            .collect::<Vec<_>>();
+        tasks.extend([
+            serde_json::json!({
+                "id": "sequential-first", "title": "First", "status": "next",
+                "projectId": "project-1", "sectionId": "section-1",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z"
+            }),
+            serde_json::json!({
+                "id": "other-section", "title": "Other section", "status": "next",
+                "projectId": "project-1", "sectionId": "section-2",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z"
+            }),
+            serde_json::json!({
+                "id": "focused-elsewhere", "title": "Focused", "status": "next",
+                "isFocusedToday": true, "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z"
+            }),
+        ]);
+        replace_data_in_transaction(
+            &conn,
+            serde_json::json!({
+                "tasks": tasks,
+                "projects": [{
+                    "id": "project-1", "title": "Sequential", "status": "active",
+                    "color": "#000000", "isSequential": true,
+                    "sequentialScope": "section", "tagIds": [],
+                    "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z"
+                }],
+                "sections": [
+                    { "id": "section-1", "projectId": "project-1", "title": "One",
+                      "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z" },
+                    { "id": "section-2", "projectId": "project-1", "title": "Two",
+                      "createdAt": "2026-07-31T08:00:00Z", "updatedAt": "2026-07-31T08:00:00Z" }
+                ],
+                "areas": [{ "id": "area-1", "name": "Area", "order": 0 }],
+                "people": [],
+                "settings": { "deviceId": "device-a", "gtd": { "focusTaskLimit": 3 } }
+            }),
+        )
+        .expect("seed large store");
+        let scope = TaskMutationReadScope::create(
+            Some("project-1"),
+            Some("section-1"),
+            Some("area-1"),
+            true,
+        );
+
+        let (data, stats) = read_task_mutation_data(&conn, &scope).expect("scoped context");
+
+        assert_eq!(data["projects"].as_array().map(Vec::len), Some(1));
+        assert_eq!(data["sections"].as_array().map(Vec::len), Some(1));
+        assert_eq!(data["areas"].as_array().map(Vec::len), Some(1));
+        assert_eq!(data[TASK_MUTATION_FOCUSED_COUNT_KEY], 1);
+        assert_eq!(data["settings"]["deviceId"], "device-a");
+        assert_eq!(
+            data["tasks"]
+                .as_array()
+                .expect("scoped tasks")
+                .iter()
+                .map(|task| task["id"].as_str().expect("task id"))
+                .collect::<Vec<_>>(),
+            vec!["sequential-first"]
+        );
+        assert_eq!(stats.task_rows, 1);
+        assert!(stats.statements <= 6);
+    }
+
+    #[test]
+    fn saturated_revision_future_timestamp_does_not_discard_local_api_patch() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        replace_data_in_transaction(
+            &conn,
+            serde_json::json!({
+                "tasks": [{
+                    "id": "task-1", "title": "Original", "status": "next",
+                    "tags": [], "contexts": [],
+                    "rev": 2_147_483_647_i64, "revBy": "remote-clock",
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2099-01-01T00:00:00Z"
+                }],
+                "projects": [], "areas": [], "sections": [], "people": [],
+                "settings": { "deviceId": "desktop-local-api" }
+            }),
+        )
+        .expect("seed future-dated saturated row");
+        let patch = serde_json::json!({ "title": "Patched" })
+            .as_object()
+            .expect("patch object")
+            .clone();
+        let scope = TaskMutationReadScope::existing("task-1", false);
+        let mut mutation = |data: &mut Value| {
+            let task = data["tasks"]
+                .as_array_mut()
+                .expect("tasks")
+                .iter_mut()
+                .find(|task| task["id"] == "task-1")
+                .and_then(Value::as_object_mut)
+                .expect("target task");
+            crate::local_api::apply_task_patch(task, &patch, "desktop-local-api")?;
+            Ok::<_, String>(((), vec![Value::Object(task.clone())]))
+        };
+
+        commit_task_row_mutation(&conn, &scope, &mut mutation).expect("commit patch");
+
+        let persisted = conn
+            .query_row(
+                "SELECT * FROM tasks WHERE id = 'task-1'",
+                [],
+                row_to_task_value,
+            )
+            .expect("persisted task");
+        assert_eq!(persisted["title"], "Patched");
+        assert_eq!(persisted["rev"], 2_147_483_647_i64);
+        assert_ne!(persisted["updatedAt"], "2099-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn incremental_task_save_does_not_resurrect_an_observed_absent_task() {
+        let conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        let baseline = serde_json::json!({
+            "id": "task-observed", "title": "Observed", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        });
+        let stale_edit = serde_json::json!({
+            "id": "task-observed", "title": "Stale edit", "status": "next",
+            "tags": [], "contexts": [], "rev": 2,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T11:00:00Z"
+        });
+
+        let canonical = persist_task_snapshot(&conn, &stale_edit, &data_path, Some(&baseline))
+            .expect("guarded incremental save");
+        assert_eq!(canonical["tasks"], serde_json::json!([]));
+
+        let new_task = serde_json::json!({
+            "id": "task-new", "title": "New", "status": "inbox",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-07-31T12:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+        });
+        let canonical =
+            persist_task_snapshot(&conn, &new_task, &data_path, None).expect("unobserved insert");
+        assert_eq!(canonical["tasks"].as_array().expect("tasks").len(), 1);
+        assert_eq!(canonical["tasks"][0]["id"], "task-new");
+    }
+
+    #[test]
+    fn incremental_task_save_keeps_higher_revision_across_connections() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let first = Connection::open(&db_path).expect("open first connection");
+        first.execute_batch(SQLITE_SCHEMA).expect("create schema");
+        let second = Connection::open(&db_path).expect("open second connection");
+        second
+            .execute_batch(SQLITE_SCHEMA)
+            .expect("configure second connection");
+        let data_path = temp.path().join("data.json");
+        let task = |title: &str, rev: i64, updated_at: &str| {
+            serde_json::json!({
+                "id": "task-1", "title": title, "status": "next",
+                "tags": [], "contexts": [], "rev": rev, "revBy": "writer-a",
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": updated_at
+            })
+        };
+
+        persist_task_snapshot(
+            &first,
+            &task("Initial", 1, "2026-07-31T10:00:00Z"),
+            &data_path,
+            None,
+        )
+        .expect("initial save");
+        persist_task_snapshot(
+            &second,
+            &task("Higher revision", 3, "2026-07-31T12:00:00Z"),
+            &data_path,
+            None,
+        )
+        .expect("higher revision save");
+        let canonical = persist_task_snapshot(
+            &first,
+            &task("Stale retry", 2, "2026-07-31T11:00:00Z"),
+            &data_path,
+            None,
+        )
+        .expect("stale retry returns winner");
+
+        assert_eq!(canonical["tasks"][0]["title"], "Higher revision");
+        assert_eq!(canonical["tasks"][0]["rev"], 3);
+        assert_eq!(
+            read_json_with_retries(&data_path, 1).expect("recovery copy")["tasks"][0]["title"],
+            "Higher revision"
+        );
+    }
+
+    #[test]
+    fn incremental_equal_revision_winner_is_arrival_order_independent() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let task = |title: &str| {
+            serde_json::json!({
+                "id": "task-1", "title": title, "status": "next",
+                "tags": [], "contexts": [], "rev": 3, "revBy": "writer-a",
+                "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T12:00:00Z"
+            })
+        };
+        let save_in_order = |db_name: &str, first: Value, second: Value| {
+            let conn = Connection::open(temp.path().join(db_name)).expect("open database");
+            conn.execute_batch(SQLITE_SCHEMA).expect("create schema");
+            let data_path = temp.path().join(format!("{db_name}.json"));
+            persist_task_snapshot(&conn, &first, &data_path, None).expect("first save");
+            persist_task_snapshot(&conn, &second, &data_path, None).expect("second save")
+        };
+
+        let left = save_in_order("left.db", task("Alpha"), task("Zulu"));
+        let right = save_in_order("right.db", task("Zulu"), task("Alpha"));
+        assert_eq!(left["tasks"], right["tasks"]);
+    }
+
+    #[test]
+    fn data_json_refresh_reloads_latest_sqlite_after_another_commit() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let mut first = Connection::open(&db_path).expect("open first connection");
+        first.execute_batch(SQLITE_SCHEMA).expect("create schema");
+        let mut second = Connection::open(&db_path).expect("open second connection");
+        second
+            .execute_batch(SQLITE_SCHEMA)
+            .expect("configure second connection");
+        let snapshot = |title: &str, rev: i64| {
+            serde_json::json!({
+                "tasks": [{
+                    "id": "task-1", "title": title, "status": "next",
+                    "tags": [], "contexts": [], "rev": rev,
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": format!("2026-07-31T1{}:00:00Z", rev)
+                }],
+                "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+            })
+        };
+        migrate_json_to_sqlite(&mut first, &snapshot("First commit", 1)).expect("first commit");
+        let stale = read_sqlite_snapshot(&first).expect("capture stale canonical");
+        migrate_json_to_sqlite(&mut second, &snapshot("Later commit", 2)).expect("later commit");
+        let data_path = temp.path().join("data.json");
+        write_data_json_file(&data_path, &stale).expect("seed stale recovery copy");
+
+        let refreshed = refresh_data_json_from_sqlite(&first, &data_path)
+            .expect("refresh committed canonical data");
+
+        let mirrored = read_json_with_retries(&data_path, 1).expect("read recovery copy");
+        assert_eq!(mirrored, refreshed);
+        assert_eq!(mirrored["tasks"][0]["title"], "Later commit");
+        assert_eq!(mirrored["tasks"][0]["rev"], 2);
+    }
+
+    #[test]
+    fn full_save_merge_and_exact_release_writer_during_slow_publication() {
+        for exact in [false, true] {
+            let temp = tempfile::tempdir().expect("tempdir");
+            let db_path = temp.path().join("data.db");
+            let mut first = Connection::open(&db_path).expect("first connection");
+            first.execute_batch(SQLITE_SCHEMA).expect("first schema");
+            let second = Connection::open(&db_path).expect("second connection");
+            second.execute_batch(SQLITE_SCHEMA).expect("second schema");
+            let initial = serde_json::json!({
+                "tasks": [{
+                    "id": "task-1", "title": "Initial", "status": "next",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-07-31T10:00:00Z",
+                    "updatedAt": "2026-07-31T10:00:00Z"
+                }],
+                "projects": [], "areas": [], "sections": [], "people": [], "settings": {}
+            });
+            if exact {
+                replace_json_in_sqlite(&mut first, &initial).expect("exact full save commit");
+            } else {
+                merge_json_to_sqlite(&mut first, &initial, None).expect("merge full save commit");
+            }
+            let (canonical, data_version) =
+                stable_sqlite_snapshot_with_version(&first).expect("post-commit canonical");
+            let data_path = temp.path().join("data.json");
+            let publication_guard = data_json_publication_lock()
+                .lock()
+                .expect("hold slow publication gate");
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let publisher_barrier = barrier.clone();
+            let publisher = std::thread::spawn(move || {
+                publisher_barrier.wait();
+                publish_task_data_json(&first, &data_path, canonical, data_version)
+            });
+            barrier.wait();
+
+            let later = serde_json::json!({
+                "id": "task-2", "title": "Concurrent", "status": "next",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-07-31T11:00:00Z",
+                "updatedAt": "2026-07-31T11:00:00Z"
+            });
+            commit_task_snapshot(&second, &later, None)
+                .expect("second writer commits while publication is blocked");
+            drop(publication_guard);
+
+            let published = publisher.join().expect("publisher thread");
+            assert!(published["tasks"]
+                .as_array()
+                .expect("published tasks")
+                .iter()
+                .any(|task| task["id"] == "task-2"));
+        }
     }
 
     #[test]

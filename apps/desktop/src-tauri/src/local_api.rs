@@ -1,10 +1,13 @@
-use crate::storage::{ensure_data_file, load_data_snapshot, persist_data_snapshot_with_retries};
+use crate::storage::{
+    ensure_data_file, load_data_snapshot, mutate_task_rows_with_retries, TaskMutationReadScope,
+    TASK_MUTATION_FOCUSED_COUNT_KEY,
+};
 use crate::{get_config_path, get_secrets_path, read_config, write_config_files, AppConfigToml};
 use rand::RngCore;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
+use time::{Date, Month, OffsetDateTime};
 
 const LOCAL_API_HOST: &str = "127.0.0.1";
 pub(crate) const DEFAULT_LOCAL_API_PORT: u16 = 3456;
@@ -23,6 +26,9 @@ const REQUEST_BODY_LIMIT_BYTES: usize = 1_000_000;
 const LOCAL_API_TOKEN_BYTES: usize = 32;
 const LOCAL_API_REV_BY: &str = "desktop-local-api";
 const MAX_SYNC_REVISION: i64 = 2_147_483_647;
+const MAX_TASK_TITLE_LENGTH: usize = 500;
+const MAX_TASK_TOKEN_LENGTH: usize = MAX_TASK_TITLE_LENGTH;
+const RECURRENCE_REQUIRES_APP: &str = "recurrence_requires_app";
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -567,6 +573,7 @@ fn api_error_response(error: String) -> ApiResponse {
         return ApiResponse::error(404, error);
     }
     if error.starts_with("Invalid ")
+        || error.starts_with("Unsupported ")
         || error.starts_with("Task title")
         || error.starts_with("Request ")
     {
@@ -624,39 +631,69 @@ fn route_api_request(
 
     if request.method == "POST" && request.path == "/tasks" {
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
-        let mut data = load_data_snapshot(app)?;
         let body = parse_body_object(&request.body)?;
-        let device_id = device_id_from_data(&data);
-        let task = create_task_from_body(&body, &device_id)?;
-        ensure_array_mut(&mut data, "tasks")?.push(Value::Object(task.clone()));
-        persist_data_snapshot_with_retries(app, &data)?;
-        return Ok(ApiResponse::created(json!({ "task": Value::Object(task) })));
+        let props = body.get("props").and_then(Value::as_object);
+        let scope = TaskMutationReadScope::create(
+            props
+                .and_then(|props| props.get("projectId"))
+                .and_then(Value::as_str),
+            props
+                .and_then(|props| props.get("sectionId"))
+                .and_then(Value::as_str),
+            props
+                .and_then(|props| props.get("areaId"))
+                .and_then(Value::as_str),
+            props
+                .and_then(|props| props.get("isFocusedToday"))
+                .and_then(Value::as_bool)
+                == Some(true),
+        );
+        let (task_id, persisted) = mutate_task_rows_with_retries(app, scope, |data| {
+            let task = create_task_from_body(&body, &device_id_from_data(data), data)?;
+            let task_id = task
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Task id is required".to_string())?
+                .to_string();
+            let task = Value::Object(task);
+            ensure_array_mut(data, "tasks")?.push(task.clone());
+            Ok((task_id, vec![task]))
+        })?;
+        return Ok(ApiResponse::created(
+            json!({ "task": persisted_task(&persisted, &task_id)? }),
+        ));
     }
 
     if segments.len() == 2 && segments[0] == "tasks" && request.method == "PATCH" {
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
-        let mut data = load_data_snapshot(app)?;
-        let device_id = device_id_from_data(&data);
         let body = parse_body_object(&request.body)?;
-        let task = update_task_in_data(&mut data, &segments[1], |task| {
-            apply_task_patch(task, &body, &device_id)
+        let scope = TaskMutationReadScope::existing(&segments[1], false);
+        let (_, persisted) = mutate_task_rows_with_retries(app, scope, |data| {
+            let device_id = device_id_from_data(data);
+            let task = update_task_in_data(data, &segments[1], |task| {
+                apply_task_patch(task, &body, &device_id)
+            })?;
+            Ok(((), vec![task]))
         })?;
-        persist_data_snapshot_with_retries(app, &data)?;
-        return Ok(ApiResponse::ok(json!({ "task": task })));
+        return Ok(ApiResponse::ok(
+            json!({ "task": persisted_task(&persisted, &segments[1])? }),
+        ));
     }
 
     if segments.len() == 2 && segments[0] == "tasks" && request.method == "DELETE" {
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
-        let mut data = load_data_snapshot(app)?;
-        let device_id = device_id_from_data(&data);
-        update_task_in_data(&mut data, &segments[1], |task| {
-            let now = now_iso();
-            task.insert("deletedAt".to_string(), Value::String(now.clone()));
-            task.insert("updatedAt".to_string(), Value::String(now));
-            bump_task_revision(task, &device_id);
-            Ok(())
+        let scope = TaskMutationReadScope::existing(&segments[1], false);
+        mutate_task_rows_with_retries(app, scope, |data| {
+            let device_id = device_id_from_data(data);
+            let task = update_task_in_data(data, &segments[1], |task| {
+                let now = now_iso();
+                task.insert("deletedAt".to_string(), Value::String(now.clone()));
+                task.insert("updatedAt".to_string(), Value::String(now));
+                bump_task_revision(task, &device_id);
+                Ok(())
+            })?;
+            Ok(((), vec![task]))
         })?;
-        persist_data_snapshot_with_retries(app, &data)?;
         return Ok(ApiResponse::ok(json!({ "ok": true })));
     }
 
@@ -666,43 +703,53 @@ fn route_api_request(
             return Ok(ApiResponse::error(404, "Not found"));
         }
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
-        let mut data = load_data_snapshot(app)?;
-        if action == "complete" {
-            if let Some(refusal) = recurrence_completion_refusal(&data, &segments[1]) {
-                return Ok(refusal);
+        let scope = TaskMutationReadScope::existing(&segments[1], action == "restore");
+        let mutation = mutate_task_rows_with_retries(app, scope, |data| {
+            if action == "complete" && recurrence_completion_refusal(data, &segments[1]).is_some() {
+                return Err(RECURRENCE_REQUIRES_APP.to_string());
             }
-        }
-        let device_id = device_id_from_data(&data);
-        // Only restore needs a live-container snapshot; building it for
-        // complete/archive would be wasted work.
-        let live_containers = if action == "restore" {
-            LiveContainers::from_data(&data)
-        } else {
-            LiveContainers::default()
+            let device_id = device_id_from_data(data);
+            let live_containers = if action == "restore" {
+                LiveContainers::from_data(data)
+            } else {
+                LiveContainers::default()
+            };
+            let now = now_iso();
+            let mut recurring_follow_up: Option<Map<String, Value>> = None;
+            let task = update_task_in_data(data, &segments[1], |task| {
+                let previous_status = task
+                    .get("status")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("inbox")
+                    .to_string();
+                recurring_follow_up = apply_task_action(
+                    task,
+                    action,
+                    &previous_status,
+                    &now,
+                    &device_id,
+                    &live_containers,
+                )?;
+                Ok(())
+            })?;
+            let mut changed_tasks = vec![task];
+            if let Some(next_task) = recurring_follow_up {
+                let next_task = Value::Object(next_task);
+                ensure_array_mut(data, "tasks")?.push(next_task.clone());
+                changed_tasks.push(next_task);
+            }
+            Ok(((), changed_tasks))
+        });
+        let (_, persisted) = match mutation {
+            Ok(result) => result,
+            Err(error) if error == RECURRENCE_REQUIRES_APP => {
+                return Ok(recurrence_completion_refusal_response());
+            }
+            Err(error) => return Err(error),
         };
-        let now = now_iso();
-        let mut recurring_follow_up: Option<Map<String, Value>> = None;
-        let task = update_task_in_data(&mut data, &segments[1], |task| {
-            let previous_status = task
-                .get("status")
-                .and_then(|value| value.as_str())
-                .unwrap_or("inbox")
-                .to_string();
-            recurring_follow_up = apply_task_action(
-                task,
-                action,
-                &previous_status,
-                &now,
-                &device_id,
-                &live_containers,
-            )?;
-            Ok(())
-        })?;
-        if let Some(next_task) = recurring_follow_up {
-            ensure_array_mut(&mut data, "tasks")?.push(Value::Object(next_task));
-        }
-        persist_data_snapshot_with_retries(app, &data)?;
-        return Ok(ApiResponse::ok(json!({ "task": task })));
+        return Ok(ApiResponse::ok(
+            json!({ "task": persisted_task(&persisted, &segments[1])? }),
+        ));
     }
 
     Ok(ApiResponse::error(404, "Not found"))
@@ -870,6 +917,10 @@ fn find_task(data: &Value, task_id: &str) -> Option<Value> {
         .cloned()
 }
 
+fn persisted_task(data: &Value, task_id: &str) -> Result<Value, String> {
+    find_task(data, task_id).ok_or_else(|| "Task not found after persistence".to_string())
+}
+
 /// Refuses `POST /tasks/{id}/complete` outright when the task's recurrence
 /// carries selectors this engine cannot compute (byDay/byMonthDay/rrule —
 /// see `recurrence_needs_core_engine`). A vanished recurring series is worse
@@ -889,13 +940,17 @@ fn recurrence_completion_refusal(data: &Value, task_id: &str) -> Option<ApiRespo
     if recurrence_rule(task_object).is_none() || !recurrence_needs_core_engine(task_object) {
         return None;
     }
-    Some(ApiResponse {
+    Some(recurrence_completion_refusal_response())
+}
+
+fn recurrence_completion_refusal_response() -> ApiResponse {
+    ApiResponse {
         status: 409,
         body: json!({
             "error": "This task's recurrence rule requires the app to complete it correctly.",
-            "code": "recurrence_requires_app",
+            "code": RECURRENCE_REQUIRES_APP,
         }),
-    })
+    }
 }
 
 fn update_task_in_data<F>(data: &mut Value, task_id: &str, update: F) -> Result<Value, String>
@@ -1009,6 +1064,55 @@ fn set_or_remove_string(task: &mut Map<String, Value>, key: &str, value: Option<
             task.remove(key);
         }
     }
+}
+
+fn normalize_created_task_containers(
+    task: &mut Map<String, Value>,
+    live: &LiveContainers,
+) -> Result<(), String> {
+    let project_id = normalize_optional_container_id(task.get("projectId"));
+    if project_id
+        .as_ref()
+        .is_some_and(|id| !live.project_ids.contains(id))
+    {
+        return Err("Invalid task projectId: Project not found".to_string());
+    }
+
+    let section_id = normalize_optional_container_id(task.get("sectionId"));
+    let section_project_id = section_id
+        .as_ref()
+        .and_then(|id| live.section_project_ids.get(id))
+        .cloned();
+    if section_id.is_some() && section_project_id.is_none() {
+        return Err("Invalid task sectionId: Section not found".to_string());
+    }
+    if project_id.is_some()
+        && section_project_id.is_some()
+        && project_id != section_project_id
+    {
+        return Err("Invalid task sectionId: Section does not belong to project".to_string());
+    }
+
+    let area_id = normalize_optional_container_id(task.get("areaId"));
+    let resolved = resolve_task_container_hierarchy(
+        project_id,
+        section_id,
+        area_id,
+        section_project_id,
+    );
+    if resolved.project_id.is_none()
+        && resolved
+            .area_id
+            .as_ref()
+            .is_some_and(|id| !live.area_ids.contains(id))
+    {
+        return Err("Invalid task areaId: Area not found".to_string());
+    }
+
+    set_or_remove_string(task, "projectId", resolved.project_id);
+    set_or_remove_string(task, "sectionId", resolved.section_id);
+    set_or_remove_string(task, "areaId", resolved.area_id);
+    Ok(())
 }
 
 /// Direct Rust port of `sanitizeRestoredTaskContainerReferences`
@@ -1754,10 +1858,284 @@ fn duplicate_attachment_value(value: Option<&Value>, timestamp: &str) -> Option<
     }
 }
 
+fn normalize_created_reference_task(task: &mut Map<String, Value>) {
+    for key in [
+        "startTime",
+        "dueDate",
+        "relativeStartOffset",
+        "reviewAt",
+        "recurrence",
+        "priority",
+        "timeEstimate",
+        "suppressMindwtrReminders",
+        "repeatReminderMinutes",
+        "showFutureRecurrence",
+        "focusOrder",
+        "boardOrder",
+    ] {
+        task.remove(key);
+    }
+    task.insert("isFocusedToday".to_string(), Value::Bool(false));
+    task.insert("pushCount".to_string(), Value::Number(0.into()));
+}
+
+fn local_api_schedule_time(value: Option<&Value>) -> Option<OffsetDateTime> {
+    let value = value?.as_str()?;
+    if let Some(date) = parse_iso_date_bytes(value.as_bytes()) {
+        return date.with_hms(0, 0, 0).ok().map(|value| value.assume_utc());
+    }
+    OffsetDateTime::parse(value, &Rfc3339).ok()
+}
+
+fn local_api_due_schedule_time(value: Option<&Value>) -> Option<OffsetDateTime> {
+    let value = value?.as_str()?;
+    if let Some(date) = parse_iso_date_bytes(value.as_bytes()) {
+        return date
+            .with_hms_milli(23, 59, 59, 999)
+            .ok()
+            .map(|value| value.assume_utc());
+    }
+    OffsetDateTime::parse(value, &Rfc3339).ok()
+}
+
+fn local_api_review_is_due(task: &Map<String, Value>, now: OffsetDateTime) -> bool {
+    local_api_schedule_time(task.get("reviewAt")).is_some_and(|review| review <= now)
+}
+
+fn local_api_task_is_future_start(task: &Map<String, Value>, now: OffsetDateTime) -> bool {
+    let defer_until = local_api_schedule_time(task.get("startTime")).or_else(|| {
+        recurrence_rule(task).and_then(|_| {
+            [
+                local_api_schedule_time(task.get("dueDate")),
+                local_api_schedule_time(task.get("reviewAt")),
+            ]
+            .into_iter()
+            .flatten()
+            .min()
+        })
+    });
+    defer_until.is_some_and(|value| value.date() > now.date())
+}
+
+fn local_api_focus_task_limit(data: &Value) -> usize {
+    let raw = data
+        .get("settings")
+        .and_then(|settings| settings.get("gtd"))
+        .and_then(|gtd| gtd.get("focusTaskLimit"));
+    let numeric = raw
+        .and_then(Value::as_f64)
+        .or_else(|| raw.and_then(Value::as_str).and_then(|value| value.parse().ok()));
+    numeric
+        .filter(|value| value.is_finite())
+        .map(|value| value.floor().clamp(1.0, 10.0) as usize)
+        .unwrap_or(3)
+}
+
+fn local_api_focused_task_count(data: &Value) -> usize {
+    if let Some(count) = data
+        .get(TASK_MUTATION_FOCUSED_COUNT_KEY)
+        .and_then(Value::as_u64)
+    {
+        return count as usize;
+    }
+    array_items(data, "tasks")
+        .iter()
+        .filter(|task| {
+            !has_string_field(task, "deletedAt")
+                && task.get("isFocusedToday").and_then(Value::as_bool) == Some(true)
+                && !matches!(
+                    task.get("status").and_then(Value::as_str),
+                    Some("done" | "reference")
+                )
+        })
+        .count()
+}
+
+fn local_api_project_allows_focus(task: &Map<String, Value>, data: &Value) -> bool {
+    let Some(project_id) = task.get("projectId").and_then(Value::as_str) else {
+        return true;
+    };
+    let Some(project) = array_items(data, "projects")
+        .into_iter()
+        .find(|project| project.get("id").and_then(Value::as_str) == Some(project_id))
+    else {
+        return true;
+    };
+    !has_string_field(&project, "deletedAt")
+        && (project.get("status").and_then(Value::as_str) == Some("active")
+            || project.get("isFocused").and_then(Value::as_bool) == Some(true))
+}
+
+fn local_api_focus_schedule_key(
+    task: &Map<String, Value>,
+    now: OffsetDateTime,
+) -> (u8, i128) {
+    if task.get("isFocusedToday").and_then(Value::as_bool) == Some(true) {
+        return (0, 0);
+    }
+    let mut scheduled = Vec::new();
+    if let Some(due) = local_api_due_schedule_time(task.get("dueDate")) {
+        if due.date() <= now.date() {
+            scheduled.push(due.unix_timestamp_nanos());
+        }
+    }
+    if let Some(start) = local_api_schedule_time(task.get("startTime")) {
+        if start.date() == now.date() {
+            scheduled.push(start.unix_timestamp_nanos());
+        }
+    }
+    if local_api_review_is_due(task, now) {
+        if let Some(review) = local_api_schedule_time(task.get("reviewAt")) {
+            scheduled.push(review.unix_timestamp_nanos());
+        }
+    }
+    scheduled
+        .into_iter()
+        .min()
+        .map(|time| (1, time))
+        .unwrap_or((2, i128::MAX))
+}
+
+fn local_api_focus_order(task: &Map<String, Value>, has_order: bool) -> f64 {
+    if has_order {
+        return task
+            .get("order")
+            .and_then(Value::as_f64)
+            .or_else(|| task.get("orderNum").and_then(Value::as_f64))
+            .filter(|value| value.is_finite())
+            .unwrap_or(f64::INFINITY);
+    }
+    local_api_schedule_time(task.get("createdAt"))
+        .map(|value| value.unix_timestamp_nanos() as f64)
+        .unwrap_or(f64::INFINITY)
+}
+
+fn local_api_focus_candidate_is_sequential_first(
+    candidate: &Map<String, Value>,
+    data: &Value,
+    now: OffsetDateTime,
+) -> bool {
+    let Some(project_id) = candidate.get("projectId").and_then(Value::as_str) else {
+        return true;
+    };
+    let Some(project) = array_items(data, "projects")
+        .into_iter()
+        .find(|project| project.get("id").and_then(Value::as_str) == Some(project_id))
+    else {
+        return true;
+    };
+    if project.get("isSequential").and_then(Value::as_bool) != Some(true) {
+        return true;
+    }
+    let section_scoped = project.get("sequentialScope").and_then(Value::as_str) == Some("section");
+    let candidate_section = candidate.get("sectionId").and_then(Value::as_str);
+    let mut candidates = array_items(data, "tasks")
+        .into_iter()
+        .filter_map(|task| {
+            let task = task.as_object()?.clone();
+            if has_string_field(&Value::Object(task.clone()), "deletedAt")
+                || task.get("projectId").and_then(Value::as_str) != Some(project_id)
+                || (section_scoped
+                    && task.get("sectionId").and_then(Value::as_str) != candidate_section)
+                || !matches!(
+                    task.get("status").and_then(Value::as_str),
+                    Some("inbox" | "next" | "waiting" | "someday")
+                )
+                || !(task.get("isFocusedToday").and_then(Value::as_bool) == Some(true)
+                    || task.get("status").and_then(Value::as_str) == Some("next")
+                    || local_api_review_is_due(&task, now))
+            {
+                return None;
+            }
+            Some(task)
+        })
+        .collect::<Vec<_>>();
+    candidates.push(candidate.clone());
+    let has_order = candidates.iter().any(|task| {
+        task.get("order")
+            .and_then(Value::as_f64)
+            .or_else(|| task.get("orderNum").and_then(Value::as_f64))
+            .is_some_and(|value| value.is_finite())
+    });
+    let mut best_id = None;
+    let mut best_schedule = (u8::MAX, i128::MAX);
+    let mut best_order = f64::INFINITY;
+    for task in &candidates {
+        let schedule = local_api_focus_schedule_key(task, now);
+        let order = local_api_focus_order(task, has_order);
+        if best_id.is_none()
+            || schedule < best_schedule
+            || (schedule == best_schedule && order < best_order)
+        {
+            best_id = task.get("id").and_then(Value::as_str);
+            best_schedule = schedule;
+            best_order = order;
+        }
+    }
+    best_id == candidate.get("id").and_then(Value::as_str)
+}
+
+fn normalize_created_task_focus(task: &mut Map<String, Value>, data: &Value, now: &str) {
+    if task.get("isFocusedToday").and_then(Value::as_bool) != Some(true) {
+        task.remove("focusOrder");
+        return;
+    }
+    let now = OffsetDateTime::parse(now, &Rfc3339).unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let original_status = task
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("inbox")
+        .to_string();
+    let promoted_status = if original_status == "inbox" {
+        "next"
+    } else {
+        original_status.as_str()
+    };
+    let mut candidate = task.clone();
+    candidate.insert(
+        "status".to_string(),
+        Value::String(promoted_status.to_string()),
+    );
+    candidate.insert("isFocusedToday".to_string(), Value::Bool(false));
+    let status_is_eligible = promoted_status == "next"
+        || (promoted_status != "inbox" && local_api_review_is_due(&candidate, now));
+    let eligible = status_is_eligible
+        && local_api_project_allows_focus(&candidate, data)
+        && !local_api_task_is_future_start(&candidate, now)
+        && local_api_focus_candidate_is_sequential_first(&candidate, data, now);
+    let cap_is_available = local_api_focused_task_count(data) < local_api_focus_task_limit(data);
+    if eligible && cap_is_available {
+        task.insert(
+            "status".to_string(),
+            Value::String(promoted_status.to_string()),
+        );
+    } else {
+        task.insert("isFocusedToday".to_string(), Value::Bool(false));
+        task.remove("focusOrder");
+    }
+}
+
 fn create_task_from_body(
     body: &Map<String, Value>,
     device_id: &str,
+    data: &Value,
 ) -> Result<Map<String, Value>, String> {
+    let unsupported = body
+        .keys()
+        .filter(|key| !matches!(key.as_str(), "input" | "title" | "props"))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unsupported.is_empty() {
+        return Err(format!(
+            "Unsupported task creation fields: {}",
+            unsupported.join(", ")
+        ));
+    }
+    for key in ["input", "title"] {
+        if body.get(key).is_some_and(|value| !value.is_string()) {
+            return Err(format!("Invalid task {key}"));
+        }
+    }
     let input = body
         .get("input")
         .and_then(|value| value.as_str())
@@ -1772,13 +2150,24 @@ fn create_task_from_body(
     if resolved_title.is_empty() {
         return Err("Task title is required".to_string());
     }
+    if js_string_length(resolved_title) > MAX_TASK_TITLE_LENGTH {
+        return Err(format!(
+            "Task title too long (max {MAX_TASK_TITLE_LENGTH} characters)"
+        ));
+    }
 
-    let mut task = body
-        .get("props")
-        .and_then(|value| value.as_object())
-        .cloned()
-        .unwrap_or_default();
+    let mut task = match body.get("props") {
+        Some(Value::Object(props)) => props.clone(),
+        Some(_) => return Err("Invalid task props".to_string()),
+        None => Map::new(),
+    };
+    if task.contains_key("title") {
+        return Err("Unsupported task props: title".to_string());
+    }
     sanitize_task_patch_map(&mut task)?;
+    task.retain(|_, value| !value.is_null());
+    normalize_created_task_containers(&mut task, &LiveContainers::from_data(data))?;
+    let had_explicit_status = task.contains_key("status");
     let now = now_iso();
     task.insert("id".to_string(), Value::String(generate_uuid_v4()));
     task.insert(
@@ -1787,20 +2176,41 @@ fn create_task_from_body(
     );
     task.entry("status".to_string())
         .or_insert_with(|| Value::String("inbox".to_string()));
+    task.entry("tags".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    task.entry("contexts".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    task.entry("taskMode".to_string())
+        .or_insert_with(|| Value::String("task".to_string()));
+    task.entry("pushCount".to_string())
+        .or_insert_with(|| Value::Number(0.into()));
     task.insert("createdAt".to_string(), Value::String(now.clone()));
-    task.insert("updatedAt".to_string(), Value::String(now));
+    task.insert("updatedAt".to_string(), Value::String(now.clone()));
+    if !had_explicit_status && has_non_empty_string(&task, "startTime") {
+        task.insert("status".to_string(), Value::String("next".to_string()));
+    }
+    if task.get("status").and_then(Value::as_str) == Some("reference") {
+        normalize_created_reference_task(&mut task);
+    }
+    normalize_created_task_focus(&mut task, data, &now);
     task.insert("rev".to_string(), Value::Number(1.into()));
     task.insert("revBy".to_string(), Value::String(device_id.to_string()));
     Ok(task)
 }
 
-fn apply_task_patch(
+pub(crate) fn apply_task_patch(
     task: &mut Map<String, Value>,
     patch: &Map<String, Value>,
     device_id: &str,
 ) -> Result<(), String> {
+    if patch.contains_key("status") {
+        return Err(
+            "Invalid task field: status; use the complete, archive, or restore action".to_string(),
+        );
+    }
     let mut sanitized = patch.clone();
     sanitize_task_patch_map(&mut sanitized)?;
+    resolve_relative_start_patch(task, &mut sanitized);
     let series_id = task
         .get("recurrence")
         .and_then(Value::as_object)
@@ -1843,21 +2253,685 @@ fn apply_task_patch(
 }
 
 fn sanitize_task_patch_map(patch: &mut Map<String, Value>) -> Result<(), String> {
-    for key in [
-        "id",
-        "createdAt",
-        "updatedAt",
-        "rev",
-        "revBy",
-        "deletedAt",
-        "purgedAt",
-    ] {
-        patch.remove(key);
+    for key in ["tags", "contexts"] {
+        if let Some(items) = patch.get_mut(key).and_then(Value::as_array_mut) {
+            for item in items {
+                if let Some(token) = item.as_str() {
+                    *item = Value::String(token.trim().to_string());
+                }
+            }
+        }
     }
-    if let Some(status) = patch.get("status").and_then(|value| value.as_str()) {
-        validate_task_status(status)?;
+    if let Some(items) = patch.get_mut("checklist").and_then(Value::as_array_mut) {
+        for item in items {
+            if let Some(item) = item.as_object_mut() {
+                item.entry("isCompleted".to_string())
+                    .or_insert(Value::Bool(false));
+            }
+        }
+    }
+
+    for (key, value) in patch.iter() {
+        let valid = match key.as_str() {
+            "title" => value.as_str().is_some_and(|title| {
+                !title.trim().is_empty() && js_string_length(title) <= MAX_TASK_TITLE_LENGTH
+            }),
+            "status" => value
+                .as_str()
+                .is_some_and(|status| validate_task_status(status).is_ok()),
+            "tags" | "contexts" => value.as_array().is_some_and(|items| {
+                items.iter().all(|item| {
+                    item.as_str().is_some_and(|token| {
+                        !token.is_empty() && js_string_length(token) <= MAX_TASK_TOKEN_LENGTH
+                    })
+                })
+            }),
+            "priority" => {
+                value.is_null()
+                    || value
+                        .as_str()
+                        .is_some_and(|item| matches!(item, "low" | "medium" | "high" | "urgent"))
+            }
+            "energyLevel" => {
+                value.is_null()
+                    || value
+                        .as_str()
+                        .is_some_and(|item| matches!(item, "low" | "medium" | "high"))
+            }
+            "taskMode" => {
+                value.is_null()
+                    || value
+                        .as_str()
+                        .is_some_and(|item| matches!(item, "task" | "list"))
+            }
+            "textDirection" => {
+                value.is_null()
+                    || value
+                        .as_str()
+                        .is_some_and(|item| matches!(item, "auto" | "ltr" | "rtl"))
+            }
+            "assignedTo" | "description" | "location" | "projectId" | "sectionId" | "areaId" => {
+                value.is_null() || value.is_string()
+            }
+            "startTime" | "dueDate" | "reviewAt" => {
+                value.is_null() || value.as_str().is_some_and(valid_iso_date_like)
+            }
+            "timeEstimate" => value.is_null() || valid_time_estimate(value),
+            "showFutureRecurrence" | "isFocusedToday" | "suppressMindwtrReminders" => {
+                value.is_boolean()
+            }
+            "pushCount" | "timeSpentMinutes" => {
+                value.is_null() || value.as_i64().is_some_and(|number| number >= 0)
+            }
+            "repeatReminderMinutes" => {
+                value.is_null()
+                    || value
+                        .as_i64()
+                        .is_some_and(|minutes| matches!(minutes, 0 | 5 | 10 | 15 | 30 | 60))
+            }
+            "order" | "orderNum" | "boardOrder" | "focusOrder" => {
+                value.is_null() || valid_finite_integer(value)
+            }
+            "checklist" => value.is_null() || valid_checklist(value),
+            "attachments" => value.is_null() || valid_attachments(value),
+            "relativeStartOffset" => value.is_null() || valid_relative_start_offset(value),
+            "recurrence" => value.is_null() || valid_recurrence(value),
+            _ => return Err(format!("Unsupported task field: {key}")),
+        };
+        if !valid {
+            return Err(format!("Invalid task field: {key}"));
+        }
     }
     Ok(())
+}
+
+fn js_string_length(value: &str) -> usize {
+    value.encode_utf16().count()
+}
+
+fn valid_finite_integer(value: &Value) -> bool {
+    value.as_i64().is_some()
+        || value.as_u64().is_some()
+        || value
+            .as_f64()
+            .is_some_and(|number| number.is_finite() && number.fract() == 0.0)
+}
+
+fn valid_time_estimate(value: &Value) -> bool {
+    let Some(estimate) = value.as_str() else {
+        return false;
+    };
+    if matches!(
+        estimate,
+        "5min" | "10min" | "15min" | "30min" | "1hr" | "2hr" | "3hr" | "4hr" | "4hr+"
+    ) {
+        return true;
+    }
+    estimate
+        .strip_prefix("custom:")
+        .and_then(|minutes| minutes.parse::<f64>().ok())
+        .is_some_and(|minutes| minutes.is_finite() && minutes >= 1.0)
+}
+
+fn valid_relative_start_offset(value: &Value) -> bool {
+    let Some(offset) = value.as_object() else {
+        return false;
+    };
+    offset.len() == 2
+        && offset
+            .get("amount")
+            .and_then(Value::as_i64)
+            .is_some_and(|amount| (-10_000..=0).contains(&amount))
+        && offset
+            .get("unit")
+            .and_then(Value::as_str)
+            .is_some_and(|unit| matches!(unit, "minute" | "hour" | "day" | "week"))
+}
+
+fn resolve_relative_start_patch(task: &Map<String, Value>, patch: &mut Map<String, Value>) {
+    let has_due_date = patch.contains_key("dueDate");
+    let has_start_time = patch.contains_key("startTime");
+    let has_offset = patch.contains_key("relativeStartOffset");
+    if !has_due_date && !has_start_time && !has_offset {
+        return;
+    }
+
+    let next_due_date = if has_due_date {
+        patch.get("dueDate").and_then(Value::as_str)
+    } else {
+        task.get("dueDate").and_then(Value::as_str)
+    };
+    let meaningful_start_edit = has_start_time
+        && patch.get("startTime").and_then(Value::as_str)
+            != task.get("startTime").and_then(Value::as_str);
+
+    if has_offset {
+        let computed = patch
+            .get("relativeStartOffset")
+            .filter(|offset| valid_relative_start_offset(offset))
+            .zip(next_due_date)
+            .and_then(|(offset, due_date)| compute_relative_start_time(due_date, offset));
+        if let Some(start_time) = computed {
+            patch.insert("startTime".to_string(), Value::String(start_time));
+        } else {
+            patch.insert("relativeStartOffset".to_string(), Value::Null);
+        }
+        return;
+    }
+
+    if meaningful_start_edit {
+        patch.insert("relativeStartOffset".to_string(), Value::Null);
+        return;
+    }
+
+    let existing_offset = task
+        .get("relativeStartOffset")
+        .filter(|offset| valid_relative_start_offset(offset));
+    if has_due_date {
+        if let Some((offset, start_time)) =
+            existing_offset
+                .zip(next_due_date)
+                .and_then(|(offset, due_date)| {
+                    compute_relative_start_time(due_date, offset)
+                        .map(|start_time| (offset.clone(), start_time))
+                })
+        {
+            patch.insert("startTime".to_string(), Value::String(start_time));
+            patch.insert("relativeStartOffset".to_string(), offset);
+        } else if existing_offset.is_some() {
+            patch.insert("relativeStartOffset".to_string(), Value::Null);
+        }
+    }
+}
+
+fn compute_relative_start_time(due_date: &str, offset: &Value) -> Option<String> {
+    let offset = offset.as_object()?;
+    let amount = offset.get("amount")?.as_i64()?;
+    let unit = offset.get("unit")?.as_str()?;
+    if let Some(date) = parse_iso_date_bytes(due_date.as_bytes()) {
+        let days = match unit {
+            "day" => amount,
+            "week" => amount.checked_mul(7)?,
+            _ => return None,
+        };
+        let computed = date.checked_add(time::Duration::days(days))?;
+        if !(0..=9999).contains(&computed.year()) {
+            return None;
+        }
+        return Some(format!(
+            "{:04}-{:02}-{:02}",
+            computed.year(),
+            u8::from(computed.month()),
+            computed.day()
+        ));
+    }
+
+    let due = OffsetDateTime::parse(due_date, &Rfc3339).ok()?;
+    let duration = match unit {
+        "minute" => time::Duration::minutes(amount),
+        "hour" => time::Duration::hours(amount),
+        "day" => time::Duration::days(amount),
+        "week" => time::Duration::days(amount.checked_mul(7)?),
+        _ => return None,
+    };
+    let computed = due.checked_add(duration)?.to_offset(time::UtcOffset::UTC);
+    if !(0..=9999).contains(&computed.year()) {
+        return None;
+    }
+    Some(format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        computed.year(),
+        u8::from(computed.month()),
+        computed.day(),
+        computed.hour(),
+        computed.minute(),
+        computed.second(),
+        computed.millisecond()
+    ))
+}
+
+fn valid_iso_date_like(value: &str) -> bool {
+    valid_iso_date(value) || valid_iso_datetime(value, true)
+}
+
+fn valid_iso_date(value: &str) -> bool {
+    parse_iso_date_bytes(value.as_bytes()).is_some()
+}
+
+fn parse_iso_date_bytes(bytes: &[u8]) -> Option<Date> {
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes[..4].iter().all(u8::is_ascii_digit)
+        || !bytes[5..7].iter().all(u8::is_ascii_digit)
+        || !bytes[8..].iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    let year = decimal_bytes(&bytes[..4]) as i32;
+    let month = decimal_bytes(&bytes[5..7]) as u8;
+    let day = decimal_bytes(&bytes[8..]) as u8;
+    Date::from_calendar_date(year, Month::try_from(month).ok()?, day).ok()
+}
+
+fn decimal_bytes(bytes: &[u8]) -> u32 {
+    bytes
+        .iter()
+        .fold(0, |value, byte| value * 10 + u32::from(byte - b'0'))
+}
+
+fn valid_iso_datetime(value: &str, timezone_required: bool) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 19
+        || bytes.get(10) != Some(&b'T')
+        || bytes.get(13) != Some(&b':')
+        || bytes.get(16) != Some(&b':')
+        || parse_iso_date_bytes(&bytes[..10]).is_none()
+        || !bytes[11..13].iter().all(u8::is_ascii_digit)
+        || !bytes[14..16].iter().all(u8::is_ascii_digit)
+        || !bytes[17..19].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+    let hour = decimal_bytes(&bytes[11..13]);
+    let minute = decimal_bytes(&bytes[14..16]);
+    let second = decimal_bytes(&bytes[17..19]);
+    if hour > 23 || minute > 59 || second > 59 {
+        return false;
+    }
+
+    let mut index = 19;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let fraction_start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if !(1..=3).contains(&(index - fraction_start)) {
+            return false;
+        }
+    }
+
+    if index == bytes.len() {
+        return !timezone_required;
+    }
+    let timezone_valid = bytes[index..] == *b"Z"
+        || (bytes.len() == index + 6
+            && matches!(bytes[index], b'+' | b'-')
+            && bytes[index + 3] == b':'
+            && bytes[index + 1..index + 3].iter().all(u8::is_ascii_digit)
+            && bytes[index + 4..].iter().all(u8::is_ascii_digit));
+    timezone_valid && OffsetDateTime::parse(value, &Rfc3339).is_ok()
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct RecurrenceSchedule {
+    rule: String,
+    by_day: Vec<String>,
+    by_month_day: Vec<i64>,
+    week_start: Option<String>,
+    count: Option<i64>,
+    until: Option<String>,
+}
+
+fn valid_recurrence(value: &Value) -> bool {
+    if let Some(rule) = value.as_str() {
+        return is_recurrence_rule(rule);
+    }
+    let Some(recurrence) = value.as_object() else {
+        return false;
+    };
+    recurrence.iter().all(|(key, value)| match key.as_str() {
+        "rule" => value.as_str().is_some_and(is_recurrence_rule),
+        "seriesId" => value
+            .as_str()
+            .is_some_and(|item| !item.trim().is_empty() && item.len() <= 500),
+        "until" => value.as_str().is_some_and(valid_recurrence_until),
+        "rrule" => value.as_str().and_then(parse_supported_rrule).is_some(),
+        "strategy" => value
+            .as_str()
+            .is_some_and(|item| matches!(item, "strict" | "fluid")),
+        "byDay" => value.as_array().is_some_and(|items| {
+            items
+                .iter()
+                .all(|item| item.as_str().is_some_and(valid_recurrence_by_day))
+        }),
+        "byMonthDay" => value.as_array().is_some_and(|items| {
+            items.len() <= 31
+                && items
+                    .iter()
+                    .all(|item| item.as_i64().is_some_and(|day| (1..=31).contains(&day)))
+        }),
+        "weekStart" => value.as_str().is_some_and(valid_recurrence_weekday),
+        "count" => value.as_i64().is_some_and(|count| count > 0),
+        "completedOccurrences" => value.as_i64().is_some_and(|count| count >= 0),
+        "anchorDay" | "startAnchorDay" | "dueAnchorDay" | "reviewAnchorDay" => {
+            value.as_i64().is_some_and(|day| (1..=31).contains(&day))
+        }
+        _ => false,
+    }) && recurrence_schedule(recurrence).is_some_and(|schedule| {
+        compatible_recurrence_schedule(&schedule)
+            && recurrence
+                .get("rrule")
+                .and_then(Value::as_str)
+                .is_none_or(|rrule| {
+                    parse_supported_rrule(rrule)
+                        .is_some_and(|parsed| same_recurrence_schedule(&schedule, &parsed))
+                })
+    })
+}
+
+fn recurrence_schedule(recurrence: &Map<String, Value>) -> Option<RecurrenceSchedule> {
+    let parsed = recurrence
+        .get("rrule")
+        .and_then(Value::as_str)
+        .and_then(parse_supported_rrule);
+    let mut by_day = recurrence
+        .get("byDay")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if by_day.is_empty() {
+        by_day = parsed
+            .as_ref()
+            .map(|schedule| schedule.by_day.clone())
+            .unwrap_or_default();
+    }
+    by_day.sort();
+    by_day.dedup();
+
+    let mut by_month_day = recurrence
+        .get("byMonthDay")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(Value::as_i64).collect::<Vec<_>>())
+        .unwrap_or_default();
+    if by_month_day.is_empty() {
+        by_month_day = parsed
+            .as_ref()
+            .map(|schedule| schedule.by_month_day.clone())
+            .unwrap_or_default();
+    }
+    by_month_day.sort_unstable();
+    by_month_day.dedup();
+
+    Some(RecurrenceSchedule {
+        rule: recurrence.get("rule")?.as_str()?.to_string(),
+        by_day,
+        by_month_day,
+        week_start: recurrence
+            .get("weekStart")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                parsed
+                    .as_ref()
+                    .and_then(|schedule| schedule.week_start.clone())
+            }),
+        count: recurrence
+            .get("count")
+            .and_then(Value::as_i64)
+            .or_else(|| parsed.as_ref().and_then(|schedule| schedule.count)),
+        until: recurrence
+            .get("until")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| parsed.as_ref().and_then(|schedule| schedule.until.clone())),
+    })
+}
+
+fn compatible_recurrence_schedule(schedule: &RecurrenceSchedule) -> bool {
+    match schedule.rule.as_str() {
+        "weekly" => {
+            schedule.by_month_day.is_empty()
+                && schedule
+                    .by_day
+                    .iter()
+                    .all(|day| valid_recurrence_weekday(day))
+        }
+        "monthly" => {
+            schedule.week_start.is_none()
+                && (schedule.by_day.is_empty() || schedule.by_month_day.is_empty())
+                && schedule
+                    .by_day
+                    .iter()
+                    .all(|day| valid_ordinal_recurrence_weekday(day))
+        }
+        "daily" | "yearly" => {
+            schedule.by_day.is_empty()
+                && schedule.by_month_day.is_empty()
+                && schedule.week_start.is_none()
+        }
+        _ => false,
+    }
+}
+
+fn same_recurrence_schedule(left: &RecurrenceSchedule, right: &RecurrenceSchedule) -> bool {
+    left.rule == right.rule
+        && left.by_day == right.by_day
+        && left.by_month_day == right.by_month_day
+        && left.week_start == right.week_start
+        && left.count == right.count
+        && same_recurrence_until(left.until.as_deref(), right.until.as_deref())
+}
+
+fn same_recurrence_until(left: Option<&str>, right: Option<&str>) -> bool {
+    if left == right {
+        return true;
+    }
+    let (Some(left), Some(right)) = (left, right) else {
+        return false;
+    };
+    let (Ok(left), Ok(right)) = (
+        OffsetDateTime::parse(left, &Rfc3339),
+        OffsetDateTime::parse(right, &Rfc3339),
+    ) else {
+        return false;
+    };
+    left.unix_timestamp_nanos() == right.unix_timestamp_nanos()
+}
+
+fn parse_supported_rrule(value: &str) -> Option<RecurrenceSchedule> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 2_000 {
+        return None;
+    }
+    let mut seen = HashSet::new();
+    let mut schedule = RecurrenceSchedule::default();
+    for token in value.split(';') {
+        if token.matches('=').count() != 1 {
+            return None;
+        }
+        let (key, raw) = token.split_once('=')?;
+        if key.is_empty() || raw.is_empty() {
+            return None;
+        }
+        let key = key.to_ascii_uppercase();
+        if !seen.insert(key.clone()) {
+            return None;
+        }
+        match key.as_str() {
+            "FREQ" => {
+                schedule.rule = match raw.to_ascii_uppercase().as_str() {
+                    "DAILY" => "daily",
+                    "WEEKLY" => "weekly",
+                    "MONTHLY" => "monthly",
+                    "YEARLY" => "yearly",
+                    _ => return None,
+                }
+                .to_string();
+            }
+            "INTERVAL" => {
+                let interval = parse_positive_integer(raw)?;
+                if interval > 999 {
+                    return None;
+                }
+            }
+            "BYDAY" => {
+                let mut days = raw
+                    .split(',')
+                    .map(str::to_ascii_uppercase)
+                    .collect::<Vec<_>>();
+                if days.iter().any(|day| !valid_recurrence_by_day(day)) {
+                    return None;
+                }
+                days.sort();
+                days.dedup();
+                schedule.by_day = days;
+            }
+            "BYMONTHDAY" => {
+                let mut days = raw
+                    .split(',')
+                    .map(parse_positive_integer)
+                    .collect::<Option<Vec<_>>>()?;
+                if days.iter().any(|day| !(1..=31).contains(day)) {
+                    return None;
+                }
+                days.sort_unstable();
+                days.dedup();
+                schedule.by_month_day = days;
+            }
+            "WKST" => {
+                let weekday = raw.to_ascii_uppercase();
+                if !valid_recurrence_weekday(&weekday) {
+                    return None;
+                }
+                schedule.week_start = Some(weekday);
+            }
+            "COUNT" => schedule.count = Some(parse_positive_integer(raw)?),
+            "UNTIL" => schedule.until = Some(parse_rrule_until(raw)?),
+            "X-MINDWTR-SERIES-ID" => {}
+            _ => return None,
+        }
+    }
+    if schedule.rule.is_empty() || !compatible_recurrence_schedule(&schedule) {
+        return None;
+    }
+    Some(schedule)
+}
+
+fn parse_positive_integer(value: &str) -> Option<i64> {
+    if value.starts_with('0') || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    value
+        .parse::<i64>()
+        .ok()
+        .filter(|value| (1..=9_007_199_254_740_991).contains(value))
+}
+
+fn parse_rrule_until(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    if bytes.len() == 8 && bytes.iter().all(u8::is_ascii_digit) {
+        let canonical = format!("{}-{}-{}", &value[..4], &value[4..6], &value[6..]);
+        return valid_iso_date(&canonical).then_some(canonical);
+    }
+    if !matches!(bytes.len(), 13..=16)
+        || !bytes[..8].iter().all(u8::is_ascii_digit)
+        || !bytes[8].eq_ignore_ascii_case(&b'T')
+        || !bytes[9..13].iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    let has_utc = bytes
+        .last()
+        .is_some_and(|byte| byte.eq_ignore_ascii_case(&b'Z'));
+    let value_end = bytes.len() - usize::from(has_utc);
+    let second = match value_end {
+        13 => "00",
+        15 if bytes[13..15].iter().all(u8::is_ascii_digit) => &value[13..15],
+        _ => return None,
+    };
+    let canonical = format!(
+        "{}-{}-{}T{}:{}:{}{}",
+        &value[..4],
+        &value[4..6],
+        &value[6..8],
+        &value[9..11],
+        &value[11..13],
+        second,
+        if has_utc { "Z" } else { "" }
+    );
+    valid_recurrence_until(&canonical).then_some(canonical)
+}
+
+fn valid_recurrence_until(value: &str) -> bool {
+    valid_iso_date(value) || valid_iso_datetime(value, false)
+}
+
+fn valid_recurrence_weekday(value: &str) -> bool {
+    matches!(value, "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU")
+}
+
+fn valid_recurrence_by_day(value: &str) -> bool {
+    valid_recurrence_weekday(value)
+        || ["1", "2", "3", "4", "-1"].iter().any(|prefix| {
+            value
+                .strip_prefix(prefix)
+                .is_some_and(valid_recurrence_weekday)
+        })
+}
+
+fn valid_ordinal_recurrence_weekday(value: &str) -> bool {
+    ["1", "2", "3", "4", "-1"].iter().any(|prefix| {
+        value
+            .strip_prefix(prefix)
+            .is_some_and(valid_recurrence_weekday)
+    })
+}
+
+fn valid_checklist(value: &Value) -> bool {
+    value.as_array().is_some_and(|items| {
+        items.iter().all(|item| {
+            let Some(item) = item.as_object() else {
+                return false;
+            };
+            item.len() == 3
+                && item
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| !id.trim().is_empty())
+                && item
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .is_some_and(|title| !title.trim().is_empty())
+                && item.get("isCompleted").is_some_and(Value::is_boolean)
+        })
+    })
+}
+
+fn valid_attachments(value: &Value) -> bool {
+    value.as_array().is_some_and(|attachments| {
+        attachments.iter().all(|attachment| {
+            let Some(attachment) = attachment.as_object() else {
+                return false;
+            };
+            attachment.iter().all(|(key, value)| match key.as_str() {
+                "id" | "title" | "uri" | "createdAt" | "updatedAt" => {
+                    value.as_str().is_some_and(|item| !item.trim().is_empty())
+                }
+                "kind" => value
+                    .as_str()
+                    .is_some_and(|kind| matches!(kind, "file" | "link")),
+                "mimeType" | "deletedAt" | "cloudKey" | "fileHash" => value.is_string(),
+                "size" => value.as_u64().is_some(),
+                "localStatus" => value.as_str().is_some_and(|status| {
+                    matches!(
+                        status,
+                        "available" | "missing" | "uploading" | "downloading"
+                    )
+                }),
+                _ => false,
+            }) && ["id", "kind", "title", "uri", "createdAt", "updatedAt"]
+                .iter()
+                .all(|key| attachment.contains_key(*key))
+        })
+    })
 }
 
 fn validate_task_status(status: &str) -> Result<(), String> {
@@ -1900,6 +2974,17 @@ fn hex_value(value: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn empty_local_api_data() -> Value {
+        json!({
+            "tasks": [],
+            "projects": [],
+            "sections": [],
+            "areas": [],
+            "people": [],
+            "settings": { "deviceId": "device-a" }
+        })
+    }
 
     #[test]
     fn normalizes_default_local_api_port() {
@@ -2079,7 +3164,8 @@ mod tests {
         let mut body = Map::new();
         body.insert("input".to_string(), Value::String("Call Alice".to_string()));
 
-        let task = create_task_from_body(&body, "device-a").expect("task");
+        let task = create_task_from_body(&body, "device-a", &empty_local_api_data())
+            .expect("task");
 
         assert_eq!(task.get("rev").and_then(|value| value.as_i64()), Some(1));
         assert_eq!(
@@ -2139,6 +3225,562 @@ mod tests {
             task.get("recurrence"),
             Some(&json!({ "rule": "daily", "seriesId": "weekly-series" }))
         );
+    }
+
+    #[test]
+    fn local_api_due_date_patch_recomputes_relative_start() {
+        let mut task = json!({
+            "id": "task-1", "title": "Scheduled", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "dueDate": "2026-08-10", "startTime": "2026-08-08",
+            "relativeStartOffset": { "amount": -2, "unit": "day" },
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        })
+        .as_object()
+        .expect("task object")
+        .clone();
+
+        apply_task_patch(
+            &mut task,
+            json!({ "dueDate": "2026-08-20" })
+                .as_object()
+                .expect("patch object"),
+            "device-a",
+        )
+        .expect("due date patch");
+
+        assert_eq!(task["startTime"], "2026-08-18");
+        assert_eq!(
+            task["relativeStartOffset"],
+            json!({ "amount": -2, "unit": "day" })
+        );
+    }
+
+    #[test]
+    fn local_api_manual_start_clears_relative_offset() {
+        let mut task = json!({
+            "id": "task-1", "title": "Scheduled", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "dueDate": "2026-08-20", "startTime": "2026-08-18",
+            "relativeStartOffset": { "amount": -2, "unit": "day" },
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        })
+        .as_object()
+        .expect("task object")
+        .clone();
+
+        apply_task_patch(
+            &mut task,
+            json!({ "startTime": "2026-08-19" })
+                .as_object()
+                .expect("patch object"),
+            "device-a",
+        )
+        .expect("manual start patch");
+
+        assert_eq!(task["startTime"], "2026-08-19");
+        assert!(!task.contains_key("relativeStartOffset"));
+
+        apply_task_patch(
+            &mut task,
+            json!({ "relativeStartOffset": { "amount": -1, "unit": "hour" } })
+                .as_object()
+                .expect("patch object"),
+            "device-a",
+        )
+        .expect("incompatible offset is cleared");
+        assert!(!task.contains_key("relativeStartOffset"));
+        assert_eq!(task["startTime"], "2026-08-19");
+    }
+
+    #[test]
+    fn local_api_patch_rejects_unknown_and_managed_fields() {
+        for patch in [
+            json!({ "surprise": true }),
+            json!({ "id": "replacement-id" }),
+            json!({ "rev": 99 }),
+        ] {
+            let mut patch = patch.as_object().expect("patch object").clone();
+            assert!(sanitize_task_patch_map(&mut patch).is_err());
+        }
+    }
+
+    #[test]
+    fn local_api_patch_rejects_null_or_invalid_required_fields() {
+        for patch in [
+            json!({ "title": null }),
+            json!({ "title": "" }),
+            json!({ "title": "x".repeat(MAX_TASK_TITLE_LENGTH + 1) }),
+            json!({ "status": null }),
+            json!({ "status": 1 }),
+            json!({ "tags": null }),
+            json!({ "tags": ["#valid", 2] }),
+            json!({ "tags": ["   "] }),
+            json!({ "tags": ["x".repeat(MAX_TASK_TOKEN_LENGTH + 1)] }),
+            json!({ "contexts": "@home" }),
+            json!({ "contexts": ["\t"] }),
+            json!({ "isFocusedToday": null }),
+            json!({ "showFutureRecurrence": null }),
+            json!({ "suppressMindwtrReminders": null }),
+        ] {
+            let mut patch = patch.as_object().expect("patch object").clone();
+            assert!(sanitize_task_patch_map(&mut patch).is_err(), "{patch:?}");
+        }
+    }
+
+    #[test]
+    fn local_api_patch_validates_optional_field_types() {
+        for patch in [
+            json!({ "isFocusedToday": "yes" }),
+            json!({ "timeSpentMinutes": 1.5 }),
+            json!({ "order": "first" }),
+            json!({ "order": 2.5 }),
+            json!({ "orderNum": -1.5 }),
+            json!({ "boardOrder": 0.25 }),
+            json!({ "focusOrder": 3.75 }),
+            json!({ "checklist": {} }),
+            json!({ "attachments": "file" }),
+            json!({ "relativeStartOffset": [] }),
+            json!({ "recurrence": [] }),
+            json!({ "timeEstimate": "45min" }),
+            json!({ "timeEstimate": "custom:" }),
+            json!({ "timeEstimate": "custom:0" }),
+            json!({ "timeEstimate": "custom:-1" }),
+            json!({ "timeEstimate": "custom:NaN" }),
+            json!({ "timeEstimate": "custom:inf" }),
+            json!({ "checklist": [{ "title": "Missing id", "isCompleted": false }] }),
+            json!({ "attachments": [{ "id": "attachment-1", "kind": "file" }] }),
+            json!({ "recurrence": { "rule": "daily", "strategy": 1 } }),
+        ] {
+            let mut patch = patch.as_object().expect("patch object").clone();
+            assert!(sanitize_task_patch_map(&mut patch).is_err(), "{patch:?}");
+        }
+
+        let mut valid = json!({
+            "title": "Validated",
+            "status": "next",
+            "tags": [" #home ", "x".repeat(MAX_TASK_TOKEN_LENGTH)],
+            "contexts": [" @desk "],
+            "isFocusedToday": true,
+            "timeSpentMinutes": 10,
+            "order": 2.0,
+            "orderNum": -1,
+            "boardOrder": 0,
+            "focusOrder": 3,
+            "checklist": [{ "id": "item-1", "title": "Item" }],
+            "attachments": [],
+            "relativeStartOffset": { "amount": -1, "unit": "day" },
+            "recurrence": { "rule": "daily" },
+            "timeEstimate": "custom:42.5",
+            "description": null
+        })
+        .as_object()
+        .expect("patch object")
+        .clone();
+        sanitize_task_patch_map(&mut valid).expect("valid patch");
+        assert_eq!(valid["tags"][0], "#home");
+        assert_eq!(valid["contexts"][0], "@desk");
+        assert_eq!(valid["checklist"][0]["isCompleted"], false);
+
+        for estimate in ["5min", "4hr+", "custom:1", "custom:15"] {
+            assert!(valid_time_estimate(&Value::String(estimate.to_string())));
+        }
+    }
+
+    #[test]
+    fn local_api_patch_rejects_generic_status_transitions() {
+        let mut task = json!({
+            "id": "task-1", "title": "Lifecycle", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-07-31T10:00:00Z", "updatedAt": "2026-07-31T10:00:00Z"
+        })
+        .as_object()
+        .expect("task object")
+        .clone();
+        let original = task.clone();
+
+        let error = apply_task_patch(
+            &mut task,
+            json!({ "status": "done" })
+                .as_object()
+                .expect("patch object"),
+            "device-a",
+        )
+        .expect_err("status changes require lifecycle actions");
+
+        assert!(error.contains("complete, archive, or restore"));
+        assert_eq!(task, original);
+        assert_eq!(api_error_response(error).status, 400);
+    }
+
+    #[test]
+    fn local_api_patch_validates_canonical_task_dates() {
+        for patch in [
+            json!({ "startTime": "2026-02-30" }),
+            json!({ "dueDate": "2026-01-01T25:00:00Z" }),
+            json!({ "reviewAt": "2026-01-01T12:00:00" }),
+            json!({ "reviewAt": "tomorrow" }),
+        ] {
+            let mut patch = patch.as_object().expect("patch object").clone();
+            assert!(sanitize_task_patch_map(&mut patch).is_err(), "{patch:?}");
+        }
+
+        let mut valid = json!({
+            "startTime": "2024-02-29",
+            "dueDate": "2026-01-01T12:34:56.123+02:30",
+            "reviewAt": null
+        })
+        .as_object()
+        .expect("patch object")
+        .clone();
+        sanitize_task_patch_map(&mut valid).expect("canonical dates");
+    }
+
+    #[test]
+    fn local_api_patch_rejects_invalid_recurrence_until_and_rrule() {
+        for recurrence in [
+            json!({ "rule": "daily", "until": "2026-02-30" }),
+            json!({ "rule": "daily", "until": "eventually" }),
+            json!({ "rule": "daily", "rrule": "anything" }),
+            json!({ "rule": "daily", "rrule": "FREQ=DAILY;BYHOUR=9" }),
+            json!({ "rule": "daily", "rrule": "FREQ=DAILY;FREQ=DAILY" }),
+            json!({ "rule": "daily", "rrule": "FREQ=DAILY;INTERVAL=0" }),
+            json!({ "rule": "daily", "rrule": "FREQ=DAILY;UNTIL=20260230" }),
+        ] {
+            assert!(!valid_recurrence(&recurrence), "{recurrence:?}");
+        }
+
+        assert!(valid_recurrence(&json!({
+            "rule": "daily",
+            "until": "2026-12-31T23:59:59Z",
+            "rrule": "FREQ=DAILY;UNTIL=20261231T235959Z"
+        })));
+    }
+
+    #[test]
+    fn local_api_patch_rejects_incompatible_recurrence_combinations() {
+        for recurrence in [
+            json!({ "rule": "weekly", "byMonthDay": [1] }),
+            json!({ "rule": "weekly", "byDay": ["1MO"] }),
+            json!({ "rule": "monthly", "byDay": ["MO"] }),
+            json!({ "rule": "monthly", "byDay": ["1MO"], "byMonthDay": [1] }),
+            json!({ "rule": "monthly", "weekStart": "MO" }),
+            json!({ "rule": "daily", "byDay": ["MO"] }),
+            json!({ "rule": "weekly", "rrule": "FREQ=DAILY" }),
+            json!({ "rule": "weekly", "byDay": ["TU"], "rrule": "FREQ=WEEKLY;BYDAY=MO" }),
+        ] {
+            assert!(!valid_recurrence(&recurrence), "{recurrence:?}");
+        }
+
+        for recurrence in [
+            json!({ "rule": "weekly", "byDay": ["MO", "WE"], "weekStart": "MO" }),
+            json!({ "rule": "monthly", "byDay": ["-1FR"] }),
+            json!({ "rule": "monthly", "byMonthDay": [1, 15] }),
+            json!({
+                "rule": "daily",
+                "until": "2026-01-01T01:00:00+01:00",
+                "rrule": "FREQ=DAILY;UNTIL=20260101T000000Z"
+            }),
+        ] {
+            assert!(valid_recurrence(&recurrence), "{recurrence:?}");
+        }
+    }
+
+    #[test]
+    fn local_api_create_rejects_invalid_shapes_and_defaults_required_arrays() {
+        let data = empty_local_api_data();
+        for body in [
+            json!({ "input": "Task", "props": "invalid" }),
+            json!({ "input": "Task", "unexpected": true }),
+            json!({ "input": "Task", "props": { "id": "managed" } }),
+            json!({ "input": "Task", "props": { "title": "ignored" } }),
+            json!({ "title": "x".repeat(MAX_TASK_TITLE_LENGTH + 1) }),
+        ] {
+            assert!(
+                create_task_from_body(body.as_object().expect("body"), "device-a", &data)
+                    .is_err(),
+                "{body:?}"
+            );
+        }
+
+        let task = create_task_from_body(
+            json!({ "input": "Task", "props": { "description": null } })
+                .as_object()
+                .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("valid task");
+        assert_eq!(task.get("tags"), Some(&json!([])));
+        assert_eq!(task.get("contexts"), Some(&json!([])));
+        assert!(!task.contains_key("description"));
+
+        let boundary_title = "x".repeat(MAX_TASK_TITLE_LENGTH);
+        let task = create_task_from_body(
+            json!({ "title": boundary_title })
+                .as_object()
+                .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("maximum-length title");
+        assert_eq!(task["title"].as_str(), Some(boundary_title.as_str()));
+    }
+
+    #[test]
+    fn local_api_create_resolves_and_validates_container_hierarchy() {
+        let data = json!({
+            "tasks": [],
+            "projects": [
+                { "id": "project-1", "status": "active" },
+                { "id": "project-2", "status": "active" }
+            ],
+            "sections": [
+                { "id": "section-1", "projectId": "project-1" }
+            ],
+            "areas": [{ "id": "area-1" }],
+            "settings": { "deviceId": "device-a" }
+        });
+
+        let task = create_task_from_body(
+            json!({
+                "input": "Section task",
+                "props": { "sectionId": " section-1 ", "areaId": "area-1" }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("valid section assignment");
+        assert_eq!(task["projectId"], "project-1");
+        assert_eq!(task["sectionId"], "section-1");
+        assert!(!task.contains_key("areaId"));
+
+        for props in [
+            json!({ "projectId": "missing-project" }),
+            json!({ "sectionId": "missing-section" }),
+            json!({ "areaId": "missing-area" }),
+            json!({ "projectId": "project-2", "sectionId": "section-1" }),
+        ] {
+            let body = json!({ "input": "Invalid container", "props": props });
+            assert!(
+                create_task_from_body(body.as_object().expect("body"), "device-a", &data)
+                    .is_err(),
+                "{body:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn local_api_create_promotes_implicit_inbox_with_start_but_honors_explicit_status() {
+        let data = empty_local_api_data();
+        let implicit = create_task_from_body(
+            json!({ "input": "Scheduled", "props": { "startTime": "2026-08-01" } })
+                .as_object()
+                .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("implicit status task");
+        assert_eq!(implicit["status"], "next");
+
+        let explicit = create_task_from_body(
+            json!({
+                "input": "Explicit inbox",
+                "props": { "status": "inbox", "startTime": "2026-08-01" }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("explicit status task");
+        assert_eq!(explicit["status"], "inbox");
+    }
+
+    #[test]
+    fn local_api_create_canonicalizes_reference_tasks() {
+        let data = empty_local_api_data();
+        let task = create_task_from_body(
+            json!({
+                "input": "Reference",
+                "props": {
+                    "status": "reference",
+                    "startTime": "2026-08-01",
+                    "dueDate": "2026-08-02",
+                    "relativeStartOffset": { "amount": -1, "unit": "day" },
+                    "reviewAt": "2026-08-03",
+                    "recurrence": { "rule": "daily" },
+                    "priority": "high",
+                    "timeEstimate": "30min",
+                    "suppressMindwtrReminders": true,
+                    "repeatReminderMinutes": 15,
+                    "showFutureRecurrence": true,
+                    "isFocusedToday": true,
+                    "focusOrder": 2,
+                    "boardOrder": 4,
+                    "pushCount": 3
+                }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &data,
+        )
+        .expect("reference task");
+
+        assert_eq!(task["status"], "reference");
+        assert_eq!(task["isFocusedToday"], false);
+        assert_eq!(task["pushCount"], 0);
+        for field in [
+            "startTime",
+            "dueDate",
+            "relativeStartOffset",
+            "reviewAt",
+            "recurrence",
+            "priority",
+            "timeEstimate",
+            "suppressMindwtrReminders",
+            "repeatReminderMinutes",
+            "showFutureRecurrence",
+            "focusOrder",
+            "boardOrder",
+        ] {
+            assert!(!task.contains_key(field), "{field}");
+        }
+    }
+
+    #[test]
+    fn local_api_create_applies_focus_eligibility_and_limit() {
+        let eligible = create_task_from_body(
+            json!({ "input": "Focus me", "props": { "isFocusedToday": true } })
+                .as_object()
+                .expect("body"),
+            "device-a",
+            &empty_local_api_data(),
+        )
+        .expect("eligible focus task");
+        assert_eq!(eligible["status"], "next");
+        assert_eq!(eligible["isFocusedToday"], true);
+
+        let cap_full = json!({
+            "tasks": [{
+                "id": "focused",
+                "status": "next",
+                "isFocusedToday": true
+            }],
+            "projects": [],
+            "sections": [],
+            "areas": [],
+            "settings": {
+                "deviceId": "device-a",
+                "gtd": { "focusTaskLimit": 1 }
+            }
+        });
+        let refused = create_task_from_body(
+            json!({
+                "input": "Cap refused",
+                "props": { "status": "inbox", "isFocusedToday": true }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &cap_full,
+        )
+        .expect("refused focus task remains valid");
+        assert_eq!(refused["status"], "inbox");
+        assert_eq!(refused["isFocusedToday"], false);
+    }
+
+    #[test]
+    fn local_api_create_rejects_ineligible_focus_without_reclassifying() {
+        let future = create_task_from_body(
+            json!({
+                "input": "Future",
+                "props": {
+                    "status": "inbox",
+                    "startTime": "9999-12-31",
+                    "isFocusedToday": true
+                }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &empty_local_api_data(),
+        )
+        .expect("future task");
+        assert_eq!(future["status"], "inbox");
+        assert_eq!(future["isFocusedToday"], false);
+
+        let sequential = json!({
+            "tasks": [{
+                "id": "first",
+                "title": "First",
+                "status": "next",
+                "projectId": "project-1",
+                "createdAt": "2020-01-01T00:00:00Z"
+            }],
+            "projects": [{
+                "id": "project-1",
+                "status": "active",
+                "isSequential": true
+            }],
+            "sections": [],
+            "areas": [],
+            "settings": { "deviceId": "device-a" }
+        });
+        let blocked = create_task_from_body(
+            json!({
+                "input": "Later",
+                "props": {
+                    "status": "next",
+                    "projectId": "project-1",
+                    "isFocusedToday": true
+                }
+            })
+            .as_object()
+            .expect("body"),
+            "device-a",
+            &sequential,
+        )
+        .expect("sequential task");
+        assert_eq!(blocked["status"], "next");
+        assert_eq!(blocked["isFocusedToday"], false);
+    }
+
+    #[test]
+    fn unsupported_local_api_fields_are_bad_requests() {
+        assert_eq!(
+            api_error_response("Unsupported task field: unknown".to_string()).status,
+            400
+        );
+    }
+
+    #[test]
+    fn local_api_patch_allowlist_matches_task_sync_schema() {
+        let schema: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/task-sync-schema.fixture.json"
+        ))
+        .expect("valid task schema fixture");
+        let fixture = schema["fixture"].as_object().expect("fixture object");
+        for field in schema["fields"].as_array().expect("schema fields") {
+            let name = field["name"].as_str().expect("field name");
+            let cloud_write = field["cloudWrite"].as_str().expect("cloud write mode");
+            let mut patch = Map::from_iter([(
+                name.to_string(),
+                fixture
+                    .get(name)
+                    .cloned()
+                    .expect("fixture covers every field"),
+            )]);
+            let writable = matches!(cloud_write, "create-patch" | "patch");
+            assert_eq!(
+                sanitize_task_patch_map(&mut patch).is_ok(),
+                writable,
+                "Local API write parity for {name}"
+            );
+        }
     }
 
     fn comparable_local_api_recurring_task(task: Option<Map<String, Value>>) -> Value {

@@ -90,6 +90,33 @@ describe('useAiSettings speech provider changes', () => {
         coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
     });
 
+    it('loads provider keys only after the AI page becomes active', async () => {
+        const settings: AppData['settings'] = {
+            ai: { provider: 'gemini', speechToText: { provider: 'openai' } },
+        };
+
+        function Probe({ enabled }: { enabled: boolean }) {
+            useAiSettings({
+                isTauri: false,
+                settings,
+                updateSettings: vi.fn(async () => undefined),
+                showSaved: vi.fn(),
+                enabled,
+            });
+            return null;
+        }
+
+        const view = render(<Probe enabled={false} />);
+        expect(aiConfigMocks.loadAIKey).not.toHaveBeenCalled();
+
+        view.rerender(<Probe enabled />);
+
+        await waitFor(() => {
+            expect(aiConfigMocks.loadAIKey).toHaveBeenCalledWith('gemini');
+            expect(aiConfigMocks.loadAIKey).toHaveBeenCalledWith('openai');
+        });
+    });
+
     it('does not reuse a Whisper model file path when switching to Parakeet', () => {
         let result: HookResult | null = null;
         const updateSettings = vi.fn(async () => undefined);
@@ -467,6 +494,23 @@ describe('useAiSettings live model lists', () => {
         expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith('openai', {
             apiKey: '',
             baseUrl: 'http://localhost:9000/v1',
+            kind: 'transcription',
+        });
+    });
+
+    it('requests Gemini speech models with the transcription capability', async () => {
+        aiConfigMocks.loadAIKey.mockResolvedValue('g-key');
+
+        await renderOptions({
+            ai: {
+                provider: 'gemini',
+                speechToText: { provider: 'gemini' },
+            },
+        });
+
+        expect(coreMocks.fetchProviderModelsCached).toHaveBeenCalledWith('gemini', {
+            apiKey: 'g-key',
+            baseUrl: '',
             kind: 'transcription',
         });
     });

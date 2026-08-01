@@ -35,7 +35,7 @@ import {
     type ParsedTodoistProject,
     type TodoistImportParseResult,
 } from './todoist-import';
-import type { AppData } from './types';
+import type { AppData, Attachment } from './types';
 
 export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'omnifocus' | 'ticktick' | 'todoist';
 export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup' | 'backup-merge'>;
@@ -107,6 +107,14 @@ const toBackupCountExtra = (data: AppData): Record<string, string> => ({
     areas: String(data.areas.filter((area) => !area.deletedAt).length),
 });
 
+const filterAdditiveBackupAttachments = (
+    incoming: Attachment[] | undefined,
+    current: Attachment[] | undefined,
+): Attachment[] | undefined => {
+    const locallyDeletedIds = new Set(current?.filter((item) => item.deletedAt).map((item) => item.id));
+    return incoming?.filter((item) => !item.deletedAt && !locallyDeletedIds.has(item.id));
+};
+
 // `resolvedUsingIncoming` counts every record the backup supplied, records this device had
 // never seen included, so the records that were genuinely *changed* are what's left once the
 // additions come out. Both shells report merge results through this, so the arithmetic can't
@@ -144,9 +152,9 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         countExtra: toBackupCountExtra,
     },
     // Same file, opposite intent: restore replaces local data and deliberately outranks local
-    // tombstones (prepareRestoredBackupDataForSync stamps fresh revisions), while a merge is
-    // plain sync semantics — newer wins, local-only records stay, and a task deleted locally
-    // stays deleted even if the backup still holds a live copy. Never rev-stamp here.
+    // tombstones (prepareRestoredBackupDataForSync stamps fresh revisions), while merge is
+    // additive. Incoming entity/attachment tombstones are ignored, local tombstones still
+    // participate in the ordinary merge, and live incoming records retain newer-wins semantics.
     'backup-merge': {
         operation: 'mergeBackup',
         source: 'backup-merge',
@@ -154,7 +162,48 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
         completeLabel: 'Backup merge complete',
         parse: parseBackupInput,
         apply: (currentData, parsed) => {
-            const merge = mergeAppDataWithStats(currentData, parsed);
+            const currentTasksById = new Map(currentData.tasks.map((item) => [item.id, item]));
+            const currentProjectsById = new Map(currentData.projects.map((item) => [item.id, item]));
+            const currentSectionsById = new Map(currentData.sections.map((item) => [item.id, item]));
+            const currentAreasById = new Map(currentData.areas.map((item) => [item.id, item]));
+            const currentPeopleById = new Map((currentData.people ?? []).map((item) => [item.id, item]));
+            const additiveBackup: AppData = {
+                ...parsed,
+                tasks: parsed.tasks
+                    .filter((item) => {
+                        const current = currentTasksById.get(item.id);
+                        return !item.deletedAt && !item.purgedAt && !current?.deletedAt && !current?.purgedAt;
+                    })
+                    .map((item) => ({
+                        ...item,
+                        attachments: filterAdditiveBackupAttachments(
+                            item.attachments,
+                            currentTasksById.get(item.id)?.attachments,
+                        ),
+                    })),
+                projects: parsed.projects
+                    .filter((item) => {
+                        const current = currentProjectsById.get(item.id);
+                        return !item.deletedAt && !item.purgedAt && !current?.deletedAt && !current?.purgedAt;
+                    })
+                    .map((item) => ({
+                        ...item,
+                        attachments: filterAdditiveBackupAttachments(
+                            item.attachments,
+                            currentProjectsById.get(item.id)?.attachments,
+                        ),
+                    })),
+                sections: parsed.sections.filter((item) => (
+                    !item.deletedAt && !currentSectionsById.get(item.id)?.deletedAt
+                )),
+                areas: parsed.areas.filter((item) => (
+                    !item.deletedAt && !currentAreasById.get(item.id)?.deletedAt
+                )),
+                people: parsed.people?.filter((item) => (
+                    !item.deletedAt && !currentPeopleById.get(item.id)?.deletedAt
+                )),
+            };
+            const merge = mergeAppDataWithStats(currentData, additiveBackup);
             return { data: merge.data, result: merge };
         },
         countExtra: (result) => ({

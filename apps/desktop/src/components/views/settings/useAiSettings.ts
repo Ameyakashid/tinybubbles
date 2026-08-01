@@ -219,7 +219,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         return () => {
             active = false;
         };
-    }, [aiProvider]);
+    }, [aiProvider, enabled]);
 
     useEffect(() => {
         let active = true;
@@ -245,7 +245,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         return () => {
             active = false;
         };
-    }, [speechProvider]);
+    }, [enabled, speechProvider]);
 
     // Live assistant/copilot model list (#986). The keys above arrive
     // asynchronously, so this reruns once aiApiKey lands. Any failure keeps the
@@ -286,8 +286,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
             fetchProviderModelsCached(speechProvider, {
                 apiKey,
                 baseUrl,
-                // Gemini transcribes with its regular generateContent models.
-                kind: speechProvider === 'openai' ? 'transcription' : 'chat',
+                kind: 'transcription',
             })
                 .then((models) => {
                     if (!cancelled) setFetchedSpeechModels(models);

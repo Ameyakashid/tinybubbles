@@ -1280,9 +1280,11 @@ describe('Sync Logic', () => {
                 title: '(deleted)',
                 deletedAt: localTask.purgedAt,
                 purgedAt: localTask.purgedAt,
+                rev: 8,
+                revBy: SYNC_REPAIR_REV_BY,
             });
-            expect(result.stats.tasks.conflicts).toBe(1);
-            expect(result.stats.tasks.conflictIds).toEqual(['1']);
+            expect(result.stats.tasks.conflicts).toBe(0);
+            expect(result.stats.tasks.conflictIds).toEqual([]);
         });
 
         it('does not count conflict when stale recurrence preview flag differs on non-recurring task', () => {

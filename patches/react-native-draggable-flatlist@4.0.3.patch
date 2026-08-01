@@ -1,6 +1,3 @@
-diff --git a/node_modules/react-native-draggable-flatlist/.bun-tag-6d440f704aab95d2 b/.bun-tag-6d440f704aab95d2
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/src/components/CellRendererComponent.tsx b/src/components/CellRendererComponent.tsx
 index e4e861a6663ae59838af08c965ab6782fc41f8b0..44bb09da4ffd9ab287f8c6f6a5d8550dde3b83b1 100644
 --- a/src/components/CellRendererComponent.tsx

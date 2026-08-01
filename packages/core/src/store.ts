@@ -609,6 +609,7 @@ export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelec
             debouncedSave,
             flushPendingSave,
             hasPendingSaveWork,
+            getSaveGeneration: () => pendingVersion,
             getStorage: () => storage,
         }),
         ...createTaskActions({

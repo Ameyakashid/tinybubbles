@@ -268,7 +268,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     settings,
     updateSettings,
     showSaved,
-    enabled: true,
+    enabled: page === "ai",
   });
   const selectSyncFolderTitle = useMemo(() => {
     return translateWithFallback(translate, "settings.selectSyncFolderTitle", "Select sync folder");

@@ -209,6 +209,32 @@ describe('runSharedSyncCycle', () => {
         expect(harness.diagnostics).toEqual(expect.arrayContaining(['flush', 'merge-complete']));
     });
 
+    it('applies and publishes the canonical snapshot returned by local persistence', async () => {
+        const concurrentTask = createTask('t-concurrent', 'Concurrent local task');
+        const applyDataToStore = vi.fn();
+        const { harness, hooks, run } = createHarness({
+            storage: {
+                persistLocal: vi.fn(async (data: AppData) => (
+                    data.tasks.some((task) => task.id === concurrentTask.id)
+                        ? data
+                        : { ...data, tasks: [...data.tasks, concurrentTask] }
+                )),
+                applyDataToStore,
+            },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(harness.remote?.tasks.some((task) => task.id === concurrentTask.id)).toBe(true);
+        expect(applyDataToStore).toHaveBeenCalledWith(expect.objectContaining({
+            tasks: expect.arrayContaining([expect.objectContaining({ id: concurrentTask.id })]),
+        }));
+        expect(hooks.finalizeSuccess).toHaveBeenCalledWith(expect.objectContaining({
+            tasks: expect.arrayContaining([expect.objectContaining({ id: concurrentTask.id })]),
+        }), expect.anything());
+    });
+
     it('skips the second run as unchanged via the recorded fast-sync state', async () => {
         const { harness, io, run } = createHarness({ fastSyncScope: 'scope-1' });
 
