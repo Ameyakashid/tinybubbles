@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Project } from '@mindwtr/core';
+import { getProjectChoiceState, type Project } from '@mindwtr/core';
 import { ChevronDown, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModalPortal } from '../ModalPortal';
@@ -21,11 +21,6 @@ interface ProjectSelectorProps {
     controlClassName?: string;
     menuClassName?: string;
 }
-
-const isSelectableProject = (project: Project): boolean => {
-    const status = String(project.status);
-    return !project.deletedAt && status !== 'archived' && status !== 'completed';
-};
 
 export function ProjectSelector({
     projects,
@@ -56,25 +51,10 @@ export function ProjectSelector({
     });
 
     const normalizedQuery = query.trim().toLowerCase();
-    const selectableProjects = useMemo(
-        () => projects.filter(isSelectableProject),
-        [projects]
+    const { filteredProjects: filtered, canCreate } = useMemo(
+        () => getProjectChoiceState(projects, query, projectPool),
+        [projectPool, projects, query],
     );
-    // The browse list stays scoped to the caller's area, but searching must reach every
-    // project — picking one clears the area anyway, so out-of-area projects are alternatives.
-    const searchableProjects = useMemo(
-        () => projectPool.filter(isSelectableProject),
-        [projectPool]
-    );
-    const filtered = useMemo(() => {
-        if (!normalizedQuery) return selectableProjects;
-        return searchableProjects.filter((project) => project.title.toLowerCase().includes(normalizedQuery));
-    }, [searchableProjects, selectableProjects, normalizedQuery]);
-
-    const hasExactMatch = useMemo(() => {
-        if (!normalizedQuery) return false;
-        return projectPool.some((project) => project.title.toLowerCase() === normalizedQuery);
-    }, [normalizedQuery, projectPool]);
 
     useEffect(() => {
         if (!open) return;
@@ -153,7 +133,7 @@ export function ProjectSelector({
             return;
         }
 
-        if (!hasExactMatch && onCreateProject) {
+        if (canCreate && onCreateProject) {
             event.preventDefault();
             void handleCreate();
         }
@@ -221,7 +201,7 @@ export function ProjectSelector({
                             >
                                 {noProjectLabel}
                             </button>
-                            {!hasExactMatch && query.trim() && onCreateProject && (
+                            {canCreate && onCreateProject && (
                                 <button
                                     type="button"
                                     data-selector-option="true"

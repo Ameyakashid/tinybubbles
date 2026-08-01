@@ -5,6 +5,7 @@ import {
     getSequentialProjectTaskCues,
     getProjectNextActionCandidates,
     getProjectNextActionPromptData,
+    getProjectChoiceState,
     getProjectsByArea,
     getProjectsByTag,
     isTaskInActiveProject,
@@ -247,6 +248,35 @@ describe('project-utils', () => {
         ];
         expect(filterProjectsBySelectedArea(pickerProjects).map((p) => p.id)).toEqual(['p1', 'p2', 'p3', 'p4']);
         expect(filterProjectsBySelectedArea(pickerProjects, 'a1').map((p) => p.id)).toEqual(['p1', 'p2']);
+    });
+
+    it('derives assignable Container project choices for browse, search, exact match, and creation', () => {
+        const archivedExact: Project = {
+            id: 'archived-exact', title: 'Old Home', status: 'archived', tagIds: [], areaId: 'a2', createdAt: '', updatedAt: '',
+        };
+        const completed: Project = {
+            id: 'completed', title: 'Completed Home', status: 'completed' as Project['status'], tagIds: [], areaId: 'a2', createdAt: '', updatedAt: '',
+        };
+        const allProjects = [...projects, archivedExact, completed];
+
+        const browse = getProjectChoiceState(projects.filter((project) => project.areaId === 'a1'), '', allProjects);
+        expect(browse.filteredProjects.map((project) => project.id)).toEqual(['p1', 'p2']);
+        expect(browse.exactMatch).toBeUndefined();
+        expect(browse.canCreate).toBe(false);
+
+        const search = getProjectChoiceState(projects.filter((project) => project.areaId === 'a1'), ' gam ', allProjects);
+        expect(search.filteredProjects.map((project) => project.id)).toEqual(['p3']);
+        expect(search.exactMatch).toBeUndefined();
+        expect(search.canCreate).toBe(true);
+
+        const exact = getProjectChoiceState([], ' gamma ', allProjects);
+        expect(exact.exactMatch?.id).toBe('p3');
+        expect(exact.canCreate).toBe(false);
+
+        const archived = getProjectChoiceState([], 'old home', allProjects);
+        expect(archived.filteredProjects).toEqual([]);
+        expect(archived.exactMatch).toBeUndefined();
+        expect(archived.canCreate).toBe(true);
     });
 
     it('marks archived and legacy completed projects as unavailable for task assignment', () => {

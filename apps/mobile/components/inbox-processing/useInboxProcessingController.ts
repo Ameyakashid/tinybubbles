@@ -16,6 +16,7 @@ import {
   createAIProvider,
   filterProjectsBySelectedArea,
   formatAIErrorAlertBody,
+  getProjectChoiceState,
   getProcessInboxCurrentCandidate,
   getProcessInboxRemainingCandidates,
   hasTimeComponent,
@@ -321,20 +322,11 @@ export function useInboxProcessingController({
     () => filterProjectsBySelectedArea(projects, projectFilterAreaId),
     [projects, projectFilterAreaId],
   );
-  // The browse list stays scoped to the selected area, but searching must reach every
-  // project — picking one clears the area anyway, so out-of-area projects are alternatives.
-  const selectableProjects = useMemo(() => filterProjectsBySelectedArea(projects, undefined), [projects]);
-  const filteredProjects = useMemo(() => {
-    if (!projectSearch.trim()) return areaFilteredProjects;
-    const query = projectSearch.trim().toLowerCase();
-    return selectableProjects.filter((project) => project.title.toLowerCase().includes(query));
-  }, [areaFilteredProjects, projectSearch, selectableProjects]);
-
-  const hasExactProjectMatch = useMemo(() => {
-    if (!projectSearch.trim()) return false;
-    const query = projectSearch.trim().toLowerCase();
-    return selectableProjects.some((project) => project.title.toLowerCase() === query);
-  }, [projectSearch, selectableProjects]);
+  const { filteredProjects, exactMatch: exactProjectMatch } = useMemo(
+    () => getProjectChoiceState(areaFilteredProjects, projectSearch, projects),
+    [areaFilteredProjects, projectSearch, projects],
+  );
+  const hasExactProjectMatch = Boolean(exactProjectMatch);
 
   const currentProject = useMemo(
     () => (selectedProjectId ? projects.find((project) => project.id === selectedProjectId) ?? null : null),
@@ -799,9 +791,8 @@ export function useInboxProcessingController({
   const handleCreateProjectEarly = useCallback(async () => {
     const title = projectSearch.trim();
     if (!title) return;
-    const existing = areaFilteredProjects.find((project) => project.title.toLowerCase() === title.toLowerCase());
-    if (existing) {
-      selectProjectEarly(existing.id);
+    if (exactProjectMatch) {
+      selectProjectEarly(exactProjectMatch.id);
       return;
     }
     const created = await addProject(
@@ -811,7 +802,7 @@ export function useInboxProcessingController({
     );
     if (!created) return;
     selectProjectEarly(created.id);
-  }, [addProject, areaFilteredProjects, projectFilterAreaId, projectSearch, selectProjectEarly]);
+  }, [addProject, exactProjectMatch, projectFilterAreaId, projectSearch, selectProjectEarly]);
 
   const handleProjectConversionStart = useCallback(() => {
     const baseTitle = processingTitle.trim() || currentTask?.title || '';

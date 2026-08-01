@@ -5,6 +5,7 @@ import {
     getFrequentTaskTokens,
     getRecentTaskTokens,
     filterProjectsBySelectedArea,
+    getProjectChoiceState,
     isTaskInActiveProject,
     normalizeClockTimeInput,
     openProcessInboxTask,
@@ -196,20 +197,15 @@ export function useInboxProcessingState({
     const stepHistory = processingSession.stepHistory;
     const skippedIds = processingSession.skippedTaskIds;
 
-    const filteredProjects = useMemo(() => {
-        if (!projectSearch.trim()) return filterProjectsBySelectedArea(projects, draft.areaId || undefined);
-        // Typing searches every selectable project, not just the selected
-        // area's — picking one clears the direct area anyway (#987).
-        const query = projectSearch.trim().toLowerCase();
-        return filterProjectsBySelectedArea(projects, undefined)
-            .filter((project) => project.title.toLowerCase().includes(query));
-    }, [draft.areaId, projects, projectSearch]);
-
-    const hasExactProjectMatch = useMemo(() => {
-        if (!projectSearch.trim()) return false;
-        const query = projectSearch.trim().toLowerCase();
-        return projects.some((project) => project.title.toLowerCase() === query);
-    }, [projects, projectSearch]);
+    const { filteredProjects, exactMatch: exactProjectMatch } = useMemo(
+        () => getProjectChoiceState(
+            filterProjectsBySelectedArea(projects, draft.areaId || undefined),
+            projectSearch,
+            projects,
+        ),
+        [draft.areaId, projects, projectSearch],
+    );
+    const hasExactProjectMatch = Boolean(exactProjectMatch);
 
     const activeAreas = useMemo(
         () => areas.filter((area) => !area.deletedAt).sort((a, b) => a.order - b.order),

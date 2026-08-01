@@ -244,6 +244,33 @@ export function filterProjectsBySelectedArea(projects: Project[], selectedAreaId
     });
 }
 
+export type ProjectChoiceState = {
+    filteredProjects: Project[];
+    exactMatch?: Project;
+    canCreate: boolean;
+};
+
+export function getProjectChoiceState(
+    browseProjects: readonly Project[],
+    query: string,
+    searchProjects: readonly Project[] = browseProjects,
+): ProjectChoiceState {
+    const normalizedQuery = query.trim().toLowerCase();
+    const selectableBrowseProjects = browseProjects.filter(isSelectableProjectForTaskAssignment);
+    if (!normalizedQuery) {
+        return { filteredProjects: selectableBrowseProjects, canCreate: false };
+    }
+
+    const selectableSearchProjects = searchProjects.filter(isSelectableProjectForTaskAssignment);
+    const normalizedTitle = (project: Project) => project.title.trim().toLowerCase();
+    const exactMatch = selectableSearchProjects.find((project) => normalizedTitle(project) === normalizedQuery);
+    return {
+        filteredProjects: selectableSearchProjects.filter((project) => normalizedTitle(project).includes(normalizedQuery)),
+        exactMatch,
+        canCreate: !exactMatch,
+    };
+}
+
 export const getProjectsByTag = (projects: Project[], tagId: string): Project[] => {
     return projects
         .filter(p => !p.deletedAt && (p.tagIds || []).includes(tagId))

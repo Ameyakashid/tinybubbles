@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { isSelectableProjectForTaskAssignment, type Project } from '@mindwtr/core';
+import { getProjectChoiceState, type Project } from '@mindwtr/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { styles } from './task-edit-modal.styles';
 import { logError } from '../../lib/app-log';
@@ -61,41 +61,23 @@ export function TaskEditProjectPicker({
         if (visible) setProjectQuery('');
     }, [visible]);
 
-    const activeProjects = useMemo(() => {
-        return projects.filter(isSelectableProjectForTaskAssignment).sort(byOrder);
-    }, [projects]);
-    const allActiveProjects = useMemo(() => {
-        return (allProjects ?? projects).filter((project) => !project.deletedAt).sort(byOrder);
-    }, [allProjects, projects]);
-    // The browse list stays scoped to the caller's area, but searching must reach every
-    // project — picking one clears the area anyway, so out-of-area projects are alternatives.
-    const searchableProjects = useMemo(() => {
-        return (allProjects ?? projects).filter(isSelectableProjectForTaskAssignment).sort(byOrder);
-    }, [allProjects, projects]);
-
     const normalizedProjectQuery = projectQuery.trim().toLowerCase();
-    const filteredProjects = useMemo(() => {
-        if (!normalizedProjectQuery) return activeProjects;
-        return searchableProjects.filter((project) =>
-            project.title.toLowerCase().includes(normalizedProjectQuery)
-        );
-    }, [activeProjects, searchableProjects, normalizedProjectQuery]);
-
-    const hasExactProjectMatch = useMemo(() => {
-        if (!normalizedProjectQuery) return false;
-        return allActiveProjects.some((project) => project.title.toLowerCase() === normalizedProjectQuery);
-    }, [allActiveProjects, normalizedProjectQuery]);
+    const { filteredProjects, exactMatch, canCreate } = useMemo(
+        () => getProjectChoiceState(
+            [...projects].sort(byOrder),
+            projectQuery,
+            [...(allProjects ?? projects)].sort(byOrder),
+        ),
+        [allProjects, projectQuery, projects],
+    );
 
     const handleCreateProject = async () => {
         if (!allowCreate) return;
         const title = projectQuery.trim();
         if (!title) return;
-        if (hasExactProjectMatch) {
-            const matched = allActiveProjects.find((project) => project.title.toLowerCase() === normalizedProjectQuery);
-            if (matched && isSelectableProjectForTaskAssignment(matched)) {
-                onSelectProject(matched.id);
-                onClose();
-            }
+        if (exactMatch) {
+            onSelectProject(exactMatch.id);
+            onClose();
             return;
         }
         try {
@@ -135,7 +117,7 @@ export function TaskEditProjectPicker({
                         accessibilityLabel={t('taskEdit.projectLabel')}
                         accessibilityHint={t('common.search')}
                     />
-                    {allowCreate && !hasExactProjectMatch && projectQuery.trim() && (
+                    {allowCreate && canCreate && (
                         <Pressable
                             onPress={handleCreateProject}
                             style={styles.pickerItem}
