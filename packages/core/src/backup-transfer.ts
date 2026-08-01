@@ -9,10 +9,9 @@ import {
 } from './tombstone-compaction';
 import {
     isObjectRecord,
-    normalizeAppData,
     validateMergedSyncData,
-    validateSyncPayloadShape,
 } from './sync-normalization';
+import { parseSyncDocument } from './sync-document';
 
 export const BACKUP_FILE_PREFIX = 'mindwtr-backup-';
 
@@ -324,18 +323,18 @@ export const validateBackupJson = (
     }
 
     const envelope = extractBackupEnvelope(parsed);
-    const shapeErrors = validateSyncPayloadShape(envelope.data, 'local');
-    if (shapeErrors.length > 0) {
+    const document = parseSyncDocument(envelope.data, 'local');
+    if (!document.ok) {
         return {
             valid: false,
             data: null,
             metadata: null,
-            errors: shapeErrors,
+            errors: document.errors,
             warnings,
         };
     }
 
-    const normalized = normalizeAppData(envelope.data as AppData);
+    const normalized = document.data;
     const dataErrors = validateMergedSyncData(normalized);
     if (dataErrors.length > 0) {
         return {

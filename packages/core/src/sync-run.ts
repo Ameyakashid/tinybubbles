@@ -19,13 +19,16 @@ import { SyncRemoteWriteConflict } from './sync-run-ports';
 import { LocalSyncAbort, ensureFreshLocalSyncSnapshot, getInMemoryAppDataSnapshot, shouldRunAttachmentCleanup } from './sync-client-helpers';
 import { flushPendingSave, useTaskStore } from './store';
 import {
-    areSyncPayloadsEqual,
     assertNoPendingAttachmentUploads,
-    computeSyncPayloadFingerprint,
     findPendingAttachmentUploads,
     hasPendingSyncSideEffects,
-    sanitizeAppDataForRemote,
 } from './sync-helpers';
+import {
+    areRemoteSyncDocumentsEqual,
+    computeRemoteSyncDocumentFingerprint,
+    parseSyncDocument,
+    toRemoteSyncDocument,
+} from './sync-document';
 import { buildHttpRemoteFileFingerprint } from './webdav';
 import type { RemoteJsonWriteResult } from './webdav';
 import type { CloudJsonWriteResult } from './cloud';
@@ -310,14 +313,14 @@ class SharedSyncRunMachine {
         await this.ensureNetwork();
         try {
             const raw = await this.requireIo().readRemote();
-            // Normalize once, here, at the single point every backend's remote
-            // payload enters the cycle: a backend can hand back a partial
-            // object (e.g. a fresh file-sync folder's synthesized "no remote
-            // yet" payload) missing an AppData array. Downstream code
-            // (sanitizeAppDataForRemote, tombstone checks, the merge itself)
-            // all assume every array is present (#990). A genuinely absent
-            // remote (`raw` null/undefined) stays null — merge-neutral.
-            const data = raw ? normalizeAppData(raw) : null;
+            // A genuinely absent remote stays merge-neutral. Every document
+            // otherwise enters through the shared validation/normalization
+            // seam before code that assumes all AppData arrays are present.
+            const parsed = raw == null ? null : parseSyncDocument(raw, 'remote');
+            if (parsed && !parsed.ok) {
+                throw new Error(`Invalid remote sync payload: ${parsed.errors.slice(0, 3).join('; ')}`);
+            }
+            const data = parsed?.data ?? null;
             if (this.backend === 'webdav') {
                 this.state.webdavRemoteCorrupted = false;
             }
@@ -355,16 +358,18 @@ class SharedSyncRunMachine {
             this.logPendingAttachmentUploads('Remote write blocked by pending attachment uploads', 'remote-write', pending);
             assertNoPendingAttachmentUploads(data);
         }
-        const sanitized = sanitizeAppDataForRemote(data);
-        const remoteSanitized = state.remoteDataForCompare
-            ? sanitizeAppDataForRemote(state.remoteDataForCompare)
+        const remoteDocument = toRemoteSyncDocument(data);
+        const previousRemoteDocument = state.remoteDataForCompare
+            ? toRemoteSyncDocument(state.remoteDataForCompare)
             : null;
         const remoteNeedsTombstoneCompaction = state.remoteDataForCompare
             ? hasUncompactedPurgedTombstones(state.remoteDataForCompare)
             : false;
-        if (remoteSanitized && !remoteNeedsTombstoneCompaction && areSyncPayloadsEqual(remoteSanitized, sanitized)) {
+        if (previousRemoteDocument
+            && !remoteNeedsTombstoneCompaction
+            && areRemoteSyncDocumentsEqual(previousRemoteDocument, remoteDocument)) {
             if (this.backend !== 'cloudkit') {
-                this.notifier.tracePayload?.('remote-write-skipped-unchanged', sanitized, { backend: this.backend });
+                this.notifier.tracePayload?.('remote-write-skipped-unchanged', remoteDocument, { backend: this.backend });
             }
             return;
         }
@@ -373,7 +378,7 @@ class SharedSyncRunMachine {
         }
         let outcome: SyncRemoteWriteOutcome;
         try {
-            outcome = await this.requireIo().writeRemote(sanitized);
+            outcome = await this.requireIo().writeRemote(remoteDocument);
         } catch (error) {
             if (error instanceof SyncRemoteWriteConflict) {
                 // Another device wrote between readRemote and writeRemote; retry next cycle.
@@ -392,11 +397,11 @@ class SharedSyncRunMachine {
             state.remoteDataForCompare = null;
             this.hooks.requestFollowUp();
         } else {
-            state.remoteDataForCompare = sanitized;
+            state.remoteDataForCompare = remoteDocument;
         }
         if (this.backend === 'webdav') {
             state.webdavRemoteCorrupted = false;
-            this.notifier.tracePayload?.('remote-write-completed', sanitized, {
+            this.notifier.tracePayload?.('remote-write-completed', remoteDocument, {
                 backend: this.backend,
                 remoteFingerprint: fingerprint ?? '',
             });
@@ -430,7 +435,7 @@ class SharedSyncRunMachine {
         this.ensureLocalSnapshotFresh();
         if (hasPendingSyncSideEffects(localData)) return null;
 
-        const localFingerprint = computeSyncPayloadFingerprint(localData);
+        const localFingerprint = computeRemoteSyncDocumentFingerprint(toRemoteSyncDocument(localData));
         const cached = await this.storage.readFastSyncState(scope);
         if (!cached || cached.localFingerprint !== localFingerprint) return null;
 
@@ -471,9 +476,9 @@ class SharedSyncRunMachine {
         this.state.readCheckRemoteData = remoteData;
         if (hasUncompactedPurgedTombstones(remoteData)) return null;
 
-        const localSanitized = sanitizeAppDataForRemote(localData);
-        const remoteSanitized = sanitizeAppDataForRemote(remoteData);
-        if (!areSyncPayloadsEqual(remoteSanitized, localSanitized)) return null;
+        const localDocument = toRemoteSyncDocument(localData);
+        const remoteDocument = toRemoteSyncDocument(remoteData);
+        if (!areRemoteSyncDocumentsEqual(remoteDocument, localDocument)) return null;
 
         await this.recordFastSyncState(localData, { allowRemoteFingerprintRead: false });
         await this.persistUnchangedSyncStatus();
@@ -507,7 +512,7 @@ class SharedSyncRunMachine {
         if (!remoteFingerprint) return;
         await this.storage.writeFastSyncState({
             scope,
-            localFingerprint: computeSyncPayloadFingerprint(data),
+            localFingerprint: computeRemoteSyncDocumentFingerprint(toRemoteSyncDocument(data)),
             remoteFingerprint,
             checkedAt: this.nowIso(),
         });

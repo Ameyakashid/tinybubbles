@@ -17,15 +17,14 @@ import {
     isValidTimestamp,
     type SyncMergeArea,
     normalizeAreaForSyncMerge,
-    normalizeAppData,
     normalizePersonForSyncMerge,
     normalizeProjectForSyncMerge,
     repairMergedSyncReferences,
     normalizeRevisionMetadata,
     normalizeTaskForSyncMerge,
     validateMergedSyncData,
-    validateSyncPayloadShape,
 } from './sync-normalization';
+import { parseSyncDocument } from './sync-document';
 import { mergeSettingsForSync } from './sync-merge-settings';
 import {
     chooseDeterministicWinner,
@@ -1085,14 +1084,12 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
     const readLocalDataForSync = async (): Promise<AppData> => {
         io.onStep?.('read-local');
         await yieldToUi();
-        const localDataRaw = await io.readLocal();
-        const localShapeErrors = validateSyncPayloadShape(localDataRaw, 'local');
-        if (localShapeErrors.length > 0) {
-            const sample = localShapeErrors.slice(0, 3).join('; ');
+        const localDocument = parseSyncDocument(await io.readLocal(), 'local');
+        if (!localDocument.ok) {
+            const sample = localDocument.errors.slice(0, 3).join('; ');
             throw new Error(`Invalid local sync payload: ${sample}`);
         }
-        const localNormalized = normalizeAppData(localDataRaw);
-        return purgeExpiredTombstones(localNormalized, nowIso, io.tombstoneRetentionDays).data;
+        return purgeExpiredTombstones(localDocument.data, nowIso, io.tombstoneRetentionDays).data;
     };
 
     let localData = await readLocalDataForSync();
@@ -1127,25 +1124,19 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
 
     io.onStep?.('read-remote');
     await yieldToUi();
-    const remoteDataRaw = await io.readRemote();
-    if (remoteDataRaw) {
-        const remoteShapeErrors = validateSyncPayloadShape(remoteDataRaw, 'remote');
-        if (remoteShapeErrors.length > 0) {
-            const sample = remoteShapeErrors.slice(0, 3).join('; ');
-            logWarn('Invalid remote sync payload shape', {
-                scope: 'sync',
-                context: {
-                    issues: remoteShapeErrors.length,
-                    sample,
-                },
-            });
-            throw new Error(`Invalid remote sync payload: ${sample}`);
-        }
+    const remoteDocument = parseSyncDocument(await io.readRemote() ?? {}, 'remote');
+    if (!remoteDocument.ok) {
+        const sample = remoteDocument.errors.slice(0, 3).join('; ');
+        logWarn('Invalid remote sync payload shape', {
+            scope: 'sync',
+            context: {
+                issues: remoteDocument.errors.length,
+                sample,
+            },
+        });
+        throw new Error(`Invalid remote sync payload: ${sample}`);
     }
-    const remoteNormalized = normalizeAppData(
-        remoteDataRaw || { tasks: [], projects: [], sections: [], areas: [], settings: {} }
-    );
-    const remoteData = purgeExpiredTombstones(remoteNormalized, nowIso, io.tombstoneRetentionDays).data;
+    const remoteData = purgeExpiredTombstones(remoteDocument.data, nowIso, io.tombstoneRetentionDays).data;
 
     io.onStep?.('merge');
     await yieldToUi();
