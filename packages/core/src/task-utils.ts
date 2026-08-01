@@ -11,6 +11,16 @@ import { isTaskActionable, TASK_STATUS_ORDER } from './task-status';
 import { isTaskInActiveProject } from './project-utils';
 import type { Language } from './i18n/i18n-types';
 
+/**
+ * Shared collator for the tie-break comparisons below. `localeCompare` resolves
+ * its locale and collation options on every call, and these run on a large
+ * fraction of the comparisons in an n-log-n sort over the whole task list. One
+ * instance with default options sorts identically and is reused everywhere.
+ * Deliberately no `numeric`/`sensitivity` options — those change user-visible
+ * ordering and are a separate decision.
+ */
+const textCollator = new Intl.Collator();
+
 export function buildTasksByProjectId(tasks: readonly Task[]): Map<string, Task[]> {
     const tasksByProjectId = new Map<string, Task[]>();
 
@@ -186,10 +196,10 @@ const compareProjectDeadlineBoostTasks = (
     const createdDiff = safeTime(a.createdAt, Number.POSITIVE_INFINITY) - safeTime(b.createdAt, Number.POSITIVE_INFINITY);
     if (createdDiff !== 0) return createdDiff;
 
-    const titleDiff = a.title.localeCompare(b.title);
+    const titleDiff = textCollator.compare(a.title, b.title);
     if (titleDiff !== 0) return titleDiff;
 
-    return a.id.localeCompare(b.id);
+    return textCollator.compare(a.id, b.id);
 };
 
 const compareProjectDeadlineBoosts = (
@@ -209,7 +219,7 @@ const compareProjectDeadlineBoosts = (
         return boostA.projectOrder - boostB.projectOrder;
     }
 
-    const projectTitleDiff = boostA.projectTitle.localeCompare(boostB.projectTitle);
+    const projectTitleDiff = textCollator.compare(boostA.projectTitle, boostB.projectTitle);
     if (projectTitleDiff !== 0) return projectTitleDiff;
 
     return compareProjectDeadlineBoostTasks(taskA, taskB);
@@ -289,7 +299,7 @@ export function compareProjectsByOrder(
     const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.POSITIVE_INFINITY;
     const bOrder = Number.isFinite(b.order) ? (b.order as number) : Number.POSITIVE_INFINITY;
     if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.title.localeCompare(b.title);
+    return textCollator.compare(a.title, b.title);
 }
 
 // Builds the projectId -> rank map that project-grouped views sort tasks by.
@@ -652,7 +662,7 @@ function compareDeletedAtDesc(
     if (leftDeletedAt !== rightDeletedAt) {
         return rightDeletedAt > leftDeletedAt ? 1 : -1;
     }
-    return left.id.localeCompare(right.id);
+    return textCollator.compare(left.id, right.id);
 }
 
 export type TrashTimelineItem =
@@ -699,7 +709,7 @@ export function sortTasksBy(tasks: Task[], sortBy: TaskSortBy = 'default'): Task
     switch (sortBy) {
         case 'title':
             return copy.sort((a, b) => {
-                const cmp = a.title.localeCompare(b.title);
+                const cmp = textCollator.compare(a.title, b.title);
                 if (cmp !== 0) return cmp;
                 return safeTime(a.createdAt, 0) - safeTime(b.createdAt, 0);
             });
@@ -738,7 +748,7 @@ export function sortTasksBy(tasks: Task[], sortBy: TaskSortBy = 'default'): Task
                 const aCompleted = safeTime(a.completedAt, -Infinity);
                 const bCompleted = safeTime(b.completedAt, -Infinity);
                 if (aCompleted !== bCompleted) return bCompleted - aCompleted;
-                return a.title.localeCompare(b.title);
+                return textCollator.compare(a.title, b.title);
             });
         default:
             return sortTasks(tasks);
@@ -801,7 +811,7 @@ export function sortDoneTasksForListView<T extends Pick<Task, 'completedAt' | 'u
     return [...tasks].sort((a, b) => {
         const completionDiff = getCompletionListTime(b) - getCompletionListTime(a);
         if (completionDiff !== 0) return completionDiff;
-        return a.title.localeCompare(b.title);
+        return textCollator.compare(a.title, b.title);
     });
 }
 
@@ -827,7 +837,7 @@ export function sortTasksBySavedPreference<T extends Task>(
             const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.POSITIVE_INFINITY;
             const bOrder = Number.isFinite(b.order) ? (b.order as number) : Number.POSITIVE_INFINITY;
             if (aOrder !== bOrder) return aOrder - bOrder;
-            return a.title.localeCompare(b.title);
+            return textCollator.compare(a.title, b.title);
         })
         .forEach((project, index) => {
             projectOrder.set(project.id, index);
@@ -838,8 +848,8 @@ export function sortTasksBySavedPreference<T extends Task>(
     const compare = (a: T, b: T): number => {
         const byCreatedAsc = () => safeTime(a.createdAt, 0) - safeTime(b.createdAt, 0);
         const byCreatedDesc = () => safeTime(b.createdAt, 0) - safeTime(a.createdAt, 0);
-        const byTitle = () => a.title.localeCompare(b.title);
-        const byId = () => a.id.localeCompare(b.id);
+        const byTitle = () => textCollator.compare(a.title, b.title);
+        const byId = () => textCollator.compare(a.id, b.id);
         const byDue = () => safeDueTime(a.dueDate, Number.POSITIVE_INFINITY) - safeDueTime(b.dueDate, Number.POSITIVE_INFINITY);
         const byStart = () => safeTime(a.startTime, Number.POSITIVE_INFINITY) - safeTime(b.startTime, Number.POSITIVE_INFINITY);
         const byReview = () => safeTime(a.reviewAt, Number.POSITIVE_INFINITY) - safeTime(b.reviewAt, Number.POSITIVE_INFINITY);
@@ -855,7 +865,7 @@ export function sortTasksBySavedPreference<T extends Task>(
             if (orderA !== orderB) return orderA - orderB;
             const titleA = a.projectId ? (projectTitle.get(a.projectId) ?? '') : '';
             const titleB = b.projectId ? (projectTitle.get(b.projectId) ?? '') : '';
-            return titleA.localeCompare(titleB);
+            return textCollator.compare(titleA, titleB);
         };
         const withFallbacks = (...comparers: Array<() => number>) => {
             for (const comparer of comparers) {
@@ -942,10 +952,10 @@ export function sortFocusNextActions(tasks: Task[], options: SortFocusNextAction
         const createdDiff = safeTime(a.createdAt, 0) - safeTime(b.createdAt, 0);
         if (createdDiff !== 0) return createdDiff;
 
-        const titleDiff = a.title.localeCompare(b.title);
+        const titleDiff = textCollator.compare(a.title, b.title);
         if (titleDiff !== 0) return titleDiff;
 
-        return a.id.localeCompare(b.id);
+        return textCollator.compare(a.id, b.id);
     });
 }
 
