@@ -3,18 +3,15 @@ import { Platform } from 'react-native';
 import type {
   AudioCaptureMode,
   AudioFieldStrategy,
+  OpenAISpeechUpload,
   SpeechToTaskCaptureConfig,
   SpeechToTaskResult,
   SpeechToTextSettings,
 } from '@mindwtr/core';
 import {
-  buildSpeechToTaskPrompt,
   normalizeSpeechLanguage,
   OPENAI_DEFAULT_MODEL,
-  openAITranscribeLanguageFieldName,
-  parseSpeechToTaskResult,
-  resolveGeminiModel,
-  resolveOpenAITranscribeEndpoint,
+  runRemoteSpeechToTaskCapture,
   runSpeechToTaskCapture,
 } from '@mindwtr/core';
 import { logInfo, logWarn } from './app-log';
@@ -68,15 +65,6 @@ export type WhisperRealtimeHandle = {
   hasRealtimeTranscript: boolean;
 };
 
-type FetchOptions = {
-  timeoutMs?: number;
-  signal?: AbortSignal;
-};
-
-const DEFAULT_TIMEOUT_MS = 30_000;
-const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const WHISPER_ANDROID_MAX_THREADS = 1;
 const WHISPER_ANDROID_N_PROCESSORS = 1;
 const LOCAL_WHISPER_SAMPLE_RATE = 16000;
@@ -331,27 +319,6 @@ const buildWhisperTranscribeOptions = (language: string): Record<string, unknown
   return options;
 };
 
-const bytesToBase64 = (bytes: Uint8Array) => {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b0 = bytes[i] ?? 0;
-    const b1 = bytes[i + 1];
-    const b2 = bytes[i + 2];
-
-    const hasB1 = typeof b1 === 'number';
-    const hasB2 = typeof b2 === 'number';
-
-    const triplet = (b0 << 16) | ((b1 ?? 0) << 8) | (b2 ?? 0);
-
-    out += alphabet[(triplet >> 18) & 0x3f];
-    out += alphabet[(triplet >> 12) & 0x3f];
-    out += hasB1 ? alphabet[(triplet >> 6) & 0x3f] : '=';
-    out += hasB2 ? alphabet[triplet & 0x3f] : '=';
-  }
-  return out;
-};
-
 const getExtension = (uri: string) => {
   const match = uri.match(/\.[a-z0-9]+$/i);
   return match ? match[0] : '.m4a';
@@ -376,26 +343,6 @@ const getMimeType = (uri: string) => {
     case '.m4a':
     default:
       return 'audio/mp4';
-  }
-};
-
-const fetchJson = async (url: string, init: RequestInit, options?: FetchOptions) => {
-  const controller = new AbortController();
-  const handle = setTimeout(() => controller.abort(), options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  if (options?.signal) {
-    if (options.signal.aborted) controller.abort();
-    else options.signal.addEventListener('abort', () => controller.abort(), { once: true });
-  }
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(text || `Request failed (${response.status})`);
-    }
-    const data = await response.json();
-    return data as Promise<unknown>;
-  } finally {
-    clearTimeout(handle);
   }
 };
 
@@ -459,12 +406,11 @@ const buildOpenAIMultipartPayload = async (
   };
 };
 
-const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) => {
-  // Official OpenAI keeps requiring a key; a self-hosted server usually has
-  // none, so only block when there is neither.
-  if (!config.apiKey && !config.baseUrl?.trim()) {
-    throw new Error('OpenAI API key missing');
-  }
+const withOpenAIUpload = async <T>(
+  audioUri: string,
+  config: SpeechToTextConfig,
+  send: (upload: OpenAISpeechUpload) => Promise<T>
+): Promise<T> => {
   const language = normalizeSpeechLanguage(config.language);
   const strategies: OpenAIUploadStrategy[] = isExpoGo() ? ['uri', 'blob'] : ['blob', 'uri'];
   let lastError: unknown = null;
@@ -483,35 +429,9 @@ const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) =>
           ...meta,
         },
       });
-
-      const form = new FormData();
-      if (fileName) {
-        form.append('file', part as Blob, fileName);
-      } else {
-        form.append('file', part as any);
-      }
-      form.append('model', config.model);
-      if (language !== 'auto') {
-        form.append(openAITranscribeLanguageFieldName(config.model), language);
-      }
-      form.append('response_format', 'json');
-
-      const result = await fetchJson(
-        resolveOpenAITranscribeEndpoint(config.baseUrl),
-        {
-          method: 'POST',
-          headers: {
-            // An empty "Bearer " header makes some self-hosted servers 401
-            // instead of ignoring auth — only send it when we have one.
-            ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
-          },
-          body: form,
-        },
-        { timeoutMs: DEFAULT_TIMEOUT_MS }
-      );
-      const text = typeof (result as { text?: unknown }).text === 'string'
-        ? (result as { text: string }).text
-        : '';
+      // React Native FormData accepts its URI descriptor at runtime even though
+      // the DOM type used by core only exposes Blob.
+      const result = await send({ part: part as Blob, fileName });
       void logInfo('OpenAI transcription completed', {
         scope: 'speech',
         extra: {
@@ -520,10 +440,12 @@ const transcribeOpenAI = async (audioUri: string, config: SpeechToTextConfig) =>
           language,
           attempt: String(index + 1),
           strategy,
-          transcriptLength: String(text.trim().length),
+          transcriptLength: String(
+            typeof result === 'string' ? result.trim().length : 0
+          ),
         },
       });
-      return text.trim();
+      return result;
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
@@ -563,169 +485,6 @@ const resolveOpenAIParseModel = (value?: string) => {
   const lower = value.toLowerCase();
   if (lower.startsWith('gpt-4o')) return OPENAI_DEFAULT_MODEL;
   return value;
-};
-
-const extractResponsesText = (result: unknown) => {
-  const direct = typeof (result as { output_text?: string }).output_text === 'string'
-    ? (result as { output_text: string }).output_text
-    : undefined;
-  if (direct && direct.trim()) return direct;
-  const output = (result as { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }).output;
-  if (!Array.isArray(output)) return undefined;
-  for (const item of output) {
-    if (!item || item.type !== 'message') continue;
-    const content = item.content;
-    if (!Array.isArray(content)) continue;
-    const textPart = content.find((part) => part?.type === 'output_text' || part?.type === 'text');
-    if (textPart?.text && textPart.text.trim()) return textPart.text;
-  }
-  return undefined;
-};
-
-const parseWithOpenAIResponses = async (transcript: string, config: SpeechToTextConfig, overrideModel?: string) => {
-  if (!config.apiKey) {
-    throw new Error('OpenAI API key missing');
-  }
-  const now = config.now ?? new Date();
-  const prompt = buildSpeechToTaskPrompt({
-    fieldStrategy: config.fieldStrategy ?? 'smart',
-    language: normalizeSpeechLanguage(config.language),
-    now,
-    timeZone: config.timeZone,
-  });
-  const parserModel = resolveOpenAIParseModel(overrideModel ?? config.parseModel);
-  const result = await fetchJson(
-    OPENAI_RESPONSES_URL,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: parserModel,
-        temperature: 0.2,
-        input: [
-          { role: 'system', content: prompt },
-          { role: 'user', content: transcript },
-        ],
-        text: { format: { type: 'json_object' } },
-      }),
-    },
-    { timeoutMs: DEFAULT_TIMEOUT_MS }
-  );
-  const content = extractResponsesText(result);
-  if (!content) {
-    throw new Error('OpenAI returned no content.');
-  }
-  return parseSpeechToTaskResult(content);
-};
-
-const parseWithOpenAIChat = async (transcript: string, config: SpeechToTextConfig, overrideModel?: string) => {
-  if (!config.apiKey) {
-    throw new Error('OpenAI API key missing');
-  }
-  const now = config.now ?? new Date();
-  const prompt = buildSpeechToTaskPrompt({
-    fieldStrategy: config.fieldStrategy ?? 'smart',
-    language: normalizeSpeechLanguage(config.language),
-    now,
-    timeZone: config.timeZone,
-  });
-  const parserModel = resolveOpenAIParseModel(overrideModel ?? config.parseModel);
-  const result = await fetchJson(
-    OPENAI_CHAT_URL,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: parserModel,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: prompt },
-          { role: 'user', content: transcript },
-        ],
-      }),
-    },
-    { timeoutMs: DEFAULT_TIMEOUT_MS }
-  );
-  const content = (result as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error('OpenAI returned no content.');
-  }
-  return parseSpeechToTaskResult(content);
-};
-
-const parseWithOpenAI = async (transcript: string, config: SpeechToTextConfig, overrideModel?: string) => {
-  try {
-    return await parseWithOpenAIResponses(transcript, config, overrideModel);
-  } catch (error) {
-    void logWarn('OpenAI responses parse failed, retrying with chat completions', {
-      scope: 'speech',
-      extra: { error: error instanceof Error ? error.message : String(error) },
-    });
-    return parseWithOpenAIChat(transcript, config, overrideModel);
-  }
-};
-
-const requestGemini = async (audioUri: string, config: SpeechToTextConfig, prompt: string) => {
-  if (!config.apiKey) {
-    throw new Error('Gemini API key missing');
-  }
-  const normalizedUri = normalizeAudioUri(audioUri);
-  const fileReadUri = normalizeAudioUriForFileRead(audioUri);
-  const file = new File(fileReadUri);
-  const bytes = await file.bytes();
-  const base64Audio = bytesToBase64(bytes);
-  const mimeType = getMimeType(normalizedUri);
-  const geminiModel = resolveGeminiModel(config.model);
-  const url = `${GEMINI_BASE_URL}/${geminiModel}:generateContent`;
-  const body = {
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64Audio,
-            },
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      topP: 0.8,
-      topK: 20,
-      candidateCount: 1,
-      maxOutputTokens: 1024,
-      responseMimeType: 'application/json',
-    },
-  };
-  const result = await fetchJson(
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': config.apiKey,
-      },
-      body: JSON.stringify(body),
-    },
-    { timeoutMs: DEFAULT_TIMEOUT_MS }
-  );
-  const text = (result as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
-    .candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error('Gemini returned no content.');
-  }
-  return parseSpeechToTaskResult(text);
 };
 
 const MIN_WHISPER_MODEL_BYTES = 5 * 1024 * 1024;
@@ -1305,11 +1064,35 @@ export async function processAudioCapture(
   config: SpeechToTextConfig
 ): Promise<SpeechToTextResult> {
   assertSpeechProviderAllowedForRuntime(config.provider, config.isFossBuild);
+  if (config.provider === 'openai' || config.provider === 'gemini') {
+    const parseModel = resolveOpenAIParseModel(config.parseModel);
+    const retryModel = resolveOpenAIParseModel(config.retryModel ?? 'gpt-4o-mini');
+    return runRemoteSpeechToTaskCapture(
+      { ...config, provider: config.provider, parseModel, retryModel },
+      {
+        readBytes: async () => {
+          const normalizedUri = normalizeAudioUri(audioUri);
+          const fileReadUri = normalizeAudioUriForFileRead(audioUri);
+          const file = new File(fileReadUri);
+          return {
+            bytes: await file.bytes(),
+            mimeType: getMimeType(normalizedUri),
+          };
+        },
+        withOpenAIUpload: (send) => withOpenAIUpload(audioUri, config, send),
+      },
+      {
+        onWarn: (message, error) => {
+          void logWarn(message, {
+            scope: 'speech',
+            extra: { error: error.message },
+          });
+        },
+      }
+    );
+  }
   return runSpeechToTaskCapture(config, {
     transcribe: async () => {
-      if (config.provider !== 'whisper') {
-        return transcribeOpenAI(audioUri, config);
-      }
       const localInput = await prepareAudioForLocalWhisper({
         uri: audioUri,
         platform: Platform.OS === 'ios' ? 'ios' : 'android',
@@ -1320,15 +1103,6 @@ export async function processAudioCapture(
         throw new Error(LOCAL_WHISPER_UNSUPPORTED_AUDIO_ERROR);
       }
       return transcribeLocalWhisper(localInput, config);
-    },
-    direct: (prompt) => requestGemini(audioUri, config, prompt),
-    parse: (transcript, overrideModel) =>
-      parseWithOpenAI(transcript, config, overrideModel),
-    onParseFallback: (error) => {
-      void logWarn('OpenAI smart parse failed, falling back to transcript', {
-        scope: 'speech',
-        extra: { error: error.message },
-      });
     },
   });
 }
