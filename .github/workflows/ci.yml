@@ -61,6 +61,11 @@ jobs:
       - name: Workflow JSON newline check
         run: node scripts/ci/validate-workflow-json-newlines.js
 
+      - name: Package-lock override sync check
+        run: |
+          node scripts/ci/check-package-lock-sync.js packages/core/package.json packages/core/package-lock.json --check-overrides
+          node scripts/ci/check-package-lock-sync.js apps/desktop/package.json apps/desktop/package-lock.json --check-overrides
+
       - name: Google Play listing metadata check
         run: |
           python3 scripts/ci/prepare-google-play-listing-metadata.test.py

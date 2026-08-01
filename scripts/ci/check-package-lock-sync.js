@@ -1,7 +1,35 @@
 #!/usr/bin/env node
 
+// Validates an npm workspace lockfile on two axes:
+//
+//   1. package.json <-> package-lock.json agreement (the original check).
+//   2. The lockfile honors the scalar pins in the ROOT package.json
+//      "overrides" block. Opt-in via --check-overrides, because the mobile
+//      FOSS lock (checked through this same script by
+//      check-mobile-foss-lock-sync.js) is a separate channel that does not
+//      track the root pins.
+//
+// (2) exists because npm never reads the root manifest in this layout, so the
+// npm lockfiles that feed the Flathub source mirror resolved without the
+// security-pin block that Bun applies to every other channel. Without this
+// assertion the two graphs drift apart silently.
+//
+// Divergence policy — a resolved version that differs from its pin is:
+//   - OLDER than the pin  -> FAILURE. This is the direction the pin exists to
+//     prevent; a pinned-out version is back in the graph.
+//   - NEWER than the pin  -> warning. Not a security regression, and forcing
+//     these back down is a separate judgement call.
+//   - OLDER, but on a NESTED path that is dev-only (e.g. eslint's private
+//     minimatch@3.1.5) -> warning by default. These never reach a shipped
+//     bundle, and pinning them would drag a lint-only dependency across a
+//     major version. Set MINDWTR_LOCK_OVERRIDE_STRICT=1 to make them fail.
+
 const fs = require('fs');
 const path = require('path');
+
+const ROOT_PACKAGE_JSON = path.resolve(__dirname, '..', '..', 'package.json');
+const STRICT_NESTED_DEV = process.env.MINDWTR_LOCK_OVERRIDE_STRICT === '1';
+const NODE_MODULES_SEGMENT = 'node_modules/';
 
 const SKIP_SPEC_PREFIXES = [
   'file:',
@@ -97,10 +125,63 @@ function shouldSkipSpec(spec) {
   return SKIP_SPEC_PREFIXES.some((prefix) => spec.startsWith(prefix));
 }
 
+// Every scalar pin in the root "overrides" block, checked against each resolved
+// copy of that package in the lockfile. See the policy note at the top.
+function collectOverrideDivergences(lockJson) {
+  const rootPackageJson = readJson(ROOT_PACKAGE_JSON);
+  const pins = Object.entries(rootPackageJson.overrides || {})
+    .filter(([, pinnedSpec]) => typeof pinnedSpec === 'string');
+  if (pins.length === 0) return { failures: [], warnings: [] };
+
+  const pinnedVersions = new Map(pins);
+  const failures = [];
+  const warnings = [];
+
+  for (const [lockPath, entry] of Object.entries(lockJson.packages || {})) {
+    const segmentIndex = lockPath.lastIndexOf(NODE_MODULES_SEGMENT);
+    if (segmentIndex === -1) continue;
+    if (!entry || typeof entry.version !== 'string') continue;
+
+    const dependencyName = lockPath.slice(segmentIndex + NODE_MODULES_SEGMENT.length);
+    const pinnedSpec = pinnedVersions.get(dependencyName);
+    if (!pinnedSpec) continue;
+
+    const pinned = parseVersion(pinnedSpec);
+    const resolved = parseVersion(entry.version);
+    if (!pinned || !resolved) continue;
+
+    const comparison = compareVersions(resolved, pinned);
+    if (comparison === 0) continue;
+
+    const isNested = lockPath.indexOf(NODE_MODULES_SEGMENT) !== segmentIndex;
+    const isDevOnly = entry.dev === true;
+    const divergence = {
+      dependencyName,
+      pinnedSpec,
+      resolvedVersion: entry.version,
+      lockPath,
+    };
+
+    if (comparison > 0) {
+      warnings.push({ ...divergence, reason: 'newer than the pin' });
+    } else if (isNested && isDevOnly && !STRICT_NESTED_DEV) {
+      warnings.push({ ...divergence, reason: 'older than the pin, nested dev-only path' });
+    } else {
+      failures.push(divergence);
+    }
+  }
+
+  return { failures, warnings };
+}
+
 function main() {
-  const [packageJsonPath, lockJsonPath] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const checkOverrides = args.includes('--check-overrides');
+  const [packageJsonPath, lockJsonPath] = args.filter((arg) => !arg.startsWith('--'));
   if (!packageJsonPath || !lockJsonPath) {
-    console.error(`Usage: ${path.basename(process.argv[1])} <package.json> <package-lock.json>`);
+    console.error(
+      `Usage: ${path.basename(process.argv[1])} <package.json> <package-lock.json> [--check-overrides]`
+    );
     process.exit(1);
   }
 
@@ -139,7 +220,18 @@ function main() {
     }
   }
 
-  if (missingEntries.length > 0 || mismatches.length > 0) {
+  const { failures: overrideFailures, warnings: overrideWarnings } = checkOverrides
+    ? collectOverrideDivergences(lockJson)
+    : { failures: [], warnings: [] };
+
+  for (const warning of overrideWarnings) {
+    console.warn(
+      `warn: ${warning.dependencyName} is pinned to ${warning.pinnedSpec} in the root overrides, `
+      + `lock has ${warning.resolvedVersion} at ${warning.lockPath} (${warning.reason})`
+    );
+  }
+
+  if (missingEntries.length > 0 || mismatches.length > 0 || overrideFailures.length > 0) {
     if (missingEntries.length > 0) {
       console.error('Package-lock is missing entries for package dependencies:');
       for (const item of missingEntries) {
@@ -154,10 +246,28 @@ function main() {
         );
       }
     }
+    if (overrideFailures.length > 0) {
+      console.error('Package-lock resolves versions below the root overrides pins:');
+      for (const failure of overrideFailures) {
+        console.error(
+          `  - ${failure.dependencyName} pinned to ${failure.pinnedSpec}, `
+          + `lock has ${failure.resolvedVersion} at ${failure.lockPath}`
+        );
+      }
+      console.error(
+        `Add the missing pins to the "overrides" block of ${packageJsonPath}, then regenerate with:`
+      );
+      console.error(
+        `  npm install --package-lock-only --prefix ${path.dirname(packageJsonPath)} --legacy-peer-deps --workspaces=false`
+      );
+    }
     process.exit(1);
   }
 
   console.log(`Package.json specs match locked dependencies: ${packageJsonPath}`);
+  if (checkOverrides) {
+    console.log(`Locked versions honor the root overrides pins: ${lockJsonPath}`);
+  }
 }
 
 main();
