@@ -52,6 +52,7 @@ export * from './sync-fast-sync';
 export * from './task-utils';
 export * from './completion-grouping';
 export * from './filter-criteria';
+export * from './task-filter-selections';
 export * from './task-draft';
 export * from './task-token-usage';
 export * from './people';
