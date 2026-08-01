@@ -286,6 +286,44 @@ describe('runSharedSyncCycle', () => {
         expect(harness.infos.some((info) => info.message === 'Sync fast check found no changes')).toBe(true);
     });
 
+    it('does not record an unchanged fast sync when local data changes during the remote fingerprint read', async () => {
+        let editDuringFingerprintRead = false;
+        const bundle = createHarness({
+            fastSyncScope: 'scope-1',
+            io: {
+                readRemoteFingerprint: vi.fn(async () => {
+                    const remote = bundle.harness.remote;
+                    const fingerprint = remote
+                        ? `remote-fp-${JSON.stringify(remote.tasks.map((task) => task.id).sort())}`
+                        : null;
+                    // The user edits while the fingerprint round trip is in flight.
+                    if (editDuringFingerprintRead) bundle.harness.lastDataChangeAt += 1;
+                    return fingerprint;
+                }),
+            },
+        });
+        const { harness, storage, hooks, run } = bundle;
+
+        const first = await run();
+        expect(first.skipped).toBeUndefined();
+        const staleLocalFingerprint = harness.fastStates.get('scope-1')?.localFingerprint;
+        expect(staleLocalFingerprint).toBeDefined();
+        vi.mocked(storage.writeFastSyncState).mockClear();
+        vi.mocked(hooks.requestFollowUp).mockClear();
+
+        editDuringFingerprintRead = true;
+        const second = await run();
+
+        // Option B: the freshness re-check throws LocalSyncAbort, so the cycle
+        // requeues instead of reporting the mid-check edit as already synced.
+        expect(second).toMatchObject({ success: true, skipped: 'requeued' });
+        expect(hooks.requestFollowUp).toHaveBeenCalled();
+        expect(storage.writeFastSyncState).not.toHaveBeenCalledWith(
+            expect.objectContaining({ localFingerprint: staleLocalFingerprint }),
+        );
+        expect(harness.statusUpdates.at(-1)?.lastSyncStatus).not.toBe('success');
+    });
+
     it('never takes the fingerprint fast-check for manual syncs', async () => {
         const { io, run } = createHarness({ fastSyncScope: 'scope-1' });
 

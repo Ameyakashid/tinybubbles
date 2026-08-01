@@ -448,6 +448,9 @@ class SharedSyncRunMachine {
         }
         if (!remoteFingerprint || remoteFingerprint !== cached.remoteFingerprint) return null;
 
+        // A local edit landing during the fingerprint round trip must not be
+        // recorded as "synced, nothing changed"; abort and requeue instead.
+        this.ensureLocalSnapshotFresh();
         await this.storage.writeFastSyncState({
             scope,
             localFingerprint,
