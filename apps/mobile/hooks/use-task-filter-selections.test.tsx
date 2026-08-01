@@ -1,14 +1,13 @@
 import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SavedFilter, Task, TaskMetadataFilterVisibility } from '@mindwtr/core';
-
 import {
   taskMatchesFilterSelections,
   useTaskFilterSelections,
   type TaskFilterSelections,
   type TaskFilterSelectionsOptions,
-} from './use-task-filter-selections';
+} from '@mindwtr/core/task-filter-selections';
+import type { SavedFilter, Task, TaskMetadataFilterVisibility } from '@mindwtr/core';
 
 const ALL_VISIBLE: TaskMetadataFilterVisibility = {
   energyLevel: true,

@@ -13,9 +13,10 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, criteriaFromSelections, removeAdvancedFilterCriteriaChip, selectionsFromCriteria, formatFocusTaskLimitText,
-    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, hasActiveFilterCriteria, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@mindwtr/core';
-import type { FilterCriteria, MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
+import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, removeAdvancedFilterCriteriaChip, formatFocusTaskLimitText,
+    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@mindwtr/core';
+import type { MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
+import { useTaskFilterSelections } from '@mindwtr/core/task-filter-selections';
 import { useLanguage } from '../../contexts/language-context';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
@@ -267,19 +268,9 @@ export function AgendaView() {
         setProjectView: state.setProjectView,
         showToast: state.showToast,
     }));
-    const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
-    const [excludedTokens, setExcludedTokens] = useState<string[]>([]);
-    const [selectedPriorities, setSelectedPriorities] = useState<TaskPriority[]>([]);
-    const [selectedEnergyLevels, setSelectedEnergyLevels] = useState<TaskEnergyLevel[]>([]);
-    const [selectedTimeEstimates, setSelectedTimeEstimates] = useState<TimeEstimate[]>([]);
-    const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-    const [contextMatchMode, setContextMatchMode] = useState<MultiValueFilterMatchMode>('all');
-    const [tagMatchMode, setTagMatchMode] = useState<MultiValueFilterMatchMode>('all');
-    const [locationFilter, setLocationFilter] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
     const [filtersOpen, setFiltersOpen] = useState(false);
-    const [activeSavedFilterId, setActiveSavedFilterId] = useState<string | null>(null);
     const [focusSortBy, setFocusSortBy] = useState<SortField>(DEFAULT_FOCUS_SORT_BY);
+    const resetFocusSort = useCallback(() => setFocusSortBy(DEFAULT_FOCUS_SORT_BY), []);
     const [saveFilterPromptOpen, setSaveFilterPromptOpen] = useState(false);
     const filterInputRef = useRef<HTMLInputElement | null>(null);
     const [persistedViewState, setPersistedViewState] = usePersistedViewState(
@@ -335,8 +326,6 @@ export function AgendaView() {
     const showEnergyLevelFilters = metadataFilterVisibility.energyLevel;
     const showTimeEstimateFilters = metadataFilterVisibility.timeEstimate;
     const showLocationFilter = metadataFilterVisibility.location;
-    const activePriorities = showPriorityFilters ? selectedPriorities : [];
-    const activeTimeEstimates = showTimeEstimateFilters ? selectedTimeEstimates : [];
     const projectOptions = useMemo<AgendaProjectFilterOption[]>(() => {
         const activeProjectIds = new Set(
             activeTasks
@@ -355,32 +344,46 @@ export function AgendaView() {
     const showNoProjectOption = activeTasks.some((task) => !task.projectId);
     const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
     const savedFocusFilters = (settings?.savedFilters ?? []).filter((filter) => filter.view === 'focus' && !filter.deletedAt);
-    const activeSavedFilter = savedFocusFilters.find((filter) => filter.id === activeSavedFilterId) ?? null;
+    const filterSelections = useTaskFilterSelections({
+        view: 'focus',
+        t,
+        visibility: metadataFilterVisibility,
+        savedFilters: savedFocusFilters,
+        onClear: resetFocusSort,
+    });
+    const {
+        activeSavedFilter,
+        activeSavedFilterId,
+        applySaved: applySavedSelections,
+        clear: clearAllFilters,
+        criteria: effectiveFilterCriteria,
+        currentCriteria: currentFilterCriteria,
+        energyLevels: selectedEnergyLevels,
+        excludedTokens,
+        hasActive: hasTaskFilters,
+        hasCurrentCriteria: hasCurrentFilterCriteria,
+        locationQuery: locationFilter,
+        priorities: selectedPriorities,
+        projects: selectedProjects,
+        searchQuery,
+        setLocation: updateLocationFilter,
+        setMatchMode,
+        setSearchQuery,
+        timeEstimates: selectedTimeEstimates,
+        toggleEnergyLevel: toggleEnergyFilter,
+        togglePriority: togglePriorityFilter,
+        toggleProject: toggleProjectFilter,
+        toggleTimeEstimate: toggleTimeFilter,
+        toggleToken: toggleTokenFilter,
+        tokens: selectedTokens,
+        unbindSaved: unbindSavedFilter,
+    } = filterSelections;
+    const activePriorities = showPriorityFilters ? selectedPriorities : [];
+    const activeTimeEstimates = showTimeEstimateFilters ? selectedTimeEstimates : [];
     const effectiveFocusSortBy = activeSavedFilter?.sortBy ?? focusSortBy;
     const effectiveNextGroupBy = normalizeAgendaGroupBy(activeSavedFilter?.groupBy ?? nextGroupBy);
-    const currentFilterCriteria = criteriaFromSelections({
-        tokens: selectedTokens,
-        excludedTokens,
-        contextMatchMode,
-        tagMatchMode,
-        projects: selectedProjects,
-        locations: showLocationFilter && locationFilter.trim() ? [locationFilter.trim()] : [],
-        priorities: activePriorities,
-        energyLevels: showEnergyLevelFilters ? selectedEnergyLevels : [],
-        timeEstimates: activeTimeEstimates,
-    });
-    const rawEffectiveFilterCriteria = activeSavedFilter?.criteria ?? currentFilterCriteria;
-    const effectiveContextMatchMode = rawEffectiveFilterCriteria.contextMatchMode ?? 'all';
-    const effectiveTagMatchMode = rawEffectiveFilterCriteria.tagMatchMode ?? 'all';
-    const effectiveFilterCriteria: FilterCriteria = {
-        ...rawEffectiveFilterCriteria,
-        ...(showPriorityFilters ? {} : { priority: undefined }),
-        ...(showEnergyLevelFilters ? {} : { energy: undefined }),
-        ...(showLocationFilter ? {} : { locations: undefined }),
-        ...(showTimeEstimateFilters ? {} : { timeEstimates: undefined, timeEstimateRange: undefined }),
-    };
-    const hasCurrentFilterCriteria = hasActiveFilterCriteria(currentFilterCriteria);
-    const hasFilters = hasActiveFilterCriteria(effectiveFilterCriteria);
+    const effectiveContextMatchMode = effectiveFilterCriteria.contextMatchMode ?? 'all';
+    const effectiveTagMatchMode = effectiveFilterCriteria.tagMatchMode ?? 'all';
     const canSaveFocusPerspective = activeSavedFilterId === null
         && (
             hasCurrentFilterCriteria
@@ -421,10 +424,7 @@ export function AgendaView() {
                 id: `excluded-token:${token}`,
                 label: token,
                 excluded: true,
-                onRemove: () => {
-                    setActiveSavedFilterId(null);
-                    setExcludedTokens((prev) => prev.filter((item) => item !== token));
-                },
+                onRemove: () => toggleTokenFilter(token),
             });
         });
         selectedProjects.forEach((projectId) => {
@@ -498,11 +498,11 @@ export function AgendaView() {
         selectedTokens,
         excludedTokens,
         t,
+        toggleTokenFilter,
     ]);
-    const activeFilterCount = activeFilterChips.length
-        + (normalizedSearchQuery ? 1 : 0)
+    const activeFilterCount = filterSelections.activeCount
         + (effectiveFocusSortBy !== DEFAULT_FOCUS_SORT_BY ? 1 : 0)
-        + (activeSavedFilterId && activeFilterChips.length === 0 && effectiveFocusSortBy === DEFAULT_FOCUS_SORT_BY ? 1 : 0);
+        + (activeSavedFilterId && filterSelections.activeCount === 0 && effectiveFocusSortBy === DEFAULT_FOCUS_SORT_BY ? 1 : 0);
     const saveFilterDefaultName = getSavedFilterDefaultName(activeFilterChips, resolveText('savedFilters.defaultName', 'Focus filter'));
 
     const { filteredActiveTasks, reviewDueCandidates } = useMemo(() => {
@@ -543,112 +543,34 @@ export function AgendaView() {
         setProjectView({ selectedProjectId: projectId });
         dispatchNavigateEvent('projects');
     }, [setProjectView]);
-    const hasTaskFilters = hasFilters || Boolean(normalizedSearchQuery);
     const showFiltersPanel = filtersOpen;
     const shouldRenderFiltersPanel = filtersOpen
         || hasTaskFilters
         || focusSortBy !== DEFAULT_FOCUS_SORT_BY
         || Boolean(activeSavedFilterId);
     useEffect(() => {
-        if (activeSavedFilterId && !activeSavedFilter) {
-            setActiveSavedFilterId(null);
-        }
-    }, [activeSavedFilter, activeSavedFilterId]);
-    useEffect(() => {
         if (!filtersOpen) return;
         filterInputRef.current?.focus();
     }, [filtersOpen]);
-    const toggleTokenFilter = (token: string) => {
-        setActiveSavedFilterId(null);
-        // Tri-state cycle: neutral → included → excluded → neutral. A token is
-        // only ever on one side, so each transition clears the other.
-        const isIncluded = selectedTokens.includes(token);
-        const isExcluded = excludedTokens.includes(token);
-        if (isIncluded) {
-            setSelectedTokens((prev) => prev.filter((item) => item !== token));
-            setExcludedTokens((prev) => (prev.includes(token) ? prev : [...prev, token]));
-        } else if (isExcluded) {
-            setExcludedTokens((prev) => prev.filter((item) => item !== token));
-        } else {
-            setSelectedTokens((prev) => [...prev, token]);
-        }
-    };
-    const togglePriorityFilter = (priority: TaskPriority) => {
-        setActiveSavedFilterId(null);
-        setSelectedPriorities((prev) =>
-            prev.includes(priority) ? prev.filter((item) => item !== priority) : [...prev, priority]
-        );
-    };
-    const toggleProjectFilter = (projectId: string) => {
-        setActiveSavedFilterId(null);
-        setSelectedProjects((prev) =>
-            prev.includes(projectId) ? prev.filter((item) => item !== projectId) : [...prev, projectId]
-        );
-    };
-    const toggleEnergyFilter = (energyLevel: TaskEnergyLevel) => {
-        setActiveSavedFilterId(null);
-        setSelectedEnergyLevels((prev) =>
-            prev.includes(energyLevel) ? prev.filter((item) => item !== energyLevel) : [...prev, energyLevel]
-        );
-    };
-    const toggleTimeFilter = (estimate: TimeEstimate) => {
-        setActiveSavedFilterId(null);
-        setSelectedTimeEstimates((prev) =>
-            prev.includes(estimate) ? prev.filter((item) => item !== estimate) : [...prev, estimate]
-        );
-    };
     const updateContextMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-        setActiveSavedFilterId(null);
-        setContextMatchMode(mode);
-    }, []);
+        setMatchMode('context', mode);
+    }, [setMatchMode]);
     const updateTagMatchMode = useCallback((mode: MultiValueFilterMatchMode) => {
-        setActiveSavedFilterId(null);
-        setTagMatchMode(mode);
-    }, []);
-    const updateLocationFilter = (value: string) => {
-        setActiveSavedFilterId(null);
-        setLocationFilter(value);
-    };
+        setMatchMode('tag', mode);
+    }, [setMatchMode]);
     const updateFocusSortBy = useCallback((value: SortField) => {
-        setActiveSavedFilterId(null);
+        unbindSavedFilter();
         setFocusSortBy(value);
-    }, []);
+    }, [unbindSavedFilter]);
     const updateFocusGroupBy = useCallback((value: NextGroupBy) => {
-        setActiveSavedFilterId(null);
+        unbindSavedFilter();
         setListOptions({ nextGroupBy: value });
-    }, [setListOptions]);
-    const clearFilters = () => {
-        setActiveSavedFilterId(null);
-        setFocusSortBy(DEFAULT_FOCUS_SORT_BY);
-        setSelectedTokens([]);
-        setExcludedTokens([]);
-        setSelectedProjects([]);
-        setLocationFilter('');
-        setSelectedPriorities([]);
-        setSelectedEnergyLevels([]);
-        setSelectedTimeEstimates([]);
-        setContextMatchMode('all');
-        setTagMatchMode('all');
-    };
-    const clearAllFilters = () => {
-        clearFilters();
-        setSearchQuery('');
-    };
+    }, [setListOptions, unbindSavedFilter]);
     const applySavedFocusFilter = useCallback((filter: SavedFilter) => {
-        const selections = selectionsFromCriteria(filter.criteria);
-        setSelectedTokens(selections.tokens);
-        setExcludedTokens(selections.excludedTokens);
-        setSelectedProjects(selections.projects);
-        setLocationFilter(selections.locations[0] ?? '');
-        setSelectedPriorities(selections.priorities);
-        setSelectedEnergyLevels(selections.energyLevels);
-        setSelectedTimeEstimates(selections.timeEstimates);
-        setContextMatchMode(selections.contextMatchMode);
-        setTagMatchMode(selections.tagMatchMode);
+        applySavedSelections(filter);
         setFocusSortBy(filter.sortBy ?? DEFAULT_FOCUS_SORT_BY);
-        setActiveSavedFilterId(filter.id);
         setFiltersOpen(false);
-    }, []);
+    }, [applySavedSelections]);
     const handleSaveFilterConfirm = useCallback((name: string) => {
         const trimmedName = name.trim();
         if (!trimmedName || !canSaveFocusPerspective) return;
@@ -667,9 +589,9 @@ export function AgendaView() {
             savedFilters: [...(settings?.savedFilters ?? []), nextFilter],
         }).then(() => {
             setSaveFilterPromptOpen(false);
-            setActiveSavedFilterId(nextFilter.id);
+            applySavedSelections(nextFilter);
         }).catch(() => undefined);
-    }, [canSaveFocusPerspective, currentFilterCriteria, effectiveNextGroupBy, focusSortBy, settings?.savedFilters, updateSettings]);
+    }, [applySavedSelections, canSaveFocusPerspective, currentFilterCriteria, effectiveNextGroupBy, focusSortBy, settings?.savedFilters, updateSettings]);
     const handleDeleteSavedFilter = useCallback(async (filter: SavedFilter) => {
         const confirmed = await requestConfirmation({
             title: resolveText('savedFilters.deleteTitle', 'Delete saved filter?'),
@@ -681,24 +603,10 @@ export function AgendaView() {
         const nextFilters = markSavedFilterDeleted(settings?.savedFilters, filter.id);
         void updateSettings({ savedFilters: nextFilters }).then(() => {
             if (activeSavedFilterId === filter.id) {
-                setActiveSavedFilterId(null);
+                unbindSavedFilter();
             }
         }).catch(() => undefined);
-    }, [activeSavedFilterId, requestConfirmation, resolveText, settings?.savedFilters, t, updateSettings]);
-    useEffect(() => {
-        if (!showPriorityFilters && selectedPriorities.length > 0) {
-            setSelectedPriorities([]);
-        }
-        if (!showEnergyLevelFilters && selectedEnergyLevels.length > 0) {
-            setSelectedEnergyLevels([]);
-        }
-        if (!showLocationFilter && locationFilter.trim().length > 0) {
-            setLocationFilter('');
-        }
-        if (!showTimeEstimateFilters && selectedTimeEstimates.length > 0) {
-            setSelectedTimeEstimates([]);
-        }
-    }, [locationFilter, selectedEnergyLevels.length, selectedPriorities.length, selectedTimeEstimates.length, showEnergyLevelFilters, showLocationFilter, showPriorityFilters, showTimeEstimateFilters]);
+    }, [activeSavedFilterId, requestConfirmation, resolveText, settings?.savedFilters, t, unbindSavedFilter, updateSettings]);
 
     useEffect(() => {
         if (!highlightTaskId) return;

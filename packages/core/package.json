@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./task-draft": "./src/task-draft.ts",
+    "./task-filter-selections": "./src/task-filter-selections.ts",
     "./process-inbox-workflow": "./src/process-inbox-workflow.ts",
     "./task-sync-schema": "./src/task-sync-schema.ts",
     "./task-recurrence-fields": "./src/task-recurrence-fields.ts",
