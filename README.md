@@ -285,9 +285,9 @@ You can help in several ways:
 
 <a href="https://www.star-history.com/?repos=dongdongbh%2FMindwtr&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&theme=dark&legend=top-left&sealed_token=o7AhNqQCMIgsAPrJNNtM_vXOeX8W0bIEpvmIena9PV3XimmgI9az7lbogUApV_fH-XpQ4OuVXrpI4qP3V7ixza9r8lDKbwNU0-oQrJywIWFf0kNhQD71ypiYzU7MpatFfUn30EeKyKyEpEqUlOtHfAb0XEs59TKha6lmoUfazzlSHvmR47bncqR7gUGO" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=o7AhNqQCMIgsAPrJNNtM_vXOeX8W0bIEpvmIena9PV3XimmgI9az7lbogUApV_fH-XpQ4OuVXrpI4qP3V7ixza9r8lDKbwNU0-oQrJywIWFf0kNhQD71ypiYzU7MpatFfUn30EeKyKyEpEqUlOtHfAb0XEs59TKha6lmoUfazzlSHvmR47bncqR7gUGO" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=o7AhNqQCMIgsAPrJNNtM_vXOeX8W0bIEpvmIena9PV3XimmgI9az7lbogUApV_fH-XpQ4OuVXrpI4qP3V7ixza9r8lDKbwNU0-oQrJywIWFf0kNhQD71ypiYzU7MpatFfUn30EeKyKyEpEqUlOtHfAb0XEs59TKha6lmoUfazzlSHvmR47bncqR7gUGO" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&theme=dark&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
  </picture>
 </a>
 
