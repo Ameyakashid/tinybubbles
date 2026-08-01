@@ -1445,6 +1445,7 @@ pub fn run() {
                         if let Some(w) = handle.get_webview_window("main") {
                             if !w.is_visible().unwrap_or(true) {
                                 let _ = w.show();
+                                crate::ui::nudge_wayland_csd_after_show(&w);
                             }
                             let _ = w.set_focus();
                         }
@@ -1664,6 +1665,7 @@ pub fn run() {
                     // that no longer has a tray.
                     if let Some(window) = handle.get_webview_window("main") {
                         let _ = window.show();
+                        crate::ui::nudge_wayland_csd_after_show(&window);
                     }
                 }
             }

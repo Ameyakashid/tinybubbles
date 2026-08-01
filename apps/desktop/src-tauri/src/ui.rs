@@ -468,11 +468,34 @@ pub(crate) fn reveal_main_window_after_timeout(app: &tauri::AppHandle) {
     });
 }
 
+/// tao < 0.36 installs its own Wayland CSD titlebar whose buttons stop
+/// responding after any hide -> show cycle (tauri-apps/tauri#11856; fixed
+/// upstream by tao#1218, released in tao 0.36.0, not yet in a published
+/// Tauri). Toggling resizable makes tao's WlHeader rebuild its buttons
+/// (it listens on resizable-notify) with no visible change. Skipped while
+/// maximized — maximizing already re-allocates the titlebar. Delete once
+/// our Tauri ships tao >= 0.36. (#988)
+#[cfg(target_os = "linux")]
+pub(crate) fn nudge_wayland_csd_after_show(window: &tauri::WebviewWindow) {
+    if std::env::var("WAYLAND_DISPLAY").is_err() {
+        return;
+    }
+    if window.is_maximized().unwrap_or(false) {
+        return;
+    }
+    let _ = window.set_resizable(false);
+    let _ = window.set_resizable(true);
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn nudge_wayland_csd_after_show(_window: &tauri::WebviewWindow) {}
+
 pub(crate) fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_skip_taskbar(false);
         let _ = window.unminimize();
         let _ = window.show();
+        nudge_wayland_csd_after_show(&window);
         let _ = window.set_focus();
     }
 }
