@@ -158,12 +158,16 @@ const buildSqliteWatcherTraceExtra = (
 
 type SnapshotTraceSummary = {
     dataSig: string;
-    tasksSig: string;
-    projectsSig: string;
-    sectionsSig: string;
-    areasSig: string;
-    peopleSig: string;
-    settingsSig: string;
+    /**
+     * Per-collection signatures are diagnostics only and are absent unless
+     * logging is enabled — see the gate in `buildSnapshotTraceSummary`.
+     */
+    tasksSig?: string;
+    projectsSig?: string;
+    sectionsSig?: string;
+    areasSig?: string;
+    peopleSig?: string;
+    settingsSig?: string;
     taskCount: string;
     projectCount: string;
     sectionCount: string;
@@ -179,15 +183,24 @@ const buildSnapshotTraceSummary = async (data: AppData): Promise<SnapshotTraceSu
     const areas = Array.isArray(normalized.areas) ? normalized.areas : [];
     const people = Array.isArray(normalized.people) ? normalized.people ?? [] : [];
     const settings = normalized.settings ?? {};
-    const [dataSig, tasksSig, projectsSig, sectionsSig, areasSig, peopleSig, settingsSig] = await Promise.all([
-        localDataWatcherDependencies.hashPayload(toStableJson(normalized)),
-        localDataWatcherDependencies.hashPayload(toStableJson(tasks)),
-        localDataWatcherDependencies.hashPayload(toStableJson(projects)),
-        localDataWatcherDependencies.hashPayload(toStableJson(sections)),
-        localDataWatcherDependencies.hashPayload(toStableJson(areas)),
-        localDataWatcherDependencies.hashPayload(toStableJson(people)),
-        localDataWatcherDependencies.hashPayload(toStableJson(settings)),
-    ]);
+    // `dataSig` drives the no-op refresh detection in `runSqliteRefresh`, so it
+    // is always computed. The six per-collection signatures are for logging
+    // only, and each one costs another full stable-stringify of that
+    // collection — on a large store that is megabytes of transient string per
+    // refresh, twice per refresh. Gate them behind the same logging switch
+    // `sync-service.ts` uses for its payload traces.
+    const detailed = normalized.settings?.diagnostics?.loggingEnabled === true;
+    const dataSig = await localDataWatcherDependencies.hashPayload(toStableJson(normalized));
+    const [tasksSig, projectsSig, sectionsSig, areasSig, peopleSig, settingsSig] = detailed
+        ? await Promise.all([
+            localDataWatcherDependencies.hashPayload(toStableJson(tasks)),
+            localDataWatcherDependencies.hashPayload(toStableJson(projects)),
+            localDataWatcherDependencies.hashPayload(toStableJson(sections)),
+            localDataWatcherDependencies.hashPayload(toStableJson(areas)),
+            localDataWatcherDependencies.hashPayload(toStableJson(people)),
+            localDataWatcherDependencies.hashPayload(toStableJson(settings)),
+        ])
+        : [undefined, undefined, undefined, undefined, undefined, undefined];
 
     return {
         dataSig,
@@ -209,26 +222,41 @@ const prefixSnapshotTraceSummary = (
     prefix: string,
     summary: SnapshotTraceSummary,
 ): Record<string, string> => Object.fromEntries(
-    Object.entries(summary).map(([name, value]) => [
-        `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}`,
-        value,
-    ]),
+    Object.entries(summary)
+        // An absent per-collection signature means logging was off when the
+        // summary was built; omit it rather than reporting an empty digest.
+        .filter(([, value]) => value !== undefined)
+        .map(([name, value]) => [
+            `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}`,
+            value as string,
+        ]),
+);
+
+/** Reports a change only when both signatures were actually computed. */
+const changed = (
+    name: string,
+    before: string | undefined,
+    after: string | undefined,
+): Record<string, string> => (
+    before === undefined || after === undefined ? {} : { [name]: String(before !== after) }
 );
 
 const buildSnapshotChangeTraceExtra = (
     before: SnapshotTraceSummary,
     after: SnapshotTraceSummary,
-): Record<string, string> => ({
-    dataChanged: String(before.dataSig !== after.dataSig),
-    tasksChanged: String(before.tasksSig !== after.tasksSig),
-    projectsChanged: String(before.projectsSig !== after.projectsSig),
-    sectionsChanged: String(before.sectionsSig !== after.sectionsSig),
-    areasChanged: String(before.areasSig !== after.areasSig),
-    peopleChanged: String(before.peopleSig !== after.peopleSig),
-    settingsChanged: String(before.settingsSig !== after.settingsSig),
-    ...prefixSnapshotTraceSummary('before', before),
-    ...prefixSnapshotTraceSummary('after', after),
-});
+): Record<string, string> => {
+    return {
+        dataChanged: String(before.dataSig !== after.dataSig),
+        ...changed('tasksChanged', before.tasksSig, after.tasksSig),
+        ...changed('projectsChanged', before.projectsSig, after.projectsSig),
+        ...changed('sectionsChanged', before.sectionsSig, after.sectionsSig),
+        ...changed('areasChanged', before.areasSig, after.areasSig),
+        ...changed('peopleChanged', before.peopleSig, after.peopleSig),
+        ...changed('settingsChanged', before.settingsSig, after.settingsSig),
+        ...prefixSnapshotTraceSummary('before', before),
+        ...prefixSnapshotTraceSummary('after', after),
+    };
+};
 
 /** Filter out iCloud placeholder events (.icloud files, lock files). */
 const isRelevantSyncEvent = (paths: string[]): boolean => {
