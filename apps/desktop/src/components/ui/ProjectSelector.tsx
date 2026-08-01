@@ -60,10 +60,16 @@ export function ProjectSelector({
         () => projects.filter(isSelectableProject),
         [projects]
     );
+    // The browse list stays scoped to the caller's area, but searching must reach every
+    // project — picking one clears the area anyway, so out-of-area projects are alternatives.
+    const searchableProjects = useMemo(
+        () => projectPool.filter(isSelectableProject),
+        [projectPool]
+    );
     const filtered = useMemo(() => {
         if (!normalizedQuery) return selectableProjects;
-        return selectableProjects.filter((project) => project.title.toLowerCase().includes(normalizedQuery));
-    }, [selectableProjects, normalizedQuery]);
+        return searchableProjects.filter((project) => project.title.toLowerCase().includes(normalizedQuery));
+    }, [searchableProjects, selectableProjects, normalizedQuery]);
 
     const hasExactMatch = useMemo(() => {
         if (!normalizedQuery) return false;

@@ -614,6 +614,43 @@ describe('InboxProcessingModal', () => {
     expect(findNodesWithText(root, 'Home Project').length).toBeGreaterThan(0);
   });
 
+  it('searches projects outside the selected area while the browse list stays scoped (#987)', () => {
+    storeState.tasks = [{ ...baseInboxTask, areaId: workArea.id }];
+    storeState.areas = [workArea, homeArea];
+    storeState.projects = [workProject, homeProject];
+    let tree: ReturnType<typeof create>;
+
+    act(() => {
+      tree = create(<InboxProcessingModal visible onClose={vi.fn()} />);
+    });
+
+    const root = tree!.root;
+
+    revealDeferredOptions(root);
+
+    expect(findNodesWithText(root, 'Home Project')).toHaveLength(0);
+
+    const projectSearch = root.findByProps({ placeholder: 'projects.addPlaceholder' });
+
+    act(() => {
+      projectSearch.props.onChangeText('Home');
+    });
+
+    expect(findNodesWithText(root, 'Home Project').length).toBeGreaterThan(0);
+    // An existing title anywhere suppresses the create offer, not just in-area ones.
+    act(() => {
+      root.findByProps({ placeholder: 'projects.addPlaceholder' }).props.onChangeText('Home Project');
+    });
+    expect(findNodesWithText(root, 'projects.create')).toHaveLength(0);
+
+    act(() => {
+      root.findByProps({ placeholder: 'projects.addPlaceholder' }).props.onChangeText('');
+    });
+
+    expect(findNodesWithText(root, 'Home Project')).toHaveLength(0);
+    expect(findNodesWithText(root, 'Work Project').length).toBeGreaterThan(0);
+  });
+
   it('respects the global area filter when building the processing queue', async () => {
     mockSettings.filters = { areaId: workArea.id };
     storeState.areas = [workArea, homeArea];

@@ -141,4 +141,66 @@ describe('Task edit pickers', () => {
         expect(tree!.root.findAll((node) => node.props.accessibilityLabel === 'Archived Project')).toHaveLength(0);
         expect(tree!.root.findAll((node) => node.props.accessibilityLabel === 'Completed Project')).toHaveLength(0);
     });
+
+    it('searches every selectable project while the browse list stays area-scoped (#987)', () => {
+        const inArea = {
+            id: 'project-in-area',
+            title: 'In Area Project',
+            status: 'active' as const,
+            color: '#3b82f6',
+            order: 0,
+            tagIds: [],
+            areaId: 'area-1',
+            createdAt: '2025-01-01T00:00:00.000Z',
+            updatedAt: '2025-01-01T00:00:00.000Z',
+        };
+        const outOfArea = { ...inArea, id: 'project-other-area', title: 'Other Area Project', order: 1, areaId: 'area-2' };
+        const archivedElsewhere = {
+            ...inArea,
+            id: 'project-archived',
+            title: 'Archived Elsewhere',
+            status: 'archived' as const,
+            order: 2,
+            areaId: 'area-2',
+        };
+        let tree: renderer.ReactTestRenderer;
+        act(() => {
+            tree = renderer.create(
+                <TaskEditProjectPicker
+                    visible
+                    projects={[inArea]}
+                    allProjects={[inArea, outOfArea, archivedElsewhere]}
+                    tc={tc as any}
+                    t={(key) => key}
+                    onClose={vi.fn()}
+                    onSelectProject={vi.fn()}
+                    onCreateProject={vi.fn().mockResolvedValue(null)}
+                />
+            );
+        });
+
+        const root = tree!.root;
+        const findLabelled = (label: string) => root.findAll((node) => node.props.accessibilityLabel === label);
+        const input = root.find(
+            (node) => node.props.accessibilityLabel === 'taskEdit.projectLabel' && node.props.accessibilityHint === 'common.search'
+        );
+
+        expect(findLabelled('In Area Project').length).toBeGreaterThan(0);
+        expect(findLabelled('Other Area Project')).toHaveLength(0);
+
+        act(() => {
+            input.props.onChangeText('Other');
+        });
+        expect(findLabelled('Other Area Project').length).toBeGreaterThan(0);
+
+        act(() => {
+            input.props.onChangeText('Archived');
+        });
+        expect(findLabelled('Archived Elsewhere')).toHaveLength(0);
+
+        act(() => {
+            input.props.onChangeText('');
+        });
+        expect(findLabelled('Other Area Project')).toHaveLength(0);
+    });
 });

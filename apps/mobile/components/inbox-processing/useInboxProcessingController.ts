@@ -321,17 +321,20 @@ export function useInboxProcessingController({
     () => filterProjectsBySelectedArea(projects, projectFilterAreaId),
     [projects, projectFilterAreaId],
   );
+  // The browse list stays scoped to the selected area, but searching must reach every
+  // project — picking one clears the area anyway, so out-of-area projects are alternatives.
+  const selectableProjects = useMemo(() => filterProjectsBySelectedArea(projects, undefined), [projects]);
   const filteredProjects = useMemo(() => {
     if (!projectSearch.trim()) return areaFilteredProjects;
     const query = projectSearch.trim().toLowerCase();
-    return areaFilteredProjects.filter((project) => project.title.toLowerCase().includes(query));
-  }, [areaFilteredProjects, projectSearch]);
+    return selectableProjects.filter((project) => project.title.toLowerCase().includes(query));
+  }, [areaFilteredProjects, projectSearch, selectableProjects]);
 
   const hasExactProjectMatch = useMemo(() => {
     if (!projectSearch.trim()) return false;
     const query = projectSearch.trim().toLowerCase();
-    return areaFilteredProjects.some((project) => project.title.toLowerCase() === query);
-  }, [areaFilteredProjects, projectSearch]);
+    return selectableProjects.some((project) => project.title.toLowerCase() === query);
+  }, [projectSearch, selectableProjects]);
 
   const currentProject = useMemo(
     () => (selectedProjectId ? projects.find((project) => project.id === selectedProjectId) ?? null : null),

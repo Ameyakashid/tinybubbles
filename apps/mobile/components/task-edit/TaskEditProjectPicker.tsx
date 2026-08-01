@@ -8,6 +8,12 @@ import { useAndroidKeyboardInset } from '../../lib/use-android-keyboard-inset';
 
 type ProjectPickerThemeColors = Pick<ThemeColors, 'border' | 'cardBg' | 'inputBg' | 'secondaryText' | 'text' | 'tint'>;
 
+const byOrder = (a: Project, b: Project) => {
+    const orderA = Number.isFinite(a.order) ? a.order : 0;
+    const orderB = Number.isFinite(b.order) ? b.order : 0;
+    return orderA - orderB;
+};
+
 type ProjectPickerLeadingOption = {
     key: string;
     label: string;
@@ -56,31 +62,24 @@ export function TaskEditProjectPicker({
     }, [visible]);
 
     const activeProjects = useMemo(() => {
-        return projects
-            .filter(isSelectableProjectForTaskAssignment)
-            .sort((a, b) => {
-                const orderA = Number.isFinite(a.order) ? a.order : 0;
-                const orderB = Number.isFinite(b.order) ? b.order : 0;
-                return orderA - orderB;
-            });
+        return projects.filter(isSelectableProjectForTaskAssignment).sort(byOrder);
     }, [projects]);
     const allActiveProjects = useMemo(() => {
-        return (allProjects ?? projects)
-            .filter((project) => !project.deletedAt)
-            .sort((a, b) => {
-                const orderA = Number.isFinite(a.order) ? a.order : 0;
-                const orderB = Number.isFinite(b.order) ? b.order : 0;
-                return orderA - orderB;
-            });
+        return (allProjects ?? projects).filter((project) => !project.deletedAt).sort(byOrder);
+    }, [allProjects, projects]);
+    // The browse list stays scoped to the caller's area, but searching must reach every
+    // project — picking one clears the area anyway, so out-of-area projects are alternatives.
+    const searchableProjects = useMemo(() => {
+        return (allProjects ?? projects).filter(isSelectableProjectForTaskAssignment).sort(byOrder);
     }, [allProjects, projects]);
 
     const normalizedProjectQuery = projectQuery.trim().toLowerCase();
     const filteredProjects = useMemo(() => {
         if (!normalizedProjectQuery) return activeProjects;
-        return activeProjects.filter((project) =>
+        return searchableProjects.filter((project) =>
             project.title.toLowerCase().includes(normalizedProjectQuery)
         );
-    }, [activeProjects, normalizedProjectQuery]);
+    }, [activeProjects, searchableProjects, normalizedProjectQuery]);
 
     const hasExactProjectMatch = useMemo(() => {
         if (!normalizedProjectQuery) return false;

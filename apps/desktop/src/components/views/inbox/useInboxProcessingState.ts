@@ -197,10 +197,12 @@ export function useInboxProcessingState({
     const skippedIds = processingSession.skippedTaskIds;
 
     const filteredProjects = useMemo(() => {
-        const areaFilteredProjects = filterProjectsBySelectedArea(projects, draft.areaId || undefined);
-        if (!projectSearch.trim()) return areaFilteredProjects;
+        if (!projectSearch.trim()) return filterProjectsBySelectedArea(projects, draft.areaId || undefined);
+        // Typing searches every selectable project, not just the selected
+        // area's — picking one clears the direct area anyway (#987).
         const query = projectSearch.trim().toLowerCase();
-        return areaFilteredProjects.filter((project) => project.title.toLowerCase().includes(query));
+        return filterProjectsBySelectedArea(projects, undefined)
+            .filter((project) => project.title.toLowerCase().includes(query));
     }, [draft.areaId, projects, projectSearch]);
 
     const hasExactProjectMatch = useMemo(() => {

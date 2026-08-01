@@ -219,6 +219,37 @@ describe('ProjectSelector', () => {
         expect(queryByText(/Create project/i)).not.toBeInTheDocument();
     });
 
+    it('searches every selectable project while the browse list stays area-scoped (#987)', () => {
+        const archivedElsewhere: Project = {
+            id: 'p3', title: 'Archived Elsewhere', status: 'archived', color: '#64748b', order: 2, tagIds: [], areaId: 'a1', createdAt: '', updatedAt: '',
+        };
+        const { getByRole, getByLabelText, queryByRole } = render(
+            <ProjectSelector
+                projects={[projects[0]]}
+                allProjects={[...projects, archivedElsewhere]}
+                value=""
+                onChange={vi.fn()}
+                placeholder="Select project"
+                searchPlaceholder="Search projects"
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: 'Select project' }));
+
+        expect(getByRole('option', { name: 'Alpha' })).toBeInTheDocument();
+        expect(queryByRole('option', { name: 'Work Project' })).not.toBeInTheDocument();
+
+        const input = getByLabelText('Search projects') as HTMLInputElement;
+        setInputValue(input, 'Work');
+        expect(getByRole('option', { name: 'Work Project' })).toBeInTheDocument();
+
+        setInputValue(input, 'Archived');
+        expect(queryByRole('option', { name: 'Archived Elsewhere' })).not.toBeInTheDocument();
+
+        setInputValue(input, '');
+        expect(queryByRole('option', { name: 'Work Project' })).not.toBeInTheDocument();
+    });
+
     it('selects the first matching project from the search input with Enter', () => {
         const onChange = vi.fn();
         const { getByRole, getByLabelText } = render(
