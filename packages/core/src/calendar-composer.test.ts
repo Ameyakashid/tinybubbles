@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    executeComposerSave,
     openComposerAt,
     openComposerForDate,
     prepareComposerSave,
@@ -348,5 +349,24 @@ describe('prepareComposerSave intents', () => {
 
         expect(applied.props.projectId).toBe('project-new');
         expect(applied.props.areaId).toBeUndefined();
+    });
+});
+
+describe('executeComposerSave', () => {
+    it('keeps a failed task update as a failed composer outcome', async () => {
+        const result = await executeComposerSave(
+            composerState({ mode: 'existing', selectedTaskId: 'task-7' }),
+            saveContext(),
+            {
+                addProject: async () => null,
+                addTask: async () => ({ success: true }),
+                updateTask: async () => ({ success: false, error: 'disk full' }),
+            },
+        );
+
+        expect(result).toEqual({
+            success: false,
+            error: { code: 'save_failed', detail: 'disk full' },
+        });
     });
 });

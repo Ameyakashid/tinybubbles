@@ -15,10 +15,9 @@ import {
     type Task,
 } from '@mindwtr/core';
 import {
-    applyComposerCreatedProject,
+    executeComposerSave,
     openComposerAt,
     openComposerForDate,
-    prepareComposerSave,
     selectComposerTask,
     setComposerDuration,
     setComposerEndTime,
@@ -59,7 +58,7 @@ export type CalendarComposerOptions = {
     t: (key: string) => string;
     tasks: Task[];
     timeEstimateToMinutes: (estimate: Task['timeEstimate']) => number;
-    updateTask: (id: string, updates: Partial<Task>) => Promise<unknown>;
+    updateTask: (id: string, updates: Partial<Task>) => Promise<StoreActionResult>;
 };
 
 export function useCalendarComposer({
@@ -206,46 +205,19 @@ export function useCalendarComposer({
 
     const saveTaskComposer = async () => {
         if (!taskComposer) return;
-        const intent = prepareComposerSave(taskComposer, {
+        const result = await executeComposerSave(taskComposer, {
             areas,
             isSlotFree,
             projects,
-        });
-        if (intent.kind === 'error') {
-            failTaskComposer(intent.error);
+        }, { addProject, addTask, updateTask });
+        if (!result.success) {
+            if (result.cause !== undefined) reportError('Failed to save calendar task', result.cause);
+            failTaskComposer(result.error);
             return;
         }
 
-        const start = taskComposer.startAt;
-        try {
-            if (intent.kind === 'update') {
-                await updateTask(intent.taskId, intent.updates);
-            } else {
-                let draft = intent.draft;
-                if (intent.projectToCreate) {
-                    const created = await addProject(
-                        intent.projectToCreate.name,
-                        intent.projectToCreate.color,
-                        intent.projectToCreate.initialProps,
-                    );
-                    if (!created) {
-                        failTaskComposer({ code: 'save_failed' });
-                        return;
-                    }
-                    draft = applyComposerCreatedProject(draft, created.id);
-                }
-                const result = await addTask(draft.title, draft.props);
-                if (!result.success) {
-                    failTaskComposer({ code: 'save_failed', detail: result.error ?? undefined });
-                    return;
-                }
-            }
-            setTaskComposer(null);
-            onSaved(start);
-        } catch (error) {
-            reportError('Failed to save calendar task', error);
-            failTaskComposer({ code: 'save_failed' });
-        }
+        setTaskComposer(null);
+        onSaved(result.start);
     };
 
     return {

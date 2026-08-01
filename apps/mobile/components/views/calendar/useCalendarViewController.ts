@@ -49,10 +49,9 @@ import {
   useTaskStore,
 } from '@mindwtr/core';
 import {
-  applyComposerCreatedProject,
+  executeComposerSave,
   openComposerAt,
   openComposerForDate,
-  prepareComposerSave,
   selectComposerTask,
   setComposerDuration,
   setComposerEndTime,
@@ -80,7 +79,6 @@ import { taskMatchesAreaFilter } from '@mindwtr/core';
 import { useLanguage } from '../../../contexts/language-context';
 import { canOpenExternalCalendarEvent, fetchExternalCalendarEvents, openExternalCalendarEvent } from '../../../lib/external-calendar';
 import { logError } from '../../../lib/app-log';
-import { getActionFailureMessage, isActionFailure } from '../../store-action-result';
 import {
   coerceCalendarWeekVisibleDays,
   coerceCalendarViewMode,
@@ -698,60 +696,25 @@ export function useCalendarViewController() {
 
   const saveCalendarComposer = async () => {
     if (!calendarComposer) return;
-    const intent = prepareComposerSave(calendarComposer, {
+    const result = await executeComposerSave(calendarComposer, {
       areas,
       isSlotFree: (start, durationMinutes, excludeTaskId) => (
         isSlotFreeForDay(start, start, durationMinutes, excludeTaskId)
       ),
       projects,
-    });
-    if (intent.kind === 'error') {
-      failCalendarComposer(intent.error);
+    }, { addProject, addTask, updateTask });
+    if (!result.success) {
+      if (result.cause !== undefined) logCalendarError(result.cause);
+      failCalendarComposer(result.error);
       return;
     }
 
-    const start = calendarComposer.startAt;
-    try {
-      if (intent.kind === 'update') {
-        // Mirrors the create branch below: a `{ success: false }` write must not
-        // fall through to closing the composer as if it had saved.
-        const updated = await updateTask(intent.taskId, intent.updates);
-        if (isActionFailure(updated)) {
-          failCalendarComposer({ code: 'save_failed', detail: getActionFailureMessage(updated) });
-          return;
-        }
-      } else {
-        let draft = intent.draft;
-        if (intent.projectToCreate) {
-          const created = await addProject(
-            intent.projectToCreate.name,
-            intent.projectToCreate.color,
-            intent.projectToCreate.initialProps,
-          );
-          if (!created) {
-            failCalendarComposer({ code: 'save_failed' });
-            return;
-          }
-          draft = applyComposerCreatedProject(draft, created.id);
-        }
-        const result = await addTask(draft.title, draft.props);
-        if (!result.success) {
-          failCalendarComposer({ code: 'save_failed', detail: result.error ?? undefined });
-          return;
-        }
-      }
-      setCalendarComposer(null);
-      setScheduleQuery('');
-      if (start) {
-        setSelectedDate(start);
-        setVisibleMonthDate(start);
-        setPendingScrollMinutes((start.getHours() * 60 + start.getMinutes()) - DAY_START_HOUR * 60);
-      }
-      setViewMode('day');
-    } catch (error) {
-      logCalendarError(error);
-      failCalendarComposer({ code: 'save_failed' });
-    }
+    setCalendarComposer(null);
+    setScheduleQuery('');
+    setSelectedDate(result.start);
+    setVisibleMonthDate(result.start);
+    setPendingScrollMinutes((result.start.getHours() * 60 + result.start.getMinutes()) - DAY_START_HOUR * 60);
+    setViewMode('day');
   };
 
   const scheduleTaskOnSelectedDate = (taskId: string) => {

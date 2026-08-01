@@ -9,10 +9,10 @@
  * time field. So the platform parses its own inputs into `startAt` and this
  * module owns everything downstream.
  *
- * `prepareComposerSave` never touches the store: it returns an *intent* and the
- * platform performs the write through the normal `addTask`/`addProject`/
- * `updateTask` paths (which stamp `rev`, timestamps and defaults). Errors come
- * back as codes; the platform maps them to its own localized strings.
+ * Store writes still run through the normal `addTask`/`addProject`/`updateTask`
+ * actions, which stamp `rev`, timestamps and defaults. This module sequences
+ * those actions and returns one explicit outcome; the platform only maps error
+ * codes to localized strings and updates view state after success.
  */
 import {
     DEFAULT_CALENDAR_DAY_START_HOUR,
@@ -25,6 +25,7 @@ import {
 } from './calendar-scheduling';
 import { DEFAULT_PROJECT_COLOR } from './color-constants';
 import { getQuickAddProjectInitialProps } from './quick-add';
+import type { StoreActionResult } from './store-types';
 import type { Area, Project, Task } from './types';
 
 const DEFAULT_CALENDAR_COMPOSER_DURATION_MINUTES = 30;
@@ -96,6 +97,22 @@ export type CalendarComposerSaveContext = {
     now?: Date;
     projects?: Project[];
 };
+
+export type CalendarComposerActions = {
+    addProject: (
+        name: string,
+        color: string,
+        initialProps?: Partial<Project>,
+    ) => Promise<Pick<Project, 'id'> | null>;
+    addTask: (title: string, props?: Partial<Task>) => Promise<StoreActionResult>;
+    updateTask: (taskId: string, updates: Partial<Task>) => Promise<StoreActionResult>;
+};
+
+export type CalendarComposerSaveResult =
+    | { error: CalendarComposerError; cause?: unknown; success: false }
+    | { kind: 'create' | 'update'; start: Date; success: true };
+
+type CalendarComposerSaveFailure = Extract<CalendarComposerSaveResult, { success: false }>;
 
 const composerError = (code: CalendarComposerErrorCode, detail?: string): CalendarComposerSaveIntent => ({
     error: detail ? { code, detail } : { code },
@@ -271,4 +288,52 @@ export function prepareComposerSave(
             }
             : undefined,
     };
+}
+
+const actionFailure = (detail?: string): CalendarComposerSaveFailure => ({
+    error: detail ? { code: 'save_failed', detail } : { code: 'save_failed' },
+    success: false,
+});
+
+const thrownFailure = (cause: unknown): CalendarComposerSaveFailure => ({
+    ...actionFailure(),
+    cause,
+});
+
+/** Validate and durably apply one composer state through the normal store actions. */
+export async function executeComposerSave(
+    state: CalendarComposerState,
+    context: CalendarComposerSaveContext,
+    actions: CalendarComposerActions,
+): Promise<CalendarComposerSaveResult> {
+    const intent = prepareComposerSave(state, context);
+    if (intent.kind === 'error') return { error: intent.error, success: false };
+
+    try {
+        if (intent.kind === 'update') {
+            const result = await actions.updateTask(intent.taskId, intent.updates);
+            if (!result.success) return actionFailure(result.error);
+        } else {
+            let draft = intent.draft;
+            if (intent.projectToCreate) {
+                const created = await actions.addProject(
+                    intent.projectToCreate.name,
+                    intent.projectToCreate.color,
+                    intent.projectToCreate.initialProps,
+                );
+                if (!created) return actionFailure();
+                draft = applyComposerCreatedProject(draft, created.id);
+            }
+
+            const result = await actions.addTask(draft.title, draft.props);
+            if (!result.success) return actionFailure(result.error);
+        }
+    } catch (cause) {
+        return thrownFailure(cause);
+    }
+
+    // Validation above proves this is a Date; retain the guard for type safety if
+    // the validation cascade changes later.
+    if (!state.startAt) return actionFailure();
+    return { kind: intent.kind, start: state.startAt, success: true };
 }
