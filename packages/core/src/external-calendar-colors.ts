@@ -75,6 +75,29 @@ export function resolveExternalCalendarColor(
 }
 
 /**
+ * Nord stand-ins for the 8 pickable swatches (#974). Display only — the map is
+ * applied to the *output* of `resolveExternalCalendarColor`, never to what gets
+ * stored, so a pick made under Nord is still the canonical hex on every other
+ * theme. A feed-provided COLOR hint is arbitrary hex, misses this map, and
+ * passes through unchanged.
+ */
+export const NORD_EXTERNAL_CALENDAR_COLOR_MAP: Record<string, string> = {
+    '#2563eb': '#5e81ac',
+    '#7c3aed': '#b48ead',
+    '#db2777': '#bf616a',
+    '#ea580c': '#d08770',
+    '#059669': '#8fbcbb',
+    '#0891b2': '#88c0d0',
+    '#4f46e5': '#81a1c1',
+    '#65a30d': '#a3be8c',
+};
+
+export function themeExternalCalendarDisplayColor(color: string, theme?: string): string {
+    if (theme !== 'nord') return color;
+    return NORD_EXTERNAL_CALENDAR_COLOR_MAP[color.toLowerCase()] ?? color;
+}
+
+/**
  * Whether a stored color counts as a deliberate pick for
  * `resolveExternalCalendarColor` — a stored color equal to the hash default is
  * treated as unset (see the resolver note above). The settings screens use

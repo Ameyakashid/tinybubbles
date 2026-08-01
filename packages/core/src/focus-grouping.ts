@@ -31,6 +31,8 @@ export type BuildFocusTaskGroupsParams = {
     projects: Project[];
     areas: Area[];
     resolveText: FocusResolveText;
+    /** Active theme, for the context/tag swatch palette only (#974). */
+    theme?: string;
 };
 
 // Internal shape carrying the ordering key the single-assignment axes sort by.
@@ -98,6 +100,7 @@ function buildTokenGroups(
     selectToken: (task: Task) => string[] | undefined,
     keyPrefix: string,
     noneLabel: string,
+    theme?: string,
 ): FocusTaskGroup[] {
     const grouped = new Map<string, Task[]>();
     const noneTasks: Task[] = [];
@@ -128,7 +131,7 @@ function buildTokenGroups(
                 key: `${keyPrefix}:${token}`,
                 label: token,
                 tasks: grouped.get(token) ?? [],
-                dotColor: getContextColor(token),
+                dotColor: getContextColor(token, theme),
             });
         });
     return groups;
@@ -146,6 +149,7 @@ export function buildFocusTaskGroups({
     projects,
     areas,
     resolveText,
+    theme,
 }: BuildFocusTaskGroupsParams): FocusTaskGroup[] {
     switch (groupBy) {
         case 'none':
@@ -156,6 +160,7 @@ export function buildFocusTaskGroups({
                 (task) => task.contexts,
                 'context',
                 resolveText('contexts.none', 'No context'),
+                theme,
             );
         case 'tag':
             return buildTokenGroups(
@@ -163,6 +168,7 @@ export function buildFocusTaskGroups({
                 (task) => task.tags,
                 'tag',
                 resolveText('projects.noTags', 'No tags'),
+                theme,
             );
         case 'project': {
             const projectById = new Map(projects.map((project) => [project.id, project]));

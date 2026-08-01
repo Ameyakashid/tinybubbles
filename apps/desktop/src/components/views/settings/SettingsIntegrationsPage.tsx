@@ -99,6 +99,8 @@ type SettingsIntegrationsPageProps = {
     calendarPushTargetCalendarId: string | null;
     calendarPushTargets: SystemCalendarPushTarget[];
     calendarPushLoading: boolean;
+    /** Active theme, for the calendar swatch fills only (#974). */
+    theme?: string;
     onCalendarNameChange: (value: string) => void;
     onCalendarUrlChange: (value: string) => void;
     onAddCalendar: () => void;
@@ -152,6 +154,7 @@ export function SettingsIntegrationsPage({
     calendarPushTargetCalendarId,
     calendarPushTargets,
     calendarPushLoading,
+    theme,
     onCalendarNameChange,
     onCalendarUrlChange,
     onAddCalendar,
@@ -204,6 +207,7 @@ export function SettingsIntegrationsPage({
                 calendarPushTargetCalendarId={calendarPushTargetCalendarId}
                 calendarPushTargets={calendarPushTargets}
                 calendarPushLoading={calendarPushLoading}
+                theme={theme}
                 onCalendarNameChange={onCalendarNameChange}
                 onCalendarUrlChange={onCalendarUrlChange}
                 onAddCalendar={onAddCalendar}

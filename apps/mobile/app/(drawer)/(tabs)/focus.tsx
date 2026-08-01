@@ -230,7 +230,7 @@ export default function FocusScreen() {
     highlightTaskId: state.highlightTaskId,
     setHighlightTask: state.setHighlightTask,
   }), shallow);
-  const { isDark } = useTheme();
+  const { isDark, themePreset } = useTheme();
   const { t } = useLanguage();
   const { showToast } = useToast();
   const tc = useThemeColors();
@@ -945,6 +945,7 @@ export default function FocusScreen() {
         projects,
         areas,
         resolveText,
+        theme: themePreset,
       });
       return groups
         .flatMap((group) => [
@@ -1020,6 +1021,7 @@ export default function FocusScreen() {
     reviewDueProjects,
     schedule,
     t,
+    themePreset,
   ]);
   const focusListVersion = useMemo(() => (
     sections.map((section) => {

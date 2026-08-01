@@ -1436,6 +1436,7 @@ export const TaskItem = memo(function TaskItem({
                                 showHoverHint={showHoverHint}
                                 projectDeadlineLabel={projectDeadlineLabel}
                                 renameRequestToken={renameRequestToken}
+                                theme={settings?.theme}
                                 t={t}
                             />
                         )}

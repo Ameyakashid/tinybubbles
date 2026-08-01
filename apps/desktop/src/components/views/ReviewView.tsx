@@ -197,8 +197,8 @@ export function ReviewView() {
         undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
     });
     const groupedTasks = useMemo<TaskGroup[]>(
-        () => groupTasks(groupBy, { tasks: filteredTasks, areas, projectMap: projectMapById, t }),
-        [areas, filteredTasks, groupBy, projectMapById, t],
+        () => groupTasks(groupBy, { tasks: filteredTasks, areas, projectMap: projectMapById, t, theme: settings?.theme }),
+        [areas, filteredTasks, groupBy, projectMapById, settings?.theme, t],
     );
     const isGrouping = groupBy !== 'none' && filteredTasks.length > 0;
 

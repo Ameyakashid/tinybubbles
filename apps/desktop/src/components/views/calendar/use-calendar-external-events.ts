@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     resolveExternalCalendarColor,
     safeParseDate,
+    themeExternalCalendarDisplayColor,
+    useTaskStore,
     type ExternalCalendarEvent,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
@@ -20,9 +22,13 @@ import { dayKey } from './calendar-primitives';
 
 const HIDDEN_EXTERNAL_CALENDAR_IDS_STORAGE_KEY = 'mindwtr.calendar.hiddenExternalCalendars';
 
-/** User pick > feed-provided color > deterministic palette hash (#974). */
-export const defaultExternalCalendarColor = (sourceId: string, override?: string, feedColor?: string): string => (
-    resolveExternalCalendarColor(sourceId, override, feedColor)
+/**
+ * User pick > feed-provided color > deterministic palette hash (#974), then a
+ * display-only theme remap — the resolved value is canonical, `theme` only
+ * decides which hex it is painted as.
+ */
+export const defaultExternalCalendarColor = (sourceId: string, override?: string, feedColor?: string, theme?: string): string => (
+    themeExternalCalendarDisplayColor(resolveExternalCalendarColor(sourceId, override, feedColor), theme)
 );
 
 const serializeHiddenExternalCalendarIds = (ids: Iterable<string>): string => (
@@ -71,6 +77,7 @@ export type CalendarExternalEventsOptions = {
 };
 
 export function useCalendarExternalEvents({ filterQuery, visibleRange }: CalendarExternalEventsOptions) {
+    const theme = useTaskStore((state) => state.settings?.theme);
     const [externalCalendars, setExternalCalendars] = useState<ExternalCalendarSubscription[]>([]);
     const [externalEvents, setExternalEvents] = useState<ExternalCalendarEvent[]>([]);
     const hiddenExternalCalendarIdsStorageRef = useRef<string | null>(null);
@@ -130,12 +137,12 @@ export function useCalendarExternalEvents({ filterQuery, visibleRange }: Calenda
 
     const calendarNameById = useMemo(() => new Map(externalCalendars.map((c) => [c.id, c.name])), [externalCalendars]);
     const calendarColorById = useMemo(
-        () => new Map(externalCalendars.map((c) => [c.id, defaultExternalCalendarColor(c.id, c.color, c.feedColor)])),
-        [externalCalendars]
+        () => new Map(externalCalendars.map((c) => [c.id, defaultExternalCalendarColor(c.id, c.color, c.feedColor, theme)])),
+        [externalCalendars, theme]
     );
     const getExternalCalendarColor = useCallback(
-        (sourceId: string) => calendarColorById.get(sourceId) ?? defaultExternalCalendarColor(sourceId),
-        [calendarColorById]
+        (sourceId: string) => calendarColorById.get(sourceId) ?? defaultExternalCalendarColor(sourceId, undefined, undefined, theme),
+        [calendarColorById, theme]
     );
 
     const visibleExternalEvents = useMemo(

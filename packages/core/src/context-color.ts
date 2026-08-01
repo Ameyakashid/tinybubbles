@@ -15,6 +15,26 @@ const CONTEXT_COLOR_PALETTE = [
     '#b45309',
 ];
 
+/**
+ * Nord-flavored stand-ins, slot-for-slot with the canonical palette above.
+ * Display only — nothing stores a context color, so a context keeps its slot
+ * across themes and only the rendered hex changes (#974).
+ */
+export const NORD_CONTEXT_COLOR_PALETTE = [
+    '#5e81ac',
+    '#8fbcbb',
+    '#a3be8c',
+    '#b48ead',
+    '#d08770',
+    '#bf616a',
+    '#88c0d0',
+    '#81a1c1',
+    // Nord ships 9 accents and this palette needs 10 distinct slots; this is
+    // nord14 (#a3be8c, slot 2) darkened so the two stay tellable apart.
+    '#7a9161',
+    '#ebcb8b',
+];
+
 function hashText(value: string): number {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
@@ -24,10 +44,11 @@ function hashText(value: string): number {
     return hash;
 }
 
-export function getContextColor(context: string): string {
+export function getContextColor(context: string, theme?: string): string {
+    const palette = theme === 'nord' ? NORD_CONTEXT_COLOR_PALETTE : CONTEXT_COLOR_PALETTE;
     const normalized = context.trim().toLowerCase();
-    if (!normalized) return CONTEXT_COLOR_PALETTE[0];
+    if (!normalized) return palette[0];
     const hash = hashText(normalized);
-    const index = Math.abs(hash) % CONTEXT_COLOR_PALETTE.length;
-    return CONTEXT_COLOR_PALETTE[index];
+    const index = Math.abs(hash) % palette.length;
+    return palette[index];
 }

@@ -549,9 +549,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const isListGrouping = activeGroupBy !== 'none';
     const groupedTasks = useMemo(() => (
         isListGrouping
-            ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t })
+            ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t, theme: settings?.theme })
             : [] as TaskGroup[]
-    ), [activeGroupBy, areas, filteredTasks, isListGrouping, localDayKey, projectMap, t]);
+    ), [activeGroupBy, areas, filteredTasks, isListGrouping, localDayKey, projectMap, settings?.theme, t]);
     const activeCollapseKey: ListGroupCollapseKey | null = isListGrouping
         ? activeGroupBy as ListGroupCollapseKey
         : null;

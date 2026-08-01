@@ -294,8 +294,8 @@ export function ArchiveView() {
     const isGrouping = archivedGroupBy !== 'none';
     const localDayKey = useLocalDayKey(archivedGroupBy === 'completedDate');
     const groupedTasks = useMemo<TaskGroup[]>(
-        () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t }) : []),
-        [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, t]
+        () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t, theme: settings?.theme }) : []),
+        [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, settings?.theme, t]
     );
     const activeCollapseKey: ArchiveGroupCollapseKey | null = isGrouping
         ? archivedGroupBy as ArchiveGroupCollapseKey

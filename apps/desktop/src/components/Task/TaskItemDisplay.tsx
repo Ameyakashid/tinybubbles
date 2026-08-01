@@ -73,6 +73,8 @@ interface TaskItemDisplayProps {
     showHoverHint?: boolean;
     projectDeadlineLabel?: string;
     renameRequestToken?: number;
+    /** Active theme, for the context swatch palette only (#974). */
+    theme?: string;
     t: (key: string) => string;
 }
 
@@ -120,6 +122,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     showHoverHint = true,
     projectDeadlineLabel,
     renameRequestToken = 0,
+    theme,
     t,
 }: TaskItemDisplayProps) {
     const {
@@ -326,7 +329,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                 key={ctx}
                 variant="context"
                 label={ctx}
-                dotColor={getContextColor(ctx)}
+                dotColor={getContextColor(ctx, theme)}
             />
         );
         if (!onOpenContextToken) return badge;

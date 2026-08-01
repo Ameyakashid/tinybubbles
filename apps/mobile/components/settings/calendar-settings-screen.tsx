@@ -10,6 +10,7 @@ import {
     hasExplicitExternalCalendarColor,
     normalizeExternalCalendarColor,
     tFallback,
+    themeExternalCalendarDisplayColor,
     type ExternalCalendarSubscription,
     useTaskStore,
 } from '@mindwtr/core';
@@ -43,6 +44,7 @@ import {
     updateMindwtrCalendarColor,
     type CalendarPushTargetCalendar,
 } from '@/lib/calendar-push-sync';
+import { useTheme } from '@/contexts/theme-context';
 import { useToast } from '@/contexts/toast-context';
 import { maskCalendarUrl } from '@/lib/settings-utils';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -94,6 +96,7 @@ function CollapsibleSettingHeader({
 
 export function CalendarSettingsScreen() {
     const tc = useThemeColors();
+    const { themePreset } = useTheme();
     const filledButton = useFilledButtonColors();
     const { showToast } = useToast();
     const { isChineseLanguage, tr, t } = useSettingsLocalization();
@@ -957,7 +960,8 @@ export function CalendarSettingsScreen() {
                                                             width: 22,
                                                             height: 22,
                                                             borderRadius: 11,
-                                                            backgroundColor: color,
+                                                            // Fill only — the stored pick stays canonical (#974).
+                                                            backgroundColor: themeExternalCalendarDisplayColor(color, themePreset),
                                                             borderWidth: selected ? 3 : 1,
                                                             borderColor: selected ? tc.tint : tc.border,
                                                         }}

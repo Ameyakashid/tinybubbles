@@ -63,6 +63,8 @@ interface GroupByAreaParams {
 interface GroupByContextParams {
     tasks: Task[];
     noContextLabel: string;
+    /** Active theme, for the token swatch palette only (#974). */
+    theme?: string;
 }
 
 interface GroupByProjectParams {
@@ -74,6 +76,8 @@ interface GroupByProjectParams {
 interface GroupByTagParams {
     tasks: Task[];
     noTagLabel: string;
+    /** Active theme, for the token swatch palette only (#974). */
+    theme?: string;
 }
 
 interface GroupByPriorityParams {
@@ -148,6 +152,7 @@ export function groupTasksByArea({
 export function groupTasksByContext({
     tasks,
     noContextLabel,
+    theme,
 }: GroupByContextParams): TaskGroup[] {
     const grouped = new Map<string, Task[]>();
     const noContextTasks: Task[] = [];
@@ -177,7 +182,7 @@ export function groupTasksByContext({
             id: `context:${context}`,
             title: context,
             tasks: contextTasks,
-            dotColor: getContextColor(context),
+            dotColor: getContextColor(context, theme),
         });
     });
 
@@ -400,6 +405,7 @@ export function groupTasksByStatus({
 export function groupTasksByTag({
     tasks,
     noTagLabel,
+    theme,
 }: GroupByTagParams): TaskGroup[] {
     const grouped = new Map<string, Task[]>();
     const noTagTasks: Task[] = [];
@@ -429,7 +435,7 @@ export function groupTasksByTag({
             id: `tag:${tag}`,
             title: tag,
             tasks: tagTasks,
-            dotColor: getContextColor(tag),
+            dotColor: getContextColor(tag, theme),
         });
     });
 
@@ -456,6 +462,8 @@ export type GroupTasksInputs = {
     areas: Area[];
     projectMap: Map<string, Project>;
     t: (key: string) => string;
+    /** Active theme, for the context/tag swatch palette only (#974). */
+    theme?: string;
 };
 
 /**
@@ -463,7 +471,7 @@ export type GroupTasksInputs = {
  * included. Views declare which axes they offer and where the choice
  * persists — nothing else.
  */
-export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }: GroupTasksInputs): TaskGroup[] {
+export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t, theme }: GroupTasksInputs): TaskGroup[] {
     switch (axis) {
         case 'none':
             return [];
@@ -480,9 +488,9 @@ export function groupTasks(axis: TaskGroupAxis, { tasks, areas, projectMap, t }:
         case 'person':
             return groupTasksByPerson({ tasks, unassignedLabel: tFallback(t, 'people.unassigned', 'Unassigned') });
         case 'tag':
-            return groupTasksByTag({ tasks, noTagLabel: tFallback(t, 'projects.noTags', 'No tags') });
+            return groupTasksByTag({ tasks, noTagLabel: tFallback(t, 'projects.noTags', 'No tags'), theme });
         case 'context':
-            return groupTasksByContext({ tasks, noContextLabel: tFallback(t, 'contexts.none', 'No context') });
+            return groupTasksByContext({ tasks, noContextLabel: tFallback(t, 'contexts.none', 'No context'), theme });
         case 'completedDate':
             // Bucketing and labels live in core so Done/Archive read the same
             // on both platforms (#959).

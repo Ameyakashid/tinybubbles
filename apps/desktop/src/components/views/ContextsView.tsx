@@ -54,7 +54,7 @@ type BulkTokenPickerState = {
 
 export function ContextsView() {
     const perf = usePerformanceMonitor('ContextsView');
-    const { tasks, tasksById, projects, areas, areaFilterId, taskSortBy, undoNotificationsEnabled, updateSettings } = useTaskStore(
+    const { tasks, tasksById, projects, areas, areaFilterId, taskSortBy, theme, undoNotificationsEnabled, updateSettings } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             tasksById: state._tasksById,
@@ -62,6 +62,7 @@ export function ContextsView() {
             areas: state.areas,
             areaFilterId: state.settings?.filters?.areaId,
             taskSortBy: state.settings?.taskSortBy,
+            theme: state.settings?.theme,
             undoNotificationsEnabled: state.settings?.undoNotificationsEnabled !== false,
             updateSettings: state.updateSettings,
         }),
@@ -205,8 +206,8 @@ export function ContextsView() {
         }));
     }, [setPersistedViewState]);
     const groupedTasks = useMemo<TaskGroup[]>(
-        () => groupTasks(groupBy, { tasks: sortedTasks, areas, projectMap, t }),
-        [areas, groupBy, projectMap, sortedTasks, t],
+        () => groupTasks(groupBy, { tasks: sortedTasks, areas, projectMap, t, theme }),
+        [areas, groupBy, projectMap, sortedTasks, t, theme],
     );
     const isGrouping = groupBy !== 'none';
     // Grouping reorders the rows, so the keyboard walks the grouped order.

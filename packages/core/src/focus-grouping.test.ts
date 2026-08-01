@@ -44,12 +44,14 @@ const build = (groupBy: Parameters<typeof buildFocusTaskGroups>[0]['groupBy'], p
     tasks: Task[];
     projects?: Project[];
     areas?: Area[];
+    theme?: string;
 }) => buildFocusTaskGroups({
     groupBy,
     tasks: params.tasks,
     projects: params.projects ?? [],
     areas: params.areas ?? [],
     resolveText,
+    theme: params.theme,
 });
 
 const keys = (groups: { key: string }[]) => groups.map((group) => group.key);
@@ -171,6 +173,16 @@ describe('buildFocusTaskGroups', () => {
 
             const tag = build('tag', { tasks: [makeTask({ id: 'a', tags: ['home'] })] });
             expect(tag[0].dotColor).toBe(getContextColor('home'));
+        });
+
+        it('passes the theme through to the token palette (#974)', () => {
+            const tasks = [makeTask({ id: 'a', contexts: ['@work'] })];
+            expect(build('context', { tasks, theme: 'nord' })[0].dotColor)
+                .toBe(getContextColor('@work', 'nord'));
+            // The project/area axes read stored colors and must not be themed.
+            const projects = [makeProject({ id: 'p1', color: '#123456' })];
+            expect(build('project', { tasks: [makeTask({ id: 'a', projectId: 'p1' })], projects, theme: 'nord' })[0].dotColor)
+                .toBe('#123456');
         });
 
         it('colors project buckets by project.color, none-bucket bare', () => {

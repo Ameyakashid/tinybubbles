@@ -296,6 +296,8 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
 
     return {
         externalCalendars,
+        // Swatch fills only — a pick is still stored as the canonical hex (#974).
+        theme: settings?.theme,
         newCalendarName,
         newCalendarUrl,
         calendarError,

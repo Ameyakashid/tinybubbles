@@ -39,6 +39,7 @@ import {
   shallow,
   startOfCalendarMonth,
   resolveExternalCalendarColor,
+  themeExternalCalendarDisplayColor,
   timeEstimateToMinutes as resolveTimeEstimateToMinutes,
   translateText,
   type CalendarSettings,
@@ -152,9 +153,13 @@ type CalendarTaskComposerState = CalendarComposerState & {
   startTimeValue: string;
 };
 
-/** User pick > feed-provided color > deterministic palette hash (#974). */
-const sourceColorForId = (sourceId: string, override?: string, feedColor?: string): string => (
-  resolveExternalCalendarColor(sourceId, override, feedColor)
+/**
+ * User pick > feed-provided color > deterministic palette hash (#974), then a
+ * display-only theme remap — the resolved value is canonical, `theme` only
+ * decides which hex it is painted as.
+ */
+const sourceColorForId = (sourceId: string, override?: string, feedColor?: string, theme?: string): string => (
+  themeExternalCalendarDisplayColor(resolveExternalCalendarColor(sourceId, override, feedColor), theme)
 );
 
 const formatTimeInputValue = formatCalendarTimeInputValue;
@@ -175,7 +180,7 @@ export function useCalendarViewController() {
     updateSettings: state.updateSettings,
     settings: state.settings,
   }), shallow);
-  const { isDark } = useTheme();
+  const { isDark, themePreset } = useTheme();
   const { showToast } = useToast();
   const tc = useThemeColors();
   const { t, language } = useLanguage();
@@ -562,12 +567,12 @@ export function useCalendarViewController() {
     [externalCalendars],
   );
   const calendarColorById = useMemo(
-    () => new Map(externalCalendars.map((calendar) => [calendar.id, sourceColorForId(calendar.id, calendar.color, calendar.feedColor)])),
-    [externalCalendars],
+    () => new Map(externalCalendars.map((calendar) => [calendar.id, sourceColorForId(calendar.id, calendar.color, calendar.feedColor, themePreset)])),
+    [externalCalendars, themePreset],
   );
   const getSourceColorForId = useCallback(
-    (sourceId: string) => calendarColorById.get(sourceId) ?? sourceColorForId(sourceId),
-    [calendarColorById],
+    (sourceId: string) => calendarColorById.get(sourceId) ?? sourceColorForId(sourceId, undefined, undefined, themePreset),
+    [calendarColorById, themePreset],
   );
 
   const planningTasks = useMemo(() => {

@@ -838,8 +838,8 @@ export function AgendaView() {
         sortBySavedPerspective,
     ]);
     const nextActionGroups = useMemo(() => (
-        groupTasks(effectiveNextGroupBy, { tasks: sections.nextActions, areas, projectMap, t })
-    ), [areas, effectiveNextGroupBy, projectMap, sections.nextActions, t]);
+        groupTasks(effectiveNextGroupBy, { tasks: sections.nextActions, areas, projectMap, t, theme: settings?.theme })
+    ), [areas, effectiveNextGroupBy, projectMap, sections.nextActions, settings?.theme, t]);
     const activeGroupCollapseKey = getFocusGroupCollapseKey(effectiveNextGroupBy);
     const collapsedNextActionGroupIds = useMemo(() => new Set(
         activeGroupCollapseKey ? persistedViewState.collapsedGroups[activeGroupCollapseKey] ?? [] : []

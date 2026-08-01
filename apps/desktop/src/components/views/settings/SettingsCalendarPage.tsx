@@ -2,6 +2,7 @@ import type { SystemCalendarPermissionStatus, SystemCalendarPushTarget } from '.
 import {
     EXTERNAL_CALENDAR_COLORS,
     hasExplicitExternalCalendarColor,
+    themeExternalCalendarDisplayColor,
     type ExternalCalendarSubscription,
 } from '@mindwtr/core';
 import { Ban, ExternalLink } from 'lucide-react';
@@ -52,6 +53,8 @@ type SettingsCalendarPageProps = {
     calendarPushTargetCalendarId: string | null;
     calendarPushTargets: SystemCalendarPushTarget[];
     calendarPushLoading: boolean;
+    /** Active theme, for the swatch fills only — picks stay canonical (#974). */
+    theme?: string;
     onCalendarNameChange: (value: string) => void;
     onCalendarUrlChange: (value: string) => void;
     onAddCalendar: () => void;
@@ -78,6 +81,7 @@ export function SettingsCalendarPage({
     calendarPushTargetCalendarId,
     calendarPushTargets,
     calendarPushLoading,
+    theme,
     onCalendarNameChange,
     onCalendarUrlChange,
     onAddCalendar,
@@ -283,7 +287,7 @@ export function SettingsCalendarPage({
                                                                                 ? "border-background ring-2 ring-primary ring-offset-2 ring-offset-background"
                                                                                 : "border-border hover:border-foreground/40"
                                                                         )}
-                                                                        style={{ backgroundColor: color }}
+                                                                        style={{ backgroundColor: themeExternalCalendarDisplayColor(color, theme) }}
                                                                     />
                                                                 );
                                                             })}

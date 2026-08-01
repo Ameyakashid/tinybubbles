@@ -22,3 +22,4 @@ _None yet._
 - Mindwtr speaks Swedish (Svenska): a complete translation of every interface string, selectable from the language picker on desktop and mobile. That makes 20 languages.
 - Desktop (Linux): with Appearance set to System, KDE Plasma with a dark theme starts in dark mode right away, instead of starting light until Settings was opened. (#989)
 - Desktop (Linux): the window's minimize/maximize/close buttons respond again on Wayland when the app starts unmaximized or is reopened from the tray, without needing to maximize the window first. (#988)
+- Nord theme: context dots and calendar colors now use Nord-flavored colors instead of the default palette — calendars follow the mapping contributed in the issue thread, and every stored color stays unchanged, so nothing re-syncs or moves. (#974)
