@@ -11,6 +11,7 @@ import {
     isNaturalLanguageDatesEnabled,
     normalizeClockTimeInput,
     parseProjectNextActionInput,
+    resolveReviewStepSession,
     type AIProviderId,
     type ExternalCalendarEvent,
     type Project,
@@ -430,39 +431,27 @@ export function useReviewModalController({
         );
         return list;
     }, [includeContextStep, labels, stepHasWork]);
-    const activeSteps = useMemo(
-        () => steps.filter((step) => step.hasWork || step.id === 'completed'),
-        [steps],
-    );
-    const displayedStep = activeSteps.some((step) => step.id === currentStep)
-        ? currentStep
-        : activeSteps[0]?.id ?? 'completed';
-    const currentStepIndex = steps.findIndex((step) => step.id === displayedStep);
-    const safeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
-    const activeStepIndex = activeSteps.findIndex((step) => step.id === displayedStep);
-    const progress = (safeStepIndex / Math.max(1, steps.length - 1)) * 100;
+    const {
+        displayedStep,
+        currentStepIndex: safeStepIndex,
+        progress,
+        nextStep: nextStepId,
+        previousStep: previousStepId,
+    } = useMemo(() => resolveReviewStepSession(steps, currentStep), [currentStep, steps]);
 
     useEffect(() => {
-        if (!activeSteps.some((step) => step.id === currentStep)) {
-            setCurrentStep(activeSteps[0]?.id ?? 'completed');
+        if (currentStep !== displayedStep) {
+            setCurrentStep(displayedStep);
         }
-    }, [activeSteps, currentStep]);
+    }, [currentStep, displayedStep]);
 
     const nextStep = useCallback(() => {
-        if (activeStepIndex < 0) {
-            setCurrentStep(activeSteps[0]?.id ?? 'completed');
-            return;
-        }
-        if (activeStepIndex < activeSteps.length - 1) {
-            setCurrentStep(activeSteps[activeStepIndex + 1].id);
-        }
-    }, [activeStepIndex, activeSteps]);
+        if (nextStepId) setCurrentStep(nextStepId);
+    }, [nextStepId]);
 
     const prevStep = useCallback(() => {
-        if (activeStepIndex > 0) {
-            setCurrentStep(activeSteps[activeStepIndex - 1].id);
-        }
-    }, [activeStepIndex, activeSteps]);
+        if (previousStepId) setCurrentStep(previousStepId);
+    }, [previousStepId]);
 
     const handleNavigateToProject = useCallback((projectId: string) => {
         onClose();

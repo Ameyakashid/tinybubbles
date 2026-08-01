@@ -408,6 +408,41 @@ export type ReviewStepFlags = {
     hasWork: boolean;
 };
 
+export type ReviewStepSession<Step extends ReviewStepFlags> = {
+    activeSteps: Step[];
+    displayedStep: Step['id'];
+    currentStepIndex: number;
+    activeStepIndex: number;
+    progress: number;
+    nextStep: Step['id'] | null;
+    previousStep: Step['id'] | null;
+};
+
+/** Resolves skipped steps, progress, and navigation for either review flow. */
+export function resolveReviewStepSession<Step extends ReviewStepFlags>(
+    steps: readonly Step[],
+    requestedStep: Step['id'],
+): ReviewStepSession<Step> {
+    const activeSteps = steps.filter((step) => step.hasWork || step.id === 'completed');
+    const displayedStep = activeSteps.some((step) => step.id === requestedStep)
+        ? requestedStep
+        : activeSteps[0]?.id ?? requestedStep;
+    const currentStepIndex = Math.max(0, steps.findIndex((step) => step.id === displayedStep));
+    const activeStepIndex = activeSteps.findIndex((step) => step.id === displayedStep);
+
+    return {
+        activeSteps,
+        displayedStep,
+        currentStepIndex,
+        activeStepIndex,
+        progress: (currentStepIndex / Math.max(1, steps.length - 1)) * 100,
+        nextStep: activeStepIndex >= 0 && activeStepIndex < activeSteps.length - 1
+            ? activeSteps[activeStepIndex + 1].id
+            : null,
+        previousStep: activeStepIndex > 0 ? activeSteps[activeStepIndex - 1].id : null,
+    };
+}
+
 export type DailyReviewStepsOptions = {
     kind: 'daily';
     includeFocusStep?: boolean;

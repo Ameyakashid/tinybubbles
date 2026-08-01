@@ -8,6 +8,7 @@ import {
     getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
     partitionByReviewDate,
+    resolveReviewStepSession,
 } from './review-utils';
 import type { Project, Task } from './types';
 
@@ -359,5 +360,37 @@ describe('buildReviewSteps', () => {
         const steps = buildReviewSteps(buckets, { kind: 'weekly', includeContextStep: false });
 
         expect(steps.find((step) => step.id === 'waiting')?.hasWork).toBe(false);
+    });
+});
+
+describe('resolveReviewStepSession', () => {
+    it('skips empty steps while preserving progress and navigation order', () => {
+        const steps = [
+            { id: 'today' as const, hasWork: false },
+            { id: 'inbox' as const, hasWork: true },
+            { id: 'waiting' as const, hasWork: false },
+            { id: 'completed' as const, hasWork: true },
+        ];
+
+        const first = resolveReviewStepSession(steps, 'today');
+
+        expect(first.activeSteps.map((step) => step.id)).toEqual(['inbox', 'completed']);
+        expect(first).toMatchObject({
+            displayedStep: 'inbox',
+            currentStepIndex: 1,
+            activeStepIndex: 0,
+            previousStep: null,
+            nextStep: 'completed',
+        });
+        expect(first.progress).toBeCloseTo(100 / 3);
+
+        const completed = resolveReviewStepSession(steps, 'completed');
+        expect(completed).toMatchObject({
+            currentStepIndex: 3,
+            activeStepIndex: 1,
+            previousStep: 'inbox',
+            nextStep: null,
+            progress: 100,
+        });
     });
 });

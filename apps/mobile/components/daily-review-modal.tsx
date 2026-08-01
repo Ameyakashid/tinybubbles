@@ -13,6 +13,7 @@ import {
     shallow,
     isDueForReview,
     normalizeFocusTaskLimit,
+    resolveReviewStepSession,
     safeFormatDate,
     safeParseDate,
     tFallback,
@@ -185,33 +186,26 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
         );
         return list;
     }, [includeFocusStep, stepHasWork, t]);
-    const activeSteps = useMemo(
-        () => steps.filter((step) => step.hasWork || step.id === 'completed'),
-        [steps],
-    );
-
-    const displayedStep = activeSteps.some((step) => step.id === currentStep)
-        ? currentStep
-        : activeSteps[0]?.id ?? 'completed';
-    const activeStepIndex = activeSteps.findIndex((step) => step.id === displayedStep);
+    const {
+        activeSteps,
+        displayedStep,
+        activeStepIndex,
+        nextStep: nextStepId,
+        previousStep: previousStepId,
+    } = useMemo(() => resolveReviewStepSession(steps, currentStep), [currentStep, steps]);
     const safeActiveStepIndex = Math.max(0, activeStepIndex);
     const displayedStepDefinition = activeSteps[safeActiveStepIndex];
 
     useEffect(() => {
-        if (activeSteps.some((step) => step.id === currentStep)) return;
-        setCurrentStep(activeSteps[0]?.id ?? 'completed');
-    }, [activeSteps, currentStep]);
+        if (currentStep !== displayedStep) setCurrentStep(displayedStep);
+    }, [currentStep, displayedStep]);
 
     const next = () => {
-        if (activeStepIndex < 0) {
-            setCurrentStep(activeSteps[0]?.id ?? 'completed');
-            return;
-        }
-        if (activeStepIndex < activeSteps.length - 1) setCurrentStep(activeSteps[activeStepIndex + 1].id);
+        if (nextStepId) setCurrentStep(nextStepId);
     };
 
     const back = () => {
-        if (activeStepIndex > 0) setCurrentStep(activeSteps[activeStepIndex - 1].id);
+        if (previousStepId) setCurrentStep(previousStepId);
     };
 
     const openTask = (task: Task) => {

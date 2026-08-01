@@ -88,7 +88,8 @@ vi.mock('react-native', async () => {
     };
 });
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@mindwtr/core', async (importOriginal) => ({
+    resolveReviewStepSession: (await importOriginal<typeof import('@mindwtr/core')>()).resolveReviewStepSession,
     useTaskStore: Object.assign(() => storeState, { getState: () => storeState }),
     shallow: vi.fn((a, b) => a === b),
     normalizeClockTimeInput: vi.fn(() => null),

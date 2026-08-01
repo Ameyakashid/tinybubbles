@@ -7,6 +7,7 @@ import {
     formatFocusTaskLimitText,
     isDueForReview,
     normalizeFocusTaskLimit,
+    resolveReviewStepSession,
     safeFormatDate,
     safeParseDate,
     tFallback,
@@ -203,23 +204,19 @@ export function DailyReviewGuideModal({ onClose }: DailyReviewGuideModalProps) {
         );
         return visibleSteps;
     }, [includeFocusStep, stepHasWork, t]);
-    const activeSteps = useMemo(
-        () => steps.filter((step) => step.hasWork || step.id === 'completed'),
-        [steps],
-    );
+    const {
+        displayedStep: activeStep,
+        currentStepIndex,
+        progress,
+        nextStep: nextStepId,
+        previousStep: previousStepId,
+    } = useMemo(() => resolveReviewStepSession(steps, currentStep), [currentStep, steps]);
 
     useEffect(() => {
-        if (!activeSteps.some((step) => step.id === currentStep)) {
-            setCurrentStep(activeSteps[0]?.id ?? 'completed');
+        if (currentStep !== activeStep) {
+            setCurrentStep(activeStep);
         }
-    }, [activeSteps, currentStep]);
-
-    const activeStep = activeSteps.some((step) => step.id === currentStep)
-        ? currentStep
-        : activeSteps[0]?.id ?? 'completed';
-    const currentStepIndex = Math.max(0, steps.findIndex((s) => s.id === activeStep));
-    const activeStepIndex = activeSteps.findIndex((step) => step.id === activeStep);
-    const progress = ((currentStepIndex) / (steps.length - 1)) * 100;
+    }, [activeStep, currentStep]);
 
     const finishReview = () => {
         window.localStorage.removeItem(DAILY_REVIEW_STEP_STORAGE_KEY);
@@ -227,19 +224,11 @@ export function DailyReviewGuideModal({ onClose }: DailyReviewGuideModalProps) {
     };
 
     const nextStep = () => {
-        if (activeStepIndex < 0) {
-            setCurrentStep(activeSteps[0]?.id ?? 'completed');
-            return;
-        }
-        if (activeStepIndex < activeSteps.length - 1) {
-            setCurrentStep(activeSteps[activeStepIndex + 1].id);
-        }
+        if (nextStepId) setCurrentStep(nextStepId);
     };
 
     const prevStep = () => {
-        if (activeStepIndex > 0) {
-            setCurrentStep(activeSteps[activeStepIndex - 1].id);
-        }
+        if (previousStepId) setCurrentStep(previousStepId);
     };
 
     const renderStepRail = () => (
