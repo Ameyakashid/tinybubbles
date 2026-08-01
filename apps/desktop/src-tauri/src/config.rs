@@ -1,5 +1,7 @@
 use crate::obsidian_paths::normalize_obsidian_inbox_file;
 use crate::*;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 const KEYRING_FALLBACK_WARNING_EVENT: &str = "keyring-fallback-warning";
@@ -148,7 +150,26 @@ fn write_config_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> 
 }
 
 fn write_secrets_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> {
-    write_config_toml_with_header(path, config, "# Mindwtr desktop secrets")
+    write_config_toml_with_header(path, config, "# Mindwtr desktop secrets")?;
+    // After the write, not before: a brand new file takes its mode from the
+    // umask at creation time, so anything set earlier would be overwritten.
+    if let Some(parent) = path.parent() {
+        restrict_to_owner(parent, 0o700)?;
+    }
+    restrict_to_owner(path, 0o600)
+}
+
+/// Restricts a path holding credentials to owner-only access. No-op on
+/// Windows, where file ACLs are not expressible through
+/// `std::fs::Permissions`.
+#[cfg(unix)]
+fn restrict_to_owner(path: &Path, mode: u32) -> Result<(), String> {
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|e| e.to_string())
+}
+
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path, _mode: u32) -> Result<(), String> {
+    Ok(())
 }
 
 fn write_config_toml_with_header(
@@ -1102,6 +1123,60 @@ mod tests {
         // Non-secret fields still round-trip through the public file.
         assert_eq!(public_config.sync_backend, original.sync_backend);
         assert_eq!(public_config.local_api_port, original.local_api_port);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn secrets_toml_is_owner_only() {
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let secrets_path = dir.path().join("secrets.toml");
+
+        write_config_files(
+            &dir.path().join("config.toml"),
+            &secrets_path,
+            &fully_populated_config(),
+        )
+        .expect("should write config and secrets files");
+
+        let mode = fs::metadata(&secrets_path)
+            .expect("secrets.toml should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "secrets.toml must not be readable by other users"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn secrets_toml_stays_owner_only_on_overwrite() {
+        let dir = tempfile::tempdir().expect("should create temp dir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let config = fully_populated_config();
+
+        write_config_files(&config_path, &secrets_path, &config).expect("should write first time");
+        // Loosen both, as a file left behind by a pre-fix build would be, so
+        // the second write has to actually re-apply the restriction.
+        fs::set_permissions(&secrets_path, fs::Permissions::from_mode(0o644))
+            .expect("should loosen secrets.toml");
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755))
+            .expect("should loosen the containing dir");
+
+        write_config_files(&config_path, &secrets_path, &config).expect("should write second time");
+
+        let file_mode = fs::metadata(&secrets_path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            file_mode, 0o600,
+            "an overwrite must restore owner-only access on secrets.toml"
+        );
+        let dir_mode = fs::metadata(dir.path()).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            dir_mode, 0o700,
+            "the directory holding secrets.toml must not be traversable by other users"
+        );
     }
 
     #[test]
