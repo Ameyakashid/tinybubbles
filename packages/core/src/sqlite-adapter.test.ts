@@ -81,6 +81,13 @@ const loadDatabaseCtor = (): DatabaseCtor | null => {
 const RuntimeDatabase = loadDatabaseCtor();
 const describeSqlite = RuntimeDatabase ? describe : describe.skip;
 
+// `describe.skip` above passes silently if no sqlite runtime is found - this bare
+// top-level check fails loudly instead, so the persistence-adapter suite can't
+// vanish unnoticed on a runtime that lacks both bun:sqlite and node:sqlite.
+it('has a sqlite runtime available to run the adapter suite', () => {
+    expect(RuntimeDatabase).not.toBeNull();
+});
+
 const createClient = (db: Database): SqliteClient => ({
     run: async (sql: string, params: unknown[] = []) => {
         runSql(db, sql, params);

@@ -42,6 +42,13 @@ const loadDatabaseCtor = (): DatabaseCtor | null => {
 const RuntimeDatabase = loadDatabaseCtor();
 const describeSqlite = RuntimeDatabase ? describe : describe.skip;
 
+// `describe.skip` above passes silently if no sqlite runtime is found - this bare
+// top-level check fails loudly instead, so the schema suite can't vanish
+// unnoticed on a runtime that lacks both bun:sqlite and node:sqlite.
+it('has a sqlite runtime available to run the schema suite', () => {
+    expect(RuntimeDatabase).not.toBeNull();
+});
+
 // Prepares exactly one statement, like op-sqlite's execute(): an incomplete
 // fragment (e.g. a CREATE TRIGGER body cut at an inner ';') fails to prepare.
 const prepareSingle = (db: Database, sql: string): Statement => {
