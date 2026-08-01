@@ -189,8 +189,28 @@ fn read_gsettings_value(_schema: &str, _key: &str) -> Option<String> {
     None
 }
 
+// KDE never writes GNOME's gsettings keys, so `color-scheme` reads 'default'
+// and this probe reports "light" on a dark Plasma desktop. KDE syncs the GTK
+// dark preference itself (kde-gtk-config), so the native GTK theme channel is
+// the reliable signal there and this probe must stay silent (#989).
+fn is_kde_desktop_value(value: &str) -> bool {
+    value
+        .to_ascii_lowercase()
+        .split(':')
+        .any(|part| part == "kde" || part == "plasma")
+}
+
+fn is_kde_desktop() -> bool {
+    ["XDG_CURRENT_DESKTOP", "XDG_SESSION_DESKTOP"]
+        .iter()
+        .any(|var| std::env::var(var).is_ok_and(|value| is_kde_desktop_value(&value)))
+}
+
 #[tauri::command]
 pub(crate) fn get_system_theme_preference() -> Option<String> {
+    if is_kde_desktop() {
+        return None;
+    }
     let color_scheme = read_gsettings_value(GNOME_INTERFACE_SCHEMA, GNOME_COLOR_SCHEME_KEY);
     let gtk_theme = read_gsettings_value(GNOME_INTERFACE_SCHEMA, GNOME_GTK_THEME_KEY);
     resolve_gnome_system_theme_preference(color_scheme.as_deref(), gtk_theme.as_deref())
@@ -617,6 +637,17 @@ mod tests {
             resolve_gnome_system_theme_preference(Some("'prefer-dark'"), Some("'Adwaita'")),
             Some("dark")
         );
+    }
+
+    #[test]
+    fn detects_kde_desktop_values() {
+        assert!(is_kde_desktop_value("KDE"));
+        assert!(is_kde_desktop_value("plasma"));
+        assert!(is_kde_desktop_value("ubuntu:KDE"));
+        assert!(!is_kde_desktop_value("GNOME"));
+        assert!(!is_kde_desktop_value("niri"));
+        assert!(!is_kde_desktop_value("kde-something"));
+        assert!(!is_kde_desktop_value(""));
     }
 
     #[test]

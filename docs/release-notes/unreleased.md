@@ -20,3 +20,4 @@ _None yet._
 - AI settings: the model pickers (assistant, copilot, and remote speech-to-text) now list your provider's current models when an API key or custom server is configured, instead of a fixed list — a self-hosted OpenAI-compatible server shows its own models. The built-in suggestions remain as the fallback whenever the list can't be fetched, and local Whisper stays fully offline. (#986)
 - Desktop (Linux): the Flatpak no longer crashes or reports "Evolution Data Server is unavailable" when reading system calendars or enabling task push — the sandbox could load two conflicting copies of the calendar libraries. (#575)
 - Mindwtr speaks Swedish (Svenska): a complete translation of every interface string, selectable from the language picker on desktop and mobile. That makes 20 languages.
+- Desktop (Linux): with Appearance set to System, KDE Plasma with a dark theme starts in dark mode right away, instead of starting light until Settings was opened. (#989)
