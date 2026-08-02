@@ -68,7 +68,10 @@ vi.mock('@mindwtr/core', async () => {
     return {
         ...actual,
         isTaskInActiveProject: () => true,
-        safeFormatDate: (value: Date) => value.toISOString(),
+        // The projected-recurrence label passes the occurrence's raw date
+        // string (task.startTime/dueDate), not a Date -- the real
+        // safeFormatDate accepts either.
+        safeFormatDate: (value: Date | string) => (value instanceof Date ? value : new Date(value)).toISOString(),
         safeParseDate: (value: string) => new Date(value),
         safeParseDueDate: (value: string) => new Date(value),
         shallow: () => false,
@@ -755,6 +758,97 @@ describe('CalendarView', () => {
 
         expect(screen.queryByText('Finished thing')).not.toBeInTheDocument();
         expect(screen.getByText('Still open')).toBeInTheDocument();
+    });
+
+    it('paints a daily recurring task into every visible day in the month, read-only', async () => {
+        // System time is 2026-04-03T14:48 (see beforeEach); a daily task due
+        // the day before projects forward across the rest of the visible month.
+        const recurringTask = makeTask({
+            id: 'task-recurring-daily',
+            title: 'Daily standup',
+            dueDate: '2026-04-02',
+            recurrence: 'daily',
+            showFutureRecurrence: true,
+        });
+        storeMocks.taskStoreState.tasks = [recurringTask];
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        // The real occurrence (the task itself, on its own dueDate) stays a normal,
+        // editable chip -- only the synthetic range-projected occurrences are inert.
+        const realChip = document.querySelector('[data-task-id="task-recurring-daily"]');
+        expect(realChip).not.toBeNull();
+        expect(realChip).toHaveAttribute('data-task-edit-trigger', 'true');
+        expect(realChip).not.toBeDisabled();
+
+        const projectedChips = document.querySelectorAll(
+            '[data-task-id^="task-recurring-daily:projected-recurrence:"]'
+        );
+        // Every remaining day of the visible month (04-04 through 04-30) should
+        // have painted its own projected occurrence -- a range, not one preview.
+        expect(projectedChips.length).toBeGreaterThan(20);
+
+        for (const chip of projectedChips) {
+            expect(chip).toBeDisabled();
+            expect(chip).not.toHaveAttribute('data-task-edit-trigger');
+        }
+
+        // Read-only: clicking a projected chip is a no-op (the button is disabled,
+        // so no click handler fires and nothing gets written back to the store).
+        await act(async () => {
+            fireEvent.click(projectedChips[0] as HTMLElement);
+            await Promise.resolve();
+        });
+        expect(storeMocks.taskStoreState.updateTask).not.toHaveBeenCalled();
+        expect(storeMocks.taskStoreState.deleteTask).not.toHaveBeenCalled();
+    });
+
+    it("paints a weekly recurring task into the month grid's spill day from next month (correction pass finding 2)", async () => {
+        // April 2026's grid is week-aligned and spills into 2026-03-29..2026-05-02 (35 cells) --
+        // wider than the calendar month itself. A weekly task due 04-24 projects next to 05-01,
+        // a spill day; before the fix the recurrence range only covered the month proper and
+        // this occurrence was silently dropped even though the cell renders on screen.
+        const recurringTask = makeTask({
+            id: 'task-recurring-weekly-spill',
+            title: 'Weekly sync',
+            dueDate: '2026-04-24',
+            recurrence: 'weekly',
+            showFutureRecurrence: true,
+        });
+        storeMocks.taskStoreState.tasks = [recurringTask];
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        const spillDayChip = document.querySelector(
+            '[data-task-id^="task-recurring-weekly-spill:projected-recurrence:2026-05-01"]'
+        );
+        expect(spillDayChip).not.toBeNull();
+    });
+
+    it('counts a filtered recurring task once, not once per painted occurrence (correction pass finding 4)', async () => {
+        const recurringTask = makeTask({
+            id: 'task-recurring-daily-count',
+            title: 'Daily standup',
+            dueDate: '2026-04-02',
+            recurrence: 'daily',
+            showFutureRecurrence: true,
+        });
+        storeMocks.taskStoreState.tasks = [recurringTask];
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        const searchInput = document.querySelector('[data-view-filter-input]') as HTMLInputElement;
+        await act(async () => {
+            fireEvent.change(searchInput, { target: { value: 'Daily standup' } });
+            await Promise.resolve();
+        });
+
+        // Without keying on the source task, this would report one match per painted
+        // day (dozens) instead of one match for the one recurring task.
+        expect(screen.getByText('1 matches in this view')).toBeInTheDocument();
     });
 
     it('keeps completed work from archived projects in history without admitting deferred or deleted projects', async () => {

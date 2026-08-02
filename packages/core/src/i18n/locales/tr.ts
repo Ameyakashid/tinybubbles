@@ -339,7 +339,7 @@ export const trOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Tamamlandıktan sonra vadesi gelecek (ör. çamaşır yıkama)',
         'recurrence.afterCompletion': 'Tamamlandıktan sonra tekrarlayın',
         'recurrence.afterCompletionShort': 'tamamlandıktan sonra',
-        'recurrence.showFutureInCalendar': 'Sonraki tekrarı Takvimde göster',
+        'recurrence.showFutureInCalendar': 'Gelecek tekrarları Takvimde göster',
         'recurrence.showFutureInCalendarHint': 'Yalnızca planlama önizlemesi; gerçek sonraki görev bu görev tamamlandığında oluşturulur.',
         'inbox.title': 'Gelen kutusu',
         'inbox.processButton': 'Gelen Kutusunu İşle',

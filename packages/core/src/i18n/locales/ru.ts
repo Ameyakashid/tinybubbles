@@ -333,7 +333,7 @@ export const ruOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Оплата после завершения (например, стирка)',
         'recurrence.afterCompletion': 'Повторить после завершения',
         'recurrence.afterCompletionShort': 'после завершения',
-        'recurrence.showFutureInCalendar': 'Показывать следующее повторение в календаре',
+        'recurrence.showFutureInCalendar': 'Показывать будущие повторения в календаре',
         'recurrence.showFutureInCalendarHint': 'Только предварительный просмотр для планирования; настоящая следующая задача будет создана после завершения текущей.',
         'inbox.title': 'Входящие',
         'inbox.processButton': 'Обработка входящих сообщений',

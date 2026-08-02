@@ -393,7 +393,7 @@ export const svOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Förfaller efter slutförande (t.ex. tvätt)',
         'recurrence.afterCompletion': 'Upprepa efter slutförande',
         'recurrence.afterCompletionShort': 'efter slutförande',
-        'recurrence.showFutureInCalendar': 'Visa nästa tillfälle i Kalender',
+        'recurrence.showFutureInCalendar': 'Visa kommande tillfällen i Kalender',
         'recurrence.showFutureInCalendarHint': 'Endast en planeringsförhandsvisning; nästa uppgift skapas fortfarande när den här slutförs.',
         'recurrence.nextCalendarPreview': 'Nästa kalenderförhandsvisning',
 

@@ -438,7 +438,7 @@ export const csOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Termín po dokončení (např. praní)',
         'recurrence.afterCompletion': 'Opakovat po dokončení',
         'recurrence.afterCompletionShort': 'po dokončení',
-        'recurrence.showFutureInCalendar': 'Zobrazit další výskyt v Kalendáři',
+        'recurrence.showFutureInCalendar': 'Zobrazit budoucí výskyty v Kalendáři',
         'recurrence.showFutureInCalendarHint': 'Pouze plánovací náhled; další úkol se vytvoří až po dokončení tohoto.',
         'inbox.title': 'Schránka',
         'inbox.processButton': 'Zpracovat schránku',

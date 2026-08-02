@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
+  CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
   DEFAULT_CALENDAR_DAY_END_HOUR,
   DEFAULT_CALENDAR_DAY_START_HOUR,
   addCalendarMonths as addCalendarSystemMonths,
   buildCalendarEventTaskDraft,
-  expandCalendarRecurringTasks,
+  expandCalendarRecurringTasksInRange,
   formatCalendarTimeInputValue,
   formatI18nTemplate,
   getCalendarPlanningCandidates,
@@ -353,16 +355,56 @@ export function useCalendarViewController() {
     ))
   ), [tasks, resolvedAreaFilter, projectById, areaById]);
 
+  // The same visible-window bounds used to fetch/clip external calendar events
+  // below double as the recurrence range: whatever window the month grid, week
+  // strip, or schedule list is currently showing is exactly what a "show future
+  // recurrence" task should paint every occurrence into (#calendar-range-projection).
+  const externalCalendarRange = useMemo(() => {
+    const weekStart = new Date(weekStartTime);
+    const rangeStart = viewMode === 'week'
+      ? weekStart
+      : viewMode === 'schedule'
+        ? new Date(selectedDate ?? currentMonthDate)
+        : new Date(currentMonthDate);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = viewMode === 'week'
+      ? new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59, 999)
+      : viewMode === 'schedule'
+        ? new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 45, 23, 59, 59, 999)
+        : new Date(addCalendarSystemMonths(currentMonthDate, 1, calendarSystem).getTime() - 1);
+    return { rangeStart, rangeEnd };
+  }, [calendarSystem, currentMonthDate, selectedDate, viewMode, weekStartTime]);
+
+  // Primitive bounds, not the `externalCalendarRange` object: in month mode the window's actual
+  // start/end don't change when the selected day or week-start reference does, but the object's
+  // identity does, and re-expanding every recurring task's whole range on every day tap is exactly
+  // the "unrelated state change" P19 says must not re-enumerate.
+  const externalRangeStartMs = externalCalendarRange.rangeStart.getTime();
+  const externalRangeEndMs = externalCalendarRange.rangeEnd.getTime();
+
   const visibleTasks = useMemo(() => {
     const projectedAtIso = new Date(nowTick).toISOString();
+    const recurrenceRange = {
+      startIso: new Date(externalRangeStartMs).toISOString(),
+      endIso: new Date(externalRangeEndMs).toISOString(),
+    };
     // Done, archived and reference tasks are deliberately excluded here: they
     // belong to the completed look-back below, filed by completion date, not to
     // the scheduled/deadline buckets. Before #955 mobile left them in and showed
     // finished work on its old start/due date while desktop hid it entirely.
-    return areaVisibleTasks
-      .filter(isSchedulableCalendarTask)
-      .flatMap((task) => expandCalendarRecurringTasks(task, projectedAtIso));
-  }, [areaVisibleTasks, nowTick]);
+    const schedulable = areaVisibleTasks.filter(isSchedulableCalendarTask);
+    const expanded: Task[] = [];
+    let remainingProjectionBudget = CALENDAR_RANGE_PROJECTION_TOTAL_CAP;
+    for (const task of schedulable) {
+      const maxOccurrences = Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, remainingProjectionBudget);
+      const taskOccurrences = maxOccurrences > 0
+        ? expandCalendarRecurringTasksInRange(task, recurrenceRange, projectedAtIso, maxOccurrences)
+        : [task];
+      remainingProjectionBudget -= Math.max(0, taskOccurrences.length - 1);
+      expanded.push(...taskOccurrences);
+    }
+    return expanded;
+  }, [areaVisibleTasks, externalRangeStartMs, externalRangeEndMs, nowTick]);
 
   const completedTasksByDate = useMemo(() => {
     const map = new Map<string, Task[]>();
@@ -480,24 +522,6 @@ export function useCalendarViewController() {
     })
   );
 
-  const externalCalendarRange = useMemo(() => {
-    const weekStart = new Date(weekStartTime);
-    const rangeStart = viewMode === 'week'
-      ? weekStart
-      : viewMode === 'schedule'
-        ? new Date(selectedDate ?? currentMonthDate)
-        : new Date(currentMonthDate);
-    rangeStart.setHours(0, 0, 0, 0);
-    const rangeEnd = viewMode === 'week'
-      ? new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6, 23, 59, 59, 999)
-      : viewMode === 'schedule'
-        ? new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate() + 45, 23, 59, 59, 999)
-        : new Date(addCalendarSystemMonths(currentMonthDate, 1, calendarSystem).getTime() - 1);
-    return { rangeStart, rangeEnd };
-  }, [calendarSystem, currentMonthDate, selectedDate, viewMode, weekStartTime]);
-
-  const externalRangeStartMs = externalCalendarRange.rangeStart.getTime();
-  const externalRangeEndMs = externalCalendarRange.rangeEnd.getTime();
   const externalCalendarSettings = settings?.externalCalendars;
 
   const requestExternalCalendarRefresh = useCallback(() => {

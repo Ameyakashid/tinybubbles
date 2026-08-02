@@ -333,7 +333,7 @@ export const jaOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': '完了後（例：洗濯）',
         'recurrence.afterCompletion': '完了後に繰り返します',
         'recurrence.afterCompletionShort': '完成後',
-        'recurrence.showFutureInCalendar': 'カレンダーに次回を表示',
+        'recurrence.showFutureInCalendar': 'カレンダーに今後の繰り返しを表示',
         'recurrence.showFutureInCalendarHint': '計画用のプレビューのみです。実際の次のタスクは、このタスクを完了したときに作成されます。',
         'inbox.title': '受信箱',
         'inbox.processButton': '受信箱を処理する',

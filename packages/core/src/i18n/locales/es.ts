@@ -308,6 +308,7 @@ export const esOverrides: Record<string, string> = {
         'recurrence.strategyStrictDesc': 'Vencimiento en el día programado (p. ej., facturas)',
         'recurrence.strategyFluidDesc': 'Fecha de vencimiento tras finalización (p. ej., hacer la colada)',
         'recurrence.afterCompletion': 'Repetir una vez completada',
+        'recurrence.showFutureInCalendar': 'Mostrar próximas apariciones en el Calendario',
         'recurrence.afterCompletionShort': 'tras completar',
         'inbox.title': 'Bandeja',
         'inbox.processButton': 'Procesar bandeja',

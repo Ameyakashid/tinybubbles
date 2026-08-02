@@ -80,8 +80,16 @@ export const getProjectedRecurringTaskId = (taskId: string): string => (
     `${taskId}${PROJECTED_RECURRENCE_ID_SUFFIX}`
 );
 
+// Range expansion needs one synthetic id per occurrence (`<id>:projected-recurrence:<anchor-iso>`)
+// instead of the single-projection suffix above. `isProjectedRecurringTaskId` matches both forms
+// via substring rather than `endsWith` so it keeps recognizing every synthetic id calendar-push-run
+// still mints with the old suffix-only scheme.
+const getRangeProjectedRecurringTaskId = (taskId: string, occurrenceIso: string): string => (
+    `${taskId}${PROJECTED_RECURRENCE_ID_SUFFIX}:${occurrenceIso}`
+);
+
 export const isProjectedRecurringTaskId = (taskId: string | undefined | null): boolean => (
-    typeof taskId === 'string' && taskId.endsWith(PROJECTED_RECURRENCE_ID_SUFFIX)
+    typeof taskId === 'string' && taskId.includes(PROJECTED_RECURRENCE_ID_SUFFIX)
 );
 
 export const isProjectedRecurringTask = (task: Partial<Task> | null | undefined): task is ProjectedRecurringTask => (
@@ -865,38 +873,61 @@ function projectUnscheduledMonthlyStart(
     return iso ? { iso, steps: 1 } : emptyProjectedIsoResult();
 }
 
+type ProjectedOccurrenceFields = {
+    startTime?: string;
+    dueDate?: string;
+    reviewAt?: string;
+    steps: number;
+};
+
+type ProjectedOccurrenceAnchors = {
+    startTime?: number;
+    dueDate?: number;
+    reviewAt?: number;
+};
+
 /**
- * Create a read-only, calendar-only preview of the next visible occurrence.
- *
- * This never creates a persisted task. It uses a synthetic ID so calendar views
- * and device calendar push can add/update/remove the preview independently.
+ * Per-field anchor day (e.g. 31 for a monthly task due the 31st), resolved once
+ * from the series' first base task and held fixed for every later occurrence.
+ * `projectStrictIsoFrom` already holds its own anchor fixed across its internal
+ * catch-up loop -- this does the same across occurrence-to-occurrence steps in
+ * `expandCalendarRecurringTasksInRange`. Recomputing the anchor from each new
+ * occurrence's (already clamped) date would drift it down every step: a task
+ * due the 31st would clamp to 28 in February and then re-anchor on 28 for every
+ * month after, instead of returning to 31 whenever the month allows it.
  */
-export function createProjectedRecurringTask(
+function resolveProjectedOccurrenceAnchors(task: Task, baseTask: Task): ProjectedOccurrenceAnchors {
+    return {
+        startTime: getRecurrenceFieldAnchorDay(task.recurrence, 'startTime') ?? getDateDay(baseTask.startTime),
+        dueDate: getRecurrenceFieldAnchorDay(task.recurrence, 'dueDate') ?? getDateDay(baseTask.dueDate),
+        reviewAt: getRecurrenceFieldAnchorDay(task.recurrence, 'reviewAt') ?? getDateDay(baseTask.reviewAt),
+    };
+}
+
+/**
+ * One recurrence step forward from `baseTask`'s schedule fields. Shared by the
+ * single-occurrence preview (`createProjectedRecurringTask`) and the range-based
+ * calendar expansion (`expandCalendarRecurringTasksInRange`) so there remains
+ * exactly one implementation of "what is a recurring task's next instance" (P10) --
+ * the range expansion just calls this again with the previous occurrence as the
+ * new `baseTask` instead of duplicating the stepping math.
+ */
+function projectNextRecurringOccurrenceFields(
     task: Task,
-    projectedAtIso: string = new Date().toISOString()
-): ProjectedRecurringTask | null {
-    if (!task.showFutureRecurrence) return null;
-    if (isProjectedRecurringTask(task)) return null;
-    if (task.deletedAt || !isTaskActionable(task)) {
-        return null;
-    }
-
-    const rule = getRecurrenceRule(task.recurrence);
-    if (!rule) return null;
-
+    baseTask: Task,
+    rule: RecurrenceRule,
+    projectedAtIso: string,
+    projectionBase: Date,
+    anchors: ProjectedOccurrenceAnchors
+): ProjectedOccurrenceFields | null {
     const strategy = getRecurrenceStrategy(task.recurrence);
     const byDay = getRecurrenceByDay(task.recurrence);
     const byMonthDay = getRecurrenceByMonthDay(task.recurrence);
     const interval = getRecurrenceInterval(task.recurrence);
     const weekStart = getRecurrenceWeekStart(task.recurrence);
-    const count = getRecurrenceCountValue(task.recurrence);
-    const until = getRecurrenceUntilValue(task.recurrence);
-    const completedOccurrences = getRecurrenceCompletedOccurrencesValue(task.recurrence) ?? 0;
-    const projectionBase = getProjectionBaseDate(projectedAtIso);
-    const projectionSourceTask = createCurrentRecurringCalendarTask(task, projectedAtIso) ?? task;
 
     const projectField = (field: 'startTime' | 'dueDate' | 'reviewAt'): ProjectedIsoResult => {
-        const baseIso = projectionSourceTask[field];
+        const baseIso = baseTask[field];
         if (!baseIso) return { iso: undefined, steps: 0 };
         if (strategy === 'fluid') {
             // Fluid has no series anchor: the base is normally "now" (the spawn
@@ -917,27 +948,53 @@ export function createProjectedRecurringTask(
                 steps: 1,
             };
         }
-        const anchorDay = getRecurrenceFieldAnchorDay(task.recurrence, field)
-            ?? getDateDay(baseIso);
-        return projectStrictIsoFrom(baseIso, rule, projectionBase, byDay, interval, byMonthDay, weekStart, anchorDay);
+        return projectStrictIsoFrom(baseIso, rule, projectionBase, byDay, interval, byMonthDay, weekStart, anchors[field]);
     };
 
-    const hasScheduleFields = Boolean(
-        projectionSourceTask.startTime
-        || projectionSourceTask.dueDate
-        || projectionSourceTask.reviewAt
-    );
-    const nextStart = projectionSourceTask.startTime || hasScheduleFields
+    const hasScheduleFields = Boolean(baseTask.startTime || baseTask.dueDate || baseTask.reviewAt);
+    const nextStart = baseTask.startTime || hasScheduleFields
         ? projectField('startTime')
         : projectUnscheduledMonthlyStart(rule, projectionBase, byDay, interval, byMonthDay, weekStart);
     const nextDue = projectField('dueDate');
     const nextReview = projectField('reviewAt');
-    const projectionSteps = Math.max(nextStart.steps, nextDue.steps, nextReview.steps);
+    const steps = Math.max(nextStart.steps, nextDue.steps, nextReview.steps);
     if (!nextStart.iso && !nextDue.iso && !nextReview.iso) return null;
     if (!nextStart.iso && !nextDue.iso) return null;
-    if (count && completedOccurrences + projectionSteps >= count) return null;
 
-    const nextOccurrenceAnchor = nextDue.iso ?? nextStart.iso ?? nextReview.iso;
+    return { startTime: nextStart.iso, dueDate: nextDue.iso, reviewAt: nextReview.iso, steps };
+}
+
+/**
+ * Create a read-only, calendar-only preview of the next visible occurrence.
+ *
+ * This never creates a persisted task. It uses a synthetic ID so calendar views
+ * and device calendar push can add/update/remove the preview independently.
+ */
+export function createProjectedRecurringTask(
+    task: Task,
+    projectedAtIso: string = new Date().toISOString()
+): ProjectedRecurringTask | null {
+    if (!task.showFutureRecurrence) return null;
+    if (isProjectedRecurringTask(task)) return null;
+    if (task.deletedAt || !isTaskActionable(task)) {
+        return null;
+    }
+
+    const rule = getRecurrenceRule(task.recurrence);
+    if (!rule) return null;
+
+    const count = getRecurrenceCountValue(task.recurrence);
+    const until = getRecurrenceUntilValue(task.recurrence);
+    const completedOccurrences = getRecurrenceCompletedOccurrencesValue(task.recurrence) ?? 0;
+    const projectionBase = getProjectionBaseDate(projectedAtIso);
+    const baseTask = createCurrentRecurringCalendarTask(task, projectedAtIso) ?? task;
+    const anchors = resolveProjectedOccurrenceAnchors(task, baseTask);
+
+    const fields = projectNextRecurringOccurrenceFields(task, baseTask, rule, projectedAtIso, projectionBase, anchors);
+    if (!fields) return null;
+    if (count && completedOccurrences + fields.steps >= count) return null;
+
+    const nextOccurrenceAnchor = fields.dueDate ?? fields.startTime ?? fields.reviewAt;
     if (shouldStopAtUntil(nextOccurrenceAnchor, until)) return null;
 
     return {
@@ -945,9 +1002,9 @@ export function createProjectedRecurringTask(
         id: getProjectedRecurringTaskId(task.id),
         sourceTaskId: task.id,
         isProjectedRecurringTask: true,
-        startTime: nextStart.iso,
-        dueDate: nextDue.iso,
-        reviewAt: nextReview.iso,
+        startTime: fields.startTime,
+        dueDate: fields.dueDate,
+        reviewAt: fields.reviewAt,
         attachments: undefined,
         completedAt: undefined,
         deletedAt: undefined,
@@ -1025,6 +1082,115 @@ export function expandCalendarRecurringTasks(
     const currentTask = createCurrentRecurringCalendarTask(task, projectedAtIso) ?? task;
     const projectedTask = createProjectedRecurringTask(task, projectedAtIso);
     return projectedTask ? [currentTask, projectedTask] : [currentTask];
+}
+
+// Safety caps for expandCalendarRecurringTasksInRange: per-task in-range-occurrence cap (only
+// occurrences that actually land inside `range` count against it -- see MAX_RANGE_PROJECTION_ITERATIONS
+// below for the separate walk guard), and a total across one calendar render's whole expansion
+// pass (all tasks) so one screen can never enumerate unboundedly (perf guardrail P19). Both
+// truncate deterministically -- earliest occurrences win -- never silently reordering what's shown.
+export const CALENDAR_RANGE_PROJECTION_PER_TASK_CAP = 62;
+export const CALENDAR_RANGE_PROJECTION_TOTAL_CAP = 500;
+
+// The walk itself needs its own, larger iteration guard, separate from the in-range cap above:
+// occurrences before `range.startIso` are generated and discarded (they establish the stepping
+// chain) without counting against the per-task cap, so a range that starts far in the future
+// (e.g. paging the calendar several months ahead of a daily task's anchor date) must still be
+// able to walk that many steps before it ever reaches something worth keeping. ~800 covers about
+// two years of daily stepping; the `anchorDate > rangeEndMs` break just below already bounds the
+// tail for any range that isn't absurdly far out, so this guard only matters for the walk-up.
+const MAX_RANGE_PROJECTION_ITERATIONS = 800;
+
+export type CalendarRecurrenceRange = {
+    startIso: string;
+    endIso: string;
+};
+
+/**
+ * Calendar-only range expansion: every occurrence of a recurring task that
+ * intersects `range` (inclusive of both ends), instead of just the single next
+ * occurrence `expandCalendarRecurringTasks` returns. A drop-in superset of that
+ * function for calendar views -- when `showFutureRecurrence` is off, or the task
+ * isn't an active recurring series, it returns `[task]` (or the synthetic
+ * "current" unscheduled occurrence), exactly like `expandCalendarRecurringTasks`.
+ *
+ * Device-calendar push and the ICS feed keep using `expandCalendarRecurringTasks`
+ * (single occurrence) -- they must not gain multi-occurrence projections.
+ *
+ * `maxOccurrences` lets a caller iterating many tasks in one render thread a
+ * shared total budget (CALENDAR_RANGE_PROJECTION_TOTAL_CAP) on top of the
+ * per-task cap; it defaults to the per-task cap alone.
+ */
+export function expandCalendarRecurringTasksInRange(
+    task: Task,
+    range: CalendarRecurrenceRange,
+    projectedAtIso: string = new Date().toISOString(),
+    maxOccurrences: number = CALENDAR_RANGE_PROJECTION_PER_TASK_CAP
+): Task[] {
+    const currentTask = createCurrentRecurringCalendarTask(task, projectedAtIso) ?? task;
+    if (!task.showFutureRecurrence) return [currentTask];
+    if (isProjectedRecurringTask(task)) return [currentTask];
+    if (task.deletedAt || !isTaskActionable(task)) return [currentTask];
+
+    const rule = getRecurrenceRule(task.recurrence);
+    if (!rule) return [currentTask];
+
+    const rangeEndDate = safeParseDate(range.endIso);
+    if (!rangeEndDate) return [currentTask];
+    const rangeStartDate = safeParseDate(range.startIso);
+    const rangeStartMs = rangeStartDate ? rangeStartDate.getTime() : -Infinity;
+    const rangeEndMs = rangeEndDate.getTime();
+
+    const count = getRecurrenceCountValue(task.recurrence);
+    const until = getRecurrenceUntilValue(task.recurrence);
+    const baseCompletedOccurrences = getRecurrenceCompletedOccurrencesValue(task.recurrence) ?? 0;
+    const projectionBase = getProjectionBaseDate(projectedAtIso);
+    const anchors = resolveProjectedOccurrenceAnchors(task, currentTask);
+
+    const results: Task[] = [currentTask];
+    let baseTask: Task = currentTask;
+    let stepsSoFar = 0;
+    let pushedCount = 0;
+    const cap = Math.max(0, Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, maxOccurrences));
+
+    for (let iteration = 0; iteration < MAX_RANGE_PROJECTION_ITERATIONS && pushedCount < cap; iteration += 1) {
+        const fields = projectNextRecurringOccurrenceFields(task, baseTask, rule, projectedAtIso, projectionBase, anchors);
+        if (!fields) break;
+        stepsSoFar += fields.steps;
+        if (count && baseCompletedOccurrences + stepsSoFar >= count) break;
+
+        const anchorIso = fields.dueDate ?? fields.startTime ?? fields.reviewAt;
+        if (shouldStopAtUntil(anchorIso, until)) break;
+        const anchorDate = safeParseDate(anchorIso);
+        // Occurrences only move forward, so once one lands past the range end no
+        // later occurrence can re-enter it -- safe to stop the whole walk here.
+        if (!anchorDate || anchorDate.getTime() > rangeEndMs) break;
+
+        const occurrenceTask: ProjectedRecurringTask = {
+            ...task,
+            id: getRangeProjectedRecurringTaskId(task.id, anchorIso as string),
+            sourceTaskId: task.id,
+            isProjectedRecurringTask: true,
+            startTime: fields.startTime,
+            dueDate: fields.dueDate,
+            reviewAt: fields.reviewAt,
+            attachments: undefined,
+            completedAt: undefined,
+            deletedAt: undefined,
+            purgedAt: undefined,
+            isFocusedToday: false,
+            createdAt: task.createdAt,
+            updatedAt: projectedAtIso,
+        };
+
+        if (anchorDate.getTime() >= rangeStartMs) {
+            results.push(occurrenceTask);
+            pushedCount += 1;
+        }
+        baseTask = occurrenceTask;
+    }
+
+    return results;
 }
 
 /**

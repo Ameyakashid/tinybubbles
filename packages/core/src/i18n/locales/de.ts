@@ -362,7 +362,7 @@ export const deOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Fällig nach Abschluss (z.B. Wäsche)',
         'recurrence.afterCompletion': 'Nach Abschluß wiederholen',
         'recurrence.afterCompletionShort': 'Nach Abschluß',
-        'recurrence.showFutureInCalendar': 'Nächste Wiederholung im Kalender anzeigen',
+        'recurrence.showFutureInCalendar': 'Künftige Wiederholungen im Kalender anzeigen',
         'recurrence.showFutureInCalendarHint': 'Nur Planungsvorschau; die nächste echte Aufgabe wird erst erstellt, wenn diese abgeschlossen wird.',
         
         // Inbox (Mobile)

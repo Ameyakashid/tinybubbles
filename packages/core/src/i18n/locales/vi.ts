@@ -447,7 +447,7 @@ export const viOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Đến hạn sau khi hoàn thành (vd. giặt quần áo)',
         'recurrence.afterCompletion': 'Lặp lại sau khi hoàn thành',
         'recurrence.afterCompletionShort': 'sau khi hoàn thành',
-        'recurrence.showFutureInCalendar': 'Hiện lần xuất hiện tiếp theo trong Lịch',
+        'recurrence.showFutureInCalendar': 'Hiện các lần lặp lại sắp tới trong Lịch',
         'recurrence.showFutureInCalendarHint': 'Chỉ xem trước cho lên kế hoạch; nhiệm vụ tiếp theo vẫn được tạo khi hoàn thành cái này.',
 
         // Inbox (Mobile)

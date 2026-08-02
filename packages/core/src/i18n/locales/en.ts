@@ -406,7 +406,7 @@ export const en: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Due after completion (e.g., laundry)',
         'recurrence.afterCompletion': 'Repeat after completion',
         'recurrence.afterCompletionShort': 'after completion',
-        'recurrence.showFutureInCalendar': 'Show next occurrence in Calendar',
+        'recurrence.showFutureInCalendar': 'Show future occurrences in Calendar',
         'recurrence.showFutureInCalendarHint': 'Planning-only preview; the next task is still created when this one is completed.',
         'recurrence.nextCalendarPreview': 'Next calendar preview',
 

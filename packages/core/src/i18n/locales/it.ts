@@ -1447,7 +1447,7 @@ export const itOverrides: Record<string, string> = {
         'taskEdit.checklist': 'Lista di controllo',
         'taskEdit.areaLabel': 'Area attività',
         'task.aria.area': 'Area attività',
-        'recurrence.showFutureInCalendar': 'Mostra futuri eventi nel calendario',
+        'recurrence.showFutureInCalendar': 'Mostra occorrenze future nel calendario',
         'recurrence.showFutureInCalendarHint': 'Mostra le prossime occorrenze delle attività ricorrenti nel calendario.',
         'calendar.time': 'Ora',
         'calendar.items': 'Elementi',

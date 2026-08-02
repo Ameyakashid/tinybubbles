@@ -358,7 +358,7 @@ export const frOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Exigé après l’achèvement (par exemple, lessive).',
         'recurrence.afterCompletion': 'Répéter une fois terminé',
         'recurrence.afterCompletionShort': 'après l’achèvement',
-        'recurrence.showFutureInCalendar': 'Voir la prochaine occurrence dans le calendrier',
+        'recurrence.showFutureInCalendar': 'Voir les occurrences à venir dans le calendrier',
         'recurrence.showFutureInCalendarHint': 'Aperçu seulement dans le planning; la prochaine tâche sera créée après l’achèvement de la tâche actuelle.',
 
         // Inbox (Mobile)

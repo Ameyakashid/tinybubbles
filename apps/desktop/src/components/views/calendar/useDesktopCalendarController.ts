@@ -12,7 +12,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     buildCalendarEventTaskDraft,
-    expandCalendarRecurringTasks,
+    CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
+    CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
+    expandCalendarRecurringTasksInRange,
     getCalendarPlanningCandidates,
     getWeekStartsOnIndex,
     findFreeSlotForDay as findCalendarFreeSlotForDay,
@@ -168,7 +170,7 @@ export function useDesktopCalendarController() {
         onNavigate: feedback.resetSelectedDayState,
         weekStartsOn,
     });
-    const { currentMonth, selectedDate, viewMode, visibleRange } = nav;
+    const { currentMonth, days, selectedDate, viewMode, visibleRange } = nav;
     const external = useCalendarExternalEvents({
         filterQuery: normalizedViewFilterQuery,
         visibleRange,
@@ -216,9 +218,35 @@ export function useDesktopCalendarController() {
                 else completedByDay.set(completedKey, [task]);
             }
         }
+        // Recurrence projections now cover the whole visible range (#calendar-range-projection)
+        // instead of just the single next occurrence, so a daily "show future recurrence" task
+        // paints every visible day. Month mode's grid renders week-aligned spill days from the
+        // adjacent months (`nav.days`), which is wider than `visibleRange` (first-to-last of the
+        // month) -- use the grid bounds there so a spill-day occurrence doesn't vanish; every
+        // other view mode's visibleRange already matches what's rendered exactly. Widened to
+        // whole calendar days the same way visibleSearchMatchCount below does, and a shared
+        // budget across this loop keeps one render from enumerating without bound when many
+        // tasks are all opted in (P19).
+        const useGridBounds = viewMode === 'month' && days.length > 0;
+        const recurrenceRangeStart = new Date(useGridBounds ? days[0]! : visibleRange.start);
+        recurrenceRangeStart.setHours(0, 0, 0, 0);
+        const recurrenceRangeEnd = new Date(useGridBounds ? days[days.length - 1]! : visibleRange.end);
+        recurrenceRangeEnd.setHours(23, 59, 59, 999);
+        const recurrenceRange = { startIso: recurrenceRangeStart.toISOString(), endIso: recurrenceRangeEnd.toISOString() };
+        let remainingProjectionBudget = CALENDAR_RANGE_PROJECTION_TOTAL_CAP;
         for (const task of tasks) {
-            for (const calendarTask of expandCalendarRecurringTasks(task)) {
-                if (!isCalendarTaskVisible(calendarTask)) continue;
+            // Every field isCalendarTaskVisible reads (status, deletedAt, projectId, areaId,
+            // title) is copied unchanged onto every projected occurrence, so its verdict is the
+            // same for the source task and all of its occurrences -- check it once here and skip
+            // the expansion walk entirely for tasks that won't be shown, instead of paying for it
+            // and then filtering per occurrence below.
+            if (!isCalendarTaskVisible(task)) continue;
+            const maxOccurrences = Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, remainingProjectionBudget);
+            const expanded = maxOccurrences > 0
+                ? expandCalendarRecurringTasksInRange(task, recurrenceRange, undefined, maxOccurrences)
+                : [task];
+            remainingProjectionBudget -= Math.max(0, expanded.length - 1);
+            for (const calendarTask of expanded) {
                 visibleTasks.push(calendarTask);
                 if (calendarTask.dueDate) {
                     const dueDate = safeParseDueDate(calendarTask.dueDate);
@@ -241,7 +269,7 @@ export function useDesktopCalendarController() {
             }
         }
         return { visibleTasks, deadlinesByDay, scheduledByDay, completedByDay };
-    }, [tasks, allTasks, isCalendarTaskVisible, isCalendarTaskInScope, showCompleted]);
+    }, [tasks, allTasks, isCalendarTaskVisible, isCalendarTaskInScope, showCompleted, visibleRange, viewMode, days]);
 
     const schedulableTasks = useMemo(
         () => tasks
@@ -322,16 +350,20 @@ export function useDesktopCalendarController() {
 
         const taskIds = new Set<string>();
         for (const task of calendarTaskData.visibleTasks) {
+            // Each projected occurrence has its own synthetic id (#calendar-range-projection), so
+            // a daily recurring task would otherwise count once per painted day instead of once
+            // per source task -- key on the real task so every occurrence collapses to one match.
+            const matchId = isProjectedRecurringTask(task) ? task.sourceTaskId : task.id;
             const dueDate = task.dueDate ? safeParseDueDate(task.dueDate) : null;
             const startTime = task.startTime ? safeParseDate(task.startTime) : null;
-            if (dueDate && dueDate.getTime() >= startMs && dueDate.getTime() <= endMs) taskIds.add(task.id);
+            if (dueDate && dueDate.getTime() >= startMs && dueDate.getTime() <= endMs) taskIds.add(matchId);
             if (
                 hasTimeComponent(task.startTime)
                 && startTime
                 && startTime.getTime() >= startMs
                 && startTime.getTime() <= endMs
             ) {
-                taskIds.add(task.id);
+                taskIds.add(matchId);
             }
         }
 

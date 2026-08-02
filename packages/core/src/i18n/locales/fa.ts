@@ -393,7 +393,7 @@ export const faOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'بعد از تکمیل سررسید دارد (مثلاً لباسشویی)',
         'recurrence.afterCompletion': 'تکرار بعد از تکمیل',
         'recurrence.afterCompletionShort': 'بعد از تکمیل',
-        'recurrence.showFutureInCalendar': 'نمایش تکرار بعدی در تقویم',
+        'recurrence.showFutureInCalendar': 'نمایش تکرارهای آینده در تقویم',
         'recurrence.showFutureInCalendarHint': 'پیش‌نمایش صرفاً برنامه‌ریزی؛ با تکمیل این کار، کار بعدی همچنان ایجاد می‌شود.',
         'recurrence.nextCalendarPreview': 'پیش‌نمایش تقویم بعدی',
 

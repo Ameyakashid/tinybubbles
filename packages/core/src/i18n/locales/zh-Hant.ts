@@ -401,7 +401,7 @@ export const zhHant: Record<string, string> = {
         'recurrence.strategyFluidDesc': '按完成時間後順延（如洗衣）',
         'recurrence.afterCompletion': '完成後重複',
         'recurrence.afterCompletionShort': '完成後',
-        'recurrence.showFutureInCalendar': '在日曆中顯示下一次',
+        'recurrence.showFutureInCalendar': '在行事曆顯示未來重複',
         'recurrence.showFutureInCalendarHint': '僅用於規劃預覽；完成目前任務後才會建立真正的下一個任務。',
         'inbox.title': '收集箱',
         'inbox.processButton': '處理收集箱',

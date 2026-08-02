@@ -338,7 +338,7 @@ export const ptOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': 'Vencimento após a conclusão (por exemplo, lavanderia)',
         'recurrence.afterCompletion': 'Repetir após a conclusão',
         'recurrence.afterCompletionShort': 'após a conclusão',
-        'recurrence.showFutureInCalendar': 'Mostrar o próximo evento no Calendário',
+        'recurrence.showFutureInCalendar': 'Mostrar próximas ocorrências no Calendário',
         'recurrence.showFutureInCalendarHint': 'Pré-visualização apenas para planejamento; a próxima tarefa será criada somente após a conclusão desta.',
 
         // Inbox (Mobile)

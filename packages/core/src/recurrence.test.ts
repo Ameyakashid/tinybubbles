@@ -6,6 +6,7 @@ import {
     createNextRecurringTask,
     createCurrentRecurringCalendarTask,
     expandCalendarRecurringTasks,
+    expandCalendarRecurringTasksInRange,
     createProjectedRecurringTask,
     formatRecurrenceLabel,
     getProjectedRecurringTaskCalendarDate,
@@ -13,7 +14,9 @@ import {
     getRecurringTaskPreviewDate,
     getTaskCalendarOccurrenceDate,
     isProjectedRecurringTask,
+    isProjectedRecurringTaskId,
     normalizeRecurrenceForLoad,
+    CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
 } from './recurrence';
 import type { Task, TaskStatus } from './types';
 
@@ -1434,6 +1437,332 @@ describe('recurrence', () => {
         expect(next?.priority).toBe('urgent');
         expect(next?.energyLevel).toBe('high');
         expect(next?.assignedTo).toBe('Ada');
+    });
+});
+
+describe('expandCalendarRecurringTasksInRange', () => {
+    const rangeTask = (overrides: Partial<Task>): Task => ({
+        id: 't-range-task',
+        title: 'Range task',
+        status: 'next',
+        tags: [],
+        contexts: [],
+        showFutureRecurrence: true,
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        ...overrides,
+    });
+
+    it('paints a daily task into every visible day and includes exact range-boundary occurrences', () => {
+        const task = rangeTask({
+            id: 't-range-daily',
+            dueDate: '2026-08-02T12:00:00.000Z',
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-08-02T12:00:00.000Z';
+        const range = { startIso: '2026-08-03T12:00:00.000Z', endIso: '2026-08-06T12:00:00.000Z' };
+
+        const expanded = expandCalendarRecurringTasksInRange(task, range, projectedAtIso);
+
+        expect(expanded[0]).toBe(task);
+        const projected = expanded.slice(1);
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-03T12:00:00.000Z',
+            '2026-08-04T12:00:00.000Z',
+            '2026-08-05T12:00:00.000Z',
+            '2026-08-06T12:00:00.000Z',
+        ]);
+        for (const occurrence of projected) {
+            expect(isProjectedRecurringTask(occurrence)).toBe(true);
+            expect(occurrence.sourceTaskId).toBe(task.id);
+            expect(isProjectedRecurringTaskId(occurrence.id)).toBe(true);
+        }
+    });
+
+    it('expands a single-weekday weekly recurrence to every occurrence in range', () => {
+        const task = rangeTask({
+            id: 't-range-weekly-single',
+            dueDate: '2026-08-03', // a Monday
+            recurrence: { rule: 'weekly', strategy: 'strict', byDay: ['MO'], rrule: 'FREQ=WEEKLY;BYDAY=MO' },
+        });
+        const projectedAtIso = '2026-08-02T12:00:00.000Z';
+        const range = { startIso: '2026-08-01', endIso: '2026-09-15' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14',
+        ]);
+        for (const occurrence of projected) {
+            expect(new Date(`${occurrence.dueDate}T00:00:00`).getDay()).toBe(1); // Monday
+        }
+    });
+
+    it('expands a multi-weekday weekly recurrence, alternating between the configured weekdays', () => {
+        const task = rangeTask({
+            id: 't-range-weekly-multi',
+            dueDate: '2026-08-03', // a Monday
+            recurrence: { rule: 'weekly', strategy: 'strict', byDay: ['MO', 'WE'], rrule: 'FREQ=WEEKLY;BYDAY=MO,WE' },
+        });
+        const projectedAtIso = '2026-08-02T12:00:00.000Z';
+        const range = { startIso: '2026-08-01', endIso: '2026-08-20' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-05', '2026-08-10', '2026-08-12', '2026-08-17', '2026-08-19',
+        ]);
+        for (const occurrence of projected) {
+            const weekday = new Date(`${occurrence.dueDate}T00:00:00`).getDay();
+            expect([1, 3]).toContain(weekday); // Monday or Wednesday only
+        }
+    });
+
+    it('honors an interval greater than one for a daily recurrence', () => {
+        const task = rangeTask({
+            id: 't-range-interval-daily',
+            dueDate: '2026-08-01',
+            recurrence: { rule: 'daily', strategy: 'strict', interval: 2, rrule: 'FREQ=DAILY;INTERVAL=2' },
+        });
+        const projectedAtIso = '2026-07-30T00:00:00.000Z';
+        const range = { startIso: '2026-08-01', endIso: '2026-08-09' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-03', '2026-08-05', '2026-08-07', '2026-08-09',
+        ]);
+        for (let i = 1; i < projected.length; i += 1) {
+            const gapMs = new Date(projected[i]!.dueDate as string).getTime() - new Date(projected[i - 1]!.dueDate as string).getTime();
+            expect(gapMs).toBe(2 * 24 * 60 * 60 * 1000);
+        }
+    });
+
+    it('honors an interval greater than one for a weekly recurrence', () => {
+        const task = rangeTask({
+            id: 't-range-interval-weekly',
+            dueDate: '2026-08-03', // a Monday
+            recurrence: { rule: 'weekly', strategy: 'strict', interval: 2, rrule: 'FREQ=WEEKLY;INTERVAL=2' },
+        });
+        const projectedAtIso = '2026-07-01T00:00:00.000Z';
+        const range = { startIso: '2026-08-01', endIso: '2026-09-20' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-17', '2026-08-31', '2026-09-14',
+        ]);
+        for (const occurrence of projected) {
+            expect(new Date(`${occurrence.dueDate}T00:00:00`).getDay()).toBe(1); // stays on Monday
+        }
+        for (let i = 1; i < projected.length; i += 1) {
+            const gapMs = new Date(projected[i]!.dueDate as string).getTime() - new Date(projected[i - 1]!.dueDate as string).getTime();
+            expect(gapMs).toBe(14 * 24 * 60 * 60 * 1000);
+        }
+    });
+
+    it('stops mid-range once the recurrence COUNT is exhausted', () => {
+        const task = rangeTask({
+            id: 't-range-count',
+            dueDate: '2026-08-02T12:00:00.000Z',
+            recurrence: { rule: 'daily', strategy: 'strict', count: 5, completedOccurrences: 0, rrule: 'FREQ=DAILY;COUNT=5' },
+        });
+        const projectedAtIso = '2026-08-02T12:00:00.000Z';
+        // Range extends far past where COUNT exhausts, to prove the stop happens mid-range and
+        // not because the range itself ran out.
+        const range = { startIso: '2026-08-01', endIso: '2026-08-15' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-03T12:00:00.000Z',
+            '2026-08-04T12:00:00.000Z',
+            '2026-08-05T12:00:00.000Z',
+            '2026-08-06T12:00:00.000Z',
+        ]);
+    });
+
+    it('stops mid-range once the recurrence UNTIL date passes, including the UNTIL date itself', () => {
+        const task = rangeTask({
+            id: 't-range-until',
+            dueDate: '2026-08-02T12:00:00.000Z',
+            recurrence: { rule: 'daily', strategy: 'strict', until: '2026-08-05', rrule: 'FREQ=DAILY;UNTIL=20260805T000000Z' },
+        });
+        const projectedAtIso = '2026-08-02T12:00:00.000Z';
+        const range = { startIso: '2026-08-01', endIso: '2026-08-10' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-08-03T12:00:00.000Z',
+            '2026-08-04T12:00:00.000Z',
+            '2026-08-05T12:00:00.000Z',
+        ]);
+    });
+
+    it('keeps date-only occurrences date-only across a DST spring-forward transition', () => {
+        const task = rangeTask({
+            id: 't-range-dst-date-only',
+            dueDate: '2026-03-06', // Friday, before the 2026-03-08 US spring-forward
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-03-01T00:00:00.000Z';
+        const range = { startIso: '2026-03-07', endIso: '2026-03-10' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10',
+        ]);
+        for (const occurrence of projected) {
+            expect(occurrence.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
+    });
+
+    it('keeps a datetime occurrence\'s wall-clock time across a DST spring-forward transition', () => {
+        const task = rangeTask({
+            id: 't-range-dst-datetime',
+            startTime: '2026-03-06T09:00',
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-03-01T00:00:00.000Z';
+        // endIso is an exact instant (inclusive), not a whole-day shorthand -- callers widen to
+        // end-of-day themselves (see the desktop/mobile controllers), so cover the whole 10th here.
+        const range = { startIso: '2026-03-07', endIso: '2026-03-10T23:59:59' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.startTime)).toEqual([
+            '2026-03-07T09:00', '2026-03-08T09:00', '2026-03-09T09:00', '2026-03-10T09:00',
+        ]);
+    });
+
+    it('returns just the task itself when showFutureRecurrence is off, matching expandCalendarRecurringTasks', () => {
+        const task = rangeTask({
+            id: 't-range-disabled',
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+            showFutureRecurrence: false,
+        });
+        const range = { startIso: '2026-08-01', endIso: '2026-09-01' };
+
+        const expanded = expandCalendarRecurringTasksInRange(task, range);
+
+        expect(expanded).toEqual([task]);
+        expect(expanded).toEqual(expandCalendarRecurringTasks(task));
+    });
+
+    it('truncates at the per-task cap, earliest occurrences winning, even with a much larger range', () => {
+        const task = rangeTask({
+            id: 't-range-per-task-cap',
+            dueDate: '2026-01-01T00:00:00.000Z',
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-01-01T00:00:00.000Z';
+        const range = { startIso: '2026-01-01', endIso: '2027-01-01' };
+
+        const explicitCap = expandCalendarRecurringTasksInRange(task, range, projectedAtIso, 5).slice(1);
+        expect(explicitCap).toHaveLength(5);
+        expect(explicitCap[0]?.dueDate).toBe('2026-01-02T00:00:00.000Z');
+        expect(explicitCap[4]?.dueDate).toBe('2026-01-06T00:00:00.000Z');
+
+        const defaultCap = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+        expect(defaultCap).toHaveLength(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP);
+    });
+
+    it('holds the monthly anchor day fixed across a February clamp instead of drifting to the clamped value', () => {
+        // Without a fixed anchor this drifts to Feb 28, Mar 28, Apr 28... instead of returning
+        // to the 31st whenever the month allows it (correction pass finding 1).
+        const task = rangeTask({
+            id: 't-range-monthly-anchor-31',
+            dueDate: '2026-01-31',
+            recurrence: 'monthly',
+        });
+        const projectedAtIso = '2026-01-01T00:00:00.000Z';
+        const range = { startIso: '2026-02-01', endIso: '2026-07-01' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30',
+        ]);
+    });
+
+    it('returns to Feb 29 in a later leap year instead of getting stuck on Feb 28 (correction pass finding 1)', () => {
+        const task = rangeTask({
+            id: 't-range-yearly-anchor-29',
+            dueDate: '2024-02-29',
+            recurrence: 'yearly',
+        });
+        const projectedAtIso = '2024-03-01T00:00:00.000Z';
+        // 2025/2026/2027 clamp to the 28th and are walked-past (before rangeStart); 2028 is the
+        // next leap year and must land back on the 29th.
+        const range = { startIso: '2027-06-01', endIso: '2028-12-31' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual(['2028-02-29']);
+    });
+
+    it('matches createProjectedRecurringTask for the first occurrence (anchor, clamp, and fluid parity)', () => {
+        const cases: Task[] = [
+            rangeTask({ id: 't-parity-monthly-31', dueDate: '2026-01-31', recurrence: 'monthly' }),
+            rangeTask({ id: 't-parity-yearly-leap', dueDate: '2024-02-29', recurrence: 'yearly' }),
+            rangeTask({
+                id: 't-parity-fluid-interval',
+                dueDate: '2026-07-15',
+                recurrence: { rule: 'daily', strategy: 'fluid', interval: 3, rrule: 'FREQ=DAILY;INTERVAL=3' },
+            }),
+        ];
+        const projectedAtIso = '2026-01-01T00:00:00.000Z';
+        const wideOpenRange = { startIso: '2000-01-01', endIso: '2100-01-01' };
+
+        for (const task of cases) {
+            const single = createProjectedRecurringTask(task, projectedAtIso);
+            const [firstRanged] = expandCalendarRecurringTasksInRange(task, wideOpenRange, projectedAtIso).slice(1);
+            expect(firstRanged?.dueDate).toEqual(single?.dueDate);
+            expect(firstRanged?.startTime).toEqual(single?.startTime);
+        }
+    });
+
+    it('fills the entire visible window for a daily task even when the range starts many months out (correction pass finding 3)', () => {
+        // The reviewer's measured repro: a per-task cap that counted walked-past steps instead of
+        // in-range occurrences returned 0 occurrences for November and 3-then-blank for October.
+        const task = rangeTask({
+            id: 't-range-far-future-window',
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-08-02T00:00:00.000Z';
+
+        const novemberProjected = expandCalendarRecurringTasksInRange(
+            task, { startIso: '2026-11-01', endIso: '2026-11-30' }, projectedAtIso,
+        ).slice(1);
+        expect(novemberProjected).toHaveLength(30);
+        expect(novemberProjected[0]?.dueDate).toBe('2026-11-01');
+        expect(novemberProjected[29]?.dueDate).toBe('2026-11-30');
+
+        const octoberProjected = expandCalendarRecurringTasksInRange(
+            task, { startIso: '2026-10-01', endIso: '2026-10-31' }, projectedAtIso,
+        ).slice(1);
+        expect(octoberProjected).toHaveLength(31);
+    });
+
+    it('charges only in-range (pushed) occurrences against the cap, not the walk-up before the range starts', () => {
+        const task = rangeTask({
+            id: 't-range-cap-in-range-only',
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+        });
+        const projectedAtIso = '2026-08-02T00:00:00.000Z';
+        // ~90 days of walked-past-but-discarded occurrences before the range even starts.
+        const range = { startIso: '2026-11-01', endIso: '2027-01-01' };
+
+        const projected = expandCalendarRecurringTasksInRange(task, range, projectedAtIso, 5).slice(1);
+
+        expect(projected).toHaveLength(5);
+        expect(projected[0]?.dueDate).toBe('2026-11-01');
+        expect(projected[4]?.dueDate).toBe('2026-11-05');
     });
 });
 

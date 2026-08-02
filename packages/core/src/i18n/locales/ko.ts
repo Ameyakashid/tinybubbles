@@ -457,7 +457,7 @@ export const koOverrides: Record<string, string> = {
         'recurrence.strategyFluidDesc': '완료 후 반복(예: 세탁)',
         'recurrence.afterCompletion': '완료 후 반복',
         'recurrence.afterCompletionShort': '완료 후',
-        'recurrence.showFutureInCalendar': '캘린더에 다음 발생 표시',
+        'recurrence.showFutureInCalendar': '캘린더에 향후 반복 표시',
         'recurrence.showFutureInCalendarHint': '계획 전용 미리보기입니다. 이 할 일을 완료해야 다음 할 일이 생성됩니다.',
 
         // Inbox (Mobile)
