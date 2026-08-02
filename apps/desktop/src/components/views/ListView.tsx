@@ -608,6 +608,18 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         return map;
     }, [visibleTasks]);
 
+    // useListSelection's reveal effect looks the highlighted task up in
+    // visibleTasks, which a collapsed group contributes nothing to — so a task
+    // sent here by global search (#916) was never scrolled to or flashed. Unfold
+    // its group first; the reveal then happens on the next pass.
+    useEffect(() => {
+        if (!highlightTaskId || !isListGrouping) return;
+        const collapsedGroup = groupedTasks.find((group) => (
+            collapsedGroupIds.has(group.id) && group.tasks.some((task) => task.id === highlightTaskId)
+        ));
+        if (collapsedGroup) toggleGroup(collapsedGroup.id);
+    }, [collapsedGroupIds, groupedTasks, highlightTaskId, isListGrouping, toggleGroup]);
+
     const showDeferredProjects = statusFilter === 'someday' || statusFilter === 'waiting';
     const deferredProjects = showDeferredProjects
         ? [...projects]

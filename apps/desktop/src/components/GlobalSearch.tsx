@@ -341,7 +341,10 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
             // Map task status to appropriate view
             const task = result.item;
             setHighlightTask(task.id);
-            if (task.projectId) {
+            // A finished task is invisible in its project — the workspace never
+            // lists archived tasks and hides done ones unless the project has
+            // them switched on — so it goes to Done/Archived, which do reveal it.
+            if (task.projectId && !isTaskFinished(task as Task)) {
                 setProjectView({ selectedProjectId: task.projectId });
                 onNavigate('projects', task.id);
                 return;

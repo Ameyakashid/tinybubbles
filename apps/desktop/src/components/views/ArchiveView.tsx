@@ -135,6 +135,26 @@ function getArchiveDomIdSegment(value: string): string {
     return value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'group';
 }
 
+// App-wide flash duration for the shared highlight (#916).
+const HIGHLIGHT_FLASH_MS = 4000;
+
+/**
+ * Where the flat virtualized task list has to scroll to centre a row, read from
+ * the same measured row model that positions the rows. Never `index * estimate`:
+ * a fabricated offset scrolls past the end of the content and blanks the list
+ * (#916). Returns null when the row is not in the model.
+ */
+export function getArchiveHighlightScrollTop(
+    rowTop: number | undefined,
+    rowHeight: number,
+    viewportHeight: number,
+    totalHeight: number,
+): number | null {
+    if (rowTop === undefined) return null;
+    const centered = rowTop - Math.max(0, (viewportHeight - rowHeight) / 2);
+    return Math.min(Math.max(0, centered), Math.max(0, totalHeight - viewportHeight));
+}
+
 export function ArchiveView() {
     const perf = usePerformanceMonitor('ArchiveView');
     const {
@@ -147,6 +167,8 @@ export function ArchiveView() {
         batchDeleteTasks,
         restoreTask,
         settings,
+        highlightTaskId,
+        setHighlightTask,
     } = useTaskStore(
         (state) => ({
             _allTasks: state._allTasks,
@@ -158,6 +180,8 @@ export function ArchiveView() {
             batchDeleteTasks: state.batchDeleteTasks,
             restoreTask: state.restoreTask,
             settings: state.settings,
+            highlightTaskId: state.highlightTaskId,
+            setHighlightTask: state.setHighlightTask,
         }),
         shallow
     );
@@ -172,6 +196,7 @@ export function ArchiveView() {
         sanitizeArchiveViewState,
     );
     const listScrollRef = useRef<HTMLDivElement>(null);
+    const scrolledHighlightIdRef = useRef<string | null>(null);
     const rowHeightsRef = useRef<Map<string, number>>(new Map());
     const [measureVersion, setMeasureVersion] = useState(0);
     const [listScrollTop, setListScrollTop] = useState(0);
@@ -372,7 +397,7 @@ export function ArchiveView() {
     const handleVirtualScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
         setListScrollTop(event.currentTarget.scrollTop);
     }, []);
-    const { rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
+    const { rowHeights, rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
         tasks: archivedTasks,
         shouldVirtualize: shouldVirtualizeFlatTasks,
         rowHeightsRef,
@@ -485,6 +510,131 @@ export function ArchiveView() {
             return next;
         });
     }, [exitSelectionMode]);
+
+    // One flash per highlight, owned here rather than by the reveal effect below:
+    // that effect re-runs every time a row measures, which would keep sliding the
+    // 4s window forward for as long as the user scrolls.
+    useEffect(() => {
+        if (!highlightTaskId) {
+            scrolledHighlightIdRef.current = null;
+            return;
+        }
+        const flashTimer = window.setTimeout(() => setHighlightTask(null), HIGHLIGHT_FLASH_MS);
+        return () => window.clearTimeout(flashTimer);
+    }, [highlightTaskId, setHighlightTask]);
+
+    // Global search sets the shared highlight before navigating here (#916), and
+    // Archive is the view that has to honour it — a task landing in a list that
+    // is not showing it looks like the search result went nowhere. Whatever is
+    // hiding the row is undone one step at a time (each step re-runs this
+    // effect): the Projects segment, then the filters, then a collapsed group.
+    // The flash itself is TaskItem's, so it needs nothing beyond a mounted row.
+    useEffect(() => {
+        if (!highlightTaskId) return;
+        if (!archivedBaseTasks.some((task) => task.id === highlightTaskId)) return;
+
+        if (segment !== 'tasks') {
+            handleSegmentChange('tasks');
+            return;
+        }
+
+        if (!archivedTasks.some((task) => task.id === highlightTaskId)) {
+            // Landing on a list that cannot show the result is worse than losing
+            // a filter, so drop the filter and say so — the same trade global
+            // search already makes for the area filter.
+            if (!hasActiveFilterCriteria(activeFilterCriteria) && !searchQuery.trim()) return;
+            clearFilters();
+            setSearchQuery('');
+            showToast('Cleared the archive filters so the selected task is visible.', 'info');
+            return;
+        }
+
+        if (isGrouping) {
+            const collapsedGroup = groupedTasks.find((group) => (
+                collapsedGroupIds.has(group.id) && group.tasks.some((task) => task.id === highlightTaskId)
+            ));
+            if (collapsedGroup) {
+                toggleGroup(collapsedGroup.id);
+                return;
+            }
+        }
+
+        // Measuring a row bumps the virtual model, which re-runs this effect. The
+        // obstacle steps above are idempotent, but scrolling is not: without this
+        // guard every row the user scrolls past yanks the list back to the
+        // highlighted one. The ref is set where a scroll actually lands, so an
+        // attempt cut short by a re-render still gets to retry.
+        if (scrolledHighlightIdRef.current === highlightTaskId) return;
+
+        let retryTimer: number | null = null;
+        let cancelled = false;
+        let attempts = 0;
+        const scrollHighlightedTask = () => {
+            if (cancelled) return;
+            if (isGrouping && shouldVirtualize) {
+                const rowIndex = groupedVirtualRows.findIndex(
+                    (row) => row.kind === 'task' && row.task.id === highlightTaskId
+                );
+                if (rowIndex < 0) return;
+                groupedRowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
+                scrolledHighlightIdRef.current = highlightTaskId;
+                return;
+            }
+            if (shouldVirtualizeFlatTasks) {
+                const index = archivedTasks.findIndex((task) => task.id === highlightTaskId);
+                const scrollTop = getArchiveHighlightScrollTop(
+                    rowOffsets[index],
+                    rowHeights[index] ?? 0,
+                    listHeight,
+                    totalHeight,
+                );
+                if (scrollTop !== null && listScrollRef.current) {
+                    listScrollRef.current.scrollTop = scrollTop;
+                    setListScrollTop(scrollTop);
+                    scrolledHighlightIdRef.current = highlightTaskId;
+                }
+                return;
+            }
+            const element = document.querySelector(`[data-task-id="${highlightTaskId}"]`) as HTMLElement | null;
+            if (element && typeof element.scrollIntoView === 'function') {
+                element.scrollIntoView({ block: 'center' });
+                scrolledHighlightIdRef.current = highlightTaskId;
+                return;
+            }
+            // A row can be a frame behind the state change that revealed it.
+            if (attempts >= 8) return;
+            attempts += 1;
+            retryTimer = window.setTimeout(scrollHighlightedTask, 50);
+        };
+        scrollHighlightedTask();
+
+        return () => {
+            cancelled = true;
+            if (retryTimer !== null) window.clearTimeout(retryTimer);
+        };
+    }, [
+        activeFilterCriteria,
+        archivedBaseTasks,
+        archivedTasks,
+        clearFilters,
+        collapsedGroupIds,
+        groupedRowVirtualizer,
+        groupedTasks,
+        groupedVirtualRows,
+        handleSegmentChange,
+        highlightTaskId,
+        isGrouping,
+        listHeight,
+        rowHeights,
+        rowOffsets,
+        searchQuery,
+        segment,
+        shouldVirtualize,
+        shouldVirtualizeFlatTasks,
+        showToast,
+        toggleGroup,
+        totalHeight,
+    ]);
 
     return (
         <ErrorBoundary>

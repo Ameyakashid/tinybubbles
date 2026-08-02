@@ -231,6 +231,64 @@ describe('GlobalSearch', () => {
         expect(screen.queryByText('Type to search')).not.toBeInTheDocument();
     });
 
+    // A project workspace never lists archived tasks and hides done ones unless
+    // that project has them switched on, so routing a finished task there sent
+    // the user to a page that could not show it (#991).
+    describe('routing a task that belongs to a project', () => {
+        const projectTask: Task = {
+            id: 'project-task',
+            title: 'Zeta project work',
+            status: 'next',
+            projectId: 'project-1',
+            tags: [],
+            contexts: [],
+            createdAt: now,
+            updatedAt: now,
+        };
+
+        const selectZeta = async (task: Task) => {
+            const onNavigate = vi.fn();
+            useTaskStore.setState({ _allTasks: [task], settings: {} });
+            render(
+                <LanguageProvider>
+                    <GlobalSearch onNavigate={onNavigate} />
+                </LanguageProvider>
+            );
+            await act(async () => {
+                window.dispatchEvent(new Event('mindwtr:open-search'));
+                await vi.advanceTimersByTimeAsync(50);
+            });
+            await act(async () => {
+                fireEvent.change(screen.getByRole('textbox'), { target: { value: 'id:project-task' } });
+                await vi.advanceTimersByTimeAsync(200);
+                await Promise.resolve();
+            });
+            await act(async () => {
+                document.querySelector<HTMLElement>('[data-search-index="0"]')!.click();
+                await Promise.resolve();
+            });
+            return onNavigate;
+        };
+
+        it('opens a live task in its project', async () => {
+            const onNavigate = await selectZeta(projectTask);
+
+            expect(onNavigate).toHaveBeenCalledWith('projects', projectTask.id);
+        });
+
+        it('sends a done task to Done instead', async () => {
+            const onNavigate = await selectZeta({ ...projectTask, status: 'done', completedAt: now });
+
+            expect(onNavigate).toHaveBeenCalledWith('done', projectTask.id);
+        });
+
+        it('sends an archived task to Archive instead', async () => {
+            const onNavigate = await selectZeta({ ...projectTask, status: 'archived', completedAt: now });
+
+            expect(onNavigate).toHaveBeenCalledWith('archived', projectTask.id);
+        });
+    });
+
     // A bare date on a search row cannot say whether it is a deadline or a
     // record of when the work finished (#991).
     describe('result dates', () => {

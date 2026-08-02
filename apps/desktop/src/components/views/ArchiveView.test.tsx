@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Project, Task } from '@mindwtr/core';
 import { safeFormatDate, useTaskStore } from '@mindwtr/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
 import { useUiStore } from '../../store/ui-store';
-import { ArchiveView } from './ArchiveView';
+import { ArchiveView, getArchiveHighlightScrollTop } from './ArchiveView';
 import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 const initialTaskState = useTaskStore.getState();
@@ -510,6 +510,216 @@ describe('ArchiveView', () => {
 
             expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
             expect(screen.queryByRole('combobox', { name: 'Group' })).not.toBeInTheDocument();
+        });
+    });
+
+    // Global search sets the shared highlight and navigates here (#916). Before
+    // #991 Archive consumed it nowhere, so a result that the view was hiding —
+    // by filter or by collapsed group — looked like the search went nowhere.
+    describe('revealing a task sent here by global search', () => {
+        const homeTask: Task = {
+            ...archivedTask,
+            id: 'task-2',
+            title: 'Tidy the garage',
+            contexts: ['@home'],
+            projectId: 'project-9',
+        };
+        const liveTask: Task = {
+            ...archivedTask,
+            id: 'task-3',
+            title: 'Still to do',
+            status: 'next',
+            completedAt: undefined,
+        };
+        const activeProject: Project = {
+            ...archivedProject,
+            id: 'project-9',
+            title: 'House',
+            status: 'active',
+        };
+
+        const renderArchive = (extraTasks: Task[] = []) => {
+            const tasks = [archivedTask, homeTask, ...extraTasks];
+            useTaskStore.setState({
+                _allTasks: tasks,
+                _tasksById: new Map(tasks.map((task) => [task.id, task])),
+                projects: [activeProject],
+                _allProjects: [activeProject],
+            });
+            return render(
+                <LanguageProvider>
+                    <ArchiveView />
+                </LanguageProvider>
+            );
+        };
+
+        const rowTitles = () => Array
+            .from(document.querySelectorAll('[data-task-id] .task-item-display__title'))
+            .map((element) => element.textContent);
+
+        const highlight = (taskId: string) => act(() => {
+            useTaskStore.setState({ highlightTaskId: taskId });
+        });
+
+        const groupByProject = () => {
+            fireEvent.click(screen.getByRole('combobox', { name: 'Group' }));
+            fireEvent.click(screen.getByRole('option', { name: 'Project' }));
+        };
+
+        it('expands the collapsed group the task sits in', () => {
+            renderArchive();
+            groupByProject();
+            fireEvent.click(screen.getByRole('button', { name: /House\s*1/i }));
+            expect(rowTitles()).toEqual(['Archived task']);
+
+            highlight(homeTask.id);
+
+            expect(screen.getByRole('button', { name: /House\s*1/i })).toHaveAttribute('aria-expanded', 'true');
+            expect(rowTitles()).toContain('Tidy the garage');
+        });
+
+        it('clears an archive filter that hides the task and says why', () => {
+            const showToast = vi.fn();
+            useUiStore.setState((state) => ({
+                ...state,
+                showToast,
+                listFilters: { ...state.listFilters, criteria: { contexts: ['@office'] } },
+            }));
+            renderArchive();
+            expect(rowTitles()).toEqual([]);
+
+            highlight(archivedTask.id);
+
+            expect(useUiStore.getState().listFilters.criteria).toEqual({});
+            expect(showToast).toHaveBeenCalledWith(
+                'Cleared the archive filters so the selected task is visible.',
+                'info',
+            );
+            expect(rowTitles()).toContain('Archived task');
+        });
+
+        it('clears the archive search box when it is what hides the task', () => {
+            renderArchive();
+            fireEvent.change(screen.getByPlaceholderText('Search archived tasks...'), {
+                target: { value: 'garage' },
+            });
+            expect(rowTitles()).toEqual(['Tidy the garage']);
+
+            highlight(archivedTask.id);
+
+            expect(rowTitles()).toContain('Archived task');
+        });
+
+        // The highlight is app-wide: a task headed for another list must not
+        // make Archive throw the user's filters away.
+        it('ignores a highlight for a task that is not archived', () => {
+            const showToast = vi.fn();
+            useUiStore.setState((state) => ({
+                ...state,
+                showToast,
+                listFilters: { ...state.listFilters, criteria: { contexts: ['@office'] } },
+            }));
+            renderArchive([liveTask]);
+
+            highlight(liveTask.id);
+
+            expect(useUiStore.getState().listFilters.criteria).toEqual({ contexts: ['@office'] });
+            expect(showToast).not.toHaveBeenCalled();
+        });
+
+        // Rows measure as they scroll into the window, which bumps the virtual
+        // model and re-runs the reveal effect. Scrolling has to be once per
+        // highlight or the list snaps back under the user for four seconds.
+        it('scrolls to the row once and lets the user scroll away while rows measure', () => {
+            const originalRect = Element.prototype.getBoundingClientRect;
+            // Without a height nothing virtualizes meaningfully in jsdom, so no
+            // row ever measures and the bug cannot show itself.
+            Element.prototype.getBoundingClientRect = function fakeRect() {
+                return { height: 120, width: 0, top: 0, left: 0, right: 0, bottom: 120, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+            };
+            vi.useFakeTimers();
+            try {
+                const manyTasks = Array.from({ length: 40 }, (_, index): Task => ({
+                    ...archivedTask,
+                    id: `bulk-${index}`,
+                    title: `Archived task ${index}`,
+                }));
+                useTaskStore.setState({
+                    _allTasks: manyTasks,
+                    _tasksById: new Map(manyTasks.map((task) => [task.id, task])),
+                });
+                const { container } = render(
+                    <LanguageProvider>
+                        <ArchiveView />
+                    </LanguageProvider>
+                );
+
+                const scroller = container.querySelector('.overflow-y-auto') as HTMLElement;
+                expect(scroller).toBeTruthy();
+                // jsdom ignores scrollTop writes, so record them instead.
+                const scrollWrites: number[] = [];
+                Object.defineProperty(scroller, 'scrollTop', {
+                    configurable: true,
+                    get: () => scrollWrites[scrollWrites.length - 1] ?? 0,
+                    set: (value: number) => { scrollWrites.push(value); },
+                });
+
+                act(() => {
+                    useTaskStore.setState({ highlightTaskId: 'bulk-30' });
+                });
+                expect(scrollWrites).toHaveLength(1);
+                expect(scrollWrites[0]).toBeGreaterThan(0);
+
+                act(() => {
+                    fireEvent.scroll(scroller, { target: { scrollTop: 400 } });
+                });
+
+                expect(scrollWrites).toEqual([scrollWrites[0], 400]);
+
+                // …and the flash still ends four seconds after the reveal rather
+                // than being pushed forward by every measurement.
+                act(() => {
+                    vi.advanceTimersByTime(4000);
+                });
+                expect(useTaskStore.getState().highlightTaskId).toBeNull();
+            } finally {
+                vi.useRealTimers();
+                Element.prototype.getBoundingClientRect = originalRect;
+            }
+        });
+
+        it('releases the shared highlight once the flash is over', () => {
+            vi.useFakeTimers();
+            try {
+                renderArchive();
+                highlight(archivedTask.id);
+                expect(useTaskStore.getState().highlightTaskId).toBe(archivedTask.id);
+
+                act(() => {
+                    vi.advanceTimersByTime(4000);
+                });
+
+                expect(useTaskStore.getState().highlightTaskId).toBeNull();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
+
+    // jsdom lays nothing out, so a rendered test would pass against broken
+    // offset math. Pin the arithmetic itself (#916).
+    describe('getArchiveHighlightScrollTop', () => {
+        it('centres a measured row in the viewport', () => {
+            expect(getArchiveHighlightScrollTop(1_000, 120, 600, 5_000)).toBe(760);
+        });
+
+        it('clamps to the top and to the end of the content', () => {
+            expect(getArchiveHighlightScrollTop(40, 120, 600, 5_000)).toBe(0);
+            expect(getArchiveHighlightScrollTop(4_900, 120, 600, 5_000)).toBe(4_400);
+        });
+
+        it('reports no scroll target for a row the model does not know', () => {
+            expect(getArchiveHighlightScrollTop(undefined, 120, 600, 5_000)).toBeNull();
         });
     });
 

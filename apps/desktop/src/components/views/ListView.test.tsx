@@ -529,6 +529,39 @@ describe('ListView', () => {
     expect(secondRender.getByText('Home reference')).toBeInTheDocument();
   });
 
+  // useListSelection reveals the highlighted task, but a collapsed group keeps
+  // it out of visibleTasks entirely, so search sent the user to Done and
+  // nothing happened (#991).
+  it('expands the collapsed group holding a task sent here by global search', () => {
+    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('1', { title: 'Work done', status: 'done', contexts: ['@work'], completedAt: now }),
+        makeTask('2', { title: 'Home done', status: 'done', contexts: ['@home'], completedAt: now }),
+      ],
+      lastDataChangeAt: 1,
+    });
+    useUiStore.setState((state) => ({
+      ...state,
+      listOptions: {
+        ...state.listOptions,
+        doneGroupBy: 'context',
+      },
+    }));
+
+    const view = renderListView('done', 'Done');
+    fireEvent.click(view.getByRole('button', { name: /@work\s*1/i }));
+    expect(view.queryByText('Work done')).not.toBeInTheDocument();
+
+    act(() => {
+      useTaskStore.setState({ highlightTaskId: '1' });
+    });
+
+    expect(view.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(view.getByText('Work done')).toBeInTheDocument();
+    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+  });
+
   it('collapses groups on any status list, not just Reference (#963)', () => {
     useTaskStore.setState({
       _allTasks: [
