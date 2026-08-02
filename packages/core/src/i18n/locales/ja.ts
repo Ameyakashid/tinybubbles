@@ -1094,6 +1094,8 @@ export const jaOverrides: Record<string, string> = {
         'search.noSavedSearches': '保存された検索はまだありません。',
         'search.deleteConfirm': 'この保存された検索を削除しますか?',
         'search.hiddenCompletedMatches': '完了・アーカイブ済みにあと{{count}}件',
+        'search.completedDate': '{{date}} 完了',
+        'search.dueDate': '期日 {{date}}',
         'search.includeCompleted': '完了タスクとアーカイブ済みタスクを含める',
         'search.includeReference': '参照タスクを含める',
         'search.include.label': '含む',

@@ -1478,6 +1478,8 @@ export const faOverrides: Record<string, string> = {
         'search.deleteConfirm': 'این جستجوی ذخیره‌شده حذف شود؟',
         'search.helpOperators': 'از عملگرهایی مانند status:‏ context:‏ tag:‏ project:‏ due:<=7d استفاده کنید.',
         'search.hiddenCompletedMatches': '{{count}} مورد دیگر در انجام‌شده و بایگانی‌شده',
+        'search.completedDate': 'تکمیل‌شده {{date}}',
+        'search.dueDate': 'سررسید {{date}}',
         'search.includeCompleted': 'شامل کارهای انجام‌شده و بایگانی‌شده',
         'search.includeReference': 'شامل کارهای مرجع',
         'search.include.label': 'شامل',

@@ -1385,6 +1385,8 @@ export const zhHant: Record<string, string> = {
         'search.deleteConfirm': '刪除此已保存的搜索？',
         'search.helpOperators': '可用操作符：status:、context:、tag:、project:、due:<=7d 等。',
         'search.hiddenCompletedMatches': '已完成和歸檔中還有 {{count}} 條',
+        'search.completedDate': '完成於 {{date}}',
+        'search.dueDate': '截止 {{date}}',
         'search.includeCompleted': '包含已完成和歸檔任務',
         'search.includeReference': '包含參考資料',
         'search.include.label': '包含',

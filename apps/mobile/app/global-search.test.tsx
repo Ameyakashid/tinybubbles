@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList, Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import { safeFormatDate, type Task } from '@mindwtr/core';
 
 const routerPushMock = vi.hoisted(() => vi.fn());
 const setHighlightTaskMock = vi.hoisted(() => vi.fn());
@@ -85,6 +85,8 @@ vi.mock('../contexts/language-context', () => ({
             'filters.label': 'Filters',
             'search.helpOperators': 'Use operators',
             'search.inProjectSuffix': 'in project',
+            'search.completedDate': 'Completed {{date}}',
+            'search.dueDate': 'Due {{date}}',
             'search.hiddenCompletedMatches': '{{count}} more in Done & Archived',
             'search.noResults': 'No results',
             'search.placeholder': 'Search',
@@ -251,6 +253,87 @@ describe('SearchScreen task results', () => {
         });
 
         expect(tree.root.findByType(FlatList).props.data.map((result: any) => result.item.id)).toEqual(['task-1']);
+    });
+
+    // A bare date on a search row cannot say whether it is a deadline or a
+    // record of when the work finished (#991).
+    describe('result dates', () => {
+        const completedAt = '2026-05-01T09:15:00.000Z';
+
+        const renderWithDateTasks = () => {
+            routeParams.q = 'Zeta';
+            storeState._allTasks = [
+                makeTask('t-done', 'Zeta done', { status: 'done', completedAt }),
+                makeTask('t-archived', 'Zeta archived', { status: 'archived', completedAt }),
+                makeTask('t-unstamped', 'Zeta unstamped', { status: 'archived' }),
+                makeTask('t-due', 'Zeta due', { dueDate: '2099-01-01' }),
+                makeTask('t-overdue', 'Zeta overdue', { dueDate: '2020-01-01' }),
+                makeTask('t-plain', 'Zeta plain'),
+            ];
+
+            let tree!: ReturnType<typeof create>;
+            act(() => {
+                tree = create(<SearchScreen />);
+            });
+
+            // Done and Archived matches are hidden until asked for.
+            const hint = tree.root.findAllByType(TouchableOpacity).find((node) =>
+                node.findAllByType(Text).some((textNode) =>
+                    String(textNode.props.children).includes('more in Done & Archived')
+                )
+            );
+            act(() => {
+                hint!.props.onPress();
+            });
+            return tree;
+        };
+
+        // FlatList is a host component in the shim, so the row has to be
+        // rendered on its own to read what it puts on screen.
+        const dateLineOf = (tree: ReturnType<typeof create>, taskId: string) => {
+            const list = tree.root.findByType(FlatList);
+            const index = list.props.data.findIndex((result: any) => result.item.id === taskId);
+            expect(index, `search result for ${taskId}`).toBeGreaterThanOrEqual(0);
+            const element = list.props.renderItem({ item: list.props.data[index], index });
+            let rowTree!: ReturnType<typeof create>;
+            act(() => {
+                rowTree = create(element);
+            });
+            return rowTree.root
+                .findAllByType(Text)
+                .map((node) => ({
+                    text: String(node.props.children),
+                    color: Array.isArray(node.props.style) ? node.props.style[1]?.color : undefined,
+                }))
+                .find((line) => /^(Completed|Due) /.test(line.text)) ?? null;
+        };
+
+        it('labels a finished task with its completion date', () => {
+            const tree = renderWithDateTasks();
+
+            const label = `Completed ${safeFormatDate(completedAt, 'Pp')}`;
+            expect(dateLineOf(tree, 't-done')?.text).toBe(label);
+            // A status gate that only checks 'done' misses archived (#968).
+            expect(dateLineOf(tree, 't-archived')?.text).toBe(label);
+        });
+
+        it('labels an unfinished task with its due date and reddens only the overdue one', () => {
+            const tree = renderWithDateTasks();
+
+            const due = dateLineOf(tree, 't-due');
+            expect(due?.text).toBe(`Due ${safeFormatDate('2099-01-01', 'P')}`);
+            expect(due?.color).toBe('#64748b');
+            // Red is reserved for a date that has passed (#640).
+            expect(dateLineOf(tree, 't-overdue')?.color).toBe('#dc2626');
+        });
+
+        it('shows no date at all rather than an ambiguous or empty one', () => {
+            const tree = renderWithDateTasks();
+
+            expect(dateLineOf(tree, 't-plain')).toBeNull();
+            // Finished with nothing to report: no fallback to the due date.
+            expect(dateLineOf(tree, 't-unstamped')).toBeNull();
+        });
     });
 
     it('keeps literal CJK substring matches when SQLite search returns partial token matches', async () => {

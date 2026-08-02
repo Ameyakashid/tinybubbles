@@ -1478,6 +1478,8 @@ export const svOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Ta bort den här sparade sökningen?',
         'search.helpOperators': 'Använd operatorer som status:, context:, tag:, project:, due:<=7d.',
         'search.hiddenCompletedMatches': '{{count}} fler i Klar och Arkiverat',
+        'search.completedDate': 'Slutförd {{date}}',
+        'search.dueDate': 'Förfaller {{date}}',
         'search.includeCompleted': 'Inkludera uppgifter från Klar och Arkiverat',
         'search.includeReference': 'Inkludera Referens-uppgifter',
         'search.include.label': 'Inkludera',

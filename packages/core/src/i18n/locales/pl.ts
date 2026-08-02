@@ -1092,6 +1092,8 @@ export const plOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Usunąć to zapisane wyszukiwanie?',
         'search.helpOperators': 'Użyj operatorów takich jak status:, context:, tag:, project:, due:<=7d. Np. context:dom status:next',
         'search.hiddenCompletedMatches': '{{count}} więcej w wykonanych i zarchiwizowanych',
+        'search.completedDate': 'Ukończono {{date}}',
+        'search.dueDate': 'Termin {{date}}',
         'search.includeCompleted': 'Uwzględnij zadania wykonane i zarchiwizowane',
         'search.includeReference': 'Uwzględnij zadania referencyjne',
         'search.include.label': 'Uwzględnij',

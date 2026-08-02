@@ -1108,6 +1108,8 @@ export const trOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Bu kayıtlı arama silinsin mi?',
         'search.helpOperators': 'status:, context:, tag:, project:, Due:<=7d gibi operatörleri kullanın.',
         'search.hiddenCompletedMatches': 'Tamamlanan ve Arşivlenenlerde {{count}} sonuç daha',
+        'search.completedDate': '{{date}} tarihinde tamamlandı',
+        'search.dueDate': 'Son tarih {{date}}',
         'search.includeCompleted': 'Tamamlanan ve Arşivlenen görevleri dahil et',
         'search.includeReference': 'Referans görevlerini dahil et',
         'search.include.label': 'Katmak',

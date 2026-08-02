@@ -29,3 +29,4 @@ _None yet._
 - Russian: "No area" is now translated as «Нет области» instead of the literal «Нет площади».
 - Desktop: the file holding your saved passwords, sync tokens, and API keys is now readable only by your own user account. On a shared computer, other accounts could previously read it. If you have used Mindwtr on a machine you share, rotate those credentials.
 - Weekly review: the AI review step now ignores any suggestion that does not match one of the items it was asked to review, so nothing outside that list can be archived or moved to Someday.
+- Search: task results now carry a labeled date — "Completed" with the date the task was finished, or "Due" with its deadline (in red once it has passed). Tasks with neither look the same as before. On desktop and mobile. (#991)

@@ -1094,6 +1094,8 @@ export const ruOverrides: Record<string, string> = {
         'search.noSavedSearches': 'Сохраненных поисков пока нет.',
         'search.deleteConfirm': 'Удалить этот сохраненный поиск?',
         'search.hiddenCompletedMatches': 'Ещё {{count}} в выполненных и заархивированных',
+        'search.completedDate': 'Завершено {{date}}',
+        'search.dueDate': 'Срок {{date}}',
         'search.includeCompleted': 'Включить выполненные и заархивированные задачи',
         'search.includeReference': 'Включить справочные задачи',
         'search.include.label': 'Включать',

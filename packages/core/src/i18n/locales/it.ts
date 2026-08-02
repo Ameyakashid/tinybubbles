@@ -1266,6 +1266,8 @@ export const itOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Eliminare questa ricerca salvata?',
         'search.helpOperators': 'Usa operatori come status:, context:, tag:, project:, due:<=7d.',
         'search.hiddenCompletedMatches': '{{count}} in più tra completate e archiviate',
+        'search.completedDate': 'Completata {{date}}',
+        'search.dueDate': 'Scadenza {{date}}',
         'search.includeCompleted': 'Includi attività completate e archiviate',
         'search.includeReference': 'Includi materiale di riferimento',
         'search.include.label': 'Includi',

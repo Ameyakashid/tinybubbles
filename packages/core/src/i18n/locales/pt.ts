@@ -1172,6 +1172,8 @@ export const ptOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Excluir esta pesquisa salva?',
         'search.helpOperators': 'Use operadores como status:, context:, tag:, project:, due:<=7d.',
         'search.hiddenCompletedMatches': 'Mais {{count}} em concluídas e arquivadas',
+        'search.completedDate': 'Concluída {{date}}',
+        'search.dueDate': 'Vence {{date}}',
         'search.includeCompleted': 'Incluir tarefas concluídas e arquivadas',
         'search.includeReference': 'Incluir tarefas de referência',
         'search.include.label': 'Incluir',

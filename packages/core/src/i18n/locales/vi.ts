@@ -1642,6 +1642,8 @@ export const viOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Xóa tìm kiếm đã lưu này?',
         'search.helpOperators': 'Dùng các toán tử như status:, context:, tag:, project:, due:<=7d.',
         'search.hiddenCompletedMatches': 'Còn {{count}} trong Hoàn thành và Đã lưu trữ',
+        'search.completedDate': 'Hoàn thành {{date}}',
+        'search.dueDate': 'Đến hạn {{date}}',
         'search.includeCompleted': 'Bao gồm nhiệm vụ Hoàn thành và Đã lưu trữ',
         'search.includeReference': 'Bao gồm nhiệm vụ Tham khảo',
         'search.include.label': 'Bao gồm',

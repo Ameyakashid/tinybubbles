@@ -1502,6 +1502,8 @@ export const koOverrides: Record<string, string> = {
         'search.deleteConfirm': '저장된 검색결과를 삭제하시겠습니까?',
         'search.helpOperators': 'status:, context:, tag:, project:, due:<=7d와 같은 연산자를 사용하세요.',
         'search.hiddenCompletedMatches': '완료 및 보관됨에 {{count}}개 더 있음',
+        'search.completedDate': '{{date}} 완료',
+        'search.dueDate': '마감 {{date}}',
         'search.includeCompleted': '완료 및 보관된 할 일 포함',
         'search.includeReference': '참조 할 일 포함',
         'search.include.label': '포함',

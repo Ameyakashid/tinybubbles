@@ -11,6 +11,10 @@ import { shallow,
     SearchTaskResult,
     getStorageAdapter,
     normalizeWeekStartSetting,
+    formatI18nTemplate,
+    hasTimeComponent,
+    isTaskFinished,
+    safeFormatDate,
     TaskStatus,
     AREA_FILTER_ALL,
     resolveAreaFilter,
@@ -18,6 +22,7 @@ import { shallow,
     projectMatchesAreaFilter, tFallback, } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
+import { getUrgencyColor } from './Task/TaskItemDisplay';
 import { PromptModal } from './PromptModal';
 import { Dialog } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
@@ -68,6 +73,9 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     const { allContexts, allTags } = getDerivedState();
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+    // Search results are SearchTaskResult rows, which deliberately carry no
+    // completedAt — the full task behind the row does (#991).
+    const taskById = useMemo(() => new Map(_allTasks.map((task) => [task.id, task])), [_allTasks]);
     const activeAreaFilter = useMemo(
         () => resolveAreaFilter(settings?.filters?.areaId, areas),
         [settings?.filters?.areaId, areas]
@@ -246,6 +254,34 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                 ? <span key={`${part}-${index}`} className="text-primary font-semibold">{part}</span>
                 : <span key={`${part}-${index}`}>{part}</span>
         ));
+    };
+
+    // A search row never shows a bare date: the label word is what says whether
+    // it is a completion or a deadline, for sighted readers and screen readers
+    // alike (#991). Completion wins for a finished task, and a finished task
+    // with no completedAt shows nothing rather than falling back to its due
+    // date. Red stays reserved for a date that has passed (#640).
+    const renderResultDate = (result: SearchTaskResult) => {
+        const task = taskById.get(result.id);
+        if (!task) return null;
+        if (isTaskFinished(task)) {
+            if (!task.completedAt) return null;
+            return (
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                    {formatI18nTemplate(t('search.completedDate'), {
+                        date: safeFormatDate(task.completedAt, hasTimeComponent(task.completedAt) ? 'Pp' : 'P'),
+                    })}
+                </span>
+            );
+        }
+        if (!task.dueDate) return null;
+        return (
+            <span className={cn("shrink-0 whitespace-nowrap text-xs", getUrgencyColor(task))}>
+                {formatI18nTemplate(t('search.dueDate'), {
+                    date: safeFormatDate(task.dueDate, hasTimeComponent(task.dueDate) ? 'Pp' : 'P'),
+                })}
+            </span>
+        );
     };
 
     // Keyboard navigation
@@ -738,6 +774,8 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                                 {result.type === 'task' && (result.item as SearchTaskResult).projectId ? ` • ${t('search.inProjectSuffix')}` : ''}
                             </span>
                         </div>
+
+                        {result.type === 'task' && renderResultDate(result.item)}
 
                         {index === selectedIndex && (
                             <span className="text-xs text-muted-foreground">↵</span>

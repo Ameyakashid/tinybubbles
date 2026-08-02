@@ -82,7 +82,7 @@ interface TaskItemDisplayProps {
 // warning, not a failure — and mobile already reads that way, so painting
 // "due within 24h" destructive here made the same task look overdue on one
 // device and not the other (#640).
-const getUrgencyColor = (task: Task) => {
+export const getUrgencyColor = (task: Task) => {
     const urgency = getTaskUrgency(task);
     switch (urgency) {
         case 'overdue': return 'text-destructive font-bold';

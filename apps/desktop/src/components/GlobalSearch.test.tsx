@@ -1,6 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AREA_FILTER_ALL, useTaskStore, type Area, type Task } from '@mindwtr/core';
+import { AREA_FILTER_ALL, safeFormatDate, useTaskStore, type Area, type Task } from '@mindwtr/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 import { GlobalSearch } from './GlobalSearch';
@@ -229,5 +229,92 @@ describe('GlobalSearch', () => {
         expect(screen.getByText('Archived report')).toBeInTheDocument();
         expect(screen.queryByText('Work task')).not.toBeInTheDocument();
         expect(screen.queryByText('Type to search')).not.toBeInTheDocument();
+    });
+
+    // A bare date on a search row cannot say whether it is a deadline or a
+    // record of when the work finished (#991).
+    describe('result dates', () => {
+        const base: Task = {
+            id: 'seed',
+            title: 'seed',
+            status: 'next',
+            tags: [],
+            contexts: [],
+            createdAt: now,
+            updatedAt: now,
+        };
+        const completedAt = '2026-05-01T09:15:00.000Z';
+        const dateTasks: Task[] = [
+            { ...base, id: 'zeta-done', title: 'Zeta done', status: 'done', completedAt },
+            { ...base, id: 'zeta-archived', title: 'Zeta archived', status: 'archived', completedAt },
+            { ...base, id: 'zeta-unstamped', title: 'Zeta unstamped', status: 'archived' },
+            { ...base, id: 'zeta-due', title: 'Zeta due', dueDate: '2099-01-01' },
+            { ...base, id: 'zeta-overdue', title: 'Zeta overdue', dueDate: '2020-01-01' },
+            { ...base, id: 'zeta-plain', title: 'Zeta plain' },
+        ];
+
+        const rowFor = (title: string) => {
+            const row = Array.from(document.querySelectorAll<HTMLElement>('[data-search-index]'))
+                .find((candidate) => candidate.textContent?.includes(title));
+            expect(row, `search row for ${title}`).toBeTruthy();
+            return row!;
+        };
+
+        const searchZeta = async () => {
+            useTaskStore.setState({ _allTasks: dateTasks, settings: {} });
+            render(
+                <LanguageProvider>
+                    <GlobalSearch onNavigate={vi.fn()} />
+                </LanguageProvider>
+            );
+
+            await act(async () => {
+                window.dispatchEvent(new Event('mindwtr:open-search'));
+                await vi.advanceTimersByTimeAsync(50);
+            });
+            await act(async () => {
+                fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Zeta' } });
+                await vi.advanceTimersByTimeAsync(200);
+                await Promise.resolve();
+            });
+            // Done and Archived are filtered out of search by default.
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+                await vi.advanceTimersByTimeAsync(50);
+            });
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: 'Include Done and Archived tasks' }));
+                await vi.advanceTimersByTimeAsync(200);
+            });
+        };
+
+        it('labels a finished task with its completion date', async () => {
+            await searchZeta();
+
+            const label = `Completed ${safeFormatDate(completedAt, 'Pp')}`;
+            expect(rowFor('Zeta done').textContent).toContain(label);
+            // A status gate that only checks 'done' misses archived (#968).
+            expect(rowFor('Zeta archived').textContent).toContain(label);
+        });
+
+        it('labels an unfinished task with its due date and reddens only the overdue one', async () => {
+            await searchZeta();
+
+            expect(rowFor('Zeta due').textContent)
+                .toContain(`Due ${safeFormatDate('2099-01-01', 'P')}`);
+            expect(within(rowFor('Zeta due')).getByText(/^Due /).className)
+                .toContain('text-muted-foreground');
+            // Red is reserved for a date that has passed (#640).
+            expect(within(rowFor('Zeta overdue')).getByText(/^Due /).className)
+                .toContain('text-destructive');
+        });
+
+        it('shows no date at all rather than an ambiguous or empty one', async () => {
+            await searchZeta();
+
+            expect(rowFor('Zeta plain').textContent).not.toMatch(/Due|Completed/);
+            // Finished with nothing to report: no fallback to the due date.
+            expect(rowFor('Zeta unstamped').textContent).not.toMatch(/Due|Completed/);
+        });
     });
 });

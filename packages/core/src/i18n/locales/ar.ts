@@ -1140,6 +1140,8 @@ export const arOverrides: Record<string, string> = {
         'search.noSavedSearches': 'لا توجد عمليات بحث محفوظة حتى الآن.',
         'search.deleteConfirm': 'هل تريد حذف هذا البحث المحفوظ؟',
         'search.hiddenCompletedMatches': '{{count}} أخرى في المنجزة والمؤرشفة',
+        'search.completedDate': 'اكتمل في {{date}}',
+        'search.dueDate': 'يستحق في {{date}}',
         'search.includeCompleted': 'تضمين المهام المنجزة والمؤرشفة',
         'search.includeReference': 'تضمين المهام المرجعية',
         'search.include.label': 'يشمل',

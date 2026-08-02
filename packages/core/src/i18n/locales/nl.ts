@@ -291,6 +291,8 @@ export const nlOverrides: Record<string, string> = {
         'areas.edit': 'Gebied bewerken',
         'common.search': 'Zoeken',
         'search.scopeHint': 'Taken, projecten, personen',
+        'search.completedDate': 'Voltooid {{date}}',
+        'search.dueDate': 'Vervalt {{date}}',
         'common.done': 'Klaar',
         'common.hideKeyboard': 'Toetsenbord verbergen',
         'common.showCompleted': 'Voltooide tonen',

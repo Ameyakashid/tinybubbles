@@ -1435,6 +1435,8 @@ export const csOverrides: Record<string, string> = {
         'search.deleteConfirm': 'Smazat toto uložené hledání?',
         'search.helpOperators': 'Použijte operátory jako status:, context:, tag:, project:, due:<=7d.',
         'search.hiddenCompletedMatches': 'Dalších {{count}} v Hotovo a Archivováno',
+        'search.completedDate': 'Dokončeno {{date}}',
+        'search.dueDate': 'Termín {{date}}',
         'search.includeCompleted': 'Zahrnout úkoly Hotovo a Archivováno',
         'search.includeReference': 'Zahrnout referenční úkoly',
         'search.include.label': 'Zahrnout',

@@ -21,6 +21,11 @@ import { useTaskStore,
     SearchTaskResult,
     Task,
     getStorageAdapter,
+    formatI18nTemplate,
+    getTaskUrgency,
+    hasTimeComponent,
+    isTaskFinished,
+    safeFormatDate,
     TaskStatus,
     PRESET_CONTEXTS,
     PRESET_TAGS,
@@ -181,6 +186,40 @@ export default function SearchScreen() {
             : null,
         [_allTasks, editingTaskId]
     );
+    const taskById = useMemo(() => new Map(_allTasks.map((task) => [task.id, task])), [_allTasks]);
+    // Search rows are SearchTaskResult, which deliberately carries no
+    // completedAt — the full task behind the row does (#991). The label word is
+    // what tells a completion date from a deadline, so neither is ever shown
+    // bare; a finished task with no completedAt shows nothing rather than
+    // falling back to its due date.
+    const resolveResultDate = (result: SearchTaskResult): { color: string; label: string } | null => {
+        const task = taskById.get(result.id);
+        if (!task) return null;
+        if (isTaskFinished(task)) {
+            if (!task.completedAt) return null;
+            return {
+                color: tc.secondaryText,
+                label: formatI18nTemplate(t('search.completedDate'), {
+                    date: safeFormatDate(task.completedAt, hasTimeComponent(task.completedAt) ? 'Pp' : 'P'),
+                }),
+            };
+        }
+        if (!task.dueDate) return null;
+        // Same mapping the task rows use: red is reserved for a date that has
+        // already passed (#640).
+        const urgency = getTaskUrgency(task);
+        const dueColor = urgency === 'overdue'
+            ? tc.danger
+            : urgency === 'urgent' || urgency === 'upcoming'
+                ? tc.warning
+                : tc.secondaryText;
+        return {
+            color: dueColor,
+            label: formatI18nTemplate(t('search.dueDate'), {
+                date: safeFormatDate(task.dueDate, hasTimeComponent(task.dueDate) ? 'Pp' : 'P'),
+            }),
+        };
+    };
     const noResultsLabel = trimmedQuery ? t('search.noResults') + ' "' + trimmedQuery + '"' : t('search.noResults');
 
     const savedSearches = settings?.savedSearches || [];
@@ -637,29 +676,37 @@ export default function SearchScreen() {
                         </View>
                     ) : null
                 }
-                renderItem={({ item }) => (
-                    <TouchableOpacity
-                        style={[styles.resultItem, { backgroundColor: tc.cardBg, borderColor: tc.border }]}
-                        onPress={() => handleSelect(item)}
-                    >
-                        {item.type === 'project' ? (
-                            <Folder size={24} color={tc.tint} />
-                        ) : (
-                            <CheckCircle size={24} color={tc.secondaryText} />
-                        )}
-                        <View style={styles.resultText}>
-                            <Text style={[styles.resultTitle, { color: tc.text }]}>{item.item.title}</Text>
-                            <Text style={[styles.resultSubtitle, { color: tc.secondaryText }]}>
-                                {item.type === 'project'
-                                    ? t('search.resultProject')
-                                    : (item.item as SearchTaskResult).projectId
-                                        ? `${t('search.resultTask')} • ${t('search.inProjectSuffix')}`
-                                        : t('search.resultTask')}
-                            </Text>
-                        </View>
-                        <ChevronRight size={20} color={tc.secondaryText} />
-                    </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                    const resultDate = item.type === 'task' ? resolveResultDate(item.item) : null;
+                    return (
+                        <TouchableOpacity
+                            style={[styles.resultItem, { backgroundColor: tc.cardBg, borderColor: tc.border }]}
+                            onPress={() => handleSelect(item)}
+                        >
+                            {item.type === 'project' ? (
+                                <Folder size={24} color={tc.tint} />
+                            ) : (
+                                <CheckCircle size={24} color={tc.secondaryText} />
+                            )}
+                            <View style={styles.resultText}>
+                                <Text style={[styles.resultTitle, { color: tc.text }]}>{item.item.title}</Text>
+                                <Text style={[styles.resultSubtitle, { color: tc.secondaryText }]}>
+                                    {item.type === 'project'
+                                        ? t('search.resultProject')
+                                        : (item.item as SearchTaskResult).projectId
+                                            ? `${t('search.resultTask')} • ${t('search.inProjectSuffix')}`
+                                            : t('search.resultTask')}
+                                </Text>
+                                {resultDate && (
+                                    <Text style={[styles.resultDate, { color: resultDate.color }]}>
+                                        {resultDate.label}
+                                    </Text>
+                                )}
+                            </View>
+                            <ChevronRight size={20} color={tc.secondaryText} />
+                        </TouchableOpacity>
+                    );
+                }}
               removeClippedSubviews={false}
             />
 
@@ -882,6 +929,10 @@ const styles = StyleSheet.create({
     },
     resultSubtitle: {
         fontSize: 12,
+    },
+    resultDate: {
+        fontSize: 12,
+        marginTop: 2,
     },
     emptyContainer: {
         padding: 32,
