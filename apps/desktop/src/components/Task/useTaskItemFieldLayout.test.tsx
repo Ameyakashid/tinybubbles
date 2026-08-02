@@ -161,6 +161,12 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.detailsFields).toContain('checklist');
     });
 
+    it('groups the scheduling dates together above the recurrence editor', () => {
+        const { result } = renderHook(() => useTaskItemFieldLayout(buildParams()));
+
+        expect(result.current.schedulingFields).toEqual(['startTime', 'reviewAt', 'recurrence']);
+    });
+
     it('splits basic fields around the organizer row following the configured order', () => {
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
             settings: {

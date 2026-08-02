@@ -258,7 +258,7 @@ export function TaskItemFieldRenderer({
 
     const markdownEditorAssist = useTaskStore((state) => isMarkdownEditorAssistEnabled(state.settings));
 
-    const [repeatReminderOptionsExpanded, setRepeatReminderOptionsExpanded] = useState(false);
+    const [remindersExpanded, setRemindersExpanded] = useState(false);
     const [descriptionExpanded, setDescriptionExpanded] = useState(false);
     const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const lastDescriptionPairSelectionRef = useRef<{ value: string; selection: MarkdownSelection } | null>(null);
@@ -974,27 +974,10 @@ export function TaskItemFieldRenderer({
                             hasValue: Boolean(editDueDate),
                             warning: dateIssueLabel,
                         })}
-                        {hasReminderHandoffSchedule && (
-                            <label className="mt-1 flex items-start gap-2 rounded border border-border/70 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={editSuppressMindwtrReminders}
-                                    onChange={(event) => setEditSuppressMindwtrReminders(event.target.checked)}
-                                    className="mt-0.5 shrink-0 accent-primary"
-                                />
-                                <span className="min-w-0">
-                                    <span className="block font-medium text-foreground">
-                                        {tFallback(t, 'taskEdit.suppressMindwtrReminders', 'Skip reminders')}
-                                    </span>
-                                    <span className="block leading-snug">
-                                        {tFallback(t, 'taskEdit.suppressMindwtrRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
-                                    </span>
-                                </span>
-                            </label>
-                        )}
-                        {hasTime && !editSuppressMindwtrReminders && (() => {
-                            const label = tFallback(t, 'taskEdit.repeatReminderLabel', 'Repeat reminder');
+                        {hasReminderHandoffSchedule && (() => {
+                            const repeatLabel = tFallback(t, 'taskEdit.repeatReminderLabel', 'Repeat reminder');
                             const current = editRepeatReminderMinutes ?? 0;
+                            const showRepeat = hasTime && !editSuppressMindwtrReminders;
                             const formatValue = (minutes: number) => (
                                 minutes === 0
                                     ? tFallback(t, 'taskEdit.repeatReminderOff', 'Off')
@@ -1005,46 +988,71 @@ export function TaskItemFieldRenderer({
                                     ? tFallback(t, 'taskEdit.repeatReminderOff', 'Off')
                                     : tFallback(t, 'taskEdit.repeatReminderMinutesShort', '{count} min').replace('{count}', String(minutes))
                             );
+                            // One quiet line for both correction-path options; it has to
+                            // say when either one is off its default without being opened.
+                            // A stored repeat interval is unreachable once the due time is
+                            // gone, so it must not light up a summary that cannot show it.
+                            const isDefault = !editSuppressMindwtrReminders && (!showRepeat || current === 0);
+                            const summary = editSuppressMindwtrReminders
+                                ? tFallback(t, 'taskEdit.suppressMindwtrRemindersViewValue', 'Mindwtr reminders off')
+                                : [
+                                    tFallback(t, 'taskEdit.remindersSummaryOn', 'Reminders on'),
+                                    ...(showRepeat ? [`${repeatLabel}: ${formatValue(current)}`] : []),
+                                ].join(' · ');
                             return (
                                 <div className="mt-1 space-y-1.5">
                                     <button
                                         type="button"
-                                        aria-label={`${label}: ${formatValue(current)}`}
-                                        aria-expanded={repeatReminderOptionsExpanded}
-                                        className={`flex w-full items-center justify-between gap-2 rounded border px-2 py-1.5 text-left text-xs transition-colors ${repeatReminderOptionsExpanded || current > 0
-                                            ? 'border-primary/60 bg-primary/10'
-                                            : 'border-border bg-muted/30 hover:bg-muted/50'
+                                        aria-expanded={remindersExpanded}
+                                        className={`w-full rounded border px-2 py-1.5 text-left text-xs transition-colors ${remindersExpanded || !isDefault
+                                            ? 'border-primary/60 bg-primary/10 text-foreground'
+                                            : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/50'
                                             }`}
-                                        onClick={() => setRepeatReminderOptionsExpanded((expanded) => !expanded)}
+                                        onClick={() => setRemindersExpanded((expanded) => !expanded)}
                                     >
-                                        <span className="min-w-0 truncate font-medium text-foreground">{label}</span>
-                                        <span className={current > 0 ? 'shrink-0 text-primary' : 'shrink-0 text-muted-foreground'}>
-                                            {formatValue(current)}
-                                        </span>
+                                        {summary}
                                     </button>
-                                    {repeatReminderOptionsExpanded && (
-                                        <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
-                                            {[0, ...REPEAT_REMINDER_INTERVAL_OPTIONS].map((minutes) => {
-                                                const active = current === minutes;
-                                                return (
-                                                    <button
-                                                        key={minutes}
-                                                        type="button"
-                                                        aria-pressed={active}
-                                                        className={`rounded border px-2 py-1 text-xs transition-colors ${active
-                                                            ? 'border-primary bg-primary text-primary-foreground'
-                                                            : 'border-border bg-muted/40 text-foreground hover:bg-muted'
-                                                            }`}
-                                                        onClick={() => {
-                                                            setEditRepeatReminderMinutes(minutes > 0 ? minutes : undefined);
-                                                            setRepeatReminderOptionsExpanded(false);
-                                                        }}
-                                                    >
-                                                        {formatOption(minutes)}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                    {remindersExpanded && (
+                                        <>
+                                            <label className="flex items-start gap-2 rounded border border-border/70 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editSuppressMindwtrReminders}
+                                                    onChange={(event) => setEditSuppressMindwtrReminders(event.target.checked)}
+                                                    className="mt-0.5 shrink-0 accent-primary"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block font-medium text-foreground">
+                                                        {tFallback(t, 'taskEdit.suppressMindwtrReminders', 'Skip reminders')}
+                                                    </span>
+                                                    <span className="block leading-snug">
+                                                        {tFallback(t, 'taskEdit.suppressMindwtrRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            {showRepeat && (
+                                                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={repeatLabel}>
+                                                    <span className="text-xs text-muted-foreground">{repeatLabel}</span>
+                                                    {[0, ...REPEAT_REMINDER_INTERVAL_OPTIONS].map((minutes) => {
+                                                        const active = current === minutes;
+                                                        return (
+                                                            <button
+                                                                key={minutes}
+                                                                type="button"
+                                                                aria-pressed={active}
+                                                                className={`rounded border px-2 py-1 text-xs transition-colors ${active
+                                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                                    : 'border-border bg-muted/40 text-foreground hover:bg-muted'
+                                                                    }`}
+                                                                onClick={() => setEditRepeatReminderMinutes(minutes > 0 ? minutes : undefined)}
+                                                            >
+                                                                {formatOption(minutes)}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             );
@@ -1110,6 +1118,7 @@ export function TaskItemFieldRenderer({
             return (
                 <RecurrenceField
                     t={t}
+                    language={language}
                     editRecurrence={editRecurrence}
                     editRecurrenceStrategy={editRecurrenceStrategy}
                     editRecurrenceRRule={editRecurrenceRRule}

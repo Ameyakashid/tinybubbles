@@ -72,6 +72,10 @@ const t = (key: string) => {
         'taskEdit.repeatReminderOff': 'Off',
         'taskEdit.repeatReminderEveryMinutes': 'Every {count} min',
         'taskEdit.repeatReminderMinutesShort': '{count} min',
+        'taskEdit.remindersSummaryOn': 'Reminders on',
+        'taskEdit.suppressMindwtrReminders': 'Skip reminders',
+        'taskEdit.suppressMindwtrRemindersHint': 'Skip start and due reminders for this task.',
+        'taskEdit.suppressMindwtrRemindersViewValue': 'Mindwtr reminders off',
         'taskEdit.checklist': 'Checklist',
         'attachments.title': 'Attachments',
         'recurrence.none': 'None',
@@ -81,9 +85,17 @@ const t = (key: string) => {
         'recurrence.yearly': 'Yearly',
         'recurrence.repeatEvery': 'Repeat every',
         'recurrence.repeatOn': 'Repeat on',
+        'recurrence.onLabel': 'On',
+        'recurrence.summaryOnDays': 'on {{days}}',
+        'recurrence.onDayOfMonth': 'Day {day}',
         'recurrence.dayUnit': 'day(s)',
         'recurrence.weekUnit': 'week(s)',
+        'recurrence.monthUnit': 'month(s)',
         'recurrence.afterCompletion': 'Repeat after completion',
+        'recurrence.afterCompletionShort': 'after completion',
+        'recurrence.showFutureInCalendar': 'Show future occurrences in Calendar',
+        'recurrence.showFutureInCalendarHint': 'Planning-only preview.',
+        'recurrence.nextCalendarPreview': 'Next calendar preview',
         'recurrence.yearUnit': 'year(s)',
         'recurrence.endsLabel': 'Ends',
         'recurrence.endsNever': 'Never',
@@ -370,6 +382,21 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         expect(setField).toHaveBeenCalledWith(draftKey, '');
     });
 
+    it('offers the start-mode toggle on a due date alone, before any start value exists', () => {
+        const setField = vi.fn();
+        const { getByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="startTime"
+                {...createProps({ draft: { dueDate: '2026-04-19T11:45', startTime: '' }, setField })}
+            />
+        );
+
+        // Picking Relative first, with no start date yet, is a supported flow.
+        fireEvent.click(getByRole('button', { name: 'Relative' }));
+
+        expect(setField).toHaveBeenCalledWith('relativeStartOffset', { amount: -3, unit: 'day' });
+    });
+
     it('hides the clear button when the date field is empty', () => {
         const { queryByRole } = render(
             <TaskItemFieldRenderer
@@ -429,7 +456,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         expect(queryByRole('button', { name: 'Date only: Due Date' })).toBeNull();
     });
 
-    it('collapses due-date repeat reminder options until the compact row is opened', () => {
+    it('collapses both due-date reminder controls behind one summary line until it is opened', () => {
         const setField = vi.fn();
 
         const { getByRole, queryByRole } = render(
@@ -439,13 +466,60 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
             />
         );
 
-        expect(queryByRole('combobox', { name: 'Repeat reminder' })).toBeNull();
-        const collapsedRow = getByRole('button', { name: 'Repeat reminder: Off' });
+        // Resting state: no Skip reminders checkbox, no repeat chips.
+        expect(queryByRole('checkbox')).toBeNull();
+        expect(queryByRole('group', { name: 'Repeat reminder' })).toBeNull();
+        const summaryRow = getByRole('button', { name: 'Reminders on · Repeat reminder: Off' });
+        expect(summaryRow).toHaveAttribute('aria-expanded', 'false');
 
-        fireEvent.click(collapsedRow);
+        fireEvent.click(summaryRow);
+
+        expect(summaryRow).toHaveAttribute('aria-expanded', 'true');
+        expect(queryByRole('checkbox')).not.toBeNull();
         fireEvent.click(getByRole('button', { name: '10 min' }));
 
         expect(setField).toHaveBeenCalledWith('repeatReminderMinutes', 10);
+    });
+
+    it('surfaces a non-default repeat interval in the collapsed reminder summary', () => {
+        const { getByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="dueDate"
+                {...createProps({ draft: { dueDate: '2026-04-19T11:45', repeatReminderMinutes: 10 } })}
+            />
+        );
+
+        expect(getByRole('button', { name: 'Reminders on · Repeat reminder: Every 10 min' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('leaves the summary at rest when a stored repeat interval is out of reach', () => {
+        // Due time cleared but repeatReminderMinutes lingers: the repeat control is
+        // gone, so highlighting a value nothing can show or clear would be a dead end.
+        const { getByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="dueDate"
+                {...createProps({
+                    draft: { startTime: '2026-04-19T09:30', dueDate: '2026-04-19', repeatReminderMinutes: 10 },
+                })}
+            />
+        );
+
+        const summaryRow = getByRole('button', { name: 'Reminders on' });
+        expect(summaryRow.className).not.toContain('border-primary/60');
+    });
+
+    it('says reminders are skipped in the collapsed summary when they are suppressed', () => {
+        const { getByRole, queryByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="dueDate"
+                {...createProps({ draft: { dueDate: '2026-04-19T11:45', suppressMindwtrReminders: true } })}
+            />
+        );
+
+        expect(getByRole('button', { name: 'Mindwtr reminders off' })).toBeInTheDocument();
+        // Repeat is meaningless while reminders are skipped, so it stays out of both states.
+        fireEvent.click(getByRole('button', { name: 'Mindwtr reminders off' }));
+        expect(queryByRole('group', { name: 'Repeat reminder' })).toBeNull();
     });
 
     it('applies the configured locale to native date and time inputs', () => {
@@ -1090,6 +1164,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
                 />
             </LanguageProvider>
         );
+        fireEvent.click(getByRole('button', { name: 'Repeat every 2 week(s) on Tue · Ends: Never' }));
         const input = container.querySelector('input[type="number"]') as HTMLInputElement | null;
 
         expect(input).toBeTruthy();
@@ -1104,7 +1179,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
 
     it('updates yearly recurrence intervals', () => {
         const setField = vi.fn();
-        const { container } = render(
+        const { container, getByRole } = render(
             <LanguageProvider>
                 <TaskItemFieldRenderer
                     fieldId="recurrence"
@@ -1118,6 +1193,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
                 />
             </LanguageProvider>
         );
+        fireEvent.click(getByRole('button', { name: 'Yearly · Ends: Never' }));
         const input = container.querySelector('input[type="number"]') as HTMLInputElement | null;
 
         expect(input).toBeTruthy();
@@ -1128,7 +1204,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
 
     it('updates monthly recurrence intervals from the monthly recurrence controls', () => {
         const setField = vi.fn();
-        const { container } = render(
+        const { container, getByRole } = render(
             <LanguageProvider>
                 <TaskItemFieldRenderer
                     fieldId="recurrence"
@@ -1142,12 +1218,79 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
                 />
             </LanguageProvider>
         );
+        fireEvent.click(getByRole('button', { name: 'Monthly · Day 15 · Ends: Never' }));
         const input = container.querySelector('input[type="number"]') as HTMLInputElement | null;
 
         expect(input).toBeTruthy();
         fireEvent.change(input!, { target: { value: '3' } });
 
         expect(setField).toHaveBeenCalledWith('recurrenceRRule', 'FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15');
+    });
+
+    it('rests a set recurrence rule as a one-sentence summary row', () => {
+        const { getByRole, queryByLabelText } = render(
+            <LanguageProvider>
+                <TaskItemFieldRenderer
+                    fieldId="recurrence"
+                    {...createProps({
+                        draft: {
+                            recurrence: 'weekly',
+                            recurrenceStrategy: 'fluid',
+                            recurrenceRRule: 'FREQ=WEEKLY;BYDAY=MO,TU;COUNT=5',
+                        },
+                    })}
+                />
+            </LanguageProvider>
+        );
+
+        const summaryRow = getByRole('button', {
+            name: 'Weekly on Mon, Tue · Ends: After 5 occurrence(s) · after completion',
+        });
+        expect(summaryRow).toHaveAttribute('aria-expanded', 'false');
+        expect(queryByLabelText('Recurrence')).toBeNull();
+
+        fireEvent.click(summaryRow);
+
+        expect(summaryRow).toHaveAttribute('aria-expanded', 'true');
+        expect(queryByLabelText('Recurrence')).not.toBeNull();
+    });
+
+    it('keeps the plain dropdown resting while no recurrence rule is set', () => {
+        const setField = vi.fn();
+        const { getByLabelText, queryByRole } = render(
+            <LanguageProvider>
+                <TaskItemFieldRenderer fieldId="recurrence" {...createProps({ setField })} />
+            </LanguageProvider>
+        );
+
+        const select = getByLabelText('Recurrence');
+        expect(queryByRole('button', { name: /Ends:/ })).toBeNull();
+
+        fireEvent.change(select, { target: { value: 'daily' } });
+
+        expect(setField).toHaveBeenCalledWith('recurrence', 'daily');
+    });
+
+    it('only explains the calendar preview once future occurrences are shown', () => {
+        const renderRecurrence = (showFutureRecurrence: boolean) => render(
+            <LanguageProvider>
+                <TaskItemFieldRenderer
+                    fieldId="recurrence"
+                    {...createProps({
+                        draft: { recurrence: 'daily', recurrenceRRule: 'FREQ=DAILY', showFutureRecurrence },
+                    })}
+                />
+            </LanguageProvider>
+        );
+
+        const unchecked = renderRecurrence(false);
+        fireEvent.click(unchecked.getByRole('button', { name: 'Daily · Ends: Never' }));
+        expect(unchecked.queryByText(/Planning-only preview/)).toBeNull();
+        cleanup();
+
+        const checked = renderRecurrence(true);
+        fireEvent.click(checked.getByRole('button', { name: 'Daily · Ends: Never' }));
+        expect(checked.queryByText(/Planning-only preview/)).not.toBeNull();
     });
 
     it('undoes markdown description edits with Ctrl+Z', async () => {
@@ -1441,11 +1584,17 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
 
     const timedTask: Task = { ...baseTask, dueDate: '2026-04-19T11:45' };
 
+    /** The checkbox now lives behind the collapsed reminder summary line. */
+    const openReminders = (getByRole: ReturnType<typeof render>['getByRole']) => {
+        fireEvent.click(getByRole('button', { name: /^(Reminders on|Mindwtr reminders off)/ }));
+    };
+
     it('reflects the persisted suppressMindwtrReminders state and toggles it (#885)', () => {
         const { getByRole } = render(
             <DraftFieldHarness fieldId="dueDate" initialDraft={{ dueDate: '2026-04-19T11:45' }} />
         );
 
+        openReminders(getByRole);
         const toggle = getByRole('checkbox') as HTMLInputElement;
         // Off by default: the field is absent on a fresh task.
         expect(toggle.checked).toBe(false);
@@ -1456,14 +1605,15 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
     });
 
     it('stays hidden for a date-only due date until a suppressible time exists', () => {
-        const { queryByRole, rerender } = render(
+        const { queryByRole, getByRole, rerender } = render(
             <TaskItemFieldRenderer fieldId="dueDate" {...createProps({ draft: { dueDate: '2026-04-19' } })} />
         );
-        expect(queryByRole('checkbox')).toBeNull();
+        expect(queryByRole('button', { name: /^Reminders on/ })).toBeNull();
 
         rerender(
             <TaskItemFieldRenderer fieldId="dueDate" {...createProps({ draft: { dueDate: '2026-04-19T11:45' } })} />
         );
+        openReminders(getByRole);
         expect(queryByRole('checkbox')).not.toBeNull();
     });
 
@@ -1475,6 +1625,8 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
             />
         );
 
+        // No due time, so the summary carries no repeat clause.
+        openReminders(getByRole);
         expect(getByRole('checkbox')).not.toBeNull();
     });
 

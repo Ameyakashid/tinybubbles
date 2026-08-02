@@ -19,9 +19,10 @@ export const DEFAULT_TASK_EDITOR_ORDER: TaskEditorFieldId[] = [
     'contexts',
     'dueDate',
     'section',
-    'recurrence',
+    // Dates group together in Scheduling; the recurrence editor follows them.
     'startTime',
     'reviewAt',
+    'recurrence',
     'tags',
     'description',
     'attachments',

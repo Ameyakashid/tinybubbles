@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { buildRRuleString, parseRRuleString, RECURRENCE_INTERVAL_MAX, safeParseDate, tFallback, type RecurrenceByDay, type RecurrenceRule, type RecurrenceStrategy } from '@mindwtr/core';
 
 import { cn } from '../../../lib/utils';
@@ -5,9 +6,11 @@ import { DateField } from '../../ui/DateField';
 import { WeekdaySelector } from '../TaskForm/WeekdaySelector';
 import type { MonthlyRecurrenceInfo } from '../TaskItemFieldRenderer';
 import { taskEditorLabelClassName } from '../task-editor-label';
+import { formatRecurrenceSummary } from './recurrence-summary';
 
 type RecurrenceFieldProps = {
     t: (key: string) => string;
+    language: string;
     editRecurrence: RecurrenceRule | '';
     editRecurrenceStrategy: RecurrenceStrategy;
     editRecurrenceRRule: string;
@@ -44,6 +47,7 @@ const normalizeRecurrenceIntervalInput = (value: number): number => (
 
 export function RecurrenceField({
     t,
+    language,
     editRecurrence,
     editRecurrenceStrategy,
     editRecurrenceRRule,
@@ -62,15 +66,49 @@ export function RecurrenceField({
     openCustomRecurrence,
     buildRecurrenceRRule,
 }: RecurrenceFieldProps) {
+    // Session-only disclosure: once a rule exists the editor rests as a
+    // one-sentence summary, and picking a rule from the resting dropdown lands
+    // you in the expanded editor.
+    const [expanded, setExpanded] = useState(false);
+    const showEditor = !editRecurrence || expanded;
+    const summary = editRecurrence
+        ? formatRecurrenceSummary({
+            rule: editRecurrence,
+            strategy: editRecurrenceStrategy,
+            interval: parsedRecurrenceRRule.interval,
+            byDay: parsedRecurrenceRRule.byDay,
+            byMonthDay: parsedRecurrenceRRule.byMonthDay,
+            count: parsedRecurrenceRRule.count,
+            until: parsedRecurrenceRRule.until,
+        }, t, language)
+        : '';
+
     return (
         <div className="flex flex-col gap-1 w-full">
             <label className={taskEditorLabelClassName}>{t('taskEdit.recurrenceLabel')}</label>
+            {editRecurrence && (
+                <button
+                    type="button"
+                    aria-expanded={expanded}
+                    onClick={() => setExpanded((current) => !current)}
+                    className={cn(
+                        'w-full rounded border px-2 py-1.5 text-left text-xs transition-colors',
+                        expanded
+                            ? 'border-primary/60 bg-primary/10 text-foreground'
+                            : 'border-border bg-muted/30 text-foreground hover:bg-muted/50'
+                    )}
+                >
+                    {summary}
+                </button>
+            )}
+            {showEditor && (<>
             <select
                 value={editRecurrence}
                 aria-label={t('task.aria.recurrence')}
                 onChange={(e) => {
                     const value = e.target.value as RecurrenceRule | '';
                     onRecurrenceChange(value);
+                    if (value) setExpanded(true);
                     if (value === 'daily') {
                         if (!editRecurrenceRRule || parsedRecurrenceRRule.rule !== 'daily') {
                             onRecurrenceRRuleChange(buildRRuleString('daily', undefined, 1, {
@@ -149,64 +187,57 @@ export function RecurrenceField({
                 </label>
             )}
             {editRecurrence && (
-                <label className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/30 px-2 py-1.5 text-[10px] text-muted-foreground">
+                <label className="flex items-center gap-2 pt-1 text-[10px] text-muted-foreground">
                     <input
                         type="checkbox"
                         checked={editShowFutureRecurrence}
                         onChange={(event) => onShowFutureRecurrenceChange(event.target.checked)}
-                        className="mt-0.5 accent-primary"
+                        className="accent-primary"
                     />
-                    <span className="min-w-0">
-                        <span className="block font-medium text-foreground">
-                            {tFallback(t, 'recurrence.showFutureInCalendar', 'Show next occurrence in Calendar')}
-                        </span>
-                        <span className="block leading-snug">
-                            {tFallback(t, 'recurrence.showFutureInCalendarHint', 'Planning-only preview; the next task is still created when this one is completed.')}
-                            {projectedRecurrenceDateLabel
-                                ? ` ${tFallback(t, 'recurrence.nextCalendarPreview', 'Next calendar preview')}: ${projectedRecurrenceDateLabel}.`
-                                : ''}
-                        </span>
-                    </span>
+                    {tFallback(t, 'recurrence.showFutureInCalendar', 'Show next occurrence in Calendar')}
                 </label>
             )}
+            {editRecurrence && editShowFutureRecurrence && (
+                <p className="pl-6 text-[10px] leading-snug text-muted-foreground">
+                    {tFallback(t, 'recurrence.showFutureInCalendarHint', 'Planning-only preview; the next task is still created when this one is completed.')}
+                    {projectedRecurrenceDateLabel
+                        ? ` ${tFallback(t, 'recurrence.nextCalendarPreview', 'Next calendar preview')}: ${projectedRecurrenceDateLabel}.`
+                        : ''}
+                </p>
+            )}
             {editRecurrence === 'weekly' && (
-                <div className="pt-1 space-y-2">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">{t('recurrence.repeatEvery')}</span>
-                        <input
-                            type="number"
-                            min={1}
-                            max={RECURRENCE_INTERVAL_MAX}
-                            value={Math.max(parsedRecurrenceRRule.interval ?? 1, 1)}
-                            onChange={(event) => {
-                                const safeInterval = normalizeRecurrenceIntervalInput(Number(event.target.valueAsNumber));
-                                onRecurrenceRRuleChange(buildRecurrenceRRule('weekly', {
-                                    byDay: parsedRecurrenceRRule.byDay,
-                                    byMonthDay: undefined,
-                                    interval: safeInterval,
-                                }));
-                            }}
-                            className="w-20 text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground"
-                        />
-                        <span className="text-[10px] text-muted-foreground">{t('recurrence.weekUnit')}</span>
-                    </div>
-                    <div>
-                        <span className="text-[10px] text-muted-foreground">{t('recurrence.repeatOn')}</span>
-                        <WeekdaySelector
-                            value={editRecurrenceRRule || buildRRuleString('weekly', undefined, undefined, {
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
+                    <span className="text-[10px] text-muted-foreground">{t('recurrence.repeatEvery')}</span>
+                    <input
+                        type="number"
+                        min={1}
+                        max={RECURRENCE_INTERVAL_MAX}
+                        value={Math.max(parsedRecurrenceRRule.interval ?? 1, 1)}
+                        onChange={(event) => {
+                            const safeInterval = normalizeRecurrenceIntervalInput(Number(event.target.valueAsNumber));
+                            onRecurrenceRRuleChange(buildRecurrenceRRule('weekly', {
+                                byDay: parsedRecurrenceRRule.byDay,
+                                byMonthDay: undefined,
+                                interval: safeInterval,
+                            }));
+                        }}
+                        className="w-20 text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground"
+                    />
+                    <span className="text-[10px] text-muted-foreground">{t('recurrence.weekUnit')}</span>
+                    <span className="text-[10px] text-muted-foreground">{t('recurrence.onLabel')}</span>
+                    <WeekdaySelector
+                        value={editRecurrenceRRule || buildRRuleString('weekly', undefined, undefined, {
+                            count: parsedRecurrenceRRule.count,
+                            until: parsedRecurrenceRRule.until,
+                        })}
+                        onChange={(rrule) => {
+                            const parsed = parseRRuleString(rrule);
+                            onRecurrenceRRuleChange(buildRRuleString('weekly', parsed.byDay, parsedRecurrenceRRule.interval, {
                                 count: parsedRecurrenceRRule.count,
                                 until: parsedRecurrenceRRule.until,
-                            })}
-                            onChange={(rrule) => {
-                                const parsed = parseRRuleString(rrule);
-                                onRecurrenceRRuleChange(buildRRuleString('weekly', parsed.byDay, parsedRecurrenceRRule.interval, {
-                                    count: parsedRecurrenceRRule.count,
-                                    until: parsedRecurrenceRRule.until,
-                                }));
-                            }}
-                            className="pt-1"
-                        />
-                    </div>
+                            }));
+                        }}
+                    />
                 </div>
             )}
             {editRecurrence && (
@@ -358,6 +389,7 @@ export function RecurrenceField({
                     <span className="text-[10px] text-muted-foreground">{t('recurrence.yearUnit')}</span>
                 </div>
             )}
+            </>)}
         </div>
     );
 }
