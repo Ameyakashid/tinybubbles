@@ -3,6 +3,7 @@ import {
     useLayoutEffect,
     useRef,
     useState,
+    type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
     type RefObject,
@@ -580,6 +581,36 @@ export function TaskQuickActionMenu({
         }
     };
 
+    // Enter in a panel field confirms like the Save button (#992). Buttons act
+    // on Enter natively, and an open selector dropdown / suggestion list
+    // consumes it one layer deeper (arriving here already default-prevented or
+    // not at all), so both are left alone.
+    const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Enter' || event.defaultPrevented || !activePanel) return;
+        const target = event.target instanceof HTMLElement ? event.target : null;
+        if (target?.closest('button, [data-selector-dropdown="true"]')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (savingPanel) return;
+        if (activePanel === 'startTime') {
+            if (startDraftChanged) void handleStartDateSave();
+            else onClose();
+        } else if (activePanel === 'dueDate') {
+            if (dueDraftChanged) void handleDueDateSave();
+            else onClose();
+        } else if (activePanel === 'reviewAt') {
+            if (reviewDraftChanged) void handleReviewDateSave();
+            else onClose();
+        } else if (activePanel === 'area') {
+            if (areaDraftChanged) void handleAreaSave();
+            else onClose();
+        } else if (contextsDraftChanged) {
+            void handleContextsSave();
+        } else {
+            onClose();
+        }
+    };
+
     const renderMenuAction = ({
         key,
         ref,
@@ -786,6 +817,7 @@ export function TaskQuickActionMenu({
                         visibility: panelPosition ? 'visible' : 'hidden',
                     }}
                     onContextMenu={(event) => event.preventDefault()}
+                    onKeyDown={handlePanelKeyDown}
                 >
                     {activePanel === 'startTime' ? (
                         <div className="space-y-3">

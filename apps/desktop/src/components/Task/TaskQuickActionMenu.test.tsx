@@ -262,6 +262,61 @@ describe('TaskQuickActionMenu', () => {
         expect(props.onClose).toHaveBeenCalledTimes(1);
     });
 
+    it('saves the panel draft when Enter is pressed in a field', async () => {
+        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
+        const props = renderMenu({ onUpdateTask });
+
+        fireEvent.click(screen.getByRole('menuitem', { name: /start date/i }));
+        const dialog = screen.getByRole('dialog', { name: /start date/i });
+        const input = within(dialog).getByLabelText('Start Date');
+        fireEvent.change(input, { target: { value: '2026-02-04' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => {
+            expect(onUpdateTask).toHaveBeenCalledWith({ startTime: '2026-02-04' });
+        });
+        expect(props.onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes without saving when Enter is pressed on an unchanged draft', () => {
+        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
+        const props = renderMenu({ task: { ...task, dueDate: '2026-04-12' }, onUpdateTask });
+
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Due Date…' }));
+        const panel = screen.getByRole('dialog', { name: 'Due Date' });
+        fireEvent.keyDown(within(panel).getByLabelText('Due Date'), { key: 'Enter' });
+
+        expect(onUpdateTask).not.toHaveBeenCalled();
+        expect(props.onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves Enter to the area selector dropdown instead of saving the panel', () => {
+        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
+        const props = renderMenu({
+            areas: [{
+                id: 'area-work',
+                name: 'Work',
+                color: '#2563eb',
+                order: 0,
+                createdAt: now,
+                updatedAt: now,
+            }],
+            onUpdateTask,
+        });
+
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Area…' }));
+        fireEvent.click(screen.getByRole('button', { name: 'No Area' }));
+        const search = screen.getByRole('textbox', { name: 'Search areas' });
+        fireEvent.change(search, { target: { value: 'Wo' } });
+        fireEvent.keyDown(search, { key: 'Enter' });
+
+        // Enter picked the area in the dropdown; the panel stays open for Save.
+        expect(onUpdateTask).not.toHaveBeenCalled();
+        expect(props.onClose).not.toHaveBeenCalled();
+        const panel = screen.getByRole('dialog', { name: 'Area' });
+        expect(within(panel).getByRole('button', { name: 'Work' })).toBeInTheDocument();
+    });
+
     it('keeps a mini-calendar date in the draft until Save', async () => {
         const onUpdateTask = vi.fn(async () => ({ success: true as const }));
         const props = renderMenu({
