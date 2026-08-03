@@ -20,7 +20,7 @@ import { useTaskFilterSelections } from '@mindwtr/core/task-filter-selections';
 import { useLanguage } from '../../contexts/language-context';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
-import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X } from 'lucide-react';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
@@ -32,6 +32,7 @@ import { AgendaHeader } from './agenda/AgendaHeader';
 import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaSections';
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
+import { GroupedTaskSectionHeader } from './list/GroupedTaskSections';
 import { LIST_END_GAP } from './list/list-toolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import {
@@ -1221,35 +1222,12 @@ export function AgendaView() {
                                             const controlsId = `agenda-next-group-${getDomIdSegment(effectiveNextGroupBy)}-${index}-${getDomIdSegment(group.id)}`;
                                             return (
                                                 <div key={group.id} className="overflow-hidden rounded-lg border border-border/50 bg-card/40">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleNextActionGroup(group.id)}
-                                                        aria-expanded={!collapsed}
-                                                        aria-controls={controlsId}
-                                                        className={cn(
-                                                            'flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/30',
-                                                            'focus:outline-none focus:ring-2 focus:ring-primary/30',
-                                                            !collapsed && 'border-b border-border/30',
-                                                        )}
-                                                    >
-                                                        <span className={cn(
-                                                            'inline-flex min-w-0 items-center gap-2 text-sm font-semibold',
-                                                            group.muted ? 'text-muted-foreground' : 'text-foreground',
-                                                        )}>
-                                                            {collapsed ? (
-                                                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                                            ) : (
-                                                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                                            )}
-                                                            {group.dotColor && (
-                                                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.dotColor }} aria-hidden="true" />
-                                                            )}
-                                                            <span className="truncate">{group.title}</span>
-                                                        </span>
-                                                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                            {group.tasks.length}
-                                                        </span>
-                                                    </button>
+                                                    <GroupedTaskSectionHeader
+                                                        group={group}
+                                                        collapsed={collapsed}
+                                                        controlsId={controlsId}
+                                                        onToggleGroup={toggleNextActionGroup}
+                                                    />
                                                     {!collapsed && (
                                                         <div id={controlsId} className="ml-4 border-l border-border/40 pl-3">
                                                             <AgendaTaskList

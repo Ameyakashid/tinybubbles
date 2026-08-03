@@ -2174,8 +2174,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   contextGroupTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   contextGroupCount: {
     fontSize: 12,
