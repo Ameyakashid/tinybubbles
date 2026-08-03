@@ -31,6 +31,18 @@
   "bundle": {
     "active": true,
     "homepage": "https://mindwtr.app",
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/applications/mindwtr.desktop": "./linux/mindwtr-window-matcher.desktop"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/applications/mindwtr.desktop": "./linux/mindwtr-window-matcher.desktop"
+        }
+      }
+    },
     "targets": [
       "nsis",
       "appimage",

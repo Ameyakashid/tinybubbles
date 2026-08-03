@@ -1,0 +1,15 @@
+# Hidden desktop entry installed as mindwtr.desktop by the deb/rpm bundles.
+# Wayland compositors match a window's app id against a .desktop file with the
+# same basename, case-sensitively. The app id is the process name (mindwtr),
+# but tauri-bundler hardcodes the visible entry's filename to the product name
+# (Mindwtr.desktop), so KWin's alt-tab switcher found no icon (#997). This
+# NoDisplay entry exists only to give compositors an exact-name match; the
+# visible menu entry stays Mindwtr.desktop.
+[Desktop Entry]
+Type=Application
+Name=Mindwtr
+Exec=mindwtr
+Icon=mindwtr
+Terminal=false
+NoDisplay=true
+StartupWMClass=mindwtr
