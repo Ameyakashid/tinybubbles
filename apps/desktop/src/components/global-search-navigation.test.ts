@@ -25,16 +25,16 @@ describe('resolveGlobalSearchTaskView', () => {
         expect(result).toBe('review');
     });
 
-    it('keeps next view for currently visible next tasks', () => {
-        const result = resolveGlobalSearchTaskView(
-            {
-                ...baseTask,
-                status: 'next',
-                startTime: '2026-02-27T10:00:00.000Z',
-            },
-            new Date('2026-02-27T09:00:00.000Z')
-        );
-        expect(result).toBe('next');
+    // Next hides a timed start until its time arrives (#995), so before it
+    // the task is only reachable via Review.
+    it('falls back to review for a timed start later today, then next once started', () => {
+        const task = {
+            ...baseTask,
+            status: 'next' as const,
+            startTime: '2026-02-27T10:00:00.000Z',
+        };
+        expect(resolveGlobalSearchTaskView(task, new Date('2026-02-27T09:00:00.000Z'))).toBe('review');
+        expect(resolveGlobalSearchTaskView(task, new Date('2026-02-27T11:00:00.000Z'))).toBe('next');
     });
 
     // A recurring task with no start date defers on its due date, so Next hides

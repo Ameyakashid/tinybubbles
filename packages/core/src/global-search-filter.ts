@@ -182,7 +182,7 @@ export const computeGlobalSearchResults = ({
     const matchesDue = buildDueMatcher(duePreset, getWeekStartsOnIndex(weekStart));
 
     const passesNonStatusTaskFilters = (task: SearchTaskResult) => {
-        if (!shouldShowTaskForStart(task, { showFutureStarts: !hideFutureTasks })) return false;
+        if (!shouldShowTaskForStart(task, { showFutureStarts: !hideFutureTasks, granularity: 'time' })) return false;
         if (scope === 'project_tasks' && !task.projectId) return false;
         if (!matchesTaskArea(task)) return false;
         if (!matchesTokens(task)) return false;

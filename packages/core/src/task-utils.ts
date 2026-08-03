@@ -4,7 +4,7 @@
 
 import { Task, TaskStatus, TaskSortBy, TaskPriority, Project, AppData, SortField } from './types';
 import { differenceInCalendarDays, startOfDay } from 'date-fns';
-import { isDueForReview, safeParseDate, safeParseDueDate } from './date';
+import { hasTimeComponent, isDueForReview, safeParseDate, safeParseDueDate } from './date';
 import { hasRecurrenceRule } from './recurrence';
 import { timeEstimateToMinutes } from './calendar-scheduling';
 import { isTaskActionable, TASK_STATUS_ORDER } from './task-status';
@@ -82,6 +82,14 @@ export const FOCUS_NEXT_DUE_SOON_WINDOW_DAYS = 30;
 type TaskStartVisibilityOptions = {
     now?: Date;
     showFutureStarts?: boolean;
+    /**
+     * 'day' (default): a start today is visible all day — right for planning
+     * surfaces like Daily Review, which must offer tonight's tasks in the
+     * morning (#867). 'time': a start with an explicit clock time later today
+     * stays hidden until that moment — the actionable-now list surfaces
+     * (Focus, Next) opt in (#995).
+     */
+    granularity?: 'day' | 'time';
 };
 
 type FocusSequentialOptions = {
@@ -417,7 +425,37 @@ export function shouldShowTaskForStart(
     options: TaskStartVisibilityOptions = {},
 ): boolean {
     if (options.showFutureStarts === true) return true;
-    return !isTaskFutureStart(task, options.now);
+    const now = options.now ?? new Date();
+    if (isTaskFutureStart(task, now)) return false;
+    if (options.granularity !== 'time') return true;
+    // A date-only start stays visible all day. The unstar-on-defer rule
+    // (store-helpers) deliberately keeps day granularity via
+    // isTaskFutureStart, so a Today star set on a task that starts later
+    // today survives to resurface when the task does.
+    const start = safeParseDate(task.startTime);
+    return !(start && start > now && hasTimeComponent(task.startTime));
+}
+
+/**
+ * The earliest upcoming timed start today among the given tasks, as an epoch
+ * timestamp — the moment a view filtering with shouldShowTaskForStart next
+ * needs to re-render to reveal a task (#995). Starts beyond today are the
+ * day-key tick's job.
+ */
+export function getNextFutureStartRevealAt(
+    tasks: ReadonlyArray<Pick<Task, 'startTime'>>,
+    now: Date = new Date(),
+): number | null {
+    const nowMs = now.getTime();
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+    let next: number | null = null;
+    for (const task of tasks) {
+        if (!hasTimeComponent(task.startTime)) continue;
+        const start = safeParseDate(task.startTime)?.getTime();
+        if (start === undefined || start <= nowMs || start > endOfToday) continue;
+        if (next === null || start < next) next = start;
+    }
+    return next;
 }
 
 export function getSequentialFirstTaskIds<T extends Pick<Task, 'createdAt' | 'id' | 'order' | 'orderNum' | 'projectId'> & Partial<Pick<Task, 'sectionId'>>>(

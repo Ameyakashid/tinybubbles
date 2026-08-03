@@ -78,7 +78,7 @@ import { useToast } from '../../../contexts/toast-context';
 import { addHardwareBackPressListener } from '@/lib/hardware-back';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import type { TaskEditTab } from '@/components/task-edit/use-task-edit-state';
-import { useLocalDayKey } from '@/hooks/use-local-day-key';
+import { useFutureStartRevealTick, useLocalDayKey } from '@/hooks/use-local-day-key';
 import { PomodoroPanel } from '@/components/pomodoro-panel';
 import {
   getFocusTokenOptions,
@@ -280,13 +280,15 @@ export default function FocusScreen() {
       && isTaskActionable(task)
     ))
   ), [visibleTasks]);
+  const futureStartTick = useFutureStartRevealTick(baseActiveTasks);
   const activeTasks = useMemo(() => {
     void localDayKey;
+    void futureStartTick;
     const now = new Date();
     return baseActiveTasks.filter((task) => (
-      shouldShowTaskForStart(task, { now })
+      shouldShowTaskForStart(task, { now, granularity: 'time' })
     ));
-  }, [baseActiveTasks, localDayKey]);
+  }, [baseActiveTasks, localDayKey, futureStartTick]);
   const tokenOptions = useMemo(() => getFocusTokenOptions(activeTasks), [activeTasks]);
   const metadataFilterVisibility = useMemo(() => getTaskMetadataFilterVisibility(activeTasks, {
     prioritiesEnabled,

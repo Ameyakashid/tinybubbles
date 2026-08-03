@@ -47,7 +47,7 @@ import {
 import { PromptModal } from '../PromptModal';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { FocusStarIcon } from '../FocusStarIcon';
-import { useLocalDayKey } from '../../hooks/useLocalDayKey';
+import { useFutureStartRevealTick, useLocalDayKey } from '../../hooks/useLocalDayKey';
 
 const AGENDA_VIRTUALIZATION_THRESHOLD = 25;
 const NO_PROJECT_FILTER_ID = SAVED_FILTER_NO_PROJECT_ID;
@@ -307,15 +307,17 @@ export function AgendaView() {
         )
     ), [derivedActiveTasks, projectMap, resolvedAreaFilter, areaById]);
 
+    const futureStartTick = useFutureStartRevealTick(baseActiveTasks);
     const { activeTasks, allTokens } = useMemo(() => {
         void localDayKey;
+        void futureStartTick;
         const now = new Date();
-        const active = baseActiveTasks.filter((task) => shouldShowTaskForStart(task, { now }));
+        const active = baseActiveTasks.filter((task) => shouldShowTaskForStart(task, { now, granularity: 'time' }));
         return {
             activeTasks: active,
             allTokens: getUsedTaskTokens(active, (task) => [...(task.contexts || []), ...(task.tags || [])]),
         };
-    }, [baseActiveTasks, localDayKey]);
+    }, [baseActiveTasks, localDayKey, futureStartTick]);
     const priorityOptions: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
     const energyLevelOptions: TaskEnergyLevel[] = ['low', 'medium', 'high'];
     const timeEstimateOptions: TimeEstimate[] = ['5min', '10min', '15min', '30min', '1hr', '2hr', '3hr', '4hr', '4hr+'];
@@ -513,7 +515,7 @@ export function AgendaView() {
             .filter((task) => matchesSearchQuery(task.title));
         const reviewDueBase = baseActiveTasks
             .filter((task) => {
-                if (!shouldShowTaskForStart(task, { now })) return false;
+                if (!shouldShowTaskForStart(task, { now, granularity: 'time' })) return false;
                 if (!isDueForReview(task.reviewAt, now)) return false;
                 if (!matchesSearchQuery(task.title)) return false;
                 return true;

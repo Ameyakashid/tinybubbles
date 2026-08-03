@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getNextFutureStartRevealAt } from '@mindwtr/core';
 
 export function getLocalDayKey(now: Date = new Date()): string {
     return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
@@ -33,4 +34,20 @@ export function useLocalDayKey(enabled = true): string {
     }, [enabled]);
 
     return dayKey;
+}
+
+/**
+ * Re-renders the consumer when the earliest upcoming timed start among the
+ * given tasks arrives, so a task hidden until its start time (#995) appears
+ * without waiting for an unrelated store change.
+ */
+export function useFutureStartRevealTick(tasks: ReadonlyArray<{ startTime?: string }>): number {
+    const [tick, setTick] = useState(0);
+    useEffect(() => {
+        const revealAt = getNextFutureStartRevealAt(tasks);
+        if (revealAt === null) return;
+        const timer = window.setTimeout(() => setTick((t) => t + 1), Math.max(1, revealAt - Date.now() + 50));
+        return () => window.clearTimeout(timer);
+    }, [tasks, tick]);
+    return tick;
 }

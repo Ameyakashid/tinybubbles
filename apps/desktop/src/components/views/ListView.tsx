@@ -512,7 +512,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 // moment it is completed (#843, #867, #900).
                 if (
                     deferredFilterInputs.statusFilter === 'next'
-                    && !shouldShowTaskForStart(t, { now })
+                    && !shouldShowTaskForStart(t, { now, granularity: 'time' })
                 ) {
                     return false;
                 }

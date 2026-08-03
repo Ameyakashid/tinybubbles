@@ -22,6 +22,7 @@ import {
     getTaskFocusEligibility,
     getWaitingPerson,
     groupCompletedTasksLast,
+    getNextFutureStartRevealAt,
     isTaskFutureStart,
     shouldShowTaskForStart,
     sortDoneTasksForListView,
@@ -836,6 +837,26 @@ describe('task-utils', () => {
             expect(shouldShowTaskForStart(task, { now, showFutureStarts: true })).toBe(true);
         });
 
+        it('hides a task with a timed start later today until that time under time granularity (#995)', () => {
+            const task = { startTime: new Date(2026, 4, 2, 17, 0, 0, 0).toISOString() };
+
+            expect(shouldShowTaskForStart(task, { now, granularity: 'time' })).toBe(false);
+            expect(shouldShowTaskForStart(task, { now, granularity: 'time', showFutureStarts: true })).toBe(true);
+            expect(shouldShowTaskForStart(task, { now: new Date(2026, 4, 2, 17, 0, 0, 1), granularity: 'time' })).toBe(true);
+            // Day granularity (the default, e.g. Daily Review planning and the
+            // unstar-on-defer rule) keeps a later-today start visible.
+            expect(shouldShowTaskForStart(task, { now })).toBe(true);
+            expect(isTaskFutureStart(task, now)).toBe(false);
+        });
+
+        it('shows a task with a timed start earlier today under time granularity', () => {
+            expect(shouldShowTaskForStart({ startTime: new Date(2026, 4, 2, 8, 0, 0, 0).toISOString() }, { now, granularity: 'time' })).toBe(true);
+        });
+
+        it('shows a date-only start all day under time granularity', () => {
+            expect(shouldShowTaskForStart({ startTime: '2026-05-02' }, { now, granularity: 'time' })).toBe(true);
+        });
+
         it('defers a recurring due-only task until its due date arrives', () => {
             const task = { startTime: undefined, dueDate: '2026-05-09', recurrence: { rule: 'weekly' as const } };
 
@@ -888,6 +909,22 @@ describe('task-utils', () => {
             };
 
             expect(isTaskFutureStart(task, now)).toBe(false);
+        });
+
+        it('reports the earliest upcoming timed start today as the reveal moment', () => {
+            const at = (h: number, m = 0) => new Date(2026, 4, 2, h, m, 0, 0);
+            const tasks = [
+                { startTime: at(17).toISOString() },
+                { startTime: at(14, 30).toISOString() },
+                { startTime: at(8).toISOString() },          // already started
+                { startTime: '2026-05-02' },                 // date-only: never hidden today
+                { startTime: new Date(2026, 4, 3, 9, 0, 0, 0).toISOString() }, // beyond today: day-key's job
+                { startTime: undefined },
+            ];
+
+            expect(getNextFutureStartRevealAt(tasks, now)).toBe(at(14, 30).getTime());
+            expect(getNextFutureStartRevealAt([{ startTime: at(8).toISOString() }], now)).toBeNull();
+            expect(getNextFutureStartRevealAt([], now)).toBeNull();
         });
     });
 
