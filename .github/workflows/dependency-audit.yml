@@ -63,10 +63,14 @@ jobs:
           #   The only remaining <0.41 copy comes from wayland-scanner (build-time
           #   codegen over bundled Wayland protocol XML, no untrusted input);
           #   drop these once wayland-rs moves to quick-xml >=0.41.
+          # - RUSTSEC-2023-0086: lexical-core 0.7 soundness advisory, pinned by
+          #   nom 5 under the imap crate (email capture). No compatible fix on
+          #   nom 5; drop once imap releases a stable on nom >=7.
           if ! cargo audit --deny warnings \
             --ignore RUSTSEC-2026-0097 \
             --ignore RUSTSEC-2026-0194 \
             --ignore RUSTSEC-2026-0195 \
+            --ignore RUSTSEC-2023-0086 \
             --file apps/desktop/src-tauri/Cargo.lock; then
             echo "cargo audit reported vulnerabilities or warnings, or failed." >&2
             exit 1
