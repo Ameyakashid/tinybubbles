@@ -1,4 +1,4 @@
-- Añadir a Mindwtr acepta fechas de inicio y vencimiento; Obtener tareas de Mindwtr entrega tareas a Atajos y iOS 18+ las muestra en Spotlight.
-- Fusionar copia combina una copia con los datos actuales.
-- Calendario conserva los colores del feed, separa categorías y muestra tareas completadas.
-- La búsqueda de texto y el respaldo protegen los cambios de iOS ante errores de base de datos.
+- Las tareas repetidas muestran todas sus apariciones en el intervalo visible del calendario.
+- Enfoque y Siguiente ocultan una tarea hasta su hora exacta de inicio.
+- La búsqueda etiqueta fechas completadas y de vencimiento y encuentra todos los proyectos.
+- La sincronización valida datos y adjuntos antes de cambiar; los selectores de IA pueden cargar los modelos actuales del proveedor.

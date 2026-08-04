@@ -1,4 +1,4 @@
-- Ajouter à Mindwtr accepte les dates de début et d’échéance; Obtenir les tâches Mindwtr transmet les tâches à Raccourcis, et iOS 18+ les affiche dans Spotlight.
-- Fusionner la sauvegarde combine sauvegarde et données locales.
-- Calendrier garde les couleurs du flux, sépare les catégories et affiche les tâches finies.
-- Recherche plein texte et stockage de secours protègent les modifications iOS lors d’erreurs de base de données.
+- Les tâches répétées affichent toutes leurs occurrences dans la période visible du calendrier.
+- Focus et Suivant masquent une tâche jusqu’à son heure de début exacte.
+- La recherche étiquette les dates de fin et d’échéance et trouve tous les projets.
+- La synchro valide données et pièces jointes avant le changement; les sélecteurs IA chargent les modèles actuels du fournisseur.

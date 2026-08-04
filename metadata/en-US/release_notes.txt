@@ -1,4 +1,4 @@
-- Add to Mindwtr accepts start and due dates; Get Mindwtr Tasks feeds tasks into Shortcuts, and iOS 18+ shows them in Spotlight.
-- Merge Backup combines a backup with current data.
-- Calendar keeps feed colors, splits category feeds, and can show completed work.
-- Full-text search and fallback storage protect iOS changes during database errors.
+- Repeating tasks now show every occurrence across the visible calendar range.
+- Focus and Next hide a timed-start task until its exact start time.
+- Search labels completed and due dates, and project search covers every project.
+- Sync setup validates remote data and attachments before switching; AI model pickers can load the provider's current models.

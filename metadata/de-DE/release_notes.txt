@@ -1,4 +1,4 @@
-- „Zu Mindwtr hinzufügen“ übernimmt Start- und Fälligkeitsdaten; „Mindwtr-Aufgaben abrufen“ liefert Aufgaben an Kurzbefehle, und iOS 18+ zeigt sie in Spotlight.
-- „Backup zusammenführen“ verbindet Sicherung und lokale Daten.
-- Kalender übernehmen Feed-Farben, trennen Kategorien und zeigen erledigte Aufgaben.
-- Volltextsuche und Ersatzspeicher sichern iOS-Änderungen bei Datenbankfehlern.
+- Wiederholende Aufgaben erscheinen jetzt über den gesamten sichtbaren Kalenderbereich.
+- Fokus und Nächste blenden Aufgaben bis zu ihrer genauen Startzeit aus.
+- Die Suche kennzeichnet Erledigt- und Fälligkeitsdaten; die Projektsuche umfasst alle Projekte.
+- Sync-Ziele werden vor dem Wechsel samt Anhängen geprüft; KI-Modelllisten können direkt vom Anbieter geladen werden.

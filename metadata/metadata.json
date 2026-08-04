@@ -30,7 +30,7 @@
           "列表、日历与看板视图，支持提醒与重复任务",
           "免费开源、无广告"
         ],
-        "ReleaseNotes": "• 归档新增筛选、排序、分组、可折叠标题和只读任务详情。\n• 日历可显示已完成任务、保留订阅颜色、按类别拆分并适应窗口。\n• 设置搜索可找到每个选项；对话框会在小窗口内保留焦点和操作按钮。\n• “合并备份”会合并数据，TLS 1.3 同步和窗口位置修复让桌面使用更稳。",
+        "ReleaseNotes": "• 重复任务会在可见日历范围内显示每一次发生，定时开始的任务会隐藏到准确时间。\n• 搜索会标记完成和截止日期，并能可靠打开已完成或已归档的任务。\n• 切换同步目标前会验证远端数据和附件；AI 模型选择器可加载服务商的当前模型。\n• Windows 证书同步和更安全的凭据文件提升桌面可靠性。",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -82,7 +82,7 @@
           "List, calendar, and kanban views with reminders and repeating tasks",
           "Free and open source, no ads"
         ],
-        "ReleaseNotes": "• Archive adds filters, sorting, grouping, collapsible headers, and read-only task details.\n• Calendar can show completed work, preserve feed colors, split category feeds, and fit the window.\n• Settings search finds each option; dialogs keep focus and actions inside short windows.\n• Merge Backup combines data, while TLS 1.3 sync and window geometry fixes improve desktop use.",
+        "ReleaseNotes": "• Repeating tasks show every occurrence in the visible calendar; timed-start tasks stay hidden until the exact time.\n• Search labels completed and due dates and reliably opens finished or archived tasks.\n• Sync setup validates remote data and attachments before switching; AI model pickers can load current provider models.\n• Windows certificate sync and tighter credential-file permissions improve desktop reliability.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
@@ -131,7 +131,7 @@
           "Listen-, Kalender- und Kanban-Ansichten mit Erinnerungen und Wiederholungen",
           "Kostenlos und Open Source, ohne Werbung"
         ],
-        "ReleaseNotes": "• Das Archiv bietet Filter, Sortierung, Gruppen, einklappbare Überschriften und schreibgeschützte Aufgabendetails.\n• Der Kalender zeigt Erledigtes, übernimmt Feed-Farben, trennt Kategorien und passt ins Fenster.\n• Die Einstellungssuche findet jede Option; Dialoge halten Fokus und Aktionen in kleinen Fenstern.\n• „Backup zusammenführen“, TLS-1.3-Sync und Fensterkorrekturen verbessern die Desktop-Nutzung.",
+        "ReleaseNotes": "• Wiederholende Aufgaben erscheinen im sichtbaren Kalender; Aufgaben mit Startzeit bleiben bis dahin ausgeblendet.\n• Die Suche kennzeichnet Erledigt- und Fälligkeitsdaten und öffnet fertige oder archivierte Aufgaben zuverlässig.\n• Sync-Ziele werden vor dem Wechsel samt Daten und Anhängen geprüft; KI-Modelllisten kommen direkt vom Anbieter.\n• Windows-Zertifikatssync und strengere Dateirechte erhöhen die Zuverlässigkeit.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -161,7 +161,7 @@
           "Vues liste, calendrier et kanban, rappels et tâches répétées",
           "Gratuit et open source, sans publicité"
         ],
-        "ReleaseNotes": "• Archive ajoute filtres, tri, groupes, en-têtes repliables et détails de tâche en lecture seule.\n• Calendrier affiche les tâches finies, garde les couleurs, sépare les catégories et s’adapte à la fenêtre.\n• La recherche trouve chaque réglage; les boîtes de dialogue gardent focus et actions dans les petites fenêtres.\n• Fusion de sauvegarde, sync TLS 1.3 et corrections de fenêtre améliorent l’usage du bureau.",
+        "ReleaseNotes": "• Les tâches répétées affichent toutes leurs occurrences; celles avec une heure de début restent masquées jusqu’au moment exact.\n• La recherche étiquette les dates de fin et d’échéance et ouvre bien les tâches finies ou archivées.\n• La synchro valide données et pièces jointes avant le changement; les listes de modèles IA viennent du fournisseur.\n• Les certificats Windows et des droits de fichier renforcés améliorent la fiabilité.",
         "Images": [],
         "RecommendedHardware": [],
         "MinimumHardware": [],
@@ -190,7 +190,7 @@
           "Vistas de lista, calendario y kanban, con recordatorios y tareas repetidas",
           "Gratis y de código abierto, sin anuncios"
         ],
-        "ReleaseNotes": "• Archivo añade filtros, orden, grupos, encabezados plegables y detalles de tarea de solo lectura.\n• Calendario muestra tareas completadas, conserva colores, separa categorías y se ajusta a la ventana.\n• La búsqueda encuentra cada ajuste; los diálogos mantienen el foco y las acciones en ventanas pequeñas.\n• Fusionar copia, la sincronización TLS 1.3 y los arreglos de ventana mejoran el escritorio.",
+        "ReleaseNotes": "• Las tareas repetidas muestran todas sus apariciones; las que tienen hora de inicio se ocultan hasta el momento exacto.\n• La búsqueda etiqueta fechas completadas y de vencimiento y abre bien tareas terminadas o archivadas.\n• La sincronización valida datos y adjuntos antes de cambiar; las listas de modelos de IA vienen del proveedor.\n• Los certificados de Windows y permisos de archivo más estrictos mejoran la fiabilidad.",
         "Images": [
           {
             "FileName": "2026-01-27_22-59-40.png",
