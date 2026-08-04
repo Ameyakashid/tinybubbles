@@ -1021,7 +1021,7 @@ jobs:
             aur-proposal
 
       - name: Preserve exact AUR proposal for reviewed publication
-        uses: actions/upload-artifact@b7c566a7b083a21b1e7e8c6b4f906d85b85c5f8a # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: aur-proposal-mindwtr-bin-${{ steps.version.outputs.tag }}
           path: aur-proposal/
@@ -1290,7 +1290,7 @@ jobs:
             aur-proposal
 
       - name: Preserve exact AUR proposal for reviewed publication
-        uses: actions/upload-artifact@b7c566a7b083a21b1e7e8c6b4f906d85b85c5f8a # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: aur-proposal-mindwtr-${{ steps.version.outputs.tag }}
           path: aur-proposal/
