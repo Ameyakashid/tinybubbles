@@ -128,6 +128,9 @@ export type TaskListGroupBy = TaskGroupBy;
 /** The project Completed pile: a screen section, not a grouping heading. */
 const PROJECT_COMPLETED_SECTION_ID = 'project-completed-tasks';
 
+/** The project References pile below the task list, matching desktop's ProjectWorkspace (#1000). */
+const PROJECT_REFERENCE_SECTION_ID = 'project-reference-tasks';
+
 /** What the list shows: which tasks, in what order, grouped how. */
 interface TaskListContentProps {
   statusFilter: TaskStatus | 'all';
@@ -328,6 +331,7 @@ function TaskListComponent({
     areas,
     addTask,
     addProject,
+    allVisibleTasks,
     updateTask,
     deleteTask,
     restoreTask,
@@ -343,6 +347,10 @@ function TaskListComponent({
     getDerivedState,
   } = useTaskStore((state) => ({
     tasks: taskSource ?? (includeArchived ? state._allTasks : state.tasks),
+    // References tag-matched to the project can live in other projects, so the
+    // reference pile reads the full visible pool even when taskSource narrows
+    // the main list to one project's tasks (#1000).
+    allVisibleTasks: state.tasks,
     projects: state.projects,
     sections: state.sections,
     areas: state.areas,
@@ -669,6 +677,24 @@ function TaskListComponent({
     return filterableTasks.filter((task) => taskMatchesFilterSelections(task, filterSelections));
   }, [filterCriteria, filterSearchQuery, filterableTasks]);
 
+  // Reference tasks render as their own pile below the list, matching desktop's
+  // ProjectWorkspace: the project's own references plus references whose tags
+  // match the project's tags (that tag match is how one reference serves
+  // several projects) (#1000).
+  const projectReferenceTasks = useMemo(() => {
+    if (!projectId || statusFilter !== 'all') return [] as Task[];
+    const projectTagSet = new Set(
+      (projectById.get(projectId)?.tagIds || []).map((tag) => String(tag).toLowerCase()),
+    );
+    const filterSelections = { criteria: filterCriteria, searchQuery: filterSearchQuery };
+    return sortProjectTasksByOrder(allVisibleTasks.filter((task) => {
+      if (task.deletedAt || task.status !== 'reference') return false;
+      const inProject = task.projectId === projectId
+        || (projectTagSet.size > 0 && (task.tags || []).some((tag) => projectTagSet.has(String(tag).toLowerCase())));
+      return inProject && taskMatchesFilterSelections(task, filterSelections);
+    }));
+  }, [allVisibleTasks, filterCriteria, filterSearchQuery, projectById, projectId, statusFilter]);
+
   const orderedTasks = useMemo(() => {
     if (projectId && enableProjectReorder && sortBy === 'default') {
       return sortProjectTasksByOrder(filteredTasks);
@@ -738,9 +764,22 @@ function TaskListComponent({
       return items;
     };
 
+    const appendReferenceTasks = (items: ListItem[]) => {
+      if (projectReorderMode || projectReferenceTasks.length === 0) return items;
+      items.push({
+        type: 'section',
+        id: PROJECT_REFERENCE_SECTION_ID,
+        title: tFallback(t, 'status.reference', 'Reference'),
+        count: projectReferenceTasks.length,
+        muted: true,
+      });
+      projectReferenceTasks.forEach((task) => items.push({ type: 'task', task }));
+      return items;
+    };
+
     const shouldGroup = Boolean(projectId) && (projectSections.length > 0 || orderedActiveTasks.some((task) => task.sectionId));
     if (!shouldGroup) {
-      return appendCompletedTasks(orderedActiveTasks.map((task) => ({ type: 'task', task, reorderSectionId: projectId ? undefined : task.sectionId })));
+      return appendReferenceTasks(appendCompletedTasks(orderedActiveTasks.map((task) => ({ type: 'task', task, reorderSectionId: projectId ? undefined : task.sectionId }))));
     }
     const sectionIds = new Set(projectSections.map((section) => section.id));
     const tasksBySection = new Map<string, Task[]>();
@@ -773,8 +812,8 @@ function TaskListComponent({
       });
       unsectioned.forEach((task) => items.push({ type: 'task', task, reorderSectionId }));
     }
-    return appendCompletedTasks(items);
-  }, [activeGroupBy, areas, collapsedGroupIds, completedTasksCollapsed, localDayKey, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
+    return appendReferenceTasks(appendCompletedTasks(items));
+  }, [activeGroupBy, areas, collapsedGroupIds, completedTasksCollapsed, localDayKey, orderedActiveTasks, orderedCompletedTasks, projectById, projectId, projectReferenceTasks, projectReorderMode, projectSections, shouldGroupCompletedTasks, t]);
   const orderedTaskIds = useMemo(
     () => Array.from(new Set(listItems.flatMap((item) => (item.type === 'task' ? [item.task.id] : [])))),
     [listItems],

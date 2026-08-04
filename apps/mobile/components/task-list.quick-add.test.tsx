@@ -446,6 +446,46 @@ describe('TaskList project quick add', () => {
     });
   });
 
+  it('shows a References pile below the project list, including tag-matched references (#1000)', async () => {
+    const active = makeTask('task-1', 'Write intro');
+    const ownReference = makeTask('ref-1', 'Style guide', { status: 'reference' });
+    const tagReference = makeTask('ref-2', 'Shared bibliography', { status: 'reference', projectId: 'project-2', tags: ['#research'] });
+    const unrelatedReference = makeTask('ref-3', 'Elsewhere', { status: 'reference', projectId: 'project-2' });
+    storeState.tasks = [active, ownReference, tagReference, unrelatedReference];
+    storeState.projects = [{ ...projectFixture, tagIds: ['#research'] } as Project];
+
+    let tree!: ReturnType<typeof create>;
+    try {
+      await act(async () => {
+        tree = create(
+          <TaskList
+            allowAdd
+            projectId={project.id}
+            showHeader={false}
+            statusFilter="all"
+            taskSource={[active, ownReference]}
+            title={project.title}
+          />,
+        );
+      });
+
+      const data = flatListPropsSpy.mock.calls.at(-1)?.[0].data as Array<{ type: string; id?: string; count?: number; task?: Task }>;
+      const sectionIndex = data.findIndex((item) => item.type === 'section' && item.id === 'project-reference-tasks');
+      expect(sectionIndex).toBeGreaterThan(-1);
+      expect(data[sectionIndex].count).toBe(2);
+      const referenceIds = data.filter((item) => item.type === 'task' && item.task?.status === 'reference').map((item) => item.task!.id);
+      expect(referenceIds).toEqual(['ref-1', 'ref-2']);
+      // The main list stays reference-free: the active row sits above the pile.
+      expect(data.findIndex((item) => item.type === 'task' && item.task?.id === 'task-1')).toBeLessThan(sectionIndex);
+
+      act(() => {
+        tree.unmount();
+      });
+    } finally {
+      storeState.projects = [projectFixture as Project];
+    }
+  });
+
   it('passes a group control to non-reference list headers', async () => {
     const onChangeGroupBy = vi.fn();
     let tree!: ReturnType<typeof create>;
