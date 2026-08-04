@@ -382,12 +382,6 @@ export function useRootLayoutSyncEffects({
             // not run on every store update (#766). Data writes always bump
             // lastDataChangeAt, so skipping the fingerprint here is safe.
             if (state.lastDataChangeAt === prevState.lastDataChangeAt) return;
-            const currentFingerprint = readCurrentSyncPayloadFingerprint();
-            const previousFingerprint = lastAutoSyncPayloadFingerprint.current;
-            if (currentFingerprint) {
-                lastAutoSyncPayloadFingerprint.current = currentFingerprint;
-            }
-            if (currentFingerprint && previousFingerprint && currentFingerprint === previousFingerprint) return;
             const cadence = syncCadenceRef.current;
             const hadTimer = !!syncDebounceTimer.current;
             if (syncDebounceTimer.current) {
@@ -396,6 +390,15 @@ export function useRootLayoutSyncEffects({
             const debounceMs = hadTimer ? cadence.debounceContinuousChangeMs : cadence.debounceFirstChangeMs;
             syncDebounceTimer.current = setTimeout(() => {
                 if (!isActive.current) return;
+                // The fingerprint dedupe runs here, once per quiet period: even
+                // gated to data writes it serializes the whole library, which cost
+                // ~0.4s inside every done/save tap on a 7k-task device (#766).
+                const currentFingerprint = readCurrentSyncPayloadFingerprint();
+                const previousFingerprint = lastAutoSyncPayloadFingerprint.current;
+                if (currentFingerprint) {
+                    lastAutoSyncPayloadFingerprint.current = currentFingerprint;
+                }
+                if (currentFingerprint && previousFingerprint && currentFingerprint === previousFingerprint) return;
                 requestSync();
             }, debounceMs);
         }));

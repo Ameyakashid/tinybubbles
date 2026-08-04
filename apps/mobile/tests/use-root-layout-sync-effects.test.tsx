@@ -257,6 +257,44 @@ describe('useRootLayoutSyncEffects', () => {
     vi.useRealTimers();
   });
 
+  it('defers the payload fingerprint to the debounce timer instead of the write path (#766)', async () => {
+    vi.useFakeTimers();
+    const storeListeners: Array<(state: { lastDataChangeAt: number }, prevState: { lastDataChangeAt: number }) => void> = [];
+    storeSubscribe.mockImplementation((...args: unknown[]) => {
+      const callback = args[0] as (state: { lastDataChangeAt: number }, prevState: { lastDataChangeAt: number }) => void;
+      storeListeners.push(callback);
+      return vi.fn();
+    });
+
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<TestHarness />);
+      await flushMicrotasks();
+    });
+    getInMemorySyncChangeFingerprint.mockClear();
+    const storeListener = storeListeners.find((callback) => callback.length >= 2);
+    expect(storeListener).toBeTypeOf('function');
+
+    // The fingerprint is a full-dataset serialize; running it synchronously in
+    // the store listener put ~0.4s inside every done/save tap on large libraries.
+    await act(async () => {
+      storeListener?.({ lastDataChangeAt: 2 }, { lastDataChangeAt: 1 });
+      storeListener?.({ lastDataChangeAt: 3 }, { lastDataChangeAt: 2 });
+    });
+    expect(getInMemorySyncChangeFingerprint).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+      await flushMicrotasks();
+    });
+    expect(getInMemorySyncChangeFingerprint).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      tree.unmount();
+    });
+    vi.useRealTimers();
+  });
+
   it('auto-syncs when the sync payload fingerprint changes', async () => {
     vi.useFakeTimers();
     const storeListeners: Array<(state: { lastDataChangeAt: number }, prevState: { lastDataChangeAt: number }) => void> = [];
