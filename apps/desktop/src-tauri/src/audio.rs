@@ -1193,13 +1193,16 @@ mod tests {
     fn audio_capture_file_name_uses_subsecond_precision() {
         let first = audio_capture_file_name(UNIX_EPOCH + Duration::from_secs(1))
             .expect("should format first capture name");
+        // Windows SystemTime is backed by 100 ns ticks, so a 1 ns delta can be
+        // rounded away before duration_since observes it. A microsecond remains
+        // subsecond precision while being representable on every target.
         let second =
-            audio_capture_file_name(UNIX_EPOCH + Duration::from_secs(1) + Duration::from_nanos(1))
+            audio_capture_file_name(UNIX_EPOCH + Duration::from_secs(1) + Duration::from_micros(1))
                 .expect("should format second capture name");
 
         assert_ne!(first, second);
         assert_eq!(first, "mindwtr-audio-1000000000.wav");
-        assert_eq!(second, "mindwtr-audio-1000000001.wav");
+        assert_eq!(second, "mindwtr-audio-1000001000.wav");
     }
 
     #[test]
