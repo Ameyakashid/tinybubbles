@@ -361,6 +361,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Import Mindwtr release signing key
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
       - name: Download RC artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -445,6 +451,8 @@ jobs:
           (
             cd ./release-assets
             sha256sum * > SHA256SUMS
+            gpg --batch --yes --armor --detach-sign --output SHA256SUMS.asc SHA256SUMS
+            gpg --batch --verify SHA256SUMS.asc SHA256SUMS
           )
           ls -la ./release-assets
 
@@ -505,11 +513,10 @@ jobs:
   aur-beta:
     if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.prerelease.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_aur_beta) }}
     needs: [validate, prerelease]
-    name: Update AUR Beta (mindwtr-bin-beta)
+    name: Prepare AUR Beta Proposal (mindwtr-bin-beta)
     uses: ./.github/workflows/update-aur-beta.yml
     with:
       tag: ${{ needs.validate.outputs.tag }}
-    secrets: inherit
 
   linux-repos-beta:
     if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.prerelease.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_linux_repos_beta) }}

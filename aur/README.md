@@ -1,116 +1,65 @@
-# Mindwtr AUR Package
+# Mindwtr AUR packages
 
-This directory contains the PKGBUILD for maintaining the [mindwtr-bin](https://aur.archlinux.org/packages/mindwtr-bin) package on the Arch User Repository (AUR). It also includes the `mindwtr-bin-beta` template used by release-candidate automation.
+Mindwtr recognizes these AUR package identities:
 
-## Installation
+| Package                                                                   | Channel | Source                        | Expected owner(s)                                       |
+| ------------------------------------------------------------------------- | ------- | ----------------------------- | ------------------------------------------------------- |
+| [`mindwtr-bin`](https://aur.archlinux.org/packages/mindwtr-bin)           | Stable  | GitHub release `.deb`         | Maintainer `dongdongbh`                                 |
+| [`mindwtr`](https://aur.archlinux.org/packages/mindwtr)                   | Stable  | GitHub release source archive | Maintainer `yochananmarqos`; co-maintainer `dongdongbh` |
+| [`mindwtr-bin-beta`](https://aur.archlinux.org/packages/mindwtr-bin-beta) | RC/beta | GitHub prerelease `.deb`      | Maintainer `dongdongbh`                                 |
 
-**Using an AUR helper (recommended):**
-```bash
-# Using yay
-yay -S mindwtr-bin
+Treat a different upstream URL or an unexpected ownership change as a security event. The machine-readable policy is in [`trusted-packages.json`](trusted-packages.json).
 
-# Using paru
-paru -S mindwtr-bin
-```
+## Install
 
-**Manual installation:**
+Review every AUR file before building. For example:
+
 ```bash
 git clone https://aur.archlinux.org/mindwtr-bin.git
 cd mindwtr-bin
+git log --oneline -10
+less PKGBUILD .SRCINFO
+makepkg --verifysource
 makepkg -sri
 ```
 
----
+The source URLs must resolve to `https://github.com/dongdongbh/Mindwtr`, executable and source artifacts must have full SHA-256 checksums, and `.SRCINFO` must match `PKGBUILD`. Mindwtr AUR packages must not contain install scripts, remote-shell commands, persistence hooks, or `SKIP` checksums for executable/source content.
 
-## Maintaining the AUR Package
+## Release trust anchor
 
-### Prerequisites
-1. Create an account on [aur.archlinux.org](https://aur.archlinux.org/)
-2. Upload your SSH public key to your AUR account
-3. Clone the AUR repo: `git clone ssh://aur@aur.archlinux.org/mindwtr-bin.git`
+Mindwtr publishes `SHA256SUMS` with release artifacts and signs new manifests as `SHA256SUMS.asc`. The primary signing-key fingerprint is:
 
-### Updating the Package
-
-When a new version is released:
-
-```bash
-# 1. Go to your local AUR repo clone
-cd /path/to/aur/mindwtr-bin
-
-# 2. Update PKGBUILD
-# - Change pkgver to new version (e.g., 0.2.4)
-# - Update checksums if needed
-
-# 3. Update checksums (download the new .deb and calculate)
-updpkgsums
-# Or manually: sha256sum mindwtr_0.2.4_amd64.deb
-
-# 4. Regenerate .SRCINFO (required by AUR)
-makepkg --printsrcinfo > .SRCINFO
-
-# 5. Test locally
-makepkg -sri
-
-# 6. If tests pass, commit and push
-git add PKGBUILD .SRCINFO
-git commit -m "Update to v0.2.4"
-git push origin master  # AUR only accepts 'master' branch
+```text
+0358 999B BE70 4F58 8B90  9497 9E55 3245 CB17 047D
 ```
 
-### Quick Update Script
-
-For convenience, you can use this script to update the AUR package:
+Verify the fingerprint independently before trusting the key. A typical verification is:
 
 ```bash
-#!/bin/bash
-# update-aur.sh
-
-VERSION="$1"
-if [ -z "$VERSION" ]; then
-    echo "Usage: ./update-aur.sh 0.2.4"
-    exit 1
-fi
-
-# Update pkgver in PKGBUILD
-sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
-
-# Update checksums
-updpkgsums
-
-# Regenerate .SRCINFO
-makepkg --printsrcinfo > .SRCINFO
-
-# Test build
-makepkg -f
-
-echo "Ready to commit. Run:"
-echo "  git add PKGBUILD .SRCINFO && git commit -m 'Update to v$VERSION' && git push origin master"
+gpg --verify SHA256SUMS.asc SHA256SUMS
+sha256sum --check SHA256SUMS
 ```
 
-### Package Types
+## Publishing policy
 
-| Package            | Source                     | Notes                    |
-| ------------------ | -------------------------- | ------------------------ |
-| `mindwtr-bin`      | GitHub Release `.deb`      | Stable binary package    |
-| `mindwtr-bin-beta` | GitHub prerelease `.deb`   | RC/beta binary package   |
-| `mindwtr`          | Build from source          | Stable source package    |
-| `mindwtr-appimage` | GitHub Release `.AppImage` | Alternative binary       |
+A Mindwtr release never pushes directly to AUR. Release jobs instead:
 
-### Useful Commands
+1. Clone the current AUR repository over read-only HTTPS.
+2. Generate the proposed `PKGBUILD` and `.SRCINFO`.
+3. Reject unexpected files, owners, sources, commands, or skipped checksums.
+4. Build in a clean Arch container.
+5. Save the exact files, base commit, all-package ownership/history snapshot, review diff, and diff checksum as a 90-day workflow artifact.
 
-```bash
-# Check PKGBUILD for issues
-namcap PKGBUILD
+Publication is a separate manual `Publish reviewed AUR proposal` workflow protected by the `aur-publish` GitHub Environment. Before its one non-force push attempt, it re-fetches all three packages and requires the reviewed ownership and histories to be unchanged. A recognized AUR maintenance response marks only that channel as delayed; an unexpected rejection fails the publication job.
 
-# Check built package
-namcap mindwtr-bin-*.pkg.tar.zst
+When AUR is unavailable, do not retry repeatedly. Preserve the proposal artifact and dispatch publication only after Arch announces that pushes are restored.
 
-# View package contents
-pacman -Qlp mindwtr-bin-*.pkg.tar.zst
-```
+## Maintainer security
 
-## Notes
+- Keep `dongdongbh` as maintainer or co-maintainer of all recognized packages.
+- Use a dedicated, passphrase-protected Ed25519 AUR key that is not shared with GitHub, servers, or general build machines.
+- Store the publishing key only as the `AUR_SSH_PRIVATE_KEY` secret in the protected `aur-publish` Environment.
+- Require a human review of the proposal artifact before approving the Environment deployment.
+- Never orphan a package for temporary maintenance convenience and never force-push AUR history.
 
-- **Repology**: Once published on AUR, the package will automatically appear on [Repology](https://repology.org/) after their next sync
-- **Branch**: AUR only accepts pushes to the `master` branch (not `main`)
-- **Checksums**: Use `SKIP` during development, but always use proper SHA256 checksums for releases
+The AUR is unofficial. Automation catches policy drift, but it does not replace reviewing the actual package diff and build behavior.

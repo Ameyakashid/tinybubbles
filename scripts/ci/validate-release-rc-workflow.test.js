@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
-const asNeedsList = (needs) => Array.isArray(needs) ? needs : [needs];
+const asNeedsList = (needs) => (Array.isArray(needs) ? needs : [needs]);
 
 test("stable release validates tags and committed versions before any build or publish", () => {
   const workflow = parse(readFileSync(".github/workflows/release.yml", "utf8"));
@@ -13,35 +13,47 @@ test("stable release validates tags and committed versions before any build or p
   expect(stepNames).toContain("Validate stable tag naming");
   expect(stepNames).toContain("Resolve and validate release notes");
   expect(stepNames).toContain("Verify app versions match the stable tag");
-  expect(stepNames).toContain("Verify committed FOSS release version matches the stable tag");
-  expect(stepNames).toContain("Verify CloudKit production schema is fully deployed");
+  expect(stepNames).toContain(
+    "Verify committed FOSS release version matches the stable tag",
+  );
+  expect(stepNames).toContain(
+    "Verify CloudKit production schema is fully deployed",
+  );
   expect(stepNames).toContain("Verify stable tag points at this commit");
   expect(validate.outputs.release_notes_path).toBe(
-    "${{ steps.release_notes.outputs.body_path }}"
+    "${{ steps.release_notes.outputs.body_path }}",
   );
 
-  const versionStep = steps.find((step) => step.name === "Verify app versions match the stable tag");
+  const versionStep = steps.find(
+    (step) => step.name === "Verify app versions match the stable tag",
+  );
   expect(versionStep.run).toContain("apps/desktop/src-tauri/tauri.conf.json");
   expect(versionStep.run).toContain("apps/desktop/src-tauri/Cargo.toml");
   const releaseNotesStep = steps.find(
-    (step) => step.name === "Resolve and validate release notes"
+    (step) => step.name === "Resolve and validate release notes",
   );
-  expect(releaseNotesStep.run).toContain('docs/release-notes/${TAG}.md');
-  expect(releaseNotesStep.run).toContain('docs/release-notes/${VERSION}.md');
+  expect(releaseNotesStep.run).toContain("docs/release-notes/${TAG}.md");
+  expect(releaseNotesStep.run).toContain("docs/release-notes/${VERSION}.md");
   expect(releaseNotesStep.run).toContain(
-    '[[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]'
+    '[[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]',
   );
   expect(releaseNotesStep.run).not.toContain('!= *"$VERSION"*');
   const fossStep = steps.find(
-    (step) => step.name === "Verify committed FOSS release version matches the stable tag"
+    (step) =>
+      step.name ===
+      "Verify committed FOSS release version matches the stable tag",
   );
   expect(fossStep.run).toContain("apps/mobile/release-version.json");
 
   const releaseSteps = workflow.jobs.release.steps;
-  expect(releaseSteps.some((step) => step.name === "Resolve release notes")).toBe(false);
-  const createReleaseStep = releaseSteps.find((step) => step.name === "Create Release");
+  expect(
+    releaseSteps.some((step) => step.name === "Resolve release notes"),
+  ).toBe(false);
+  const createReleaseStep = releaseSteps.find(
+    (step) => step.name === "Create Release",
+  );
   expect(createReleaseStep.env.NOTES_FILE).toBe(
-    "${{ needs.validate.outputs.release_notes_path }}"
+    "${{ needs.validate.outputs.release_notes_path }}",
   );
   expect(createReleaseStep.run).toContain('--notes-file "$NOTES_FILE"');
 
@@ -79,40 +91,139 @@ test("stable release validates tags and committed versions before any build or p
 });
 
 test("RC tag pushes publish Android builds to Play internal and open testing", () => {
-  const workflow = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
+  const workflow = parse(
+    readFileSync(".github/workflows/release-rc.yml", "utf8"),
+  );
   const playTrack = workflow.jobs.android.with.play_track;
 
   expect(playTrack).toContain("'internal,beta'");
 });
 
 test("RC workflow dispatch defaults include Play open testing", () => {
-  const workflow = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
+  const workflow = parse(
+    readFileSync(".github/workflows/release-rc.yml", "utf8"),
+  );
 
   expect(workflow.on.workflow_dispatch.inputs.play_track.default).toBe("beta");
 });
 
 test("RC Android Play and FOSS builds share a parallel versionCode preflight", () => {
-  const workflow = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
+  const workflow = parse(
+    readFileSync(".github/workflows/release-rc.yml", "utf8"),
+  );
 
   expect(workflow.jobs["android-version-code"]).toBeDefined();
-  expect(workflow.jobs.android.needs).toEqual(["validate", "android-version-code"]);
-  expect(workflow.jobs.android.with.version_code).toBe("${{ needs['android-version-code'].outputs.version_code }}");
-  expect(workflow.jobs["android-foss"].needs).toEqual(["validate", "android-version-code"]);
-  expect(workflow.jobs["android-foss"].with.version_code).toBe("${{ needs['android-version-code'].outputs.version_code }}");
+  expect(workflow.jobs.android.needs).toEqual([
+    "validate",
+    "android-version-code",
+  ]);
+  expect(workflow.jobs.android.with.version_code).toBe(
+    "${{ needs['android-version-code'].outputs.version_code }}",
+  );
+  expect(workflow.jobs["android-foss"].needs).toEqual([
+    "validate",
+    "android-version-code",
+  ]);
+  expect(workflow.jobs["android-foss"].with.version_code).toBe(
+    "${{ needs['android-version-code'].outputs.version_code }}",
+  );
 });
 
 test("RC validation checks the committed FOSS version before platform builds start", () => {
-  const workflow = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
+  const workflow = parse(
+    readFileSync(".github/workflows/release-rc.yml", "utf8"),
+  );
   const steps = workflow.jobs.validate.steps;
   const versionCheckIndex = steps.findIndex(
-    (step) => step.name === "Verify committed FOSS release version matches the RC tag"
+    (step) =>
+      step.name === "Verify committed FOSS release version matches the RC tag",
   );
   const tagCommitCheckIndex = steps.findIndex(
-    (step) => step.name === "Verify RC tag points at this commit"
+    (step) => step.name === "Verify RC tag points at this commit",
   );
 
   expect(versionCheckIndex).toBeGreaterThan(-1);
-  expect(steps[versionCheckIndex].run).toContain("apps/mobile/release-version.json");
+  expect(steps[versionCheckIndex].run).toContain(
+    "apps/mobile/release-version.json",
+  );
   expect(steps[versionCheckIndex].run).toContain("./scripts/bump-version.sh");
   expect(versionCheckIndex).toBeLessThan(tagCommitCheckIndex);
+});
+
+test("stable and RC releases sign and verify the checksum manifest", () => {
+  const stable = parse(readFileSync(".github/workflows/release.yml", "utf8"));
+  const rc = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));
+
+  for (const [job, validateStepName] of [
+    [stable.jobs.release, "Validate release assets"],
+    [rc.jobs.prerelease, "Validate RC assets"],
+  ]) {
+    expect(
+      job.steps.some(
+        (step) => step.name === "Import Mindwtr release signing key",
+      ),
+    ).toBe(true);
+    const validateStep = job.steps.find(
+      (step) => step.name === validateStepName,
+    );
+    expect(validateStep.run).toContain("SHA256SUMS.asc");
+    expect(validateStep.run).toContain(
+      "gpg --batch --verify SHA256SUMS.asc SHA256SUMS",
+    );
+  }
+});
+
+test("release jobs preserve AUR proposals without receiving publish credentials", () => {
+  const stableText = readFileSync(".github/workflows/release.yml", "utf8");
+  const rcText = readFileSync(".github/workflows/release-rc.yml", "utf8");
+  const betaText = readFileSync(
+    ".github/workflows/update-aur-beta.yml",
+    "utf8",
+  );
+  const stable = parse(stableText);
+  const rc = parse(rcText);
+  const beta = parse(betaText);
+
+  expect(stableText).not.toContain("AUR_SSH_PRIVATE_KEY");
+  expect(rcText).not.toContain("AUR_SSH_PRIVATE_KEY");
+  expect(betaText).not.toContain("AUR_SSH_PRIVATE_KEY");
+
+  for (const jobName of ["update-aur", "update-aur-source"]) {
+    const steps = stable.jobs[jobName].steps;
+    expect(
+      steps.some((step) => step.name === "Prepare immutable AUR proposal"),
+    ).toBe(true);
+    expect(
+      steps.some(
+        (step) =>
+          step.name === "Preserve exact AUR proposal for reviewed publication",
+      ),
+    ).toBe(true);
+  }
+  expect(rc.jobs["aur-beta"].name).toContain("Prepare AUR Beta Proposal");
+  expect(beta.on.workflow_dispatch.inputs.tag.required).toBe(true);
+  expect(
+    beta.jobs["update-aur-beta"].steps.some(
+      (step) =>
+        step.name === "Preserve exact AUR proposal for reviewed publication",
+    ),
+  ).toBe(true);
+  expect(betaText).toContain("SHA256SUMS");
+  expect(betaText).not.toContain("updpkgsums");
+});
+
+test("AUR publication is a manual environment-gated recovery workflow", () => {
+  const text = readFileSync(".github/workflows/publish-aur.yml", "utf8");
+  const workflow = parse(text);
+  const publish = workflow.jobs.publish;
+
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+  expect(publish.environment).toBe("aur-publish");
+  expect(text).toContain("audit-aur-state.mjs --compare");
+  expect(text).toContain("AUR is down due to maintenance");
+  expect(text).toContain("status=delayed");
+  expect(text).toContain("git -C aur-live push origin HEAD:master");
+  expect(text).toContain("SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4");
+  expect(text).toContain("SOURCE_EVENT");
+  expect(text).not.toContain("--force");
 });

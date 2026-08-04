@@ -392,6 +392,12 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.tag }}
 
+      - name: Import Mindwtr release signing key
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
       - name: Download build artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -477,8 +483,10 @@ jobs:
           (
             cd ./release-assets
             sha256sum * > SHA256SUMS
+            gpg --batch --yes --armor --detach-sign --output SHA256SUMS.asc SHA256SUMS
+            gpg --batch --verify SHA256SUMS.asc SHA256SUMS
           )
-          echo "Generated checksum manifest at release-assets/SHA256SUMS"
+          echo "Generated and signed checksum manifest at release-assets/SHA256SUMS"
 
       - name: Create Release
         env:
@@ -792,11 +800,10 @@ jobs:
   update-aur-bin-beta:
     needs: [validate, release]
     if: ${{ always() && needs.validate.result == 'success' && !contains(github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name, '-') && ((startsWith(github.ref, 'refs/tags/') && github.event_name == 'push' && needs.release.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.run_update_aur && (needs.release.result == 'success' || needs.release.result == 'skipped'))) }}
-    name: Update AUR Beta (mindwtr-bin-beta)
+    name: Prepare AUR Beta Proposal (mindwtr-bin-beta)
     uses: ./.github/workflows/update-aur-beta.yml
     with:
       tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-    secrets: inherit
 
   # Stable releases also land in the beta repos (matching the Flathub beta
   # branch behavior) so beta-repo users pick stable back up after a test
@@ -940,7 +947,7 @@ jobs:
   update-aur:
     needs: [validate, release]
     runs-on: ubuntu-latest
-    name: Update AUR
+    name: Prepare AUR Proposal (mindwtr-bin)
     timeout-minutes: 30
     permissions:
       contents: read
@@ -969,57 +976,12 @@ jobs:
           sed -i "s/^pkgrel=.*/pkgrel=1/" aur/PKGBUILD
         shell: bash
 
-      - name: Configure SSH for AUR
-        shell: bash
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${AUR_SSH_PRIVATE_KEY}" ]; then
-            echo "Missing AUR_SSH_PRIVATE_KEY secret."
-            exit 1
-          fi
-
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "${AUR_SSH_PRIVATE_KEY}" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          cat > ~/.ssh/config <<'EOF'
-          Host aur.archlinux.org
-            HostName aur.archlinux.org
-            User aur
-            IdentityFile ~/.ssh/aur
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          EOF
-
-          rm -f ~/.ssh/known_hosts
-          touch ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          for attempt in 1 2 3; do
-            if ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null; then
-              exit 0
-            fi
-            echo "ssh-keyscan attempt ${attempt} failed; retrying..." >&2
-            sleep 2
-          done
-          echo "Failed to collect AUR host keys after 3 attempts." >&2
-          exit 1
-
-      - name: Clone AUR repo
+      - name: Clone AUR repo read-only
         shell: bash
         run: |
           set -euo pipefail
           rm -rf aur-mindwtr-bin
-          for attempt in 1 2 3; do
-            if git clone ssh://aur@aur.archlinux.org/mindwtr-bin.git aur-mindwtr-bin; then
-              exit 0
-            fi
-            echo "AUR clone attempt ${attempt} failed; retrying..." >&2
-            rm -rf aur-mindwtr-bin
-            sleep 3
-          done
-          echo "Failed to clone mindwtr-bin from AUR after 3 attempts." >&2
-          exit 1
+          git clone https://aur.archlinux.org/mindwtr-bin.git aur-mindwtr-bin
 
       - name: Sync PKGBUILD into AUR repo
         shell: bash
@@ -1048,38 +1010,29 @@ jobs:
             '
         shell: bash
 
-      - name: Commit and push changes
+      - name: Prepare immutable AUR proposal
         shell: bash
-        working-directory: aur-mindwtr-bin
-        env:
-          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
-          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain -- PKGBUILD .SRCINFO)" ]; then
-            echo "No AUR binary-package changes to publish."
-            exit 0
-          fi
+          bash scripts/ci/prepare-aur-proposal.sh \
+            aur-mindwtr-bin \
+            mindwtr-bin \
+            "${{ steps.version.outputs.tag }}" \
+            aur-proposal
 
-          git config --local user.name "${AUR_USERNAME:-mindwtr-bot}"
-          git config --local user.email "${AUR_EMAIL:-actions@github.com}"
-          git add PKGBUILD .SRCINFO
-          git commit -m "Update to ${{ steps.version.outputs.tag }}"
-
-          for attempt in 1 2 3; do
-            if git push origin master; then
-              exit 0
-            fi
-            echo "AUR push attempt ${attempt} failed; retrying..." >&2
-            sleep 3
-          done
-          echo "Failed to push mindwtr-bin to AUR after 3 attempts." >&2
-          exit 1
+      - name: Preserve exact AUR proposal for reviewed publication
+        uses: actions/upload-artifact@b7c566a7b083a21b1e7e8c6b4f906d85b85c5f8a # v4.6.2
+        with:
+          name: aur-proposal-mindwtr-bin-${{ steps.version.outputs.tag }}
+          path: aur-proposal/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
 
   update-aur-source:
     needs: [validate, release]
     runs-on: ubuntu-latest
-    name: Update AUR (mindwtr)
+    name: Prepare AUR Proposal (mindwtr)
     timeout-minutes: 60
     permissions:
       contents: read
@@ -1090,55 +1043,12 @@ jobs:
         with:
           path: source
 
-      - name: Configure SSH for AUR
-        shell: bash
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${AUR_SSH_PRIVATE_KEY}" ]; then
-            echo "Missing AUR_SSH_PRIVATE_KEY secret."
-            exit 1
-          fi
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "${AUR_SSH_PRIVATE_KEY}" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          cat > ~/.ssh/config <<'EOF'
-          Host aur.archlinux.org
-            HostName aur.archlinux.org
-            User aur
-            IdentityFile ~/.ssh/aur
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          EOF
-          rm -f ~/.ssh/known_hosts
-          touch ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          for attempt in 1 2 3; do
-            if ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null; then
-              exit 0
-            fi
-            echo "ssh-keyscan attempt ${attempt} failed; retrying..." >&2
-            sleep 2
-          done
-          echo "Failed to collect AUR host keys after 3 attempts." >&2
-          exit 1
-
-      - name: Clone AUR repo
+      - name: Clone AUR repo read-only
         shell: bash
         run: |
           set -euo pipefail
           rm -rf aur-mindwtr
-          for attempt in 1 2 3; do
-            if git clone ssh://aur@aur.archlinux.org/mindwtr.git aur-mindwtr; then
-              exit 0
-            fi
-            echo "AUR clone attempt ${attempt} failed; retrying..." >&2
-            rm -rf aur-mindwtr
-            sleep 3
-          done
-          echo "Failed to clone mindwtr from AUR after 3 attempts." >&2
-          exit 1
+          git clone https://aur.archlinux.org/mindwtr.git aur-mindwtr
 
       - name: Resolve release version
         id: version
@@ -1369,33 +1279,21 @@ jobs:
               su builder -c "makepkg --printsrcinfo > /aur/.SRCINFO"
             '
 
-      - name: Commit and push changes
+      - name: Prepare immutable AUR proposal
         shell: bash
-        working-directory: aur-mindwtr
-        env:
-          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
-          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
         run: |
-          if [ -z "$(git status --porcelain -- PKGBUILD .SRCINFO tauri-v2-schema.patch)" ]; then
-            echo "No AUR source-package changes to publish."
-            exit 0
-          fi
-          git config --local user.name "${AUR_USERNAME:-mindwtr-bot}"
-          git config --local user.email "${AUR_EMAIL:-actions@github.com}"
-          git add PKGBUILD .SRCINFO
-          if git ls-files --error-unmatch tauri-v2-schema.patch >/dev/null 2>&1; then
-            git add -u -- tauri-v2-schema.patch
-          fi
-          if [ -e tauri-v2-schema.patch ]; then
-            git add -- tauri-v2-schema.patch
-          fi
-          git commit -m "Update to ${{ steps.version.outputs.tag }}"
-          for attempt in 1 2 3; do
-            if git push origin HEAD; then
-              exit 0
-            fi
-            echo "AUR push attempt ${attempt} failed; retrying..." >&2
-            sleep 3
-          done
-          echo "Failed to push mindwtr source package to AUR after 3 attempts." >&2
-          exit 1
+          set -euo pipefail
+          bash source/scripts/ci/prepare-aur-proposal.sh \
+            aur-mindwtr \
+            mindwtr \
+            "${{ steps.version.outputs.tag }}" \
+            aur-proposal
+
+      - name: Preserve exact AUR proposal for reviewed publication
+        uses: actions/upload-artifact@b7c566a7b083a21b1e7e8c6b4f906d85b85c5f8a # v4.6.2
+        with:
+          name: aur-proposal-mindwtr-${{ steps.version.outputs.tag }}
+          path: aur-proposal/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
