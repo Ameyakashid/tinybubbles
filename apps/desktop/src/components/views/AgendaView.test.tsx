@@ -365,6 +365,8 @@ describe('AgendaView', () => {
     });
 
     it('shows next tasks with start time today in Today section (not Next Actions)', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 1, 28, 12, 0, 0, 0));
         const now = new Date();
         const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0).toISOString();
         const startTodayNextTask: Task = {
@@ -720,6 +722,8 @@ describe('AgendaView', () => {
     });
 
     it('keeps waiting tasks with review dates out of Today', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 1, 28, 12, 0, 0, 0));
         const now = new Date();
         const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0).toISOString();
         const reviewDue = new Date(now.getTime() - 60_000).toISOString();
@@ -1728,6 +1732,8 @@ describe('AgendaView', () => {
     });
 
     it('persists collapsed Focus sections after leaving and returning to the view', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 1, 28, 12, 0, 0, 0));
         const now = new Date();
         const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0, 0).toISOString();
         const todayTask: Task = {
