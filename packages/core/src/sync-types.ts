@@ -49,6 +49,8 @@ export interface MergeStats {
     sections: EntityMergeStats;
     areas: EntityMergeStats;
     people?: EntityMergeStats;
+    /** Purged tombstones stamped with a compaction rev bump this cycle; must converge to 0 (#766). */
+    tombstoneRepairs?: number;
 }
 
 export type ClockSkewDirection = 'local-ahead' | 'remote-ahead';

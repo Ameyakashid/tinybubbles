@@ -904,6 +904,8 @@ class MobileSyncRun {
       logSyncDiagnostic('Sync diagnostic merge cycle complete', this.mergeCycleStartedAt, {
         backend,
         status: event.extra?.status ?? 'success',
+        // Steady nonzero across cycles = tombstone rev-bump loop (#766).
+        tombstoneRepairs: event.extra?.tombstoneRepairs ?? '0',
         ...buildSyncDataDiagnostics(event.data),
       });
       return;

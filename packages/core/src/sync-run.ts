@@ -844,7 +844,11 @@ class SharedSyncRunMachine {
         this.notifier.onDiagnostic?.({
             event: 'merge-complete',
             data: mergedData,
-            extra: { status: syncResult.status },
+            extra: {
+                status: syncResult.status,
+                // Steady nonzero across cycles = tombstone rev-bump loop (#766).
+                tombstoneRepairs: String(stats.tombstoneRepairs ?? 0),
+            },
         });
         this.notifier.tracePayload?.('core-result', mergedData, {
             backend: this.backend,

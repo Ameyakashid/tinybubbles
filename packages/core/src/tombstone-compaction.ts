@@ -11,12 +11,19 @@ const SQLITE_NEUTRAL_FALSE_FIELDS = new Set([
     'isCollapsed',
 ]);
 
+// normalizeTaskForLoad backfills pushCount: 0 on every load while compacted
+// tombstones omit the field; without this neutral-zero carve-out every purged
+// tombstone re-flags as uncompacted and takes a rev bump on every merge, which
+// changes the sync fingerprint and re-triggers the next cycle forever (#766).
+const NEUTRAL_ZERO_FIELDS = new Set(['pushCount']);
+
 const hasValuesOutsideCompactedTombstone = (
     value: Record<string, unknown>,
     compacted: Record<string, unknown>,
 ): boolean => Object.entries(value).some(([key, item]) => (
     item !== undefined
     && !(item === false && compacted[key] === undefined && SQLITE_NEUTRAL_FALSE_FIELDS.has(key))
+    && !(item === 0 && compacted[key] === undefined && NEUTRAL_ZERO_FIELDS.has(key))
     && JSON.stringify(item) !== JSON.stringify(compacted[key])
 ));
 

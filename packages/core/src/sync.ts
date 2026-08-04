@@ -777,20 +777,34 @@ const getClockSkewWarning = (stats: MergeResult['stats']): ClockSkewWarning | un
 export function mergeAppDataWithStats(local: AppData, incoming: AppData, options: MergeAppDataOptions = {}): MergeResult {
     const nowIso = isValidTimestamp(options.nowIso) ? options.nowIso : new Date().toISOString();
     const signatureMemo = createSyncSignatureMemo();
+    // Compaction repairs must converge to zero after one cycle; a steady nonzero
+    // count here is a rev-bump loop that rewrites every purged tombstone each
+    // cycle (#766). Counted per cycle and surfaced via stats.tombstoneRepairs.
+    let tombstoneRepairs = 0;
+    const countRepair = <T extends { rev?: number; purgedAt?: string }>(before: T, after: T): T => {
+        if (before.purgedAt && after.rev !== before.rev) tombstoneRepairs += 1;
+        return after;
+    };
     const localSections = compactSectionsForPurgedProjects(local.sections || [], local.projects || [], true);
     const incomingSections = compactSectionsForPurgedProjects(incoming.sections || [], incoming.projects || [], true);
+    (local.sections || []).forEach((section, index) => {
+        if (localSections[index]?.rev !== section.rev) tombstoneRepairs += 1;
+    });
+    (incoming.sections || []).forEach((section, index) => {
+        if (incomingSections[index]?.rev !== section.rev) tombstoneRepairs += 1;
+    });
     const localNormalized = {
         ...local,
-        tasks: (local.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso, true))),
-        projects: (local.projects || []).map((project) => normalizeRevisionMetadata(normalizeProjectForSyncMerge(project, true))),
+        tasks: (local.tasks || []).map((task) => normalizeRevisionMetadata(countRepair(task, normalizeTaskForSyncMerge(task, nowIso, true)))),
+        projects: (local.projects || []).map((project) => normalizeRevisionMetadata(countRepair(project, normalizeProjectForSyncMerge(project, true)))),
         sections: localSections.map((section) => normalizeRevisionMetadata(section)),
         areas: (local.areas || []).map((area) => normalizeRevisionMetadata(normalizeAreaForSyncMerge(area, nowIso))),
         people: (local.people || []).map((person) => normalizeRevisionMetadata(normalizePersonForSyncMerge(person, nowIso))),
     };
     const incomingNormalized = {
         ...incoming,
-        tasks: (incoming.tasks || []).map((task) => normalizeRevisionMetadata(normalizeTaskForSyncMerge(task, nowIso))),
-        projects: (incoming.projects || []).map((project) => normalizeRevisionMetadata(normalizeProjectForSyncMerge(project))),
+        tasks: (incoming.tasks || []).map((task) => normalizeRevisionMetadata(countRepair(task, normalizeTaskForSyncMerge(task, nowIso)))),
+        projects: (incoming.projects || []).map((project) => normalizeRevisionMetadata(countRepair(project, normalizeProjectForSyncMerge(project)))),
         sections: incomingSections.map((section) => normalizeRevisionMetadata(section)),
         areas: (incoming.areas || []).map((area) => normalizeRevisionMetadata(normalizeAreaForSyncMerge(area, nowIso))),
         people: (incoming.people || []).map((person) => normalizeRevisionMetadata(normalizePersonForSyncMerge(person, nowIso))),
@@ -981,6 +995,7 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
         sections: sectionsResult.stats,
         areas: areasResult.stats,
         people: peopleResult.stats,
+        tombstoneRepairs,
     };
 
     const data = repairMergedSyncReferences({
