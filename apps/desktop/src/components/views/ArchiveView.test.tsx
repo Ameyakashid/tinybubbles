@@ -578,6 +578,27 @@ describe('ArchiveView', () => {
             expect(rowTitles()).toContain('Tidy the garage');
         });
 
+        it('keeps other collapsed groups folded when a highlighted task appears in more than one', () => {
+            const dualTagTask: Task = {
+                ...archivedTask,
+                id: 'dual-tag-task',
+                title: 'Dual-tag archive task',
+                tags: ['#alpha', '#beta'],
+            };
+            renderArchive([dualTagTask]);
+            fireEvent.click(screen.getByRole('combobox', { name: 'Group' }));
+            fireEvent.click(screen.getByRole('option', { name: 'Tags' }));
+            const alpha = () => screen.getByRole('button', { name: /#alpha\s*1/i });
+            const beta = () => screen.getByRole('button', { name: /#beta\s*1/i });
+            fireEvent.click(alpha());
+            fireEvent.click(beta());
+
+            highlight(dualTagTask.id);
+
+            expect([alpha(), beta()].filter((group) => group.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
+            expect(screen.getAllByText('Dual-tag archive task')).toHaveLength(1);
+        });
+
         it('clears an archive filter that hides the task and says why', () => {
             const showToast = vi.fn();
             useUiStore.setState((state) => ({

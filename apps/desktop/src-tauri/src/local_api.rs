@@ -1,6 +1,6 @@
 use crate::storage::{
     ensure_data_file, load_data_snapshot, mutate_task_rows_with_retries, TaskMutationReadScope,
-    TASK_MUTATION_FOCUSED_COUNT_KEY,
+    TASK_MUTATION_FOCUSED_COUNT_KEY, TASK_MUTATION_PROJECT_NEXT_ORDERS_KEY,
 };
 use crate::{get_config_path, get_secrets_path, read_config, write_config_files, AppConfigToml};
 use rand::RngCore;
@@ -553,7 +553,10 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b.iter()).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |diff, (x, y)| diff | (x ^ y))
+        == 0
 }
 
 fn is_request_authorized(request: &ApiRequest, token: &str) -> bool {
@@ -667,12 +670,14 @@ fn route_api_request(
     if segments.len() == 2 && segments[0] == "tasks" && request.method == "PATCH" {
         let _guard = write_lock.lock().map_err(|e| e.to_string())?;
         let body = parse_body_object(&request.body)?;
-        let scope = TaskMutationReadScope::existing(&segments[1], false);
+        let scope = TaskMutationReadScope::patch(
+            &segments[1],
+            body.get("projectId").and_then(Value::as_str),
+            body.get("sectionId").and_then(Value::as_str),
+            body.get("areaId").and_then(Value::as_str),
+        );
         let (_, persisted) = mutate_task_rows_with_retries(app, scope, |data| {
-            let device_id = device_id_from_data(data);
-            let task = update_task_in_data(data, &segments[1], |task| {
-                apply_task_patch(task, &body, &device_id)
-            })?;
+            let task = patch_task_in_data(data, &segments[1], &body)?;
             Ok(((), vec![task]))
         })?;
         return Ok(ApiResponse::ok(
@@ -979,22 +984,35 @@ struct LiveContainers {
     project_ids: std::collections::HashSet<String>,
     section_project_ids: std::collections::HashMap<String, String>,
     area_ids: std::collections::HashSet<String>,
+    next_project_orders: std::collections::HashMap<String, f64>,
 }
 
 impl LiveContainers {
     fn from_data(data: &Value) -> Self {
         let project_ids: std::collections::HashSet<String> = array_items(data, "projects")
             .into_iter()
-            .filter(|project| !has_string_field(project, "deletedAt") && !has_string_field(project, "purgedAt"))
-            .filter_map(|project| project.get("id").and_then(Value::as_str).map(str::to_string))
+            .filter(|project| {
+                !has_string_field(project, "deletedAt") && !has_string_field(project, "purgedAt")
+            })
+            .filter_map(|project| {
+                project
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
             .collect();
         let section_project_ids = array_items(data, "sections")
             .into_iter()
             .filter(|section| !has_string_field(section, "deletedAt"))
             .filter_map(|section| {
                 let id = section.get("id").and_then(Value::as_str)?.to_string();
-                let project_id = section.get("projectId").and_then(Value::as_str)?.to_string();
-                project_ids.contains(&project_id).then_some((id, project_id))
+                let project_id = section
+                    .get("projectId")
+                    .and_then(Value::as_str)?
+                    .to_string();
+                project_ids
+                    .contains(&project_id)
+                    .then_some((id, project_id))
             })
             .collect();
         let area_ids = array_items(data, "areas")
@@ -1002,7 +1020,55 @@ impl LiveContainers {
             .filter(|area| !has_string_field(area, "deletedAt"))
             .filter_map(|area| area.get("id").and_then(Value::as_str).map(str::to_string))
             .collect();
-        Self { project_ids, section_project_ids, area_ids }
+        let mut next_project_orders: std::collections::HashMap<String, f64> = project_ids
+            .iter()
+            .map(|project_id| (project_id.clone(), 0.0))
+            .collect::<std::collections::HashMap<_, _>>();
+        for task in array_items(data, "tasks") {
+            if has_string_field(&task, "deletedAt") || has_string_field(&task, "purgedAt") {
+                continue;
+            }
+            let Some(project_id) = task.get("projectId").and_then(Value::as_str) else {
+                continue;
+            };
+            if !project_ids.contains(project_id) {
+                continue;
+            }
+            let order = task
+                .get("order")
+                .and_then(Value::as_f64)
+                .or_else(|| task.get("orderNum").and_then(Value::as_f64))
+                .filter(|order| order.is_finite())
+                .unwrap_or(-1.0);
+            let next = order + 1.0;
+            next_project_orders
+                .entry(project_id.to_string())
+                .and_modify(|existing| {
+                    if next > *existing {
+                        *existing = next;
+                    }
+                })
+                .or_insert(next);
+        }
+        if let Some(reserved) = data
+            .get(TASK_MUTATION_PROJECT_NEXT_ORDERS_KEY)
+            .and_then(Value::as_object)
+        {
+            for (project_id, value) in reserved {
+                let Some(next) = value.as_f64().filter(|next| next.is_finite()) else {
+                    continue;
+                };
+                if project_ids.contains(project_id) {
+                    next_project_orders.insert(project_id.clone(), next);
+                }
+            }
+        }
+        Self {
+            project_ids,
+            section_project_ids,
+            area_ids,
+            next_project_orders,
+        }
     }
 }
 
@@ -1012,6 +1078,16 @@ fn normalize_optional_container_id(value: Option<&Value>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+fn finite_order_number(value: f64) -> Option<serde_json::Number> {
+    if !value.is_finite() {
+        return None;
+    }
+    if value.fract() == 0.0 && value >= i64::MIN as f64 && value <= i64::MAX as f64 {
+        return Some((value as i64).into());
+    }
+    serde_json::Number::from_f64(value)
 }
 
 /// Direct Rust port of `resolveTaskContainerHierarchy` (task-container-rules.ts):
@@ -1086,20 +1162,13 @@ fn normalize_created_task_containers(
     if section_id.is_some() && section_project_id.is_none() {
         return Err("Invalid task sectionId: Section not found".to_string());
     }
-    if project_id.is_some()
-        && section_project_id.is_some()
-        && project_id != section_project_id
-    {
+    if project_id.is_some() && section_project_id.is_some() && project_id != section_project_id {
         return Err("Invalid task sectionId: Section does not belong to project".to_string());
     }
 
     let area_id = normalize_optional_container_id(task.get("areaId"));
-    let resolved = resolve_task_container_hierarchy(
-        project_id,
-        section_id,
-        area_id,
-        section_project_id,
-    );
+    let resolved =
+        resolve_task_container_hierarchy(project_id, section_id, area_id, section_project_id);
     if resolved.project_id.is_none()
         && resolved
             .area_id
@@ -1115,10 +1184,121 @@ fn normalize_created_task_containers(
     Ok(())
 }
 
+fn normalize_task_container_patch(
+    task: &Map<String, Value>,
+    patch: &mut Map<String, Value>,
+    live: &LiveContainers,
+) -> Result<(), String> {
+    let has_project_update = patch.contains_key("projectId");
+    let has_section_update = patch.contains_key("sectionId");
+    let has_area_update = patch.contains_key("areaId");
+    let has_order_update = patch.contains_key("order") || patch.contains_key("orderNum");
+    if !has_project_update && !has_section_update && !has_area_update {
+        return Ok(());
+    }
+
+    let current_project_id = normalize_optional_container_id(task.get("projectId"));
+    let current_section_id = normalize_optional_container_id(task.get("sectionId"));
+    let current_area_id = normalize_optional_container_id(task.get("areaId"));
+    let next_project_id = if has_project_update {
+        normalize_optional_container_id(patch.get("projectId"))
+    } else {
+        current_project_id.clone()
+    };
+    let project_changed = current_project_id != next_project_id;
+    let candidate_section_id = if has_section_update {
+        normalize_optional_container_id(patch.get("sectionId"))
+    } else if has_project_update && project_changed {
+        None
+    } else {
+        current_section_id
+    };
+    let candidate_area_id = if has_area_update {
+        normalize_optional_container_id(patch.get("areaId"))
+    } else if has_project_update && project_changed && next_project_id.is_some() {
+        None
+    } else {
+        current_area_id
+    };
+
+    if next_project_id
+        .as_ref()
+        .is_some_and(|id| !live.project_ids.contains(id))
+    {
+        return Err("Invalid task projectId: Project not found".to_string());
+    }
+    let section_project_id = candidate_section_id
+        .as_ref()
+        .and_then(|id| live.section_project_ids.get(id))
+        .cloned();
+    if candidate_section_id.is_some() && section_project_id.is_none() {
+        return Err("Invalid task sectionId: Section not found".to_string());
+    }
+    if next_project_id.is_some()
+        && section_project_id.is_some()
+        && next_project_id != section_project_id
+    {
+        return Err("Invalid task sectionId: Section does not belong to project".to_string());
+    }
+
+    let resolved = resolve_task_container_hierarchy(
+        next_project_id,
+        candidate_section_id,
+        candidate_area_id,
+        section_project_id,
+    );
+    if resolved.project_id.is_none()
+        && resolved
+            .area_id
+            .as_ref()
+            .is_some_and(|id| !live.area_ids.contains(id))
+    {
+        return Err("Invalid task areaId: Area not found".to_string());
+    }
+
+    let mut set_patch_value = |key: &str, value: Option<String>| match value {
+        Some(value) => patch.insert(key.to_string(), Value::String(value)),
+        None => patch.insert(key.to_string(), Value::Null),
+    };
+    set_patch_value("projectId", resolved.project_id.clone());
+    set_patch_value("sectionId", resolved.section_id);
+    set_patch_value("areaId", resolved.area_id);
+    if project_changed && resolved.project_id.is_none() {
+        patch.insert("order".to_string(), Value::Null);
+        patch.insert("orderNum".to_string(), Value::Null);
+    } else if project_changed && !has_order_update {
+        if let Some(order) = resolved
+            .project_id
+            .as_ref()
+            .and_then(|project_id| live.next_project_orders.get(project_id))
+            .and_then(|order| finite_order_number(*order))
+        {
+            patch.insert("order".to_string(), Value::Number(order.clone()));
+            patch.insert("orderNum".to_string(), Value::Number(order));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn patch_task_in_data(
+    data: &mut Value,
+    task_id: &str,
+    patch: &Map<String, Value>,
+) -> Result<Value, String> {
+    let device_id = device_id_from_data(data);
+    let live_containers = LiveContainers::from_data(data);
+    update_task_in_data(data, task_id, |task| {
+        apply_task_patch_with_containers(task, patch, &device_id, &live_containers)
+    })
+}
+
 /// Direct Rust port of `sanitizeRestoredTaskContainerReferences`
 /// (store-tasks.ts): a restored task never keeps a reference to a
 /// project/section/area that no longer exists.
-fn sanitize_restored_task_container_references(task: &mut Map<String, Value>, live: &LiveContainers) {
+fn sanitize_restored_task_container_references(
+    task: &mut Map<String, Value>,
+    live: &LiveContainers,
+) {
     let mut project_id = normalize_optional_container_id(task.get("projectId"));
     let mut section_id = normalize_optional_container_id(task.get("sectionId"));
     let area_id = normalize_optional_container_id(task.get("areaId"));
@@ -1128,16 +1308,23 @@ fn sanitize_restored_task_container_references(task: &mut Map<String, Value>, li
         .and_then(|id| live.section_project_ids.get(id))
         .cloned();
 
-    if project_id.as_ref().is_some_and(|id| !live.project_ids.contains(id)) {
+    if project_id
+        .as_ref()
+        .is_some_and(|id| !live.project_ids.contains(id))
+    {
         project_id = None;
     }
     if section_id.is_some() && section_project_id.is_none() {
         section_id = None;
     }
 
-    let resolved = resolve_task_container_hierarchy(project_id, section_id, area_id, section_project_id);
+    let resolved =
+        resolve_task_container_hierarchy(project_id, section_id, area_id, section_project_id);
     let mut resolved_area_id = resolved.area_id;
-    if resolved_area_id.as_ref().is_some_and(|id| !live.area_ids.contains(id)) {
+    if resolved_area_id
+        .as_ref()
+        .is_some_and(|id| !live.area_ids.contains(id))
+    {
         resolved_area_id = None;
     }
 
@@ -1151,7 +1338,9 @@ fn sanitize_restored_task_container_references(task: &mut Map<String, Value>, li
 /// (applyTaskUpdates in store-helpers.ts) so complete's archived-correction
 /// branch and archive's own completedAt fallback use the same rule.
 fn has_non_empty_string(task: &Map<String, Value>, key: &str) -> bool {
-    task.get(key).and_then(Value::as_str).is_some_and(|value| !value.is_empty())
+    task.get(key)
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.is_empty())
 }
 
 /// The complete/archive/restore mutation lifted out of `route_api_request`'s
@@ -1206,11 +1395,12 @@ fn apply_task_action(
             task.remove("focusOrder");
             task.remove("boardOrder");
             if should_create_recurring_follow_up(action, previous_status) {
-                recurring_follow_up = create_next_recurring_task_for_local_api(&previous_task, now, previous_status)
-                    .map(|mut next_task| {
-                        bump_task_revision(&mut next_task, device_id);
-                        next_task
-                    });
+                recurring_follow_up =
+                    create_next_recurring_task_for_local_api(&previous_task, now, previous_status)
+                        .map(|mut next_task| {
+                            bump_task_revision(&mut next_task, device_id);
+                            next_task
+                        });
             }
         }
         "archive" => {
@@ -1283,7 +1473,10 @@ fn bump_task_revision(task: &mut Map<String, Value>, device_id: &str) {
 /// this engine doesn't carry it at all). Only `packages/core/src/recurrence.ts`
 /// understands these — the local API must refuse rather than guess a date.
 fn recurrence_needs_core_engine(task: &Map<String, Value>) -> bool {
-    if task.get("relativeStartOffset").is_some_and(|value| !value.is_null()) {
+    if task
+        .get("relativeStartOffset")
+        .is_some_and(|value| !value.is_null())
+    {
         return true;
     }
     let Some(Value::Object(recurrence)) = recurrence_value(task) else {
@@ -1659,10 +1852,7 @@ fn next_recurrence_value(
     match recurrence_value(task)? {
         Value::Object(value) => {
             let mut next = value.clone();
-            next.insert(
-                "seriesId".to_string(),
-                Value::String(series_id.to_string()),
-            );
+            next.insert("seriesId".to_string(), Value::String(series_id.to_string()));
             for (key, value) in anchor_days {
                 next.insert(key, value);
             }
@@ -1681,10 +1871,7 @@ fn next_recurrence_value(
         Value::String(value) => {
             let mut next = anchor_days;
             next.insert("rule".to_string(), Value::String(value.clone()));
-            next.insert(
-                "seriesId".to_string(),
-                Value::String(series_id.to_string()),
-            );
+            next.insert("seriesId".to_string(), Value::String(series_id.to_string()));
             Some(Value::Object(next))
         }
         value => Some(value.clone()),
@@ -1922,9 +2109,10 @@ fn local_api_focus_task_limit(data: &Value) -> usize {
         .get("settings")
         .and_then(|settings| settings.get("gtd"))
         .and_then(|gtd| gtd.get("focusTaskLimit"));
-    let numeric = raw
-        .and_then(Value::as_f64)
-        .or_else(|| raw.and_then(Value::as_str).and_then(|value| value.parse().ok()));
+    let numeric = raw.and_then(Value::as_f64).or_else(|| {
+        raw.and_then(Value::as_str)
+            .and_then(|value| value.parse().ok())
+    });
     numeric
         .filter(|value| value.is_finite())
         .map(|value| value.floor().clamp(1.0, 10.0) as usize)
@@ -1966,10 +2154,7 @@ fn local_api_project_allows_focus(task: &Map<String, Value>, data: &Value) -> bo
             || project.get("isFocused").and_then(Value::as_bool) == Some(true))
 }
 
-fn local_api_focus_schedule_key(
-    task: &Map<String, Value>,
-    now: OffsetDateTime,
-) -> (u8, i128) {
+fn local_api_focus_schedule_key(task: &Map<String, Value>, now: OffsetDateTime) -> (u8, i128) {
     if task.get("isFocusedToday").and_then(Value::as_bool) == Some(true) {
         return (0, 0);
     }
@@ -2203,6 +2388,24 @@ pub(crate) fn apply_task_patch(
     patch: &Map<String, Value>,
     device_id: &str,
 ) -> Result<(), String> {
+    apply_task_patch_internal(task, patch, device_id, None)
+}
+
+fn apply_task_patch_with_containers(
+    task: &mut Map<String, Value>,
+    patch: &Map<String, Value>,
+    device_id: &str,
+    live_containers: &LiveContainers,
+) -> Result<(), String> {
+    apply_task_patch_internal(task, patch, device_id, Some(live_containers))
+}
+
+fn apply_task_patch_internal(
+    task: &mut Map<String, Value>,
+    patch: &Map<String, Value>,
+    device_id: &str,
+    live_containers: Option<&LiveContainers>,
+) -> Result<(), String> {
     if patch.contains_key("status") {
         return Err(
             "Invalid task field: status; use the complete, archive, or restore action".to_string(),
@@ -2210,6 +2413,18 @@ pub(crate) fn apply_task_patch(
     }
     let mut sanitized = patch.clone();
     sanitize_task_patch_map(&mut sanitized)?;
+    let explicit_order = if sanitized.contains_key("order") {
+        sanitized.get("order").cloned()
+    } else {
+        sanitized.get("orderNum").cloned()
+    };
+    if let Some(order) = explicit_order {
+        sanitized.insert("order".to_string(), order.clone());
+        sanitized.insert("orderNum".to_string(), order);
+    }
+    if let Some(live_containers) = live_containers {
+        normalize_task_container_patch(task, &mut sanitized, live_containers)?;
+    }
     resolve_relative_start_patch(task, &mut sanitized);
     let series_id = task
         .get("recurrence")
@@ -2220,9 +2435,7 @@ pub(crate) fn apply_task_patch(
         .filter(|value| !value.is_empty())
         .or_else(|| task.get("id").and_then(Value::as_str))
         .map(str::to_string);
-    if let (Some(series_id), Some(recurrence)) =
-        (series_id, sanitized.get_mut("recurrence"))
-    {
+    if let (Some(series_id), Some(recurrence)) = (series_id, sanitized.get_mut("recurrence")) {
         match recurrence {
             Value::Object(value) => {
                 let has_series_id = value
@@ -3108,9 +3321,8 @@ mod tests {
                 .filter_map(|(key, value)| value.as_str().map(|v| (key.clone(), v.to_string())))
                 .collect();
 
-            let filtered = filter_tasks(tasks, &query).unwrap_or_else(|error| {
-                panic!("filter_tasks failed for {name}: {error}")
-            });
+            let filtered = filter_tasks(tasks, &query)
+                .unwrap_or_else(|error| panic!("filter_tasks failed for {name}: {error}"));
             let mut ids: Vec<String> = filtered
                 .iter()
                 .filter_map(|task| task.get("id").and_then(Value::as_str).map(str::to_string))
@@ -3124,7 +3336,10 @@ mod tests {
 
         // Sanity check on the check itself: if every case ever became
         // `rustQuery: null`, the loop above would pass vacuously.
-        assert!(ran > 0, "expected at least one Rust-expressible fixture case");
+        assert!(
+            ran > 0,
+            "expected at least one Rust-expressible fixture case"
+        );
     }
 
     #[test]
@@ -3164,8 +3379,7 @@ mod tests {
         let mut body = Map::new();
         body.insert("input".to_string(), Value::String("Call Alice".to_string()));
 
-        let task = create_task_from_body(&body, "device-a", &empty_local_api_data())
-            .expect("task");
+        let task = create_task_from_body(&body, "device-a", &empty_local_api_data()).expect("task");
 
         assert_eq!(task.get("rev").and_then(|value| value.as_i64()), Some(1));
         assert_eq!(
@@ -3225,6 +3439,188 @@ mod tests {
             task.get("recurrence"),
             Some(&json!({ "rule": "daily", "seriesId": "weekly-series" }))
         );
+    }
+
+    #[test]
+    fn local_api_patch_route_rejects_a_section_from_another_project() {
+        let mut data = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Organized", "status": "next",
+                "projectId": "project-a", "sectionId": "section-a",
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+            }],
+            "projects": [
+                { "id": "project-a", "title": "A", "status": "active" },
+                { "id": "project-b", "title": "B", "status": "active" }
+            ],
+            "sections": [
+                { "id": "section-a", "projectId": "project-a", "title": "A section" },
+                { "id": "section-b", "projectId": "project-b", "title": "B section" }
+            ],
+            "areas": [{ "id": "area-a", "name": "Area" }],
+            "settings": { "deviceId": "desktop-local-api" }
+        });
+
+        let error = patch_task_in_data(
+            &mut data,
+            "task-1",
+            json!({ "projectId": "project-b", "sectionId": "section-a" })
+                .as_object()
+                .expect("patch object"),
+        )
+        .expect_err("a section cannot be persisted under another project");
+
+        assert_eq!(
+            error,
+            "Invalid task sectionId: Section does not belong to project"
+        );
+        assert_eq!(data["tasks"][0]["projectId"], "project-a");
+        assert_eq!(data["tasks"][0]["sectionId"], "section-a");
+        assert_eq!(data["tasks"][0]["rev"], 1);
+    }
+
+    #[test]
+    fn local_api_patch_route_normalizes_partial_container_moves() {
+        let mut data = serde_json::json!({
+            "tasks": [
+                {
+                    "id": "organized", "title": "Organized", "status": "next",
+                    "projectId": "project-a", "sectionId": "section-a", "areaId": "area-a",
+                    "order": 7, "orderNum": 7,
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                },
+                {
+                    "id": "uncontained", "title": "Uncontained", "status": "next",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                }
+            ],
+            "projects": [
+                { "id": "project-a", "title": "A", "status": "active" },
+                { "id": "project-b", "title": "B", "status": "active" }
+            ],
+            "sections": [
+                { "id": "section-a", "projectId": "project-a", "title": "A section" },
+                { "id": "section-b", "projectId": "project-b", "title": "B section" }
+            ],
+            "areas": [{ "id": "area-a", "name": "Area" }],
+            "settings": { "deviceId": "desktop-local-api" }
+        });
+
+        let moved = patch_task_in_data(
+            &mut data,
+            "organized",
+            json!({ "projectId": "project-b" })
+                .as_object()
+                .expect("project patch"),
+        )
+        .expect("project move");
+        assert_eq!(moved["projectId"], "project-b");
+        assert!(moved.get("sectionId").is_none());
+        assert!(moved.get("areaId").is_none());
+
+        let sectioned = patch_task_in_data(
+            &mut data,
+            "uncontained",
+            json!({ "sectionId": "section-b", "areaId": "area-a" })
+                .as_object()
+                .expect("section patch"),
+        )
+        .expect("section infers its owning project");
+        assert_eq!(sectioned["projectId"], "project-b");
+        assert_eq!(sectioned["sectionId"], "section-b");
+        assert!(sectioned.get("areaId").is_none());
+
+        let area_task = patch_task_in_data(
+            &mut data,
+            "organized",
+            json!({ "projectId": null, "areaId": "area-a" })
+                .as_object()
+                .expect("area patch"),
+        )
+        .expect("area move");
+        assert!(area_task.get("projectId").is_none());
+        assert!(area_task.get("sectionId").is_none());
+        assert_eq!(area_task["areaId"], "area-a");
+        assert!(area_task.get("order").is_none());
+        assert!(area_task.get("orderNum").is_none());
+    }
+
+    #[test]
+    fn local_api_patch_route_appends_project_moves_and_honors_explicit_order_aliases() {
+        let mut data = serde_json::json!({
+            "tasks": [
+                {
+                    "id": "implicit", "title": "Implicit", "status": "next",
+                    "projectId": "project-a", "order": 7, "orderNum": 7,
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                },
+                {
+                    "id": "explicit-order", "title": "Explicit order", "status": "next",
+                    "projectId": "project-a", "order": 8, "orderNum": 8,
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                },
+                {
+                    "id": "explicit-order-num", "title": "Explicit orderNum", "status": "next",
+                    "projectId": "project-a", "order": 9, "orderNum": 9,
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                },
+                {
+                    "id": "destination-high", "title": "Destination", "status": "next",
+                    "projectId": "project-b", "sectionId": "section-b",
+                    "order": 5, "orderNum": 5,
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                }
+            ],
+            "projects": [
+                { "id": "project-a", "title": "A", "status": "active" },
+                { "id": "project-b", "title": "B", "status": "active" }
+            ],
+            "sections": [
+                { "id": "section-b", "projectId": "project-b", "title": "B section" }
+            ],
+            "areas": [],
+            "settings": { "deviceId": "desktop-local-api" }
+        });
+
+        let implicit = patch_task_in_data(
+            &mut data,
+            "implicit",
+            json!({ "projectId": "project-b" })
+                .as_object()
+                .expect("implicit project patch"),
+        )
+        .expect("implicit project move");
+        assert_eq!(implicit["order"], 6);
+        assert_eq!(implicit["orderNum"], 6);
+
+        let explicit_order = patch_task_in_data(
+            &mut data,
+            "explicit-order",
+            json!({ "projectId": "project-b", "order": 3 })
+                .as_object()
+                .expect("explicit order patch"),
+        )
+        .expect("explicit order move");
+        assert_eq!(explicit_order["order"], 3);
+        assert_eq!(explicit_order["orderNum"], 3);
+
+        let explicit_order_num = patch_task_in_data(
+            &mut data,
+            "explicit-order-num",
+            json!({ "projectId": "project-b", "orderNum": 4 })
+                .as_object()
+                .expect("explicit orderNum patch"),
+        )
+        .expect("explicit orderNum move");
+        assert_eq!(explicit_order_num["order"], 4);
+        assert_eq!(explicit_order_num["orderNum"], 4);
     }
 
     #[test]
@@ -3497,8 +3893,7 @@ mod tests {
             json!({ "title": "x".repeat(MAX_TASK_TITLE_LENGTH + 1) }),
         ] {
             assert!(
-                create_task_from_body(body.as_object().expect("body"), "device-a", &data)
-                    .is_err(),
+                create_task_from_body(body.as_object().expect("body"), "device-a", &data).is_err(),
                 "{body:?}"
             );
         }
@@ -3565,8 +3960,7 @@ mod tests {
         ] {
             let body = json!({ "input": "Invalid container", "props": props });
             assert!(
-                create_task_from_body(body.as_object().expect("body"), "device-a", &data)
-                    .is_err(),
+                create_task_from_body(body.as_object().expect("body"), "device-a", &data).is_err(),
                 "{body:?}"
             );
         }
@@ -3988,7 +4382,11 @@ mod tests {
         let mut actual_names: Vec<&str> = cases
             .iter()
             .filter(|case| case.get("kind").and_then(Value::as_str) == Some("action"))
-            .map(|case| case.get("name").and_then(Value::as_str).expect("action case name"))
+            .map(|case| {
+                case.get("name")
+                    .and_then(Value::as_str)
+                    .expect("action case name")
+            })
             .collect();
         actual_names.sort_unstable();
         let mut expected_names = PINNED_ACTION_CASE_NAMES.to_vec();
@@ -4060,14 +4458,20 @@ mod tests {
                 .and_then(Value::as_object)
                 .cloned()
                 .unwrap_or_else(|| panic!("missing task for {name}"));
-            let containers_data = test_case.get("containers").cloned().unwrap_or_else(|| json!({}));
+            let containers_data = test_case
+                .get("containers")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
             let live_containers = LiveContainers::from_data(&containers_data);
 
             let expected_task = test_case
                 .get("expectedTask")
                 .cloned()
                 .unwrap_or_else(|| panic!("missing expectedTask for {name}"));
-            let expected_follow_up = test_case.get("expectedFollowUp").cloned().unwrap_or(Value::Null);
+            let expected_follow_up = test_case
+                .get("expectedFollowUp")
+                .cloned()
+                .unwrap_or(Value::Null);
 
             let follow_up = apply_task_action(
                 &mut task,
@@ -4086,10 +4490,18 @@ mod tests {
                     // `id` is a fresh random uuid - the one legitimately
                     // platform/run-variant field.
                     next_task.remove("id");
-                    assert_eq!(Value::Object(next_task), expected_follow_up, "{name}: follow-up mismatch");
+                    assert_eq!(
+                        Value::Object(next_task),
+                        expected_follow_up,
+                        "{name}: follow-up mismatch"
+                    );
                 }
                 None => {
-                    assert_eq!(Value::Null, expected_follow_up, "{name}: expected no follow-up");
+                    assert_eq!(
+                        Value::Null,
+                        expected_follow_up,
+                        "{name}: expected no follow-up"
+                    );
                 }
             }
         }

@@ -244,21 +244,31 @@ export const getDropboxClientId = async (): Promise<string> => {
   }
 };
 
+export type DropboxAccessTokenResolver = (forceRefresh: boolean) => Promise<string>;
+
 export const runDropboxAuthorized = async <T,>(
   dropboxClientId: string,
   operation: (accessToken: string) => Promise<T>,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = fetch,
+  resolveAccessToken?: DropboxAccessTokenResolver,
 ): Promise<T> => {
-  const {
-    forceRefreshDropboxAccessToken,
-    getValidDropboxAccessToken,
-  } = await import('./dropbox-auth');
-  let accessToken = await getValidDropboxAccessToken(dropboxClientId, fetcher);
+  let resolver = resolveAccessToken;
+  if (!resolver) {
+    const {
+      forceRefreshDropboxAccessToken,
+      getValidDropboxAccessToken,
+    } = await import('./dropbox-auth');
+    resolver = (forceRefresh) => forceRefresh
+      ? forceRefreshDropboxAccessToken(dropboxClientId, fetcher)
+      : getValidDropboxAccessToken(dropboxClientId, fetcher);
+  }
+
+  let accessToken = await resolver(false);
   try {
     return await operation(accessToken);
   } catch (error) {
     if (!isDropboxUnauthorizedError(error)) throw error;
-    accessToken = await forceRefreshDropboxAccessToken(dropboxClientId, fetcher);
+    accessToken = await resolver(true);
     return operation(accessToken);
   }
 };

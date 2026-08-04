@@ -13,7 +13,7 @@ export const CLOUD_URL_KEY = 'mindwtr-cloud-url';
 export const CLOUD_TOKEN_KEY = 'mindwtr-cloud-token';
 export const CLOUD_ALLOW_INSECURE_HTTP_KEY = 'mindwtr-cloud-allow-insecure-http';
 export const CLOUD_REMEMBER_TOKEN_KEY = 'mindwtr-cloud-remember-token';
-const CLOUD_PROVIDER_KEY = 'mindwtr-cloud-provider';
+export const CLOUD_PROVIDER_KEY = 'mindwtr-cloud-provider';
 const DEFAULT_DROPBOX_APP_KEY = String(import.meta.env.VITE_DROPBOX_APP_KEY || '').trim();
 
 type ConfigDeps = {
@@ -36,21 +36,40 @@ const setSyncBackendLocal = (backend: SyncBackend) => {
 };
 
 export const getWebDavConfigLocal = (): WebDavConfig => {
+    const password = sessionStorage.getItem(WEBDAV_PASSWORD_KEY) || '';
     return {
         url: localStorage.getItem(WEBDAV_URL_KEY) || '',
         username: localStorage.getItem(WEBDAV_USERNAME_KEY) || '',
-        password: '',
-        hasPassword: false,
+        password,
+        hasPassword: Boolean(password),
         allowInsecureHttp: localStorage.getItem(WEBDAV_ALLOW_INSECURE_HTTP_KEY) === 'true',
         allowWeakFingerprint: localStorage.getItem(WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY) !== 'false',
     };
 };
 
-const setWebDavConfigLocal = (config: { url: string; username?: string; password?: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean }) => {
+type WebDavConfigWrite = {
+    url: string;
+    username?: string;
+    password?: string;
+    allowInsecureHttp?: boolean;
+    allowWeakFingerprint?: boolean;
+    replacePassword?: boolean;
+};
+
+const setWebDavConfigLocal = (config: WebDavConfigWrite) => {
     localStorage.setItem(WEBDAV_URL_KEY, config.url);
     localStorage.setItem(WEBDAV_USERNAME_KEY, config.username || '');
     localStorage.setItem(WEBDAV_ALLOW_INSECURE_HTTP_KEY, config.allowInsecureHttp === true ? 'true' : 'false');
     localStorage.setItem(WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY, config.allowWeakFingerprint === false ? 'false' : 'true');
+    if (!config.url || config.replacePassword === true) {
+        if (config.password) {
+            sessionStorage.setItem(WEBDAV_PASSWORD_KEY, config.password);
+        } else {
+            sessionStorage.removeItem(WEBDAV_PASSWORD_KEY);
+        }
+    } else if (config.password) {
+        sessionStorage.setItem(WEBDAV_PASSWORD_KEY, config.password);
+    }
 };
 
 export const getCloudConfigLocal = (): CloudConfig => {
@@ -99,6 +118,11 @@ const getCloudProviderLocal = (): CloudProvider => {
 
 const setCloudProviderLocal = (provider: CloudProvider) => {
     localStorage.setItem(CLOUD_PROVIDER_KEY, normalizeCloudProvider(provider));
+};
+
+const parsePersistedCloudProvider = (value: string): CloudProvider => {
+    if (value === 'selfhosted' || value === 'dropbox') return value;
+    throw new Error(`Invalid persisted cloud provider: ${value}`);
 };
 
 const getDropboxAppKeyLocal = (): string => {
@@ -152,7 +176,7 @@ export async function readWebDavConfig(
 }
 
 export async function writeWebDavConfig(
-    config: { url: string; username?: string; password?: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean },
+    config: WebDavConfigWrite,
     deps: ConfigDeps,
 ): Promise<void> {
     if (!deps.isTauriRuntimeEnv()) {
@@ -166,6 +190,7 @@ export async function writeWebDavConfig(
             password: config.password || '',
             allowInsecureHttp: config.allowInsecureHttp === true,
             allowWeakFingerprint: config.allowWeakFingerprint,
+            replacePassword: config.replacePassword === true,
         });
     } catch (error) {
         deps.reportError('Failed to set WebDAV config', error);
@@ -209,12 +234,40 @@ export async function writeCloudConfig(
     }
 }
 
-export async function readCloudProvider(): Promise<CloudProvider> {
-    return getCloudProviderLocal();
+export async function readCloudProvider(deps: ConfigDeps): Promise<CloudProvider> {
+    if (!deps.isTauriRuntimeEnv()) return getCloudProviderLocal();
+    await deps.maybeMigrateLegacyLocalStorageToConfig();
+    try {
+        const provider = await deps.tauriInvoke<string>('get_sync_cloud_provider');
+        return parsePersistedCloudProvider(provider);
+    } catch (error) {
+        deps.reportError('Failed to get cloud sync provider', error);
+        throw error;
+    }
 }
 
-export async function writeCloudProvider(provider: CloudProvider): Promise<void> {
-    setCloudProviderLocal(provider);
+export async function writeCloudProvider(provider: CloudProvider, deps: ConfigDeps): Promise<void> {
+    const normalizedProvider = normalizeCloudProvider(provider);
+    if (!deps.isTauriRuntimeEnv()) {
+        setCloudProviderLocal(normalizedProvider);
+        return;
+    }
+    await deps.maybeMigrateLegacyLocalStorageToConfig();
+    try {
+        await deps.tauriInvoke('set_sync_cloud_provider', { provider: normalizedProvider });
+        const persistedProvider = parsePersistedCloudProvider(
+            await deps.tauriInvoke<string>('get_sync_cloud_provider'),
+        );
+        if (persistedProvider !== normalizedProvider) {
+            throw new Error('Cloud sync provider did not persist correctly');
+        }
+        // In Tauri, native state is authoritative. This key exists only long
+        // enough to migrate older renderer-owned installations.
+        localStorage.removeItem(CLOUD_PROVIDER_KEY);
+    } catch (error) {
+        deps.reportError('Failed to set cloud sync provider', error);
+        throw error;
+    }
 }
 
 export async function readDropboxAppKey(): Promise<string> {
@@ -252,5 +305,16 @@ export async function writeSyncPath(
         deps.reportError('Failed to set sync path', error);
         const message = error instanceof Error ? error.message : String(error);
         return { success: false, path: '', error: message };
+    }
+}
+
+export async function clearSyncPath(deps: ConfigWriteDeps): Promise<void> {
+    if (!deps.isTauriRuntimeEnv()) return;
+    try {
+        await deps.tauriInvoke('clear_sync_path');
+        await deps.startFileWatcher();
+    } catch (error) {
+        deps.reportError('Failed to clear sync path', error);
+        throw error;
     }
 }

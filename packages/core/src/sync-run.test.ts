@@ -45,6 +45,8 @@ type HarnessConfig = {
     backend?: SyncBackend;
     fastSyncScope?: string | null;
     manual?: boolean;
+    activationProbe?: boolean;
+    ignorePendingRemoteWriteBackoff?: boolean;
     policy?: Partial<SyncRunPolicy>;
     io?: Partial<SyncBackendIO>;
     hooks?: Partial<SyncRunPlatformHooks>;
@@ -150,8 +152,17 @@ const createHarness = (config: HarnessConfig = {}) => {
         ...config.policy,
     };
 
-    const run = (options: { manual?: boolean } = {}) => runSharedSyncCycle({
-        options: { manual: config.manual ?? options.manual },
+    const run = (options: {
+        manual?: boolean;
+        activationProbe?: boolean;
+        ignorePendingRemoteWriteBackoff?: boolean;
+    } = {}) => runSharedSyncCycle({
+        options: {
+            manual: config.manual ?? options.manual,
+            activationProbe: config.activationProbe ?? options.activationProbe,
+            ignorePendingRemoteWriteBackoff: config.ignorePendingRemoteWriteBackoff
+                ?? options.ignorePendingRemoteWriteBackoff,
+        },
         storage,
         notifier,
         store,
@@ -207,6 +218,384 @@ describe('runSharedSyncCycle', () => {
         expect(harness.fastStates.get('scope-1')?.remoteFingerprint).toContain('remote-fp-');
         expect(harness.steps).toEqual(expect.arrayContaining(['flush', 'fast-check', 'read-local', 'read-remote', 'merge', 'write-local', 'write-remote', 'refresh']));
         expect(harness.diagnostics).toEqual(expect.arrayContaining(['flush', 'merge-complete']));
+    });
+
+    it('keeps candidate remote data out of durable local storage when an activation probe fails', async () => {
+        const local = createData([createTask('t-local', 'Local task')]);
+        const remote = createData([createTask('t-remote', 'Remote task')]);
+        const syncAttachments = vi.fn(async () => true);
+        const injectExternalCalendars = vi.fn(async (data: AppData) => data);
+        const persistExternalCalendars = vi.fn(async () => {});
+        const writeFastSyncState = vi.fn(async () => {});
+        const { harness, io, hooks, storage, run } = createHarness({
+            local,
+            remote,
+            activationProbe: true,
+            fastSyncScope: 'candidate-scope',
+            io: {
+                syncAttachments,
+                writeRemote: vi.fn(async () => {
+                    throw new Error('candidate write failed');
+                }),
+            },
+            storage: {
+                injectExternalCalendars,
+                persistExternalCalendars,
+                writeFastSyncState,
+            },
+        });
+
+        const result = await run();
+
+        expect(result).toMatchObject({ success: false, error: '[cloud] candidate write failed' });
+        expect(io.writeRemote).toHaveBeenCalledWith(expect.objectContaining({
+            tasks: expect.arrayContaining([
+                expect.objectContaining({ id: 't-local' }),
+                expect.objectContaining({ id: 't-remote' }),
+            ]),
+        }));
+        expect(harness.persisted.tasks.map((task) => task.id)).toEqual(['t-local']);
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+        expect(injectExternalCalendars).not.toHaveBeenCalled();
+        expect(persistExternalCalendars).not.toHaveBeenCalled();
+        expect(writeFastSyncState).not.toHaveBeenCalled();
+        expect(syncAttachments).not.toHaveBeenCalled();
+        expect(hooks.finalizeSuccess).not.toHaveBeenCalled();
+        expect(hooks.finalizeErrorStatus).not.toHaveBeenCalled();
+        expect(hooks.requestFollowUp).not.toHaveBeenCalled();
+        expect(harness.statusUpdates).toEqual([]);
+    });
+
+    it('returns a side-effect-free requeue when an activation probe meets a remote write conflict', async () => {
+        const { hooks, storage, run } = createHarness({
+            activationProbe: true,
+            io: {
+                writeRemote: vi.fn(async () => {
+                    throw new SyncRemoteWriteConflict();
+                }),
+            },
+        });
+
+        const result = await run();
+
+        expect(result).toEqual({ success: true, skipped: 'requeued' });
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+        expect(hooks.requestFollowUp).not.toHaveBeenCalled();
+        expect(hooks.finalizeSuccess).not.toHaveBeenCalled();
+        expect(hooks.finalizeErrorStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not persist candidate attachment metadata when an activation probe requeues', async () => {
+        const localTask = createTask('t-attached-requeue', 'Attached task');
+        localTask.attachments = [{
+            id: 'attachment-requeue',
+            kind: 'file',
+            title: 'Notes',
+            uri: '/local/notes.txt',
+            cloudKey: 'cloudkit:old',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const { harness, storage, run } = createHarness({
+            local: createData([localTask]),
+            activationProbe: true,
+            io: {
+                syncAttachments: vi.fn(async (data: AppData) => {
+                    const attachment = data.tasks[0]?.attachments?.[0];
+                    if (attachment) {
+                        attachment.cloudKey = 'attachments/candidate.txt';
+                        attachment.localStatus = 'available';
+                    }
+                    return data;
+                }),
+                writeRemote: vi.fn(async () => {
+                    throw new SyncRemoteWriteConflict();
+                }),
+            },
+        });
+
+        const result = await run();
+
+        expect(result).toEqual({ success: true, skipped: 'requeued' });
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+        expect(harness.persisted.tasks[0]?.attachments?.[0]?.cloudKey).toBe('cloudkit:old');
+    });
+
+    it('forces a candidate remote write before an activation probe can succeed', async () => {
+        const local = createData([createTask('t-shared', 'Shared task')]);
+        const remote = cloneAppData(local);
+        const { harness, io, hooks, storage, run } = createHarness({
+            local,
+            remote,
+            activationProbe: true,
+            fastSyncScope: 'candidate-scope',
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+        expect(hooks.finalizeSuccess).not.toHaveBeenCalled();
+        expect(harness.fastStates.size).toBe(0);
+    });
+
+    it('proves local attachment bytes on the candidate before publishing their metadata', async () => {
+        const localTask = createTask('t-attached', 'Attached task');
+        localTask.attachments = [{
+            id: 'attachment-1',
+            kind: 'file',
+            title: 'Notes',
+            uri: '/local/notes.txt',
+            // This key wins the ordinary attachment merge tie-break against
+            // the candidate key below. An activation probe must still keep the
+            // metadata it just proved on the candidate backend authoritative.
+            cloudKey: 'cloudkit:a',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const local = createData([localTask]);
+        const syncAttachments = vi.fn(async (data: AppData, helpers: { activationProbe: boolean }) => {
+            expect(helpers.activationProbe).toBe(true);
+            const attachment = data.tasks[0]?.attachments?.[0];
+            expect(attachment?.localStatus).toBe('missing');
+            if (attachment) {
+                attachment.cloudKey = 'attachments/a.txt';
+                attachment.localStatus = 'available';
+            }
+            return data;
+        });
+        const { harness, io, storage, run } = createHarness({
+            local,
+            activationProbe: true,
+            io: { syncAttachments },
+            hooks: { shouldRunAttachmentPhase: vi.fn(async () => false) },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(syncAttachments).toHaveBeenCalledTimes(1);
+        expect(io.writeRemote).toHaveBeenCalledWith(expect.objectContaining({
+            tasks: expect.arrayContaining([
+                expect.objectContaining({
+                    attachments: expect.arrayContaining([
+                        expect.objectContaining({ cloudKey: 'attachments/a.txt' }),
+                    ]),
+                }),
+            ]),
+        }));
+        expect(harness.persisted.tasks[0]?.attachments?.[0]?.cloudKey).toBe('cloudkit:a');
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+    });
+
+    it('keeps a candidate-proven attachment key when newer remote metadata points to a missing object', async () => {
+        const localTask = createTask('t-attached-conflict', 'Local title');
+        localTask.attachments = [{
+            id: 'attachment-conflict',
+            kind: 'file',
+            title: 'Local notes',
+            uri: '/local/notes.txt',
+            cloudKey: 'cloudkit:old-backend',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const remoteTask = cloneAppData(createData([localTask])).tasks[0]!;
+        remoteTask.title = 'Newer remote title';
+        remoteTask.updatedAt = '2026-07-02T00:00:00.000Z';
+        remoteTask.attachments![0] = {
+            ...remoteTask.attachments![0]!,
+            title: 'Newer remote notes',
+            uri: '',
+            cloudKey: 'attachments/missing-on-candidate.txt',
+            localStatus: 'missing',
+            updatedAt: '2026-07-02T00:00:00.000Z',
+        };
+        const syncAttachments = vi.fn(async (data: AppData) => {
+            const attachment = data.tasks[0]?.attachments?.[0];
+            if (attachment) {
+                attachment.cloudKey = 'attachments/proven-on-candidate.txt';
+                attachment.localStatus = 'available';
+            }
+            return data;
+        });
+        const { harness, storage, run } = createHarness({
+            local: createData([localTask]),
+            remote: createData([remoteTask]),
+            activationProbe: true,
+            io: { syncAttachments },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(harness.remote?.tasks[0]).toMatchObject({
+            title: 'Newer remote title',
+            attachments: [expect.objectContaining({
+                title: 'Newer remote notes',
+                cloudKey: 'attachments/proven-on-candidate.txt',
+            })],
+        });
+        expect(harness.persisted.tasks[0]?.attachments?.[0]?.cloudKey).toBe('cloudkit:old-backend');
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+    });
+
+    it('rejects activation when a candidate-remote-only attachment object cannot be proved', async () => {
+        const remoteTask = createTask('t-remote-only', 'Remote-only attachment');
+        remoteTask.attachments = [{
+            id: 'attachment-remote-only',
+            kind: 'file',
+            title: 'Remote notes',
+            uri: '',
+            cloudKey: 'attachments/missing-remote-only.txt',
+            localStatus: 'missing',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const syncAttachments = vi.fn(async (data: AppData) => data);
+        const { io, storage, run } = createHarness({
+            local: createData(),
+            remote: createData([remoteTask]),
+            activationProbe: true,
+            io: { syncAttachments },
+        });
+
+        const result = await run();
+
+        expect(result).toMatchObject({
+            success: false,
+            error: '[cloud] Candidate attachment proof failed for attachment-remote-only',
+        });
+        expect(syncAttachments).toHaveBeenCalledTimes(1);
+        expect(io.writeRemote).not.toHaveBeenCalled();
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+    });
+
+    it('preserves an incoming owner deletion without probing its former local attachment', async () => {
+        const localTask = createTask('t-deleted-remotely', 'Delete me');
+        localTask.attachments = [{
+            id: 'attachment-deleted-owner',
+            kind: 'file',
+            title: 'Old notes',
+            uri: '/local/old-notes.txt',
+            cloudKey: 'cloudkit:old-notes',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const remoteTask = cloneAppData(createData([localTask])).tasks[0]!;
+        remoteTask.updatedAt = '2026-07-02T00:00:00.000Z';
+        remoteTask.deletedAt = '2026-07-02T00:00:00.000Z';
+        const syncAttachments = vi.fn(async (data: AppData) => data);
+        const { harness, run } = createHarness({
+            local: createData([localTask]),
+            remote: createData([remoteTask]),
+            activationProbe: true,
+            io: { syncAttachments },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(harness.remote?.tasks[0]).toMatchObject({
+            id: 't-deleted-remotely',
+            deletedAt: '2026-07-02T00:00:00.000Z',
+        });
+        expect(syncAttachments).not.toHaveBeenCalled();
+    });
+
+    it('rejects activation when an existing cloud key is not proved on the candidate', async () => {
+        const localTask = createTask('t-attached', 'Attached task');
+        localTask.attachments = [{
+            id: 'attachment-1',
+            kind: 'file',
+            title: 'Notes',
+            uri: '/local/notes.txt',
+            cloudKey: 'attachments/from-old-backend.txt',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const { io, storage, run } = createHarness({
+            local: createData([localTask]),
+            activationProbe: true,
+            io: { syncAttachments: vi.fn(async () => false) },
+        });
+
+        const result = await run();
+
+        expect(result).toMatchObject({
+            success: false,
+            error: '[cloud] Candidate attachment proof failed for attachment-1',
+        });
+        expect(io.writeRemote).not.toHaveBeenCalled();
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+    });
+
+    it('does not let the proven backend retry state block an activation probe', async () => {
+        const retryAt = '2999-01-01T00:00:00.000Z';
+        const local = createData([createTask('t-local', 'Local task')], {
+            pendingRemoteWriteAt: STAMP,
+            pendingRemoteWriteRetryAt: retryAt,
+            pendingRemoteWriteAttempts: 2,
+            lastSyncStatus: 'error',
+            lastSyncError: 'Previous backend write failed.',
+        });
+        const { harness, io, storage, run } = createHarness({
+            local,
+            remote: createData([createTask('t-remote', 'Remote task')]),
+            activationProbe: true,
+        });
+
+        const result = await run();
+
+        expect(result).toMatchObject({ success: true });
+        expect(result.skipped).toBeUndefined();
+        expect(io.readRemote).toHaveBeenCalledTimes(1);
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+        expect(storage.persistLocal).not.toHaveBeenCalled();
+        expect(harness.persisted.settings.pendingRemoteWriteAt).toBe(STAMP);
+        expect(harness.persisted.settings.pendingRemoteWriteRetryAt).toBe(retryAt);
+        expect(harness.persisted.settings.pendingRemoteWriteAttempts).toBe(2);
+    });
+
+    it('adopts candidate attachment keys on the first durable post-activation sync', async () => {
+        const localTask = createTask('t-post-activation', 'Attached task');
+        localTask.attachments = [{
+            id: 'attachment-post-activation',
+            kind: 'file',
+            title: 'Notes',
+            uri: '/local/notes.txt',
+            cloudKey: 'cloudkit:a',
+            localStatus: 'available',
+            createdAt: STAMP,
+            updatedAt: STAMP,
+        }];
+        const remoteTask = cloneAppData(createData([localTask])).tasks[0]!;
+        remoteTask.attachments![0] = {
+            ...remoteTask.attachments![0]!,
+            uri: '',
+            cloudKey: 'attachments/a.txt',
+            localStatus: 'missing',
+        };
+        const { harness, run } = createHarness({
+            local: createData([localTask]),
+            remote: createData([remoteTask]),
+            ignorePendingRemoteWriteBackoff: true,
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(harness.persisted.tasks[0]?.attachments?.[0]).toMatchObject({
+            cloudKey: 'attachments/a.txt',
+            uri: '/local/notes.txt',
+            localStatus: 'available',
+        });
+        expect(harness.remote?.tasks[0]?.attachments?.[0]?.cloudKey).toBe('attachments/a.txt');
     });
 
     it('applies and publishes the canonical snapshot returned by local persistence', async () => {
@@ -480,6 +869,32 @@ describe('runSharedSyncCycle', () => {
             error: 'Remote write failed. Retrying in the background.',
         });
         expect(io.readRemote).not.toHaveBeenCalled();
+    });
+
+    it('retries inherited pending work immediately on the first durable post-activation cycle', async () => {
+        const retryAt = '2999-01-01T00:00:00.000Z';
+        const local = createData([createTask('t-local', 'Local task')], {
+            pendingRemoteWriteAt: STAMP,
+            pendingRemoteWriteRetryAt: retryAt,
+            pendingRemoteWriteAttempts: 2,
+            lastSyncStatus: 'error',
+            lastSyncError: 'Previous backend write failed.',
+        });
+        const { harness, io, run } = createHarness({
+            local,
+            remote: createData([createTask('t-remote', 'Remote task')]),
+            ignorePendingRemoteWriteBackoff: true,
+        });
+
+        const result = await run();
+
+        expect(result).toMatchObject({ success: true });
+        expect(result.skipped).toBeUndefined();
+        expect(io.readRemote).toHaveBeenCalledTimes(1);
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+        expect(harness.persisted.settings.pendingRemoteWriteAt).toBeUndefined();
+        expect(harness.persisted.settings.pendingRemoteWriteRetryAt).toBeUndefined();
+        expect(harness.persisted.settings.pendingRemoteWriteAttempts).toBeUndefined();
     });
 
     it('surfaces a deferred remote write on a completed merge without failing the run', async () => {

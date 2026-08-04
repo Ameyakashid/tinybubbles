@@ -2,6 +2,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import {
     getFocusStarBlockedText,
     formatRecurrenceLabel,
+    formatI18nTemplate,
     getProjectNextActionPromptData,
     hasTimeComponent,
     isTaskActionable,
@@ -426,14 +427,15 @@ function SwipeableTaskItemInner({
 
     const leftAction = getLeftAction();
     const recurrenceLabel = formatRecurrenceLabel({ recurrence: task.recurrence, t });
-    const longPressAccessibilityHint = onLongPressAction && onLongPressActionLabel
-        ? ` Long press for ${onLongPressActionLabel.toLowerCase()}.`
-        : '';
     const swipeAccessibilityHint = interactionDisabled
         ? tFallback(t, 'projects.taskOrder', 'Task order')
-        : selectionMode || disableSwipe
-        ? `Double tap to edit task details.${longPressAccessibilityHint} Additional actions are available in the accessibility actions menu.`
-        : `Double tap to edit task details. Swipe right to ${leftAction.label.toLowerCase()} and swipe left to delete.${longPressAccessibilityHint} Additional actions are available in the accessibility actions menu.`;
+        : selectionMode
+            ? tFallback(t, 'task.aria.selectionHint', 'Double-tap to toggle task selection.')
+            : tFallback(
+                t,
+                'task.aria.actionsHint',
+                'Double-tap to edit task details. More actions are available in the accessibility actions menu.',
+            );
 
     const renderLeftActions = () => {
         const LeftIcon = leftAction.action === 'inbox' ? RotateCcw : leftAction.action === 'done' ? Check : ArrowRight;
@@ -451,7 +453,10 @@ function SwipeableTaskItemInner({
                     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
                     setCompletedAtPicker('complete');
                 } : undefined}
-                accessibilityLabel={`${leftAction.label} action`}
+                accessibilityLabel={formatI18nTemplate(
+                    tFallback(t, 'task.aria.action', '{action} action'),
+                    { action: leftAction.label },
+                )}
                 accessibilityRole="button"
                 accessibilityHint={leftAction.action === 'done'
                     ? tFallback(t, 'task.completeBackdateHintMobile', 'Long-press to complete with a different time')
@@ -485,7 +490,7 @@ function SwipeableTaskItemInner({
 
     const accessibilityLabel = [
         task.title,
-        `Status: ${t(`status.${task.status}`)}`,
+        `${tFallback(t, 'taskEdit.statusLabel', 'Status')}: ${t(`status.${task.status}`)}`,
         (() => {
             const start = safeParseDate(task.startTime);
             if (!start) return null;
@@ -496,7 +501,7 @@ function SwipeableTaskItemInner({
             const due = safeParseDueDate(task.dueDate);
             if (!due) return null;
             const hasTime = hasTimeComponent(task.dueDate);
-            return `Due: ${safeFormatDate(due, hasTime ? 'Pp' : 'P')}`;
+            return `${tFallback(t, 'taskEdit.dueDateLabel', 'Due')}: ${safeFormatDate(due, hasTime ? 'Pp' : 'P')}`;
         })(),
         sequenceCue === 'available' ? sequenceLabel : null,
         projectDeadlineLabel,
@@ -569,7 +574,14 @@ function SwipeableTaskItemInner({
     };
 
     const accessibilityActions = interactionDisabled ? [] : [
-        { name: 'activate', label: tFallback(t, 'common.edit', 'Edit') },
+        {
+            name: 'activate',
+            label: selectionMode
+                ? isMultiSelected
+                    ? tFallback(t, 'task.deselect', 'Deselect task')
+                    : tFallback(t, 'task.select', 'Select task')
+                : tFallback(t, 'common.edit', 'Edit'),
+        },
         ...(!selectionMode
             ? [
                 { name: 'changeStatus', label: leftAction.label },

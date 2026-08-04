@@ -77,3 +77,32 @@ Landed right after stable v1.1.0, in the staged commits this plan prescribed.
 - Line counts: desktop `sync-service.ts` 2,456 → ~1,860; mobile
   `sync-service.ts` 1,651 → ~1,250; the machine plus ports add ~1,000 lines to
   core, written once.
+
+## Activation safety update (2026-08-03)
+
+Desktop and mobile now pass uncommitted transport settings to the shared state
+machine as a candidate configuration. An activation probe performs the normal
+remote read, merge, validation, and write against that candidate while keeping
+local data, status, history, and fast-sync state unchanged.
+
+After merging the candidate document, the probe runs attachment transfer
+against a clone of that merged snapshot immediately before the candidate write.
+Each live file attachment, including one found only in the candidate document,
+must finish with a remote key and confirmed availability at the candidate
+destination. A key left over from another backend does not satisfy that check.
+An incoming owner deletion keeps normal merge semantics and is excluded from
+attachment proof rather than being re-uploaded.
+
+Settings commit the candidate only after the probe succeeds. Desktop disables
+the current backend while it writes and verifies the candidate transport, then
+reactivates the candidate. A failed write restores and verifies the prior
+configuration; if rollback cannot be verified, sync stays off. Mobile writes
+the backend activation key after its candidate transport values and restores
+and verifies the previous values if the transaction fails; an incomplete
+rollback leaves sync durably off.
+
+The first durable sync after activation preserves any pending remote-write
+marker but ignores a retry deadline inherited from the previous backend. The
+new backend therefore receives a full commit before normal retry policy resumes.
+For that one merge, live attachment keys from the candidate document are
+authoritative so an equal-time key from the previous backend cannot return.

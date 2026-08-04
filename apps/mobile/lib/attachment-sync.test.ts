@@ -152,13 +152,18 @@ const coreRuntimeMocks = vi.hoisted(() => {
       const hasLocalPath = Boolean(localPath);
       const existsLocally = hasLocalPath ? await options.localFileExists(localPath) : false;
 
-      const nextStatus = existsLocally ? 'available' : 'missing';
+    const nextStatus = existsLocally ? 'available' : 'missing';
       if (attachment.localStatus !== nextStatus) {
         attachment.localStatus = nextStatus;
-        didMutate = true;
-      }
+      didMutate = true;
+    }
 
-      if (!hasCloudCopy(attachment) && existsLocally) {
+    if (options.forceUploadExistingLocal && existsLocally && attachment.cloudKey !== undefined) {
+      attachment.cloudKey = undefined;
+      didMutate = true;
+    }
+
+    if (!hasCloudCopy(attachment) && existsLocally) {
         if (!options.policy?.shouldUpload || options.policy.shouldUpload(attachment)) {
           try {
             if (await options.onUpload(attachment, localPath)) didMutate = true;
@@ -450,6 +455,60 @@ describe('attachment sync', () => {
 
     expect(didMutate).toBe(false);
     expect(fileSystemMock.StorageAccessFramework.makeDirectoryAsync).not.toHaveBeenCalled();
+    expect(fileSystemMock.StorageAccessFramework.createFileAsync).not.toHaveBeenCalled();
+    expect(fileSystemMock.StorageAccessFramework.writeAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('proves a remote-only SAF attachment during file-backend activation', async () => {
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const remoteFileUri = `${attachmentsDirUri}remote-only.txt`;
+
+    fileSystemMock.StorageAccessFramework.readDirectoryAsync.mockImplementation(async (uri: string) => {
+      if (uri === attachmentsDirUri) return [remoteFileUri];
+      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) return [attachmentsDirUri];
+      return [];
+    });
+
+    const { syncFileAttachments } = await import('./attachment-sync');
+    const appData: AppData = {
+      tasks: [{
+        id: 'task-remote-only',
+        title: 'Remote only',
+        status: 'inbox',
+        tags: [],
+        contexts: [],
+        attachments: [{
+          id: 'remote-only',
+          kind: 'file',
+          title: 'remote-only.txt',
+          uri: '',
+          cloudKey: 'attachments/remote-only.txt',
+          localStatus: 'missing',
+          createdAt: '2026-04-18T10:00:00.000Z',
+          updatedAt: '2026-04-18T10:00:00.000Z',
+        }],
+        createdAt: '2026-04-18T10:00:00.000Z',
+        updatedAt: '2026-04-18T10:00:00.000Z',
+      }],
+      projects: [],
+      sections: [],
+      areas: [],
+      settings: {},
+    };
+
+    const didMutate = await syncFileAttachments(
+      appData,
+      syncFileUri,
+      undefined,
+      { activationProbe: true },
+    );
+
+    expect(didMutate).toBe(true);
+    expect(appData.tasks[0]?.attachments?.[0]).toMatchObject({
+      cloudKey: 'attachments/remote-only.txt',
+      localStatus: 'available',
+    });
     expect(fileSystemMock.StorageAccessFramework.createFileAsync).not.toHaveBeenCalled();
     expect(fileSystemMock.StorageAccessFramework.writeAsStringAsync).not.toHaveBeenCalled();
   });
@@ -978,6 +1037,60 @@ describe('attachment sync', () => {
     });
   });
 
+  it('re-uploads an existing local attachment when proving a candidate cloud backend', async () => {
+    const localUri = 'file://document/attachments/notes.txt';
+    fileSystemMock.getInfoAsync.mockImplementation(async (uri: string) => (
+      uri === localUri ? { exists: true, size: 3 } : { exists: false }
+    ));
+    fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
+    const core = await import('@mindwtr/core');
+    const appData: AppData = {
+      tasks: [{
+        id: 'task-1',
+        title: 'Task',
+        status: 'inbox',
+        tags: [],
+        contexts: [],
+        attachments: [{
+          id: 'notes',
+          kind: 'file',
+          title: 'notes.txt',
+          uri: localUri,
+          cloudKey: 'attachments/from-previous-backend.txt',
+          localStatus: 'available',
+          createdAt: '2026-08-03T10:00:00.000Z',
+          updatedAt: '2026-08-03T10:00:00.000Z',
+        }],
+        createdAt: '2026-08-03T10:00:00.000Z',
+        updatedAt: '2026-08-03T10:00:00.000Z',
+      }],
+      projects: [],
+      sections: [],
+      areas: [],
+      settings: {},
+    };
+
+    const { syncCloudAttachments } = await import('./attachment-sync');
+    const didMutate = await syncCloudAttachments(
+      appData,
+      { url: 'https://candidate.example/v1/data', token: 'candidate-token' },
+      'https://candidate.example/v1',
+      { activationProbe: true },
+    );
+
+    expect(didMutate).toBe(true);
+    expect(core.cloudPutFile).toHaveBeenCalledWith(
+      'https://candidate.example/v1/attachments/notes.txt',
+      expect.any(ArrayBuffer),
+      'application/octet-stream',
+      { token: 'candidate-token' },
+    );
+    expect(appData.tasks[0]?.attachments?.[0]).toMatchObject({
+      cloudKey: 'attachments/notes.txt',
+      localStatus: 'available',
+    });
+  });
+
   it('cleans up a cloud upload when local data changes before metadata is stamped', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
@@ -1147,6 +1260,128 @@ describe('attachment sync', () => {
     )).rejects.toBe(uploadError);
 
     expect(appData.tasks[0].attachments?.[0]?.cloudKey).toBeUndefined();
+  });
+
+  it('uses a candidate Dropbox token resolver when no durable credentials exist', async () => {
+    const localUri = 'file://document/attachments/first-connect.txt';
+    fileSystemMock.getInfoAsync.mockImplementation(async (uri: string) => (
+      uri === localUri ? { exists: true, size: 3 } : { exists: false }
+    ));
+    fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
+    const dropbox = await import('./dropbox-sync');
+    const dropboxAuth = await import('./dropbox-auth');
+    vi.mocked(dropbox.uploadDropboxFile).mockResolvedValue({ rev: null });
+    vi.mocked(dropboxAuth.getValidDropboxAccessToken).mockRejectedValue(
+      new Error('Dropbox is not connected'),
+    );
+    const resolveAccessToken = vi.fn().mockResolvedValue('candidate-token');
+    const appData: AppData = {
+      tasks: [{
+        id: 'task-1',
+        title: 'Task',
+        status: 'inbox',
+        tags: [],
+        contexts: [],
+        attachments: [{
+          id: 'first-connect',
+          kind: 'file',
+          title: 'first-connect.txt',
+          uri: localUri,
+          localStatus: 'available',
+          createdAt: '2026-08-03T10:00:00.000Z',
+          updatedAt: '2026-08-03T10:00:00.000Z',
+        }],
+        createdAt: '2026-08-03T10:00:00.000Z',
+        updatedAt: '2026-08-03T10:00:00.000Z',
+      }],
+      projects: [],
+      sections: [],
+      areas: [],
+      settings: {},
+    };
+
+    const { syncDropboxAttachments } = await import('./attachment-sync');
+    const didMutate = await syncDropboxAttachments(
+      appData,
+      'dropbox-client-id',
+      fetch,
+      { activationProbe: true, resolveAccessToken },
+    );
+
+    expect(didMutate).toBe(true);
+    expect(resolveAccessToken).toHaveBeenCalledWith(false);
+    expect(dropboxAuth.getValidDropboxAccessToken).not.toHaveBeenCalled();
+    expect(dropbox.uploadDropboxFile).toHaveBeenCalledWith(
+      'candidate-token',
+      'attachments/first-connect.txt',
+      expect.any(ArrayBuffer),
+      'application/octet-stream',
+      fetch,
+    );
+    expect(appData.tasks[0].attachments?.[0]).toMatchObject({
+      cloudKey: 'attachments/first-connect.txt',
+      localStatus: 'available',
+    });
+  });
+
+  it('refreshes candidate Dropbox credentials without falling back to an old account', async () => {
+    const localUri = 'file://document/attachments/reconnect.txt';
+    fileSystemMock.getInfoAsync.mockImplementation(async (uri: string) => (
+      uri === localUri ? { exists: true, size: 3 } : { exists: false }
+    ));
+    fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
+    const dropbox = await import('./dropbox-sync');
+    const dropboxAuth = await import('./dropbox-auth');
+    vi.mocked(dropboxAuth.getValidDropboxAccessToken).mockResolvedValue('old-account-token');
+    vi.mocked(dropbox.uploadDropboxFile)
+      .mockRejectedValueOnce(new Error('Dropbox upload failed: HTTP 401'))
+      .mockResolvedValueOnce({ rev: null });
+    const resolveAccessToken = vi.fn(async (forceRefresh: boolean) => (
+      forceRefresh ? 'candidate-refreshed-token' : 'candidate-access-token'
+    ));
+    const appData: AppData = {
+      tasks: [{
+        id: 'task-1',
+        title: 'Task',
+        status: 'inbox',
+        tags: [],
+        contexts: [],
+        attachments: [{
+          id: 'reconnect',
+          kind: 'file',
+          title: 'reconnect.txt',
+          uri: localUri,
+          cloudKey: 'attachments/from-old-account.txt',
+          localStatus: 'available',
+          createdAt: '2026-08-03T10:00:00.000Z',
+          updatedAt: '2026-08-03T10:00:00.000Z',
+        }],
+        createdAt: '2026-08-03T10:00:00.000Z',
+        updatedAt: '2026-08-03T10:00:00.000Z',
+      }],
+      projects: [],
+      sections: [],
+      areas: [],
+      settings: {},
+    };
+
+    const { syncDropboxAttachments } = await import('./attachment-sync');
+    const didMutate = await syncDropboxAttachments(
+      appData,
+      'dropbox-client-id',
+      fetch,
+      { activationProbe: true, resolveAccessToken },
+    );
+
+    expect(didMutate).toBe(true);
+    expect(resolveAccessToken).toHaveBeenNthCalledWith(1, false);
+    expect(resolveAccessToken).toHaveBeenNthCalledWith(2, true);
+    expect(dropboxAuth.getValidDropboxAccessToken).not.toHaveBeenCalled();
+    expect(vi.mocked(dropbox.uploadDropboxFile).mock.calls.map(([token]) => token)).toEqual([
+      'candidate-access-token',
+      'candidate-refreshed-token',
+    ]);
+    expect(appData.tasks[0].attachments?.[0]?.cloudKey).toBe('attachments/reconnect.txt');
   });
 
   it('does not leave partial cloud metadata when a later attachment aborts the batch', async () => {

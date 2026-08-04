@@ -63,7 +63,8 @@ export const syncWebdavAttachments = async (
   appData: AppData,
   webDavConfig: WebDavConfig,
   baseSyncUrl: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { activationProbe?: boolean } = {}
 ): Promise<boolean> => {
   assertAttachmentSyncNotAborted(signal);
   let lastRequestAt = 0;
@@ -210,12 +211,15 @@ export const syncWebdavAttachments = async (
   const syncMutated = await runMobileAttachmentLifecycle({
     attachmentsById,
     localFileExists: fileExists,
+    forceUploadExistingLocal: options.activationProbe === true,
     isFatalError: (error) => isAttachmentSyncAbortError(error, signal),
-    policy: {
-      shouldSkip: () => abortedByRateLimit,
-      shouldUpload,
-      shouldDownload,
-    },
+    policy: options.activationProbe
+      ? undefined
+      : {
+          shouldSkip: () => abortedByRateLimit,
+          shouldUpload,
+          shouldDownload,
+        },
     onUpload: async (attachment, localPath) => {
       try {
         let size = await getAttachmentByteSize(attachment, localPath);

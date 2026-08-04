@@ -5,6 +5,7 @@ import {
     clearAttachmentSyncState,
     syncCloudAttachments,
     syncCloudKitAttachments,
+    syncFileAttachments,
     syncWebdavAttachments,
     type AttachmentBackendDeps,
 } from './sync-attachment-backends';
@@ -58,6 +59,41 @@ const errorResponse = (status: number, statusText: string): Response =>
         body: null,
         arrayBuffer: async () => new ArrayBuffer(0),
     }) as Response;
+
+const createCandidateAttachmentData = (): AppData => ({
+    tasks: [
+        {
+            id: 'task-1',
+            title: 'Task',
+            status: 'next',
+            tags: [],
+            contexts: [],
+            attachments: [
+                {
+                    id: 'attachment-1',
+                    kind: 'file',
+                    title: 'candidate-proof.txt',
+                    uri: '/data/candidate-proof.txt',
+                    cloudKey: 'attachments/attachment-1.txt',
+                    localStatus: 'available',
+                    createdAt: '2026-08-03T00:00:00.000Z',
+                    updatedAt: '2026-08-03T00:00:00.000Z',
+                },
+            ],
+            createdAt: '2026-08-03T00:00:00.000Z',
+            updatedAt: '2026-08-03T00:00:00.000Z',
+        },
+    ],
+    projects: [],
+    sections: [],
+    areas: [],
+    settings: {},
+});
+
+const activationHelpers = () => ({
+    activationProbe: true,
+    ensureLocalSnapshotFresh: vi.fn(),
+});
 
 describe('desktop sync attachment backends', () => {
     beforeEach(() => {
@@ -206,6 +242,94 @@ describe('desktop sync attachment backends', () => {
         );
     });
 
+    it('re-uploads a locally available attachment with an old cloud key during a self-hosted activation probe', async () => {
+        const bytes = new Uint8Array([1, 2, 3]);
+        const fetcher = vi.fn(async () => new Response(null, { status: 200 }));
+        const appData = createCandidateAttachmentData();
+        const deps: AttachmentBackendDeps = {
+            getTauriFetch: async () => fetcher as unknown as typeof fetch,
+            isTauriRuntimeEnv: () => true,
+            logSyncInfo: vi.fn(),
+            logSyncWarning: vi.fn(),
+            resolveWebdavPassword: vi.fn(),
+        };
+        fsMocks.exists.mockResolvedValue(true);
+        fsMocks.readFile.mockResolvedValue(bytes);
+
+        await syncCloudAttachments(
+            appData,
+            { url: 'https://candidate.example/v1/data', token: 'candidate-token' },
+            'https://candidate.example/v1',
+            deps,
+            activationHelpers(),
+        );
+
+        expect(fetcher).toHaveBeenCalledWith(
+            'https://candidate.example/v1/attachments/attachment-1.txt',
+            expect.objectContaining({ method: 'PUT' }),
+        );
+        expect(appData.tasks[0].attachments?.[0]?.cloudKey).toBe('attachments/attachment-1.txt');
+    });
+
+    it('clears stale candidate proof when an activation-probe attachment upload fails', async () => {
+        const fetcher = vi.fn(async () => errorResponse(503, 'Unavailable'));
+        const appData = createCandidateAttachmentData();
+        const deps: AttachmentBackendDeps = {
+            getTauriFetch: async () => fetcher as unknown as typeof fetch,
+            isTauriRuntimeEnv: () => true,
+            logSyncInfo: vi.fn(),
+            logSyncWarning: vi.fn(),
+            resolveWebdavPassword: vi.fn(),
+        };
+        fsMocks.exists.mockResolvedValue(true);
+        fsMocks.readFile.mockResolvedValue(new Uint8Array([1, 2, 3]));
+
+        await syncCloudAttachments(
+            appData,
+            { url: 'https://candidate.example/v1/data', token: 'candidate-token' },
+            'https://candidate.example/v1',
+            deps,
+            activationHelpers(),
+        );
+
+        expect(fetcher).toHaveBeenCalledWith(
+            'https://candidate.example/v1/attachments/attachment-1.txt',
+            expect.objectContaining({ method: 'PUT' }),
+        );
+        expect(appData.tasks[0].attachments?.[0]?.cloudKey).toBeUndefined();
+    });
+
+    it('re-copies a locally available attachment with an old cloud key during a file activation probe', async () => {
+        const bytes = new Uint8Array([1, 2, 3]);
+        const appData = createCandidateAttachmentData();
+        const deps: AttachmentBackendDeps = {
+            getTauriFetch: vi.fn(),
+            isTauriRuntimeEnv: () => true,
+            logSyncInfo: vi.fn(),
+            logSyncWarning: vi.fn(),
+            resolveWebdavPassword: vi.fn(),
+        };
+        fsMocks.exists.mockResolvedValue(true);
+        fsMocks.readFile.mockResolvedValue(bytes);
+
+        await syncFileAttachments(
+            appData,
+            '/candidate-sync',
+            deps,
+            activationHelpers(),
+        );
+
+        expect(fsMocks.writeFile).toHaveBeenCalledWith(
+            expect.stringMatching(/^\/candidate-sync\/attachments\/attachment-1\.txt\.tmp-/),
+            bytes,
+        );
+        expect(fsMocks.rename).toHaveBeenCalledWith(
+            expect.stringMatching(/^\/candidate-sync\/attachments\/attachment-1\.txt\.tmp-/),
+            '/candidate-sync/attachments/attachment-1.txt',
+        );
+        expect(appData.tasks[0].attachments?.[0]?.cloudKey).toBe('attachments/attachment-1.txt');
+    });
+
     it('keeps WebDAV attachment sync in cooldown across repeated sync runs after rate limiting', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-06-12T00:00:00.000Z'));
@@ -327,6 +451,36 @@ describe('desktop sync attachment backends', () => {
             expect.stringContaining('Failed to upload attachment'),
             expect.anything(),
         );
+    });
+
+    it('re-uploads a locally available attachment with an old cloud key during a WebDAV activation probe', async () => {
+        const bytes = new Uint8Array([1, 2, 3]);
+        const fetcher = vi.fn(async () => new Response(null, { status: 200 }));
+        const appData = createCandidateAttachmentData();
+        const deps: AttachmentBackendDeps = {
+            getTauriFetch: async () => fetcher as unknown as typeof fetch,
+            isTauriRuntimeEnv: () => true,
+            logSyncInfo: vi.fn(),
+            logSyncWarning: vi.fn(),
+            resolveWebdavPassword: vi.fn(async () => 'secret'),
+        };
+        fsMocks.exists.mockResolvedValue(true);
+        fsMocks.readFile.mockResolvedValue(bytes);
+        coreMocks.webdavFileExists.mockResolvedValue(true);
+
+        const result = await syncWebdavAttachments(
+            appData,
+            { url: 'https://candidate.example/mindwtr', username: 'alice' },
+            'https://candidate.example/mindwtr',
+            deps,
+            activationHelpers(),
+        );
+
+        expect(fetcher).toHaveBeenCalledWith(
+            'https://candidate.example/mindwtr/attachments/attachment-1.txt',
+            expect.objectContaining({ method: 'PUT' }),
+        );
+        expect(result?.tasks[0].attachments?.[0]?.cloudKey).toBe('attachments/attachment-1.txt');
     });
 
     it('uploads local attachments to CloudKit and flushes CloudKit pending deletes', async () => {

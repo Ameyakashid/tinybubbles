@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -19,12 +19,27 @@ import { pickAndParseSyncFolder } from '@/lib/storage-file';
 import { getCloudKitAccountStatus } from '@/lib/cloudkit-sync';
 import { authorizeDropbox, getDropboxRedirectUri } from '@/lib/dropbox-oauth';
 import {
+    clearDropboxTokens,
     disconnectDropbox,
     forceRefreshDropboxAccessToken,
+    forceRefreshDropboxAccessTokenForTokens,
+    getStoredDropboxTokens,
     getValidDropboxAccessToken,
+    getValidDropboxAccessTokenForTokens,
     isDropboxConnected,
+    revokeDropboxTokens,
+    saveDropboxTokens,
 } from '@/lib/dropbox-auth';
-import { clearMobileSyncConfigCache, performMobileSync } from '@/lib/sync-service';
+import {
+    clearMobileSyncConfigCache,
+    performMobileSync,
+    type MobileDropboxSyncCredentials,
+    type MobileSyncConfigOverride,
+} from '@/lib/sync-service';
+import {
+    commitProvenMobileSyncConfiguration,
+    MobileSyncConfigurationTransactionError,
+} from '@/lib/sync-configuration-transaction';
 import { syncMobileBackgroundSyncRegistration } from '@/lib/background-sync-task';
 import { getMobileCloudRequestOptions, getMobileWebDavRequestOptions } from '@/lib/webdav-request-options';
 import {
@@ -50,7 +65,7 @@ import {
     WEBDAV_URL_KEY,
     WEBDAV_USERNAME_KEY,
 } from '@/lib/sync-constants';
-import { getSecureConfigValue, setSecureConfigValue } from '@/lib/secure-config';
+import { deleteSecureConfigValue, getSecureConfigValue, setSecureConfigValue } from '@/lib/secure-config';
 
 import { type CloudProvider, isValidHttpUrl } from './settings.constants';
 import { type SelfHostedSyncSettings } from './sync-settings-selfhosted-panel';
@@ -66,23 +81,12 @@ type SyncActionOptions = {
     webdav?: WebDavSyncSettings;
 };
 
-const serializeBool = (value: boolean): string => (value ? 'true' : 'false');
-
 const reconcileBackgroundSyncRegistration = () => {
     void syncMobileBackgroundSyncRegistration().catch(logSettingsError);
 };
 
 const persistSyncConfigItem = (key: string, value: string, afterSave?: () => void) => {
     AsyncStorage.setItem(key, value)
-        .then(() => {
-            clearMobileSyncConfigCache();
-            afterSave?.();
-        })
-        .catch(logSettingsError);
-};
-
-const persistSyncConfigItems = (entries: [string, string][], afterSave?: () => void) => {
-    AsyncStorage.multiSet(entries)
         .then(() => {
             clearMobileSyncConfigCache();
             afterSave?.();
@@ -143,6 +147,7 @@ export function useSyncSettingsTransportActions({
     t,
 }: UseSyncSettingsTransportActionsParams) {
     const [syncPath, setSyncPath] = useState<string | null>(null);
+    const [syncPathBookmark, setSyncPathBookmark] = useState<string | null>(null);
     const [syncBackend, setSyncBackend] = useState<SyncBackend>('off');
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -154,6 +159,10 @@ export function useSyncSettingsTransportActions({
     const [cloudToken, setCloudToken] = useState('');
     const [cloudAllowInsecureHttp, setCloudAllowInsecureHttp] = useState(false);
     const [cloudProvider, setCloudProvider] = useState<CloudProvider>('selfhosted');
+    const provenSyncBackendRef = useRef<SyncBackend>('off');
+    const provenCloudProviderRef = useRef<CloudProvider>('selfhosted');
+    const hasPendingSyncConfiguration = useRef(false);
+    const stagedDropboxCredentialsRef = useRef<MobileDropboxSyncCredentials | null>(null);
     const [dropboxConnected, setDropboxConnected] = useState(false);
     const [dropboxBusy, setDropboxBusy] = useState(false);
     const [cloudKitAccountStatus, setCloudKitAccountStatus] = useState<CloudKitAccountStatus>('unknown');
@@ -166,14 +175,34 @@ export function useSyncSettingsTransportActions({
     }, [t]);
 
     const runDropboxConnectionTest = useCallback(async () => {
-        let accessToken = await getValidDropboxAccessToken(dropboxAppKey);
+        const stagedCredentials = stagedDropboxCredentialsRef.current;
+        let accessToken: string;
+        if (stagedCredentials) {
+            const resolution = await getValidDropboxAccessTokenForTokens(
+                dropboxAppKey,
+                stagedCredentials.tokens,
+            );
+            stagedCredentials.tokens = resolution.tokens;
+            accessToken = resolution.accessToken;
+        } else {
+            accessToken = await getValidDropboxAccessToken(dropboxAppKey);
+        }
         try {
             await testDropboxAccess(accessToken);
         } catch (error) {
             if (!isDropboxUnauthorizedError(error)) {
                 throw error;
             }
-            accessToken = await forceRefreshDropboxAccessToken(dropboxAppKey);
+            if (stagedCredentials) {
+                const resolution = await forceRefreshDropboxAccessTokenForTokens(
+                    dropboxAppKey,
+                    stagedCredentials.tokens,
+                );
+                stagedCredentials.tokens = resolution.tokens;
+                accessToken = resolution.accessToken;
+            } else {
+                accessToken = await forceRefreshDropboxAccessToken(dropboxAppKey);
+            }
             await testDropboxAccess(accessToken);
         }
     }, [dropboxAppKey]);
@@ -227,6 +256,7 @@ export function useSyncSettingsTransportActions({
         Promise.all([
             AsyncStorage.multiGet([
                 SYNC_PATH_KEY,
+                SYNC_PATH_BOOKMARK_KEY,
                 SYNC_BACKEND_KEY,
                 WEBDAV_URL_KEY,
                 WEBDAV_USERNAME_KEY,
@@ -242,6 +272,7 @@ export function useSyncSettingsTransportActions({
 
             const entryMap = new Map(entries);
             const path = entryMap.get(SYNC_PATH_KEY);
+            const pathBookmark = entryMap.get(SYNC_PATH_BOOKMARK_KEY);
             const storedBackend = entryMap.get(SYNC_BACKEND_KEY);
             const storedWebDavUrl = entryMap.get(WEBDAV_URL_KEY);
             const storedWebDavUsername = entryMap.get(WEBDAV_USERNAME_KEY);
@@ -251,6 +282,7 @@ export function useSyncSettingsTransportActions({
             const storedCloudProvider = entryMap.get(CLOUD_PROVIDER_KEY);
 
             setSyncPath(path || null);
+            setSyncPathBookmark(pathBookmark || null);
             setWebdavUrl(storedWebDavUrl || '');
             setWebdavUsername(storedWebDavUsername || '');
             setWebdavPassword(storedWebDavPassword || '');
@@ -266,8 +298,14 @@ export function useSyncSettingsTransportActions({
                 || storedBackend === 'cloudkit'
                 ? storedBackend
                 : 'off';
-            const supportedBackend = coerceSupportedBackend(resolvedBackend, supportsNativeICloudSync);
+            const unsupportedDropboxBackend = resolvedBackend === 'cloud'
+                && storedCloudProvider === 'dropbox'
+                && !dropboxConfigured;
+            const supportedBackend = unsupportedDropboxBackend
+                ? 'off'
+                : coerceSupportedBackend(resolvedBackend, supportsNativeICloudSync);
             setSyncBackend(supportedBackend);
+            provenSyncBackendRef.current = supportedBackend;
 
             const resolvedCloudProvider: CloudProvider = (
                 (resolvedBackend === 'cloudkit' || storedCloudProvider === 'cloudkit') && supportsNativeICloudSync
@@ -277,6 +315,7 @@ export function useSyncSettingsTransportActions({
                     ? 'dropbox'
                     : 'selfhosted';
             setCloudProvider(resolvedCloudProvider);
+            provenCloudProviderRef.current = resolvedCloudProvider;
 
             if (resolvedBackend !== supportedBackend) {
                 persistSyncConfigItem(SYNC_BACKEND_KEY, supportedBackend);
@@ -338,10 +377,16 @@ export function useSyncSettingsTransportActions({
         const nextBackend = backend === 'cloud'
             ? (cloudProvider === 'cloudkit' ? 'cloudkit' : 'cloud')
             : backend;
-        persistSyncConfigItem(SYNC_BACKEND_KEY, nextBackend, reconcileBackgroundSyncRegistration);
         addBreadcrumb(`settings:syncBackend:${nextBackend}`);
         setSyncBackend(nextBackend);
-        resetSyncStatusForBackendSwitch();
+        if (nextBackend === 'off') {
+            hasPendingSyncConfiguration.current = false;
+            provenSyncBackendRef.current = 'off';
+            resetSyncStatusForBackendSwitch();
+            persistSyncConfigItem(SYNC_BACKEND_KEY, nextBackend, reconcileBackgroundSyncRegistration);
+        } else if (nextBackend !== provenSyncBackendRef.current) {
+            hasPendingSyncConfiguration.current = true;
+        }
     }, [cloudProvider, resetSyncStatusForBackendSwitch]);
 
     const handleSelectCloudProvider = useCallback((provider: CloudProvider) => {
@@ -349,14 +394,12 @@ export function useSyncSettingsTransportActions({
         if (provider === 'dropbox' && !dropboxConfigured) return;
 
         const nextBackend: SyncBackend = provider === 'cloudkit' ? 'cloudkit' : 'cloud';
+        if (provider !== provenCloudProviderRef.current || nextBackend !== provenSyncBackendRef.current) {
+            hasPendingSyncConfiguration.current = true;
+        }
         setCloudProvider(provider);
         setSyncBackend(nextBackend);
-        persistSyncConfigItems([
-            [CLOUD_PROVIDER_KEY, provider],
-            [SYNC_BACKEND_KEY, nextBackend],
-        ], reconcileBackgroundSyncRegistration);
-        resetSyncStatusForBackendSwitch();
-    }, [dropboxConfigured, resetSyncStatusForBackendSwitch, supportsNativeICloudSync]);
+    }, [dropboxConfigured, supportsNativeICloudSync]);
 
     const handleSetSyncPath = useCallback(async () => {
         try {
@@ -366,25 +409,11 @@ export function useSyncSettingsTransportActions({
             const fileBookmark = (result as { __fileBookmark?: string }).__fileBookmark?.trim() ?? null;
             if (!fileUri) return;
 
-            await AsyncStorage.setItem(SYNC_PATH_KEY, fileUri);
-            if (fileBookmark) {
-                await AsyncStorage.setItem(SYNC_PATH_BOOKMARK_KEY, fileBookmark);
-            } else {
-                await AsyncStorage.removeItem(SYNC_PATH_BOOKMARK_KEY);
-            }
-
             setSyncPath(fileUri);
-            await AsyncStorage.setItem(SYNC_BACKEND_KEY, 'file');
-            clearMobileSyncConfigCache();
+            setSyncPathBookmark(fileBookmark);
+            hasPendingSyncConfiguration.current = true;
             addBreadcrumb('settings:syncBackend:file');
             setSyncBackend('file');
-            resetSyncStatusForBackendSwitch();
-            reconcileBackgroundSyncRegistration();
-            showToast({
-                title: tr('common.success'),
-                message: tr('settings.syncMobile.syncFolderSetSuccessfully'),
-                tone: 'success',
-            });
         } catch (error) {
             const message = String(error);
             if (/Selected JSON file is not a Mindwtr backup/i.test(message)) {
@@ -417,10 +446,8 @@ export function useSyncSettingsTransportActions({
         }
     }, [
         tr,
-        resetSyncStatusForBackendSwitch,
         showSettingsErrorToast,
         showSettingsWarning,
-        showToast,
     ]);
 
     const handleConnectDropbox = useCallback(async () => {
@@ -442,18 +469,13 @@ export function useSyncSettingsTransportActions({
         }
         setDropboxBusy(true);
         try {
-            await authorizeDropbox(dropboxAppKey);
-            await AsyncStorage.multiSet([
-                [SYNC_BACKEND_KEY, 'cloud'],
-                [CLOUD_PROVIDER_KEY, 'dropbox'],
-            ]);
-            clearMobileSyncConfigCache();
+            const tokens = await authorizeDropbox(dropboxAppKey);
+            stagedDropboxCredentialsRef.current = { tokens };
+            hasPendingSyncConfiguration.current = true;
             setCloudProvider('dropbox');
             addBreadcrumb('settings:syncBackend:cloud');
             setSyncBackend('cloud');
             setDropboxConnected(true);
-            resetSyncStatusForBackendSwitch();
-            reconcileBackgroundSyncRegistration();
             showToast({
                 title: tr('common.success'),
                 message: tr('settings.syncMobile.connectedToDropbox'),
@@ -479,20 +501,42 @@ export function useSyncSettingsTransportActions({
         isExpoGo,
         isFossBuild,
         tr,
-        resetSyncStatusForBackendSwitch,
         showSettingsErrorToast,
         showSettingsWarning,
         showToast,
     ]);
 
     const handleDisconnectDropbox = useCallback(async () => {
-        if (!dropboxConfigured) {
-            setDropboxConnected(false);
-            return;
-        }
         setDropboxBusy(true);
         try {
-            await disconnectDropbox(dropboxAppKey);
+            const stagedCredentials = stagedDropboxCredentialsRef.current;
+            if (
+                provenSyncBackendRef.current === 'cloud'
+                && provenCloudProviderRef.current === 'dropbox'
+            ) {
+                await AsyncStorage.setItem(SYNC_BACKEND_KEY, 'off');
+                clearMobileSyncConfigCache();
+                const [[, persistedBackend]] = await AsyncStorage.multiGet([SYNC_BACKEND_KEY]);
+                if (persistedBackend !== 'off') {
+                    throw new Error('Dropbox sync could not be disabled before disconnecting');
+                }
+                provenSyncBackendRef.current = 'off';
+                hasPendingSyncConfiguration.current = false;
+                setSyncBackend('off');
+                reconcileBackgroundSyncRegistration();
+            }
+            if (stagedCredentials && dropboxConfigured) {
+                await revokeDropboxTokens(dropboxAppKey, stagedCredentials.tokens);
+            }
+            stagedDropboxCredentialsRef.current = null;
+            if (dropboxConfigured) {
+                await disconnectDropbox(dropboxAppKey);
+            } else {
+                // A FOSS or otherwise unconfigured build cannot revoke the
+                // remote token, but it must still let the user remove local
+                // credentials left by a previously configured build.
+                await clearDropboxTokens();
+            }
             setDropboxConnected(false);
             resetSyncStatusForBackendSwitch();
             reconcileBackgroundSyncRegistration();
@@ -563,43 +607,13 @@ export function useSyncSettingsTransportActions({
             return;
         }
         const trimmedUsername = nextSettings.username.trim();
-        try {
-            await Promise.all([
-                AsyncStorage.multiSet([
-                    [SYNC_BACKEND_KEY, 'webdav'],
-                    [WEBDAV_URL_KEY, trimmedUrl],
-                    [WEBDAV_USERNAME_KEY, trimmedUsername],
-                    [WEBDAV_ALLOW_INSECURE_HTTP_KEY, serializeBool(nextSettings.allowInsecureHttp)],
-                ]),
-                setSecureConfigValue(WEBDAV_PASSWORD_KEY, nextSettings.password),
-            ]);
-            clearMobileSyncConfigCache();
-            setWebdavUrl(trimmedUrl);
-            setWebdavUsername(trimmedUsername);
-            setWebdavPassword(nextSettings.password);
-            setWebdavAllowInsecureHttp(nextSettings.allowInsecureHttp);
-            setSyncBackend('webdav');
-            resetSyncStatusForBackendSwitch();
-            reconcileBackgroundSyncRegistration();
-            showToast({
-                title: tr('common.success'),
-                message: t('settings.webdavSave'),
-                tone: 'success',
-            });
-        } catch {
-            showSettingsErrorToast(
-                tr('settings.syncMobile.error'),
-                tr('settings.syncMobile.failedToSaveWebdavSettings')
-            );
-        }
-    }, [
-        tr,
-        resetSyncStatusForBackendSwitch,
-        showSettingsErrorToast,
-        showToast,
-        t,
-        validateSyncHttpUrl,
-    ]);
+        setWebdavUrl(trimmedUrl);
+        setWebdavUsername(trimmedUsername);
+        setWebdavPassword(nextSettings.password);
+        setWebdavAllowInsecureHttp(nextSettings.allowInsecureHttp);
+        setSyncBackend('webdav');
+        hasPendingSyncConfiguration.current = true;
+    }, [validateSyncHttpUrl]);
 
     const handleSaveSelfHostedSettings = useCallback(async (nextSettings: SelfHostedSyncSettings) => {
         const trimmedUrl = nextSettings.url.trim();
@@ -609,44 +623,57 @@ export function useSyncSettingsTransportActions({
         if (!validateCloudToken(nextSettings.token.trim())) {
             return;
         }
-        try {
-            await Promise.all([
-                AsyncStorage.multiSet([
-                    [SYNC_BACKEND_KEY, 'cloud'],
-                    [CLOUD_PROVIDER_KEY, 'selfhosted'],
-                    [CLOUD_URL_KEY, trimmedUrl],
-                    [CLOUD_ALLOW_INSECURE_HTTP_KEY, serializeBool(nextSettings.allowInsecureHttp)],
-                ]),
-                setSecureConfigValue(CLOUD_TOKEN_KEY, nextSettings.token),
-            ]);
-            clearMobileSyncConfigCache();
-            setCloudUrl(trimmedUrl);
-            setCloudToken(nextSettings.token);
-            setCloudAllowInsecureHttp(nextSettings.allowInsecureHttp);
-            setCloudProvider('selfhosted');
-            setSyncBackend('cloud');
-            resetSyncStatusForBackendSwitch();
-            reconcileBackgroundSyncRegistration();
-            showToast({
-                title: tr('common.success'),
-                message: t('settings.cloudSave'),
-                tone: 'success',
-            });
-        } catch {
-            showSettingsErrorToast(
-                tr('settings.syncMobile.error'),
-                tr('settings.syncMobile.failedToSaveSelfHostedSettings')
-            );
-        }
+        setCloudUrl(trimmedUrl);
+        setCloudToken(nextSettings.token);
+        setCloudAllowInsecureHttp(nextSettings.allowInsecureHttp);
+        setCloudProvider('selfhosted');
+        setSyncBackend('cloud');
+        hasPendingSyncConfiguration.current = true;
     }, [
-        tr,
-        resetSyncStatusForBackendSwitch,
-        showSettingsErrorToast,
-        showToast,
-        t,
         validateCloudToken,
         validateSyncHttpUrl,
     ]);
+
+    const commitProvenSyncConfiguration = useCallback(async (config: MobileSyncConfigOverride) => {
+        try {
+            await commitProvenMobileSyncConfiguration(config, {
+                clearConfigCache: clearMobileSyncConfigCache,
+                clearDropboxTokens,
+                deleteSecret: deleteSecureConfigValue,
+                getDropboxTokens: getStoredDropboxTokens,
+                getSecret: getSecureConfigValue,
+                multiGet: (keys) => AsyncStorage.multiGet(keys),
+                multiSet: (entries) => AsyncStorage.multiSet(entries),
+                removeItem: (key) => AsyncStorage.removeItem(key),
+                saveDropboxTokens,
+                setItem: (key, value) => AsyncStorage.setItem(key, value),
+                setSecret: setSecureConfigValue,
+            });
+        } catch (error) {
+            if (
+                error instanceof MobileSyncConfigurationTransactionError
+                && error.syncRemainsDisabled
+            ) {
+                provenSyncBackendRef.current = 'off';
+                setSyncBackend('off');
+                resetSyncStatusForBackendSwitch();
+                reconcileBackgroundSyncRegistration();
+            }
+            throw error;
+        }
+
+        provenSyncBackendRef.current = config.backend;
+        if (config.backend === 'cloudkit') {
+            provenCloudProviderRef.current = 'cloudkit';
+        } else if (config.backend === 'cloud') {
+            provenCloudProviderRef.current = config.cloudProvider ?? 'selfhosted';
+        }
+        if (config.cloudProvider === 'dropbox' && config.dropbox) {
+            stagedDropboxCredentialsRef.current = null;
+        }
+        hasPendingSyncConfiguration.current = false;
+        reconcileBackgroundSyncRegistration();
+    }, [resetSyncStatusForBackendSwitch]);
 
     const handleSync = useCallback(async (options?: SyncActionOptions) => {
         addBreadcrumb('sync:manual');
@@ -655,7 +682,7 @@ export function useSyncSettingsTransportActions({
             const previousLastSyncStatus = lastSyncStatus;
             const previousLastSyncStats = lastSyncStats ?? null;
             const effectiveBackend = options?.backend ?? syncBackend;
-            let wroteSyncConfig = false;
+            const configOverride: MobileSyncConfigOverride = { backend: effectiveBackend };
             const effectiveCloud = options?.cloud ?? {
                 allowInsecureHttp: cloudAllowInsecureHttp,
                 token: cloudToken,
@@ -680,16 +707,12 @@ export function useSyncSettingsTransportActions({
                     return;
                 }
                 const trimmedWebDavUsername = effectiveWebdav.username.trim();
-                await Promise.all([
-                    AsyncStorage.multiSet([
-                        [SYNC_BACKEND_KEY, 'webdav'],
-                        [WEBDAV_URL_KEY, trimmedWebDavUrl],
-                        [WEBDAV_USERNAME_KEY, trimmedWebDavUsername],
-                        [WEBDAV_ALLOW_INSECURE_HTTP_KEY, serializeBool(effectiveWebdav.allowInsecureHttp)],
-                    ]),
-                    setSecureConfigValue(WEBDAV_PASSWORD_KEY, effectiveWebdav.password),
-                ]);
-                wroteSyncConfig = true;
+                configOverride.webdav = {
+                    allowInsecureHttp: effectiveWebdav.allowInsecureHttp,
+                    password: effectiveWebdav.password,
+                    url: trimmedWebDavUrl,
+                    username: trimmedWebDavUsername,
+                };
                 setWebdavUrl(trimmedWebDavUrl);
                 setWebdavUsername(trimmedWebDavUsername);
                 setWebdavPassword(effectiveWebdav.password);
@@ -703,11 +726,6 @@ export function useSyncSettingsTransportActions({
                     showSettingsWarning(tr('settings.syncMobile.icloudUnavailable'), statusDetails.helpText, 5200);
                     return;
                 }
-                await AsyncStorage.multiSet([
-                    [SYNC_BACKEND_KEY, 'cloudkit'],
-                    [CLOUD_PROVIDER_KEY, 'cloudkit'],
-                ]);
-                wroteSyncConfig = true;
                 setCloudProvider('cloudkit');
                 setSyncBackend('cloudkit');
             } else if (effectiveBackend === 'cloud') {
@@ -720,16 +738,16 @@ export function useSyncSettingsTransportActions({
                         showSettingsWarning(tr('settings.syncMobile.dropboxUnavailable'), tr('settings.syncMobile.dropboxAppKeyIsNotConfiguredInThisBuild'));
                         return;
                     }
-                    const connected = await isDropboxConnected();
+                    const stagedCredentials = stagedDropboxCredentialsRef.current;
+                    const connected = Boolean(stagedCredentials) || await isDropboxConnected();
                     if (!connected) {
                         showSettingsWarning(tr('common.notice'), tr('settings.syncMobile.pleaseConnectDropboxFirst'));
                         return;
                     }
-                    await AsyncStorage.multiSet([
-                        [SYNC_BACKEND_KEY, 'cloud'],
-                        [CLOUD_PROVIDER_KEY, 'dropbox'],
-                    ]);
-                    wroteSyncConfig = true;
+                    configOverride.cloudProvider = 'dropbox';
+                    if (stagedCredentials) {
+                        configOverride.dropbox = stagedCredentials;
+                    }
                     setCloudProvider('dropbox');
                     setSyncBackend('cloud');
                 } else {
@@ -741,16 +759,15 @@ export function useSyncSettingsTransportActions({
                     if (!validateSyncHttpUrl(trimmedCloudUrl, effectiveCloud.allowInsecureHttp, 'self-hosted')) {
                         return;
                     }
-                    await Promise.all([
-                        AsyncStorage.multiSet([
-                            [SYNC_BACKEND_KEY, 'cloud'],
-                            [CLOUD_PROVIDER_KEY, 'selfhosted'],
-                            [CLOUD_URL_KEY, trimmedCloudUrl],
-                            [CLOUD_ALLOW_INSECURE_HTTP_KEY, serializeBool(effectiveCloud.allowInsecureHttp)],
-                        ]),
-                        setSecureConfigValue(CLOUD_TOKEN_KEY, effectiveCloud.token),
-                    ]);
-                    wroteSyncConfig = true;
+                    if (!validateCloudToken(effectiveCloud.token.trim())) {
+                        return;
+                    }
+                    configOverride.cloudProvider = 'selfhosted';
+                    configOverride.cloud = {
+                        allowInsecureHttp: effectiveCloud.allowInsecureHttp,
+                        token: effectiveCloud.token,
+                        url: trimmedCloudUrl,
+                    };
                     setCloudUrl(trimmedCloudUrl);
                     setCloudToken(effectiveCloud.token);
                     setCloudAllowInsecureHttp(effectiveCloud.allowInsecureHttp);
@@ -762,20 +779,58 @@ export function useSyncSettingsTransportActions({
                     showSettingsWarning(tr('common.notice'), tr('settings.syncMobile.pleaseSetASyncFolderFirst'));
                     return;
                 }
-                await AsyncStorage.setItem(SYNC_BACKEND_KEY, 'file');
-                wroteSyncConfig = true;
+                configOverride.syncPath = syncPath;
+                configOverride.syncPathBookmark = syncPathBookmark;
                 setSyncBackend('file');
             }
 
-            if (wroteSyncConfig) {
-                clearMobileSyncConfigCache();
+            const needsActivationProbe = Boolean(options)
+                || hasPendingSyncConfiguration.current
+                || effectiveBackend !== provenSyncBackendRef.current
+                || (
+                    effectiveBackend === 'cloud'
+                    && effectiveCloudProvider !== provenCloudProviderRef.current
+                )
+                || (
+                    effectiveBackend === 'cloudkit'
+                    && provenCloudProviderRef.current !== 'cloudkit'
+                );
+            if (needsActivationProbe) {
+                const probeResult = await performMobileSync(
+                    effectiveBackend === 'file' ? syncPath || undefined : undefined,
+                    { activationProbe: true, manual: true, configOverride }
+                );
+                if (probeResult.skipped === 'offline' || isLikelyOfflineSyncError(probeResult.error)) {
+                    const serverUnreachable = probeResult.skipped === 'offline' && probeResult.offlineCause === 'request';
+                    showToast({
+                        title: serverUnreachable ? t('common.notice') : t('common.offline'),
+                        message: serverUnreachable ? t('settings.syncServerUnreachable') : t('settings.syncSkippedOffline'),
+                        tone: 'warning',
+                    });
+                    return;
+                }
+                if (probeResult.skipped === 'requeued') {
+                    showSettingsWarning(
+                        tr('common.notice'),
+                        tr('settings.syncFailureGeneric'),
+                        4200,
+                    );
+                    return;
+                }
+                if (
+                    !probeResult.success
+                    || probeResult.remoteWriteDeferred
+                    || probeResult.skipped === 'pendingRemoteWriteBackoff'
+                ) {
+                    throw new Error(probeResult.error || 'Sync setup could not be verified');
+                }
+                await commitProvenSyncConfiguration(configOverride);
             }
-            resetSyncStatusForBackendSwitch();
-            reconcileBackgroundSyncRegistration();
-            const result = await performMobileSync(
-                effectiveBackend === 'file' ? syncPath || undefined : undefined,
-                { manual: true }
-            );
+
+            const result = await performMobileSync(undefined, {
+                manual: true,
+                ignorePendingRemoteWriteBackoff: needsActivationProbe,
+            });
             if (result.skipped === 'offline' || isLikelyOfflineSyncError(result.error)) {
                 // 'request' means the OS says the device is online but the app's
                 // requests failed — telling the user they are offline would be false.
@@ -796,7 +851,11 @@ export function useSyncSettingsTransportActions({
                 });
                 return;
             }
-            if (result.success && !result.remoteWriteDeferred) {
+            if (
+                result.success
+                && !result.remoteWriteDeferred
+                && result.skipped !== 'pendingRemoteWriteBackoff'
+            ) {
                 const conflictCount = getSyncConflictCount(result.stats);
                 const maxResultClockSkewMs = getSyncMaxClockSkewMs(result.stats);
                 const resultTimestampAdjustments = getSyncTimestampAdjustments(result.stats);
@@ -849,6 +908,7 @@ export function useSyncSettingsTransportActions({
         cloudProvider,
         cloudToken,
         cloudUrl,
+        commitProvenSyncConfiguration,
         dropboxConfigured,
         getCloudKitStatusDetails,
         getSyncFailureToastMessage,
@@ -858,12 +918,13 @@ export function useSyncSettingsTransportActions({
         t,
         tr,
         formatText,
-        resetSyncStatusForBackendSwitch,
         showSettingsErrorToast,
         showSettingsWarning,
         showToast,
         syncBackend,
         syncPath,
+        syncPathBookmark,
+        validateCloudToken,
         validateSyncHttpUrl,
         webdavAllowInsecureHttp,
         webdavPassword,

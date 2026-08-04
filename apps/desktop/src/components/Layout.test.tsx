@@ -547,31 +547,39 @@ describe('Layout sync security warning', () => {
     });
 
     it('ignores stale cleartext WebDAV settings while file sync is active', async () => {
-        const backendSpy = vi.spyOn(SyncService, 'getSyncBackend').mockResolvedValue('file');
-        const webdavSpy = vi.spyOn(SyncService, 'getWebDavConfig').mockResolvedValue({
-            url: 'http://192.168.1.50/dav',
-            username: '',
-            hasPassword: false,
-            allowInsecureHttp: true,
-        });
-        const cloudSpy = vi.spyOn(SyncService, 'getCloudConfig').mockResolvedValue({
-            url: 'http://192.168.1.50:3000',
-            token: '',
-            allowInsecureHttp: true,
+        const configurationSpy = vi.spyOn(
+            SyncService,
+            'getPersistedSyncConfigurationSnapshot',
+        ).mockResolvedValue({
+            backend: 'file',
+            syncPath: '/tmp/sync',
+            webdav: {
+                url: 'http://192.168.1.50/dav',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque',
+                hasPassword: false,
+                allowInsecureHttp: true,
+                allowWeakFingerprint: false,
+            },
+            cloudProvider: 'selfhosted',
+            cloud: {
+                url: 'http://192.168.1.50:3000',
+                token: null,
+                tokenAuthority: 'opaque',
+                allowInsecureHttp: true,
+                rememberToken: false,
+            },
         });
 
         try {
             const { queryByText } = renderLayout();
 
-            await waitFor(() => expect(backendSpy).toHaveBeenCalled());
+            await waitFor(() => expect(configurationSpy).toHaveBeenCalledTimes(1));
             expect(queryByText(/WebDAV sync is using HTTP/)).not.toBeInTheDocument();
             expect(queryByText(/Self-hosted sync is using HTTP/)).not.toBeInTheDocument();
-            expect(webdavSpy).not.toHaveBeenCalled();
-            expect(cloudSpy).not.toHaveBeenCalled();
         } finally {
-            backendSpy.mockRestore();
-            webdavSpy.mockRestore();
-            cloudSpy.mockRestore();
+            configurationSpy.mockRestore();
         }
     });
 

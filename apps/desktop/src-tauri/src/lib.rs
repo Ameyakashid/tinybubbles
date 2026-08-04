@@ -71,9 +71,10 @@ use autostart::{get_launch_at_startup_enabled, set_launch_at_startup_enabled};
 use config::{
     check_obsidian_vault_marker, expand_external_calendar_file_scopes, expand_obsidian_vault_scope,
     get_ai_key, get_cloud_config, get_external_calendars, get_obsidian_config, get_sync_backend,
+    get_sync_cloud_provider, get_sync_cloud_provider_state, get_sync_configuration_snapshot,
     get_webdav_config, get_webdav_password, list_obsidian_vaults, set_ai_key, set_cloud_config,
     set_external_calendars, set_network_proxy, set_obsidian_config, set_sync_backend,
-    set_webdav_config,
+    set_sync_cloud_provider, set_webdav_config,
 };
 use email_capture::{
     email_capture_commit, email_capture_poll, get_email_capture_config, set_email_capture_config,
@@ -115,23 +116,27 @@ use storage::{
     restore_data_snapshot, save_data, save_task, search_fts, upsert_calendar_sync_entry,
 };
 use sync::{
-    cloud_get_json, cloud_put_json, connect_dropbox, disconnect_dropbox, get_dropbox_access_token,
-    get_dropbox_redirect_uri, get_sync_path, is_dropbox_connected, read_sync_file, set_sync_path,
-    webdav_get_json, webdav_put_json, write_sync_file,
+    clear_sync_path, cloud_get_json, cloud_put_json, connect_dropbox,
+    discard_staged_dropbox_credentials, disconnect_dropbox, finalize_staged_dropbox_credentials,
+    get_dropbox_access_token, get_dropbox_redirect_uri, get_sync_path, is_dropbox_connected,
+    promote_staged_dropbox_credentials, read_sync_file,
+    recover_dropbox_credentials_before_sync_configuration, recover_dropbox_credentials_on_startup,
+    rollback_staged_dropbox_credentials, set_sync_path, webdav_get_json, webdav_put_json,
+    write_sync_file, DropboxStagedCredentialState, DropboxStartupRecoveryOutcome,
 };
 use ui::{
     acknowledge_close_request, apply_global_quick_add_shortcut, consume_quick_add_pending,
     create_quick_add_window, get_system_theme_preference, hide_quick_add_window,
-    hide_quick_add_window_for_app, quit_app, set_global_quick_add_shortcut, set_tray_tooltip,
-    notify_ui_ready, reveal_main_window_after_timeout, set_tray_visible, show_main,
+    hide_quick_add_window_for_app, notify_ui_ready, quit_app, reveal_main_window_after_timeout,
+    set_global_quick_add_shortcut, set_tray_tooltip, set_tray_visible, show_main,
     show_quick_add_window, MainWindowReveal,
 };
 
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
 use config::read_config_toml;
 pub(crate) use config::{
-    get_keyring_secret, parse_toml_string_value, read_config, set_keyring_secret,
-    write_config_files,
+    get_keyring_secret, parse_toml_string_value, read_config, read_dropbox_credential_state,
+    set_keyring_secret, update_dropbox_credential_state, write_config_files,
 };
 #[cfg(test)]
 use install::parse_flatpak_install_channel;
@@ -146,6 +151,8 @@ pub(crate) use sync::{expand_tauri_fs_scope, is_icloud_evicted};
 const APP_NAME: &str = "mindwtr";
 const CONFIG_FILE_NAME: &str = "config.toml";
 const SECRETS_FILE_NAME: &str = "secrets.toml";
+const DROPBOX_CREDENTIAL_STATE_FILE_NAME: &str = "dropbox-credential-state.json";
+const DROPBOX_CREDENTIAL_STATE_VERSION: u8 = 1;
 const DATA_FILE_NAME: &str = "data.json";
 const DB_FILE_NAME: &str = "mindwtr.db";
 const SNAPSHOT_DIR_NAME: &str = "snapshots";
@@ -566,7 +573,69 @@ struct AppConfigToml {
     disable_hardware_acceleration: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     autostart_startup_flag_migrated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dropbox_promotion_journal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sync_cloud_provider: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DropboxCredentialStateFile {
+    version: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    token_fallback: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    promotion_journal: Option<String>,
+    #[serde(default = "default_sync_backend_marker")]
+    sync_backend_marker: String,
+    #[serde(default = "default_sync_cloud_provider")]
+    cloud_provider: String,
+    #[serde(default = "default_sync_cloud_provider_authority")]
+    cloud_provider_authority: String,
+    #[serde(default)]
+    generation: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    resolved_credential_handles: Vec<DropboxResolvedCredentialHandle>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DropboxResolvedCredentialHandle {
+    handle_fingerprint: String,
+    client_id: String,
+    candidate_fingerprint: String,
+    resolved_at_ms: i64,
+}
+
+fn default_sync_backend_marker() -> String {
+    "off".to_string()
+}
+
+fn default_sync_cloud_provider() -> String {
+    "selfhosted".to_string()
+}
+
+fn default_sync_cloud_provider_authority() -> String {
+    "uninitialized".to_string()
+}
+
+impl Default for DropboxCredentialStateFile {
+    fn default() -> Self {
+        Self {
+            version: DROPBOX_CREDENTIAL_STATE_VERSION,
+            token_fallback: None,
+            promotion_journal: None,
+            sync_backend_marker: default_sync_backend_marker(),
+            cloud_provider: default_sync_cloud_provider(),
+            cloud_provider_authority: default_sync_cloud_provider_authority(),
+            generation: 0,
+            resolved_credential_handles: Vec::new(),
+        }
+    }
+}
+
+static DROPBOX_CREDENTIAL_STATE_MUTEX: Mutex<()> = Mutex::new(());
 
 fn default_obsidian_scan_folders() -> Vec<String> {
     vec!["/".to_string()]
@@ -746,7 +815,7 @@ struct LinuxDistroInfo {
     id_like: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 struct DropboxTokenBundle {
     client_id: String,
     access_token: String,
@@ -1341,6 +1410,7 @@ pub fn run() {
         .manage(QuickAddFocusState::default())
         .manage(MainWindowReveal::default())
         .manage(LocalApiServerState::default())
+        .manage(DropboxStagedCredentialState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -1455,6 +1525,19 @@ pub fn run() {
         })
         .setup(move |app| {
             ensure_data_file(&app.handle()).ok();
+
+            match recover_dropbox_credentials_on_startup(&app.handle()) {
+                Ok(DropboxStartupRecoveryOutcome::Ready) => {}
+                Ok(DropboxStartupRecoveryOutcome::SyncDisabled { warning }) => {
+                    log::error!(
+                        "Dropbox credential recovery required fail-closed containment: {warning}"
+                    );
+                }
+                Err(error) => {
+                    log::error!("Dropbox credential recovery could not be contained: {error}");
+                    return Err(std::io::Error::new(std::io::ErrorKind::Other, error).into());
+                }
+            }
 
             let config = read_config(&app.handle());
             // One-time fixup for autostart entries that predate the --startup
@@ -1728,9 +1811,14 @@ pub fn run() {
             get_ai_key,
             set_ai_key,
             get_sync_path,
+            clear_sync_path,
             set_sync_path,
             get_sync_backend,
+            get_sync_cloud_provider,
+            get_sync_cloud_provider_state,
+            get_sync_configuration_snapshot,
             set_sync_backend,
+            set_sync_cloud_provider,
             get_obsidian_config,
             set_obsidian_config,
             expand_obsidian_vault_scope,
@@ -1756,6 +1844,11 @@ pub fn run() {
             is_dropbox_connected,
             connect_dropbox,
             get_dropbox_access_token,
+            promote_staged_dropbox_credentials,
+            recover_dropbox_credentials_before_sync_configuration,
+            rollback_staged_dropbox_credentials,
+            finalize_staged_dropbox_credentials,
+            discard_staged_dropbox_credentials,
             disconnect_dropbox,
             get_external_calendars,
             set_external_calendars,
@@ -1889,6 +1982,27 @@ mod tests {
     }
 
     #[test]
+    fn sync_configuration_transaction_commands_are_registered() {
+        let source = include_str!("lib.rs");
+        let handler = source
+            .split_once("tauri::generate_handler![")
+            .and_then(|(_, rest)| rest.split_once("])").map(|(commands, _)| commands))
+            .expect("Tauri command handler should be present");
+
+        assert!(handler.contains("get_sync_configuration_snapshot,"));
+        assert!(handler.contains("get_sync_cloud_provider,"));
+        assert!(handler.contains("get_sync_cloud_provider_state,"));
+        assert!(handler.contains("set_sync_cloud_provider,"));
+        assert!(handler.contains("clear_sync_path,"));
+        assert!(handler.contains("promote_staged_dropbox_credentials,"));
+        assert!(handler.contains("recover_dropbox_credentials_before_sync_configuration,"));
+        assert!(handler.contains("rollback_staged_dropbox_credentials,"));
+        assert!(handler.contains("finalize_staged_dropbox_credentials,"));
+        assert!(handler.contains("discard_staged_dropbox_credentials,"));
+        assert!(source.contains(".manage(DropboxStagedCredentialState::default())"));
+    }
+
+    #[test]
     fn hardware_acceleration_setting_round_trips_in_public_config() {
         let dir = unique_test_dir("hardware-acceleration");
         fs::create_dir_all(&dir).expect("should create temp config dir");
@@ -1989,7 +2103,10 @@ arch=x86_64
 --disable-domain-reliability --no-pings",
         );
         // Idempotent: re-exporting a value we already built changes nothing.
-        assert_eq!(with_windows_webview2_arguments(Some(DEFAULTS), false), DEFAULTS);
+        assert_eq!(
+            with_windows_webview2_arguments(Some(DEFAULTS), false),
+            DEFAULTS
+        );
     }
 
     #[test]

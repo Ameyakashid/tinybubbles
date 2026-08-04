@@ -12,6 +12,1047 @@ pub(crate) struct RemoteJsonWriteResult {
 }
 
 const NATIVE_HTTP_TIMEOUT_SECS: u64 = 30;
+const DROPBOX_STAGED_CREDENTIAL_TTL_MS: i64 = 30 * 60 * 1000;
+const DROPBOX_MAX_STAGED_CREDENTIALS: usize = 4;
+const DROPBOX_MAX_RESOLVED_CREDENTIAL_HANDLES: usize = 16;
+const DROPBOX_RESOLVED_CREDENTIAL_HANDLE_TTL_MS: i64 = 24 * 60 * 60 * 1000;
+const DROPBOX_PROMOTION_JOURNAL_VERSION: u8 = 1;
+const KEYRING_DROPBOX_PROMOTION_JOURNAL: &str = "dropbox_promotion_journal_v1";
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DropboxStartupRecoveryOutcome {
+    Ready,
+    SyncDisabled { warning: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "tokens", rename_all = "snake_case")]
+enum DropboxPreviousCredentials {
+    Empty,
+    Bundle(DropboxTokenBundle),
+    UnknownKeyring,
+}
+
+impl DropboxPreviousCredentials {
+    fn from_tokens(tokens: Option<DropboxTokenBundle>) -> Self {
+        match tokens {
+            Some(tokens) => Self::Bundle(tokens),
+            None => Self::Empty,
+        }
+    }
+
+    fn as_tokens(&self) -> Option<&DropboxTokenBundle> {
+        match self {
+            Self::Empty => None,
+            Self::Bundle(tokens) => Some(tokens),
+            Self::UnknownKeyring => None,
+        }
+    }
+
+    fn cloned_tokens(&self) -> Option<DropboxTokenBundle> {
+        self.as_tokens().cloned()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DropboxCredentialPromotionJournal {
+    version: u8,
+    candidate_client_id: String,
+    candidate_fingerprint: String,
+    previous: DropboxPreviousCredentials,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+enum DropboxPromotionJournalFallbackRecord {
+    PendingKeyring {
+        version: u8,
+        journal_fingerprint: String,
+    },
+    Pending {
+        journal: DropboxCredentialPromotionJournal,
+    },
+    Cleared {
+        version: u8,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DropboxRecoveryCommitState {
+    raw_backend: String,
+    backend_marker: String,
+    cloud_provider: String,
+    cloud_provider_authority: String,
+}
+
+fn inferred_dropbox_recovery_commit_state(raw_backend: String) -> DropboxRecoveryCommitState {
+    let cloud_provider = if raw_backend.trim() == "cloud" {
+        "dropbox"
+    } else {
+        "selfhosted"
+    };
+    DropboxRecoveryCommitState {
+        backend_marker: raw_backend.clone(),
+        raw_backend,
+        cloud_provider: cloud_provider.to_string(),
+        cloud_provider_authority: "native".to_string(),
+    }
+}
+
+fn dropbox_recovery_state_is_durably_off(state: &DropboxRecoveryCommitState) -> bool {
+    state.raw_backend.trim() == "off" && state.backend_marker.trim() == "off"
+}
+
+fn require_durably_disabled_dropbox_backend(
+    state: DropboxRecoveryCommitState,
+) -> Result<String, String> {
+    if dropbox_recovery_state_is_durably_off(&state) {
+        Ok("off".to_string())
+    } else {
+        Err("Dropbox credentials can only be changed while sync is durably disabled".to_string())
+    }
+}
+
+fn dropbox_recovery_state_is_committed_dropbox(state: &DropboxRecoveryCommitState) -> bool {
+    state.raw_backend.trim() == "cloud"
+        && state.backend_marker.trim() == "cloud"
+        && state.cloud_provider.trim() == "dropbox"
+        && state.cloud_provider_authority.trim() == "native"
+}
+
+fn dropbox_token_bundle_fingerprint(tokens: &DropboxTokenBundle) -> Result<String, String> {
+    let serialized = serde_json::to_vec(tokens)
+        .map_err(|_| "Failed to fingerprint Dropbox credentials".to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(serialized)))
+}
+
+fn dropbox_credential_handle_fingerprint(credential_handle: &str) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(credential_handle.as_bytes()))
+}
+
+fn prune_resolved_dropbox_credential_handles(
+    handles: &mut Vec<DropboxResolvedCredentialHandle>,
+    now: i64,
+) {
+    handles.retain(|handle| {
+        now.saturating_sub(handle.resolved_at_ms) <= DROPBOX_RESOLVED_CREDENTIAL_HANDLE_TTL_MS
+    });
+    if handles.len() > DROPBOX_MAX_RESOLVED_CREDENTIAL_HANDLES {
+        handles.sort_by_key(|handle| handle.resolved_at_ms);
+        let excess = handles.len() - DROPBOX_MAX_RESOLVED_CREDENTIAL_HANDLES;
+        handles.drain(..excess);
+    }
+}
+
+fn record_resolved_dropbox_credential_handle_with(
+    handles: &mut Vec<DropboxResolvedCredentialHandle>,
+    credential_handle: &str,
+    candidate: &DropboxTokenBundle,
+    now: i64,
+) -> Result<(), String> {
+    prune_resolved_dropbox_credential_handles(handles, now);
+    let handle_fingerprint = dropbox_credential_handle_fingerprint(credential_handle);
+    let candidate_fingerprint = dropbox_token_bundle_fingerprint(candidate)?;
+    handles.retain(|handle| handle.handle_fingerprint != handle_fingerprint);
+    handles.push(DropboxResolvedCredentialHandle {
+        handle_fingerprint,
+        client_id: candidate.client_id.clone(),
+        candidate_fingerprint,
+        resolved_at_ms: now,
+    });
+    prune_resolved_dropbox_credential_handles(handles, now);
+    Ok(())
+}
+
+fn resolved_dropbox_credential_handle_matches_with(
+    handles: &[DropboxResolvedCredentialHandle],
+    credential_handle: &str,
+    active: &DropboxTokenBundle,
+    now: i64,
+) -> Result<bool, String> {
+    let handle_fingerprint = dropbox_credential_handle_fingerprint(credential_handle);
+    let candidate_fingerprint = dropbox_token_bundle_fingerprint(active)?;
+    Ok(handles.iter().any(|handle| {
+        now.saturating_sub(handle.resolved_at_ms) <= DROPBOX_RESOLVED_CREDENTIAL_HANDLE_TTL_MS
+            && handle.handle_fingerprint == handle_fingerprint
+            && handle.client_id == active.client_id
+            && handle.candidate_fingerprint == candidate_fingerprint
+    }))
+}
+
+fn record_resolved_dropbox_credential_handle(
+    app: &tauri::AppHandle,
+    credential_handle: &str,
+    candidate: &DropboxTokenBundle,
+) -> Result<(), String> {
+    update_dropbox_credential_state(app, |state| {
+        record_resolved_dropbox_credential_handle_with(
+            &mut state.resolved_credential_handles,
+            credential_handle,
+            candidate,
+            now_unix_ms(),
+        )
+    })?;
+    let state = read_dropbox_credential_state(app)?;
+    if !resolved_dropbox_credential_handle_matches_with(
+        &state.resolved_credential_handles,
+        credential_handle,
+        candidate,
+        now_unix_ms(),
+    )? {
+        return Err("Dropbox resolved handle failed durable read-back verification".to_string());
+    }
+    Ok(())
+}
+
+fn build_dropbox_promotion_journal(
+    previous: Option<DropboxTokenBundle>,
+    candidate: &DropboxTokenBundle,
+) -> Result<DropboxCredentialPromotionJournal, String> {
+    build_dropbox_promotion_journal_with_previous(
+        DropboxPreviousCredentials::from_tokens(previous),
+        candidate,
+    )
+}
+
+fn build_dropbox_promotion_journal_with_previous(
+    previous: DropboxPreviousCredentials,
+    candidate: &DropboxTokenBundle,
+) -> Result<DropboxCredentialPromotionJournal, String> {
+    Ok(DropboxCredentialPromotionJournal {
+        version: DROPBOX_PROMOTION_JOURNAL_VERSION,
+        candidate_client_id: candidate.client_id.clone(),
+        candidate_fingerprint: dropbox_token_bundle_fingerprint(candidate)?,
+        previous,
+    })
+}
+
+fn journal_matches_candidate(
+    journal: &DropboxCredentialPromotionJournal,
+    active: &DropboxTokenBundle,
+) -> Result<bool, String> {
+    Ok(journal.version == DROPBOX_PROMOTION_JOURNAL_VERSION
+        && active.client_id == journal.candidate_client_id
+        && dropbox_token_bundle_fingerprint(active)? == journal.candidate_fingerprint)
+}
+
+fn resolve_unknown_dropbox_previous_credentials_with<ReadKeyring>(
+    journal: &DropboxCredentialPromotionJournal,
+    mut read_keyring: ReadKeyring,
+) -> Result<DropboxPreviousCredentials, String>
+where
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+{
+    if !matches!(journal.previous, DropboxPreviousCredentials::UnknownKeyring) {
+        return Ok(journal.previous.clone());
+    }
+    let raw = read_keyring().map_err(|_| {
+        "Previous Dropbox keyring state is still unavailable during recovery".to_string()
+    })?;
+    let Some(raw) = raw else {
+        return Ok(DropboxPreviousCredentials::Empty);
+    };
+    let tokens = parse_dropbox_token_bundle(&raw)?;
+    // Unknown-keyring promotion is fallback-only and therefore cannot have
+    // written this entry. Exact-candidate bytes may already have existed and
+    // are preserved just like any different valid prior bundle.
+    Ok(DropboxPreviousCredentials::Bundle(tokens))
+}
+
+fn resolve_unknown_dropbox_previous_credentials(
+    app: &tauri::AppHandle,
+    journal: &DropboxCredentialPromotionJournal,
+) -> Result<DropboxPreviousCredentials, String> {
+    resolve_unknown_dropbox_previous_credentials_with(journal, || {
+        get_keyring_secret(app, KEYRING_DROPBOX_TOKENS)
+    })
+}
+
+fn recover_known_dropbox_promotion_journal_with<
+    ReadCommitState,
+    ReadActive,
+    ResolveUnknownPrevious,
+    WriteActive,
+    ReadJournal,
+    ClearJournal,
+>(
+    journal: &DropboxCredentialPromotionJournal,
+    read_commit_state: &mut ReadCommitState,
+    read_active: &mut ReadActive,
+    resolve_unknown_previous: &mut ResolveUnknownPrevious,
+    write_active: &mut WriteActive,
+    read_journal: &mut ReadJournal,
+    clear_journal: &mut ClearJournal,
+) -> Result<(), String>
+where
+    ReadCommitState: FnMut() -> Result<DropboxRecoveryCommitState, String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    ResolveUnknownPrevious:
+        FnMut(&DropboxCredentialPromotionJournal) -> Result<DropboxPreviousCredentials, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+{
+    if journal.version != DROPBOX_PROMOTION_JOURNAL_VERSION {
+        return Err("Dropbox credential promotion journal has an unsupported version".to_string());
+    }
+
+    let commit = read_commit_state()?;
+    let committed_dropbox = dropbox_recovery_state_is_committed_dropbox(&commit);
+    if committed_dropbox {
+        let active = read_active()?.ok_or_else(|| {
+            "Committed Dropbox credential promotion has no active credentials".to_string()
+        })?;
+        if !journal_matches_candidate(journal, &active)? {
+            return Err(
+                "Committed Dropbox credentials do not match the promotion journal".to_string(),
+            );
+        }
+    } else {
+        if commit.raw_backend.trim() != commit.backend_marker.trim()
+            || commit.raw_backend.trim() == "cloud"
+            || commit.backend_marker.trim() == "cloud"
+        {
+            return Err("Dropbox credential promotion commit markers are inconsistent".to_string());
+        }
+        let previous_authority =
+            if matches!(journal.previous, DropboxPreviousCredentials::UnknownKeyring) {
+                resolve_unknown_previous(journal)?
+            } else {
+                journal.previous.clone()
+            };
+        let previous = previous_authority.cloned_tokens();
+        write_active(previous.as_ref())?;
+        if read_active()? != previous {
+            return Err(
+                "Previous Dropbox credentials failed crash-recovery read-back verification"
+                    .to_string(),
+            );
+        }
+    }
+
+    clear_journal()?;
+    if read_journal()?.is_some() {
+        return Err(
+            "Dropbox credential promotion journal failed deletion verification".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn recover_dropbox_promotion_journal_with<
+    ReadBackend,
+    ReadActive,
+    WriteActive,
+    ReadJournal,
+    ClearJournal,
+>(
+    mut read_backend: ReadBackend,
+    mut read_active: ReadActive,
+    mut write_active: WriteActive,
+    mut read_journal: ReadJournal,
+    mut clear_journal: ClearJournal,
+) -> Result<(), String>
+where
+    ReadBackend: FnMut() -> Result<String, String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+{
+    let Some(journal) = read_journal()? else {
+        return Ok(());
+    };
+    let mut read_commit_state = || read_backend().map(inferred_dropbox_recovery_commit_state);
+    let mut resolve_unknown_previous = |_journal: &DropboxCredentialPromotionJournal| {
+        Err("Unknown keyring recovery requires a keyring authority reader".to_string())
+    };
+    recover_known_dropbox_promotion_journal_with(
+        &journal,
+        &mut read_commit_state,
+        &mut read_active,
+        &mut resolve_unknown_previous,
+        &mut write_active,
+        &mut read_journal,
+        &mut clear_journal,
+    )
+}
+
+fn recover_dropbox_credentials_fail_closed_with_commit_state<
+    ReadCommitState,
+    WriteBackend,
+    ReadActive,
+    ResolveUnknownPrevious,
+    WriteActive,
+    ReadJournal,
+    ClearJournal,
+>(
+    mut read_commit_state: ReadCommitState,
+    mut write_backend: WriteBackend,
+    mut read_active: ReadActive,
+    mut resolve_unknown_previous: ResolveUnknownPrevious,
+    mut write_active: WriteActive,
+    mut read_journal: ReadJournal,
+    mut clear_journal: ClearJournal,
+) -> Result<(), String>
+where
+    ReadCommitState: FnMut() -> Result<DropboxRecoveryCommitState, String>,
+    WriteBackend: FnMut(&str) -> Result<(), String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    ResolveUnknownPrevious:
+        FnMut(&DropboxCredentialPromotionJournal) -> Result<DropboxPreviousCredentials, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+{
+    let journal = match read_journal() {
+        Ok(None) => return Ok(()),
+        Ok(Some(journal)) => journal,
+        Err(initial_error) => {
+            // Once the Dropbox backend has reached its exact durable commit
+            // point, cleanup uncertainty is post-commit. Never turn it into a
+            // rollback by disabling the backend first: doing so would erase the
+            // only commit evidence and a later recovery would restore the old
+            // credentials. Leave both the candidate and backend intact so the
+            // caller can refuse its pending disable and retry cleanup safely.
+            let commit_state = read_commit_state().map_err(|_| {
+                "Dropbox credential recovery could not verify the durable sync commit state; recovery remains pending and no state was changed"
+                    .to_string()
+            })?;
+            if dropbox_recovery_state_is_committed_dropbox(&commit_state) {
+                return Err(format!(
+                    "Dropbox credential recovery cleanup failed after commit; the active Dropbox commit was left intact: {initial_error}"
+                ));
+            }
+            write_backend("off").map_err(|disable_error| {
+                format!(
+                    "Dropbox credential recovery failed and sync could not be disabled: {initial_error}; {disable_error}"
+                )
+            })?;
+            let disabled = read_commit_state().map_err(|disable_error| {
+                format!(
+                    "Dropbox credential recovery failed and disabled state could not be verified: {initial_error}; {disable_error}"
+                )
+            })?;
+            if !dropbox_recovery_state_is_durably_off(&disabled) {
+                return Err(format!(
+                    "Dropbox credential recovery failed and sync was not durably disabled: {initial_error}"
+                ));
+            }
+            return Err(format!(
+                "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}"
+            ));
+        }
+    };
+
+    let initial_commit_state = read_commit_state().map_err(|_| {
+        "Dropbox credential recovery could not verify the durable sync commit state; recovery remains pending and no state was changed"
+            .to_string()
+    })?;
+    let committed_dropbox = dropbox_recovery_state_is_committed_dropbox(&initial_commit_state);
+    let mut read_initial_commit_state = || Ok(initial_commit_state.clone());
+    let initial = recover_known_dropbox_promotion_journal_with(
+        &journal,
+        &mut read_initial_commit_state,
+        &mut read_active,
+        &mut resolve_unknown_previous,
+        &mut write_active,
+        &mut read_journal,
+        &mut clear_journal,
+    );
+    let Err(initial_error) = initial else {
+        return Ok(());
+    };
+
+    if committed_dropbox {
+        return Err(format!(
+            "Dropbox credential recovery cleanup failed after commit; the active Dropbox commit was left intact: {initial_error}"
+        ));
+    }
+
+    write_backend("off").map_err(|disable_error| {
+        format!(
+            "Dropbox credential recovery failed and sync could not be disabled: {initial_error}; {disable_error}"
+        )
+    })?;
+    let disabled = read_commit_state().map_err(|disable_error| {
+        format!(
+            "Dropbox credential recovery failed and disabled state could not be verified: {initial_error}; {disable_error}"
+        )
+    })?;
+    if !dropbox_recovery_state_is_durably_off(&disabled) {
+        return Err(format!(
+            "Dropbox credential recovery failed and sync was not durably disabled: {initial_error}"
+        ));
+    }
+
+    if journal.version != DROPBOX_PROMOTION_JOURNAL_VERSION {
+        return Err(format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}"
+        ));
+    }
+
+    // Keep using the journal value read before the first attempt. A keyring
+    // deletion may succeed while its verification read fails; re-reading at
+    // this point could therefore return `None` and lose the only retained copy
+    // of the previous credential bundle.
+    let previous_authority = if matches!(
+        journal.previous,
+        DropboxPreviousCredentials::UnknownKeyring
+    ) {
+        resolve_unknown_previous(&journal).map_err(|recovery_error| {
+            format!(
+                "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; {recovery_error}"
+            )
+        })?
+    } else {
+        journal.previous.clone()
+    };
+    let previous = previous_authority.cloned_tokens();
+    write_active(previous.as_ref()).map_err(|recovery_error| {
+        format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; {recovery_error}"
+        )
+    })?;
+    if read_active().map_err(|recovery_error| {
+        format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; {recovery_error}"
+        )
+    })? != previous
+    {
+        return Err(format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; previous credentials failed read-back verification"
+        ));
+    }
+
+    clear_journal().map_err(|recovery_error| {
+        format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; {recovery_error}"
+        )
+    })?;
+    if read_journal().map_err(|recovery_error| {
+        format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; {recovery_error}"
+        )
+    })?.is_some()
+    {
+        return Err(format!(
+            "Dropbox credential recovery failed; sync was disabled but recovery remains pending: {initial_error}; journal deletion failed read-back verification"
+        ));
+    }
+
+    Err(format!(
+        "Dropbox credential recovery failed; sync was disabled and previous credentials were restored: {initial_error}"
+    ))
+}
+
+fn recover_dropbox_credentials_fail_closed_with<
+    ReadBackend,
+    WriteBackend,
+    ReadActive,
+    WriteActive,
+    ReadJournal,
+    ClearJournal,
+>(
+    mut read_backend: ReadBackend,
+    write_backend: WriteBackend,
+    read_active: ReadActive,
+    write_active: WriteActive,
+    read_journal: ReadJournal,
+    clear_journal: ClearJournal,
+) -> Result<(), String>
+where
+    ReadBackend: FnMut() -> Result<String, String>,
+    WriteBackend: FnMut(&str) -> Result<(), String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+{
+    recover_dropbox_credentials_fail_closed_with_commit_state(
+        || read_backend().map(inferred_dropbox_recovery_commit_state),
+        write_backend,
+        read_active,
+        |_journal| Err("Unknown keyring recovery requires a keyring authority reader".to_string()),
+        write_active,
+        read_journal,
+        clear_journal,
+    )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DropboxStagedCredentialPhase {
+    Candidate,
+    Promoted {
+        previous: DropboxPreviousCredentials,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct DropboxStagedCredential {
+    tokens: DropboxTokenBundle,
+    phase: DropboxStagedCredentialPhase,
+    created_at: i64,
+}
+
+#[derive(Default)]
+pub(crate) struct DropboxStagedCredentialState {
+    inner: Arc<Mutex<HashMap<String, DropboxStagedCredential>>>,
+}
+
+fn prune_expired_staged_dropbox_credentials(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    now: i64,
+) {
+    entries.retain(|_, entry| {
+        !matches!(entry.phase, DropboxStagedCredentialPhase::Candidate)
+            || now.saturating_sub(entry.created_at) <= DROPBOX_STAGED_CREDENTIAL_TTL_MS
+    });
+}
+
+fn insert_staged_dropbox_credentials(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: String,
+    tokens: DropboxTokenBundle,
+    now: i64,
+) -> Result<(), String> {
+    let handle = credential_handle.trim();
+    if handle.is_empty() {
+        return Err("Dropbox credential handle is empty".to_string());
+    }
+    prune_expired_staged_dropbox_credentials(entries, now);
+    if entries.contains_key(handle) {
+        return Err("Dropbox credential handle already exists".to_string());
+    }
+    while entries.len() >= DROPBOX_MAX_STAGED_CREDENTIALS {
+        let oldest_candidate = entries
+            .iter()
+            .filter(|(_, entry)| matches!(entry.phase, DropboxStagedCredentialPhase::Candidate))
+            .min_by_key(|(_, entry)| entry.created_at)
+            .map(|(handle, _)| handle.clone());
+        let Some(oldest_candidate) = oldest_candidate else {
+            return Err(
+                "Too many Dropbox credential transactions are awaiting rollback".to_string(),
+            );
+        };
+        entries.remove(&oldest_candidate);
+    }
+    entries.insert(
+        handle.to_string(),
+        DropboxStagedCredential {
+            tokens,
+            phase: DropboxStagedCredentialPhase::Candidate,
+            created_at: now,
+        },
+    );
+    Ok(())
+}
+
+fn stage_dropbox_credentials(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    tokens: DropboxTokenBundle,
+    now: i64,
+) -> Result<String, String> {
+    for _ in 0..8 {
+        let credential_handle = generate_random_urlsafe(32);
+        if entries.contains_key(&credential_handle) {
+            continue;
+        }
+        insert_staged_dropbox_credentials(entries, credential_handle.clone(), tokens, now)?;
+        return Ok(credential_handle);
+    }
+    Err("Failed to allocate an opaque Dropbox credential handle".to_string())
+}
+
+fn staged_dropbox_entry_mut<'a>(
+    entries: &'a mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+) -> Result<&'a mut DropboxStagedCredential, String> {
+    prune_expired_staged_dropbox_credentials(entries, now);
+    let entry = entries
+        .get_mut(credential_handle)
+        .ok_or_else(|| "Dropbox credential handle is invalid or expired".to_string())?;
+    if entry.tokens.client_id != client_id {
+        return Err("Dropbox credential handle belongs to a different app key".to_string());
+    }
+    Ok(entry)
+}
+
+fn resolve_staged_dropbox_access_token_with<F>(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    force_refresh: bool,
+    now: i64,
+    mut refresh: F,
+) -> Result<String, String>
+where
+    F: FnMut(&str, &str) -> Result<(String, i64), String>,
+{
+    let entry = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?;
+    if !force_refresh && now < entry.tokens.expires_at - DROPBOX_TOKEN_REFRESH_SKEW_MS {
+        return Ok(entry.tokens.access_token.clone());
+    }
+    let (access_token, expires_at) = refresh(client_id, &entry.tokens.refresh_token)?;
+    if access_token.trim().is_empty() {
+        return Err("Dropbox token refresh returned an invalid payload".to_string());
+    }
+    entry.tokens.access_token = access_token;
+    entry.tokens.expires_at = expires_at;
+    Ok(entry.tokens.access_token.clone())
+}
+
+fn format_dropbox_restore_error(primary: &str, restore: Result<(), String>) -> String {
+    match restore {
+        Ok(()) => primary.to_string(),
+        Err(error) => {
+            format!("{primary}. Previous Dropbox credentials could not be restored: {error}")
+        }
+    }
+}
+
+fn restore_active_dropbox_credentials_with<ReadActive, WriteActive>(
+    previous: &Option<DropboxTokenBundle>,
+    read_active: &mut ReadActive,
+    write_active: &mut WriteActive,
+) -> Result<(), String>
+where
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+{
+    write_active(previous.as_ref())?;
+    if read_active()? != *previous {
+        return Err(
+            "Previous Dropbox credentials failed durable read-back verification".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn promote_staged_dropbox_credentials_with<ReadActive, WriteActive>(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+    mut read_active: ReadActive,
+    mut write_active: WriteActive,
+) -> Result<(), String>
+where
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+{
+    let entry = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?;
+    let candidate = entry.tokens.clone();
+    if matches!(entry.phase, DropboxStagedCredentialPhase::Promoted { .. }) {
+        let active = read_active()?;
+        return if active.as_ref() == Some(&candidate) {
+            Ok(())
+        } else {
+            Err("Promoted Dropbox credentials failed durable read-back verification".to_string())
+        };
+    }
+
+    let previous = read_active()?;
+    if let Err(error) = write_active(Some(&candidate)) {
+        let restore =
+            restore_active_dropbox_credentials_with(&previous, &mut read_active, &mut write_active);
+        if restore.is_err() {
+            entry.phase = DropboxStagedCredentialPhase::Promoted {
+                previous: DropboxPreviousCredentials::from_tokens(previous.clone()),
+            };
+        }
+        return Err(format_dropbox_restore_error(
+            &format!("Failed to promote Dropbox credentials: {error}"),
+            restore,
+        ));
+    }
+
+    match read_active() {
+        Ok(active) if active.as_ref() == Some(&candidate) => {
+            entry.phase = DropboxStagedCredentialPhase::Promoted {
+                previous: DropboxPreviousCredentials::from_tokens(previous),
+            };
+            Ok(())
+        }
+        Ok(_) => {
+            let restore = restore_active_dropbox_credentials_with(
+                &previous,
+                &mut read_active,
+                &mut write_active,
+            );
+            if restore.is_err() {
+                entry.phase = DropboxStagedCredentialPhase::Promoted {
+                    previous: DropboxPreviousCredentials::from_tokens(previous.clone()),
+                };
+            }
+            Err(format_dropbox_restore_error(
+                "Dropbox credential promotion failed durable read-back verification",
+                restore,
+            ))
+        }
+        Err(error) => {
+            let restore = restore_active_dropbox_credentials_with(
+                &previous,
+                &mut read_active,
+                &mut write_active,
+            );
+            if restore.is_err() {
+                entry.phase = DropboxStagedCredentialPhase::Promoted {
+                    previous: DropboxPreviousCredentials::from_tokens(previous.clone()),
+                };
+            }
+            Err(format_dropbox_restore_error(
+                &format!("Dropbox credential promotion read-back failed: {error}"),
+                restore,
+            ))
+        }
+    }
+}
+
+fn promote_staged_dropbox_credentials_with_journal<
+    ReadBackend,
+    ReadPrevious,
+    ReadActive,
+    WriteActive,
+    WriteCandidateFallback,
+    ReadJournal,
+    WriteJournal,
+>(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+    mut read_backend: ReadBackend,
+    mut read_previous: ReadPrevious,
+    mut read_active: ReadActive,
+    mut write_active: WriteActive,
+    mut write_candidate_fallback: WriteCandidateFallback,
+    mut read_journal: ReadJournal,
+    mut write_journal: WriteJournal,
+) -> Result<(), String>
+where
+    ReadBackend: FnMut() -> Result<String, String>,
+    ReadPrevious: FnMut() -> Result<DropboxPreviousCredentials, String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+    WriteCandidateFallback: FnMut(&DropboxTokenBundle) -> Result<(), String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    WriteJournal: FnMut(&DropboxCredentialPromotionJournal) -> Result<(), String>,
+{
+    if read_backend()?.trim() != "off" {
+        return Err("Dropbox credentials can only be changed while sync is disabled".to_string());
+    }
+
+    let entry = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?;
+    let candidate = entry.tokens.clone();
+    if matches!(entry.phase, DropboxStagedCredentialPhase::Promoted { .. }) {
+        let journal = read_journal()?.ok_or_else(|| {
+            "Promoted Dropbox credentials are missing their durable recovery journal".to_string()
+        })?;
+        if !journal_matches_candidate(&journal, &candidate)? {
+            return Err(
+                "Promoted Dropbox credentials do not match their durable recovery journal"
+                    .to_string(),
+            );
+        }
+        return promote_staged_dropbox_credentials_with(
+            entries,
+            credential_handle,
+            client_id,
+            now,
+            read_active,
+            write_active,
+        );
+    }
+
+    let previous = read_previous()?;
+    let journal = build_dropbox_promotion_journal_with_previous(previous.clone(), &candidate)?;
+    write_journal(&journal)?;
+    if read_journal()?.as_ref() != Some(&journal) {
+        return Err(
+            "Dropbox credential promotion journal failed durable read-back verification"
+                .to_string(),
+        );
+    }
+    if !matches!(previous, DropboxPreviousCredentials::UnknownKeyring)
+        && read_active()? != previous.cloned_tokens()
+    {
+        return Err("Active Dropbox credentials changed before journaled promotion".to_string());
+    }
+    if read_backend()?.trim() != "off" {
+        return Err(
+            "Sync backend changed before Dropbox credential promotion could complete".to_string(),
+        );
+    }
+
+    if matches!(previous, DropboxPreviousCredentials::UnknownKeyring) {
+        let entry = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?;
+        if let Err(error) = write_candidate_fallback(&candidate) {
+            entry.phase = DropboxStagedCredentialPhase::Promoted {
+                previous: DropboxPreviousCredentials::UnknownKeyring,
+            };
+            return Err(format!(
+                "Failed to promote Dropbox credentials while the previous keyring state was unavailable: {error}"
+            ));
+        }
+        entry.phase = DropboxStagedCredentialPhase::Promoted {
+            previous: DropboxPreviousCredentials::UnknownKeyring,
+        };
+        return match read_active() {
+            Ok(active) if active.as_ref() == Some(&candidate) => Ok(()),
+            Ok(_) => Err(
+                "Dropbox credential promotion failed durable read-back verification while the previous keyring state was unavailable"
+                    .to_string(),
+            ),
+            Err(error) => Err(format!(
+                "Dropbox credential promotion read-back failed while the previous keyring state was unavailable: {error}"
+            )),
+        };
+    }
+
+    promote_staged_dropbox_credentials_with(
+        entries,
+        credential_handle,
+        client_id,
+        now,
+        read_active,
+        write_active,
+    )?;
+    staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?.phase =
+        DropboxStagedCredentialPhase::Promoted { previous };
+    Ok(())
+}
+
+fn rollback_staged_dropbox_credentials_with<ReadActive, WriteActive>(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+    mut read_active: ReadActive,
+    mut write_active: WriteActive,
+) -> Result<(), String>
+where
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    WriteActive: FnMut(Option<&DropboxTokenBundle>) -> Result<(), String>,
+{
+    let phase = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?
+        .phase
+        .clone();
+    match phase {
+        DropboxStagedCredentialPhase::Candidate => {
+            entries.remove(credential_handle);
+            Ok(())
+        }
+        DropboxStagedCredentialPhase::Promoted { previous } => {
+            if matches!(previous, DropboxPreviousCredentials::UnknownKeyring) {
+                return Err(
+                    "Previous Dropbox keyring state is still unavailable for rollback".to_string(),
+                );
+            }
+            let previous_tokens = previous.cloned_tokens();
+            write_active(previous_tokens.as_ref())?;
+            let restored = read_active()?;
+            if restored != previous_tokens {
+                return Err(
+                    "Previous Dropbox credentials failed durable read-back verification"
+                        .to_string(),
+                );
+            }
+            entries.remove(credential_handle);
+            Ok(())
+        }
+    }
+}
+
+fn settle_unknown_dropbox_previous_after_recovery_with<
+    ResolvePrevious,
+    ClearCandidateFallback,
+    ReadActive,
+>(
+    candidate: &DropboxTokenBundle,
+    mut resolve_previous: ResolvePrevious,
+    mut clear_candidate_fallback: ClearCandidateFallback,
+    mut read_active: ReadActive,
+) -> Result<(), String>
+where
+    ResolvePrevious:
+        FnMut(&DropboxCredentialPromotionJournal) -> Result<DropboxPreviousCredentials, String>,
+    ClearCandidateFallback: FnMut() -> Result<(), String>,
+    ReadActive: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+{
+    let synthetic_journal = build_dropbox_promotion_journal_with_previous(
+        DropboxPreviousCredentials::UnknownKeyring,
+        candidate,
+    )?;
+    let previous = resolve_previous(&synthetic_journal)?;
+    if matches!(previous, DropboxPreviousCredentials::UnknownKeyring) {
+        return Err("Previous Dropbox keyring state remains unknown".to_string());
+    }
+    // Unknown promotion is fallback-only. Remove and verify only those
+    // candidate bytes; the token keyring is untouched even when it happens to
+    // equal the candidate.
+    clear_candidate_fallback()?;
+    if read_active()? != previous.cloned_tokens() {
+        return Err(
+            "Previous Dropbox credentials failed durable rollback verification".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn finalize_staged_dropbox_credentials_in_store(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+) -> Result<(), String> {
+    let phase = staged_dropbox_entry_mut(entries, credential_handle, client_id, now)?
+        .phase
+        .clone();
+    if !matches!(phase, DropboxStagedCredentialPhase::Promoted { .. }) {
+        return Err("Dropbox credentials cannot be finalized before promotion".to_string());
+    }
+    entries.remove(credential_handle);
+    Ok(())
+}
+
+fn complete_committed_dropbox_finalize_with<RecordResolved, RemoveStaged, ClearJournal>(
+    mut record_resolved: RecordResolved,
+    mut remove_staged: RemoveStaged,
+    mut clear_journal: ClearJournal,
+) -> Result<(), String>
+where
+    RecordResolved: FnMut() -> Result<(), String>,
+    RemoveStaged: FnMut() -> Result<(), String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+{
+    record_resolved()?;
+    remove_staged()?;
+    clear_journal()
+}
+
+fn discard_staged_dropbox_credentials_in_store(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    now: i64,
+) -> Result<(), String> {
+    prune_expired_staged_dropbox_credentials(entries, now);
+    let Some(entry) = entries.get(credential_handle) else {
+        return Ok(());
+    };
+    if entry.tokens.client_id != client_id {
+        return Err("Dropbox credential handle belongs to a different app key".to_string());
+    }
+    if matches!(entry.phase, DropboxStagedCredentialPhase::Promoted { .. }) {
+        return Err("Promoted Dropbox credentials must be rolled back, not discarded".to_string());
+    }
+    entries.remove(credential_handle);
+    Ok(())
+}
 
 // The saved Proxy URL must reach every native request: env vars
 // (HTTP_PROXY/HTTPS_PROXY) still apply as reqwest defaults when no proxy is
@@ -25,8 +1066,8 @@ const NATIVE_HTTP_TIMEOUT_SECS: u64 = 30;
 // rustls with native roots (covers private CAs in the system store).
 // Known ceiling: schannel on Windows 10 has no TLS 1.3, matching 1.1.0-1.1.5.
 fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Client, String> {
-    let builder = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS));
+    let builder =
+        reqwest::blocking::Client::builder().timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS));
     #[cfg(target_os = "windows")]
     let mut builder = builder.use_native_tls();
     #[cfg(not(target_os = "windows"))]
@@ -41,9 +1082,7 @@ fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Cl
         .map_err(|error| format!("Failed to create HTTP client: {error}"))
 }
 
-fn app_blocking_http_client(
-    app: &tauri::AppHandle,
-) -> Result<reqwest::blocking::Client, String> {
+fn app_blocking_http_client(app: &tauri::AppHandle) -> Result<reqwest::blocking::Client, String> {
     blocking_http_client(read_config(app).proxy_url.as_deref())
 }
 
@@ -459,66 +1498,872 @@ fn refresh_dropbox_token(
     Ok((access_token, now_unix_ms() + expires_in * 1000))
 }
 
-fn read_dropbox_tokens(app: &tauri::AppHandle) -> Result<Option<DropboxTokenBundle>, String> {
-    let mut config = read_config(app);
-    let mut raw = get_keyring_secret(app, KEYRING_DROPBOX_TOKENS).unwrap_or(None);
-    if raw.is_none() {
-        if let Some(legacy) = config.dropbox_tokens.clone() {
-            if set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, Some(legacy.clone())).is_ok() {
-                config.dropbox_tokens = None;
-                write_config_files(&get_config_path(app), &get_secrets_path(app), &config)?;
-            }
-            raw = Some(legacy);
-        }
-    }
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-    let parsed: DropboxTokenBundle = serde_json::from_str(&raw).map_err(|_| {
-        "Stored Dropbox token payload is invalid. Please reconnect Dropbox.".to_string()
-    })?;
-    if parsed.client_id.trim().is_empty()
-        || parsed.access_token.trim().is_empty()
-        || parsed.refresh_token.trim().is_empty()
+fn validate_dropbox_token_bundle(tokens: DropboxTokenBundle) -> Result<DropboxTokenBundle, String> {
+    if tokens.client_id.trim().is_empty()
+        || tokens.access_token.trim().is_empty()
+        || tokens.refresh_token.trim().is_empty()
     {
         return Err(
             "Stored Dropbox token payload is invalid. Please reconnect Dropbox.".to_string(),
         );
     }
-    Ok(Some(parsed))
+    Ok(tokens)
+}
+
+fn parse_dropbox_token_bundle(raw: &str) -> Result<DropboxTokenBundle, String> {
+    let parsed: DropboxTokenBundle = serde_json::from_str(raw).map_err(|_| {
+        "Stored Dropbox token payload is invalid. Please reconnect Dropbox.".to_string()
+    })?;
+    validate_dropbox_token_bundle(parsed)
+}
+
+fn read_dropbox_tokens(app: &tauri::AppHandle) -> Result<Option<DropboxTokenBundle>, String> {
+    read_dropbox_tokens_for_recovery(app)
+}
+
+fn is_dropbox_connected_with<ReadTokens>(
+    client_id: &str,
+    mut read_tokens: ReadTokens,
+) -> Result<bool, String>
+where
+    ReadTokens: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+{
+    Ok(read_tokens()?.is_some_and(|tokens| {
+        tokens.client_id == client_id
+            && !tokens.access_token.trim().is_empty()
+            && !tokens.refresh_token.trim().is_empty()
+    }))
+}
+
+fn read_dropbox_tokens_for_recovery_with<ReadKeyring, ReadFallback>(
+    mut read_keyring: ReadKeyring,
+    mut read_fallback: ReadFallback,
+) -> Result<Option<DropboxTokenBundle>, String>
+where
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+{
+    let raw = match read_fallback()? {
+        Some(fallback) => Some(fallback),
+        None => match read_keyring() {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Err("Failed to inspect Dropbox credentials during recovery".to_string())
+            }
+        },
+    };
+    raw.map(|raw| parse_dropbox_token_bundle(&raw)).transpose()
+}
+
+fn read_dropbox_previous_credentials_for_promotion_with<ReadKeyring, ReadFallback>(
+    mut read_keyring: ReadKeyring,
+    mut read_fallback: ReadFallback,
+) -> Result<DropboxPreviousCredentials, String>
+where
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+{
+    if let Some(raw) = read_fallback()? {
+        return parse_dropbox_token_bundle(&raw).map(DropboxPreviousCredentials::Bundle);
+    }
+    match read_keyring() {
+        Ok(Some(raw)) => parse_dropbox_token_bundle(&raw).map(DropboxPreviousCredentials::Bundle),
+        Ok(None) => Ok(DropboxPreviousCredentials::Empty),
+        Err(_) => Ok(DropboxPreviousCredentials::UnknownKeyring),
+    }
+}
+
+fn read_dropbox_tokens_fallback(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    Ok(read_dropbox_credential_state(app)?.token_fallback)
+}
+
+fn read_dropbox_tokens_for_recovery(
+    app: &tauri::AppHandle,
+) -> Result<Option<DropboxTokenBundle>, String> {
+    read_dropbox_tokens_for_recovery_with(
+        || get_keyring_secret(app, KEYRING_DROPBOX_TOKENS),
+        || read_dropbox_tokens_fallback(app),
+    )
+}
+
+fn read_dropbox_previous_credentials_for_promotion(
+    app: &tauri::AppHandle,
+) -> Result<DropboxPreviousCredentials, String> {
+    read_dropbox_previous_credentials_for_promotion_with(
+        || get_keyring_secret(app, KEYRING_DROPBOX_TOKENS),
+        || read_dropbox_tokens_fallback(app),
+    )
 }
 
 fn write_dropbox_tokens(app: &tauri::AppHandle, tokens: &DropboxTokenBundle) -> Result<(), String> {
     let payload = serde_json::to_string(tokens)
         .map_err(|error| format!("Failed to serialize Dropbox tokens: {error}"))?;
-    let config_path = get_config_path(app);
-    let secrets_path = get_secrets_path(app);
-    let mut config = read_config(app);
-    match set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, Some(payload.clone())) {
-        Ok(_) => {
-            if config.dropbox_tokens.is_some() {
-                config.dropbox_tokens = None;
-                write_config_files(&config_path, &secrets_path, &config)?;
-            }
+    let keyring_verified = set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, Some(payload.clone()))
+        .and_then(|_| {
+            get_keyring_secret(app, KEYRING_DROPBOX_TOKENS).map(|raw| raw == Some(payload.clone()))
+        })
+        .unwrap_or(false);
+    if keyring_verified {
+        update_dropbox_credential_state(app, |state| {
+            state.token_fallback = None;
             Ok(())
+        })?;
+    } else {
+        update_dropbox_credential_state(app, |state| {
+            state.token_fallback = Some(payload.clone());
+            Ok(())
+        })?;
+        crate::config::emit_keyring_fallback_warning(app, "Dropbox credentials");
+    }
+    Ok(())
+}
+
+fn write_dropbox_tokens_fallback_only(
+    app: &tauri::AppHandle,
+    tokens: &DropboxTokenBundle,
+) -> Result<(), String> {
+    let payload = serde_json::to_string(tokens)
+        .map_err(|error| format!("Failed to serialize Dropbox tokens: {error}"))?;
+    update_dropbox_credential_state(app, |state| {
+        state.token_fallback = Some(payload.clone());
+        Ok(())
+    })?;
+    if read_dropbox_credential_state(app)?
+        .token_fallback
+        .as_deref()
+        != Some(payload.as_str())
+    {
+        return Err(
+            "Dropbox credential fallback failed durable read-back verification".to_string(),
+        );
+    }
+    crate::config::emit_keyring_fallback_warning(app, "Dropbox credentials");
+    Ok(())
+}
+
+fn clear_dropbox_tokens_fallback_only(app: &tauri::AppHandle) -> Result<(), String> {
+    update_dropbox_credential_state(app, |state| {
+        state.token_fallback = None;
+        Ok(())
+    })?;
+    if read_dropbox_credential_state(app)?.token_fallback.is_some() {
+        return Err("Dropbox credential fallback failed durable deletion verification".to_string());
+    }
+    Ok(())
+}
+
+fn clear_dropbox_tokens_with<ClearFallback, ReadFallback, ReadKeyring, DeleteKeyring>(
+    mut clear_fallback: ClearFallback,
+    mut fallback_has_tokens: ReadFallback,
+    mut keyring_has_tokens: ReadKeyring,
+    mut delete_keyring_tokens: DeleteKeyring,
+) -> Result<(), String>
+where
+    ClearFallback: FnMut() -> Result<(), String>,
+    ReadFallback: FnMut() -> Result<bool, String>,
+    ReadKeyring: FnMut() -> Result<bool, String>,
+    DeleteKeyring: FnMut() -> Result<(), String>,
+{
+    // Clear the file fallback first. `read_config` may migrate a legacy file
+    // secret into the keyring, so deleting the keyring first can immediately
+    // recreate the credential from secrets.toml.
+    clear_fallback()
+        .map_err(|error| format!("Failed to clear Dropbox credential fallback: {error}"))?;
+    if fallback_has_tokens()
+        .map_err(|error| format!("Failed to verify Dropbox credential fallback: {error}"))?
+    {
+        return Err(
+            "Dropbox credential fallback failed durable read-back verification".to_string(),
+        );
+    }
+
+    if keyring_has_tokens()
+        .map_err(|error| format!("Failed to inspect Dropbox credentials in the keyring: {error}"))?
+    {
+        delete_keyring_tokens().map_err(|error| {
+            format!("Failed to delete Dropbox credentials from the keyring: {error}")
+        })?;
+    }
+    if keyring_has_tokens()
+        .map_err(|error| format!("Failed to verify Dropbox keyring deletion: {error}"))?
+    {
+        return Err("Dropbox keyring deletion failed durable read-back verification".to_string());
+    }
+
+    // A fallback read can itself trigger the legacy migration. Recheck the
+    // keyring last so success proves both durable locations are empty at the
+    // same point in time.
+    if fallback_has_tokens()
+        .map_err(|error| format!("Failed to recheck Dropbox credential fallback: {error}"))?
+    {
+        return Err(
+            "Dropbox credential fallback failed durable read-back verification".to_string(),
+        );
+    }
+    if keyring_has_tokens()
+        .map_err(|error| format!("Failed to recheck Dropbox keyring deletion: {error}"))?
+    {
+        return Err("Dropbox credentials reappeared in the keyring during deletion".to_string());
+    }
+    Ok(())
+}
+
+fn clear_dropbox_tokens(app: &tauri::AppHandle) -> Result<(), String> {
+    clear_dropbox_tokens_with(
+        || {
+            update_dropbox_credential_state(app, |state| {
+                state.token_fallback = None;
+                Ok(())
+            })
+            .map(|_| ())
+        },
+        || Ok(read_dropbox_credential_state(app)?.token_fallback.is_some()),
+        || get_keyring_secret(app, KEYRING_DROPBOX_TOKENS).map(|value| value.is_some()),
+        || set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, None),
+    )
+}
+
+fn publish_dropbox_disconnect_state(app: &tauri::AppHandle) -> Result<(), String> {
+    let tombstone = serialize_dropbox_journal_tombstone()?;
+    let persisted = update_dropbox_credential_state(app, |state| {
+        // One protected publication removes active fallback authority and
+        // logically clears any promotion journal before either keyring entry
+        // can be deleted or the remote token can be revoked.
+        state.token_fallback = None;
+        state.promotion_journal = Some(tombstone.clone());
+        Ok(())
+    })?;
+    if persisted.token_fallback.is_some()
+        || persisted.promotion_journal.as_deref() != Some(tombstone.as_str())
+    {
+        return Err("Dropbox disconnect state failed durable read-back verification".to_string());
+    }
+    Ok(())
+}
+
+fn clear_dropbox_tokens_after_disconnect_state_publish(
+    app: &tauri::AppHandle,
+) -> Result<(), String> {
+    clear_dropbox_tokens_with(
+        || Ok(()),
+        || Ok(read_dropbox_credential_state(app)?.token_fallback.is_some()),
+        || get_keyring_secret(app, KEYRING_DROPBOX_TOKENS).map(|value| value.is_some()),
+        || set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, None),
+    )
+}
+
+fn clear_dropbox_credentials_for_disconnect(app: &tauri::AppHandle) -> Result<(), String> {
+    publish_dropbox_disconnect_state(app)?;
+    clear_dropbox_tokens_after_disconnect_state_publish(app)
+}
+
+fn write_optional_dropbox_tokens(
+    app: &tauri::AppHandle,
+    tokens: Option<&DropboxTokenBundle>,
+) -> Result<(), String> {
+    match tokens {
+        Some(tokens) => write_dropbox_tokens(app, tokens),
+        None => clear_dropbox_tokens(app),
+    }
+}
+
+fn validate_dropbox_promotion_journal(
+    journal: DropboxCredentialPromotionJournal,
+) -> Result<DropboxCredentialPromotionJournal, String> {
+    if journal.candidate_client_id.trim().is_empty()
+        || journal.candidate_fingerprint.trim().is_empty()
+    {
+        return Err("Dropbox credential promotion journal is invalid".to_string());
+    }
+    if let DropboxPreviousCredentials::Bundle(tokens) = &journal.previous {
+        validate_dropbox_token_bundle(tokens.clone())?;
+    }
+    Ok(journal)
+}
+
+fn parse_dropbox_promotion_journal_fallback_record(
+    raw: &str,
+) -> Result<DropboxPromotionJournalFallbackRecord, String> {
+    if let Ok(record) = serde_json::from_str::<DropboxPromotionJournalFallbackRecord>(raw) {
+        return match record {
+            DropboxPromotionJournalFallbackRecord::PendingKeyring {
+                version,
+                journal_fingerprint,
+            } if version == DROPBOX_PROMOTION_JOURNAL_VERSION
+                && !journal_fingerprint.trim().is_empty() =>
+            {
+                Ok(DropboxPromotionJournalFallbackRecord::PendingKeyring {
+                    version,
+                    journal_fingerprint,
+                })
+            }
+            DropboxPromotionJournalFallbackRecord::PendingKeyring { .. } => Err(
+                "Dropbox credential promotion keyring marker has an unsupported version"
+                    .to_string(),
+            ),
+            DropboxPromotionJournalFallbackRecord::Pending { journal } => {
+                validate_dropbox_promotion_journal(journal)
+                    .map(|journal| DropboxPromotionJournalFallbackRecord::Pending { journal })
+            }
+            DropboxPromotionJournalFallbackRecord::Cleared { version }
+                if version == DROPBOX_PROMOTION_JOURNAL_VERSION =>
+            {
+                Ok(DropboxPromotionJournalFallbackRecord::Cleared { version })
+            }
+            DropboxPromotionJournalFallbackRecord::Cleared { .. } => {
+                Err("Dropbox credential promotion tombstone has an unsupported version".to_string())
+            }
+        };
+    }
+
+    let journal: DropboxCredentialPromotionJournal = serde_json::from_str(raw)
+        .map_err(|_| "Dropbox credential promotion journal is invalid".to_string())?;
+    validate_dropbox_promotion_journal(journal)
+        .map(|journal| DropboxPromotionJournalFallbackRecord::Pending { journal })
+}
+
+fn serialize_dropbox_pending_journal_fallback(
+    journal: &DropboxCredentialPromotionJournal,
+) -> Result<String, String> {
+    serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Pending {
+        journal: journal.clone(),
+    })
+    .map_err(|_| "Failed to serialize the Dropbox credential promotion journal".to_string())
+}
+
+fn dropbox_promotion_journal_fingerprint(
+    journal: &DropboxCredentialPromotionJournal,
+) -> Result<String, String> {
+    let serialized = serde_json::to_vec(journal).map_err(|_| {
+        "Failed to fingerprint the Dropbox credential promotion journal".to_string()
+    })?;
+    Ok(URL_SAFE_NO_PAD.encode(Sha256::digest(serialized)))
+}
+
+fn serialize_dropbox_pending_keyring_marker(
+    journal: &DropboxCredentialPromotionJournal,
+) -> Result<String, String> {
+    serde_json::to_string(&DropboxPromotionJournalFallbackRecord::PendingKeyring {
+        version: DROPBOX_PROMOTION_JOURNAL_VERSION,
+        journal_fingerprint: dropbox_promotion_journal_fingerprint(journal)?,
+    })
+    .map_err(|_| "Failed to serialize the Dropbox credential promotion marker".to_string())
+}
+
+fn serialize_dropbox_journal_tombstone() -> Result<String, String> {
+    serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Cleared {
+        version: DROPBOX_PROMOTION_JOURNAL_VERSION,
+    })
+    .map_err(|_| "Failed to serialize the Dropbox credential promotion tombstone".to_string())
+}
+
+fn read_dropbox_promotion_journal_authority_with<
+    CanCleanupOrphan,
+    WriteFallback,
+    ReadFallback,
+    ReadKeyring,
+    ClearKeyring,
+    ClearFallback,
+>(
+    mut can_cleanup_orphan: CanCleanupOrphan,
+    mut write_fallback: WriteFallback,
+    mut read_fallback: ReadFallback,
+    mut read_keyring: ReadKeyring,
+    mut clear_keyring: ClearKeyring,
+    mut clear_fallback: ClearFallback,
+) -> Result<Option<DropboxCredentialPromotionJournal>, String>
+where
+    CanCleanupOrphan: FnMut() -> Result<bool, String>,
+    WriteFallback: FnMut(&str) -> Result<(), String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+    ClearKeyring: FnMut() -> Result<(), String>,
+    ClearFallback: FnMut() -> Result<(), String>,
+{
+    // The owner-only fallback is the authority marker. Its absence means no
+    // transaction and deliberately does not probe the keyring: a clean
+    // profile must remain usable when the OS credential service is absent.
+    let Some(raw) = read_fallback()? else {
+        return Ok(None);
+    };
+    match parse_dropbox_promotion_journal_fallback_record(&raw)? {
+        DropboxPromotionJournalFallbackRecord::PendingKeyring {
+            journal_fingerprint,
+            ..
+        } => {
+            let raw = read_keyring().map_err(|_| {
+                "Failed to inspect the Dropbox credential promotion journal".to_string()
+            })?;
+            if let Some(raw) = raw.as_deref() {
+                if let Ok(journal) = serde_json::from_str::<DropboxCredentialPromotionJournal>(raw)
+                    .map_err(|_| ())
+                    .and_then(|journal| validate_dropbox_promotion_journal(journal).map_err(|_| ()))
+                {
+                    if dropbox_promotion_journal_fingerprint(&journal)? == journal_fingerprint {
+                        return Ok(Some(journal));
+                    }
+                }
+            }
+
+            // A missing, corrupt, or mismatched keyring journal cannot be
+            // paired with this transaction-bound marker. It is safe to remove
+            // only while both durable backend authorities remain off; callers
+            // otherwise fail closed first and retry cleanup later.
+            if !can_cleanup_orphan()? {
+                return Err(
+                    "Dropbox credential promotion marker does not match its keyring journal"
+                        .to_string(),
+                );
+            }
+            let tombstone = serialize_dropbox_journal_tombstone()?;
+            write_fallback(&tombstone)?;
+            let persisted = read_fallback()?.ok_or_else(|| {
+                "Dropbox credential promotion tombstone is missing after write".to_string()
+            })?;
+            if !matches!(
+                parse_dropbox_promotion_journal_fallback_record(&persisted)?,
+                DropboxPromotionJournalFallbackRecord::Cleared { .. }
+            ) {
+                return Err(
+                    "Dropbox credential promotion tombstone failed durable read-back verification"
+                        .to_string(),
+                );
+            }
+            clear_keyring()?;
+            if !matches!(read_keyring(), Ok(None)) {
+                return Err(
+                    "Dropbox credential promotion orphan keyring deletion could not be verified"
+                        .to_string(),
+                );
+            }
+            let _ = clear_fallback();
+            Ok(None)
         }
-        Err(_error) => {
-            config.dropbox_tokens = Some(payload);
-            write_config_files(&config_path, &secrets_path, &config)
+        DropboxPromotionJournalFallbackRecord::Pending { journal } => Ok(Some(journal)),
+        DropboxPromotionJournalFallbackRecord::Cleared { .. } => {
+            // The redacted fallback tombstone is the durable authority. A
+            // stale or unavailable keyring cannot resurrect the resolved
+            // transaction. Cleanup is opportunistic and may be retried.
+            if clear_keyring().is_ok() && matches!(read_keyring(), Ok(None)) {
+                let _ = clear_fallback();
+            }
+            Ok(None)
         }
     }
 }
 
-fn clear_dropbox_tokens(app: &tauri::AppHandle) -> Result<(), String> {
-    let _ = set_keyring_secret(app, KEYRING_DROPBOX_TOKENS, None);
-    let config_path = get_config_path(app);
-    let secrets_path = get_secrets_path(app);
-    let mut config = read_config(app);
-    if config.dropbox_tokens.is_some() {
-        config.dropbox_tokens = None;
-        write_config_files(&config_path, &secrets_path, &config)?;
+fn write_dropbox_promotion_journal_authority_with<WriteKeyring, WriteFallback, ReadFallback>(
+    journal: &DropboxCredentialPromotionJournal,
+    mut write_keyring: WriteKeyring,
+    mut write_fallback: WriteFallback,
+    mut read_fallback: ReadFallback,
+) -> Result<(), String>
+where
+    WriteKeyring: FnMut(&str) -> Result<(), String>,
+    WriteFallback: FnMut(&str) -> Result<(), String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+{
+    // The redacted marker is published before the keyring write. It is the
+    // authority bit that distinguishes a clean profile from an interrupted
+    // transaction without duplicating token bytes into secrets.toml.
+    let marker = serialize_dropbox_pending_keyring_marker(journal)?;
+    write_fallback(&marker)?;
+    let persisted_marker = read_fallback()?.ok_or_else(|| {
+        "Dropbox credential promotion keyring marker is missing after write".to_string()
+    })?;
+    if persisted_marker != marker {
+        return Err(
+            "Dropbox credential promotion keyring marker does not match the pending transaction"
+                .to_string(),
+        );
+    }
+
+    let keyring_payload = serde_json::to_string(journal)
+        .map_err(|_| "Failed to serialize the Dropbox credential promotion journal".to_string())?;
+    if write_keyring(&keyring_payload).is_ok() {
+        let persisted_marker = read_fallback()?.ok_or_else(|| {
+            "Dropbox credential promotion keyring marker disappeared after keyring write"
+                .to_string()
+        })?;
+        if persisted_marker != marker {
+            return Err(
+                "Dropbox credential promotion keyring marker changed during journal publication"
+                    .to_string(),
+            );
+        }
+        return Ok(());
+    }
+
+    // A failed or uncertain keyring write may have left stale bytes behind.
+    // Publish the owner-only fallback after that attempt so it becomes the
+    // durable authority before active credentials may be overwritten.
+    let fallback_payload = serialize_dropbox_pending_journal_fallback(journal)?;
+    write_fallback(&fallback_payload)?;
+    let persisted = read_fallback()?
+        .ok_or_else(|| "Dropbox credential promotion journal is missing after write".to_string())?;
+    if parse_dropbox_promotion_journal_fallback_record(&persisted)?
+        != (DropboxPromotionJournalFallbackRecord::Pending {
+            journal: journal.clone(),
+        })
+    {
+        return Err(
+            "Dropbox credential promotion journal failed durable read-back verification"
+                .to_string(),
+        );
     }
     Ok(())
+}
+
+fn logically_clear_dropbox_promotion_journal_with<
+    WriteFallback,
+    ReadFallback,
+    ClearKeyring,
+    ReadKeyring,
+    ClearFallback,
+>(
+    mut write_fallback: WriteFallback,
+    mut read_fallback: ReadFallback,
+    mut clear_keyring: ClearKeyring,
+    mut read_keyring: ReadKeyring,
+    mut clear_fallback: ClearFallback,
+) -> Result<(), String>
+where
+    WriteFallback: FnMut(&str) -> Result<(), String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+    ClearKeyring: FnMut() -> Result<(), String>,
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+    ClearFallback: FnMut() -> Result<(), String>,
+{
+    let tombstone = serialize_dropbox_journal_tombstone()?;
+    write_fallback(&tombstone)?;
+    let persisted = read_fallback()?.ok_or_else(|| {
+        "Dropbox credential promotion tombstone is missing after write".to_string()
+    })?;
+    if !matches!(
+        parse_dropbox_promotion_journal_fallback_record(&persisted)?,
+        DropboxPromotionJournalFallbackRecord::Cleared { .. }
+    ) {
+        return Err(
+            "Dropbox credential promotion tombstone failed durable read-back verification"
+                .to_string(),
+        );
+    }
+
+    if clear_keyring().is_ok() && matches!(read_keyring(), Ok(None)) {
+        let _ = clear_fallback();
+    }
+    Ok(())
+}
+
+fn strictly_purge_dropbox_promotion_journal_with<
+    WriteFallback,
+    ReadFallback,
+    ClearKeyring,
+    ReadKeyring,
+    ClearFallback,
+>(
+    keyring_enabled: bool,
+    mut write_fallback: WriteFallback,
+    mut read_fallback: ReadFallback,
+    mut clear_keyring: ClearKeyring,
+    mut read_keyring: ReadKeyring,
+    mut clear_fallback: ClearFallback,
+) -> Result<(), String>
+where
+    WriteFallback: FnMut(&str) -> Result<(), String>,
+    ReadFallback: FnMut() -> Result<Option<String>, String>,
+    ClearKeyring: FnMut() -> Result<(), String>,
+    ReadKeyring: FnMut() -> Result<Option<String>, String>,
+    ClearFallback: FnMut() -> Result<(), String>,
+{
+    let tombstone = serialize_dropbox_journal_tombstone()?;
+    write_fallback(&tombstone)?;
+    let persisted = read_fallback()?.ok_or_else(|| {
+        "Dropbox credential promotion tombstone is missing after write".to_string()
+    })?;
+    if !matches!(
+        parse_dropbox_promotion_journal_fallback_record(&persisted)?,
+        DropboxPromotionJournalFallbackRecord::Cleared { .. }
+    ) {
+        return Err(
+            "Dropbox credential promotion tombstone failed durable read-back verification"
+                .to_string(),
+        );
+    }
+
+    if keyring_enabled {
+        clear_keyring()?;
+        match read_keyring() {
+            Ok(None) => {}
+            Ok(Some(_)) => {
+                return Err(
+                    "Dropbox credential promotion journal remained in the keyring after deletion"
+                        .to_string(),
+                )
+            }
+            Err(_) => {
+                return Err(
+                    "Dropbox credential promotion keyring deletion could not be verified"
+                        .to_string(),
+                )
+            }
+        }
+    }
+    clear_fallback()?;
+    if read_fallback()?.is_some() {
+        return Err(
+            "Dropbox credential promotion journal fallback failed deletion verification"
+                .to_string(),
+        );
+    }
+    if keyring_enabled {
+        let recheck = read_keyring();
+        if !matches!(recheck, Ok(None)) {
+            let restore_result = write_fallback(&tombstone).and_then(|_| {
+                let restored = read_fallback()?.ok_or_else(|| {
+                    "Dropbox credential promotion tombstone is missing after restoration"
+                        .to_string()
+                })?;
+                if matches!(
+                    parse_dropbox_promotion_journal_fallback_record(&restored)?,
+                    DropboxPromotionJournalFallbackRecord::Cleared { .. }
+                ) {
+                    Ok(())
+                } else {
+                    Err(
+                        "Dropbox credential promotion tombstone failed restoration verification"
+                            .to_string(),
+                    )
+                }
+            });
+            return match restore_result {
+                Ok(()) => Err(
+                    "Dropbox credential promotion keyring deletion became uncertain after fallback removal; tombstone was restored"
+                        .to_string(),
+                ),
+                Err(error) => Err(format!(
+                    "Dropbox credential promotion keyring deletion became uncertain and the tombstone could not be restored: {error}"
+                )),
+            };
+        }
+    }
+    Ok(())
+}
+
+fn write_dropbox_promotion_journal_fallback(
+    app: &tauri::AppHandle,
+    payload: Option<&str>,
+) -> Result<(), String> {
+    update_dropbox_credential_state(app, |state| {
+        state.promotion_journal = payload.map(str::to_string);
+        Ok(())
+    })
+    .map(|_| ())
+}
+
+fn read_dropbox_promotion_journal_fallback(
+    app: &tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    Ok(read_dropbox_credential_state(app)?.promotion_journal)
+}
+
+fn clear_dropbox_promotion_journal_fallback_verified(app: &tauri::AppHandle) -> Result<(), String> {
+    write_dropbox_promotion_journal_fallback(app, None)?;
+    if read_dropbox_promotion_journal_fallback(app)?.is_some() {
+        return Err(
+            "Dropbox credential promotion journal fallback failed deletion verification"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn clear_dropbox_promotion_journal_keyring(app: &tauri::AppHandle) -> Result<(), String> {
+    set_keyring_secret(app, KEYRING_DROPBOX_PROMOTION_JOURNAL, None)
+        .map_err(|_| "Failed to delete the Dropbox credential promotion journal".to_string())
+}
+
+fn write_dropbox_promotion_journal_keyring_verified(
+    app: &tauri::AppHandle,
+    payload: &str,
+    expected: &DropboxCredentialPromotionJournal,
+) -> Result<(), String> {
+    set_keyring_secret(
+        app,
+        KEYRING_DROPBOX_PROMOTION_JOURNAL,
+        Some(payload.to_string()),
+    )
+    .map_err(|_| "Failed to persist the Dropbox credential promotion journal".to_string())?;
+    let raw = get_keyring_secret(app, KEYRING_DROPBOX_PROMOTION_JOURNAL)
+        .map_err(|_| "Failed to verify the Dropbox credential promotion journal".to_string())?
+        .ok_or_else(|| {
+            "Dropbox credential promotion journal is missing after keyring write".to_string()
+        })?;
+    let persisted = match parse_dropbox_promotion_journal_fallback_record(&raw)? {
+        DropboxPromotionJournalFallbackRecord::Pending { journal } => journal,
+        DropboxPromotionJournalFallbackRecord::PendingKeyring { .. } => {
+            return Err(
+                "Dropbox credential promotion keyring contains a marker instead of a journal"
+                    .to_string(),
+            )
+        }
+        DropboxPromotionJournalFallbackRecord::Cleared { .. } => {
+            return Err(
+                "Dropbox credential promotion keyring contains a tombstone after journal write"
+                    .to_string(),
+            )
+        }
+    };
+    if &persisted != expected {
+        return Err(
+            "Dropbox credential promotion journal failed keyring read-back verification"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn read_dropbox_promotion_journal(
+    app: &tauri::AppHandle,
+) -> Result<Option<DropboxCredentialPromotionJournal>, String> {
+    read_dropbox_promotion_journal_authority_with(
+        || {
+            Ok(dropbox_recovery_state_is_durably_off(
+                &read_native_dropbox_recovery_commit_state(app)?,
+            ))
+        },
+        |payload| write_dropbox_promotion_journal_fallback(app, Some(payload)),
+        || read_dropbox_promotion_journal_fallback(app),
+        || get_keyring_secret(app, KEYRING_DROPBOX_PROMOTION_JOURNAL),
+        || clear_dropbox_promotion_journal_keyring(app),
+        || clear_dropbox_promotion_journal_fallback_verified(app),
+    )
+}
+
+fn write_dropbox_promotion_journal(
+    app: &tauri::AppHandle,
+    journal: &DropboxCredentialPromotionJournal,
+) -> Result<(), String> {
+    write_dropbox_promotion_journal_authority_with(
+        journal,
+        |payload| write_dropbox_promotion_journal_keyring_verified(app, payload, journal),
+        |payload| {
+            if matches!(
+                parse_dropbox_promotion_journal_fallback_record(payload),
+                Ok(DropboxPromotionJournalFallbackRecord::Pending { .. })
+            ) {
+                crate::config::emit_keyring_fallback_warning(app, "Dropbox recovery credentials");
+            }
+            write_dropbox_promotion_journal_fallback(app, Some(payload))
+        },
+        || read_dropbox_promotion_journal_fallback(app),
+    )
+}
+
+fn clear_dropbox_promotion_journal(app: &tauri::AppHandle) -> Result<(), String> {
+    logically_clear_dropbox_promotion_journal_with(
+        |payload| write_dropbox_promotion_journal_fallback(app, Some(payload)),
+        || read_dropbox_promotion_journal_fallback(app),
+        || clear_dropbox_promotion_journal_keyring(app),
+        || get_keyring_secret(app, KEYRING_DROPBOX_PROMOTION_JOURNAL),
+        || clear_dropbox_promotion_journal_fallback_verified(app),
+    )
+}
+
+fn strictly_purge_dropbox_promotion_journal(app: &tauri::AppHandle) -> Result<(), String> {
+    strictly_purge_dropbox_promotion_journal_with(
+        !crate::storage::is_portable_mode(),
+        |payload| write_dropbox_promotion_journal_fallback(app, Some(payload)),
+        || read_dropbox_promotion_journal_fallback(app),
+        || clear_dropbox_promotion_journal_keyring(app),
+        || get_keyring_secret(app, KEYRING_DROPBOX_PROMOTION_JOURNAL),
+        || clear_dropbox_promotion_journal_fallback_verified(app),
+    )
+}
+
+fn read_native_sync_backend(app: &tauri::AppHandle) -> Result<String, String> {
+    let (raw_backend, _) = crate::config::read_sync_backend_publication_state(app)?;
+    Ok(raw_backend)
+}
+
+fn write_native_sync_backend(app: &tauri::AppHandle, backend: &str) -> Result<(), String> {
+    crate::config::set_sync_backend(app.clone(), backend.to_string())?;
+    let (raw_backend, state) = crate::config::read_sync_backend_publication_state(app)?;
+    if raw_backend.trim() != backend || state.sync_backend_marker.trim() != backend {
+        return Err("Native sync backend failed durable read-back verification".to_string());
+    }
+    Ok(())
+}
+
+fn read_native_dropbox_recovery_commit_state(
+    app: &tauri::AppHandle,
+) -> Result<DropboxRecoveryCommitState, String> {
+    let (raw_backend, state) = crate::config::read_sync_backend_publication_state(app)?;
+    Ok(DropboxRecoveryCommitState {
+        raw_backend,
+        backend_marker: state.sync_backend_marker,
+        cloud_provider: state.cloud_provider,
+        cloud_provider_authority: state.cloud_provider_authority,
+    })
+}
+
+fn read_native_durably_disabled_sync_backend(app: &tauri::AppHandle) -> Result<String, String> {
+    require_durably_disabled_dropbox_backend(read_native_dropbox_recovery_commit_state(app)?)
+}
+
+// Callers serialize this with `DropboxStagedCredentialState`. While a journal
+// exists, the renderer transaction has already durably selected Dropbox and
+// read it back, but has not written `sync_backend = cloud` until after native
+// credential promotion succeeds. Therefore `cloud` is the durable commit
+// marker: a matching candidate is kept; every other backend restores the
+// journaled previous bundle.
+fn recover_dropbox_credentials(app: &tauri::AppHandle) -> Result<(), String> {
+    // Reconcile a process stop between raw config publication and marker
+    // publication before journal inspection. The dedicated marker is the
+    // commit authority even when no credential journal exists.
+    read_native_dropbox_recovery_commit_state(app)?;
+    recover_dropbox_credentials_fail_closed_with_commit_state(
+        || read_native_dropbox_recovery_commit_state(app),
+        |backend| write_native_sync_backend(app, backend),
+        || read_dropbox_tokens_for_recovery(app),
+        |journal| resolve_unknown_dropbox_previous_credentials(app, journal),
+        |tokens| write_optional_dropbox_tokens(app, tokens),
+        || read_dropbox_promotion_journal(app),
+        || clear_dropbox_promotion_journal(app),
+    )
+}
+
+pub(crate) fn recover_dropbox_credentials_on_startup(
+    app: &tauri::AppHandle,
+) -> Result<DropboxStartupRecoveryOutcome, String> {
+    classify_dropbox_startup_recovery_with(recover_dropbox_credentials(app), || {
+        read_native_sync_backend(app)
+    })
+}
+
+fn classify_dropbox_startup_recovery_with<ReadBackend>(
+    recovery: Result<(), String>,
+    mut read_backend: ReadBackend,
+) -> Result<DropboxStartupRecoveryOutcome, String>
+where
+    ReadBackend: FnMut() -> Result<String, String>,
+{
+    match recovery {
+        Ok(()) => Ok(DropboxStartupRecoveryOutcome::Ready),
+        Err(warning) => match read_backend() {
+            Ok(backend) if backend.trim() == "off" => {
+                Ok(DropboxStartupRecoveryOutcome::SyncDisabled { warning })
+            }
+            Ok(_) => Err(
+                "Dropbox credential recovery is uncertain and sync could not be durably disabled"
+                    .to_string(),
+            ),
+            Err(_) => Err(
+                "Dropbox credential recovery is uncertain and the disabled sync state could not be verified"
+                    .to_string(),
+            ),
+        },
+    }
 }
 
 fn get_valid_dropbox_access_token(
@@ -546,7 +2391,31 @@ fn get_valid_dropbox_access_token(
     Ok(tokens.access_token)
 }
 
-fn run_dropbox_oauth(app: &tauri::AppHandle, client_id: &str) -> Result<(), String> {
+fn get_valid_staged_dropbox_access_token(
+    app: &tauri::AppHandle,
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    credential_handle: &str,
+    client_id: &str,
+    force_refresh: bool,
+) -> Result<String, String> {
+    let normalized_client_id = normalize_dropbox_client_id(client_id)?;
+    let proxy_url = read_config(app).proxy_url;
+    resolve_staged_dropbox_access_token_with(
+        entries,
+        credential_handle,
+        &normalized_client_id,
+        force_refresh,
+        now_unix_ms(),
+        |client_id, refresh_token| {
+            refresh_dropbox_token(client_id, refresh_token, proxy_url.as_deref())
+        },
+    )
+}
+
+fn run_dropbox_oauth(
+    app: &tauri::AppHandle,
+    client_id: &str,
+) -> Result<DropboxTokenBundle, String> {
     let normalized_client_id = normalize_dropbox_client_id(client_id)?;
     let listener =
         TcpListener::bind((DROPBOX_REDIRECT_HOST, DROPBOX_REDIRECT_PORT)).map_err(|error| {
@@ -582,16 +2451,13 @@ fn run_dropbox_oauth(app: &tauri::AppHandle, client_id: &str) -> Result<(), Stri
         .map_err(|error| format!("Failed to open Dropbox authorization URL: {error}"))?;
 
     let code = wait_for_dropbox_auth_code(&listener, &state)?;
-    let tokens =
-        exchange_dropbox_auth_code(
-            &normalized_client_id,
-            &code,
-            &verifier,
-            &redirect_uri,
-            read_config(app).proxy_url.as_deref(),
-        )?;
-    write_dropbox_tokens(app, &tokens)?;
-    Ok(())
+    exchange_dropbox_auth_code(
+        &normalized_client_id,
+        &code,
+        &verifier,
+        &redirect_uri,
+        read_config(app).proxy_url.as_deref(),
+    )
 }
 
 fn default_sync_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -721,6 +2587,16 @@ pub(crate) fn get_sync_path(app: tauri::AppHandle) -> Result<String, String> {
     Ok(configured_sync_dir(&app)?
         .map(|path| sync_dir_to_display_string(&path))
         .unwrap_or_default())
+}
+
+#[tauri::command]
+pub(crate) fn clear_sync_path(app: tauri::AppHandle) -> Result<bool, String> {
+    let config_path = get_config_path(&app);
+    let mut config = read_config(&app);
+    config.sync_path = None;
+    config.sync_path_bookmark = None;
+    write_config_files(&config_path, &get_secrets_path(&app), &config)?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -1248,7 +3124,10 @@ mod tests {
     #[test]
     fn blocking_http_client_rejects_invalid_proxy_url() {
         let error = blocking_http_client(Some("not a proxy url")).unwrap_err();
-        assert!(error.contains("Invalid proxy URL"), "unexpected error: {error}");
+        assert!(
+            error.contains("Invalid proxy URL"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
@@ -1269,8 +3148,8 @@ mod tests {
             request
         });
 
-        let client = blocking_http_client(Some(&format!("http://{proxy_addr}")))
-            .expect("client with proxy");
+        let client =
+            blocking_http_client(Some(&format!("http://{proxy_addr}"))).expect("client with proxy");
         // The target host does not resolve; reaching our listener proves the
         // request went to the proxy instead of connecting directly.
         let _ = client.get("http://mindwtr-proxy-test.invalid/ping").send();
@@ -1309,7 +3188,10 @@ mod tests {
             wrong_sync_server_hint(reqwest::StatusCode::INTERNAL_SERVER_ERROR),
             ""
         );
-        assert_eq!(wrong_sync_server_hint(reqwest::StatusCode::UNAUTHORIZED), "");
+        assert_eq!(
+            wrong_sync_server_hint(reqwest::StatusCode::UNAUTHORIZED),
+            ""
+        );
     }
 
     #[test]
@@ -1484,11 +3366,2961 @@ mod tests {
         let payload = empty_remote_app_data();
         for field in ["tasks", "projects", "sections", "areas", "people"] {
             assert!(
-                payload.get(field).and_then(|value| value.as_array()).is_some(),
+                payload
+                    .get(field)
+                    .and_then(|value| value.as_array())
+                    .is_some(),
                 "empty_remote_app_data is missing AppData array surface {field:?}"
             );
         }
-        assert!(payload.get("settings").and_then(|value| value.as_object()).is_some());
+        assert!(payload
+            .get("settings")
+            .and_then(|value| value.as_object())
+            .is_some());
+    }
+
+    fn test_dropbox_tokens(label: &str, expires_at: i64) -> DropboxTokenBundle {
+        DropboxTokenBundle {
+            client_id: "client-id".to_string(),
+            access_token: format!("{label}-access"),
+            refresh_token: format!("{label}-refresh"),
+            expires_at,
+        }
+    }
+
+    #[test]
+    fn clearing_dropbox_tokens_propagates_keyring_deletion_failure() {
+        let fallback_cleared = std::cell::Cell::new(false);
+        let error = clear_dropbox_tokens_with(
+            || {
+                fallback_cleared.set(true);
+                Ok(())
+            },
+            || Ok(false),
+            || Ok(true),
+            || Err("keyring deletion failed".to_string()),
+        )
+        .expect_err("a real keyring deletion failure must fail disconnect");
+
+        assert!(fallback_cleared.get());
+        assert!(error.contains("keyring deletion failed"));
+    }
+
+    #[test]
+    fn clearing_dropbox_tokens_rejects_a_partial_keyring_deletion() {
+        let keyring_reads = std::cell::Cell::new(0usize);
+        let error = clear_dropbox_tokens_with(
+            || Ok(()),
+            || Ok(false),
+            || {
+                let read = keyring_reads.get();
+                keyring_reads.set(read + 1);
+                Ok(true)
+            },
+            || Ok(()),
+        )
+        .expect_err("a keyring write without matching read-back must fail");
+
+        assert!(error.contains("durable read-back verification"));
+        assert!(keyring_reads.get() >= 2);
+    }
+
+    #[test]
+    fn disconnect_clears_dormant_dropbox_state_for_known_non_cloud_backends() {
+        use std::cell::{Cell, RefCell};
+
+        for backend in ["off", "file", "webdav", "cloudkit"] {
+            let backend_state = RefCell::new(backend.to_string());
+            let tokens = test_dropbox_tokens("dormant", 100_000);
+            let active = RefCell::new(Some(tokens.clone()));
+            let journal_present = Cell::new(true);
+            let staged_present = Cell::new(true);
+
+            let token_to_revoke = prepare_dropbox_disconnect_with(
+                "client-id",
+                || {
+                    Ok(inferred_dropbox_recovery_commit_state(
+                        backend_state.borrow().clone(),
+                    ))
+                },
+                || Ok(None),
+                || Ok(()),
+                || Ok(active.borrow().clone()),
+                || {
+                    *active.borrow_mut() = None;
+                    Ok(())
+                },
+                || {
+                    journal_present.set(false);
+                    Ok(())
+                },
+                || staged_present.set(false),
+            )
+            .unwrap_or_else(|error| panic!("{backend} should allow disconnect: {error}"));
+
+            assert_eq!(token_to_revoke, Some(tokens));
+            assert_eq!(backend_state.borrow().as_str(), backend);
+            assert!(active.borrow().is_none());
+            assert!(!journal_present.get());
+            assert!(!staged_present.get());
+        }
+    }
+
+    #[test]
+    fn disconnect_rejects_cloud_unknown_and_unreadable_backends_without_mutation() {
+        use std::cell::Cell;
+
+        for backend in ["cloud", "future-backend", ""] {
+            let post_guard_calls = Cell::new(0usize);
+            let error = prepare_dropbox_disconnect_with(
+                "client-id",
+                || Ok(inferred_dropbox_recovery_commit_state(backend.to_string())),
+                || Ok(None),
+                || {
+                    post_guard_calls.set(post_guard_calls.get() + 1);
+                    Ok(())
+                },
+                || {
+                    post_guard_calls.set(post_guard_calls.get() + 1);
+                    Ok(None)
+                },
+                || {
+                    post_guard_calls.set(post_guard_calls.get() + 1);
+                    Ok(())
+                },
+                || {
+                    post_guard_calls.set(post_guard_calls.get() + 1);
+                    Ok(())
+                },
+                || post_guard_calls.set(post_guard_calls.get() + 1),
+            )
+            .expect_err("unsafe or unknown backend must fail closed");
+            assert!(error.contains("disconnect"));
+            assert_eq!(post_guard_calls.get(), 0);
+        }
+
+        let post_guard_calls = Cell::new(0usize);
+        let error = prepare_dropbox_disconnect_with(
+            "client-id",
+            || Err("corrupt config".to_string()),
+            || Ok(None),
+            || {
+                post_guard_calls.set(post_guard_calls.get() + 1);
+                Ok(())
+            },
+            || {
+                post_guard_calls.set(post_guard_calls.get() + 1);
+                Ok(None)
+            },
+            || {
+                post_guard_calls.set(post_guard_calls.get() + 1);
+                Ok(())
+            },
+            || {
+                post_guard_calls.set(post_guard_calls.get() + 1);
+                Ok(())
+            },
+            || post_guard_calls.set(post_guard_calls.get() + 1),
+        )
+        .expect_err("unreadable backend must fail closed");
+        assert!(error.contains("corrupt config"));
+        assert_eq!(post_guard_calls.get(), 0);
+    }
+
+    #[test]
+    fn disconnect_allows_dormant_dropbox_credentials_during_active_selfhosted_sync() {
+        use std::cell::{Cell, RefCell};
+
+        let active = RefCell::new(Some(test_dropbox_tokens("dormant", 100_000)));
+        let cleared = Cell::new(0usize);
+        let token_to_revoke = prepare_dropbox_disconnect_with(
+            "client-id",
+            || {
+                Ok(DropboxRecoveryCommitState {
+                    raw_backend: "cloud".to_string(),
+                    backend_marker: "cloud".to_string(),
+                    cloud_provider: "selfhosted".to_string(),
+                    cloud_provider_authority: "native".to_string(),
+                })
+            },
+            || Ok(None),
+            || Ok(()),
+            || Ok(active.borrow().clone()),
+            || {
+                cleared.set(cleared.get() + 1);
+                *active.borrow_mut() = None;
+                Ok(())
+            },
+            || {
+                cleared.set(cleared.get() + 1);
+                Ok(())
+            },
+            || cleared.set(cleared.get() + 1),
+        )
+        .expect("self-hosted cloud does not consume dormant Dropbox credentials");
+
+        assert!(token_to_revoke.is_some());
+        assert!(active.borrow().is_none());
+        assert_eq!(cleared.get(), 3);
+    }
+
+    #[test]
+    fn disconnect_rejects_backend_marker_mismatch_before_any_mutation() {
+        use std::cell::Cell;
+
+        let mutations = Cell::new(0usize);
+        let error = prepare_dropbox_disconnect_with(
+            "client-id",
+            || {
+                Ok(DropboxRecoveryCommitState {
+                    raw_backend: "cloud".to_string(),
+                    backend_marker: "off".to_string(),
+                    cloud_provider: "selfhosted".to_string(),
+                    cloud_provider_authority: "native".to_string(),
+                })
+            },
+            || Ok(None),
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(None)
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || mutations.set(mutations.get() + 1),
+        )
+        .expect_err("inconsistent native markers fail closed");
+
+        assert!(error.contains("inconsistent"));
+        assert_eq!(mutations.get(), 0);
+    }
+
+    #[test]
+    fn disconnect_rejects_uninitialized_provider_authority_before_any_mutation() {
+        use std::cell::Cell;
+
+        let mutations = Cell::new(0usize);
+        let error = prepare_dropbox_disconnect_with(
+            "client-id",
+            || {
+                Ok(DropboxRecoveryCommitState {
+                    raw_backend: "cloud".to_string(),
+                    backend_marker: "cloud".to_string(),
+                    cloud_provider: "selfhosted".to_string(),
+                    cloud_provider_authority: "uninitialized".to_string(),
+                })
+            },
+            || panic!("provider authority guard runs before journal inspection"),
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(None)
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || mutations.set(mutations.get() + 1),
+        )
+        .expect_err("uninitialized cloud provider authority must fail closed");
+
+        assert!(error.contains("authority is uninitialized"));
+        assert_eq!(mutations.get(), 0);
+    }
+
+    #[test]
+    fn disconnect_refuses_a_pending_journal_after_the_backend_changed() {
+        use std::cell::Cell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let journal = build_dropbox_promotion_journal(previous, &candidate)
+            .expect("build pending promotion journal");
+        let mutations = Cell::new(0usize);
+
+        let error = prepare_dropbox_disconnect_with(
+            "client-id",
+            || Ok(inferred_dropbox_recovery_commit_state("off".to_string())),
+            || Ok(Some(journal.clone())),
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(Some(candidate.clone()))
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || {
+                mutations.set(mutations.get() + 1);
+                Ok(())
+            },
+            || mutations.set(mutations.get() + 1),
+        )
+        .expect_err("disconnect must not reclassify a possibly committed journal");
+
+        assert!(error.contains("recovery must settle before the sync backend changes"));
+        assert_eq!(mutations.get(), 0);
+    }
+
+    #[test]
+    fn connect_candidate_staging_preserves_each_active_backend_without_a_journal() {
+        use std::cell::RefCell;
+
+        for backend in ["file", "webdav", "cloudkit", "cloud"] {
+            let backend_state = RefCell::new(backend.to_string());
+            let durable_tokens = RefCell::new(Some(test_dropbox_tokens("active", 90_000)));
+            let mut entries = HashMap::new();
+            let candidate = test_dropbox_tokens("candidate", 100_000);
+
+            stage_dropbox_candidate_after_recovery_with(
+                || {
+                    recover_dropbox_credentials_fail_closed_with(
+                        || Ok(backend_state.borrow().clone()),
+                        |_next| panic!("no-journal connect must not rewrite the backend"),
+                        || panic!("no-journal connect must not inspect durable credentials"),
+                        |_tokens| panic!("no-journal connect must not rewrite durable credentials"),
+                        || Ok(None),
+                        || panic!("no-journal connect must not clear an absent journal"),
+                    )
+                },
+                || {
+                    insert_staged_dropbox_credentials(
+                        &mut entries,
+                        "opaque-handle".to_string(),
+                        candidate.clone(),
+                        100,
+                    )
+                },
+            )
+            .unwrap_or_else(|error| panic!("{backend} should permit candidate staging: {error}"));
+
+            assert_eq!(backend_state.borrow().as_str(), backend);
+            assert_eq!(
+                *durable_tokens.borrow(),
+                Some(test_dropbox_tokens("active", 90_000))
+            );
+            assert!(matches!(
+                entries.get("opaque-handle").map(|entry| &entry.phase),
+                Some(DropboxStagedCredentialPhase::Candidate)
+            ));
+            let refreshed = resolve_staged_dropbox_access_token_with(
+                &mut entries,
+                "opaque-handle",
+                "client-id",
+                true,
+                200,
+                |_client_id, _refresh_token| {
+                    Ok(("refreshed-candidate-access".to_string(), 120_000))
+                },
+            )
+            .expect("Candidate refresh remains memory-only under the active backend");
+            assert_eq!(refreshed, "refreshed-candidate-access");
+            discard_staged_dropbox_credentials_in_store(
+                &mut entries,
+                "opaque-handle",
+                "client-id",
+                300,
+            )
+            .expect("Candidate discard remains memory-only under the active backend");
+            assert!(!entries.contains_key("opaque-handle"));
+            assert_eq!(backend_state.borrow().as_str(), backend);
+            assert_eq!(
+                *durable_tokens.borrow(),
+                Some(test_dropbox_tokens("active", 90_000))
+            );
+        }
+    }
+
+    #[test]
+    fn connect_candidate_staging_stops_without_rolling_back_a_committed_mismatch() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let backend = RefCell::new("cloud".to_string());
+        let active = RefCell::new(Some(test_dropbox_tokens("mismatch", 100_000)));
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build connect recovery journal"),
+        ));
+        let stage_calls = Cell::new(0usize);
+
+        let error = stage_dropbox_candidate_after_recovery_with(
+            || {
+                recover_dropbox_credentials_fail_closed_with(
+                    || Ok(backend.borrow().clone()),
+                    |next| {
+                        *backend.borrow_mut() = next.to_string();
+                        Ok(())
+                    },
+                    || Ok(active.borrow().clone()),
+                    |tokens| {
+                        *active.borrow_mut() = tokens.cloned();
+                        Ok(())
+                    },
+                    || Ok(journal.borrow().clone()),
+                    || {
+                        *journal.borrow_mut() = None;
+                        Ok(())
+                    },
+                )
+            },
+            || {
+                stage_calls.set(stage_calls.get() + 1);
+                Ok(())
+            },
+        )
+        .expect_err("mismatched cloud journal must abort candidate staging");
+
+        assert!(error.contains("active Dropbox commit was left intact"));
+        assert_eq!(backend.borrow().as_str(), "cloud");
+        assert_eq!(
+            *active.borrow(),
+            Some(test_dropbox_tokens("mismatch", 100_000))
+        );
+        assert!(journal.borrow().is_some());
+        assert_eq!(stage_calls.get(), 0);
+    }
+
+    #[test]
+    fn keyring_error_fallback_round_trips_promotion_recovery_and_rollback() {
+        use std::cell::RefCell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let fallback = RefCell::new(
+            previous
+                .as_ref()
+                .map(|tokens| serde_json::to_string(tokens).expect("serialize previous")),
+        );
+        let journal = RefCell::new(None::<DropboxCredentialPromotionJournal>);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage candidate");
+
+        let read_active = || {
+            read_dropbox_tokens_for_recovery_with(
+                || Err("desktop keyring unavailable".to_string()),
+                || Ok(fallback.borrow().clone()),
+            )
+        };
+        let write_active = |tokens: Option<&DropboxTokenBundle>| {
+            *fallback.borrow_mut() = tokens
+                .map(serde_json::to_string)
+                .transpose()
+                .map_err(|_| "serialize fallback tokens".to_string())?;
+            Ok(())
+        };
+
+        promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok("off".to_string()),
+            || {
+                read_dropbox_previous_credentials_for_promotion_with(
+                    || Err("desktop keyring unavailable".to_string()),
+                    || Ok(fallback.borrow().clone()),
+                )
+            },
+            read_active,
+            write_active,
+            |tokens| {
+                *fallback.borrow_mut() = Some(
+                    serde_json::to_string(tokens)
+                        .map_err(|_| "serialize fallback tokens".to_string())?,
+                );
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            |next| {
+                *journal.borrow_mut() = Some(next.clone());
+                Ok(())
+            },
+        )
+        .expect("fallback-backed promotion and read-back should succeed");
+        assert_eq!(
+            read_active().expect("read promoted fallback"),
+            Some(candidate)
+        );
+
+        recover_dropbox_promotion_journal_with(
+            || Ok("off".to_string()),
+            read_active,
+            write_active,
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("fallback-backed crash recovery should restore previous credentials");
+        assert_eq!(read_active().expect("read recovered fallback"), previous);
+
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+            read_active,
+            write_active,
+        )
+        .expect("fallback-backed promoted handle remains rollbackable");
+        assert_eq!(read_active().expect("read rolled back fallback"), previous);
+    }
+
+    #[test]
+    fn keyring_error_without_dropbox_fallback_remains_fail_closed() {
+        let error = read_dropbox_tokens_for_recovery_with(
+            || Err("desktop keyring unavailable".to_string()),
+            || Ok(None),
+        )
+        .expect_err("unknown keyring contents cannot be treated as empty");
+
+        assert!(error.contains("inspect Dropbox credentials"));
+    }
+
+    #[test]
+    fn recovery_token_fallback_overrides_stale_keyring_bytes_after_outage() {
+        let stale = test_dropbox_tokens("stale-keyring", 90_000);
+        let candidate = test_dropbox_tokens("fallback-candidate", 100_000);
+        let candidate_payload =
+            serde_json::to_string(&candidate).expect("serialize fallback candidate");
+
+        let recovered = read_dropbox_tokens_for_recovery_with(
+            || {
+                Ok(Some(
+                    serde_json::to_string(&stale).expect("serialize stale keyring"),
+                ))
+            },
+            || Ok(Some(candidate_payload.clone())),
+        )
+        .expect("authoritative fallback should remain readable");
+
+        assert_eq!(recovered, Some(candidate));
+    }
+
+    #[test]
+    fn corrupt_recovery_token_fallback_fails_closed_before_keyring_use() {
+        let keyring_reads = std::cell::Cell::new(0usize);
+        let error = read_dropbox_tokens_for_recovery_with(
+            || {
+                keyring_reads.set(keyring_reads.get() + 1);
+                Ok(Some(
+                    serde_json::to_string(&test_dropbox_tokens("keyring", 90_000))
+                        .expect("serialize keyring"),
+                ))
+            },
+            || Err("corrupt private fallback".to_string()),
+        )
+        .expect_err("corrupt fallback authority must fail closed");
+
+        assert!(error.contains("corrupt private fallback"));
+        assert_eq!(keyring_reads.get(), 0);
+    }
+
+    #[test]
+    fn dropbox_connection_status_never_deletes_credentials_after_a_read_failure() {
+        use std::cell::Cell;
+
+        let clear_attempts = Cell::new(0usize);
+        let error = is_dropbox_connected_with("client-id", || {
+            Err("Failed to inspect Dropbox credentials".to_string())
+        })
+        .expect_err("transient read failure must be reported");
+
+        // An explicit disconnect could make this closure succeed, but status
+        // inspection never receives or invokes a deletion capability.
+        let potentially_successful_delete = || {
+            clear_attempts.set(clear_attempts.get() + 1);
+            Ok::<(), String>(())
+        };
+        let _ = potentially_successful_delete;
+        assert!(error.contains("Failed to inspect Dropbox credentials"));
+        assert_eq!(clear_attempts.get(), 0);
+    }
+
+    #[test]
+    fn dropbox_connection_status_reports_corruption_without_mutation() {
+        let error = is_dropbox_connected_with("client-id", || {
+            parse_dropbox_token_bundle("not-json").map(Some)
+        })
+        .expect_err("corrupt credentials are not equivalent to disconnected");
+
+        assert!(error.contains("invalid"));
+    }
+
+    #[test]
+    fn first_connect_can_promote_commit_and_finalize_during_keyring_outage() {
+        use std::cell::{Cell, RefCell};
+
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let fallback = RefCell::new(None::<String>);
+        let journal = RefCell::new(None::<DropboxCredentialPromotionJournal>);
+        let token_keyring_set_calls = Cell::new(0usize);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage candidate");
+
+        let read_active = || {
+            read_dropbox_tokens_for_recovery_with(
+                || Err("keyring unavailable".to_string()),
+                || Ok(fallback.borrow().clone()),
+            )
+        };
+        promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok("off".to_string()),
+            || {
+                read_dropbox_previous_credentials_for_promotion_with(
+                    || Err("keyring unavailable".to_string()),
+                    || Ok(fallback.borrow().clone()),
+                )
+            },
+            read_active,
+            |_tokens| {
+                token_keyring_set_calls.set(token_keyring_set_calls.get() + 1);
+                Err("keyring set succeeded but verification read failed".to_string())
+            },
+            |tokens| {
+                *fallback.borrow_mut() = Some(
+                    serde_json::to_string(tokens).map_err(|_| "serialize fallback".to_string())?,
+                );
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            |next| {
+                *journal.borrow_mut() = Some(next.clone());
+                Ok(())
+            },
+        )
+        .expect("unknown prior keyring state permits fallback-backed first promotion");
+
+        assert!(matches!(
+            journal.borrow().as_ref().map(|journal| &journal.previous),
+            Some(DropboxPreviousCredentials::UnknownKeyring)
+        ));
+        assert_eq!(token_keyring_set_calls.get(), 0);
+        assert_eq!(
+            read_active().expect("read candidate fallback"),
+            Some(candidate.clone())
+        );
+
+        recover_dropbox_credentials_fail_closed_with_commit_state(
+            || {
+                Ok(DropboxRecoveryCommitState {
+                    raw_backend: "cloud".to_string(),
+                    backend_marker: "cloud".to_string(),
+                    cloud_provider: "dropbox".to_string(),
+                    cloud_provider_authority: "native".to_string(),
+                })
+            },
+            |_backend| panic!("exact committed Dropbox state must not be disabled"),
+            read_active,
+            |_journal| panic!("committed candidate does not resolve unknown prior state"),
+            |_tokens| panic!("committed candidate must not be rewritten"),
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("exact Dropbox commit keeps the candidate and resolves the journal");
+        finalize_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+        )
+        .expect("committed first connection finalizes");
+
+        assert!(journal.borrow().is_none());
+        assert_eq!(
+            read_active().expect("candidate remains active"),
+            Some(candidate)
+        );
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn unknown_keyring_recovery_preserves_a_different_preexisting_bundle() {
+        use std::cell::{Cell, RefCell};
+
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let previous = test_dropbox_tokens("previous", 90_000);
+        let journal_value = build_dropbox_promotion_journal_with_previous(
+            DropboxPreviousCredentials::UnknownKeyring,
+            &candidate,
+        )
+        .expect("build unknown-keyring journal");
+        let journal = RefCell::new(Some(journal_value));
+        let fallback = RefCell::new(Some(
+            serde_json::to_string(&candidate).expect("serialize candidate fallback"),
+        ));
+        let keyring = RefCell::new(None::<String>);
+        let keyring_available = Cell::new(false);
+        let commit = RefCell::new(DropboxRecoveryCommitState {
+            raw_backend: "off".to_string(),
+            backend_marker: "off".to_string(),
+            cloud_provider: "dropbox".to_string(),
+            cloud_provider_authority: "native".to_string(),
+        });
+
+        let recover = || {
+            recover_dropbox_credentials_fail_closed_with_commit_state(
+                || Ok(commit.borrow().clone()),
+                |backend| {
+                    commit.borrow_mut().raw_backend = backend.to_string();
+                    commit.borrow_mut().backend_marker = backend.to_string();
+                    Ok(())
+                },
+                || {
+                    read_dropbox_tokens_for_recovery_with(
+                        || {
+                            if keyring_available.get() {
+                                Ok(keyring.borrow().clone())
+                            } else {
+                                Err("keyring unavailable".to_string())
+                            }
+                        },
+                        || Ok(fallback.borrow().clone()),
+                    )
+                },
+                |pending| {
+                    resolve_unknown_dropbox_previous_credentials_with(pending, || {
+                        if keyring_available.get() {
+                            Ok(keyring.borrow().clone())
+                        } else {
+                            Err("keyring unavailable".to_string())
+                        }
+                    })
+                },
+                |tokens| {
+                    let raw = tokens
+                        .map(serde_json::to_string)
+                        .transpose()
+                        .map_err(|_| "serialize active tokens".to_string())?;
+                    *keyring.borrow_mut() = raw;
+                    *fallback.borrow_mut() = None;
+                    Ok(())
+                },
+                || Ok(journal.borrow().clone()),
+                || {
+                    *journal.borrow_mut() = None;
+                    Ok(())
+                },
+            )
+        };
+
+        recover().expect_err("unavailable prior keyring state remains pending and contained");
+        assert!(journal.borrow().is_some());
+        assert!(fallback.borrow().is_some());
+
+        keyring_available.set(true);
+        *keyring.borrow_mut() =
+            Some(serde_json::to_string(&previous).expect("serialize previous keyring bundle"));
+        recover().expect("available different keyring bundle is restored and verified");
+
+        assert!(journal.borrow().is_none());
+        assert!(fallback.borrow().is_none());
+        assert_eq!(
+            keyring
+                .borrow()
+                .as_deref()
+                .map(parse_dropbox_token_bundle)
+                .transpose()
+                .expect("parse preserved keyring bundle"),
+            Some(previous)
+        );
+    }
+
+    #[test]
+    fn unknown_keyring_resolution_preserves_even_an_exact_preexisting_candidate() {
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let previous = test_dropbox_tokens("previous", 90_000);
+        let journal = build_dropbox_promotion_journal_with_previous(
+            DropboxPreviousCredentials::UnknownKeyring,
+            &candidate,
+        )
+        .expect("build unknown-keyring journal");
+
+        assert_eq!(
+            resolve_unknown_dropbox_previous_credentials_with(&journal, || {
+                Ok(Some(
+                    serde_json::to_string(&candidate).expect("serialize candidate"),
+                ))
+            })
+            .expect("resolve partial candidate write"),
+            DropboxPreviousCredentials::Bundle(candidate)
+        );
+        assert_eq!(
+            resolve_unknown_dropbox_previous_credentials_with(&journal, || {
+                Ok(Some(
+                    serde_json::to_string(&previous).expect("serialize previous"),
+                ))
+            })
+            .expect("resolve different prior bundle"),
+            DropboxPreviousCredentials::Bundle(previous)
+        );
+        assert_eq!(
+            resolve_unknown_dropbox_previous_credentials_with(&journal, || Ok(None))
+                .expect("resolve known-empty keyring"),
+            DropboxPreviousCredentials::Empty
+        );
+    }
+
+    #[test]
+    fn reconnect_crash_recovery_restores_previous_dropbox_credentials_while_sync_is_off() {
+        use std::cell::RefCell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(Some(candidate.clone()));
+        let backend = RefCell::new("off".to_string());
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build promotion journal"),
+        ));
+
+        recover_dropbox_promotion_journal_with(
+            || Ok(backend.borrow().clone()),
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("off backend should roll a half-promoted reconnect back");
+
+        assert_eq!(*active.borrow(), previous);
+        assert!(journal.borrow().is_none());
+        assert_eq!(backend.borrow().as_str(), "off");
+    }
+
+    #[test]
+    fn first_connect_crash_recovery_restores_an_explicit_empty_credential_slot() {
+        use std::cell::RefCell;
+
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(Some(candidate.clone()));
+        let journal_value = build_dropbox_promotion_journal(None, &candidate)
+            .expect("build first-connect promotion journal");
+        let serialized = serde_json::to_string(&journal_value).expect("serialize journal");
+        assert!(serialized.contains("\"kind\":\"empty\""));
+        let journal = RefCell::new(Some(journal_value));
+
+        recover_dropbox_promotion_journal_with(
+            || Ok("off".to_string()),
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("off backend should clear a half-promoted first connection");
+
+        assert_eq!(*active.borrow(), None);
+        assert!(journal.borrow().is_none());
+    }
+
+    #[test]
+    fn committed_dropbox_crash_recovery_keeps_the_verified_candidate() {
+        use std::cell::RefCell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(Some(candidate.clone()));
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous, &candidate).expect("build promotion journal"),
+        ));
+
+        recover_dropbox_promotion_journal_with(
+            || Ok("cloud".to_string()),
+            || Ok(active.borrow().clone()),
+            |_tokens| panic!("committed candidate must not be replaced"),
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("cloud is the serialized transaction's committed Dropbox state");
+
+        assert_eq!(*active.borrow(), Some(candidate));
+        assert!(journal.borrow().is_none());
+    }
+
+    #[test]
+    fn mismatched_committed_candidate_is_never_rolled_back_after_commit() {
+        use std::cell::RefCell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let half_promoted = test_dropbox_tokens("half-promoted", 100_000);
+        let active = RefCell::new(Some(half_promoted));
+        let backend = RefCell::new("cloud".to_string());
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build promotion journal"),
+        ));
+
+        let error = recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("a mismatched active bundle must be surfaced after fail-closed recovery");
+
+        assert!(error.contains("active Dropbox commit was left intact"));
+        assert_eq!(backend.borrow().as_str(), "cloud");
+        assert_eq!(
+            *active.borrow(),
+            Some(test_dropbox_tokens("half-promoted", 100_000))
+        );
+        assert!(journal.borrow().is_some());
+    }
+
+    #[test]
+    fn committed_journal_delete_uncertainty_never_triggers_post_commit_rollback() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(Some(candidate.clone()));
+        let backend = RefCell::new("cloud".to_string());
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build promotion journal"),
+        ));
+        let journal_reads = Cell::new(0usize);
+
+        let error = recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || {
+                let read = journal_reads.get();
+                journal_reads.set(read + 1);
+                if read == 1 {
+                    return Err("journal read-back unavailable".to_string());
+                }
+                Ok(journal.borrow().clone())
+            },
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("uncertain journal deletion must be surfaced");
+
+        assert!(error.contains("active Dropbox commit was left intact"));
+        assert_eq!(backend.borrow().as_str(), "cloud");
+        assert_eq!(*active.borrow(), Some(candidate));
+    }
+
+    #[test]
+    fn portable_fallback_journal_supports_promotion_recovery_and_idempotent_clear() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(previous.clone());
+        let backend = RefCell::new("off".to_string());
+        let fallback = RefCell::new(None::<String>);
+        let active_writes = Cell::new(0usize);
+        let keyring_write_attempts = Cell::new(0usize);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage portable candidate");
+
+        let read_journal = || -> Result<Option<DropboxCredentialPromotionJournal>, String> {
+            read_dropbox_promotion_journal_authority_with(
+                || panic!("full fallback and tombstone reads do not classify orphan markers"),
+                |payload| {
+                    *fallback.borrow_mut() = Some(payload.to_string());
+                    Ok(())
+                },
+                || Ok(fallback.borrow().clone()),
+                || Ok(None),
+                || Err("portable mode has no keyring".to_string()),
+                || {
+                    *fallback.borrow_mut() = None;
+                    Ok(())
+                },
+            )
+        };
+
+        promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok(backend.borrow().clone()),
+            || {
+                Ok(DropboxPreviousCredentials::from_tokens(
+                    active.borrow().clone(),
+                ))
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                active_writes.set(active_writes.get() + 1);
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            |tokens| {
+                active_writes.set(active_writes.get() + 1);
+                *active.borrow_mut() = Some(tokens.clone());
+                Ok(())
+            },
+            read_journal,
+            |journal| {
+                write_dropbox_promotion_journal_authority_with(
+                    journal,
+                    |_payload| {
+                        keyring_write_attempts.set(keyring_write_attempts.get() + 1);
+                        Err("portable mode has no keyring".to_string())
+                    },
+                    |payload| {
+                        *fallback.borrow_mut() = Some(payload.to_string());
+                        Ok(())
+                    },
+                    || Ok(fallback.borrow().clone()),
+                )
+            },
+        )
+        .expect("portable fallback journal permits promotion");
+
+        assert_eq!(*active.borrow(), Some(candidate));
+        assert!(fallback.borrow().is_some());
+        assert_eq!(keyring_write_attempts.get(), 1);
+
+        recover_dropbox_promotion_journal_with(
+            || Ok(backend.borrow().clone()),
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                active_writes.set(active_writes.get() + 1);
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            read_journal,
+            || {
+                logically_clear_dropbox_promotion_journal_with(
+                    |payload| {
+                        *fallback.borrow_mut() = Some(payload.to_string());
+                        Ok(())
+                    },
+                    || Ok(fallback.borrow().clone()),
+                    || Err("portable mode has no keyring".to_string()),
+                    || Ok(None),
+                    || {
+                        *fallback.borrow_mut() = None;
+                        Ok(())
+                    },
+                )
+            },
+        )
+        .expect("portable crash recovery restores previous credentials");
+        recover_dropbox_promotion_journal_with(
+            || Ok(backend.borrow().clone()),
+            || Ok(active.borrow().clone()),
+            |_tokens| panic!("idempotent recovery must not rewrite active credentials"),
+            read_journal,
+            || panic!("idempotent recovery must not clear an absent journal"),
+        )
+        .expect("portable recovery is idempotent");
+
+        assert_eq!(*active.borrow(), previous);
+        assert!(matches!(
+            parse_dropbox_promotion_journal_fallback_record(
+                fallback.borrow().as_deref().expect("portable tombstone")
+            )
+            .expect("parse portable tombstone"),
+            DropboxPromotionJournalFallbackRecord::Cleared { .. }
+        ));
+        assert_eq!(active_writes.get(), 2);
+    }
+
+    #[test]
+    fn fallback_journal_and_tombstone_override_stale_keyring_state() {
+        use std::cell::{Cell, RefCell};
+
+        let authoritative = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &test_dropbox_tokens("candidate", 100_000),
+        )
+        .expect("build authoritative journal");
+        let stale =
+            build_dropbox_promotion_journal(None, &test_dropbox_tokens("stale-keyring", 110_000))
+                .expect("build stale journal");
+        let pending = serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Pending {
+            journal: authoritative.clone(),
+        })
+        .expect("serialize authoritative fallback");
+        let keyring_reads = Cell::new(0usize);
+
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || panic!("full fallback reads do not classify orphan markers"),
+            |_payload| panic!("full pending fallback cannot be replaced while reading"),
+            || Ok(Some(pending.clone())),
+            || {
+                keyring_reads.set(keyring_reads.get() + 1);
+                Ok(Some(
+                    serde_json::to_string(&stale).expect("serialize stale keyring"),
+                ))
+            },
+            || panic!("pending fallback must not delete keyring before resolution"),
+            || panic!("pending fallback must not be cleared before resolution"),
+        )
+        .expect("authoritative fallback is readable");
+        assert_eq!(selected, Some(authoritative));
+        assert_eq!(keyring_reads.get(), 0);
+
+        let tombstone = serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Cleared {
+            version: DROPBOX_PROMOTION_JOURNAL_VERSION,
+        })
+        .expect("serialize tombstone");
+        let fallback = RefCell::new(Some(tombstone));
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || panic!("tombstone reads do not classify orphan markers"),
+            |_payload| panic!("a tombstone must not be replaced while keyring is unavailable"),
+            || Ok(fallback.borrow().clone()),
+            || panic!("tombstone must be authoritative before keyring read"),
+            || Err("keyring unavailable".to_string()),
+            || panic!("tombstone must remain while keyring is uncertain"),
+        )
+        .expect("tombstone is a logical clear despite stale keyring uncertainty");
+        assert!(selected.is_none());
+        assert!(fallback.borrow().is_some());
+    }
+
+    #[test]
+    fn tombstone_eventually_purges_stale_keyring_and_then_itself() {
+        use std::cell::RefCell;
+
+        let stale =
+            build_dropbox_promotion_journal(None, &test_dropbox_tokens("stale-keyring", 110_000))
+                .expect("build stale journal");
+        let fallback = RefCell::new(Some(
+            serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Cleared {
+                version: DROPBOX_PROMOTION_JOURNAL_VERSION,
+            })
+            .expect("serialize tombstone"),
+        ));
+        let keyring = RefCell::new(Some(
+            serde_json::to_string(&stale).expect("serialize stale keyring"),
+        ));
+
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || panic!("tombstone reads do not classify orphan markers"),
+            |_payload| panic!("a valid tombstone must not be replaced during cleanup"),
+            || Ok(fallback.borrow().clone()),
+            || Ok(keyring.borrow().clone()),
+            || {
+                *keyring.borrow_mut() = None;
+                Ok(())
+            },
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("available keyring permits tombstone cleanup");
+
+        assert!(selected.is_none());
+        assert!(keyring.borrow().is_none());
+        assert!(fallback.borrow().is_none());
+    }
+
+    #[test]
+    fn tombstone_survives_false_positive_keyring_deletion() {
+        use std::cell::RefCell;
+
+        let stale =
+            build_dropbox_promotion_journal(None, &test_dropbox_tokens("stale-keyring", 110_000))
+                .expect("build stale journal");
+        let fallback = RefCell::new(Some(
+            serialize_dropbox_journal_tombstone().expect("serialize tombstone"),
+        ));
+        let keyring = serde_json::to_string(&stale).expect("serialize stale keyring");
+
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || panic!("tombstone reads do not classify orphan markers"),
+            |_payload| panic!("a valid tombstone must not be replaced during cleanup"),
+            || Ok(fallback.borrow().clone()),
+            || Ok(Some(keyring.clone())),
+            // Some keyring backends can report success even though a later
+            // read still returns stale bytes.
+            || Ok(()),
+            || panic!("unverified keyring deletion must retain the tombstone"),
+        )
+        .expect("the tombstone remains the logical authority");
+
+        assert!(selected.is_none());
+        assert!(matches!(
+            parse_dropbox_promotion_journal_fallback_record(
+                fallback.borrow().as_deref().expect("retained tombstone")
+            )
+            .expect("parse tombstone"),
+            DropboxPromotionJournalFallbackRecord::Cleared { .. }
+        ));
+    }
+
+    #[test]
+    fn healthy_keyring_journal_does_not_duplicate_pending_secrets_in_fallback() {
+        use std::cell::RefCell;
+
+        let journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &test_dropbox_tokens("candidate", 100_000),
+        )
+        .expect("build journal");
+        let keyring = RefCell::new(None::<String>);
+        let fallback = RefCell::new(Some(
+            serialize_dropbox_journal_tombstone().expect("serialize old tombstone"),
+        ));
+
+        write_dropbox_promotion_journal_authority_with(
+            &journal,
+            |payload| {
+                *keyring.borrow_mut() = Some(payload.to_string());
+                let persisted = keyring.borrow().clone().expect("keyring payload");
+                let parsed: DropboxCredentialPromotionJournal =
+                    serde_json::from_str(&persisted).expect("parse keyring journal");
+                if parsed != journal {
+                    return Err("keyring read-back mismatch".to_string());
+                }
+                Ok(())
+            },
+            |payload| {
+                assert!(
+                    !payload.contains("previous-access")
+                        && !payload.contains("previous-refresh")
+                        && !payload.contains("candidate-access")
+                        && !payload.contains("candidate-refresh"),
+                    "healthy keyring fallback must remain a redacted marker"
+                );
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+        )
+        .expect("verified keyring write succeeds without fallback duplication");
+
+        assert!(matches!(
+            parse_dropbox_promotion_journal_fallback_record(
+                fallback
+                    .borrow()
+                    .as_deref()
+                    .expect("pending keyring marker")
+            )
+            .expect("parse pending keyring marker"),
+            DropboxPromotionJournalFallbackRecord::PendingKeyring { .. }
+        ));
+        assert!(keyring
+            .borrow()
+            .as_deref()
+            .expect("keyring journal")
+            .contains("previous-access"));
+        assert_eq!(
+            read_dropbox_promotion_journal_authority_with(
+                || Ok(false),
+                |_payload| panic!("matching marker must remain stable"),
+                || Ok(fallback.borrow().clone()),
+                || Ok(keyring.borrow().clone()),
+                || panic!("matching marker must not delete the keyring journal"),
+                || panic!("matching marker must not be removed before resolution"),
+            )
+            .expect("transaction-bound marker selects its keyring journal"),
+            Some(journal)
+        );
+    }
+
+    #[test]
+    fn stale_redacted_marker_stops_before_keyring_or_candidate_publication() {
+        use std::cell::Cell;
+
+        let journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &test_dropbox_tokens("candidate", 100_000),
+        )
+        .expect("build current journal");
+        let stale_journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("older-previous", 80_000)),
+            &test_dropbox_tokens("older-candidate", 95_000),
+        )
+        .expect("build stale journal");
+        let stale_marker = serialize_dropbox_pending_keyring_marker(&stale_journal)
+            .expect("serialize stale marker");
+        let keyring_writes = Cell::new(0usize);
+
+        let error = write_dropbox_promotion_journal_authority_with(
+            &journal,
+            |_payload| {
+                keyring_writes.set(keyring_writes.get() + 1);
+                Ok(())
+            },
+            |_payload| Ok(()),
+            || Ok(Some(stale_marker.clone())),
+        )
+        .expect_err("a stale marker cannot authorize the current transaction");
+
+        assert!(error.contains("does not match the pending transaction"));
+        assert_eq!(keyring_writes.get(), 0);
+    }
+
+    #[test]
+    fn clean_profile_without_marker_never_reads_an_unavailable_keyring() {
+        for backend in ["off", "file", "webdav", "cloudkit", "cloud"] {
+            use std::cell::Cell;
+
+            let backend_writes = Cell::new(0usize);
+            recover_dropbox_credentials_fail_closed_with(
+                || Ok(backend.to_string()),
+                |_next| {
+                    backend_writes.set(backend_writes.get() + 1);
+                    Ok(())
+                },
+                || panic!("clean startup must not inspect active Dropbox credentials"),
+                |_tokens| panic!("clean startup must not mutate active Dropbox credentials"),
+                || {
+                    read_dropbox_promotion_journal_authority_with(
+                        || panic!("an absent marker is not an orphan"),
+                        |_payload| panic!("clean startup must not write fallback state"),
+                        || Ok(None),
+                        || panic!("absent fallback must not touch the keyring"),
+                        || panic!("absent fallback must not delete keyring state"),
+                        || panic!("absent fallback must not be cleared"),
+                    )
+                },
+                || panic!("clean startup has no journal to clear"),
+            )
+            .expect("clean startup is a no-op even without a keyring service");
+            assert_eq!(
+                backend_writes.get(),
+                0,
+                "backend {backend} must be preserved"
+            );
+        }
+    }
+
+    #[test]
+    fn pending_keyring_marker_outage_fails_closed_instead_of_looking_clean() {
+        let journal =
+            build_dropbox_promotion_journal(None, &test_dropbox_tokens("candidate", 100_000))
+                .expect("build journal");
+        let marker = serialize_dropbox_pending_keyring_marker(&journal).expect("serialize marker");
+
+        let error = read_dropbox_promotion_journal_authority_with(
+            || Ok(false),
+            |_payload| panic!("unavailable keyring must retain the marker"),
+            || Ok(Some(marker.clone())),
+            || Err("keyring unavailable".to_string()),
+            || panic!("unavailable keyring must not be deleted"),
+            || panic!("unavailable keyring must retain the marker"),
+        )
+        .expect_err("a pending marker makes keyring availability mandatory");
+        assert!(error.contains("Failed to inspect"));
+    }
+
+    #[test]
+    fn transaction_bound_marker_never_recovers_a_stale_keyring_journal() {
+        use std::cell::RefCell;
+
+        let old = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("old-previous", 80_000)),
+            &test_dropbox_tokens("old-candidate", 90_000),
+        )
+        .expect("build stale journal");
+        let next = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("next-previous", 100_000)),
+            &test_dropbox_tokens("next-candidate", 110_000),
+        )
+        .expect("build new journal");
+        let fallback = RefCell::new(Some(
+            serialize_dropbox_pending_keyring_marker(&next).expect("serialize new marker"),
+        ));
+        let keyring = RefCell::new(Some(
+            serde_json::to_string(&old).expect("serialize stale keyring journal"),
+        ));
+
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || Ok(true),
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Ok(keyring.borrow().clone()),
+            || {
+                *keyring.borrow_mut() = None;
+                Ok(())
+            },
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("off-state orphan cleanup discards the stale journal");
+
+        assert!(selected.is_none());
+        assert!(keyring.borrow().is_none());
+        assert!(fallback.borrow().is_none());
+    }
+
+    #[test]
+    fn new_pending_fallback_replaces_a_cleared_tombstone_during_keyring_outage() {
+        use std::cell::RefCell;
+
+        let journal =
+            build_dropbox_promotion_journal(None, &test_dropbox_tokens("candidate", 100_000))
+                .expect("build journal");
+        let fallback = RefCell::new(Some(
+            serialize_dropbox_journal_tombstone().expect("serialize old tombstone"),
+        ));
+
+        write_dropbox_promotion_journal_authority_with(
+            &journal,
+            |_payload| Err("keyring unavailable".to_string()),
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+        )
+        .expect("a new transaction replaces the redacted tombstone");
+
+        assert_eq!(
+            read_dropbox_promotion_journal_authority_with(
+                || panic!("full fallback reads do not classify orphan markers"),
+                |_payload| panic!("full pending fallback cannot be replaced while reading"),
+                || Ok(fallback.borrow().clone()),
+                || panic!("pending fallback must be authoritative"),
+                || panic!("pending fallback must not clear keyring state"),
+                || panic!("pending fallback must not be removed"),
+            )
+            .expect("read replacement pending journal"),
+            Some(journal)
+        );
+    }
+
+    #[test]
+    fn logical_clear_is_crash_safe_before_and_after_redacted_tombstone() {
+        use std::cell::RefCell;
+
+        let journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &test_dropbox_tokens("candidate", 100_000),
+        )
+        .expect("build journal");
+        let pending = serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Pending {
+            journal: journal.clone(),
+        })
+        .expect("serialize pending fallback");
+        let fallback = RefCell::new(Some(pending.clone()));
+
+        logically_clear_dropbox_promotion_journal_with(
+            |_payload| Err("crash before tombstone publish".to_string()),
+            || Ok(fallback.borrow().clone()),
+            || panic!("keyring deletion cannot precede the tombstone"),
+            || panic!("keyring read cannot precede the tombstone"),
+            || panic!("fallback clear cannot precede the tombstone"),
+        )
+        .expect_err("failed tombstone publication must preserve pending recovery");
+        assert_eq!(fallback.borrow().as_deref(), Some(pending.as_str()));
+
+        logically_clear_dropbox_promotion_journal_with(
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Err("crash after tombstone publish".to_string()),
+            || panic!("failed keyring deletion cannot be verified"),
+            || panic!("uncertain keyring must retain the tombstone"),
+        )
+        .expect("published tombstone completes logical clear");
+        let tombstone = fallback.borrow().clone().expect("retained tombstone");
+        assert!(!tombstone.contains("previous-access"));
+        assert!(!tombstone.contains("previous-refresh"));
+        assert!(!tombstone.contains("candidate-access"));
+        assert!(!tombstone.contains("candidate-refresh"));
+
+        let selected = read_dropbox_promotion_journal_authority_with(
+            || panic!("tombstone reads do not classify orphan markers"),
+            |_payload| {
+                panic!("published tombstone must not be replaced while keyring is unavailable")
+            },
+            || Ok(fallback.borrow().clone()),
+            || panic!("tombstone masks a stale keyring"),
+            || Err("keyring still unavailable".to_string()),
+            || panic!("uncertain keyring must retain the tombstone"),
+        )
+        .expect("startup honors the published tombstone");
+        assert!(selected.is_none());
+    }
+
+    #[test]
+    fn strict_journal_purge_retains_tombstone_until_keyring_deletion_is_verified() {
+        use std::cell::RefCell;
+
+        let journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &test_dropbox_tokens("candidate", 100_000),
+        )
+        .expect("build journal");
+        let fallback = RefCell::new(Some(
+            serde_json::to_string(&DropboxPromotionJournalFallbackRecord::Pending { journal })
+                .expect("serialize pending fallback"),
+        ));
+
+        strictly_purge_dropbox_promotion_journal_with(
+            true,
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Err("keyring deletion unavailable".to_string()),
+            || panic!("failed keyring deletion cannot be verified"),
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("strict disconnect cannot accept uncertain keyring deletion");
+        let retained = fallback.borrow().clone().expect("retained tombstone");
+        assert!(matches!(
+            serde_json::from_str::<DropboxPromotionJournalFallbackRecord>(&retained)
+                .expect("parse retained tombstone"),
+            DropboxPromotionJournalFallbackRecord::Cleared { .. }
+        ));
+        assert!(!retained.contains("access"));
+        assert!(!retained.contains("refresh"));
+
+        strictly_purge_dropbox_promotion_journal_with(
+            true,
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Ok(()),
+            || Ok(None),
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("verified keyring deletion permits physical fallback purge");
+        assert!(fallback.borrow().is_none());
+    }
+
+    #[test]
+    fn strict_journal_purge_rejects_false_positive_keyring_deletion() {
+        use std::cell::RefCell;
+
+        let fallback = RefCell::new(None::<String>);
+        let stale = serialize_dropbox_pending_journal_fallback(
+            &build_dropbox_promotion_journal(None, &test_dropbox_tokens("stale-keyring", 110_000))
+                .expect("build stale journal"),
+        )
+        .expect("serialize stale keyring");
+
+        strictly_purge_dropbox_promotion_journal_with(
+            true,
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Ok(()),
+            || Ok(Some(stale.clone())),
+            || panic!("fallback cannot be removed before keyring absence is verified"),
+        )
+        .expect_err("stale read-back invalidates a successful delete result");
+
+        assert!(matches!(
+            parse_dropbox_promotion_journal_fallback_record(
+                fallback.borrow().as_deref().expect("retained tombstone")
+            )
+            .expect("parse retained tombstone"),
+            DropboxPromotionJournalFallbackRecord::Cleared { .. }
+        ));
+    }
+
+    #[test]
+    fn strict_journal_purge_restores_tombstone_if_keyring_recheck_becomes_uncertain() {
+        use std::cell::{Cell, RefCell};
+
+        let fallback = RefCell::new(None::<String>);
+        let keyring_reads = Cell::new(0usize);
+
+        strictly_purge_dropbox_promotion_journal_with(
+            true,
+            |payload| {
+                *fallback.borrow_mut() = Some(payload.to_string());
+                Ok(())
+            },
+            || Ok(fallback.borrow().clone()),
+            || Ok(()),
+            || {
+                let read = keyring_reads.get();
+                keyring_reads.set(read + 1);
+                if read == 0 {
+                    Ok(None)
+                } else {
+                    Err("keyring became unavailable".to_string())
+                }
+            },
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("the post-removal keyring recheck is required");
+
+        assert_eq!(keyring_reads.get(), 2);
+        assert!(matches!(
+            parse_dropbox_promotion_journal_fallback_record(
+                fallback.borrow().as_deref().expect("restored tombstone")
+            )
+            .expect("parse restored tombstone"),
+            DropboxPromotionJournalFallbackRecord::Cleared { .. }
+        ));
+    }
+
+    #[test]
+    fn journal_is_verified_before_active_credentials_are_overwritten() {
+        use std::cell::RefCell;
+
+        let events = RefCell::new(Vec::<&'static str>::new());
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(previous.clone());
+        let journal = RefCell::new(None::<DropboxCredentialPromotionJournal>);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate,
+            100,
+        )
+        .expect("stage candidate");
+
+        promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || {
+                events.borrow_mut().push("read-backend-off");
+                Ok("off".to_string())
+            },
+            || {
+                events.borrow_mut().push("read-active");
+                Ok(DropboxPreviousCredentials::from_tokens(
+                    active.borrow().clone(),
+                ))
+            },
+            || {
+                events.borrow_mut().push("read-active");
+                Ok(active.borrow().clone())
+            },
+            |tokens| {
+                events.borrow_mut().push("write-active");
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            |_tokens| panic!("known previous credentials use the verified active writer"),
+            || {
+                events.borrow_mut().push("read-journal");
+                Ok(journal.borrow().clone())
+            },
+            |next| {
+                events.borrow_mut().push("write-journal");
+                *journal.borrow_mut() = Some(next.clone());
+                Ok(())
+            },
+        )
+        .expect("journaled promotion");
+
+        let events = events.borrow();
+        let journal_write = events
+            .iter()
+            .position(|event| *event == "write-journal")
+            .expect("journal write event");
+        let active_write = events
+            .iter()
+            .position(|event| *event == "write-active")
+            .expect("active write event");
+        assert!(journal_write < active_write);
+        assert!(events[..active_write].contains(&"read-journal"));
+        assert!(events[..active_write].contains(&"read-backend-off"));
+        assert_eq!(
+            journal.borrow().as_ref().unwrap().previous.cloned_tokens(),
+            previous
+        );
+    }
+
+    #[test]
+    fn backend_publication_before_the_second_promotion_guard_prevents_active_write() {
+        use std::cell::{Cell, RefCell};
+
+        let backend_reads = Cell::new(0usize);
+        let active_writes = Cell::new(0usize);
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let active = RefCell::new(previous.clone());
+        let journal = RefCell::new(None::<DropboxCredentialPromotionJournal>);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 100_000),
+            100,
+        )
+        .expect("stage candidate");
+
+        let error = promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || {
+                let read = backend_reads.get();
+                backend_reads.set(read + 1);
+                let state = if read == 0 {
+                    DropboxRecoveryCommitState {
+                        raw_backend: "off".to_string(),
+                        backend_marker: "off".to_string(),
+                        cloud_provider: "dropbox".to_string(),
+                        cloud_provider_authority: "native".to_string(),
+                    }
+                } else {
+                    // Models a concurrent atomic publication completing before
+                    // the second guard immediately ahead of credential write.
+                    DropboxRecoveryCommitState {
+                        raw_backend: "cloud".to_string(),
+                        backend_marker: "cloud".to_string(),
+                        cloud_provider: "dropbox".to_string(),
+                        cloud_provider_authority: "native".to_string(),
+                    }
+                };
+                require_durably_disabled_dropbox_backend(state)
+            },
+            || {
+                Ok(DropboxPreviousCredentials::from_tokens(
+                    active.borrow().clone(),
+                ))
+            },
+            || Ok(active.borrow().clone()),
+            |_tokens| {
+                active_writes.set(active_writes.get() + 1);
+                Ok(())
+            },
+            |_tokens| panic!("known previous credentials use the active writer"),
+            || Ok(journal.borrow().clone()),
+            |next| {
+                *journal.borrow_mut() = Some(next.clone());
+                Ok(())
+            },
+        )
+        .expect_err("committed cloud backend must stop candidate promotion");
+
+        assert!(error.contains("durably disabled"));
+        assert_eq!(backend_reads.get(), 2);
+        assert_eq!(active_writes.get(), 0);
+        assert_eq!(*active.borrow(), previous);
+        assert!(journal.borrow().is_some());
+        assert!(matches!(
+            entries.get("opaque-handle").map(|entry| &entry.phase),
+            Some(DropboxStagedCredentialPhase::Candidate)
+        ));
+    }
+
+    #[test]
+    fn startup_recovery_only_continues_after_fail_closed_state_is_verified() {
+        assert_eq!(
+            classify_dropbox_startup_recovery_with(Ok(()), || {
+                panic!("clean recovery needs no containment read")
+            })
+            .expect("clean startup"),
+            DropboxStartupRecoveryOutcome::Ready
+        );
+        assert!(matches!(
+            classify_dropbox_startup_recovery_with(Err("recovery warning".to_string()), || Ok(
+                "off".to_string()
+            ),)
+            .expect("verified off is safe containment"),
+            DropboxStartupRecoveryOutcome::SyncDisabled { .. }
+        ));
+        assert!(classify_dropbox_startup_recovery_with(
+            Err("recovery warning".to_string()),
+            || Ok("cloud".to_string()),
+        )
+        .is_err());
+        assert!(classify_dropbox_startup_recovery_with(
+            Err("recovery warning".to_string()),
+            || Err("backend unreadable".to_string()),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn journal_persistence_failure_never_overwrites_active_credentials() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let active = RefCell::new(previous.clone());
+        let active_writes = Cell::new(0usize);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 100_000),
+            100,
+        )
+        .expect("stage candidate");
+
+        let error = promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok("off".to_string()),
+            || {
+                Ok(DropboxPreviousCredentials::from_tokens(
+                    active.borrow().clone(),
+                ))
+            },
+            || Ok(active.borrow().clone()),
+            |_tokens| {
+                active_writes.set(active_writes.get() + 1);
+                Ok(())
+            },
+            |_tokens| panic!("journal failure stops before candidate fallback publication"),
+            || panic!("failed journal write must stop before journal read-back"),
+            |_journal| Err("journal keyring and fallback unavailable".to_string()),
+        )
+        .expect_err("promotion requires a durable recovery journal");
+
+        assert!(error.contains("journal keyring and fallback unavailable"));
+        assert_eq!(*active.borrow(), previous);
+        assert_eq!(active_writes.get(), 0);
+        assert!(matches!(
+            entries.get("opaque-handle").map(|entry| &entry.phase),
+            Some(DropboxStagedCredentialPhase::Candidate)
+        ));
+    }
+
+    #[test]
+    fn unreadable_journal_leaves_an_exact_committed_backend_intact() {
+        use std::cell::RefCell;
+
+        let candidate = Some(test_dropbox_tokens("candidate", 100_000));
+        let active = RefCell::new(candidate.clone());
+        let backend = RefCell::new("cloud".to_string());
+        let error = recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || panic!("an unreadable journal has no trustworthy active expectation"),
+            |_tokens| panic!("an unreadable journal must not rewrite active credentials"),
+            || Err("journal keyring unavailable".to_string()),
+            || panic!("an unreadable journal must not be cleared"),
+        )
+        .expect_err("journal uncertainty is surfaced");
+
+        assert!(error.contains("active Dropbox commit was left intact"));
+        assert_eq!(backend.borrow().as_str(), "cloud");
+        assert_eq!(*active.borrow(), candidate);
+    }
+
+    #[test]
+    fn unreadable_journal_and_commit_state_leave_recovery_state_untouched() {
+        use std::cell::Cell;
+
+        let commit_reads = Cell::new(0usize);
+        let backend_writes = Cell::new(0usize);
+        let active_reads = Cell::new(0usize);
+        let previous_resolutions = Cell::new(0usize);
+        let active_writes = Cell::new(0usize);
+        let journal_reads = Cell::new(0usize);
+        let journal_clears = Cell::new(0usize);
+
+        let error = recover_dropbox_credentials_fail_closed_with_commit_state(
+            || {
+                commit_reads.set(commit_reads.get() + 1);
+                Err("private commit state keyring failure".to_string())
+            },
+            |_backend| {
+                backend_writes.set(backend_writes.get() + 1);
+                Ok(())
+            },
+            || {
+                active_reads.set(active_reads.get() + 1);
+                Ok(None)
+            },
+            |_journal| {
+                previous_resolutions.set(previous_resolutions.get() + 1);
+                Ok(DropboxPreviousCredentials::Empty)
+            },
+            |_tokens| {
+                active_writes.set(active_writes.get() + 1);
+                Ok(())
+            },
+            || {
+                journal_reads.set(journal_reads.get() + 1);
+                Err("private journal keyring failure".to_string())
+            },
+            || {
+                journal_clears.set(journal_clears.get() + 1);
+                Ok(())
+            },
+        )
+        .expect_err("commit-state uncertainty must remain retryable and non-mutating");
+
+        assert!(error.contains("could not verify the durable sync commit state"));
+        assert!(!error.contains("private commit state keyring failure"));
+        assert!(!error.contains("private journal keyring failure"));
+        assert_eq!(commit_reads.get(), 1);
+        assert_eq!(journal_reads.get(), 1);
+        assert_eq!(backend_writes.get(), 0);
+        assert_eq!(active_reads.get(), 0);
+        assert_eq!(previous_resolutions.get(), 0);
+        assert_eq!(active_writes.get(), 0);
+        assert_eq!(journal_clears.get(), 0);
+    }
+
+    #[test]
+    fn known_journal_and_unreadable_commit_state_leave_recovery_state_untouched() {
+        use std::cell::Cell;
+
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let journal = build_dropbox_promotion_journal(
+            Some(test_dropbox_tokens("previous", 90_000)),
+            &candidate,
+        )
+        .expect("build recovery journal");
+        let commit_reads = Cell::new(0usize);
+        let backend_writes = Cell::new(0usize);
+        let active_reads = Cell::new(0usize);
+        let previous_resolutions = Cell::new(0usize);
+        let active_writes = Cell::new(0usize);
+        let journal_reads = Cell::new(0usize);
+        let journal_clears = Cell::new(0usize);
+
+        let error = recover_dropbox_credentials_fail_closed_with_commit_state(
+            || {
+                commit_reads.set(commit_reads.get() + 1);
+                Err("private commit state config failure".to_string())
+            },
+            |_backend| {
+                backend_writes.set(backend_writes.get() + 1);
+                Ok(())
+            },
+            || {
+                active_reads.set(active_reads.get() + 1);
+                Ok(Some(candidate.clone()))
+            },
+            |_journal| {
+                previous_resolutions.set(previous_resolutions.get() + 1);
+                Ok(DropboxPreviousCredentials::Empty)
+            },
+            |_tokens| {
+                active_writes.set(active_writes.get() + 1);
+                Ok(())
+            },
+            || {
+                journal_reads.set(journal_reads.get() + 1);
+                Ok(Some(journal.clone()))
+            },
+            || {
+                journal_clears.set(journal_clears.get() + 1);
+                Ok(())
+            },
+        )
+        .expect_err("commit-state uncertainty must stop before recovery mutation");
+
+        assert!(error.contains("could not verify the durable sync commit state"));
+        assert!(!error.contains("private commit state config failure"));
+        assert_eq!(commit_reads.get(), 1);
+        assert_eq!(journal_reads.get(), 1);
+        assert_eq!(backend_writes.get(), 0);
+        assert_eq!(active_reads.get(), 0);
+        assert_eq!(previous_resolutions.get(), 0);
+        assert_eq!(active_writes.get(), 0);
+        assert_eq!(journal_clears.get(), 0);
+    }
+
+    #[test]
+    fn journal_clear_failure_keeps_recovery_pending_and_retryable() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(Some(candidate.clone()));
+        let backend = RefCell::new("off".to_string());
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate).expect("build journal"),
+        ));
+        let fail_clear = Cell::new(true);
+
+        let error = recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                if fail_clear.get() {
+                    return Err("journal deletion unavailable".to_string());
+                }
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("uncleared journal remains a surfaced recovery condition");
+        assert!(error.contains("recovery remains pending"));
+        assert_eq!(*active.borrow(), previous);
+        assert!(journal.borrow().is_some());
+        assert_eq!(backend.borrow().as_str(), "off");
+
+        fail_clear.set(false);
+        recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect("recovery retries idempotently once journal deletion is available");
+        assert_eq!(*active.borrow(), previous);
+        assert!(journal.borrow().is_none());
+    }
+
+    #[test]
+    fn recovery_errors_never_include_journaled_token_bytes() {
+        use std::cell::RefCell;
+
+        let previous = Some(DropboxTokenBundle {
+            client_id: "private-client-id".to_string(),
+            access_token: "private-previous-access".to_string(),
+            refresh_token: "private-previous-refresh".to_string(),
+            expires_at: 90_000,
+        });
+        let candidate = DropboxTokenBundle {
+            client_id: "private-client-id".to_string(),
+            access_token: "private-candidate-access".to_string(),
+            refresh_token: "private-candidate-refresh".to_string(),
+            expires_at: 100_000,
+        };
+        let journal = build_dropbox_promotion_journal(previous.clone(), &candidate)
+            .expect("build private journal");
+        let active = RefCell::new(Some(test_dropbox_tokens("mismatch", 100_000)));
+        let backend = RefCell::new("cloud".to_string());
+
+        let error = recover_dropbox_credentials_fail_closed_with(
+            || Ok(backend.borrow().clone()),
+            |next| {
+                *backend.borrow_mut() = next.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(Some(journal.clone())),
+            || Ok(()),
+        )
+        .expect_err("mismatch is surfaced after safe containment");
+
+        for secret in [
+            "private-client-id",
+            "private-previous-access",
+            "private-previous-refresh",
+            "private-candidate-access",
+            "private-candidate-refresh",
+        ] {
+            assert!(!error.contains(secret), "recovery error leaked {secret}");
+        }
+    }
+
+    #[test]
+    fn staged_dropbox_refresh_updates_only_the_transient_candidate() {
+        let mut entries = HashMap::new();
+        let old_active = test_dropbox_tokens("old-active", 99_000);
+        let candidate = test_dropbox_tokens("candidate", 1);
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate,
+            100,
+        )
+        .expect("stage candidate");
+
+        let access_token = resolve_staged_dropbox_access_token_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            true,
+            200,
+            |_client_id, refresh_token| {
+                assert_eq!(refresh_token, "candidate-refresh");
+                Ok(("candidate-refreshed-access".to_string(), 200_000))
+            },
+        )
+        .expect("refresh staged candidate");
+
+        assert_eq!(access_token, "candidate-refreshed-access");
+        assert_eq!(old_active.access_token, "old-active-access");
+        assert_eq!(
+            entries
+                .get("opaque-handle")
+                .expect("staged candidate")
+                .tokens
+                .access_token,
+            "candidate-refreshed-access"
+        );
+    }
+
+    #[test]
+    fn promoted_dropbox_candidate_can_restore_the_previous_account() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        let old_active = test_dropbox_tokens("old-active", 99_000);
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage candidate");
+        let active = RefCell::new(Some(old_active.clone()));
+
+        promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("promote candidate");
+        assert_eq!(*active.borrow(), Some(candidate));
+
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("restore previous account");
+
+        assert_eq!(*active.borrow(), Some(old_active));
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn promotion_readback_mismatch_restores_old_tokens_and_keeps_candidate_staged() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        let old_active = test_dropbox_tokens("old-active", 99_000);
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate,
+            100,
+        )
+        .expect("stage candidate");
+        let active = RefCell::new(Some(old_active.clone()));
+        let reads = RefCell::new(0usize);
+
+        let error = promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || {
+                let mut reads = reads.borrow_mut();
+                *reads += 1;
+                if *reads == 2 {
+                    return Ok(Some(test_dropbox_tokens("wrong-readback", 100_000)));
+                }
+                Ok(active.borrow().clone())
+            },
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect_err("mismatched durable readback must fail");
+
+        assert!(error.contains("read-back"), "unexpected error: {error}");
+        assert_eq!(*active.borrow(), Some(old_active));
+        assert!(matches!(
+            entries.get("opaque-handle").map(|entry| &entry.phase),
+            Some(DropboxStagedCredentialPhase::Candidate)
+        ));
+    }
+
+    #[test]
+    fn dropbox_failed_promotion_restore_retains_rollback_state() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        let old_active = test_dropbox_tokens("old-active", 99_000);
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage candidate");
+        let active = RefCell::new(Some(old_active.clone()));
+        let reads = RefCell::new(0usize);
+        let writes = RefCell::new(0usize);
+
+        let error = promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || {
+                let mut reads = reads.borrow_mut();
+                *reads += 1;
+                if *reads == 2 {
+                    return Ok(Some(test_dropbox_tokens("wrong-readback", 100_000)));
+                }
+                Ok(active.borrow().clone())
+            },
+            |tokens| {
+                let mut writes = writes.borrow_mut();
+                *writes += 1;
+                if *writes == 2 {
+                    return Err("keyring unavailable".to_string());
+                }
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect_err("failed restoration must fail promotion");
+
+        assert!(error.contains("could not be restored"));
+        assert_eq!(*active.borrow(), Some(candidate));
+        assert!(matches!(
+            entries.get("opaque-handle").map(|entry| &entry.phase),
+            Some(DropboxStagedCredentialPhase::Promoted { .. })
+        ));
+
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("later rollback can still restore the previous credentials");
+        assert_eq!(*active.borrow(), Some(old_active));
+    }
+
+    #[test]
+    fn dropbox_staged_handles_are_client_bound_and_expire() {
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 999_999_999),
+            100,
+        )
+        .expect("stage candidate");
+
+        let wrong_client = resolve_staged_dropbox_access_token_with(
+            &mut entries,
+            "opaque-handle",
+            "other-client",
+            false,
+            200,
+            |_client_id, _refresh_token| panic!("wrong-client lookup must not refresh"),
+        )
+        .expect_err("handle must be bound to its app key");
+        assert!(wrong_client.contains("different app key"));
+
+        let expired = resolve_staged_dropbox_access_token_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            false,
+            100 + DROPBOX_STAGED_CREDENTIAL_TTL_MS + 1,
+            |_client_id, _refresh_token| panic!("expired handle must not refresh"),
+        )
+        .expect_err("expired handle must be rejected");
+        assert!(expired.contains("invalid or expired"));
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn expired_candidate_discard_is_idempotent_while_the_backend_remains_active() {
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 999_999_999),
+            100,
+        )
+        .expect("stage candidate");
+
+        // Candidate discard has no durable credential side effect, so an
+        // already-active backend must not turn expiration cleanup into a wedge.
+        discard_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            100 + DROPBOX_STAGED_CREDENTIAL_TTL_MS + 1,
+        )
+        .expect("discarding an already-pruned candidate is idempotent");
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn failed_reconnect_candidate_discard_leaves_active_credentials_untouched() {
+        let mut entries = HashMap::new();
+        let active = Some(test_dropbox_tokens("active", 90_000));
+        let journal = Some("durable-journal-sentinel".to_string());
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 100_000),
+            100,
+        )
+        .expect("stage reconnect candidate");
+
+        discard_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+        )
+        .expect("failed reconnect candidate is memory-only and discardable");
+
+        assert_eq!(active, Some(test_dropbox_tokens("active", 90_000)));
+        assert_eq!(journal.as_deref(), Some("durable-journal-sentinel"));
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn promoted_handle_is_not_ttl_pruned_and_remains_rollbackable() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let active = RefCell::new(previous.clone());
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate,
+            100,
+        )
+        .expect("stage candidate");
+        promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("promote candidate");
+
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            100 + DROPBOX_STAGED_CREDENTIAL_TTL_MS + 1,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("promoted handle survives TTL and remains rollbackable");
+
+        assert_eq!(*active.borrow(), previous);
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn first_connect_dropbox_rollback_restores_no_active_tokens() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage candidate");
+        let active = RefCell::new(None::<DropboxTokenBundle>);
+
+        promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("promote first connection");
+        assert_eq!(*active.borrow(), Some(candidate));
+
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("clear first connection after failed activation");
+
+        assert_eq!(*active.borrow(), None);
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn dropbox_finalize_requires_promotion_and_discard_cannot_drop_rollback_state() {
+        use std::cell::RefCell;
+
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "opaque-handle".to_string(),
+            test_dropbox_tokens("candidate", 100_000),
+            100,
+        )
+        .expect("stage candidate");
+        assert!(finalize_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+        )
+        .is_err());
+
+        let active = RefCell::new(None::<DropboxTokenBundle>);
+        promote_staged_dropbox_credentials_with(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            200,
+            || Ok(active.borrow().clone()),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+        )
+        .expect("promote candidate");
+        assert!(discard_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+        )
+        .is_err());
+        assert!(entries.contains_key("opaque-handle"));
+
+        finalize_staged_dropbox_credentials_in_store(
+            &mut entries,
+            "opaque-handle",
+            "client-id",
+            300,
+        )
+        .expect("finalize promoted candidate");
+        assert!(!entries.contains_key("opaque-handle"));
+    }
+
+    #[test]
+    fn unknown_rollback_after_committed_journal_clear_preserves_old_keyring() {
+        use std::cell::{Cell, RefCell};
+
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let previous = test_dropbox_tokens("previous", 90_000);
+        let fallback = RefCell::new(Some(
+            serde_json::to_string(&candidate).expect("serialize candidate fallback"),
+        ));
+        let keyring = RefCell::new(Some(
+            serde_json::to_string(&previous).expect("serialize old keyring"),
+        ));
+        let keyring_writes = Cell::new(0usize);
+
+        settle_unknown_dropbox_previous_after_recovery_with(
+            &candidate,
+            |journal| {
+                resolve_unknown_dropbox_previous_credentials_with(journal, || {
+                    Ok(keyring.borrow().clone())
+                })
+            },
+            || {
+                *fallback.borrow_mut() = None;
+                Ok(())
+            },
+            || {
+                let raw = fallback
+                    .borrow()
+                    .clone()
+                    .or_else(|| keyring.borrow().clone());
+                raw.map(|raw| parse_dropbox_token_bundle(&raw)).transpose()
+            },
+        )
+        .expect("rollback reveals and verifies the untouched prior keyring bundle");
+
+        assert!(fallback.borrow().is_none());
+        assert_eq!(keyring_writes.get(), 0);
+        assert_eq!(
+            keyring
+                .borrow()
+                .as_deref()
+                .map(parse_dropbox_token_bundle)
+                .transpose()
+                .expect("parse old keyring"),
+            Some(previous)
+        );
+
+        let uncertain_fallback = RefCell::new(Some(
+            serde_json::to_string(&candidate).expect("serialize retry candidate"),
+        ));
+        let clear_attempts = Cell::new(0usize);
+        settle_unknown_dropbox_previous_after_recovery_with(
+            &candidate,
+            |journal| {
+                resolve_unknown_dropbox_previous_credentials_with(journal, || {
+                    Err("keyring unavailable".to_string())
+                })
+            },
+            || {
+                clear_attempts.set(clear_attempts.get() + 1);
+                *uncertain_fallback.borrow_mut() = None;
+                Ok(())
+            },
+            || Ok(None),
+        )
+        .expect_err("uncertain prior keyring state keeps fallback and handle retryable");
+        assert_eq!(clear_attempts.get(), 0);
+        assert!(uncertain_fallback.borrow().is_some());
+    }
+
+    #[test]
+    fn resolved_handle_tombstones_make_finalize_retry_bound_and_bounded() {
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let mut handles = Vec::new();
+        record_resolved_dropbox_credential_handle_with(
+            &mut handles,
+            "committed-handle",
+            &candidate,
+            1_000,
+        )
+        .expect("record resolved handle");
+
+        assert!(resolved_dropbox_credential_handle_matches_with(
+            &handles,
+            "committed-handle",
+            &candidate,
+            1_001,
+        )
+        .expect("match committed retry"));
+        assert!(!resolved_dropbox_credential_handle_matches_with(
+            &handles,
+            "different-handle",
+            &candidate,
+            1_001,
+        )
+        .expect("reject unrelated handle"));
+        assert!(!resolved_dropbox_credential_handle_matches_with(
+            &handles,
+            "committed-handle",
+            &candidate,
+            1_000 + DROPBOX_RESOLVED_CREDENTIAL_HANDLE_TTL_MS + 1,
+        )
+        .expect("reject expired handle"));
+
+        for index in 0..(DROPBOX_MAX_RESOLVED_CREDENTIAL_HANDLES + 4) {
+            record_resolved_dropbox_credential_handle_with(
+                &mut handles,
+                &format!("handle-{index}"),
+                &candidate,
+                2_000 + index as i64,
+            )
+            .expect("record bounded handle");
+        }
+        assert_eq!(handles.len(), DROPBOX_MAX_RESOLVED_CREDENTIAL_HANDLES);
+    }
+
+    #[test]
+    fn finalize_records_resolution_before_removal_and_journal_cleanup() {
+        use std::cell::RefCell;
+
+        let events = RefCell::new(Vec::new());
+        let error = complete_committed_dropbox_finalize_with(
+            || {
+                events.borrow_mut().push("record-resolved");
+                Ok(())
+            },
+            || {
+                events.borrow_mut().push("remove-staged");
+                Ok(())
+            },
+            || {
+                events.borrow_mut().push("clear-journal");
+                Err("injected journal clear failure".to_string())
+            },
+        )
+        .expect_err("post-commit journal cleanup failure remains retryable");
+
+        assert_eq!(
+            *events.borrow(),
+            vec!["record-resolved", "remove-staged", "clear-journal"]
+        );
+        assert!(error.contains("journal clear failure"));
+    }
+
+    #[test]
+    fn non_staged_recovery_barrier_removes_promoted_entries_only_after_success() {
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "promoted".to_string(),
+            test_dropbox_tokens("promoted", 100_000),
+            100,
+        )
+        .expect("stage promoted entry");
+        entries.get_mut("promoted").expect("promoted entry").phase =
+            DropboxStagedCredentialPhase::Promoted {
+                previous: DropboxPreviousCredentials::Empty,
+            };
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "candidate".to_string(),
+            test_dropbox_tokens("candidate", 100_000),
+            100,
+        )
+        .expect("stage candidate entry");
+
+        recover_dropbox_before_sync_configuration_with(&mut entries, || {
+            Err("recovery still pending".to_string())
+        })
+        .expect_err("failed recovery retains all handles");
+        assert!(entries.contains_key("promoted"));
+
+        recover_dropbox_before_sync_configuration_with(&mut entries, || Ok(()))
+            .expect("settled recovery removes orphan promoted handles");
+        assert!(!entries.contains_key("promoted"));
+        assert!(entries.contains_key("candidate"));
+    }
+
+    #[test]
+    fn committed_barrier_settles_before_off_and_disconnect_revokes_the_candidate() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let commit = RefCell::new(DropboxRecoveryCommitState {
+            raw_backend: "cloud".to_string(),
+            backend_marker: "cloud".to_string(),
+            cloud_provider: "dropbox".to_string(),
+            cloud_provider_authority: "native".to_string(),
+        });
+        let active = RefCell::new(Some(candidate.clone()));
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build committed journal"),
+        ));
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "committed-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage committed candidate");
+        entries
+            .get_mut("committed-handle")
+            .expect("committed entry")
+            .phase = DropboxStagedCredentialPhase::Promoted {
+            previous: DropboxPreviousCredentials::from_tokens(previous),
+        };
+
+        recover_dropbox_before_sync_configuration_with(&mut entries, || {
+            recover_dropbox_credentials_fail_closed_with_commit_state(
+                || Ok(commit.borrow().clone()),
+                |_backend| panic!("a committed cleanup barrier must not disable sync"),
+                || Ok(active.borrow().clone()),
+                |_pending| panic!("committed recovery never resolves prior credentials"),
+                |_tokens| panic!("committed recovery never rewrites the candidate"),
+                || Ok(journal.borrow().clone()),
+                || {
+                    *journal.borrow_mut() = None;
+                    Ok(())
+                },
+            )
+        })
+        .expect("the pre-disable barrier settles the committed transaction");
+
+        assert!(journal.borrow().is_none());
+        assert_eq!(*active.borrow(), Some(candidate.clone()));
+        assert!(!entries.contains_key("committed-handle"));
+
+        commit.borrow_mut().raw_backend = "off".to_string();
+        commit.borrow_mut().backend_marker = "off".to_string();
+        let cleared_staged = Cell::new(false);
+        let token_to_revoke = prepare_dropbox_disconnect_with(
+            "client-id",
+            || Ok(commit.borrow().clone()),
+            || Ok(journal.borrow().clone()),
+            || {
+                recover_dropbox_credentials_fail_closed_with_commit_state(
+                    || Ok(commit.borrow().clone()),
+                    |_backend| panic!("settled recovery must not rewrite the backend"),
+                    || panic!("an absent journal must not inspect active credentials"),
+                    |_pending| panic!("an absent journal has no prior authority"),
+                    |_tokens| panic!("an absent journal must not rewrite credentials"),
+                    || Ok(journal.borrow().clone()),
+                    || panic!("an absent journal must not be cleared"),
+                )
+            },
+            || Ok(active.borrow().clone()),
+            || {
+                *active.borrow_mut() = None;
+                Ok(())
+            },
+            || Ok(()),
+            || cleared_staged.set(true),
+        )
+        .expect("disconnect after the barrier is safe");
+
+        assert_eq!(token_to_revoke, Some(candidate));
+        assert!(active.borrow().is_none());
+        assert!(cleared_staged.get());
+    }
+
+    #[test]
+    fn committed_barrier_failure_refuses_disable_without_post_commit_rollback() {
+        use std::cell::{Cell, RefCell};
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let commit = DropboxRecoveryCommitState {
+            raw_backend: "cloud".to_string(),
+            backend_marker: "cloud".to_string(),
+            cloud_provider: "dropbox".to_string(),
+            cloud_provider_authority: "native".to_string(),
+        };
+        let active = RefCell::new(Some(candidate.clone()));
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous, &candidate).expect("build committed journal"),
+        ));
+        let backend_writes = Cell::new(0usize);
+        let credential_writes = Cell::new(0usize);
+        let mut entries = HashMap::new();
+        insert_staged_dropbox_credentials(
+            &mut entries,
+            "committed-handle".to_string(),
+            candidate.clone(),
+            100,
+        )
+        .expect("stage committed candidate");
+        entries
+            .get_mut("committed-handle")
+            .expect("committed entry")
+            .phase = DropboxStagedCredentialPhase::Promoted {
+            previous: DropboxPreviousCredentials::Empty,
+        };
+
+        let error = recover_dropbox_before_sync_configuration_with(&mut entries, || {
+            recover_dropbox_credentials_fail_closed_with_commit_state(
+                || Ok(commit.clone()),
+                |_backend| {
+                    backend_writes.set(backend_writes.get() + 1);
+                    Ok(())
+                },
+                || Ok(active.borrow().clone()),
+                |_pending| panic!("committed recovery never resolves prior credentials"),
+                |_tokens| {
+                    credential_writes.set(credential_writes.get() + 1);
+                    Ok(())
+                },
+                || Ok(journal.borrow().clone()),
+                || Err("injected durable journal cleanup failure".to_string()),
+            )
+        })
+        .expect_err("the caller must refuse its pending off write");
+
+        assert!(error.contains("active Dropbox commit was left intact"));
+        assert_eq!(backend_writes.get(), 0);
+        assert_eq!(credential_writes.get(), 0);
+        assert_eq!(*active.borrow(), Some(candidate));
+        assert!(journal.borrow().is_some());
+        assert!(entries.contains_key("committed-handle"));
+    }
+
+    #[test]
+    fn uninitialized_provider_authority_never_commits_a_candidate() {
+        use std::cell::RefCell;
+
+        let previous = Some(test_dropbox_tokens("previous", 90_000));
+        let candidate = test_dropbox_tokens("candidate", 100_000);
+        let commit = RefCell::new(DropboxRecoveryCommitState {
+            raw_backend: "cloud".to_string(),
+            backend_marker: "cloud".to_string(),
+            cloud_provider: "dropbox".to_string(),
+            cloud_provider_authority: "uninitialized".to_string(),
+        });
+        let active = RefCell::new(Some(candidate.clone()));
+        let journal = RefCell::new(Some(
+            build_dropbox_promotion_journal(previous.clone(), &candidate)
+                .expect("build uncommitted journal"),
+        ));
+
+        let error = recover_dropbox_credentials_fail_closed_with_commit_state(
+            || Ok(commit.borrow().clone()),
+            |backend| {
+                commit.borrow_mut().raw_backend = backend.to_string();
+                commit.borrow_mut().backend_marker = backend.to_string();
+                Ok(())
+            },
+            || Ok(active.borrow().clone()),
+            |_pending| panic!("the previous authority is already known"),
+            |tokens| {
+                *active.borrow_mut() = tokens.cloned();
+                Ok(())
+            },
+            || Ok(journal.borrow().clone()),
+            || {
+                *journal.borrow_mut() = None;
+                Ok(())
+            },
+        )
+        .expect_err("uninitialized authority must fail closed as uncommitted");
+
+        assert!(error.contains("sync was disabled and previous credentials were restored"));
+        assert_eq!(commit.borrow().raw_backend, "off");
+        assert_eq!(commit.borrow().backend_marker, "off");
+        assert_eq!(*active.borrow(), previous);
+        assert!(journal.borrow().is_none());
     }
 }
 
@@ -1500,68 +6332,403 @@ pub(crate) fn get_dropbox_redirect_uri() -> String {
 #[tauri::command]
 pub(crate) fn is_dropbox_connected(
     app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
     client_id: String,
 ) -> Result<bool, String> {
+    let _entries = state.inner.lock().map_err(|error| error.to_string())?;
+    recover_dropbox_credentials(&app)?;
     let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
-    match read_dropbox_tokens(&app) {
-        Ok(Some(tokens)) => Ok(tokens.client_id == normalized_client_id
-            && !tokens.access_token.trim().is_empty()
-            && !tokens.refresh_token.trim().is_empty()),
-        Ok(None) => Ok(false),
-        Err(_error) => {
-            let _ = clear_dropbox_tokens(&app);
-            Ok(false)
-        }
-    }
+    is_dropbox_connected_with(&normalized_client_id, || read_dropbox_tokens(&app))
 }
 
 #[tauri::command]
 pub(crate) async fn connect_dropbox(
     app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
     client_id: String,
-) -> Result<bool, String> {
-    let oauth_result =
-        tauri::async_runtime::spawn_blocking(move || run_dropbox_oauth(&app, &client_id))
-            .await
-            .map_err(|error| format!("Dropbox OAuth task failed: {error}"))?;
-    oauth_result?;
-    Ok(true)
+) -> Result<String, String> {
+    let staged_entries = state.inner.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        {
+            let _entries = staged_entries.lock().map_err(|error| error.to_string())?;
+            recover_dropbox_credentials(&app)?;
+        }
+        let tokens = run_dropbox_oauth(&app, &client_id)?;
+        let mut entries = staged_entries.lock().map_err(|error| error.to_string())?;
+        stage_dropbox_candidate_after_recovery_with(
+            || recover_dropbox_credentials(&app),
+            || stage_dropbox_credentials(&mut entries, tokens, now_unix_ms()),
+        )
+    })
+    .await
+    .map_err(|error| format!("Dropbox OAuth task failed: {error}"))?
 }
 
 #[tauri::command]
 pub(crate) async fn get_dropbox_access_token(
     app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
     client_id: String,
+    credential_handle: Option<String>,
     force_refresh: Option<bool>,
 ) -> Result<String, String> {
     let should_force_refresh = force_refresh.unwrap_or(false);
+    let staged_entries = state.inner.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let mut entries = staged_entries.lock().map_err(|error| error.to_string())?;
+        recover_dropbox_credentials(&app)?;
+        if let Some(credential_handle) = credential_handle {
+            let credential_handle = credential_handle.trim();
+            if credential_handle.is_empty() {
+                return Err("Dropbox credential handle is empty".to_string());
+            }
+            return get_valid_staged_dropbox_access_token(
+                &app,
+                &mut entries,
+                credential_handle,
+                &client_id,
+                should_force_refresh,
+            );
+        }
         get_valid_dropbox_access_token(&app, &client_id, should_force_refresh)
     })
     .await
     .map_err(|error| format!("Dropbox token task failed: {error}"))?
 }
 
+fn ensure_native_sync_backend_disabled(app: &tauri::AppHandle) -> Result<(), String> {
+    let commit = read_native_dropbox_recovery_commit_state(app)?;
+    if !dropbox_recovery_state_is_durably_off(&commit) {
+        return Err("Dropbox credentials can only be changed while sync is disabled".to_string());
+    }
+    Ok(())
+}
+
+fn ensure_dropbox_disconnect_backend_safe(
+    commit: &DropboxRecoveryCommitState,
+) -> Result<(), String> {
+    if commit.raw_backend.trim() != commit.backend_marker.trim() {
+        return Err(
+            "Dropbox disconnect was refused because native sync markers are inconsistent"
+                .to_string(),
+        );
+    }
+    match commit.raw_backend.trim() {
+        "off" | "file" | "webdav" | "cloudkit" => Ok(()),
+        "cloud" if commit.cloud_provider_authority.trim() != "native" => Err(
+            "Dropbox disconnect was refused because cloud provider authority is uninitialized"
+                .to_string(),
+        ),
+        "cloud" if commit.cloud_provider.trim() == "selfhosted" => Ok(()),
+        "cloud" if commit.cloud_provider.trim() == "dropbox" => Err(
+            "Dropbox cannot be disconnected while the Dropbox sync backend is active".to_string(),
+        ),
+        _ => Err(
+            "Dropbox disconnect was refused because the native sync provider is unknown"
+                .to_string(),
+        ),
+    }
+}
+
+fn prepare_dropbox_disconnect_with<
+    ReadCommitState,
+    ReadJournal,
+    Recover,
+    ReadTokens,
+    ClearTokens,
+    ClearJournal,
+    ClearStaged,
+>(
+    client_id: &str,
+    mut read_commit_state: ReadCommitState,
+    mut read_journal: ReadJournal,
+    mut recover: Recover,
+    mut read_tokens: ReadTokens,
+    mut clear_tokens: ClearTokens,
+    mut clear_journal: ClearJournal,
+    mut clear_staged: ClearStaged,
+) -> Result<Option<DropboxTokenBundle>, String>
+where
+    ReadCommitState: FnMut() -> Result<DropboxRecoveryCommitState, String>,
+    ReadJournal: FnMut() -> Result<Option<DropboxCredentialPromotionJournal>, String>,
+    Recover: FnMut() -> Result<(), String>,
+    ReadTokens: FnMut() -> Result<Option<DropboxTokenBundle>, String>,
+    ClearTokens: FnMut() -> Result<(), String>,
+    ClearJournal: FnMut() -> Result<(), String>,
+    ClearStaged: FnMut(),
+{
+    let commit = read_commit_state()?;
+    ensure_dropbox_disconnect_backend_safe(&commit)?;
+    if read_journal()?.is_some() {
+        return Err(
+            "Dropbox disconnect was refused because credential recovery must settle before the sync backend changes"
+                .to_string(),
+        );
+    }
+    recover()?;
+    let token_to_revoke = read_tokens()
+        .ok()
+        .flatten()
+        .filter(|tokens| tokens.client_id == client_id && !tokens.access_token.trim().is_empty());
+    clear_tokens()?;
+    clear_journal()?;
+    clear_staged();
+    Ok(token_to_revoke)
+}
+
+fn stage_dropbox_candidate_after_recovery_with<T, Recover, Stage>(
+    mut recover: Recover,
+    stage: Stage,
+) -> Result<T, String>
+where
+    Recover: FnMut() -> Result<(), String>,
+    Stage: FnOnce() -> Result<T, String>,
+{
+    recover()?;
+    stage()
+}
+
+fn recover_dropbox_before_sync_configuration_with<Recover>(
+    entries: &mut HashMap<String, DropboxStagedCredential>,
+    mut recover: Recover,
+) -> Result<bool, String>
+where
+    Recover: FnMut() -> Result<(), String>,
+{
+    recover()?;
+    entries
+        .retain(|_, entry| !matches!(entry.phase, DropboxStagedCredentialPhase::Promoted { .. }));
+    Ok(true)
+}
+
+#[tauri::command]
+pub(crate) fn recover_dropbox_credentials_before_sync_configuration(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
+) -> Result<bool, String> {
+    let mut entries = state.inner.lock().map_err(|error| error.to_string())?;
+    recover_dropbox_before_sync_configuration_with(&mut entries, || {
+        recover_dropbox_credentials(&app)
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn promote_staged_dropbox_credentials(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
+    client_id: String,
+    credential_handle: String,
+) -> Result<bool, String> {
+    let staged_entries = state.inner.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
+        let mut entries = staged_entries.lock().map_err(|error| error.to_string())?;
+        recover_dropbox_credentials(&app)?;
+        promote_staged_dropbox_credentials_with_journal(
+            &mut entries,
+            credential_handle.trim(),
+            &normalized_client_id,
+            now_unix_ms(),
+            || read_native_durably_disabled_sync_backend(&app),
+            || read_dropbox_previous_credentials_for_promotion(&app),
+            || read_dropbox_tokens_for_recovery(&app),
+            |tokens| write_optional_dropbox_tokens(&app, tokens),
+            |tokens| write_dropbox_tokens_fallback_only(&app, tokens),
+            || read_dropbox_promotion_journal(&app),
+            |journal| write_dropbox_promotion_journal(&app, journal),
+        )?;
+        Ok::<bool, String>(true)
+    })
+    .await
+    .map_err(|error| format!("Dropbox credential promotion task failed: {error}"))?
+}
+
+#[tauri::command]
+pub(crate) async fn rollback_staged_dropbox_credentials(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
+    client_id: String,
+    credential_handle: String,
+) -> Result<bool, String> {
+    let staged_entries = state.inner.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
+        let mut entries = staged_entries.lock().map_err(|error| error.to_string())?;
+        ensure_native_sync_backend_disabled(&app)?;
+        let (unknown_previous, candidate) = {
+            let entry = staged_dropbox_entry_mut(
+                &mut entries,
+                credential_handle.trim(),
+                &normalized_client_id,
+                now_unix_ms(),
+            )?;
+            (
+                matches!(
+                    entry.phase,
+                    DropboxStagedCredentialPhase::Promoted {
+                        previous: DropboxPreviousCredentials::UnknownKeyring
+                    }
+                ),
+                entry.tokens.clone(),
+            )
+        };
+        recover_dropbox_credentials(&app)?;
+        if unknown_previous {
+            settle_unknown_dropbox_previous_after_recovery_with(
+                &candidate,
+                |journal| resolve_unknown_dropbox_previous_credentials(&app, journal),
+                || clear_dropbox_tokens_fallback_only(&app),
+                || read_dropbox_tokens_for_recovery(&app),
+            )?;
+            entries.remove(credential_handle.trim());
+            return Ok::<bool, String>(true);
+        }
+        rollback_staged_dropbox_credentials_with(
+            &mut entries,
+            credential_handle.trim(),
+            &normalized_client_id,
+            now_unix_ms(),
+            || read_dropbox_tokens_for_recovery(&app),
+            |tokens| write_optional_dropbox_tokens(&app, tokens),
+        )?;
+        Ok::<bool, String>(true)
+    })
+    .await
+    .map_err(|error| format!("Dropbox credential rollback task failed: {error}"))?
+}
+
+#[tauri::command]
+pub(crate) fn finalize_staged_dropbox_credentials(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
+    client_id: String,
+    credential_handle: String,
+) -> Result<bool, String> {
+    let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
+    let mut entries = state.inner.lock().map_err(|error| error.to_string())?;
+    let credential_handle = credential_handle.trim();
+    let commit = read_native_dropbox_recovery_commit_state(&app)?;
+    if commit.raw_backend.trim() != "cloud"
+        || commit.backend_marker.trim() != "cloud"
+        || commit.cloud_provider.trim() != "dropbox"
+        || commit.cloud_provider_authority.trim() != "native"
+    {
+        return Err(
+            "Dropbox credentials cannot be finalized before the Dropbox backend is committed"
+                .to_string(),
+        );
+    }
+    if !entries.contains_key(credential_handle) {
+        let active = read_dropbox_tokens_for_recovery(&app)?.ok_or_else(|| {
+            "Resolved Dropbox credentials are missing during finalize retry".to_string()
+        })?;
+        let state = read_dropbox_credential_state(&app)?;
+        if !resolved_dropbox_credential_handle_matches_with(
+            &state.resolved_credential_handles,
+            credential_handle,
+            &active,
+            now_unix_ms(),
+        )? {
+            return Err("Dropbox credential handle is invalid or expired".to_string());
+        }
+        if read_dropbox_promotion_journal(&app)?.is_some() {
+            clear_dropbox_promotion_journal(&app)?;
+            if read_dropbox_promotion_journal(&app)?.is_some() {
+                return Err(
+                    "Dropbox credential promotion journal remains pending after finalize retry"
+                        .to_string(),
+                );
+            }
+        }
+        return Ok(true);
+    }
+    let entry = staged_dropbox_entry_mut(
+        &mut entries,
+        credential_handle,
+        &normalized_client_id,
+        now_unix_ms(),
+    )?;
+    if !matches!(entry.phase, DropboxStagedCredentialPhase::Promoted { .. }) {
+        return Err("Dropbox credentials cannot be finalized before promotion".to_string());
+    }
+    let candidate = entry.tokens.clone();
+    if let Some(journal) = read_dropbox_promotion_journal(&app)? {
+        if !journal_matches_candidate(&journal, &candidate)? {
+            return Err(
+                "Final Dropbox credentials do not match their recovery journal".to_string(),
+            );
+        }
+    }
+    if read_dropbox_tokens_for_recovery(&app)?.as_ref() != Some(&candidate) {
+        return Err("Final Dropbox credentials failed durable read-back verification".to_string());
+    }
+    complete_committed_dropbox_finalize_with(
+        || record_resolved_dropbox_credential_handle(&app, credential_handle, &candidate),
+        || {
+            finalize_staged_dropbox_credentials_in_store(
+                &mut entries,
+                credential_handle,
+                &normalized_client_id,
+                now_unix_ms(),
+            )
+        },
+        || clear_dropbox_promotion_journal(&app),
+    )?;
+    if read_dropbox_promotion_journal(&app)?.is_some() {
+        return Err(
+            "Dropbox credential promotion journal remains pending after finalize".to_string(),
+        );
+    }
+    Ok(true)
+}
+
+#[tauri::command]
+pub(crate) fn discard_staged_dropbox_credentials(
+    state: tauri::State<'_, DropboxStagedCredentialState>,
+    client_id: String,
+    credential_handle: String,
+) -> Result<bool, String> {
+    let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
+    let mut entries = state.inner.lock().map_err(|error| error.to_string())?;
+    discard_staged_dropbox_credentials_in_store(
+        &mut entries,
+        credential_handle.trim(),
+        &normalized_client_id,
+        now_unix_ms(),
+    )?;
+    Ok(true)
+}
+
 #[tauri::command]
 pub(crate) async fn disconnect_dropbox(
     app: tauri::AppHandle,
+    state: tauri::State<'_, DropboxStagedCredentialState>,
     client_id: String,
 ) -> Result<bool, String> {
+    let staged_entries = state.inner.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let normalized_client_id = normalize_dropbox_client_id(&client_id)?;
-        if let Ok(Some(tokens)) = read_dropbox_tokens(&app) {
-            if tokens.client_id == normalized_client_id && !tokens.access_token.trim().is_empty() {
-                let Ok(client) = app_blocking_http_client(&app) else {
-                    clear_dropbox_tokens(&app)?;
-                    return Ok::<(), String>(());
-                };
+        let mut entries = staged_entries.lock().map_err(|error| error.to_string())?;
+        let token_to_revoke = prepare_dropbox_disconnect_with(
+            &normalized_client_id,
+            || read_native_dropbox_recovery_commit_state(&app),
+            || read_dropbox_promotion_journal(&app),
+            || recover_dropbox_credentials(&app),
+            || read_dropbox_tokens_for_recovery(&app),
+            || clear_dropbox_credentials_for_disconnect(&app),
+            || strictly_purge_dropbox_promotion_journal(&app),
+            || entries.retain(|_, entry| entry.tokens.client_id != normalized_client_id),
+        )?;
+        drop(entries);
+
+        if let Some(tokens) = token_to_revoke {
+            if let Ok(client) = app_blocking_http_client(&app) {
                 let _ = client
                     .post(DROPBOX_REVOKE_ENDPOINT)
                     .bearer_auth(tokens.access_token)
                     .send();
             }
         }
-        clear_dropbox_tokens(&app)?;
         Ok::<(), String>(())
     })
     .await
@@ -1648,9 +6815,16 @@ fn empty_remote_app_data() -> serde_json::Value {
 }
 
 #[tauri::command]
-pub(crate) fn read_sync_file(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let sync_dir =
-        configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?;
+pub(crate) fn read_sync_file(
+    app: tauri::AppHandle,
+    path: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let sync_dir = match path {
+        Some(path) => resolve_sync_dir(&app, Some(path))?,
+        None => {
+            configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
+        }
+    };
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
     let legacy_sync_file = sync_dir.join(format!("{}-sync.json", APP_NAME));
@@ -1733,9 +6907,17 @@ pub(crate) fn read_sync_file(app: tauri::AppHandle) -> Result<serde_json::Value,
 }
 
 #[tauri::command]
-pub(crate) fn write_sync_file(app: tauri::AppHandle, data: Value) -> Result<bool, String> {
-    let sync_dir =
-        configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?;
+pub(crate) fn write_sync_file(
+    app: tauri::AppHandle,
+    data: Value,
+    path: Option<String>,
+) -> Result<bool, String> {
+    let sync_dir = match path {
+        Some(path) => resolve_sync_dir(&app, Some(path))?,
+        None => {
+            configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
+        }
+    };
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
     let tmp_file = sync_dir.join(format!("{}.tmp", DATA_FILE_NAME));

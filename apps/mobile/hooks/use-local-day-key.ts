@@ -38,17 +38,24 @@ export function useLocalDayKey(enabled = true): string {
 }
 
 /**
- * Re-renders the consumer when the earliest upcoming timed start among the
- * given tasks arrives, so a task hidden until its start time (#995) appears
- * without waiting for an unrelated store change.
+ * Re-renders the consumer at the next local midnight and when the earliest
+ * upcoming timed start arrives. The midnight wake schedules tomorrow's timed
+ * starts as well as revealing date-only tasks (#995).
  */
-export function useFutureStartRevealTick(tasks: ReadonlyArray<{ startTime?: string }>): number {
+export function useFutureStartRevealTick(
+  tasks: ReadonlyArray<{ startTime?: string }>,
+  enabled = true,
+): number {
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
+    const now = new Date();
+    const nextDay = new Date(now);
+    nextDay.setHours(24, 0, 0, 0);
     const revealAt = getNextFutureStartRevealAt(tasks);
-    if (revealAt === null) return;
-    const timer = setTimeout(() => setTick((t) => t + 1), Math.max(1, revealAt - Date.now() + 50));
+    const wakeAt = revealAt === null ? nextDay.getTime() : Math.min(revealAt, nextDay.getTime());
+    const timer = setTimeout(() => setTick((t) => t + 1), Math.max(1, wakeAt - now.getTime() + 50));
     return () => clearTimeout(timer);
-  }, [tasks, tick]);
+  }, [enabled, tasks, tick]);
   return tick;
 }

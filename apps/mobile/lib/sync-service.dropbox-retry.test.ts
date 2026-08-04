@@ -1,5 +1,7 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Platform } from 'react-native';
+
+import * as syncServiceModule from './sync-service';
 
 const emptyData = {
   tasks: [],
@@ -51,7 +53,9 @@ const externalCalendarMocks = vi.hoisted(() => ({
 
 const dropboxAuthMocks = vi.hoisted(() => ({
   forceRefreshDropboxAccessToken: vi.fn(),
+  forceRefreshDropboxAccessTokenForTokens: vi.fn(),
   getValidDropboxAccessToken: vi.fn(),
+  getValidDropboxAccessTokenForTokens: vi.fn(),
   isDropboxConnected: vi.fn(),
 }));
 
@@ -164,7 +168,9 @@ vi.mock('./external-calendar', () => ({
 
 vi.mock('./dropbox-auth', () => ({
   forceRefreshDropboxAccessToken: dropboxAuthMocks.forceRefreshDropboxAccessToken,
+  forceRefreshDropboxAccessTokenForTokens: dropboxAuthMocks.forceRefreshDropboxAccessTokenForTokens,
   getValidDropboxAccessToken: dropboxAuthMocks.getValidDropboxAccessToken,
+  getValidDropboxAccessTokenForTokens: dropboxAuthMocks.getValidDropboxAccessTokenForTokens,
   isDropboxConnected: dropboxAuthMocks.isDropboxConnected,
 }));
 
@@ -218,13 +224,7 @@ vi.mock('@mindwtr/core', async () => {
   };
 });
 
-let syncServiceModule: Awaited<typeof import('./sync-service')>;
-
 describe('mobile Dropbox sync transient retry', () => {
-  beforeAll(async () => {
-    syncServiceModule = await import('./sync-service');
-  });
-
   beforeEach(() => {
     vi.clearAllMocks();
     (Platform as { OS: string }).OS = 'web';
@@ -273,7 +273,22 @@ describe('mobile Dropbox sync transient retry', () => {
     externalCalendarMocks.saveExternalCalendars.mockResolvedValue(undefined);
 
     dropboxAuthMocks.forceRefreshDropboxAccessToken.mockResolvedValue('token');
+    dropboxAuthMocks.forceRefreshDropboxAccessTokenForTokens.mockImplementation(async (
+      _clientId: string,
+      tokens: { refreshToken: string },
+    ) => ({
+      accessToken: 'candidate-refreshed-token',
+      tokens: {
+        accessToken: 'candidate-refreshed-token',
+        refreshToken: tokens.refreshToken,
+        expiresAt: 4_102_444_800_000,
+      },
+    }));
     dropboxAuthMocks.getValidDropboxAccessToken.mockResolvedValue('token');
+    dropboxAuthMocks.getValidDropboxAccessTokenForTokens.mockImplementation(async (
+      _clientId: string,
+      tokens: { accessToken: string },
+    ) => ({ accessToken: tokens.accessToken, tokens }));
     dropboxAuthMocks.isDropboxConnected.mockResolvedValue(true);
 
     dropboxSyncMocks.uploadDropboxAppData.mockResolvedValue({ rev: 'rev-2' });
@@ -363,5 +378,120 @@ describe('mobile Dropbox sync transient retry', () => {
 
     expect(result.success).toBe(false);
     expect(dropboxSyncMocks.downloadDropboxAppData).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses and refreshes staged Dropbox tokens without touching persisted credentials', async () => {
+    const staged = {
+      tokens: {
+        accessToken: 'candidate-access-token',
+        refreshToken: 'candidate-refresh-token',
+        expiresAt: 4_102_444_800_000,
+      },
+    };
+    dropboxSyncMocks.downloadDropboxAppData
+      .mockRejectedValueOnce(new Error('Dropbox download failed: HTTP 401'))
+      .mockResolvedValue({ data: emptyData, rev: 'candidate-rev' });
+
+    const result = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'cloud',
+        cloudProvider: 'dropbox',
+        dropbox: staged,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(dropboxSyncMocks.downloadDropboxAppData).toHaveBeenNthCalledWith(
+      1,
+      'candidate-access-token',
+      expect.any(Function),
+    );
+    expect(dropboxSyncMocks.downloadDropboxAppData).toHaveBeenNthCalledWith(
+      2,
+      'candidate-refreshed-token',
+      expect.any(Function),
+    );
+    expect(dropboxAuthMocks.getValidDropboxAccessTokenForTokens).toHaveBeenCalledWith(
+      'test-app-key',
+      expect.objectContaining({ accessToken: 'candidate-access-token' }),
+      expect.any(Function),
+    );
+    expect(dropboxAuthMocks.forceRefreshDropboxAccessTokenForTokens).toHaveBeenCalledWith(
+      'test-app-key',
+      expect.objectContaining({ refreshToken: 'candidate-refresh-token' }),
+      expect.any(Function),
+    );
+    expect(staged.tokens.accessToken).toBe('candidate-refreshed-token');
+    expect(dropboxAuthMocks.getValidDropboxAccessToken).not.toHaveBeenCalled();
+    expect(dropboxAuthMocks.forceRefreshDropboxAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('passes the staged-aware token resolver to Dropbox attachment proof', async () => {
+    const staged = {
+      tokens: {
+        accessToken: 'candidate-access-token',
+        refreshToken: 'candidate-refresh-token',
+        expiresAt: 4_102_444_800_000,
+      },
+    };
+    const attachedData = {
+      ...emptyData,
+      tasks: [{
+        id: 'task-with-attachment',
+        title: 'Task',
+        status: 'inbox',
+        tags: [],
+        contexts: [],
+        attachments: [{
+          id: 'candidate-attachment',
+          kind: 'file',
+          title: 'candidate.txt',
+          uri: 'file://document/attachments/candidate.txt',
+          cloudKey: 'cloudkit:candidate-attachment',
+          localStatus: 'available',
+          createdAt: '2026-08-03T10:00:00.000Z',
+          updatedAt: '2026-08-03T10:00:00.000Z',
+        }],
+        createdAt: '2026-08-03T10:00:00.000Z',
+        updatedAt: '2026-08-03T10:00:00.000Z',
+      }],
+    };
+    storageMocks.getData.mockResolvedValue(attachedData);
+    coreMocks.getInMemoryAppDataSnapshot.mockReturnValue(attachedData);
+    dropboxAuthMocks.getValidDropboxAccessToken.mockResolvedValue('old-account-token');
+    // This suite's lightweight performSyncCycle fake selects `remote ?? local`
+    // instead of running the real merge. Keep the attachment in that remote
+    // fixture so the assertion reaches the candidate attachment-proof seam.
+    dropboxSyncMocks.downloadDropboxAppData.mockResolvedValue({ data: attachedData, rev: 'candidate-rev' });
+    attachmentSyncMocks.syncDropboxAttachments.mockImplementation(async (data) => {
+      const attachment = data.tasks[0]?.attachments?.[0];
+      if (attachment) {
+        attachment.cloudKey = 'attachments/candidate-attachment.txt';
+        attachment.localStatus = 'available';
+      }
+      return data;
+    });
+
+    const result = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'cloud',
+        cloudProvider: 'dropbox',
+        dropbox: staged,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(attachmentSyncMocks.syncDropboxAttachments).toHaveBeenCalledTimes(1);
+    const attachmentOptions = attachmentSyncMocks.syncDropboxAttachments.mock.calls[0]?.[3] as {
+      resolveAccessToken?: (forceRefresh: boolean) => Promise<string>;
+    };
+    expect(attachmentOptions.resolveAccessToken).toEqual(expect.any(Function));
+    await expect(attachmentOptions.resolveAccessToken?.(false)).resolves.toBe('candidate-access-token');
+    expect(dropboxAuthMocks.getValidDropboxAccessTokenForTokens).toHaveBeenCalled();
+    expect(dropboxAuthMocks.getValidDropboxAccessToken).not.toHaveBeenCalled();
   });
 });

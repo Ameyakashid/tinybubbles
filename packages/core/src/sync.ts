@@ -246,6 +246,7 @@ type MergeableEntity = {
 
 type MergeAppDataOptions = {
     nowIso?: string;
+    preferIncomingAttachmentCloudKeys?: boolean;
 };
 
 const getRecurrenceSeriesShape = (value: Task['recurrence']): string | null => {
@@ -817,6 +818,29 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
                 && attachment.localStatus !== 'missing'
                 && !!sanitizeMergedAttachmentUri(attachment.uri);
         };
+        const resolveCloudKey = (
+            mergedAttachment: Attachment,
+            localAttachment?: Attachment,
+            incomingAttachment?: Attachment,
+        ): string | undefined => {
+            if (mergedAttachment.deletedAt) return mergedAttachment.cloudKey;
+            // The first durable cycle after activation reads the exact remote
+            // document written by the candidate probe. Its live cloud key is
+            // therefore proof for the newly active destination; an equal-time
+            // deterministic winner from the previous backend must not replace
+            // it. An explicit missing key remains missing so the cycle fails
+            // safe and a later attachment pass can upload it.
+            if (
+                options.preferIncomingAttachmentCloudKeys
+                && incomingAttachment
+                && !incomingAttachment.deletedAt
+            ) {
+                return incomingAttachment.cloudKey;
+            }
+            return mergedAttachment.cloudKey
+                || localAttachment?.cloudKey
+                || incomingAttachment?.cloudKey;
+        };
 
         const merged = mergeEntitiesWithStats(localList, incomingList, (localAttachment, incomingAttachment, winner) => {
             if (winner.kind !== 'file' || localAttachment.kind !== 'file' || incomingAttachment.kind !== 'file') {
@@ -854,9 +878,7 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
 
             return {
                 ...winner,
-                cloudKey: winner.deletedAt
-                    ? winner.cloudKey
-                    : winner.cloudKey || localAttachment.cloudKey || incomingAttachment.cloudKey,
+                cloudKey: resolveCloudKey(winner, localAttachment, incomingAttachment),
                 fileHash: winner.deletedAt
                     ? winner.fileHash
                     : winner.fileHash || localAttachment.fileHash || incomingAttachment.fileHash,
@@ -876,9 +898,7 @@ export function mergeAppDataWithStats(local: AppData, incoming: AppData, options
             return {
                 ...attachment,
                 uri: safeUri ?? '',
-                cloudKey: attachment.deletedAt
-                    ? attachment.cloudKey
-                    : attachment.cloudKey || localFile?.cloudKey || incomingFile?.cloudKey,
+                cloudKey: resolveCloudKey(attachment, localFile, incomingFile),
                 fileHash: attachment.deletedAt
                     ? attachment.fileHash
                     : attachment.fileHash || localFile?.fileHash || incomingFile?.fileHash,
@@ -1140,7 +1160,10 @@ async function performSyncCycleUnlocked(io: SyncCycleIO): Promise<SyncCycleResul
 
     io.onStep?.('merge');
     await yieldToUi();
-    const mergeResult = mergeAppDataWithStats(localData, remoteData, { nowIso });
+    const mergeResult = mergeAppDataWithStats(localData, remoteData, {
+        nowIso,
+        preferIncomingAttachmentCloudKeys: io.preferIncomingAttachmentCloudKeys,
+    });
     const mergeSummary = summarizeMergeStats(mergeResult.stats);
     const conflictCount = mergeSummary.conflicts;
     const nextSyncStatus: SyncCycleResult['status'] = conflictCount > 0 ? 'conflict' : 'success';

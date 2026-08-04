@@ -60,7 +60,9 @@ const externalCalendarMocks = vi.hoisted(() => ({
 
 const dropboxAuthMocks = vi.hoisted(() => ({
   forceRefreshDropboxAccessToken: vi.fn(),
+  forceRefreshDropboxAccessTokenForTokens: vi.fn(),
   getValidDropboxAccessToken: vi.fn(),
+  getValidDropboxAccessTokenForTokens: vi.fn(),
   isDropboxConnected: vi.fn(),
 }));
 
@@ -128,6 +130,9 @@ vi.mock('expo-constants', () => ({
     expoConfig: {
       extra: {
         isFossBuild: true,
+        // A FOSS build must reject Dropbox by policy even if a key is
+        // accidentally present in generated configuration.
+        dropboxAppKey: 'must-not-enable-dropbox',
       },
     },
   },
@@ -170,7 +175,9 @@ vi.mock('./external-calendar', () => ({
 
 vi.mock('./dropbox-auth', () => ({
   forceRefreshDropboxAccessToken: dropboxAuthMocks.forceRefreshDropboxAccessToken,
+  forceRefreshDropboxAccessTokenForTokens: dropboxAuthMocks.forceRefreshDropboxAccessTokenForTokens,
   getValidDropboxAccessToken: dropboxAuthMocks.getValidDropboxAccessToken,
+  getValidDropboxAccessTokenForTokens: dropboxAuthMocks.getValidDropboxAccessTokenForTokens,
   isDropboxConnected: dropboxAuthMocks.isDropboxConnected,
 }));
 
@@ -281,7 +288,15 @@ describe('mobile sync-service runtime', () => {
     externalCalendarMocks.saveExternalCalendars.mockResolvedValue(undefined);
 
     dropboxAuthMocks.forceRefreshDropboxAccessToken.mockResolvedValue('token');
+    dropboxAuthMocks.forceRefreshDropboxAccessTokenForTokens.mockResolvedValue({
+      accessToken: 'token',
+      tokens: { accessToken: 'token', refreshToken: 'refresh-token', expiresAt: 4_102_444_800_000 },
+    });
     dropboxAuthMocks.getValidDropboxAccessToken.mockResolvedValue('token');
+    dropboxAuthMocks.getValidDropboxAccessTokenForTokens.mockResolvedValue({
+      accessToken: 'token',
+      tokens: { accessToken: 'token', refreshToken: 'refresh-token', expiresAt: 4_102_444_800_000 },
+    });
     dropboxAuthMocks.isDropboxConnected.mockResolvedValue(false);
 
     logMocks.logSyncError.mockResolvedValue(null);
@@ -289,6 +304,8 @@ describe('mobile sync-service runtime', () => {
     coreMocks.flushPendingSave.mockResolvedValue(undefined);
     coreMocks.withRetry.mockImplementation(async (operation: () => Promise<unknown>) => await operation());
     coreMocks.webdavGetJson.mockResolvedValue(emptyData);
+    coreMocks.webdavPutJson.mockReset();
+    coreMocks.webdavPutJson.mockResolvedValue(undefined);
     coreMocks.webdavHeadFile.mockResolvedValue({ exists: true, fingerprint: 'webdav:v1:etag="initial"' });
     coreMocks.cloudHeadJson.mockResolvedValue({ exists: true, fingerprint: 'cloud:v1:etag="initial"' });
     coreMocks.getInMemoryAppDataSnapshot.mockReturnValue(emptyData);
@@ -305,6 +322,99 @@ describe('mobile sync-service runtime', () => {
     });
 
     syncServiceModule.__mobileSyncTestUtils.reset();
+  });
+
+  it('runs a first WebDAV round trip from session config without reading or activating persisted transport settings', async () => {
+    asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
+      if (key === '@mindwtr_sync_backend') return 'off';
+      return null;
+    });
+
+    const result = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'webdav',
+        webdav: {
+          url: 'https://pending.example.com/mindwtr',
+          username: 'pending-user',
+          password: 'pending-password',
+          allowInsecureHttp: false,
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(coreMocks.webdavGetJson).toHaveBeenCalledWith(
+      'https://pending.example.com/mindwtr/data.json',
+      expect.objectContaining({
+        username: 'pending-user',
+        password: 'pending-password',
+      }),
+    );
+    expect(asyncStorageMocks.getItem).not.toHaveBeenCalledWith('@mindwtr_webdav_url');
+    expect(asyncStorageMocks.setItem).not.toHaveBeenCalledWith('@mindwtr_sync_backend', 'webdav');
+    expect(storageMocks.saveData).not.toHaveBeenCalled();
+    expect(externalCalendarMocks.getExternalCalendars).not.toHaveBeenCalled();
+    expect(externalCalendarMocks.saveExternalCalendars).not.toHaveBeenCalled();
+    expect(attachmentSyncMocks.syncWebdavAttachments).not.toHaveBeenCalled();
+    expect(storeStateRef.current.fetchData).not.toHaveBeenCalled();
+  });
+
+  it('rejects a transient Dropbox override in a FOSS build even when an app key is present', async () => {
+    dropboxSyncMocks.downloadDropboxAppData.mockResolvedValue({ data: emptyData, rev: 'candidate-rev' });
+    dropboxSyncMocks.uploadDropboxAppData.mockResolvedValue('uploaded-rev');
+
+    const result = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'cloud',
+        cloudProvider: 'dropbox',
+        dropbox: {
+          tokens: {
+            accessToken: 'candidate-access-token',
+            refreshToken: 'candidate-refresh-token',
+            expiresAt: 4_102_444_800_000,
+          },
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('Dropbox sync is unavailable in this build'),
+    });
+    expect(dropboxSyncMocks.downloadDropboxAppData).not.toHaveBeenCalled();
+    expect(dropboxAuthMocks.getValidDropboxAccessTokenForTokens).not.toHaveBeenCalled();
+  });
+
+  it('does not persist candidate remote data when a mobile activation probe write fails', async () => {
+    asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
+      if (key === '@mindwtr_sync_backend') return 'off';
+      return null;
+    });
+    coreMocks.webdavGetJson.mockResolvedValue(remoteChangedData);
+    coreMocks.webdavPutJson.mockRejectedValue(new Error('candidate remote write failed'));
+
+    const result = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'webdav',
+        webdav: {
+          url: 'https://pending.example.com/mindwtr',
+          username: 'pending-user',
+          password: 'pending-password',
+          allowInsecureHttp: false,
+        },
+      },
+    });
+
+    expect(result).toMatchObject({ success: false, error: expect.stringContaining('candidate remote write failed') });
+    expect(storageMocks.saveData).not.toHaveBeenCalled();
+    expect(storeStateRef.current.fetchData).not.toHaveBeenCalled();
+    expect(coreMocks.getInMemoryAppDataSnapshot()).toEqual(emptyData);
   });
 
   it('pauses repeated WebDAV sync attempts after a rate limit response', async () => {
@@ -1135,6 +1245,39 @@ describe('mobile sync-service runtime', () => {
 
     expect(states[0]).toBe('idle');
     expect(states.at(-1)).toBe('idle');
+  });
+
+  it('does not return an active cycle as proof for a queued transient configuration', async () => {
+    let releaseSync!: () => void;
+    const syncGate = new Promise<void>((resolve) => {
+      releaseSync = resolve;
+    });
+    coreMocks.performSyncCycle.mockImplementation(async () => {
+      await syncGate;
+      return { status: 'success', stats: emptyStats, data: emptyData };
+    });
+    coreMocks.webdavGetJson.mockResolvedValue(remoteChangedData);
+
+    const activeSync = syncServiceModule.performMobileSync();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const proofResult = await syncServiceModule.performMobileSync(undefined, {
+      activationProbe: true,
+      manual: true,
+      configOverride: {
+        backend: 'webdav',
+        webdav: {
+          url: 'https://pending.example.com',
+          username: 'pending-user',
+          password: 'pending-password',
+        },
+      },
+    });
+
+    expect(proofResult).toEqual({ success: true, skipped: 'requeued' });
+    releaseSync();
+    await activeSync;
+    expect(coreMocks.performSyncCycle).toHaveBeenCalledTimes(1);
+    syncServiceModule.__mobileSyncTestUtils.reset();
   });
 
   it('cleans attachment temp files and refreshes the store after a successful WebDAV merge', async () => {

@@ -168,6 +168,51 @@ describe('GlobalSearch', () => {
         expect(screen.getByText((_, element) => element?.textContent === 'Home needle task')).toBeInTheDocument();
     });
 
+    it('refreshes hidden-future results at midnight and at an explicit start time', async () => {
+        vi.setSystemTime(new Date('2026-04-16T23:59:30'));
+        useTaskStore.setState({
+            _allTasks: [
+                {
+                    ...tasks[0],
+                    id: 'tomorrow-date',
+                    title: 'Tomorrow date task',
+                    startTime: '2026-04-17',
+                },
+                {
+                    ...tasks[0],
+                    id: 'tomorrow-time',
+                    title: 'Tomorrow timed task',
+                    startTime: '2026-04-17T00:01',
+                },
+            ],
+        });
+        render(
+            <LanguageProvider>
+                <GlobalSearch onNavigate={vi.fn()} />
+            </LanguageProvider>
+        );
+
+        await act(async () => {
+            window.dispatchEvent(new Event('mindwtr:open-search'));
+            await vi.advanceTimersByTimeAsync(50);
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Hide future tasks' }));
+        expect(screen.queryByText('Tomorrow date task')).not.toBeInTheDocument();
+        expect(screen.queryByText('Tomorrow timed task')).not.toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(30_100);
+        });
+        expect(screen.getByText('Tomorrow date task')).toBeInTheDocument();
+        expect(screen.queryByText('Tomorrow timed task')).not.toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(60_100);
+        });
+        expect(screen.getByText('Tomorrow timed task')).toBeInTheDocument();
+    });
+
     it('switches the sidebar area filter to all areas when opening a task hidden by the active area', async () => {
         const onNavigate = vi.fn();
         const showToast = vi.fn();

@@ -122,17 +122,20 @@ bun mobile:ios
 
 ## Testing and quality checks
 
-Before pushing, run everything CI runs:
+Before pushing, run the baseline local verification gate:
 
 ```bash
 bun run verify
 ```
 
-That chains typecheck, lint, every workspace test suite, the governance and
-schema checks, locale parity, and the README parity check. Two gates are not in
-it because they need extra tooling: `bun run native:test` (the desktop Rust
-suite — run it if you touched `apps/desktop/src-tauri/`) and `bun run test:e2e`
-(needs a browser).
+`bun run verify` chains typecheck, core and cloud lint, the five workspace
+unit-test suites, governance and schema checks, locale parity, and README parity. CI also runs
+performance budgets, package-specific lint, coverage thresholds, Expo Doctor,
+and store/workflow metadata checks.
+
+Run `bun run native:test` when you touch `apps/desktop/src-tauri/`, and run
+`bun run test:perf` for list, store, recurrence, or other hot-path changes.
+`bun run test:e2e` needs a browser and remains a separate optional gate.
 
 While iterating, the per-area commands below are faster.
 

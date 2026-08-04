@@ -84,7 +84,7 @@ import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { LIST_VIRTUALIZATION_THRESHOLD, LIST_VIRTUAL_ROW_ESTIMATE, LIST_VIRTUAL_OVERSCAN } from './list/useVirtualList';
 import { QuickAddSyntaxHint } from '../ui/QuickAddSyntaxHint';
-import { useLocalDayKey } from '../../hooks/useLocalDayKey';
+import { useFutureStartRevealTick, useLocalDayKey } from '../../hooks/useLocalDayKey';
 import { resolveDoneTaskSortBy, resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 
@@ -458,6 +458,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         selectedWaitingPerson,
     ]);
     const deferredFilterInputs = useDeferredValue(filterInputs);
+    const nextVisibilityEnabled = statusFilter === 'next';
+    const nextVisibilityDayKey = useLocalDayKey(nextVisibilityEnabled);
+    const nextVisibilityTick = useFutureStartRevealTick(baseTasks, nextVisibilityEnabled);
 
     const filteredTasks = useMemo(() => {
         perf.trackUseMemo();
@@ -528,7 +531,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
 
             return sortTasksBy(filtered, deferredFilterInputs.sortBy);
         });
-    }, [deferredFilterInputs, normalizedSearchQuery, showViewFilterInput]);
+    }, [deferredFilterInputs, nextVisibilityDayKey, nextVisibilityTick, normalizedSearchQuery, showViewFilterInput]);
     const resolveText = useCallback((key: string, fallback: string) => {
         return translateTextWithFallback(t, key, fallback);
     }, [t]);
@@ -540,7 +543,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         : statusFilter === 'done'
             ? activeDoneGroupBy
             : activeNextGroupBy;
-    const localDayKey = useLocalDayKey(activeDoneGroupBy === 'completedDate');
+    const completedGroupingDayKey = useLocalDayKey(activeDoneGroupBy === 'completedDate');
     const groupByOptions: readonly TaskListGroupBy[] = statusFilter === 'reference'
         ? REFERENCE_AXES
         : statusFilter === 'done'
@@ -551,7 +554,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         isListGrouping
             ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t, theme: settings?.theme })
             : [] as TaskGroup[]
-    ), [activeGroupBy, areas, filteredTasks, isListGrouping, localDayKey, projectMap, settings?.theme, t]);
+    ), [activeGroupBy, areas, completedGroupingDayKey, filteredTasks, isListGrouping, projectMap, settings?.theme, t]);
     const activeCollapseKey: ListGroupCollapseKey | null = isListGrouping
         ? activeGroupBy as ListGroupCollapseKey
         : null;
@@ -614,11 +617,15 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     // its group first; the reveal then happens on the next pass.
     useEffect(() => {
         if (!highlightTaskId || !isListGrouping) return;
+        // Tag/context grouping can render one task in several groups. Once one
+        // containing group is open the row is already reachable; preserve every
+        // other collapsed preference instead of unfolding them one per render.
+        if (visibleTasks.some((task) => task.id === highlightTaskId)) return;
         const collapsedGroup = groupedTasks.find((group) => (
             collapsedGroupIds.has(group.id) && group.tasks.some((task) => task.id === highlightTaskId)
         ));
         if (collapsedGroup) toggleGroup(collapsedGroup.id);
-    }, [collapsedGroupIds, groupedTasks, highlightTaskId, isListGrouping, toggleGroup]);
+    }, [collapsedGroupIds, groupedTasks, highlightTaskId, isListGrouping, toggleGroup, visibleTasks]);
 
     const showDeferredProjects = statusFilter === 'someday' || statusFilter === 'waiting';
     const deferredProjects = showDeferredProjects

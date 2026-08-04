@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { gzipSync, strToU8 } from 'fflate';
 
+import {
+    __externalCalendarEventsTestUtils,
+    fetchExternalCalendarEvents,
+} from './external-calendar-events';
+
 const getCalendarsMock = vi.hoisted(() => vi.fn());
 const fetchSystemCalendarEventsMock = vi.hoisted(() => vi.fn());
 const isTauriRuntimeMock = vi.hoisted(() => vi.fn(() => false));
@@ -69,9 +74,8 @@ const categorizedIcs = [
 ].join('\n');
 
 describe('external calendar events', () => {
-    beforeEach(async () => {
+    beforeEach(() => {
         vi.clearAllMocks();
-        const { __externalCalendarEventsTestUtils } = await import('./external-calendar-events');
         __externalCalendarEventsTestUtils.clearCache();
         isTauriRuntimeMock.mockReturnValue(false);
         readTextFileMock.mockReset();
@@ -90,7 +94,6 @@ describe('external calendar events', () => {
     });
 
     it('skips subscribed Mindwtr mirror calendars by default', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         getCalendarsMock.mockResolvedValue([
             { id: 'mirror', name: 'Mindwtr', url: 'https://calendar.example/mindwtr.ics', enabled: true },
             { id: 'work', name: 'Work', url: 'https://calendar.example/work.ics', enabled: true },
@@ -108,7 +111,6 @@ describe('external calendar events', () => {
     });
 
     it('caches subscribed ICS calendars by month for adjacent visible ranges', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         getCalendarsMock.mockResolvedValue([
             { id: 'work', name: 'Work', url: 'https://calendar.example/work.ics', enabled: true },
         ]);
@@ -126,7 +128,6 @@ describe('external calendar events', () => {
     });
 
     it('keeps every feed category visible while paging months with different categories', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         getCalendarsMock.mockResolvedValue([
             { id: 'shared', name: 'Shared', url: 'https://calendar.example/shared.ics', enabled: true },
         ]);
@@ -154,7 +155,6 @@ describe('external calendar events', () => {
     });
 
     it('loads yearly recurring subscribed ICS events in the visible desktop range', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         getCalendarsMock.mockResolvedValue([
             { id: 'holiday', name: 'US Holidays', url: 'https://calendar.example/holidays.ics', enabled: true },
         ]);
@@ -171,7 +171,6 @@ describe('external calendar events', () => {
     });
 
     it('loads gzip-encoded subscribed ICS responses', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         getCalendarsMock.mockResolvedValue([
             { id: 'holiday', name: 'US Holidays', url: 'https://calendar.example/holidays.ics', enabled: true },
         ]);
@@ -196,7 +195,6 @@ describe('external calendar events', () => {
     });
 
     it('loads local ICS calendar files through the desktop filesystem API', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         isTauriRuntimeMock.mockReturnValue(true);
         readTextFileMock.mockResolvedValue(workIcs);
         getCalendarsMock.mockResolvedValue([
@@ -215,7 +213,6 @@ describe('external calendar events', () => {
     });
 
     it('filters system Mindwtr mirror calendars and prefixed pushed events', async () => {
-        const { fetchExternalCalendarEvents } = await import('./external-calendar-events');
         fetchSystemCalendarEventsMock.mockResolvedValue({
             permission: 'granted',
             calendars: [

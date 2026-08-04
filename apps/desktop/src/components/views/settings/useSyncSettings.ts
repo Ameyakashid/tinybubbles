@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { SyncService, type CloudProvider } from '../../../lib/sync-service';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    SyncService,
+    type CloudProvider,
+    type DesktopSyncConfigOverride,
+} from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { logError } from '../../../lib/app-log';
 import { reportError } from '../../../lib/report-error';
@@ -44,6 +48,8 @@ import type {
 export type { SyncBackend };
 export type DropboxTestState = 'idle' | 'success' | 'error';
 export type WebDavTestState = 'idle' | 'success' | 'error';
+
+const DROPBOX_CREDENTIAL_CLEANUP_ERROR = 'Pending Dropbox authorization could not be safely cleared. Try again.';
 
 // Restore and merge read the same file and preview it identically; only the sentence about
 // what the action does to local data differs.
@@ -91,6 +97,7 @@ export const useSyncSettings = ({
     const [syncStatus, setSyncStatus] = useState(() => SyncService.getSyncStatus());
     const [syncError, setSyncError] = useState<string | null>(null);
     const [syncBackend, setSyncBackend] = useState<SyncBackend>('off');
+    const [persistedSyncBackend, setPersistedSyncBackend] = useState<SyncBackend>('off');
     const [webdavUrl, setWebdavUrl] = useState('');
     const [webdavUsername, setWebdavUsername] = useState('');
     const [webdavPassword, setWebdavPassword] = useState('');
@@ -104,12 +111,20 @@ export const useSyncSettings = ({
     const [cloudRememberToken, setCloudRememberToken] = useState(false);
     const [cloudAllowInsecureHttp, setCloudAllowInsecureHttp] = useState(false);
     const [cloudProvider, setCloudProvider] = useState<CloudProvider>('selfhosted');
+    const [persistedCloudProvider, setPersistedCloudProvider] = useState<CloudProvider>('selfhosted');
+    const hasPendingSyncConfiguration = useRef(false);
+    const syncConfigurationGeneration = useRef(0);
+    const dropboxOperationGeneration = useRef(0);
     const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
     const [calendarFeedBusy, setCalendarFeedBusy] = useState(false);
     const [calendarFeedReloadToken, setCalendarFeedReloadToken] = useState(0);
     const [dropboxAppKey, setDropboxAppKey] = useState('');
     const [dropboxConfigured, setDropboxConfigured] = useState(false);
     const [dropboxConnected, setDropboxConnected] = useState(false);
+    const [dropboxCredentialHandle, setDropboxCredentialHandle] = useState<string | null>(
+        () => SyncService.getPendingDropboxCredentialHandleForSession(),
+    );
+    const dropboxCredentialHandleRef = useRef<string | null>(dropboxCredentialHandle);
     const [dropboxBusy, setDropboxBusy] = useState(false);
     const [dropboxAuthInProgress, setDropboxAuthInProgress] = useState(false);
     const [dropboxRedirectUri, setDropboxRedirectUri] = useState('http://127.0.0.1:53682/oauth/dropbox/callback');
@@ -122,6 +137,11 @@ export const useSyncSettings = ({
     const settings = useTaskStore((state) => state.settings) ?? ({} as AppData['settings']);
     const updateSettings = useTaskStore((state) => state.updateSettings);
     const { t } = useLanguage();
+
+    const advanceSyncConfigurationGeneration = useCallback((): number => {
+        syncConfigurationGeneration.current += 1;
+        return syncConfigurationGeneration.current;
+    }, []);
 
     const formatSyncPathError = useCallback((message?: string): string => {
         const normalized = (message || '').toLowerCase();
@@ -213,46 +233,34 @@ export const useSyncSettings = ({
                 setIsLoadingSnapshots(false);
             }
         };
-        measureSettingsOpenStep('sync-load-path', () => SyncService.getSyncPath())
-            .then(setSyncPath)
-            .catch((error) => {
-                setSyncError('Failed to load sync path.');
-                void logError(error, { scope: 'sync', step: 'loadPath' });
-            });
-        measureSettingsOpenStep('sync-load-backend', () => SyncService.getSyncBackend())
-            .then(setSyncBackend)
-            .catch((error) => {
-                setSyncError('Failed to load sync backend.');
-                void logError(error, { scope: 'sync', step: 'loadBackend' });
-            });
-        measureSettingsOpenStep('sync-load-webdav', () => SyncService.getWebDavConfig({ silent: true }))
-            .then((cfg) => {
-                setWebdavUrl(cfg.url);
-                setWebdavUsername(cfg.username);
-                setWebdavPassword(cfg.password ?? '');
-                setWebdavHasPassword(cfg.hasPassword === true);
-                setWebdavAllowInsecureHttp(cfg.allowInsecureHttp === true);
+        const configurationLoadGeneration = syncConfigurationGeneration.current;
+        measureSettingsOpenStep(
+            'sync-load-configuration',
+            () => SyncService.getPersistedSyncConfigurationSnapshot(),
+        )
+            .then((configuration) => {
+                // Baselines always describe the durable configuration. Editor
+                // values are only initialized if the user has not changed them
+                // while this queue-serialized snapshot was waiting.
+                setPersistedSyncBackend(configuration.backend);
+                setPersistedCloudProvider(configuration.cloudProvider);
+                if (syncConfigurationGeneration.current !== configurationLoadGeneration) return;
+                setSyncPath(configuration.syncPath);
+                setSyncBackend(configuration.backend);
+                setWebdavUrl(configuration.webdav.url);
+                setWebdavUsername(configuration.webdav.username);
+                setWebdavPassword(configuration.webdav.password ?? '');
+                setWebdavHasPassword(configuration.webdav.hasPassword === true);
+                setWebdavAllowInsecureHttp(configuration.webdav.allowInsecureHttp === true);
+                setCloudUrl(configuration.cloud.url);
+                setCloudToken(configuration.cloud.token ?? '');
+                setCloudRememberToken(configuration.cloud.rememberToken === true);
+                setCloudAllowInsecureHttp(configuration.cloud.allowInsecureHttp === true);
+                setCloudProvider(configuration.cloudProvider);
             })
             .catch((error) => {
-                setSyncError('Failed to load WebDAV config.');
-                void logError(error, { scope: 'sync', step: 'loadWebDav' });
-            });
-        measureSettingsOpenStep('sync-load-cloud', () => SyncService.getCloudConfig({ silent: true }))
-            .then((cfg) => {
-                setCloudUrl(cfg.url);
-                setCloudToken(cfg.token);
-                setCloudRememberToken(cfg.rememberToken === true);
-                setCloudAllowInsecureHttp(cfg.allowInsecureHttp === true);
-            })
-            .catch((error) => {
-                setSyncError('Failed to load Cloud config.');
-                void logError(error, { scope: 'sync', step: 'loadCloud' });
-            });
-        measureSettingsOpenStep('sync-load-cloud-provider', () => SyncService.getCloudProvider())
-            .then(setCloudProvider)
-            .catch((error) => {
-                setSyncError('Failed to load cloud provider.');
-                void logError(error, { scope: 'sync', step: 'loadCloudProvider' });
+                setSyncError('Failed to load sync configuration.');
+                void logError(error, { scope: 'sync', step: 'loadConfiguration' });
             });
         measureSettingsOpenStep('sync-load-dropbox-app-key', () => SyncService.getDropboxAppKey())
             .then((value) => {
@@ -279,6 +287,10 @@ export const useSyncSettings = ({
     useEffect(() => {
         let cancelled = false;
         const loadDropboxConnection = async () => {
+            if (dropboxCredentialHandle) {
+                if (!cancelled) setDropboxConnected(true);
+                return;
+            }
             const appKey = dropboxAppKey.trim();
             if (!appKey) {
                 if (!cancelled) {
@@ -307,7 +319,36 @@ export const useSyncSettings = ({
         return () => {
             cancelled = true;
         };
-    }, [dropboxAppKey]);
+    }, [dropboxAppKey, dropboxCredentialHandle]);
+
+    useEffect(() => {
+        const unsubscribe = SyncService.subscribePendingDropboxCredentialHandleForSession((credentialHandle) => {
+            dropboxCredentialHandleRef.current = credentialHandle;
+            setDropboxCredentialHandle(credentialHandle);
+        });
+        void SyncService.retryPendingDropboxCredentialFinalizationForSession()
+            .catch((error) => {
+                void logError(error, { scope: 'sync', step: 'retryDropboxCredentialFinalizationOnMount' });
+            });
+        return unsubscribe;
+    }, []);
+
+    useEffect(() => () => {
+        const credentialHandle = dropboxCredentialHandleRef.current;
+        if (credentialHandle) {
+            void SyncService.resolvePendingDropboxCredentialForSession(credentialHandle)
+                .then(() => {
+                    // The service owns lifecycle serialization; the explicit
+                    // forget remains idempotent for mocked adapters.
+                    SyncService.forgetPendingDropboxCredentialHandleForSession(credentialHandle);
+                })
+                .catch((error) => {
+                    // Keep the session-owned handle on uncertain double failure
+                    // so a remounted settings view can retry recovery.
+                    void logError(error, { scope: 'sync', step: 'resolveDropboxCredentialOnUnmount' });
+                });
+        }
+    }, []);
 
     useEffect(() => {
         setWebdavTestState('idle');
@@ -317,7 +358,12 @@ export const useSyncSettings = ({
     // for every other backend. It reads the saved config (not the typed URL), so
     // it must not re-run per keystroke — handleSaveCloud refreshes it instead.
     useEffect(() => {
-        if (syncBackend !== 'cloud' || cloudProvider !== 'selfhosted') {
+        if (
+            syncBackend !== 'cloud'
+            || cloudProvider !== 'selfhosted'
+            || persistedSyncBackend !== 'cloud'
+            || persistedCloudProvider !== 'selfhosted'
+        ) {
             setCalendarFeedUrl(null);
             return;
         }
@@ -335,7 +381,7 @@ export const useSyncSettings = ({
         return () => {
             cancelled = true;
         };
-    }, [cloudProvider, syncBackend, calendarFeedReloadToken]);
+    }, [cloudProvider, persistedCloudProvider, persistedSyncBackend, syncBackend, calendarFeedReloadToken]);
 
     const handleCalendarFeedAction = useCallback(async (action: 'rotate' | 'revoke') => {
         setCalendarFeedBusy(true);
@@ -368,16 +414,12 @@ export const useSyncSettings = ({
 
     const handleSaveSyncPath = useCallback(async () => {
         if (!syncPath.trim()) return;
-        const result = await SyncService.setSyncPath(syncPath.trim());
-        if (result.success) {
-            setSyncError(null);
-            showSaved();
-            return;
-        }
-        const message = formatSyncPathError(result.error);
-        setSyncError(message);
-        showToast(message, 'error');
-    }, [formatSyncPathError, showSaved, showToast, syncPath]);
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setSyncPath(syncPath.trim());
+        setSyncError(null);
+        showToast('Sync folder ready. Sync now to verify and save it.', 'info');
+    }, [advanceSyncConfigurationGeneration, showToast, syncPath]);
 
     const handleChangeSyncLocation = useCallback(async () => {
         try {
@@ -391,52 +433,120 @@ export const useSyncSettings = ({
             });
 
             if (selected && typeof selected === 'string') {
+                advanceSyncConfigurationGeneration();
+                hasPendingSyncConfiguration.current = true;
                 setSyncPath(selected);
-                const result = await SyncService.setSyncPath(selected);
-                if (result.success) {
-                    setSyncError(null);
-                    showSaved();
-                    return;
-                }
-                const message = formatSyncPathError(result.error);
-                setSyncError(message);
-                showToast(message, 'error');
+                setSyncError(null);
+                showToast('Sync folder ready. Sync now to verify and save it.', 'info');
             }
         } catch (error) {
             setSyncError('Failed to change sync location.');
             void logError(error, { scope: 'sync', step: 'changeLocation' });
         }
-    }, [formatSyncPathError, isTauri, selectSyncFolderTitle, showSaved, showToast]);
+    }, [advanceSyncConfigurationGeneration, isTauri, selectSyncFolderTitle, showToast]);
+
+    const clearLocalDropboxCredentialHandle = useCallback((expectedHandle?: string) => {
+        if (expectedHandle && dropboxCredentialHandleRef.current !== expectedHandle) return;
+        SyncService.forgetPendingDropboxCredentialHandleForSession(expectedHandle);
+        dropboxCredentialHandleRef.current = null;
+        setDropboxCredentialHandle(null);
+    }, []);
+
+    const discardDropboxCredential = useCallback(async (
+        credentialHandle: string | null,
+        options: {
+            refreshDurableConnection?: boolean;
+            expectedGeneration?: number;
+        } = {},
+    ): Promise<boolean> => {
+        let credentialResolved = true;
+        if (credentialHandle) {
+            try {
+                await SyncService.resolvePendingDropboxCredentialForSession(credentialHandle);
+                clearLocalDropboxCredentialHandle(credentialHandle);
+            } catch (error) {
+                credentialResolved = false;
+                void logError(error, { scope: 'sync', step: 'resolveDropboxCredential' });
+            }
+        }
+        if (options.refreshDurableConnection) {
+            const appKey = dropboxAppKey.trim();
+            const connected = appKey
+                ? await SyncService.isDropboxConnected(appKey)
+                : false;
+            if (
+                options.expectedGeneration === undefined
+                || syncConfigurationGeneration.current === options.expectedGeneration
+            ) {
+                setDropboxConnected(connected);
+            }
+        }
+        return credentialResolved;
+    }, [clearLocalDropboxCredentialHandle, dropboxAppKey]);
+
+    const discardPendingDropboxCredential = useCallback((
+        options: {
+            refreshDurableConnection?: boolean;
+            expectedGeneration?: number;
+        } = {},
+    ): Promise<boolean> => discardDropboxCredential(
+        dropboxCredentialHandleRef.current,
+        options,
+    ), [discardDropboxCredential]);
 
     const handleSetSyncBackend = useCallback(async (backend: SyncBackend) => {
         addBreadcrumb(`settings:syncBackend:${backend}`);
-        if (backend === 'cloudkit') {
+        const mutationGeneration = advanceSyncConfigurationGeneration();
+        if (backend !== 'cloud' && dropboxCredentialHandleRef.current) {
+            const discarded = await discardPendingDropboxCredential({
+                refreshDurableConnection: true,
+                expectedGeneration: mutationGeneration,
+            });
+            if (syncConfigurationGeneration.current !== mutationGeneration) return;
+            if (!discarded) {
+                setSyncError(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+                return;
+            }
+        }
+        if (backend !== 'off') {
+            if (backend !== persistedSyncBackend) {
+                hasPendingSyncConfiguration.current = true;
+            }
             setSyncBackend(backend);
             setSyncError(null);
             return;
         }
+        hasPendingSyncConfiguration.current = true;
         try {
             await SyncService.setSyncBackend(backend);
-            setSyncBackend(backend);
-            setSyncError(null);
-            showSaved();
+            setPersistedSyncBackend(backend);
+            if (syncConfigurationGeneration.current === mutationGeneration) {
+                hasPendingSyncConfiguration.current = false;
+                setSyncBackend(backend);
+                setSyncError(null);
+                showSaved();
+            }
         } catch (error) {
             setSyncError(toErrorMessage(error, 'Failed to save sync backend.'));
         }
-    }, [showSaved, toErrorMessage]);
+    }, [
+        advanceSyncConfigurationGeneration,
+        discardPendingDropboxCredential,
+        persistedSyncBackend,
+        showSaved,
+        toErrorMessage,
+    ]);
 
     const handleSaveWebDav = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
         const trimmedPassword = webdavPassword.trim();
         if (trimmedUrl && !validateSyncHttpUrl(trimmedUrl, webdavAllowInsecureHttp)) return;
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
         setIsSavingWebDav(true);
         try {
-            await SyncService.setWebDavConfig({
-                url: trimmedUrl,
-                username: webdavUsername.trim(),
-                allowInsecureHttp: webdavAllowInsecureHttp,
-                ...(trimmedPassword ? { password: trimmedPassword } : {}),
-            });
+            setWebdavUrl(trimmedUrl);
+            setWebdavUsername(webdavUsername.trim());
             if (!trimmedUrl) {
                 setWebdavHasPassword(false);
                 setWebdavPassword('');
@@ -444,14 +554,19 @@ export const useSyncSettings = ({
                 setWebdavHasPassword(true);
             }
             setSyncError(null);
-            showSaved();
-            showToast('WebDAV sync settings saved.', 'success');
-        } catch (error) {
-            setSyncError(toErrorMessage(error, 'Failed to save WebDAV sync settings.'));
+            showToast('WebDAV settings ready. Sync now to verify and save them.', 'info');
         } finally {
             setIsSavingWebDav(false);
         }
-    }, [showSaved, showToast, toErrorMessage, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavPassword, webdavUrl, webdavUsername]);
+    }, [
+        advanceSyncConfigurationGeneration,
+        showToast,
+        validateSyncHttpUrl,
+        webdavAllowInsecureHttp,
+        webdavPassword,
+        webdavUrl,
+        webdavUsername,
+    ]);
 
     const handleTestWebDavConnection = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
@@ -491,35 +606,44 @@ export const useSyncSettings = ({
         const trimmedToken = cloudToken.trim();
         if (trimmedUrl && !validateSyncHttpUrl(trimmedUrl, cloudAllowInsecureHttp)) return;
         if (!validateCloudToken(trimmedToken)) return;
-        try {
-            await SyncService.setCloudConfig({
-                url: trimmedUrl,
-                token: trimmedToken,
-                rememberToken: !isTauri && cloudRememberToken,
-                allowInsecureHttp: cloudAllowInsecureHttp,
-            });
-            setSyncError(null);
-            showSaved();
-            // Saving here is an explicit button press with no visible change to
-            // confirm it, unlike the toggles elsewhere in settings that apply live.
-            // Without this the only feedback on an HTTP URL was the cleartext
-            // caution, which reads as a rejection rather than a save (#920).
-            showToast('Self-hosted sync settings saved.', 'success');
-            setCalendarFeedReloadToken((token) => token + 1);
-        } catch (error) {
-            setSyncError(toErrorMessage(error, 'Failed to save self-hosted sync settings.'));
-        }
-    }, [cloudAllowInsecureHttp, cloudRememberToken, cloudUrl, cloudToken, isTauri, showSaved, showToast, toErrorMessage, validateCloudToken, validateSyncHttpUrl]);
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setCloudUrl(trimmedUrl);
+        setCloudToken(trimmedToken);
+        setSyncError(null);
+        showToast('Self-hosted settings ready. Sync now to verify and save them.', 'info');
+    }, [
+        advanceSyncConfigurationGeneration,
+        cloudAllowInsecureHttp,
+        cloudUrl,
+        cloudToken,
+        showToast,
+        validateCloudToken,
+        validateSyncHttpUrl,
+    ]);
 
     const handleSetCloudProvider = useCallback(async (provider: CloudProvider) => {
+        const mutationGeneration = advanceSyncConfigurationGeneration();
+        if (provider !== 'dropbox' && dropboxCredentialHandleRef.current) {
+            const discarded = await discardPendingDropboxCredential({
+                refreshDurableConnection: true,
+                expectedGeneration: mutationGeneration,
+            });
+            if (syncConfigurationGeneration.current !== mutationGeneration) return;
+            if (!discarded) {
+                setSyncError(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+                return;
+            }
+        }
+        if (provider !== persistedCloudProvider) {
+            hasPendingSyncConfiguration.current = true;
+        }
         setCloudProvider(provider);
         if (provider !== 'dropbox') {
             setDropboxTestState('idle');
             setDropboxAuthInProgress(false);
         }
-        await SyncService.setCloudProvider(provider);
-        showSaved();
-    }, [showSaved]);
+    }, [advanceSyncConfigurationGeneration, discardPendingDropboxCredential, persistedCloudProvider]);
 
     const handleConnectDropbox = useCallback(async () => {
         const appKey = dropboxAppKey.trim();
@@ -527,25 +651,58 @@ export const useSyncSettings = ({
             showToast('Dropbox app key is not configured in this build.', 'error');
             return;
         }
+        const connectGeneration = advanceSyncConfigurationGeneration();
+        const connectOperation = ++dropboxOperationGeneration.current;
         setDropboxAuthInProgress(true);
         setDropboxBusy(true);
         try {
-            await SyncService.connectDropbox(appKey);
+            const discarded = await discardPendingDropboxCredential();
+            if (!discarded) throw new Error(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+            if (syncConfigurationGeneration.current !== connectGeneration) return;
+            const credentialHandle = await SyncService.connectDropbox(appKey);
+            if (syncConfigurationGeneration.current !== connectGeneration) {
+                await discardDropboxCredential(credentialHandle, {
+                    refreshDurableConnection: true,
+                    expectedGeneration: connectGeneration,
+                });
+                return;
+            }
+            SyncService.rememberPendingDropboxCredentialHandleForSession(credentialHandle);
+            dropboxCredentialHandleRef.current = credentialHandle;
+            setDropboxCredentialHandle(credentialHandle);
             setDropboxConnected(true);
             setDropboxTestState('idle');
-            showToast('Connected to Dropbox.', 'success');
-            showSaved();
+            hasPendingSyncConfiguration.current = true;
+            setSyncError(null);
+            showToast('Dropbox authorization ready. Sync now to verify and save it.', 'info');
         } catch (error) {
+            if (syncConfigurationGeneration.current !== connectGeneration) return;
             const message = toErrorMessage(error, 'Failed to connect Dropbox.');
-            setDropboxConnected(false);
+            let connected = false;
+            try {
+                connected = await SyncService.isDropboxConnected(appKey);
+            } catch (statusError) {
+                void logError(statusError, { scope: 'sync', step: 'refreshDropboxConnectedAfterConnectFailure' });
+            }
+            if (syncConfigurationGeneration.current !== connectGeneration) return;
+            setDropboxConnected(connected);
             setDropboxTestState('error');
             setSyncError(message);
             showToast(message, 'error');
         } finally {
-            setDropboxAuthInProgress(false);
-            setDropboxBusy(false);
+            if (dropboxOperationGeneration.current === connectOperation) {
+                setDropboxAuthInProgress(false);
+                setDropboxBusy(false);
+            }
         }
-    }, [dropboxAppKey, showSaved, showToast, toErrorMessage]);
+    }, [
+        advanceSyncConfigurationGeneration,
+        discardDropboxCredential,
+        discardPendingDropboxCredential,
+        dropboxAppKey,
+        showToast,
+        toErrorMessage,
+    ]);
 
     const handleDisconnectDropbox = useCallback(async () => {
         const appKey = dropboxAppKey.trim();
@@ -554,21 +711,48 @@ export const useSyncSettings = ({
             setDropboxTestState('idle');
             return;
         }
+        const disconnectGeneration = advanceSyncConfigurationGeneration();
+        const disconnectOperation = ++dropboxOperationGeneration.current;
+        setDropboxAuthInProgress(false);
         setDropboxBusy(true);
         try {
+            await discardPendingDropboxCredential();
+            if (syncConfigurationGeneration.current !== disconnectGeneration) return;
             await SyncService.disconnectDropbox(appKey);
+            const persisted = await SyncService.getPersistedSyncConfigurationSnapshot();
+            // Baselines always follow durable state, even if a newer editor
+            // intent arrived while disconnect was queued. Only the editor/UI
+            // projection is generation guarded.
+            setPersistedSyncBackend(persisted.backend);
+            setPersistedCloudProvider(persisted.cloudProvider);
+            if (syncConfigurationGeneration.current !== disconnectGeneration) return;
+            clearLocalDropboxCredentialHandle();
+            setSyncBackend(persisted.backend);
+            setCloudProvider(persisted.cloudProvider);
+            hasPendingSyncConfiguration.current = false;
             setDropboxConnected(false);
             setDropboxTestState('idle');
+            setSyncError(null);
             showToast('Disconnected from Dropbox.', 'success');
         } catch (error) {
+            if (syncConfigurationGeneration.current !== disconnectGeneration) return;
             const message = toErrorMessage(error, 'Failed to disconnect Dropbox.');
             setDropboxTestState('error');
             setSyncError(message);
             showToast(message, 'error');
         } finally {
-            setDropboxBusy(false);
+            if (dropboxOperationGeneration.current === disconnectOperation) {
+                setDropboxBusy(false);
+            }
         }
-    }, [dropboxAppKey, showToast, toErrorMessage]);
+    }, [
+        advanceSyncConfigurationGeneration,
+        clearLocalDropboxCredentialHandle,
+        discardPendingDropboxCredential,
+        dropboxAppKey,
+        showToast,
+        toErrorMessage,
+    ]);
 
     const handleTestDropboxConnection = useCallback(async () => {
         const appKey = dropboxAppKey.trim();
@@ -578,20 +762,25 @@ export const useSyncSettings = ({
         }
         setDropboxBusy(true);
         try {
-            const connected = await SyncService.isDropboxConnected(appKey);
+            const credentialHandle = dropboxCredentialHandleRef.current;
+            const connected = credentialHandle
+                ? true
+                : await SyncService.isDropboxConnected(appKey);
             if (!connected) {
                 setDropboxConnected(false);
                 setDropboxTestState('error');
                 showToast('Connect Dropbox first.', 'error');
                 return;
             }
-            await SyncService.testDropboxConnection(appKey);
+            await SyncService.testDropboxConnection(appKey, {
+                credentialHandle: credentialHandle ?? undefined,
+            });
             setDropboxConnected(true);
             setDropboxTestState('success');
             showToast('Dropbox account is reachable.', 'success');
         } catch (error) {
             const message = toErrorMessage(error, 'Dropbox connection failed.');
-            setDropboxConnected(false);
+            setDropboxConnected(Boolean(dropboxCredentialHandleRef.current));
             setDropboxTestState('error');
             setSyncError(message);
             showToast(message, 'error');
@@ -600,7 +789,53 @@ export const useSyncSettings = ({
         }
     }, [dropboxAppKey, showToast, toErrorMessage]);
 
+    const commitProvenSyncConfiguration = useCallback(async (
+        config: DesktopSyncConfigOverride,
+        activationGeneration: number,
+    ): Promise<boolean> => {
+        let commitResult: Awaited<ReturnType<typeof SyncService.commitProvenSyncConfiguration>>;
+        try {
+            commitResult = await SyncService.commitProvenSyncConfiguration(config);
+        } catch (error) {
+            if (config.backend === 'file') {
+                const message = error instanceof Error ? error.message : String(error);
+                throw new Error(formatSyncPathError(message));
+            }
+            throw error;
+        }
+        if (config.dropboxCredentialHandle && commitResult?.handleFinalized !== false) {
+            clearLocalDropboxCredentialHandle(config.dropboxCredentialHandle);
+        }
+        // These fields describe durable state, even when a newer editor change
+        // arrived while the transaction was in flight.
+        setPersistedSyncBackend(config.backend);
+        if (config.backend === 'cloud') {
+            setPersistedCloudProvider(config.cloudProvider ?? 'selfhosted');
+        }
+        if (syncConfigurationGeneration.current !== activationGeneration) {
+            hasPendingSyncConfiguration.current = true;
+            return false;
+        }
+        if (config.backend === 'webdav' && config.webdav) {
+            setWebdavHasPassword(Boolean(config.webdav.password?.trim()) || config.webdav.hasPassword === true);
+        }
+        hasPendingSyncConfiguration.current = false;
+        showSaved();
+        if (config.backend === 'cloud' && config.cloudProvider === 'selfhosted') {
+            setCalendarFeedReloadToken((token) => token + 1);
+        }
+        return true;
+    }, [clearLocalDropboxCredentialHandle, formatSyncPathError, showSaved]);
+
     const handleSync = useCallback(async () => {
+        const activationGeneration = syncConfigurationGeneration.current;
+        const activationCredentialHandle = dropboxCredentialHandleRef.current;
+        const resolveCapturedCredential = async () => {
+            if (!activationCredentialHandle) return;
+            await discardDropboxCredential(activationCredentialHandle, {
+                refreshDurableConnection: true,
+            });
+        };
         addBreadcrumb('sync:manual');
         try {
             setSyncError(null);
@@ -608,14 +843,31 @@ export const useSyncSettings = ({
             if (syncBackend === 'off') {
                 return;
             }
+            const configOverride: DesktopSyncConfigOverride = { backend: syncBackend };
             if (syncBackend === 'webdav') {
-                if (!webdavUrl.trim()) return;
-                await handleSaveWebDav();
+                const url = webdavUrl.trim();
+                if (!url || !validateSyncHttpUrl(url, webdavAllowInsecureHttp)) return;
+                configOverride.webdav = {
+                    url,
+                    username: webdavUsername.trim(),
+                    password: webdavPassword.trim() || undefined,
+                    hasPassword: webdavHasPassword,
+                    allowInsecureHttp: webdavAllowInsecureHttp,
+                };
             }
             if (syncBackend === 'cloud') {
+                configOverride.cloudProvider = cloudProvider;
                 if (cloudProvider === 'selfhosted') {
-                    if (!cloudUrl.trim()) return;
-                    await handleSaveCloud();
+                    const url = cloudUrl.trim();
+                    const token = cloudToken.trim();
+                    if (!url || !validateSyncHttpUrl(url, cloudAllowInsecureHttp)) return;
+                    if (!validateCloudToken(token)) return;
+                    configOverride.cloud = {
+                        url,
+                        token,
+                        rememberToken: !isTauri && cloudRememberToken,
+                        allowInsecureHttp: cloudAllowInsecureHttp,
+                    };
                 } else {
                     const appKey = dropboxAppKey.trim();
                     if (!appKey) {
@@ -624,7 +876,13 @@ export const useSyncSettings = ({
                         showToast(message, 'error');
                         return;
                     }
-                    const connected = await SyncService.isDropboxConnected(appKey);
+                    const credentialHandle = activationCredentialHandle;
+                    if (credentialHandle) {
+                        configOverride.dropboxCredentialHandle = credentialHandle;
+                    }
+                    const connected = credentialHandle
+                        ? true
+                        : await SyncService.isDropboxConnected(appKey);
                     if (!connected) {
                         const message = 'Connect Dropbox first.';
                         setSyncError(message);
@@ -637,29 +895,70 @@ export const useSyncSettings = ({
             }
             if (syncBackend === 'file') {
                 const path = syncPath.trim();
-                if (path) {
-                    const setPathResult = await SyncService.setSyncPath(path);
-                    if (!setPathResult.success) {
-                        const message = formatSyncPathError(setPathResult.error);
-                        setSyncError(message);
-                        showToast(message, 'error');
-                        return;
-                    }
-                }
+                if (!path) return;
+                configOverride.syncPath = path;
             }
 
-            const persistedBackend = await SyncService.getSyncBackend();
-            const isPendingCloudKitEnable = syncBackend === 'cloudkit' && persistedBackend !== 'cloudkit';
-            const result = await SyncService.performSync(
-                isPendingCloudKitEnable ? { backendOverride: 'cloudkit', manual: true } : { manual: true }
-            );
+            if (syncConfigurationGeneration.current !== activationGeneration) {
+                await resolveCapturedCredential();
+                return;
+            }
+
+            const needsActivationProbe = hasPendingSyncConfiguration.current
+                || Boolean(configOverride.dropboxCredentialHandle)
+                || configOverride.backend !== persistedSyncBackend
+                || (
+                    configOverride.backend === 'cloud'
+                    && configOverride.cloudProvider !== persistedCloudProvider
+                );
+            if (needsActivationProbe) {
+                const probeResult = await SyncService.performSync({
+                    activationProbe: true,
+                    configOverride,
+                    manual: true,
+                });
+                if (probeResult.skipped === 'requeued') {
+                    if (configOverride.dropboxCredentialHandle) {
+                        await resolveCapturedCredential();
+                    }
+                    showToast('Local changes arrived during sync. Try Sync now again.', 'info');
+                    return;
+                }
+                if (
+                    !probeResult.success
+                    || probeResult.remoteWriteDeferred
+                    || probeResult.skipped === 'offline'
+                    || probeResult.skipped === 'pendingRemoteWriteBackoff'
+                ) {
+                    if (configOverride.dropboxCredentialHandle) {
+                        await resolveCapturedCredential();
+                    }
+                    showToast(probeResult.error || 'Sync setup could not be verified. Your previous sync settings are still active.', 'error');
+                    return;
+                }
+                if (syncConfigurationGeneration.current !== activationGeneration) {
+                    await resolveCapturedCredential();
+                    return;
+                }
+                const committedCurrentConfiguration = await commitProvenSyncConfiguration(
+                    configOverride,
+                    activationGeneration,
+                );
+                if (!committedCurrentConfiguration) return;
+            }
+
+            const result = await SyncService.performSync({
+                manual: true,
+                ignorePendingRemoteWriteBackoff: needsActivationProbe,
+            });
             if (result.skipped === 'requeued') {
                 showToast('Local changes arrived during sync. Retry queued.', 'info');
-            } else if (result.success) {
-                if (isPendingCloudKitEnable) {
-                    await SyncService.setSyncBackend('cloudkit');
-                    showSaved();
-                }
+            } else if (
+                result.success
+                && !result.remoteWriteDeferred
+                && result.skipped !== 'offline'
+                && result.skipped !== 'pendingRemoteWriteBackoff'
+            ) {
                 const mergeSummary = summarizeMergeStats(result.stats);
                 const maxClockSkewMs = mergeSummary.maxClockSkewMs;
                 const timestampAdjustments = mergeSummary.timestampAdjustments;
@@ -680,10 +979,13 @@ export const useSyncSettings = ({
                 if (isTauri) {
                     setSnapshots(await SyncService.listDataSnapshots());
                 }
-            } else if (result.error) {
-                showToast(result.error, 'error');
+            } else {
+                showToast(result.error || 'Sync did not complete. Your previous sync settings are still active.', 'error');
             }
         } catch (error) {
+            if (activationCredentialHandle) {
+                await resolveCapturedCredential();
+            }
             void logError(error, { scope: 'sync', step: 'perform' });
             const message = toErrorMessage(error, 'Sync failed');
             setSyncError(message);
@@ -691,18 +993,75 @@ export const useSyncSettings = ({
         }
     }, [
         cloudProvider,
+        cloudAllowInsecureHttp,
+        cloudRememberToken,
+        cloudToken,
         cloudUrl,
+        commitProvenSyncConfiguration,
+        discardDropboxCredential,
+        discardPendingDropboxCredential,
         dropboxAppKey,
-        formatSyncPathError,
-        handleSaveCloud,
-        handleSaveWebDav,
         isTauri,
+        persistedCloudProvider,
+        persistedSyncBackend,
         showToast,
         syncBackend,
         syncPath,
         toErrorMessage,
+        validateCloudToken,
+        validateSyncHttpUrl,
+        webdavAllowInsecureHttp,
+        webdavHasPassword,
+        webdavPassword,
         webdavUrl,
+        webdavUsername,
     ]);
+
+    const handleSyncPathChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setSyncPath(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleWebdavUrlChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setWebdavUrl(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleWebdavUsernameChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setWebdavUsername(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleWebdavPasswordChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setWebdavPassword(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleWebdavAllowInsecureHttpChange = useCallback((value: boolean) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setWebdavAllowInsecureHttp(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleCloudUrlChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setCloudUrl(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleCloudTokenChange = useCallback((value: string) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setCloudToken(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleCloudRememberTokenChange = useCallback((value: boolean) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setCloudRememberToken(value);
+    }, [advanceSyncConfigurationGeneration]);
+    const handleCloudAllowInsecureHttpChange = useCallback((value: boolean) => {
+        advanceSyncConfigurationGeneration();
+        hasPendingSyncConfiguration.current = true;
+        setCloudAllowInsecureHttp(value);
+    }, [advanceSyncConfigurationGeneration]);
 
     const handleRestoreSnapshot = useCallback(async (snapshotFileName: string) => {
         if (!snapshotFileName) return false;
@@ -1107,7 +1466,7 @@ export const useSyncSettings = ({
             syncBackend,
             onSetSyncBackend: handleSetSyncBackend,
             syncPath,
-            onSyncPathChange: setSyncPath,
+            onSyncPathChange: handleSyncPathChange,
             onSaveSyncPath: handleSaveSyncPath,
             onBrowseSyncPath: handleChangeSyncLocation,
             webdavUrl,
@@ -1119,10 +1478,10 @@ export const useSyncSettings = ({
             isSavingWebDav,
             isTestingWebDav,
             webdavTestState,
-            onWebdavUrlChange: setWebdavUrl,
-            onWebdavUsernameChange: setWebdavUsername,
-            onWebdavPasswordChange: setWebdavPassword,
-            onWebdavAllowInsecureHttpChange: setWebdavAllowInsecureHttp,
+            onWebdavUrlChange: handleWebdavUrlChange,
+            onWebdavUsernameChange: handleWebdavUsernameChange,
+            onWebdavPasswordChange: handleWebdavPasswordChange,
+            onWebdavAllowInsecureHttpChange: handleWebdavAllowInsecureHttpChange,
             onSaveWebDav: handleSaveWebDav,
             onTestWebDavConnection: handleTestWebDavConnection,
             cloudUrl,
@@ -1137,10 +1496,10 @@ export const useSyncSettings = ({
             dropboxAuthInProgress,
             dropboxRedirectUri,
             dropboxTestState,
-            onCloudUrlChange: setCloudUrl,
-            onCloudTokenChange: setCloudToken,
-            onCloudRememberTokenChange: setCloudRememberToken,
-            onCloudAllowInsecureHttpChange: setCloudAllowInsecureHttp,
+            onCloudUrlChange: handleCloudUrlChange,
+            onCloudTokenChange: handleCloudTokenChange,
+            onCloudRememberTokenChange: handleCloudRememberTokenChange,
+            onCloudAllowInsecureHttpChange: handleCloudAllowInsecureHttpChange,
             onCloudProviderChange: handleSetCloudProvider,
             onSaveCloud: handleSaveCloud,
             calendarFeedUrl,

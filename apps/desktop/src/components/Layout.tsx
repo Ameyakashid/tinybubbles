@@ -592,19 +592,20 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
 
     const refreshCleartextSyncWarning = useCallback(async () => {
         try {
-            const backend = await SyncService.getSyncBackend();
-            if (backend === 'webdav') {
-                const config = await SyncService.getWebDavConfig({ silent: true });
-                if (config.url.trim().toLowerCase().startsWith('http://')) {
+            const configuration = await SyncService.getPersistedSyncConfigurationSnapshot();
+            if (configuration.backend === 'webdav') {
+                if (configuration.webdav.url.trim().toLowerCase().startsWith('http://')) {
                     setCleartextSyncWarning(tFallback(t,
                         'settings.cleartextSyncWarningWebdav',
                         'WebDAV sync is using HTTP. Data is unencrypted; use it only on a trusted network.'
                     ));
                     return;
                 }
-            } else if (backend === 'cloud' && await SyncService.getCloudProvider() === 'selfhosted') {
-                const config = await SyncService.getCloudConfig({ silent: true });
-                if (config.url.trim().toLowerCase().startsWith('http://')) {
+            } else if (
+                configuration.backend === 'cloud'
+                && configuration.cloudProvider === 'selfhosted'
+            ) {
+                if (configuration.cloud.url.trim().toLowerCase().startsWith('http://')) {
                     setCleartextSyncWarning(tFallback(t,
                         'settings.cleartextSyncWarningCloud',
                         'Self-hosted sync is using HTTP. Data is unencrypted; use it only on a trusted network.'

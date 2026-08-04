@@ -93,8 +93,7 @@ pub(crate) fn migrate_autostart_entry_if_pending(app: &tauri::AppHandle) {
         return;
     }
     let mut config = read_config(app);
-    let already_migrated =
-        bool_setting_enabled(config.autostart_startup_flag_migrated.as_deref());
+    let already_migrated = bool_setting_enabled(config.autostart_startup_flag_migrated.as_deref());
     let autostart = app.autolaunch();
     let config_path = get_config_path(app);
     let secrets_path = get_secrets_path(app);

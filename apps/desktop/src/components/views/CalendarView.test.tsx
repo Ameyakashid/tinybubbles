@@ -6,6 +6,7 @@ import { LanguageProvider } from '../../contexts/language-context';
 import { useUiStore } from '../../store/ui-store';
 import { CalendarView } from './CalendarView';
 import { combineDateAndTime } from './calendar/calendar-primitives';
+import { useDesktopCalendarController } from './calendar/useDesktopCalendarController';
 import { fetchExternalCalendarEvents } from '../../lib/external-calendar-events';
 import { setCalendarTaskDragData } from '../../lib/calendar-task-drag';
 
@@ -127,9 +128,18 @@ const renderCalendar = () => render(
     </LanguageProvider>
 );
 
+function DesktopControllerHost({
+    onResult,
+}: {
+    onResult: (controller: ReturnType<typeof useDesktopCalendarController>) => void;
+}) {
+    onResult(useDesktopCalendarController());
+    return null;
+}
+
 const flushCalendarEffects = async () => {
     await act(async () => {
-        vi.runAllTimers();
+        vi.advanceTimersByTime(0);
         await Promise.resolve();
         await Promise.resolve();
     });
@@ -290,10 +300,7 @@ describe('CalendarView', () => {
             </LanguageProvider>
         );
 
-        await act(async () => {
-            vi.runAllTimers();
-            await Promise.resolve();
-        });
+        await flushCalendarEffects();
 
         await act(async () => {
             fireEvent.click(screen.getByText('3').closest('.group') as HTMLElement);
@@ -333,10 +340,7 @@ describe('CalendarView', () => {
             </LanguageProvider>
         );
 
-        await act(async () => {
-            vi.runAllTimers();
-            await Promise.resolve();
-        });
+        await flushCalendarEffects();
 
         expect(screen.getByText(/Failed to load "Work": HTTP 504/)).toBeInTheDocument();
     });
@@ -802,6 +806,100 @@ describe('CalendarView', () => {
         });
         expect(storeMocks.taskStoreState.updateTask).not.toHaveBeenCalled();
         expect(storeMocks.taskStoreState.deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('refreshes recurrence projections and planning candidates after local midnight while open', async () => {
+        vi.setSystemTime(new Date(2026, 3, 8, 23, 59, 59, 900));
+        storeMocks.taskStoreState.tasks = [
+            makeTask({
+                id: 'task-unscheduled-monthly',
+                title: 'Ninth day planning',
+                recurrence: {
+                    rule: 'monthly',
+                    strategy: 'strict',
+                    byMonthDay: [9],
+                    rrule: 'FREQ=MONTHLY;BYMONTHDAY=9',
+                },
+                showFutureRecurrence: true,
+            }),
+            makeTask({
+                id: 'task-no-deadline',
+                title: 'No deadline',
+                createdAt: '2026-04-01T00:00:00.000Z',
+            }),
+            makeTask({
+                id: 'task-enters-due-soon',
+                title: 'Enters due-soon window',
+                dueDate: '2026-05-08',
+                createdAt: '2026-04-02T00:00:00.000Z',
+            }),
+        ];
+
+        let controller!: ReturnType<typeof useDesktopCalendarController>;
+        render(
+            <LanguageProvider>
+                <DesktopControllerHost onResult={(value) => { controller = value; }} />
+            </LanguageProvider>
+        );
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        // This suite's lightweight safeParseDate mock parses date-only values as
+        // UTC, so use the same instant that the projected `2026-04-09` start uses.
+        const projectedOccurrenceDate = new Date('2026-04-09');
+        expect(controller.getCalendarItemsForDate(projectedOccurrenceDate).some(
+            (item) => 'task' in item && item.task.id === 'task-unscheduled-monthly'
+        )).toBe(true);
+        expect(controller.planningTasks.map((task) => task.id).indexOf('task-no-deadline'))
+            .toBeLessThan(controller.planningTasks.map((task) => task.id).indexOf('task-enters-due-soon'));
+
+        await act(async () => {
+            vi.advanceTimersByTime(200);
+            await Promise.resolve();
+        });
+
+        expect(controller.getCalendarItemsForDate(projectedOccurrenceDate).some(
+            (item) => 'task' in item && item.task.id === 'task-unscheduled-monthly'
+        )).toBe(false);
+        expect(controller.planningTasks.map((task) => task.id).indexOf('task-enters-due-soon'))
+            .toBeLessThan(controller.planningTasks.map((task) => task.id).indexOf('task-no-deadline'));
+    });
+
+    it('shares the 500-occurrence cap across all recurring series', async () => {
+        storeMocks.taskStoreState.tasks = Array.from({ length: 20 }, (_, index) => makeTask({
+            id: `task-recurring-${index}`,
+            title: `Daily task ${index}`,
+            dueDate: '2026-04-02',
+            recurrence: 'daily',
+            showFutureRecurrence: true,
+        }));
+
+        let controller!: ReturnType<typeof useDesktopCalendarController>;
+        render(
+            <LanguageProvider>
+                <DesktopControllerHost onResult={(value) => { controller = value; }} />
+            </LanguageProvider>
+        );
+        await flushCalendarEffects();
+
+        const projectedIds = new Set<string>();
+        for (let offset = 0; offset < 35; offset += 1) {
+            const date = new Date(2026, 2, 29 + offset);
+            controller.getCalendarItemsForDate(date).forEach((item) => {
+                if ('task' in item && item.task.id.includes(':projected-recurrence:')) {
+                    projectedIds.add(item.task.id);
+                }
+            });
+        }
+
+        expect(projectedIds).toHaveLength(500);
+        for (let index = 0; index < 20; index += 1) {
+            expect([...projectedIds].filter(
+                (id) => id.startsWith(`task-recurring-${index}:projected-recurrence:`)
+            )).toHaveLength(25);
+        }
     });
 
     it("paints a weekly recurring task into the month grid's spill day from next month (correction pass finding 2)", async () => {

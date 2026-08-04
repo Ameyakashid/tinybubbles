@@ -198,6 +198,8 @@ export type SyncRunAttachmentPhase = 'prepare' | 'post-merge';
 export type SyncRunAttachmentHelpers = {
     /** Abort (requeue) when local data changed mid-pass. */
     ensureLocalSnapshotFresh(): void;
+    /** Candidate transports must prove attachment bytes before activation. */
+    activationProbe: boolean;
 };
 
 export type SyncRunAttachmentCleanupContext = {
@@ -313,6 +315,19 @@ export type SyncRunOptions = {
     /** User-initiated sync: never take the fingerprint fast-check skip, so a
      *  stale cached fingerprint can't hide remote data. */
     manual?: boolean;
+    /** Validate a candidate sync transport without making the merged snapshot
+     *  durable locally. The machine still performs the normal read, merge,
+     *  validation, candidate attachment proof, and remote write, but holds
+     *  writeLocal and attachment metadata changes in memory and skips
+     *  external-calendar, fast-state, follow-up, and finalize side effects.
+     *  Settings can commit the candidate only after this succeeds. */
+    activationProbe?: boolean;
+    /** First durable cycle after activating a candidate transport: retry now
+     *  instead of inheriting the previous backend's retry deadline, and adopt
+     *  attachment keys from the candidate document just proven on that
+     *  destination. The pending-write marker remains so the normal cycle
+     *  clears it only after a successful local and remote commit. */
+    ignorePendingRemoteWriteBackoff?: boolean;
 };
 
 export interface SyncRunPorts {

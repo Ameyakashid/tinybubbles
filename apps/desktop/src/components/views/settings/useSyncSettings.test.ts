@@ -25,6 +25,34 @@ import { isValidHttpUrl } from './sync/sync-page-utils';
 import { useSyncSettings } from './useSyncSettings';
 
 const initialUiState = useUiStore.getState();
+const COMMITTED_RESULT = {
+    committed: true,
+    cleanupPending: false,
+    handleFinalized: true,
+} as const;
+const dropboxConfigurationSnapshot = (
+    backend: 'cloud' | 'off' = 'cloud',
+): Awaited<ReturnType<typeof SyncService.getPersistedSyncConfigurationSnapshot>> => ({
+    backend,
+    syncPath: '',
+    webdav: {
+        url: '',
+        username: '',
+        password: '',
+        passwordAuthority: 'known',
+        hasPassword: false,
+        allowInsecureHttp: false,
+        allowWeakFingerprint: false,
+    },
+    cloudProvider: 'dropbox',
+    cloud: {
+        url: '',
+        token: '',
+        tokenAuthority: 'known',
+        rememberToken: false,
+        allowInsecureHttp: false,
+    },
+});
 
 type TargetInputs = {
     syncBackend: SyncBackend;
@@ -89,6 +117,7 @@ const NO_TARGET: TargetInputs = {
 
 describe('useSyncSettings cloud token validation', () => {
     beforeEach(() => {
+        SyncService.forgetPendingDropboxCredentialHandleForSession();
         act(() => {
             useUiStore.setState(initialUiState, true);
         });
@@ -110,9 +139,19 @@ describe('useSyncSettings cloud token validation', () => {
         vi.spyOn(SyncService, 'getCloudProvider').mockResolvedValue('selfhosted');
         vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('');
         vi.spyOn(SyncService, 'getDropboxRedirectUri').mockResolvedValue('http://127.0.0.1:53682/oauth/dropbox/callback');
+        vi.spyOn(SyncService, 'isDropboxConnected').mockResolvedValue(false);
+        vi.spyOn(SyncService, 'connectDropbox').mockResolvedValue('opaque-candidate-handle');
+        vi.spyOn(SyncService, 'discardDropboxCredentials').mockResolvedValue(undefined);
+        vi.spyOn(SyncService, 'rollbackDropboxCredentials').mockResolvedValue(undefined);
+        vi.spyOn(SyncService, 'disconnectDropbox').mockResolvedValue(undefined);
+        vi.spyOn(SyncService, 'testDropboxConnection').mockResolvedValue(undefined);
         vi.spyOn(SyncService, 'listDataSnapshots').mockResolvedValue([]);
         vi.spyOn(SyncService, 'subscribeSyncStatus').mockImplementation(() => () => {});
+        vi.spyOn(SyncService, 'setSyncBackend').mockResolvedValue(undefined);
+        vi.spyOn(SyncService, 'setCloudProvider').mockResolvedValue(undefined);
         vi.spyOn(SyncService, 'setCloudConfig').mockResolvedValue(undefined);
+        vi.spyOn(SyncService, 'commitProvenSyncConfiguration').mockResolvedValue(COMMITTED_RESULT);
+        vi.spyOn(SyncService, 'performSync').mockResolvedValue({ success: true });
     });
 
     afterEach(() => {
@@ -128,10 +167,7 @@ describe('useSyncSettings cloud token validation', () => {
         requestConfirmation: vi.fn().mockResolvedValue(true),
     }));
 
-    // Saving here is an explicit button press that changes nothing on screen, so
-    // silence read as failure — and on an HTTP URL the only toast was the
-    // cleartext caution, which looks like a rejection (#920).
-    it('confirms an explicit self-hosted save with a success toast', async () => {
+    it('keeps an explicit self-hosted save in session state until sync proves it', async () => {
         const showToast = vi.fn();
         useUiStore.setState({ showToast } as never);
 
@@ -147,31 +183,61 @@ describe('useSyncSettings cloud token validation', () => {
             await result.current.syncPageProps.onSaveCloud();
         });
 
-        expect(SyncService.setCloudConfig).toHaveBeenCalled();
-        expect(showToast).toHaveBeenCalledWith(expect.stringContaining('saved'), 'success');
+        expect(SyncService.setCloudConfig).not.toHaveBeenCalled();
+        expect(SyncService.setSyncBackend).not.toHaveBeenCalled();
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+        expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Sync now'), 'info');
     });
 
-    it('does not confirm a self-hosted save when persistence fails', async () => {
-        const showSaved = vi.fn();
-        const showToast = vi.fn();
-        useUiStore.setState({ showToast } as never);
-        vi.mocked(SyncService.setCloudConfig).mockRejectedValueOnce(new Error('native config write failed'));
-
-        const { result } = setup(showSaved);
-        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+    it('does not let a delayed persisted snapshot overwrite newer editor intent', async () => {
+        let resolveSnapshot!: (value: Awaited<ReturnType<
+            typeof SyncService.getPersistedSyncConfigurationSnapshot
+        >>) => void;
+        const snapshotGate = new Promise<Awaited<ReturnType<
+            typeof SyncService.getPersistedSyncConfigurationSnapshot
+        >>>((resolve) => {
+            resolveSnapshot = resolve;
+        });
+        vi.spyOn(SyncService, 'getPersistedSyncConfigurationSnapshot').mockReturnValue(snapshotGate);
+        const { result } = setup();
 
         act(() => {
-            result.current.syncPageProps.onCloudUrlChange('https://example.com');
-            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+            void result.current.syncPageProps.onSetSyncBackend('webdav');
+            result.current.syncPageProps.onSyncPathChange('/new/path');
+            result.current.syncPageProps.onWebdavUrlChange('https://new.example.com/dav');
+            result.current.syncPageProps.onCloudUrlChange('https://new.example.com');
+            void result.current.syncPageProps.onCloudProviderChange('dropbox');
         });
-
         await act(async () => {
-            await result.current.syncPageProps.onSaveCloud();
+            resolveSnapshot({
+                backend: 'cloud',
+                syncPath: '/old/path',
+                webdav: {
+                    url: 'https://old.example.com/dav',
+                    username: 'old-user',
+                    password: 'old-password',
+                    passwordAuthority: 'known',
+                    hasPassword: true,
+                    allowInsecureHttp: false,
+                    allowWeakFingerprint: true,
+                },
+                cloud: {
+                    url: 'https://old.example.com',
+                    token: 'old-token',
+                    tokenAuthority: 'known',
+                    rememberToken: false,
+                    allowInsecureHttp: false,
+                },
+                cloudProvider: 'selfhosted',
+            });
+            await snapshotGate;
         });
 
-        expect(showSaved).not.toHaveBeenCalled();
-        expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('saved'), 'success');
-        expect(result.current.syncPageProps.syncError).toBe('native config write failed');
+        expect(result.current.syncPageProps.syncBackend).toBe('webdav');
+        expect(result.current.syncPageProps.syncPath).toBe('/new/path');
+        expect(result.current.syncPageProps.webdavUrl).toBe('https://new.example.com/dav');
+        expect(result.current.syncPageProps.cloudUrl).toBe('https://new.example.com');
+        expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
     });
 
     it('rejects a short cloud token and does not save', async () => {
@@ -193,41 +259,740 @@ describe('useSyncSettings cloud token validation', () => {
         );
     });
 
-    it('treats an empty token as "unchanged, use keyring" and saves', async () => {
+    it.each([
+        ['offline', { success: true, skipped: 'offline' as const }],
+        ['transport error', { success: false, error: 'connection failed' }],
+        ['deferred write', { success: true, remoteWriteDeferred: true, error: 'retrying later' }],
+        ['requeue', { success: true, skipped: 'requeued' as const }],
+    ])('preserves the proven backend on %s', async (_label, syncResult) => {
+        vi.mocked(SyncService.performSync).mockResolvedValueOnce(syncResult);
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+
+        act(() => {
+            void result.current.syncPageProps.onSetSyncBackend('cloud');
+            result.current.syncPageProps.onCloudUrlChange('https://example.com');
+            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+        });
+
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.performSync).toHaveBeenCalledWith({
+            activationProbe: true,
+            configOverride: expect.objectContaining({
+                backend: 'cloud',
+                cloudProvider: 'selfhosted',
+                cloud: expect.objectContaining({ url: 'https://example.com' }),
+            }),
+            manual: true,
+        });
+        expect(SyncService.setCloudConfig).not.toHaveBeenCalled();
+        expect(SyncService.setCloudProvider).not.toHaveBeenCalled();
+        expect(SyncService.setSyncBackend).not.toHaveBeenCalled();
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+        expect(showSaved).not.toHaveBeenCalled();
+    });
+
+    it('treats an empty token as "unchanged, use keyring" in the transient sync config', async () => {
         const { result } = setup();
         await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
 
         act(() => {
+            void result.current.syncPageProps.onSetSyncBackend('cloud');
             result.current.syncPageProps.onCloudUrlChange('https://example.com');
             result.current.syncPageProps.onCloudTokenChange('');
         });
 
         await act(async () => {
-            await result.current.syncPageProps.onSaveCloud();
+            await result.current.syncPageProps.onSyncNow();
         });
 
-        expect(SyncService.setCloudConfig).toHaveBeenCalledWith(
-            expect.objectContaining({ token: '' })
+        expect(SyncService.performSync).toHaveBeenCalledWith(
+            expect.objectContaining({
+                activationProbe: true,
+                configOverride: expect.objectContaining({
+                    cloud: expect.objectContaining({ token: '' }),
+                }),
+            }),
         );
     });
 
-    it('saves a valid cloud token', async () => {
-        const { result } = setup();
+    it('commits cloud credentials, provider and backend only after a successful round trip', async () => {
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
         await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
 
         const validToken = 'a'.repeat(24);
         act(() => {
+            void result.current.syncPageProps.onSetSyncBackend('cloud');
             result.current.syncPageProps.onCloudUrlChange('https://example.com');
             result.current.syncPageProps.onCloudTokenChange(validToken);
         });
 
         await act(async () => {
-            await result.current.syncPageProps.onSaveCloud();
+            await result.current.syncPageProps.onSyncNow();
         });
 
-        expect(SyncService.setCloudConfig).toHaveBeenCalledWith(
-            expect.objectContaining({ token: validToken })
+        expect(SyncService.commitProvenSyncConfiguration).toHaveBeenCalledWith(
+            expect.objectContaining({
+                backend: 'cloud',
+                cloudProvider: 'selfhosted',
+                cloud: expect.objectContaining({ token: validToken }),
+            }),
         );
+        expect(SyncService.performSync).toHaveBeenCalledTimes(2);
+        expect(SyncService.performSync).toHaveBeenNthCalledWith(1, {
+            activationProbe: true,
+            configOverride: expect.objectContaining({
+                backend: 'cloud',
+                cloudProvider: 'selfhosted',
+            }),
+            manual: true,
+        });
+        expect(SyncService.performSync).toHaveBeenNthCalledWith(2, {
+            manual: true,
+            ignorePendingRemoteWriteBackoff: true,
+        });
+        expect(vi.mocked(SyncService.performSync).mock.invocationCallOrder[0]).toBeLessThan(
+            vi.mocked(SyncService.commitProvenSyncConfiguration).mock.invocationCallOrder[0],
+        );
+        expect(vi.mocked(SyncService.commitProvenSyncConfiguration).mock.invocationCallOrder[0]).toBeLessThan(
+            vi.mocked(SyncService.performSync).mock.invocationCallOrder[1],
+        );
+        expect(showSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets Off supersede a gated activation probe and resolves only its captured candidate', async () => {
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        SyncService.rememberPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        let releaseProbe!: () => void;
+        const probeGate = new Promise<{ success: true }>((resolve) => {
+            releaseProbe = () => resolve({ success: true });
+        });
+        vi.mocked(SyncService.performSync).mockImplementationOnce(() => probeGate);
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => {
+            expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+            expect(result.current.syncPageProps.dropboxConnected).toBe(true);
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSetSyncBackend('cloud');
+        });
+
+        let syncPromise!: Promise<void>;
+        act(() => {
+            syncPromise = result.current.syncPageProps.onSyncNow();
+        });
+        await waitFor(() => expect(SyncService.performSync).toHaveBeenCalledTimes(1));
+        await act(async () => {
+            await result.current.syncPageProps.onSetSyncBackend('off');
+        });
+        await act(async () => {
+            releaseProbe();
+            await syncPromise;
+        });
+
+        expect(SyncService.setSyncBackend).toHaveBeenCalledWith('off');
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+        expect(SyncService.performSync).toHaveBeenCalledTimes(1);
+        expect(SyncService.discardDropboxCredentials).toHaveBeenCalledWith('opaque-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+        expect(result.current.syncPageProps.syncBackend).toBe('off');
+        expect(showSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a commit-window Off action authoritative without stale saved UI or follow-up sync', async () => {
+        let releaseCommit!: () => void;
+        const commitGate = new Promise<typeof COMMITTED_RESULT>((resolve) => {
+            releaseCommit = () => resolve(COMMITTED_RESULT);
+        });
+        vi.mocked(SyncService.commitProvenSyncConfiguration).mockImplementation(() => commitGate);
+        vi.mocked(SyncService.setSyncBackend).mockImplementation(async () => {
+            await commitGate;
+        });
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        act(() => {
+            void result.current.syncPageProps.onSetSyncBackend('cloud');
+            result.current.syncPageProps.onCloudUrlChange('https://example.com');
+            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+        });
+
+        let syncPromise!: Promise<void>;
+        act(() => {
+            syncPromise = result.current.syncPageProps.onSyncNow();
+        });
+        await waitFor(() => expect(SyncService.commitProvenSyncConfiguration).toHaveBeenCalledTimes(1));
+        let disablePromise!: Promise<void>;
+        act(() => {
+            disablePromise = result.current.syncPageProps.onSetSyncBackend('off');
+        });
+        await act(async () => {
+            releaseCommit();
+            await Promise.all([syncPromise, disablePromise]);
+        });
+
+        expect(result.current.syncPageProps.syncBackend).toBe('off');
+        expect(SyncService.performSync).toHaveBeenCalledTimes(1);
+        expect(SyncService.setSyncBackend).toHaveBeenCalledWith('off');
+        expect(showSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a non-Off change made during commit pending for its own activation', async () => {
+        let releaseCommit!: () => void;
+        const commitGate = new Promise<typeof COMMITTED_RESULT>((resolve) => {
+            releaseCommit = () => resolve(COMMITTED_RESULT);
+        });
+        vi.mocked(SyncService.commitProvenSyncConfiguration)
+            .mockImplementationOnce(() => commitGate)
+            .mockResolvedValue(COMMITTED_RESULT);
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        act(() => {
+            void result.current.syncPageProps.onSetSyncBackend('cloud');
+            result.current.syncPageProps.onCloudUrlChange('https://example.com');
+            result.current.syncPageProps.onCloudTokenChange('a'.repeat(24));
+        });
+
+        let firstSync!: Promise<void>;
+        act(() => {
+            firstSync = result.current.syncPageProps.onSyncNow();
+        });
+        await waitFor(() => expect(SyncService.commitProvenSyncConfiguration).toHaveBeenCalledTimes(1));
+        await act(async () => {
+            await result.current.syncPageProps.onSetSyncBackend('webdav');
+            result.current.syncPageProps.onWebdavUrlChange('https://dav.example.com');
+        });
+        await act(async () => {
+            releaseCommit();
+            await firstSync;
+        });
+
+        expect(result.current.syncPageProps.syncBackend).toBe('webdav');
+        expect(SyncService.performSync).toHaveBeenCalledTimes(1);
+        expect(showSaved).not.toHaveBeenCalled();
+
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.performSync).toHaveBeenNthCalledWith(2, {
+            activationProbe: true,
+            configOverride: expect.objectContaining({
+                backend: 'webdav',
+                webdav: expect.objectContaining({ url: 'https://dav.example.com' }),
+            }),
+            manual: true,
+        });
+        expect(SyncService.performSync).toHaveBeenCalledTimes(3);
+        expect(SyncService.commitProvenSyncConfiguration).toHaveBeenCalledTimes(2);
+        expect(showSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        {
+            label: 'Off',
+            applyNewIntent: async (result: ReturnType<typeof setup>['result']) => {
+                await result.current.syncPageProps.onSetSyncBackend('off');
+            },
+            assertIntent: (result: ReturnType<typeof setup>['result']) => {
+                expect(result.current.syncPageProps.syncBackend).toBe('off');
+            },
+        },
+        {
+            label: 'provider change',
+            applyNewIntent: async (result: ReturnType<typeof setup>['result']) => {
+                await result.current.syncPageProps.onCloudProviderChange('selfhosted');
+            },
+            assertIntent: (result: ReturnType<typeof setup>['result']) => {
+                expect(result.current.syncPageProps.cloudProvider).toBe('selfhosted');
+            },
+        },
+    ])('discards a deferred OAuth result when a later $label intent wins', async ({
+        applyNewIntent,
+        assertIntent,
+    }) => {
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        let resolveConnect!: () => void;
+        const connectGate = new Promise<void>((resolve) => {
+            resolveConnect = resolve;
+        });
+        vi.mocked(SyncService.connectDropbox).mockImplementation(async () => {
+            await connectGate;
+            SyncService.rememberPendingDropboxCredentialHandleForSession('late-candidate-handle');
+            return 'late-candidate-handle';
+        });
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConfigured).toBe(true));
+
+        let connectPromise!: Promise<void>;
+        act(() => {
+            connectPromise = result.current.syncPageProps.onConnectDropbox();
+        });
+        await waitFor(() => expect(SyncService.connectDropbox).toHaveBeenCalledTimes(1));
+        await act(async () => {
+            await applyNewIntent(result);
+        });
+        await act(async () => {
+            resolveConnect();
+            await connectPromise;
+        });
+
+        assertIntent(result);
+        expect(SyncService.discardDropboxCredentials).toHaveBeenCalledWith('late-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+        expect(result.current.syncPageProps.dropboxConnected).toBe(false);
+        expect(showToast).not.toHaveBeenCalledWith(
+            expect.stringContaining('authorization ready'),
+            'info',
+        );
+    });
+
+    it('does not publish a stale connect error after its durable connection refresh is overtaken', async () => {
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.connectDropbox).mockRejectedValue(new Error('stale OAuth failure'));
+        let resolveConnectionRefresh!: (connected: boolean) => void;
+        const connectionRefreshGate = new Promise<boolean>((resolve) => {
+            resolveConnectionRefresh = resolve;
+        });
+        vi.mocked(SyncService.isDropboxConnected)
+            .mockResolvedValueOnce(false)
+            .mockImplementationOnce(() => connectionRefreshGate);
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        const { result } = setup();
+        await waitFor(() => {
+            expect(result.current.syncPageProps.dropboxConfigured).toBe(true);
+            expect(SyncService.isDropboxConnected).toHaveBeenCalledTimes(1);
+        });
+
+        let connectPromise!: Promise<void>;
+        act(() => {
+            connectPromise = result.current.syncPageProps.onConnectDropbox();
+        });
+        await waitFor(() => expect(SyncService.isDropboxConnected).toHaveBeenCalledTimes(2));
+        act(() => {
+            result.current.syncPageProps.onSyncPathChange('/newer/intent');
+        });
+        await act(async () => {
+            resolveConnectionRefresh(true);
+            await connectPromise;
+        });
+
+        expect(result.current.syncPageProps.syncPath).toBe('/newer/intent');
+        expect(result.current.syncPageProps.dropboxConnected).toBe(false);
+        expect(result.current.syncPageProps.dropboxTestState).toBe('idle');
+        expect(result.current.syncPageProps.syncError).toBeNull();
+        expect(result.current.syncPageProps.dropboxBusy).toBe(false);
+        expect(result.current.syncPageProps.dropboxAuthInProgress).toBe(false);
+        expect(showToast).not.toHaveBeenCalledWith('stale OAuth failure', 'error');
+    });
+
+    it('refreshes the durable sync baselines after disconnecting an active Dropbox backend', async () => {
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.spyOn(SyncService, 'getPersistedSyncConfigurationSnapshot')
+            .mockResolvedValueOnce(dropboxConfigurationSnapshot('cloud'))
+            .mockResolvedValueOnce(dropboxConfigurationSnapshot('off'));
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        const { result } = setup();
+        await waitFor(() => {
+            expect(result.current.syncPageProps.syncBackend).toBe('cloud');
+            expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+            expect(result.current.syncPageProps.dropboxConnected).toBe(true);
+        });
+
+        await act(async () => {
+            await result.current.syncPageProps.onDisconnectDropbox();
+        });
+
+        expect(SyncService.disconnectDropbox).toHaveBeenCalledWith('dropbox-app-key');
+        expect(SyncService.getPersistedSyncConfigurationSnapshot).toHaveBeenCalledTimes(2);
+        expect(result.current.syncPageProps.syncBackend).toBe('off');
+        expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+        expect(result.current.syncPageProps.dropboxConnected).toBe(false);
+        expect(result.current.syncPageProps.dropboxTestState).toBe('idle');
+        expect(result.current.syncPageProps.syncError).toBeNull();
+        expect(showToast).toHaveBeenCalledWith('Disconnected from Dropbox.', 'success');
+    });
+
+    it('does not overwrite newer editor intent when a queued Dropbox disconnect finishes', async () => {
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.spyOn(SyncService, 'getPersistedSyncConfigurationSnapshot')
+            .mockResolvedValueOnce(dropboxConfigurationSnapshot('cloud'))
+            .mockResolvedValueOnce(dropboxConfigurationSnapshot('off'));
+        let releaseDisconnect!: () => void;
+        const disconnectGate = new Promise<void>((resolve) => {
+            releaseDisconnect = resolve;
+        });
+        vi.mocked(SyncService.disconnectDropbox).mockReturnValue(disconnectGate);
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConnected).toBe(true));
+
+        let disconnectPromise!: Promise<void>;
+        act(() => {
+            disconnectPromise = result.current.syncPageProps.onDisconnectDropbox();
+        });
+        await waitFor(() => expect(SyncService.disconnectDropbox).toHaveBeenCalledTimes(1));
+        await act(async () => {
+            await result.current.syncPageProps.onCloudProviderChange('selfhosted');
+        });
+        await act(async () => {
+            releaseDisconnect();
+            await disconnectPromise;
+        });
+
+        expect(result.current.syncPageProps.syncBackend).toBe('cloud');
+        expect(result.current.syncPageProps.cloudProvider).toBe('selfhosted');
+        expect(result.current.syncPageProps.dropboxBusy).toBe(false);
+        expect(showToast).not.toHaveBeenCalledWith('Disconnected from Dropbox.', 'success');
+    });
+
+    it('never clears a newer pending authorization while resolving a stale OAuth result', async () => {
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        let resolveConnect!: () => void;
+        const connectGate = new Promise<void>((resolve) => {
+            resolveConnect = resolve;
+        });
+        vi.mocked(SyncService.connectDropbox).mockImplementation(async () => {
+            await connectGate;
+            SyncService.rememberPendingDropboxCredentialHandleForSession('stale-candidate-handle');
+            SyncService.forgetPendingDropboxCredentialHandleForSession('stale-candidate-handle');
+            SyncService.rememberPendingDropboxCredentialHandleForSession('newer-candidate-handle');
+            return 'stale-candidate-handle';
+        });
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConfigured).toBe(true));
+
+        let connectPromise!: Promise<void>;
+        act(() => {
+            connectPromise = result.current.syncPageProps.onConnectDropbox();
+        });
+        await waitFor(() => expect(SyncService.connectDropbox).toHaveBeenCalledTimes(1));
+        act(() => {
+            result.current.syncPageProps.onSyncPathChange('/newer/intent');
+        });
+        await act(async () => {
+            resolveConnect();
+            await connectPromise;
+        });
+
+        expect(SyncService.discardDropboxCredentials).not.toHaveBeenCalledWith('newer-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('newer-candidate-handle');
+    });
+
+    it('does not let an older backend cleanup overwrite a later backend selection', async () => {
+        SyncService.rememberPendingDropboxCredentialHandleForSession('pending-handle');
+        let releaseCleanup!: () => void;
+        const cleanupGate = new Promise<void>((resolve) => {
+            releaseCleanup = resolve;
+        });
+        vi.mocked(SyncService.discardDropboxCredentials).mockImplementation(() => cleanupGate);
+        const { result } = setup();
+
+        let olderSelection!: Promise<void>;
+        act(() => {
+            olderSelection = result.current.syncPageProps.onSetSyncBackend('file');
+        });
+        await waitFor(() => expect(SyncService.discardDropboxCredentials).toHaveBeenCalled());
+        await act(async () => {
+            await result.current.syncPageProps.onSetSyncBackend('cloud');
+        });
+        await act(async () => {
+            releaseCleanup();
+            await olderSelection;
+        });
+
+        expect(result.current.syncPageProps.syncBackend).toBe('cloud');
+    });
+
+    it('does not let an older provider cleanup overwrite a later provider selection', async () => {
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        SyncService.rememberPendingDropboxCredentialHandleForSession('pending-handle');
+        let releaseCleanup!: () => void;
+        const cleanupGate = new Promise<void>((resolve) => {
+            releaseCleanup = resolve;
+        });
+        vi.mocked(SyncService.discardDropboxCredentials).mockImplementation(() => cleanupGate);
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.cloudProvider).toBe('dropbox'));
+
+        let olderSelection!: Promise<void>;
+        act(() => {
+            olderSelection = result.current.syncPageProps.onCloudProviderChange('selfhosted');
+        });
+        await waitFor(() => expect(SyncService.discardDropboxCredentials).toHaveBeenCalled());
+        await act(async () => {
+            await result.current.syncPageProps.onCloudProviderChange('dropbox');
+        });
+        await act(async () => {
+            releaseCleanup();
+            await olderSelection;
+        });
+
+        expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+    });
+
+    it('does not let a completed older Off write overwrite a newer non-Off choice', async () => {
+        let releaseOff!: () => void;
+        const offGate = new Promise<void>((resolve) => {
+            releaseOff = resolve;
+        });
+        vi.mocked(SyncService.setSyncBackend).mockImplementation(() => offGate);
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+
+        let offSelection!: Promise<void>;
+        act(() => {
+            offSelection = result.current.syncPageProps.onSetSyncBackend('off');
+        });
+        await waitFor(() => expect(SyncService.setSyncBackend).toHaveBeenCalledWith('off'));
+        await act(async () => {
+            await result.current.syncPageProps.onSetSyncBackend('file');
+        });
+        await act(async () => {
+            releaseOff();
+            await offSelection;
+        });
+
+        expect(result.current.syncPageProps.syncBackend).toBe('file');
+        expect(showSaved).not.toHaveBeenCalled();
+    });
+
+    it('runs one normal sync for an already proven unchanged backend', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('selfhosted');
+        vi.mocked(SyncService.getCloudConfig).mockResolvedValue({
+            url: 'https://example.com',
+            token: 'a'.repeat(24),
+            rememberToken: false,
+            allowInsecureHttp: false,
+        });
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.syncBackend).toBe('cloud'));
+
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.performSync).toHaveBeenCalledTimes(1);
+        expect(SyncService.performSync).toHaveBeenCalledWith({
+            manual: true,
+            ignorePendingRemoteWriteBackoff: false,
+        });
+        expect(SyncService.setCloudConfig).not.toHaveBeenCalled();
+        expect(SyncService.setSyncBackend).not.toHaveBeenCalled();
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+    });
+
+    it('promotes a same-provider Dropbox reconnect only after the staged proof succeeds', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => {
+            expect(result.current.syncPageProps.syncBackend).toBe('cloud');
+            expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+            expect(result.current.syncPageProps.dropboxConnected).toBe(true);
+        });
+
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.performSync).toHaveBeenNthCalledWith(1, {
+            activationProbe: true,
+            configOverride: {
+                backend: 'cloud',
+                cloudProvider: 'dropbox',
+                dropboxCredentialHandle: 'opaque-candidate-handle',
+            },
+            manual: true,
+        });
+        expect(SyncService.commitProvenSyncConfiguration).toHaveBeenCalledWith({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+            dropboxCredentialHandle: 'opaque-candidate-handle',
+        });
+        expect(SyncService.discardDropboxCredentials).not.toHaveBeenCalled();
+        expect(showSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats cleanup-pending Dropbox activation as committed without reusing its handle', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.mocked(SyncService.commitProvenSyncConfiguration).mockImplementation(async (config) => {
+            // The real service atomically moves this handle from Candidate to
+            // its private finalize-retry registry before returning this result.
+            SyncService.forgetPendingDropboxCredentialHandleForSession(config.dropboxCredentialHandle);
+            return {
+                committed: true,
+                cleanupPending: true,
+                handleFinalized: false,
+            };
+        });
+        const showSaved = vi.fn();
+        const { result } = setup(showSaved);
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConnected).toBe(true));
+
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(showSaved).toHaveBeenCalledTimes(1);
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+        expect(result.current.syncPageProps.syncBackend).toBe('cloud');
+        expect(result.current.syncPageProps.cloudProvider).toBe('dropbox');
+
+        vi.mocked(SyncService.performSync).mockClear();
+        vi.mocked(SyncService.commitProvenSyncConfiguration).mockClear();
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.performSync).toHaveBeenCalledTimes(1);
+        expect(SyncService.performSync).toHaveBeenCalledWith({
+            manual: true,
+            ignorePendingRemoteWriteBackoff: false,
+        });
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+    });
+
+    it('discards a failed reconnect candidate while preserving the old Dropbox connection and backend', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.mocked(SyncService.performSync).mockResolvedValueOnce({
+            success: false,
+            error: 'candidate account cannot write',
+        });
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConnected).toBe(true));
+
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+
+        expect(SyncService.discardDropboxCredentials).toHaveBeenCalledWith('opaque-candidate-handle');
+        expect(SyncService.commitProvenSyncConfiguration).not.toHaveBeenCalled();
+        expect(SyncService.setSyncBackend).not.toHaveBeenCalled();
+        expect(result.current.syncPageProps.dropboxConnected).toBe(true);
+    });
+
+    it('retains the staged handle when rollback cleanup fails so recovery can be retried', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.mocked(SyncService.commitProvenSyncConfiguration).mockRejectedValue(
+            new Error('Previous Dropbox credentials could not be restored; sync remains disabled'),
+        );
+        vi.mocked(SyncService.discardDropboxCredentials).mockRejectedValue(
+            new Error('Promoted Dropbox credentials must be rolled back, not discarded'),
+        );
+        vi.mocked(SyncService.rollbackDropboxCredentials).mockRejectedValue(
+            new Error('Previous Dropbox credentials are still unavailable'),
+        );
+        const firstHook = setup();
+        const { result } = firstHook;
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConnected).toBe(true));
+
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onTestDropboxConnection();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+
+        expect(SyncService.discardDropboxCredentials).toHaveBeenCalledWith('opaque-candidate-handle');
+        expect(SyncService.testDropboxConnection).toHaveBeenCalledWith('dropbox-app-key', {
+            credentialHandle: 'opaque-candidate-handle',
+        });
+        expect(SyncService.connectDropbox).toHaveBeenCalledTimes(1);
+
+        vi.mocked(SyncService.testDropboxConnection).mockClear();
+        firstHook.unmount();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        const remounted = setup();
+        await waitFor(() => {
+            expect(remounted.result.current.syncPageProps.dropboxConfigured).toBe(true);
+            expect(remounted.result.current.syncPageProps.dropboxConnected).toBe(true);
+        });
+        await act(async () => {
+            await remounted.result.current.syncPageProps.onTestDropboxConnection();
+        });
+        expect(SyncService.testDropboxConnection).toHaveBeenCalledWith('dropbox-app-key', {
+            credentialHandle: 'opaque-candidate-handle',
+        });
+    });
+
+    it('clears the staged handle after a discard failure is recovered by rollback', async () => {
+        vi.mocked(SyncService.getSyncBackend).mockResolvedValue('cloud');
+        vi.mocked(SyncService.getCloudProvider).mockResolvedValue('dropbox');
+        vi.mocked(SyncService.getDropboxAppKey).mockResolvedValue('dropbox-app-key');
+        vi.mocked(SyncService.isDropboxConnected).mockResolvedValue(true);
+        vi.mocked(SyncService.commitProvenSyncConfiguration).mockRejectedValue(
+            new Error('Previous Dropbox credentials could not be restored; sync remains disabled'),
+        );
+        vi.mocked(SyncService.discardDropboxCredentials).mockRejectedValue(
+            new Error('Promoted Dropbox credentials must be rolled back, not discarded'),
+        );
+        const { result } = setup();
+        await waitFor(() => expect(result.current.syncPageProps.dropboxConnected).toBe(true));
+
+        await act(async () => {
+            await result.current.syncPageProps.onConnectDropbox();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onSyncNow();
+        });
+        await act(async () => {
+            await result.current.syncPageProps.onTestDropboxConnection();
+        });
+
+        expect(SyncService.rollbackDropboxCredentials).toHaveBeenCalledWith('opaque-candidate-handle');
+        expect(SyncService.testDropboxConnection).toHaveBeenCalledWith('dropbox-app-key', {
+            credentialHandle: undefined,
+        });
     });
 });
 

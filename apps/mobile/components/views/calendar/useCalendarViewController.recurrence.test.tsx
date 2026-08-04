@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
   const alert = vi.fn();
   return {
     alert,
+    areaById: new Map(),
+    expandTaskSet: vi.fn(),
     storeState: {
       tasks: [] as Task[],
       _allTasks: null as Task[] | null,
@@ -28,6 +30,10 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mindwtr/core')>();
   return {
     ...actual,
+    expandCalendarRecurringTaskSetInRange: (...args: Parameters<typeof actual.expandCalendarRecurringTaskSetInRange>) => {
+      mocks.expandTaskSet(...args);
+      return actual.expandCalendarRecurringTaskSetInRange(...args);
+    },
     shallow: (a: unknown, b: unknown) => a === b,
     useTaskStore: (selector: (state: typeof mocks.storeState) => unknown) => selector(mocks.storeState),
   };
@@ -63,7 +69,7 @@ vi.mock('@/hooks/use-theme-colors', () => ({
 
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
-    areaById: new Map(),
+    areaById: mocks.areaById,
     resolvedAreaFilter: '__all__',
   }),
 }));
@@ -114,6 +120,7 @@ describe('useCalendarViewController recurrence range projection', () => {
     mocks.storeState.updateTask.mockClear();
     mocks.storeState.deleteTask.mockClear();
     mocks.alert.mockClear();
+    mocks.expandTaskSet.mockClear();
   });
 
   afterEach(() => {
@@ -167,5 +174,57 @@ describe('useCalendarViewController recurrence range projection', () => {
     expect(mocks.alert).toHaveBeenCalledTimes(1);
     expect(mocks.storeState.updateTask).not.toHaveBeenCalled();
     expect(mocks.storeState.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('shares the 500-occurrence cap across all recurring series', async () => {
+    mocks.storeState.tasks = Array.from({ length: 20 }, (_, index) => makeTask({
+      id: `task-recurring-${index}`,
+      title: `Daily task ${index}`,
+      dueDate: '2026-04-02',
+      recurrence: 'daily',
+      showFutureRecurrence: true,
+    }));
+
+    let controller!: ReturnType<typeof useCalendarViewController>;
+    await act(async () => {
+      create(<ControllerHost onResult={(value) => { controller = value; }} />);
+    });
+    await flush();
+
+    const projectedIds = new Set<string>();
+    for (let day = 1; day <= 30; day += 1) {
+      controller.getCalendarItemsForDate(new Date(2026, 3, day)).forEach((item) => {
+        if ('task' in item && item.task.id.includes(':projected-recurrence:')) {
+          projectedIds.add(item.task.id);
+        }
+      });
+    }
+
+    expect(projectedIds).toHaveLength(500);
+    for (let index = 0; index < 20; index += 1) {
+      expect([...projectedIds].filter((id) => id.startsWith(`task-recurring-${index}:projected-recurrence:`))).toHaveLength(25);
+    }
+  });
+
+  it('does not re-expand the task store on an ordinary minute tick', async () => {
+    mocks.storeState.tasks = Array.from({ length: 5_000 }, (_, index) => makeTask({
+      id: `task-${index}`,
+      title: `Task ${index}`,
+      dueDate: '2026-04-10',
+    }));
+
+    await act(async () => {
+      create(<ControllerHost onResult={() => undefined} />);
+    });
+    await flush();
+    const expansionCountAfterSettling = mocks.expandTaskSet.mock.calls.length;
+    expect(expansionCountAfterSettling).toBeGreaterThan(0);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+    });
+
+    expect(mocks.expandTaskSet).toHaveBeenCalledTimes(expansionCountAfterSettling);
   });
 });

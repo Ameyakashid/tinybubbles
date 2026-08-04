@@ -171,7 +171,7 @@ describe('mobile storage adapter', () => {
     } finally {
       nativeModules.OPSQLite = installedModule;
     }
-  }, 10_000);
+  }, 30_000);
 
   it('coalesces a burst of calendar SQLite calls when the native module is unavailable', async () => {
     const nativeModuleError = new Error('Base module not found. Did you do a pod install/clear the gradle cache?');

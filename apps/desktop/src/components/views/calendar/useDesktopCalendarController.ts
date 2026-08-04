@@ -12,9 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     buildCalendarEventTaskDraft,
-    CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
-    CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
-    expandCalendarRecurringTasksInRange,
+    expandCalendarRecurringTaskSetInRange,
     getCalendarPlanningCandidates,
     getWeekStartsOnIndex,
     findFreeSlotForDay as findCalendarFreeSlotForDay,
@@ -45,6 +43,7 @@ import {
 
 import { checkBudget } from '../../../config/performanceBudgets';
 import { useLanguage } from '../../../contexts/language-context';
+import { useLocalDayKey } from '../../../hooks/useLocalDayKey';
 import { usePerformanceMonitor } from '../../../hooks/usePerformanceMonitor';
 import { reportError } from '../../../lib/report-error';
 import { resolveCalendarLocale } from '../calendar-locale';
@@ -77,6 +76,11 @@ const readShowCompletedPreference = (): boolean => {
 
 export function useDesktopCalendarController() {
     const perf = usePerformanceMonitor('CalendarView');
+    const localDayKey = useLocalDayKey();
+    const projectedAtIso = useMemo(() => {
+        const [year, monthIndex, date] = localDayKey.split('-').map(Number);
+        return new Date(year!, monthIndex!, date!).toISOString();
+    }, [localDayKey]);
     const { tasks, allTasks, projects, areas, addTask, addProject, updateTask, settings, getDerivedState } = useTaskStore(
         (state) => ({
             addProject: state.addProject,
@@ -233,43 +237,36 @@ export function useDesktopCalendarController() {
         const recurrenceRangeEnd = new Date(useGridBounds ? days[days.length - 1]! : visibleRange.end);
         recurrenceRangeEnd.setHours(23, 59, 59, 999);
         const recurrenceRange = { startIso: recurrenceRangeStart.toISOString(), endIso: recurrenceRangeEnd.toISOString() };
-        let remainingProjectionBudget = CALENDAR_RANGE_PROJECTION_TOTAL_CAP;
-        for (const task of tasks) {
+        const tasksInScope = tasks.filter(isCalendarTaskVisible);
+        const expandedTasks = expandCalendarRecurringTaskSetInRange(tasksInScope, recurrenceRange, projectedAtIso);
+        for (const calendarTask of expandedTasks) {
             // Every field isCalendarTaskVisible reads (status, deletedAt, projectId, areaId,
             // title) is copied unchanged onto every projected occurrence, so its verdict is the
             // same for the source task and all of its occurrences -- check it once here and skip
             // the expansion walk entirely for tasks that won't be shown, instead of paying for it
             // and then filtering per occurrence below.
-            if (!isCalendarTaskVisible(task)) continue;
-            const maxOccurrences = Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, remainingProjectionBudget);
-            const expanded = maxOccurrences > 0
-                ? expandCalendarRecurringTasksInRange(task, recurrenceRange, undefined, maxOccurrences)
-                : [task];
-            remainingProjectionBudget -= Math.max(0, expanded.length - 1);
-            for (const calendarTask of expanded) {
-                visibleTasks.push(calendarTask);
-                if (calendarTask.dueDate) {
-                    const dueDate = safeParseDueDate(calendarTask.dueDate);
-                    if (dueDate) {
-                        const dueKey = dayKey(dueDate);
-                        const existingDue = deadlinesByDay.get(dueKey);
-                        if (existingDue) existingDue.push(calendarTask);
-                        else deadlinesByDay.set(dueKey, [calendarTask]);
-                    }
+            visibleTasks.push(calendarTask);
+            if (calendarTask.dueDate) {
+                const dueDate = safeParseDueDate(calendarTask.dueDate);
+                if (dueDate) {
+                    const dueKey = dayKey(dueDate);
+                    const existingDue = deadlinesByDay.get(dueKey);
+                    if (existingDue) existingDue.push(calendarTask);
+                    else deadlinesByDay.set(dueKey, [calendarTask]);
                 }
-                if (calendarTask.startTime) {
-                    const startTime = safeParseDate(calendarTask.startTime);
-                    if (startTime) {
-                        const startKey = dayKey(startTime);
-                        const existingStart = scheduledByDay.get(startKey);
-                        if (existingStart) existingStart.push(calendarTask);
-                        else scheduledByDay.set(startKey, [calendarTask]);
-                    }
+            }
+            if (calendarTask.startTime) {
+                const startTime = safeParseDate(calendarTask.startTime);
+                if (startTime) {
+                    const startKey = dayKey(startTime);
+                    const existingStart = scheduledByDay.get(startKey);
+                    if (existingStart) existingStart.push(calendarTask);
+                    else scheduledByDay.set(startKey, [calendarTask]);
                 }
             }
         }
         return { visibleTasks, deadlinesByDay, scheduledByDay, completedByDay };
-    }, [tasks, allTasks, isCalendarTaskVisible, isCalendarTaskInScope, showCompleted, visibleRange, viewMode, days]);
+    }, [tasks, allTasks, isCalendarTaskVisible, isCalendarTaskInScope, showCompleted, visibleRange, viewMode, days, projectedAtIso]);
 
     const schedulableTasks = useMemo(
         () => tasks
@@ -291,6 +288,7 @@ export function useDesktopCalendarController() {
         isSchedulableTask,
         prioritiesEnabled,
         projects,
+        localDayKey,
         sequentialProjectIds,
         sequentialWithinSectionProjectIds,
         tasks,

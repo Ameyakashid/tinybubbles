@@ -1113,6 +1113,37 @@ describe('tauriStorage.saveTask stuck-save warning (#913)', () => {
         expect(fetchData).toHaveBeenCalledWith({ silent: true, preloadedData: canonical });
     });
 
+    it('resolves and reloads when save_task committed but its canonical read failed', async () => {
+        const observedTask = { id: 'task-1', title: 'Observed', rev: 1 };
+        const localTask = { ...observedTask, title: 'Committed', rev: 2 };
+        const observed = {
+            tasks: [observedTask], projects: [], sections: [], areas: [], people: [], settings: {},
+        } as any;
+        const target = { ...observed, tasks: [localTask] };
+        const fetchData = vi.fn().mockResolvedValue(undefined);
+        invokeMock.mockImplementation((command: string) => {
+            if (command === 'get_data') return Promise.resolve(observed);
+            return Promise.resolve({
+                committed: true,
+                canonical: null,
+                canonicalReloadRequired: true,
+            });
+        });
+
+        await tauriStorage.getData();
+        setStoreSnapshot(target, fetchData);
+        await expect(tauriStorage.saveTask!(localTask as any)).resolves.toBeUndefined();
+
+        expect(fetchData).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetchData).toHaveBeenCalledWith({ silent: true });
+        expect(reportErrorMock).not.toHaveBeenCalledWith(
+            'saveTask failure',
+            expect.anything(),
+            expect.anything(),
+        );
+    });
+
     it('does not reject the invoke early or add a retry when save_task eventually fails', async () => {
         invokeMock.mockRejectedValue(new Error('disk full'));
 

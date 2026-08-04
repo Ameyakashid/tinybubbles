@@ -134,6 +134,9 @@ describe('desktop sync-service runtime', () => {
     beforeEach(async () => {
         const syncServiceModule = await syncServiceModulePromise;
         await syncServiceModule.SyncService.resetForTests();
+        // Runtime-cycle tests exercise established native configuration. Legacy
+        // renderer migration has dedicated coverage in sync-service.test.ts.
+        (syncServiceModule.SyncService as any).didMigrate = true;
         vi.clearAllMocks();
 
         storeStateRef.current = {
@@ -502,6 +505,7 @@ describe('desktop sync-service runtime', () => {
         getInMemoryAppDataSnapshotMock.mockImplementation(() => structuredClone(localCloudData));
         invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
             if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_sync_cloud_provider') return 'selfhosted';
             if (command === 'get_cloud_config') return {
                 url: 'https://sync.example.com',
                 token: 'cloud-token',
@@ -567,6 +571,161 @@ describe('desktop sync-service runtime', () => {
             'https://sync.example.com/v1/data',
             expect.objectContaining({ method: 'PUT' })
         );
+    });
+
+    it('uses a session-only WebDAV config for its proving round trip', async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        storeStateRef.current = {
+            ...storeStateRef.current,
+            _allTasks: [],
+        };
+        const pendingRemote: AppData = {
+            tasks: [],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        };
+        const httpFetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            if (init?.method === 'PUT') {
+                return buildResponse(200, '', { etag: '"pending-write"' });
+            }
+            return buildResponse(200, JSON.stringify(pendingRemote), { etag: '"pending-read"' });
+        });
+        invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'create_data_snapshot') return undefined;
+            if (command === 'get_data') return structuredClone(pendingRemote);
+            if (command === 'save_data') return undefined;
+            if (command === 'get_webdav_password') return 'persisted-password';
+            throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
+        });
+        syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
+            getTauriFetch: async () => httpFetchMock as unknown as typeof fetch,
+        });
+        performSyncCycleMock.mockImplementation(async (io: {
+            readLocal: () => Promise<AppData>;
+            readRemote: () => Promise<AppData | null>;
+            writeLocal: (data: AppData) => Promise<AppData | void>;
+            writeRemote: (data: AppData) => Promise<void>;
+        }) => {
+            const local = await io.readLocal();
+            await expect(io.readRemote()).resolves.toEqual(pendingRemote);
+            const candidate = await io.writeLocal(local) ?? local;
+            await io.writeRemote(candidate);
+            return { status: 'success', stats: emptyStats, data: candidate };
+        });
+
+        const result = await syncServiceModule.SyncService.performSync({
+            activationProbe: true,
+            manual: true,
+            configOverride: {
+                backend: 'webdav',
+                webdav: {
+                    url: 'https://pending.example.com/mindwtr',
+                    username: 'pending-user',
+                    password: 'pending-password',
+                    allowInsecureHttp: false,
+                },
+            },
+        });
+
+        expect(result).toEqual({ success: true, stats: emptyStats });
+        expect(invokeMock).not.toHaveBeenCalledWith('get_sync_backend', undefined);
+        expect(invokeMock).not.toHaveBeenCalledWith('get_webdav_config', undefined);
+        expect(invokeMock).not.toHaveBeenCalledWith('webdav_get_json', undefined);
+        expect(invokeMock).not.toHaveBeenCalledWith('webdav_put_json', expect.anything());
+        expect(httpFetchMock).toHaveBeenCalledWith(
+            'https://pending.example.com/mindwtr/data.json',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    Authorization: `Basic ${btoa('pending-user:pending-password')}`,
+                }),
+            }),
+        );
+        expect(invokeMock.mock.calls.some(([command]) => command === 'save_data')).toBe(false);
+        expect(applySyncedDataToStoreMock).not.toHaveBeenCalled();
+        expect(externalCalendarGetMock).not.toHaveBeenCalled();
+        expect(externalCalendarSetMock).not.toHaveBeenCalled();
+    });
+
+    it('does not persist candidate remote data when a desktop activation probe write fails', async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        storeStateRef.current = {
+            ...storeStateRef.current,
+            _allTasks: [],
+        };
+        const pendingRemote: AppData = {
+            tasks: [{
+                id: 'remote-only',
+                title: 'Remote only',
+                status: 'inbox',
+                tags: [],
+                contexts: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+            }],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        };
+        const httpFetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            if (init?.method === 'PUT') throw new Error('candidate remote write failed');
+            return buildResponse(200, JSON.stringify(pendingRemote), { etag: '"pending-read"' });
+        });
+        invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'create_data_snapshot') return undefined;
+            if (command === 'get_data') return {
+                tasks: [],
+                projects: [],
+                sections: [],
+                areas: [],
+                people: [],
+                settings: {},
+            } satisfies AppData;
+            if (command === 'get_webdav_password') return 'persisted-password';
+            throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
+        });
+        syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
+            getTauriFetch: async () => httpFetchMock as unknown as typeof fetch,
+        });
+        performSyncCycleMock.mockImplementation(async (io: {
+            readLocal: () => Promise<AppData>;
+            readRemote: () => Promise<AppData | null>;
+            writeLocal: (data: AppData) => Promise<AppData | void>;
+            writeRemote: (data: AppData) => Promise<void>;
+        }) => {
+            const local = await io.readLocal();
+            const remote = await io.readRemote();
+            const candidate = {
+                ...local,
+                tasks: [...local.tasks, ...(remote?.tasks ?? [])],
+            };
+            await io.writeLocal(candidate);
+            await io.writeRemote(candidate);
+            return { status: 'success', stats: emptyStats, data: candidate };
+        });
+
+        const result = await syncServiceModule.SyncService.performSync({
+            activationProbe: true,
+            manual: true,
+            configOverride: {
+                backend: 'webdav',
+                webdav: {
+                    url: 'https://pending.example.com/mindwtr',
+                    username: 'pending-user',
+                    password: 'pending-password',
+                    allowInsecureHttp: false,
+                },
+            },
+        });
+
+        expect(result).toMatchObject({ success: false, error: expect.stringContaining('candidate remote write failed') });
+        expect(invokeMock.mock.calls.some(([command]) => command === 'save_data')).toBe(false);
+        expect(applySyncedDataToStoreMock).not.toHaveBeenCalled();
+        expect(storeStateRef.current._allTasks.some((task) => task.id === 'remote-only')).toBe(false);
     });
 
     it('only emits sync payload trace logs when diagnostics logging is enabled', async () => {
@@ -737,6 +896,7 @@ describe('desktop sync-service runtime', () => {
 
         invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
             if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_sync_cloud_provider') return 'selfhosted';
             if (command === 'get_cloud_config') return { url: '', token: '' };
             if (command === 'create_data_snapshot') return undefined;
             if (command === 'get_data') return structuredClone(localData);
@@ -1097,6 +1257,267 @@ describe('desktop sync-service runtime', () => {
         expect(freshRemoteFingerprint).not.toBe(cachedRemoteFingerprint);
     });
 
+    it('proves a first Dropbox connection with attachments using only the staged credential handle', async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url === 'https://content.dropboxapi.com/2/files/upload') {
+                expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer first-connect-token');
+                return buildResponse(200, '{"rev":"attachment-rev"}');
+            }
+            if (url === 'https://content.dropboxapi.com/2/files/download') {
+                expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer first-connect-token');
+                return buildResponse(200, JSON.stringify({
+                    tasks: [],
+                    projects: [],
+                    sections: [],
+                    areas: [],
+                    people: [],
+                    settings: {},
+                }), { 'dropbox-api-result': '{"rev":"data-rev"}' });
+            }
+            throw new Error(`Unexpected Dropbox fetch input: ${url}`);
+        });
+        vi.spyOn(syncServiceModule.SyncService, 'getDropboxAppKey').mockResolvedValue('dropbox-app-key');
+        syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
+            getTauriFetch: async () => fetchMock as unknown as typeof fetch,
+        });
+        storeStateRef.current = {
+            ...storeStateRef.current,
+            _allTasks: structuredClone(localData.tasks),
+            _allProjects: [],
+            _allSections: [],
+            _allAreas: [],
+            _allPeople: [],
+            settings: {},
+        };
+        invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'create_data_snapshot') return undefined;
+            if (command === 'get_data') return structuredClone(localData);
+            if (command === 'get_dropbox_access_token') {
+                if (args?.credentialHandle !== 'first-connect-handle') {
+                    throw new Error('Dropbox is not connected');
+                }
+                return 'first-connect-token';
+            }
+            throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
+        });
+        performSyncCycleMock.mockImplementation(async (io: {
+            prepareRemoteWrite: (data: AppData) => Promise<AppData>;
+            readLocal: () => Promise<AppData>;
+            readRemote: () => Promise<AppData | null>;
+            writeRemote: (data: AppData) => Promise<void>;
+        }) => {
+            const candidateLocal = await io.readLocal();
+            expect(candidateLocal.tasks[0]?.attachments?.[0]).toMatchObject({
+                uri: '/local/doc.txt',
+            });
+            await io.readRemote();
+            const provenCandidate = await io.prepareRemoteWrite(candidateLocal);
+            expect(provenCandidate.tasks[0]?.attachments?.[0]).toMatchObject({
+                cloudKey: 'attachments/att-1.txt',
+                localStatus: 'available',
+            });
+            await io.writeRemote(provenCandidate);
+            return { status: 'success', stats: emptyStats, data: provenCandidate };
+        });
+
+        try {
+            const result = await syncServiceModule.SyncService.performSync({
+                activationProbe: true,
+                configOverride: {
+                    backend: 'cloud',
+                    cloudProvider: 'dropbox',
+                    dropboxCredentialHandle: 'first-connect-handle',
+                },
+                manual: true,
+            });
+
+            expect(result).toEqual(expect.objectContaining({ success: true }));
+            const tokenCalls = invokeMock.mock.calls.filter(([command]) => (
+                command === 'get_dropbox_access_token'
+            ));
+            expect(tokenCalls.length).toBeGreaterThan(0);
+            expect(tokenCalls.every(([, args]) => (
+                args?.credentialHandle === 'first-connect-handle'
+            ))).toBe(true);
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
+    it('never falls back to the old Dropbox account while refreshing reconnect attachment credentials', async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        let attachmentUploadAttempts = 0;
+        const authorizationHeaders: string[] = [];
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            const authorization = new Headers(init?.headers).get('Authorization') ?? '';
+            authorizationHeaders.push(authorization);
+            if (url === 'https://content.dropboxapi.com/2/files/upload') {
+                attachmentUploadAttempts += 1;
+                return attachmentUploadAttempts === 1
+                    ? buildResponse(401, 'expired candidate token')
+                    : buildResponse(200, '{"rev":"attachment-rev"}');
+            }
+            if (url === 'https://content.dropboxapi.com/2/files/download') {
+                return buildResponse(200, JSON.stringify({
+                    tasks: [],
+                    projects: [],
+                    sections: [],
+                    areas: [],
+                    people: [],
+                    settings: {},
+                }), { 'dropbox-api-result': '{"rev":"data-rev"}' });
+            }
+            throw new Error(`Unexpected Dropbox fetch input: ${url}`);
+        });
+        vi.spyOn(syncServiceModule.SyncService, 'getDropboxAppKey').mockResolvedValue('dropbox-app-key');
+        syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
+            getTauriFetch: async () => fetchMock as unknown as typeof fetch,
+        });
+        storeStateRef.current = {
+            ...storeStateRef.current,
+            _allTasks: structuredClone(localData.tasks),
+            _allProjects: [],
+            _allSections: [],
+            _allAreas: [],
+            _allPeople: [],
+            settings: {},
+        };
+        invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'create_data_snapshot') return undefined;
+            if (command === 'get_data') return structuredClone(localData);
+            if (command === 'get_dropbox_access_token') {
+                if (!args?.credentialHandle) return 'durable-old-account-token';
+                return args.forceRefresh
+                    ? 'refreshed-new-account-token'
+                    : 'new-account-token';
+            }
+            throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
+        });
+        performSyncCycleMock.mockImplementation(async (io: {
+            prepareRemoteWrite: (data: AppData) => Promise<AppData>;
+            readLocal: () => Promise<AppData>;
+            readRemote: () => Promise<AppData | null>;
+            writeRemote: (data: AppData) => Promise<void>;
+        }) => {
+            const candidateLocal = await io.readLocal();
+            await io.readRemote();
+            const provenCandidate = await io.prepareRemoteWrite(candidateLocal);
+            await io.writeRemote(provenCandidate);
+            return { status: 'success', stats: emptyStats, data: provenCandidate };
+        });
+
+        try {
+            const result = await syncServiceModule.SyncService.performSync({
+                activationProbe: true,
+                configOverride: {
+                    backend: 'cloud',
+                    cloudProvider: 'dropbox',
+                    dropboxCredentialHandle: 'reconnect-handle',
+                },
+                manual: true,
+            });
+
+            expect(result).toEqual(expect.objectContaining({ success: true }));
+            expect(invokeMock).toHaveBeenCalledWith('get_dropbox_access_token', {
+                clientId: 'dropbox-app-key',
+                credentialHandle: 'reconnect-handle',
+                forceRefresh: false,
+            });
+            expect(invokeMock).toHaveBeenCalledWith('get_dropbox_access_token', {
+                clientId: 'dropbox-app-key',
+                credentialHandle: 'reconnect-handle',
+                forceRefresh: true,
+            });
+            expect(authorizationHeaders).toContain('Bearer new-account-token');
+            expect(authorizationHeaders).toContain('Bearer refreshed-new-account-token');
+            expect(authorizationHeaders).not.toContain('Bearer durable-old-account-token');
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
+    it('keeps a staged Dropbox handle bound to both initial and refreshed token resolution', async () => {
+        const syncServiceModule = await syncServiceModulePromise;
+        const remoteData: AppData = {
+            tasks: [],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        };
+        let downloadAttempts = 0;
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            if (String(input) !== 'https://content.dropboxapi.com/2/files/download') {
+                throw new Error(`Unexpected Dropbox fetch input: ${String(input)}`);
+            }
+            downloadAttempts += 1;
+            return downloadAttempts === 1
+                ? buildResponse(401, 'expired token')
+                : buildResponse(200, JSON.stringify(remoteData), {
+                    'dropbox-api-result': '{"rev":"rev-candidate"}',
+                });
+        });
+        vi.spyOn(syncServiceModule.SyncService, 'getDropboxAppKey').mockResolvedValue('dropbox-app-key');
+        storeStateRef.current = {
+            ...storeStateRef.current,
+            _allTasks: [],
+            _allProjects: [],
+            _allSections: [],
+            _allAreas: [],
+            _allPeople: [],
+            settings: {},
+        };
+        syncServiceModule.__syncServiceTestUtils.setDependenciesForTests({
+            getTauriFetch: async () => fetchMock as unknown as typeof fetch,
+        });
+        invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'create_data_snapshot') return undefined;
+            if (command === 'get_data') return structuredClone(remoteData);
+            if (command === 'get_dropbox_access_token') {
+                return args?.forceRefresh
+                    ? 'refreshed-staged-access-token'
+                    : 'staged-access-token';
+            }
+            throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
+        });
+        performSyncCycleMock.mockImplementation(async (io: {
+            readRemote: () => Promise<AppData | null>;
+        }) => {
+            const remote = await io.readRemote();
+            return { status: 'success', stats: emptyStats, data: remote ?? remoteData };
+        });
+
+        try {
+            const result = await syncServiceModule.SyncService.performSync({
+                activationProbe: true,
+                configOverride: {
+                    backend: 'cloud',
+                    cloudProvider: 'dropbox',
+                    dropboxCredentialHandle: 'opaque-candidate-handle',
+                },
+                manual: true,
+            });
+
+            expect(result).toEqual(expect.objectContaining({ success: true }));
+            expect(invokeMock).toHaveBeenCalledWith('get_dropbox_access_token', {
+                clientId: 'dropbox-app-key',
+                credentialHandle: 'opaque-candidate-handle',
+                forceRefresh: false,
+            });
+            expect(invokeMock).toHaveBeenCalledWith('get_dropbox_access_token', {
+                clientId: 'dropbox-app-key',
+                credentialHandle: 'opaque-candidate-handle',
+                forceRefresh: true,
+            });
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
     it('falls back to browser fetch when native Dropbox download returns an empty body', async () => {
         const syncServiceModule = await syncServiceModulePromise;
         const dropboxRemoteData: AppData = {
@@ -1138,7 +1559,6 @@ describe('desktop sync-service runtime', () => {
         });
         const originalFetch = globalThis.fetch;
 
-        localStorage.setItem('mindwtr-cloud-provider', 'dropbox');
         globalThis.fetch = browserFetchMock as unknown as typeof fetch;
         storeStateRef.current = {
             ...storeStateRef.current,
@@ -1151,6 +1571,8 @@ describe('desktop sync-service runtime', () => {
 
         invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
             if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_sync_cloud_provider') return 'dropbox';
+            if (command === 'get_dropbox_access_token') return 'dropbox-token';
             if (command === 'create_data_snapshot') return undefined;
             if (command === 'get_data') return structuredClone(localDropboxData);
             if (command === 'save_data') return undefined;
@@ -1160,7 +1582,6 @@ describe('desktop sync-service runtime', () => {
             getTauriFetch: async () => nativeFetchMock as unknown as typeof fetch,
         });
         vi.spyOn(syncServiceModule.SyncService, 'getDropboxAppKey').mockResolvedValue('dropbox-app-key');
-        vi.spyOn(syncServiceModule.SyncService, 'getDropboxAccessToken').mockResolvedValue('dropbox-token');
         performSyncCycleMock.mockImplementation(async (io: {
             readLocal: () => Promise<AppData>;
             readRemote: () => Promise<AppData | null>;
@@ -1194,7 +1615,6 @@ describe('desktop sync-service runtime', () => {
             });
         } finally {
             globalThis.fetch = originalFetch;
-            localStorage.removeItem('mindwtr-cloud-provider');
             vi.restoreAllMocks();
         }
     });

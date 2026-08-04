@@ -196,6 +196,49 @@ describe('SearchScreen task results', () => {
         expect(resultList.props.data.map((result: any) => result.item.id)).toEqual(['task-1']);
     });
 
+    it('refreshes hidden-future results at midnight and at an explicit start time', () => {
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(new Date('2026-04-16T23:59:30'));
+            routeParams.q = '';
+            storeState._allTasks = [
+                makeTask('tomorrow-date', 'Tomorrow date task', { startTime: '2026-04-17' }),
+                makeTask('tomorrow-time', 'Tomorrow timed task', { startTime: '2026-04-17T00:01' }),
+            ];
+
+            let tree!: ReturnType<typeof create>;
+            act(() => {
+                tree = create(<SearchScreen />);
+            });
+            const filterButton = tree.root
+                .findAllByType(TouchableOpacity)
+                .find((node) => node.props.accessibilityLabel === 'Filters');
+            act(() => {
+                filterButton!.props.onPress();
+            });
+            const hideFutureChip = tree.root.findAllByType(TouchableOpacity).find((node) => (
+                node.findAllByType(Text).some((textNode) => textNode.props.children === 'Hide future tasks')
+            ));
+            act(() => {
+                hideFutureChip!.props.onPress();
+            });
+            const resultIds = () => tree.root.findByType(FlatList).props.data.map((result: any) => result.item.id);
+            expect(resultIds()).toEqual([]);
+
+            act(() => {
+                vi.advanceTimersByTime(30_100);
+            });
+            expect(resultIds()).toEqual(['tomorrow-date']);
+
+            act(() => {
+                vi.advanceTimersByTime(60_100);
+            });
+            expect(resultIds()).toEqual(['tomorrow-date', 'tomorrow-time']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('offers to include hidden done and archived matches instead of hiding them silently', () => {
         storeState._allTasks = [
             makeTask('task-1', 'Launch checklist', { status: 'done' }),

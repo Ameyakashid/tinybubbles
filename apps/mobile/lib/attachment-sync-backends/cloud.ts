@@ -19,6 +19,7 @@ import {
 import { migrateAttachmentsLocallyBeforeSync, uploadCloudFileWithFileSystem } from './common';
 
 export type CloudAttachmentSyncOptions = {
+  activationProbe?: boolean;
   assertCurrent?: () => void;
   signal?: AbortSignal;
 };
@@ -85,6 +86,11 @@ export const syncCloudAttachments = async (
     const nextStatus = getAttachmentLocalStatus(uri, existsLocally);
     if (attachment.localStatus !== nextStatus) {
       attachment.localStatus = nextStatus;
+      didMutate = true;
+    }
+
+    if (options.activationProbe && existsLocally && attachment.cloudKey) {
+      attachment.cloudKey = undefined;
       didMutate = true;
     }
 

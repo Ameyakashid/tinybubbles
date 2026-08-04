@@ -10,13 +10,11 @@ import {
 } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
-  CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
   DEFAULT_CALENDAR_DAY_END_HOUR,
   DEFAULT_CALENDAR_DAY_START_HOUR,
   addCalendarMonths as addCalendarSystemMonths,
   buildCalendarEventTaskDraft,
-  expandCalendarRecurringTasksInRange,
+  expandCalendarRecurringTaskSetInRange,
   formatCalendarTimeInputValue,
   formatI18nTemplate,
   getCalendarPlanningCandidates,
@@ -381,9 +379,16 @@ export function useCalendarViewController() {
   // the "unrelated state change" P19 says must not re-enumerate.
   const externalRangeStartMs = externalCalendarRange.rangeStart.getTime();
   const externalRangeEndMs = externalCalendarRange.rangeEnd.getTime();
+  const recurrenceProjectionDayKey = calendarDateKey(new Date(nowTick));
+  const recurrenceProjectedAtIso = useMemo(
+    () => new Date(nowTick).toISOString(),
+    // A calendar projection changes at a local-day boundary, not on every
+    // minute tick used by the current-time line and planning suggestions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recurrenceProjectionDayKey],
+  );
 
   const visibleTasks = useMemo(() => {
-    const projectedAtIso = new Date(nowTick).toISOString();
     const recurrenceRange = {
       startIso: new Date(externalRangeStartMs).toISOString(),
       endIso: new Date(externalRangeEndMs).toISOString(),
@@ -393,18 +398,12 @@ export function useCalendarViewController() {
     // the scheduled/deadline buckets. Before #955 mobile left them in and showed
     // finished work on its old start/due date while desktop hid it entirely.
     const schedulable = areaVisibleTasks.filter(isSchedulableCalendarTask);
-    const expanded: Task[] = [];
-    let remainingProjectionBudget = CALENDAR_RANGE_PROJECTION_TOTAL_CAP;
-    for (const task of schedulable) {
-      const maxOccurrences = Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, remainingProjectionBudget);
-      const taskOccurrences = maxOccurrences > 0
-        ? expandCalendarRecurringTasksInRange(task, recurrenceRange, projectedAtIso, maxOccurrences)
-        : [task];
-      remainingProjectionBudget -= Math.max(0, taskOccurrences.length - 1);
-      expanded.push(...taskOccurrences);
-    }
-    return expanded;
-  }, [areaVisibleTasks, externalRangeStartMs, externalRangeEndMs, nowTick]);
+    return expandCalendarRecurringTaskSetInRange(
+      schedulable,
+      recurrenceRange,
+      recurrenceProjectedAtIso,
+    );
+  }, [areaVisibleTasks, externalRangeStartMs, externalRangeEndMs, recurrenceProjectedAtIso]);
 
   const completedTasksByDate = useMemo(() => {
     const map = new Map<string, Task[]>();

@@ -841,10 +841,64 @@ function projectStrictIsoFrom(
     weekStart?: RecurrenceWeekday,
     anchorDay?: number
 ): ProjectedIsoResult {
-    let nextIso = nextIsoFrom(baseIso, rule, projectionBase, byDay, interval, byMonthDay, weekStart, undefined, anchorDay);
+    const parsedBase = safeParseDate(baseIso);
+    const safeInterval = interval > 0 ? interval : 1;
+    const hasComplexCalendarRule = Boolean(byDay?.length) || Boolean(byMonthDay?.length);
+    let skippedSteps = 0;
+    let fastForwardedBaseIso = baseIso;
+
+    // Simple interval rules can jump close to the requested projection boundary
+    // without enumerating every occurrence since the series anchor. Use calendar
+    // units rather than elapsed milliseconds so date-only values and local wall
+    // times keep their DST behavior. Leave one step of headroom and finish with
+    // the canonical nextIsoFrom loop below; that makes month-end clamps and exact
+    // boundary inclusion identical to the iterative path.
+    if (parsedBase && parsedBase < projectionBase && !hasComplexCalendarRule) {
+        const calendarDayNumber = (date: Date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+        const calendarDayDelta = Math.max(0, calendarDayNumber(projectionBase) - calendarDayNumber(parsedBase));
+        const calendarMonthDelta = Math.max(
+            0,
+            (projectionBase.getFullYear() - parsedBase.getFullYear()) * 12
+                + projectionBase.getMonth() - parsedBase.getMonth(),
+        );
+        const calendarYearDelta = Math.max(0, projectionBase.getFullYear() - parsedBase.getFullYear());
+        const estimatedSteps = rule === 'daily'
+            ? Math.floor(calendarDayDelta / safeInterval)
+            : rule === 'weekly'
+                ? Math.floor(calendarDayDelta / (safeInterval * 7))
+                : rule === 'monthly'
+                    ? Math.floor(calendarMonthDelta / safeInterval)
+                    : Math.floor(calendarYearDelta / safeInterval);
+        skippedSteps = Math.max(0, estimatedSteps - 1);
+        if (skippedSteps > 0) {
+            fastForwardedBaseIso = nextIsoFrom(
+                baseIso,
+                rule,
+                projectionBase,
+                undefined,
+                safeInterval * skippedSteps,
+                undefined,
+                weekStart,
+                undefined,
+                anchorDay,
+            );
+        }
+    }
+
+    let nextIso = nextIsoFrom(
+        fastForwardedBaseIso,
+        rule,
+        projectionBase,
+        byDay,
+        safeInterval,
+        byMonthDay,
+        weekStart,
+        undefined,
+        anchorDay,
+    );
     if (!nextIso) return { iso: undefined, steps: 0 };
 
-    let steps = 1;
+    let steps = skippedSteps + 1;
     for (let guard = 0; guard < 1000; guard += 1) {
         const parsedNext = safeParseDate(nextIso);
         if (!parsedNext || parsedNext > projectionBase) break;
@@ -854,6 +908,189 @@ function projectStrictIsoFrom(
         steps += 1;
     }
     return { iso: nextIso, steps };
+}
+
+function projectFluidIsoFrom(
+    baseIso: string,
+    rule: RecurrenceRule,
+    projectedAtIso: string,
+    projectionBase: Date,
+    catchUpBase: Date | undefined,
+    byDay?: RecurrenceByDay[],
+    interval: number = 1,
+    byMonthDay?: number[],
+    weekStart?: RecurrenceWeekday,
+): ProjectedIsoResult {
+    // Fluid recurrence remains anchored to the completion/projection instant for
+    // its first occurrence. Catch-up only begins after that canonical first step,
+    // so opening a distant calendar range cannot change repeat-after-completion
+    // semantics.
+    const fieldBaseDate = safeParseDate(baseIso);
+    const fieldIsFuture = Boolean(fieldBaseDate && fieldBaseDate.getTime() > projectionBase.getTime());
+    const fluidBaseIso = fieldIsFuture ? baseIso : projectedAtIso;
+    const fluidFallbackBase = fieldIsFuture && fieldBaseDate ? fieldBaseDate : projectionBase;
+    let nextIso = preserveDateOnlyFormat(
+        nextFluidIsoFrom(fluidBaseIso, rule, fluidFallbackBase, byDay, interval, byMonthDay, weekStart),
+        baseIso,
+    );
+    if (!nextIso) return emptyProjectedIsoResult();
+
+    let steps = 1;
+    let parsedNext = safeParseDate(nextIso);
+    if (!catchUpBase || !parsedNext || parsedNext > catchUpBase) {
+        return { iso: nextIso, steps };
+    }
+
+    const safeInterval = interval > 0 ? interval : 1;
+    const canFastForwardByCalendarDays = (rule === 'daily' || rule === 'weekly')
+        && !byDay?.length
+        && !byMonthDay?.length;
+    if (canFastForwardByCalendarDays) {
+        const calendarDayNumber = (date: Date) => (
+            Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
+        );
+        const calendarDayDelta = Math.max(
+            0,
+            calendarDayNumber(catchUpBase) - calendarDayNumber(parsedNext),
+        );
+        const recurrenceDays = safeInterval * (rule === 'weekly' ? 7 : 1);
+        const skippedSteps = Math.max(0, Math.floor(calendarDayDelta / recurrenceDays) - 1);
+        if (skippedSteps > 0) {
+            nextIso = preserveDateOnlyFormat(
+                nextIsoFrom(
+                    nextIso,
+                    rule,
+                    catchUpBase,
+                    undefined,
+                    safeInterval * skippedSteps,
+                    undefined,
+                    weekStart,
+                ),
+                baseIso,
+            );
+            steps += skippedSteps;
+            parsedNext = safeParseDate(nextIso);
+        }
+    }
+
+    // Month-end fluid rules intentionally drift after a clamp, and BYDAY /
+    // BYMONTHDAY rules have their own interval semantics. Finish those cases by
+    // canonical stepping rather than replacing them with anchor-based math. The
+    // outer range loop can continue catch-up if this defensive bound is reached.
+    for (let guard = 0; guard < 1000 && parsedNext && parsedNext <= catchUpBase; guard += 1) {
+        const followingIso = preserveDateOnlyFormat(
+            nextFluidIsoFrom(nextIso, rule, parsedNext, byDay, safeInterval, byMonthDay, weekStart),
+            baseIso,
+        );
+        if (!followingIso || followingIso === nextIso) break;
+        nextIso = followingIso;
+        parsedNext = safeParseDate(nextIso);
+        steps += 1;
+    }
+
+    return { iso: nextIso, steps };
+}
+
+function advanceStrictIsoBySteps(
+    baseIso: string,
+    steps: number,
+    rule: RecurrenceRule,
+    fallbackBase: Date,
+    byDay?: RecurrenceByDay[],
+    interval: number = 1,
+    byMonthDay?: number[],
+    weekStart?: RecurrenceWeekday,
+    anchorDay?: number,
+): string | undefined {
+    if (steps <= 0) return baseIso;
+    const safeInterval = interval > 0 ? interval : 1;
+    const hasComplexCalendarRule = Boolean(byDay?.length) || Boolean(byMonthDay?.length);
+    if (!hasComplexCalendarRule) {
+        return nextIsoFrom(
+            baseIso,
+            rule,
+            fallbackBase,
+            undefined,
+            safeInterval * steps,
+            undefined,
+            weekStart,
+            undefined,
+            anchorDay,
+        );
+    }
+
+    let nextIso = baseIso;
+    for (let step = 0; step < steps; step += 1) {
+        const stepBase = safeParseDate(nextIso) ?? fallbackBase;
+        const followingIso = nextIsoFrom(
+            nextIso,
+            rule,
+            stepBase,
+            byDay,
+            safeInterval,
+            byMonthDay,
+            weekStart,
+            undefined,
+            anchorDay,
+        );
+        if (!followingIso || followingIso === nextIso) return undefined;
+        nextIso = followingIso;
+    }
+    return nextIso;
+}
+
+function advanceFluidIsoBySteps(
+    baseIso: string,
+    steps: number,
+    rule: RecurrenceRule,
+    projectedAtIso: string,
+    projectionBase: Date,
+    byDay?: RecurrenceByDay[],
+    interval: number = 1,
+    byMonthDay?: number[],
+    weekStart?: RecurrenceWeekday,
+): string | undefined {
+    if (steps <= 0) return baseIso;
+    const fieldBaseDate = safeParseDate(baseIso);
+    const fieldIsFuture = Boolean(fieldBaseDate && fieldBaseDate.getTime() > projectionBase.getTime());
+    const fluidBaseIso = fieldIsFuture ? baseIso : projectedAtIso;
+    const fluidFallbackBase = fieldIsFuture && fieldBaseDate ? fieldBaseDate : projectionBase;
+    let nextIso = preserveDateOnlyFormat(
+        nextFluidIsoFrom(fluidBaseIso, rule, fluidFallbackBase, byDay, interval, byMonthDay, weekStart),
+        baseIso,
+    );
+    if (!nextIso || steps === 1) return nextIso;
+
+    const safeInterval = interval > 0 ? interval : 1;
+    const remainingSteps = steps - 1;
+    const canFastForwardByCalendarDays = (rule === 'daily' || rule === 'weekly')
+        && !byDay?.length
+        && !byMonthDay?.length;
+    if (canFastForwardByCalendarDays) {
+        return preserveDateOnlyFormat(
+            nextIsoFrom(
+                nextIso,
+                rule,
+                safeParseDate(nextIso) ?? projectionBase,
+                undefined,
+                safeInterval * remainingSteps,
+                undefined,
+                weekStart,
+            ),
+            baseIso,
+        );
+    }
+
+    for (let step = 0; step < remainingSteps; step += 1) {
+        const stepBase = safeParseDate(nextIso) ?? projectionBase;
+        const followingIso = preserveDateOnlyFormat(
+            nextFluidIsoFrom(nextIso, rule, stepBase, byDay, safeInterval, byMonthDay, weekStart),
+            baseIso,
+        );
+        if (!followingIso || followingIso === nextIso) return undefined;
+        nextIso = followingIso;
+    }
+    return nextIso;
 }
 
 function projectUnscheduledMonthlyStart(
@@ -918,7 +1155,8 @@ function projectNextRecurringOccurrenceFields(
     rule: RecurrenceRule,
     projectedAtIso: string,
     projectionBase: Date,
-    anchors: ProjectedOccurrenceAnchors
+    anchors: ProjectedOccurrenceAnchors,
+    fluidCatchUpBase?: Date,
 ): ProjectedOccurrenceFields | null {
     const strategy = getRecurrenceStrategy(task.recurrence);
     const byDay = getRecurrenceByDay(task.recurrence);
@@ -926,42 +1164,87 @@ function projectNextRecurringOccurrenceFields(
     const interval = getRecurrenceInterval(task.recurrence);
     const weekStart = getRecurrenceWeekStart(task.recurrence);
 
-    const projectField = (field: 'startTime' | 'dueDate' | 'reviewAt'): ProjectedIsoResult => {
+    type ScheduleField = 'startTime' | 'dueDate' | 'reviewAt';
+    const projectField = (field: ScheduleField): ProjectedIsoResult => {
         const baseIso = baseTask[field];
         if (!baseIso) return { iso: undefined, steps: 0 };
         if (strategy === 'fluid') {
-            // Fluid has no series anchor: the base is normally "now" (the spawn
-            // date if the current occurrence were completed on time). But when
-            // the field's own date is still in the future, projecting from now
-            // would land on or before that date and duplicate it on the
-            // calendar (#900) instead of showing the occurrence after it. Use
-            // the later of the field's own date and now as the base, per field.
-            const fieldBaseDate = safeParseDate(baseIso);
-            const fieldIsFuture = !!fieldBaseDate && fieldBaseDate.getTime() > projectionBase.getTime();
-            const fluidBaseIso = fieldIsFuture ? baseIso : projectedAtIso;
-            const fluidFallbackBase = fieldIsFuture ? fieldBaseDate : projectionBase;
-            return {
-                iso: preserveDateOnlyFormat(
-                    nextFluidIsoFrom(fluidBaseIso, rule, fluidFallbackBase, byDay, interval, byMonthDay, weekStart),
-                    baseIso
-                ),
-                steps: 1,
-            };
+            return projectFluidIsoFrom(
+                baseIso,
+                rule,
+                projectedAtIso,
+                projectionBase,
+                fluidCatchUpBase,
+                byDay,
+                interval,
+                byMonthDay,
+                weekStart,
+            );
         }
         return projectStrictIsoFrom(baseIso, rule, projectionBase, byDay, interval, byMonthDay, weekStart, anchors[field]);
     };
 
-    const hasScheduleFields = Boolean(baseTask.startTime || baseTask.dueDate || baseTask.reviewAt);
-    const nextStart = baseTask.startTime || hasScheduleFields
-        ? projectField('startTime')
-        : projectUnscheduledMonthlyStart(rule, projectionBase, byDay, interval, byMonthDay, weekStart);
-    const nextDue = projectField('dueDate');
-    const nextReview = projectField('reviewAt');
-    const steps = Math.max(nextStart.steps, nextDue.steps, nextReview.steps);
-    if (!nextStart.iso && !nextDue.iso && !nextReview.iso) return null;
-    if (!nextStart.iso && !nextDue.iso) return null;
+    const advanceFieldBySteps = (field: ScheduleField, steps: number): string | undefined => {
+        const baseIso = baseTask[field];
+        if (!baseIso) return undefined;
+        return strategy === 'fluid'
+            ? advanceFluidIsoBySteps(
+                baseIso,
+                steps,
+                rule,
+                projectedAtIso,
+                projectionBase,
+                byDay,
+                interval,
+                byMonthDay,
+                weekStart,
+            )
+            : advanceStrictIsoBySteps(
+                baseIso,
+                steps,
+                rule,
+                projectionBase,
+                byDay,
+                interval,
+                byMonthDay,
+                weekStart,
+                anchors[field],
+            );
+    };
 
-    return { startTime: nextStart.iso, dueDate: nextDue.iso, reviewAt: nextReview.iso, steps };
+    const hasScheduleFields = Boolean(baseTask.startTime || baseTask.dueDate || baseTask.reviewAt);
+    if (!hasScheduleFields) {
+        const nextStart = projectUnscheduledMonthlyStart(
+            rule,
+            projectionBase,
+            byDay,
+            interval,
+            byMonthDay,
+            weekStart,
+        );
+        return nextStart.iso
+            ? { startTime: nextStart.iso, dueDate: undefined, reviewAt: undefined, steps: nextStart.steps }
+            : null;
+    }
+
+    const anchorField = (['dueDate', 'startTime', 'reviewAt'] as const)
+        .find((field) => Boolean(baseTask[field]));
+    if (!anchorField) return null;
+    const anchorProjection = projectField(anchorField);
+    if (!anchorProjection.iso || anchorProjection.steps <= 0) return null;
+    const steps = anchorProjection.steps;
+    const projectedField = (field: ScheduleField): string | undefined => (
+        field === anchorField ? anchorProjection.iso : advanceFieldBySteps(field, steps)
+    );
+    let nextStartIso = projectedField('startTime');
+    const nextDueIso = projectedField('dueDate');
+    const nextReviewIso = projectedField('reviewAt');
+    if (task.relativeStartOffset && nextDueIso) {
+        nextStartIso = computeRelativeStartTime(nextDueIso, task.relativeStartOffset) ?? nextStartIso;
+    }
+    if (!nextStartIso && !nextDueIso) return null;
+
+    return { startTime: nextStartIso, dueDate: nextDueIso, reviewAt: nextReviewIso, steps };
 }
 
 /**
@@ -1145,6 +1428,15 @@ export function expandCalendarRecurringTasksInRange(
     const until = getRecurrenceUntilValue(task.recurrence);
     const baseCompletedOccurrences = getRecurrenceCompletedOccurrencesValue(task.recurrence) ?? 0;
     const projectionBase = getProjectionBaseDate(projectedAtIso);
+    // Catch up to the instant immediately before the visible range. Strict
+    // recurrence can use it directly because the original task remains its
+    // anchor. Fluid recurrence keeps projectionBase as its completion anchor and
+    // receives the same boundary separately, after its first canonical step.
+    const catchUpBase = Number.isFinite(rangeStartMs) && rangeStartMs > projectionBase.getTime()
+        ? new Date(rangeStartMs - 1)
+        : undefined;
+    const strategy = getRecurrenceStrategy(task.recurrence);
+    const rangeProjectionBase = strategy === 'strict' && catchUpBase ? catchUpBase : projectionBase;
     const anchors = resolveProjectedOccurrenceAnchors(task, currentTask);
 
     const results: Task[] = [currentTask];
@@ -1154,7 +1446,15 @@ export function expandCalendarRecurringTasksInRange(
     const cap = Math.max(0, Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, maxOccurrences));
 
     for (let iteration = 0; iteration < MAX_RANGE_PROJECTION_ITERATIONS && pushedCount < cap; iteration += 1) {
-        const fields = projectNextRecurringOccurrenceFields(task, baseTask, rule, projectedAtIso, projectionBase, anchors);
+        const fields = projectNextRecurringOccurrenceFields(
+            task,
+            baseTask,
+            rule,
+            projectedAtIso,
+            rangeProjectionBase,
+            anchors,
+            strategy === 'fluid' ? catchUpBase : undefined,
+        );
         if (!fields) break;
         stepsSoFar += fields.steps;
         if (count && baseCompletedOccurrences + stepsSoFar >= count) break;
@@ -1191,6 +1491,122 @@ export function expandCalendarRecurringTasksInRange(
     }
 
     return results;
+}
+
+/**
+ * Expand one calendar render's task set while sharing the total projection
+ * budget fairly across recurring series. Source tasks never consume the budget.
+ * Every eligible series gets an equal tranche before any series receives the
+ * remainder, so store iteration order cannot let an early daily series starve
+ * every later one.
+ */
+export function expandCalendarRecurringTaskSetInRange(
+    tasks: readonly Task[],
+    range: CalendarRecurrenceRange,
+    projectedAtIso: string = new Date().toISOString(),
+    totalProjectionCap: number = CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
+): Task[] {
+    const projectionCandidates = tasks.filter((task) => (
+        task.showFutureRecurrence === true
+        && !isProjectedRecurringTask(task)
+        && !task.deletedAt
+        && isTaskActionable(task)
+        && Boolean(getRecurrenceRule(task.recurrence))
+    ));
+    const candidateCount = projectionCandidates.length;
+    if (candidateCount === 0) return [...tasks];
+
+    const boundedTotalCap = Math.max(0, Math.floor(totalProjectionCap));
+    const perTaskCap = Math.min(CALENDAR_RANGE_PROJECTION_PER_TASK_CAP, boundedTotalCap);
+    const baseShare = Math.min(
+        perTaskCap,
+        Math.floor(boundedTotalCap / candidateCount),
+    );
+    let remainder = boundedTotalCap - baseShare * candidateCount;
+    const allocationByTaskId = new Map<string, number>();
+    const expansionByTaskId = new Map<string, Task[]>();
+    const activeTaskIds = new Set(projectionCandidates.map((task) => task.id));
+    const candidateOrder = new Map(projectionCandidates.map((task, index) => [task.id, index]));
+
+    for (const task of projectionCandidates) {
+        const extra = baseShare < perTaskCap && remainder > 0 ? 1 : 0;
+        allocationByTaskId.set(task.id, baseShare + extra);
+        remainder -= extra;
+    }
+
+    const expandAllocatedTasks = (allocatedTasks: readonly Task[]): void => {
+        for (const task of allocatedTasks) {
+            const allocation = allocationByTaskId.get(task.id) ?? 0;
+            if (allocation === 0) {
+                expansionByTaskId.set(task.id, [task]);
+                continue;
+            }
+            const expansion = expandCalendarRecurringTasksInRange(
+                task,
+                range,
+                projectedAtIso,
+                allocation,
+            );
+            expansionByTaskId.set(task.id, expansion);
+            const emitted = Math.max(0, expansion.length - 1);
+            if (emitted < allocation || allocation >= perTaskCap) {
+                activeTaskIds.delete(task.id);
+            }
+        }
+    };
+
+    expandAllocatedTasks(projectionCandidates);
+
+    const projectedCount = (): number => Array.from(expansionByTaskId.values())
+        .reduce((total, expansion) => total + Math.max(0, expansion.length - 1), 0);
+
+    // A nominal series can be exhausted by COUNT/UNTIL or simply have no
+    // occurrence in this range. Reallocate its unused share among the series
+    // that filled their tranche. Water-filling the lowest allocation first
+    // keeps the result fair while the 500-occurrence global cap bounds work.
+    remainder = boundedTotalCap - projectedCount();
+    while (remainder > 0 && activeTaskIds.size > 0) {
+        const activeTasks = projectionCandidates
+            .filter((task) => activeTaskIds.has(task.id))
+            .sort((left, right) => (
+                (allocationByTaskId.get(left.id) ?? 0) - (allocationByTaskId.get(right.id) ?? 0)
+                || (candidateOrder.get(left.id) ?? 0) - (candidateOrder.get(right.id) ?? 0)
+            ));
+        const minimumAllocation = allocationByTaskId.get(activeTasks[0]!.id) ?? 0;
+        const lowest = activeTasks.filter((task) => (
+            (allocationByTaskId.get(task.id) ?? 0) === minimumAllocation
+        ));
+        const nextAllocation = activeTasks.find((task) => (
+            (allocationByTaskId.get(task.id) ?? 0) > minimumAllocation
+        ));
+        const nextLevel = Math.min(
+            perTaskCap,
+            nextAllocation ? allocationByTaskId.get(nextAllocation.id) ?? perTaskCap : perTaskCap,
+        );
+        const fullLevelIncrease = Math.min(
+            nextLevel - minimumAllocation,
+            Math.floor(remainder / lowest.length),
+        );
+        const changed: Task[] = [];
+
+        if (fullLevelIncrease > 0) {
+            for (const task of lowest) {
+                allocationByTaskId.set(task.id, minimumAllocation + fullLevelIncrease);
+                changed.push(task);
+            }
+        } else {
+            for (const task of lowest.slice(0, remainder)) {
+                allocationByTaskId.set(task.id, minimumAllocation + 1);
+                changed.push(task);
+            }
+        }
+        if (changed.length === 0) break;
+
+        expandAllocatedTasks(changed);
+        remainder = boundedTotalCap - projectedCount();
+    }
+
+    return tasks.flatMap((task) => expansionByTaskId.get(task.id) ?? [task]);
 }
 
 /**

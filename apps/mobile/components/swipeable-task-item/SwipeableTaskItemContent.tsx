@@ -8,6 +8,7 @@ import {
     getTaskAgeLabel,
     getTaskDateCoherenceIssues,
     getTaskUrgency,
+    formatI18nTemplate,
     formatTimeEstimateLabel,
     formatTimeSpentLabel,
     hasTimeComponent,
@@ -225,7 +226,10 @@ export function SwipeableTaskItemContent({
             renderMetaItem({
                 key: 'project',
                 onPress: canNavigateMeta && onProjectPress ? () => onProjectPress(project.id) : undefined,
-                accessibilityLabel: `Open project ${project.title}`,
+                accessibilityLabel: formatI18nTemplate(
+                    tFallback(t, 'task.aria.openProject', 'Open project {name}'),
+                    { name: project.title },
+                ),
                 children: (
                     <>
                         <View style={[styles.projectDot, { backgroundColor: projectColor || tc.tint }]} />
@@ -262,7 +266,10 @@ export function SwipeableTaskItemContent({
             renderMetaItem({
                 key: 'context',
                 onPress: canNavigateMeta && onContextPress ? () => onContextPress(context) : undefined,
-                accessibilityLabel: `Open context ${context}`,
+                accessibilityLabel: formatI18nTemplate(
+                    tFallback(t, 'task.aria.openContext', 'Open context {name}'),
+                    { name: context },
+                ),
                 children: (
                     <>
                         <CompactText
@@ -288,7 +295,10 @@ export function SwipeableTaskItemContent({
             renderMetaItem({
                 key: 'tag',
                 onPress: canNavigateMeta && onTagPress ? () => onTagPress(tag) : undefined,
-                accessibilityLabel: `Open tag ${tag}`,
+                accessibilityLabel: formatI18nTemplate(
+                    tFallback(t, 'task.aria.openTag', 'Open tag {name}'),
+                    { name: tag },
+                ),
                 children: (
                     <>
                         <CompactText
@@ -458,7 +468,12 @@ export function SwipeableTaskItemContent({
             accessibilityLabel={accessibilityLabel}
             accessibilityHint={accessibilityHint}
             accessibilityRole="button"
-            accessibilityState={interactionDisabled ? { disabled: true } : undefined}
+            accessibilityState={interactionDisabled || selectionMode
+                ? {
+                    ...(interactionDisabled ? { disabled: true } : {}),
+                    ...(selectionMode ? { selected: isMultiSelected } : {}),
+                }
+                : undefined}
             accessibilityActions={accessibilityActions}
             onAccessibilityAction={onAccessibilityAction}
         >
@@ -567,8 +582,15 @@ export function SwipeableTaskItemContent({
                                 { backgroundColor: statusColors.bg, borderColor: statusColors.border },
                             ]
                     }
-                    accessibilityLabel={`Change status. Current status: ${task.status}`}
-                    accessibilityHint="Double tap to open status menu"
+                    accessibilityLabel={formatI18nTemplate(
+                        tFallback(t, 'task.aria.changeStatus', 'Change status. Current status: {status}'),
+                        { status: t(`status.${task.status}`) },
+                    )}
+                    accessibilityHint={tFallback(
+                        t,
+                        'task.aria.changeStatusHint',
+                        'Double-tap to open status menu',
+                    )}
                     accessibilityRole="button"
                 >
                     {statusBadgeAsIcon ? (

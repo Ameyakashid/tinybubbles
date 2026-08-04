@@ -105,6 +105,57 @@ describe('runAttachmentTransferLifecycle', () => {
         expect(didMutate).toBe(false);
     });
 
+    it('can force a local file to be uploaded to a newly activated backend', async () => {
+        const attachment = makeAttachment({
+            cloudKey: 'attachments/from-previous-backend.txt',
+            localStatus: 'available',
+        });
+        const onUpload = vi.fn(async (item: Attachment) => {
+            // The previous backend key must not survive a failed candidate
+            // upload and masquerade as proof that the candidate has the blob.
+            expect(item.cloudKey).toBeUndefined();
+            item.cloudKey = 'attachments/on-candidate-backend.txt';
+            return true;
+        });
+
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[attachment.id, attachment]]),
+            localFileExists: vi.fn(async () => true),
+            forceUploadExistingLocal: true,
+            onUpload,
+            onUploadError: vi.fn(),
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+        });
+
+        expect(didMutate).toBe(true);
+        expect(onUpload).toHaveBeenCalledWith(attachment, '/local/file.txt');
+        expect(attachment.cloudKey).toBe('attachments/on-candidate-backend.txt');
+    });
+
+    it('does not retain the previous backend key when a forced candidate upload fails', async () => {
+        const attachment = makeAttachment({
+            cloudKey: 'attachments/from-previous-backend.txt',
+            localStatus: 'available',
+        });
+        const uploadError = new Error('candidate upload failed');
+        const onUploadError = vi.fn();
+
+        const didMutate = await runAttachmentTransferLifecycle({
+            attachmentsById: new Map([[attachment.id, attachment]]),
+            localFileExists: vi.fn(async () => true),
+            forceUploadExistingLocal: true,
+            onUpload: vi.fn(async () => { throw uploadError; }),
+            onUploadError,
+            onDownload: vi.fn(),
+            onDownloadError: vi.fn(),
+        });
+
+        expect(didMutate).toBe(true);
+        expect(attachment.cloudKey).toBeUndefined();
+        expect(onUploadError).toHaveBeenCalledWith(attachment, uploadError);
+    });
+
     it('routes transfer errors to the operation-specific error callbacks', async () => {
         const uploadAttachment = makeAttachment({ id: 'upload', uri: '/local/upload.txt' });
         const downloadAttachment = makeAttachment({ id: 'download', uri: '/local/missing.txt', cloudKey: 'attachments/download.txt' });

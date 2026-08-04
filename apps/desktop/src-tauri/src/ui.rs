@@ -375,9 +375,7 @@ pub(crate) fn quit_app(app: tauri::AppHandle) {
     // when the exit works, so a clean quit stays silent.
     let watchdog_app = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(
-            QUIT_WATCHDOG_SECONDS,
-        ));
+        std::thread::sleep(std::time::Duration::from_secs(QUIT_WATCHDOG_SECONDS));
         crate::logging::append_native_log_line(
             &watchdog_app,
             "Close trace: still running after app.exit(0); the exit did not terminate the process",
@@ -401,7 +399,10 @@ pub(crate) fn set_tray_visible(app: tauri::AppHandle, visible: bool) -> Result<(
 /// so the call would just error on every Focus change. The frontend still sends
 /// the update rather than branching per platform.
 #[tauri::command]
-pub(crate) fn set_tray_tooltip(app: tauri::AppHandle, tooltip: Option<String>) -> Result<(), String> {
+pub(crate) fn set_tray_tooltip(
+    app: tauri::AppHandle,
+    tooltip: Option<String>,
+) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         let _ = (&app, &tooltip);
@@ -412,7 +413,8 @@ pub(crate) fn set_tray_tooltip(app: tauri::AppHandle, tooltip: Option<String>) -
         let Some(tray) = app.tray_by_id("main") else {
             return Ok(());
         };
-        tray.set_tooltip(tooltip.as_deref()).map_err(|e| e.to_string())
+        tray.set_tooltip(tooltip.as_deref())
+            .map_err(|e| e.to_string())
     }
 }
 

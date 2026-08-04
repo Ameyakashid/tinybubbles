@@ -125,7 +125,11 @@ const flushPendingCloudKitDeletes = async (appData: AppData, signal?: AbortSigna
     return true;
 };
 
-export const syncCloudKitAttachments = async (appData: AppData, signal?: AbortSignal): Promise<boolean> => {
+export const syncCloudKitAttachments = async (
+    appData: AppData,
+    signal?: AbortSignal,
+    options: { activationProbe?: boolean } = {},
+): Promise<boolean> => {
     assertAttachmentSyncNotAborted(signal);
     const attachmentsDir = await getAttachmentsDir();
     if (!attachmentsDir) return false;
@@ -145,6 +149,7 @@ export const syncCloudKitAttachments = async (appData: AppData, signal?: AbortSi
     const syncMutated = await runMobileAttachmentLifecycle({
         attachmentsById,
         localFileExists: fileExists,
+        forceUploadExistingLocal: options.activationProbe === true,
         isFatalError: (error) => isAttachmentSyncAbortError(error, signal),
         // A cloudKey written by a different backend before a provider switch isn't a valid
         // CloudKit record key, so CloudKit must still treat the attachment as needing upload.

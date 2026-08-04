@@ -251,6 +251,29 @@ jobs:
         timeout-minutes: 20
         run: cd apps/desktop && bunx tauri build --debug --no-bundle
 
+  # Exercise cfg(windows) persistence and recovery branches with native tests.
+  desktop-native-windows:
+    runs-on: windows-2022
+    name: Desktop Native (Windows)
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Ensure Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Run Windows native tests
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+
   # Mobile app validation
   mobile:
     runs-on: ubuntu-latest

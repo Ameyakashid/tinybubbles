@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppData } from '@mindwtr/core';
+import { Directory } from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import { Platform } from 'react-native';
+
+import { pickAndParseSyncFolder, readSyncFile, writeSyncFile } from './storage-file';
 
 const fileSystemMock = vi.hoisted(() => {
   let storedText = '';
@@ -133,8 +138,6 @@ describe('storage-file sync writes', () => {
     const next = JSON.stringify(nextData, null, 2);
     fileSystemMock.__setStoredText(previous);
 
-    const { writeSyncFile } = await import('./storage-file');
-
     await writeSyncFile(syncFileUri, nextData);
 
     const written = fileSystemMock.StorageAccessFramework.writeAsStringAsync.mock.calls[0]?.[1] as string;
@@ -148,26 +151,22 @@ describe('storage-file sync writes', () => {
 });
 
 describe('iOS sync file bookmarks', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     fileSystemMock.__setStoredText('');
     expoFilesMock.clear();
     bookmarkMocks.supportsBookmarkedSyncFileIO.mockReturnValue(false);
     bookmarkMocks.createSyncPathBookmark.mockResolvedValue(null);
-    const { Platform } = await import('react-native');
     (Platform as { OS: string }).OS = 'ios';
   });
 
-  afterEach(async () => {
-    const { Platform } = await import('react-native');
+  afterEach(() => {
     (Platform as { OS: string }).OS = 'android';
   });
 
   it('creates a bookmark when falling back to picking an existing sync file', async () => {
-    const { Directory } = await import('expo-file-system');
     (Directory as unknown as { pickDirectoryAsync: ReturnType<typeof vi.fn> })
       .pickDirectoryAsync.mockRejectedValue(new Error('Operation was canceled'));
-    const DocumentPicker = await import('expo-document-picker');
     (DocumentPicker.getDocumentAsync as ReturnType<typeof vi.fn>).mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///gdrive/Mindwtr/backup.json' }],
@@ -175,7 +174,6 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.createSyncPathBookmark.mockResolvedValue('bm-token');
     expoFilesMock.set('file:///gdrive/Mindwtr/backup.json', JSON.stringify(appData({})));
 
-    const { pickAndParseSyncFolder } = await import('./storage-file');
     const result = await pickAndParseSyncFolder();
 
     expect(bookmarkMocks.createSyncPathBookmark).toHaveBeenCalledWith('file:///gdrive/Mindwtr/backup.json');
@@ -187,7 +185,6 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.supportsBookmarkedSyncFileIO.mockReturnValue(true);
     bookmarkMocks.writeBookmarkedSyncFileText.mockResolvedValue(undefined);
 
-    const { writeSyncFile } = await import('./storage-file');
     const data = appData({});
     await writeSyncFile('file:///gdrive/Mindwtr/backup.json', data, { bookmark: 'bm-token' });
 
@@ -202,7 +199,6 @@ describe('iOS sync file bookmarks', () => {
     const remote = appData({ weekStart: 'monday' });
     bookmarkMocks.readBookmarkedSyncFileText.mockResolvedValue(JSON.stringify(remote));
 
-    const { readSyncFile } = await import('./storage-file');
     await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
       .resolves.toEqual(remote);
   });
@@ -213,7 +209,6 @@ describe('iOS sync file bookmarks', () => {
     const remote = appData({ weekStart: 'sunday' });
     expoFilesMock.set('file:///gdrive/Mindwtr/backup.json', JSON.stringify(remote));
 
-    const { readSyncFile } = await import('./storage-file');
     await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
       .resolves.toEqual(remote);
   });
@@ -222,7 +217,6 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.supportsBookmarkedSyncFileIO.mockReturnValue(true);
     bookmarkMocks.readBookmarkedSyncFileText.mockRejectedValue(new Error('scope lost'));
 
-    const { readSyncFile } = await import('./storage-file');
     await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
       .resolves.toBeNull();
   });

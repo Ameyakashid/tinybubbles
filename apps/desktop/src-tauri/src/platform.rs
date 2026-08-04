@@ -797,7 +797,10 @@ mod tests {
 
         assert_eq!(size, 16);
         assert_eq!(copied, dest_dir.join("id-1.txt"));
-        assert_eq!(std::fs::read(&copied).expect("read copy"), b"hello attachment");
+        assert_eq!(
+            std::fs::read(&copied).expect("read copy"),
+            b"hello attachment"
+        );
         assert!(source.exists(), "original must stay untouched");
         let leftovers: Vec<_> = std::fs::read_dir(&dest_dir)
             .expect("read dest dir")
@@ -817,7 +820,8 @@ mod tests {
         let too_large = import_attachment_into(&dest_dir, &source, "id.bin", Some(16));
         assert_eq!(too_large.unwrap_err(), ATTACHMENT_IMPORT_TOO_LARGE);
 
-        let missing = import_attachment_into(&dest_dir, &dir.path().join("nope.bin"), "id.bin", None);
+        let missing =
+            import_attachment_into(&dest_dir, &dir.path().join("nope.bin"), "id.bin", None);
         assert!(missing.is_err());
 
         let relative = import_attachment_into(&dest_dir, Path::new("relative.bin"), "id.bin", None);

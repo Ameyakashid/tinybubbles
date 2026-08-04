@@ -39,6 +39,7 @@ import { Search, X, Folder, CheckCircle, ChevronRight, SlidersHorizontal } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
+import { useFutureStartRevealTick, useLocalDayKey } from '@/hooks/use-local-day-key';
 
 const firstSearchParam = (value: string | string[] | undefined): string => {
     if (Array.isArray(value)) return value[0] ?? '';
@@ -88,6 +89,8 @@ export default function SearchScreen() {
     const [scope, setScope] = useState<'all' | 'projects' | 'tasks' | 'project_tasks'>('all');
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const inputRef = useRef<TextInput>(null);
+    const futureStartDayKey = useLocalDayKey(hideFutureTasks);
+    const futureStartRevealTick = useFutureStartRevealTick(_allTasks, hideFutureTasks);
 
     useEffect(() => {
         // Auto-focus after mounting
@@ -145,23 +148,29 @@ export default function SearchScreen() {
         hasActiveFilters,
         hiddenCompletedCount,
     } = useMemo(
-        () => computeGlobalSearchResults({
-            query,
-            tasks: _allTasks,
-            projects,
-            areas,
-            includeCompleted,
-            includeReference,
-            hideFutureTasks,
-            selectedStatuses,
-            selectedArea,
-            selectedTokens,
-            locationQuery,
-            duePreset,
-            scope,
-            weekStart: settings?.weekStart,
-            ftsResults,
-        }),
+        () => {
+            // These clock hooks deliberately invalidate otherwise unchanged
+            // search inputs at midnight and at the next timed start.
+            void futureStartDayKey;
+            void futureStartRevealTick;
+            return computeGlobalSearchResults({
+                query,
+                tasks: _allTasks,
+                projects,
+                areas,
+                includeCompleted,
+                includeReference,
+                hideFutureTasks,
+                selectedStatuses,
+                selectedArea,
+                selectedTokens,
+                locationQuery,
+                duePreset,
+                scope,
+                weekStart: settings?.weekStart,
+                ftsResults,
+            });
+        },
         [
             query,
             _allTasks,
@@ -178,6 +187,8 @@ export default function SearchScreen() {
             scope,
             settings?.weekStart,
             ftsResults,
+            futureStartDayKey,
+            futureStartRevealTick,
         ]
     );
     const editingTask = useMemo<Task | null>(

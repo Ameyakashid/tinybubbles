@@ -8,6 +8,7 @@ const PORTABLE_DATA_DIR_NAME: &str = "data";
 const PORTABLE_WEBVIEW_DIR_NAME: &str = "webview";
 const SEARCH_RESULT_LIMIT: usize = 200;
 const SEARCH_RESULT_QUERY_LIMIT: i64 = (SEARCH_RESULT_LIMIT as i64) + 1;
+const ORPHAN_SECTION_TOMBSTONES_TABLE: &str = "orphan_section_tombstones";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StorageMode {
@@ -135,6 +136,7 @@ pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> 
         .map_err(|e| e.to_string())?;
     conn.execute_batch(SQLITE_SCHEMA)
         .map_err(|e| e.to_string())?;
+    ensure_orphan_section_tombstones_schema(&conn)?;
     ensure_column(&conn, "tasks", "energyLevel", "TEXT")?;
     ensure_column(&conn, "tasks", "assignedTo", "TEXT")?;
     ensure_column(&conn, "tasks", "textDirection", "TEXT")?;
@@ -245,7 +247,14 @@ fn sync_parent_directory(path: &Path) -> Result<(), String> {
 }
 
 fn cleanup_stale_data_json_backup_unlocked(data_path: &Path) -> Result<(), String> {
-    if !cfg!(windows) {
+    cleanup_stale_data_json_backup_for_platform(data_path, cfg!(windows))
+}
+
+fn cleanup_stale_data_json_backup_for_platform(
+    data_path: &Path,
+    use_backup_replacement: bool,
+) -> Result<(), String> {
+    if !use_backup_replacement {
         return Ok(());
     }
     let backup_path = data_json_backup_path(data_path);
@@ -260,6 +269,36 @@ fn cleanup_stale_data_json_backup_unlocked(data_path: &Path) -> Result<(), Strin
     fs::rename(&backup_path, data_path)
         .map_err(|e| format!("Failed to restore data file from backup: {e}"))?;
     Ok(())
+}
+
+fn replace_data_json_with_backup<R, D>(
+    replacement_path: &Path,
+    data_path: &Path,
+    backup_path: &Path,
+    mut rename: R,
+    mut remove: D,
+) -> Result<(), String>
+where
+    R: FnMut(&Path, &Path) -> io::Result<()>,
+    D: FnMut(&Path) -> io::Result<()>,
+{
+    rename(data_path, backup_path).map_err(|e| e.to_string())?;
+    match rename(replacement_path, data_path) {
+        Ok(()) => {
+            let _ = remove(backup_path);
+            Ok(())
+        }
+        Err(rename_error) => {
+            let restore_error = rename(backup_path, data_path).err();
+            match restore_error {
+                Some(error) => Err(format!(
+                    "Failed to replace data file: {rename_error}; original data kept at {} but restore also failed: {error}",
+                    backup_path.display()
+                )),
+                None => Err(format!("Failed to replace data file: {rename_error}")),
+            }
+        }
+    }
 }
 
 fn cleanup_stale_data_json_backup(data_path: &Path) -> Result<(), String> {
@@ -295,24 +334,15 @@ fn write_data_json_file(data_path: &Path, data: &Value) -> Result<(), String> {
     let temp_path = temp_file.into_temp_path();
 
     if cfg!(windows) && data_path.exists() {
-        fs::rename(data_path, &backup_path).map_err(|e| e.to_string())?;
-        match fs::rename(&temp_path, data_path) {
-            Ok(()) => {
-                let _ = fs::remove_file(&backup_path);
-                sync_parent_directory(data_path)?;
-                return Ok(());
-            }
-            Err(rename_err) => {
-                let restore_err = fs::rename(&backup_path, data_path).err();
-                return match restore_err {
-                    Some(error) => Err(format!(
-                        "Failed to replace data file: {rename_err}; original data kept at {} but restore also failed: {error}",
-                        backup_path.display()
-                    )),
-                    None => Err(format!("Failed to replace data file: {rename_err}")),
-                };
-            }
-        }
+        replace_data_json_with_backup(
+            &temp_path,
+            data_path,
+            &backup_path,
+            |from, to| fs::rename(from, to),
+            |path| fs::remove_file(path),
+        )?;
+        sync_parent_directory(data_path)?;
+        return Ok(());
     }
 
     fs::rename(&temp_path, data_path).map_err(|e| e.to_string())?;
@@ -384,9 +414,20 @@ fn sqlite_entity_count(conn: &Connection) -> Result<i64, String> {
     let mut total = 0i64;
     for table in ENTITY_TABLES {
         let count: i64 = conn
-            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
             .map_err(|e| e.to_string())?;
         total += count;
+    }
+    if sqlite_table_exists(conn, ORPHAN_SECTION_TOMBSTONES_TABLE)? {
+        total += conn
+            .query_row(
+                "SELECT COUNT(*) FROM orphan_section_tombstones",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|e| e.to_string())?;
     }
     Ok(total)
 }
@@ -567,6 +608,25 @@ fn ensure_column(
     let statement = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, column_sql);
     conn.execute(&statement, []).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn sqlite_table_exists(conn: &Connection, table: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+        [table],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn ensure_orphan_section_tombstones_schema(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS orphan_section_tombstones (
+            id TEXT PRIMARY KEY,
+            data TEXT NOT NULL
+        )",
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn ensure_sync_revision_columns(conn: &Connection) -> Result<(), String> {
@@ -876,7 +936,21 @@ fn sqlite_has_any_data(conn: &Connection) -> Result<bool, String> {
     let settings_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM settings", [], |row| row.get(0))
         .map_err(|e| e.to_string())?;
-    Ok(task_count > 0 || project_count > 0 || area_count > 0 || settings_count > 0)
+    let orphan_section_count = if sqlite_table_exists(conn, ORPHAN_SECTION_TOMBSTONES_TABLE)? {
+        conn.query_row(
+            "SELECT COUNT(*) FROM orphan_section_tombstones",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+    } else {
+        0
+    };
+    Ok(task_count > 0
+        || project_count > 0
+        || area_count > 0
+        || settings_count > 0
+        || orphan_section_count > 0)
 }
 
 fn ensure_fts_populated(conn: &Connection, force_rebuild: bool) -> Result<(), String> {
@@ -1019,9 +1093,14 @@ fn replace_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
             task.get("projectId").and_then(|v| v.as_str()),
             task.get("sectionId").and_then(|v| v.as_str()),
             task.get("areaId").and_then(|v| v.as_str()),
-            task.get("orderNum")
+            task.get("order")
                 .and_then(|v| v.as_f64())
-                .or_else(|| task.get("order").and_then(|v| v.as_f64())),
+                .filter(|order| order.is_finite())
+                .or_else(|| {
+                    task.get("orderNum")
+                        .and_then(|v| v.as_f64())
+                        .filter(|order| order.is_finite())
+                }),
             task.get("boardOrder").and_then(|v| v.as_f64()),
             task.get("focusOrder").and_then(|v| v.as_f64()),
             task.get("isFocusedToday").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
@@ -1525,69 +1604,244 @@ fn collect_ids(data: &Value, key: &str) -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Nulls project/task container references that don't resolve to a live row
-/// - what `ON DELETE SET NULL` would already have produced had the parent's
-/// deletion actually gone through instead of getting lost before this
-/// snapshot arrived - so a dangling reference in an old JSON snapshot can't
-/// fail the FK-enforced insert below. `sections.projectId` is `NOT NULL` (and
-/// `ON DELETE CASCADE`), so a section with no live project can't be nulled;
-/// it's dropped instead, the same end state CASCADE would have produced.
+fn collect_live_ids(data: &Value, key: &str) -> std::collections::HashSet<String> {
+    data.get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter(|item| !entity_is_deleted(item))
+                .filter_map(|item| item.get("id").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn reference_repair_identity(data: &Value) -> String {
+    data.get("settings")
+        .and_then(|settings| settings.get("deviceId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|device_id| !device_id.is_empty())
+        .unwrap_or("sync-repair")
+        .to_string()
+}
+
+fn reference_repair_timestamp() -> String {
+    OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
+}
+
+fn stamp_reference_repair(entity: &mut Value, now: &str, rev_by: &str, tombstone: bool) {
+    let next_revision = entity_revision(entity).saturating_add(1).min(2_147_483_647);
+    let Some(entity) = entity.as_object_mut() else {
+        return;
+    };
+    if tombstone {
+        entity.insert("deletedAt".to_string(), Value::String(now.to_string()));
+    }
+    entity.insert("updatedAt".to_string(), Value::String(now.to_string()));
+    entity.insert("rev".to_string(), Value::Number(next_revision.into()));
+    entity.insert("revBy".to_string(), Value::String(rev_by.to_string()));
+}
+
+/// Repairs project/task container references that don't resolve to a live row
+/// and tombstones orphaned sections with fresh revision metadata. A section
+/// whose parent row is physically absent is routed to the transactional
+/// sidecar table because the primary sections table has a NOT NULL project FK;
+/// canonical reads merge that tombstone back into the one sections array.
 /// Mutates `data` in place and returns each issue found in the same
 /// `(kind, id, missingId)` shape as core's own diagnostic instrumentation
 /// (`SqliteReferenceIssue` in sqlite-adapter.ts), for the caller to log.
 fn sanitize_dangling_container_references(data: &mut Value) -> Vec<(&'static str, String, String)> {
     let area_ids = collect_ids(data, "areas");
     let project_ids = collect_ids(data, "projects");
+    let live_area_ids = collect_live_ids(data, "areas");
+    let live_project_ids = collect_live_ids(data, "projects");
+    let repair_rev_by = reference_repair_identity(data);
+    let repair_now = reference_repair_timestamp();
     let mut issues: Vec<(&'static str, String, String)> = Vec::new();
 
     if let Some(projects) = data.get_mut("projects").and_then(|v| v.as_array_mut()) {
         for project in projects {
-            let Some(area_id) = optional_id(project.get("areaId")) else { continue };
-            if area_ids.contains(&area_id) {
+            let project_is_deleted = entity_is_deleted(project);
+            let Some(area_id) = optional_id(project.get("areaId")) else {
+                continue;
+            };
+            let valid_area_ids = if project_is_deleted {
+                &area_ids
+            } else {
+                &live_area_ids
+            };
+            if valid_area_ids.contains(&area_id) {
                 continue;
             }
-            let id = project.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let id = project
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             issues.push(("project.areaId", id, area_id));
             if let Some(obj) = project.as_object_mut() {
                 obj.remove("areaId");
+            }
+            if !project_is_deleted {
+                stamp_reference_repair(project, &repair_now, &repair_rev_by, false);
             }
         }
     }
 
     if let Some(sections) = data.get_mut("sections").and_then(|v| v.as_array_mut()) {
-        sections.retain(|section| {
-            let Some(project_id) = optional_id(section.get("projectId")) else { return true };
-            if project_ids.contains(&project_id) {
-                return true;
+        for section in sections {
+            let project_id = optional_id(section.get("projectId")).unwrap_or_default();
+            let section_is_deleted = entity_is_deleted(section);
+            let valid_project_ids = if section_is_deleted {
+                &project_ids
+            } else {
+                &live_project_ids
+            };
+            if valid_project_ids.contains(&project_id) {
+                continue;
             }
-            let id = section.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            issues.push(("section.projectId", id, project_id));
-            false
-        });
+            let id = section
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            if !section_is_deleted {
+                issues.push(("section.projectId", id, project_id.clone()));
+                stamp_reference_repair(section, &repair_now, &repair_rev_by, true);
+            }
+        }
     }
-    let section_ids = collect_ids(data, "sections");
+    let section_projects = data
+        .get("sections")
+        .and_then(Value::as_array)
+        .map(|sections| {
+            sections
+                .iter()
+                .filter_map(|section| {
+                    let id = optional_id(section.get("id"))?;
+                    let project_id = optional_id(section.get("projectId"))?;
+                    project_ids
+                        .contains(&project_id)
+                        .then_some((id, project_id))
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let live_section_projects = data
+        .get("sections")
+        .and_then(Value::as_array)
+        .map(|sections| {
+            sections
+                .iter()
+                .filter(|section| !entity_is_deleted(section))
+                .filter_map(|section| {
+                    let id = optional_id(section.get("id"))?;
+                    let project_id = optional_id(section.get("projectId"))?;
+                    live_project_ids
+                        .contains(&project_id)
+                        .then_some((id, project_id))
+                })
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+        .unwrap_or_default();
 
     if let Some(tasks) = data.get_mut("tasks").and_then(|v| v.as_array_mut()) {
         for task in tasks {
-            let id = task.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            for (kind, field, live_ids) in [
-                ("task.projectId", "projectId", &project_ids),
-                ("task.sectionId", "sectionId", &section_ids),
-                ("task.areaId", "areaId", &area_ids),
-            ] {
-                let Some(referenced_id) = optional_id(task.get(field)) else { continue };
-                if live_ids.contains(&referenced_id) {
-                    continue;
+            let task_is_deleted = entity_is_deleted(task);
+            let id = task
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let mut changed = false;
+            if let Some(project_id) = optional_id(task.get("projectId")) {
+                let valid_project_ids = if task_is_deleted {
+                    &project_ids
+                } else {
+                    &live_project_ids
+                };
+                if !valid_project_ids.contains(&project_id) {
+                    issues.push(("task.projectId", id.clone(), project_id));
+                    if let Some(task) = task.as_object_mut() {
+                        task.remove("projectId");
+                        if let Some(section_id) = optional_id(task.get("sectionId")) {
+                            issues.push(("task.sectionId", id.clone(), section_id));
+                        }
+                        task.remove("sectionId");
+                    }
+                    changed = true;
                 }
-                issues.push((kind, id.clone(), referenced_id));
-                if let Some(obj) = task.as_object_mut() {
-                    obj.remove(field);
+            }
+            if let Some(section_id) = optional_id(task.get("sectionId")) {
+                let task_project_id = optional_id(task.get("projectId"));
+                let section_project_id = if task_is_deleted {
+                    section_projects.get(&section_id)
+                } else {
+                    live_section_projects.get(&section_id)
+                };
+                if section_project_id.is_none()
+                    || task_project_id
+                        .as_ref()
+                        .is_some_and(|project_id| section_project_id != Some(project_id))
+                {
+                    issues.push(("task.sectionId", id.clone(), section_id));
+                    if let Some(task) = task.as_object_mut() {
+                        task.remove("sectionId");
+                    }
+                    changed = true;
                 }
+            }
+            if let Some(area_id) = optional_id(task.get("areaId")) {
+                let valid_area_ids = if task_is_deleted {
+                    &area_ids
+                } else {
+                    &live_area_ids
+                };
+                if !valid_area_ids.contains(&area_id) {
+                    issues.push(("task.areaId", id.clone(), area_id));
+                    if let Some(task) = task.as_object_mut() {
+                        task.remove("areaId");
+                    }
+                    changed = true;
+                }
+            }
+            if changed && !task_is_deleted {
+                stamp_reference_repair(task, &repair_now, &repair_rev_by, false);
             }
         }
     }
 
     issues
+}
+
+fn take_orphan_section_tombstones(data: &mut Value) -> Vec<Value> {
+    let project_ids = collect_ids(data, "projects");
+    let Some(sections) = data.get_mut("sections").and_then(Value::as_array_mut) else {
+        return Vec::new();
+    };
+    let mut regular = Vec::with_capacity(sections.len());
+    let mut orphaned = Vec::new();
+    for mut section in std::mem::take(sections) {
+        // Older or externally edited JSON may contain the former private
+        // marker. It is untrusted input: scrub it and derive sidecar routing
+        // solely from the persisted entity relationship.
+        if let Some(section) = section.as_object_mut() {
+            section.remove("_mindwtrOrphanSectionTombstone");
+        }
+        let parent_is_physically_absent = optional_id(section.get("projectId"))
+            .map_or(true, |project_id| !project_ids.contains(&project_id));
+        if entity_is_deleted(&section) && parent_is_physically_absent {
+            orphaned.push(section);
+        } else {
+            regular.push(section);
+        }
+    }
+    *sections = regular;
+    orphaned
 }
 
 fn entity_revision(value: &Value) -> i64 {
@@ -2103,10 +2357,11 @@ fn normalize_revision_metadata_in_data(data: &mut Value) {
 }
 
 fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Value, String> {
+    ensure_orphan_section_tombstones_schema(conn)?;
     let issues = sanitize_dangling_container_references(&mut data);
     if !issues.is_empty() {
         log::warn!(
-            "JSON->SQLite migration found {} dangling container reference(s), nulled/dropped: {}",
+            "JSON->SQLite migration found {} dangling container reference(s), repaired/tombstoned: {}",
             issues.len(),
             issues
                 .iter()
@@ -2116,6 +2371,7 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
         );
     }
     normalize_revision_metadata_in_data(&mut data);
+    let orphan_section_tombstones = take_orphan_section_tombstones(&mut data);
     let data = &data;
 
     conn.execute("DELETE FROM tasks", [])
@@ -2129,6 +2385,8 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
     conn.execute("DELETE FROM people", [])
         .map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM settings", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM orphan_section_tombstones", [])
         .map_err(|e| e.to_string())?;
 
     // Insert order is parent-before-child so each row's FK references
@@ -2239,6 +2497,20 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
         .map_err(|e| e.to_string())?;
     }
 
+    for section in orphan_section_tombstones {
+        let id = section
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| "Orphan section tombstone id is required".to_string())?;
+        let payload = serde_json::to_string(&section).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO orphan_section_tombstones (id, data) VALUES (?1, ?2)",
+            params![id, payload],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
     let tasks = data
         .get("tasks")
         .and_then(|v| v.as_array())
@@ -2277,9 +2549,14 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
                 task.get("projectId").and_then(|v| v.as_str()),
                 task.get("sectionId").and_then(|v| v.as_str()),
                 task.get("areaId").and_then(|v| v.as_str()),
-                task.get("orderNum")
+                task.get("order")
                     .and_then(|v| v.as_f64())
-                    .or_else(|| task.get("order").and_then(|v| v.as_f64())),
+                    .filter(|order| order.is_finite())
+                    .or_else(|| {
+                        task.get("orderNum")
+                            .and_then(|v| v.as_f64())
+                            .filter(|order| order.is_finite())
+                    }),
                 task.get("boardOrder").and_then(|v| v.as_f64()),
                 task.get("focusOrder").and_then(|v| v.as_f64()),
                 task.get("isFocusedToday").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
@@ -2437,6 +2714,19 @@ pub(crate) fn read_sqlite_data(conn: &Connection) -> Result<Value, String> {
     let mut sections: Vec<Value> = Vec::new();
     for row in section_rows {
         sections.push(row.map_err(|e| e.to_string())?);
+    }
+    if sqlite_table_exists(conn, ORPHAN_SECTION_TOMBSTONES_TABLE)? {
+        let mut orphan_stmt = conn
+            .prepare("SELECT data FROM orphan_section_tombstones ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        let orphan_rows = orphan_stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        for row in orphan_rows {
+            let payload = row.map_err(|e| e.to_string())?;
+            let section: Value = serde_json::from_str(&payload).map_err(|e| e.to_string())?;
+            sections.push(section);
+        }
     }
 
     let mut areas_stmt = conn
@@ -2744,7 +3034,9 @@ pub(crate) fn load_data_snapshot(app: &tauri::AppHandle) -> Result<Value, String
             // this is the backstop for anything else that goes wrong) instead
             // of hard-failing the whole load.
             if let Err(error) = migrate_json_to_sqlite(&mut conn, &value) {
-                log::warn!("First-load JSON->SQLite migration failed, using JSON directly: {error}");
+                log::warn!(
+                    "First-load JSON->SQLite migration failed, using JSON directly: {error}"
+                );
                 return Ok(value);
             }
             ensure_fts_populated(&conn, true)?;
@@ -2804,6 +3096,7 @@ pub(crate) async fn save_data(
 }
 
 pub(crate) const TASK_MUTATION_FOCUSED_COUNT_KEY: &str = "_localApiFocusedTaskCount";
+pub(crate) const TASK_MUTATION_PROJECT_NEXT_ORDERS_KEY: &str = "_localApiProjectNextOrders";
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TaskMutationReadScope {
@@ -2816,6 +3109,13 @@ pub(crate) struct TaskMutationReadScope {
 }
 
 impl TaskMutationReadScope {
+    fn normalize_container_id(value: Option<&str>) -> Option<String> {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
     pub(crate) fn existing(task_id: &str, include_target_containers: bool) -> Self {
         Self {
             task_id: Some(task_id.to_string()),
@@ -2830,17 +3130,27 @@ impl TaskMutationReadScope {
         area_id: Option<&str>,
         include_focus_context: bool,
     ) -> Self {
-        let normalize = |value: Option<&str>| {
-            value
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        };
         Self {
-            project_id: normalize(project_id),
-            section_id: normalize(section_id),
-            area_id: normalize(area_id),
+            project_id: Self::normalize_container_id(project_id),
+            section_id: Self::normalize_container_id(section_id),
+            area_id: Self::normalize_container_id(area_id),
             include_focus_context,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn patch(
+        task_id: &str,
+        project_id: Option<&str>,
+        section_id: Option<&str>,
+        area_id: Option<&str>,
+    ) -> Self {
+        Self {
+            task_id: Some(task_id.to_string()),
+            project_id: Self::normalize_container_id(project_id),
+            section_id: Self::normalize_container_id(section_id),
+            area_id: Self::normalize_container_id(area_id),
+            include_target_containers: true,
             ..Self::default()
         }
     }
@@ -3073,6 +3383,48 @@ fn read_task_mutation_data(
         load_scoped_area(conn, area_id, &mut areas, &mut stats)?;
     }
 
+    // Project order is allocated from the destination's canonical rows while
+    // the caller holds BEGIN IMMEDIATE. Concurrent Local API moves therefore
+    // serialize their MAX+1 reservations instead of choosing the same slot.
+    // Match core getProjectOrderIndex exactly: every non-deleted task in the
+    // project counts, including sectioned tasks; the SQLite row stores the
+    // synchronized order/orderNum aliases in orderNum.
+    let requested_section_project_id = scope.section_id.as_deref().and_then(|section_id| {
+        sections
+            .iter()
+            .find(|section| section.get("id").and_then(Value::as_str) == Some(section_id))
+            .and_then(|section| section.get("projectId"))
+            .and_then(Value::as_str)
+    });
+    let destination_project_id = scope.project_id.as_deref().or(requested_section_project_id);
+    let current_project_id = target
+        .as_ref()
+        .and_then(|task| task.get("projectId"))
+        .and_then(Value::as_str);
+    let destination_next_order = if target.is_some()
+        && destination_project_id.is_some()
+        && destination_project_id != current_project_id
+    {
+        let project_id = destination_project_id.expect("checked above");
+        stats.statements += 1;
+        let max_order: Option<f64> = conn
+            .query_row(
+                "SELECT MAX(orderNum) FROM tasks
+                 WHERE projectId = ?1
+                   AND (deletedAt IS NULL OR trim(deletedAt) = '')",
+                [project_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        stats.rows += 1;
+        Some((
+            project_id.to_string(),
+            max_order.filter(|order| order.is_finite()).unwrap_or(-1.0) + 1.0,
+        ))
+    } else {
+        None
+    };
+
     stats.statements += 1;
     let settings_raw: Option<String> = conn
         .query_row("SELECT data FROM settings WHERE id = 1", [], |row| {
@@ -3184,6 +3536,18 @@ fn read_task_mutation_data(
                 Value::Number(count.into()),
             );
     }
+    if let Some((project_id, next_order)) = destination_next_order {
+        let mut orders = serde_json::Map::new();
+        let order = serde_json::Number::from_f64(next_order)
+            .ok_or_else(|| "Invalid destination task order".to_string())?;
+        orders.insert(project_id, Value::Number(order));
+        data.as_object_mut()
+            .expect("scoped task data is an object")
+            .insert(
+                TASK_MUTATION_PROJECT_NEXT_ORDERS_KEY.to_string(),
+                Value::Object(orders),
+            );
+    }
     Ok((data, stats))
 }
 
@@ -3285,13 +3649,21 @@ pub(crate) async fn save_task(
     app: tauri::AppHandle,
     task: Value,
     baseline_task: Option<Value>,
-) -> Result<Value, String> {
+) -> Result<TaskSaveResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let conn = open_sqlite(&app)?;
-        persist_task_snapshot(&conn, &task, &get_data_path(&app), baseline_task.as_ref())
+        persist_task_snapshot_result(&conn, &task, &get_data_path(&app), baseline_task.as_ref())
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TaskSaveResult {
+    committed: bool,
+    canonical: Option<Value>,
+    canonical_reload_required: bool,
 }
 
 fn persist_task_snapshot(
@@ -3300,14 +3672,59 @@ fn persist_task_snapshot(
     data_path: &Path,
     baseline_task: Option<&Value>,
 ) -> Result<Value, String> {
+    persist_task_snapshot_result(conn, task, data_path, baseline_task)?
+        .canonical
+        .ok_or_else(|| "Committed task snapshot requires a canonical reload".to_string())
+}
+
+fn persist_task_snapshot_result(
+    conn: &Connection,
+    task: &Value,
+    data_path: &Path,
+    baseline_task: Option<&Value>,
+) -> Result<TaskSaveResult, String> {
+    persist_task_snapshot_with_reader(conn, task, data_path, baseline_task, || {
+        stable_sqlite_snapshot_with_version(conn)
+    })
+}
+
+fn persist_task_snapshot_with_reader<F>(
+    conn: &Connection,
+    task: &Value,
+    data_path: &Path,
+    baseline_task: Option<&Value>,
+    read_canonical: F,
+) -> Result<TaskSaveResult, String>
+where
+    F: FnOnce() -> Result<(Value, i64), String>,
+{
     commit_task_snapshot(conn, task, baseline_task)?;
-    let (canonical, data_version) = stable_sqlite_snapshot_with_version(conn)?;
-    Ok(publish_task_data_json(
-        conn,
-        data_path,
-        canonical,
-        data_version,
-    ))
+    let (canonical, data_version) = match read_canonical() {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            // COMMIT is the durable acknowledgement boundary. A recovery-copy
+            // read after it may require a later reload, but must never turn the
+            // completed mutation into a caller-visible failure and retry.
+            log::warn!(
+                "Task save committed but canonical recovery snapshot could not be read: {error}"
+            );
+            return Ok(TaskSaveResult {
+                committed: true,
+                canonical: None,
+                canonical_reload_required: true,
+            });
+        }
+    };
+    Ok(TaskSaveResult {
+        committed: true,
+        canonical: Some(publish_task_data_json(
+            conn,
+            data_path,
+            canonical,
+            data_version,
+        )),
+        canonical_reload_required: false,
+    })
 }
 
 fn commit_task_snapshot(
@@ -3950,7 +4367,10 @@ mod tests {
             }
 
             let options: TaskQueryOptions = serde_json::from_value(
-                test_case.get("query").cloned().unwrap_or(serde_json::json!({})),
+                test_case
+                    .get("query")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({})),
             )
             .unwrap_or_else(|error| panic!("invalid query descriptor for {name}: {error}"));
             let expected_ids: Vec<String> = test_case
@@ -3961,8 +4381,9 @@ mod tests {
                 .filter_map(|value| value.as_str().map(str::to_string))
                 .collect();
 
-            let filtered = query_tasks_with_connection(&conn, &options)
-                .unwrap_or_else(|error| panic!("query_tasks_with_connection failed for {name}: {error}"));
+            let filtered = query_tasks_with_connection(&conn, &options).unwrap_or_else(|error| {
+                panic!("query_tasks_with_connection failed for {name}: {error}")
+            });
             let mut ids: Vec<String> = filtered
                 .iter()
                 .filter_map(|task| task.get("id").and_then(Value::as_str).map(str::to_string))
@@ -4194,7 +4615,10 @@ mod tests {
             "settings": {"theme": "dark"}
         });
         let result = refuse_empty_snapshot_overwrite(&conn, &empty, None);
-        assert!(result.is_err(), "empty payload over live data must be refused");
+        assert!(
+            result.is_err(),
+            "empty payload over live data must be refused"
+        );
 
         // Mass deletions keep tombstoned rows, so a payload that still carries
         // the (deleted) entity is a legitimate overwrite.
@@ -4272,18 +4696,9 @@ mod tests {
             .and_then(|tasks| tasks.first())
             .expect("should read task");
 
-        assert_eq!(
-            task.get("order").and_then(|v| v.as_f64()),
-            Some(1536.5)
-        );
-        assert_eq!(
-            task.get("orderNum").and_then(|v| v.as_f64()),
-            Some(1536.5)
-        );
-        assert_eq!(
-            task.get("boardOrder").and_then(|v| v.as_f64()),
-            Some(12.25)
-        );
+        assert_eq!(task.get("order").and_then(|v| v.as_f64()), Some(1536.5));
+        assert_eq!(task.get("orderNum").and_then(|v| v.as_f64()), Some(1536.5));
+        assert_eq!(task.get("boardOrder").and_then(|v| v.as_f64()), Some(12.25));
     }
 
     #[test]
@@ -5759,6 +6174,145 @@ mod tests {
     }
 
     #[test]
+    fn failed_backup_replacement_restores_the_original_data_file() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        let backup_path = data_json_backup_path(&data_path);
+        let replacement_path = temp.path().join("replacement.tmp");
+        fs::write(&data_path, b"original").expect("original data");
+        fs::write(&replacement_path, b"replacement").expect("replacement data");
+        let mut rename_call = 0;
+
+        let error = replace_data_json_with_backup(
+            &replacement_path,
+            &data_path,
+            &backup_path,
+            |from, to| {
+                rename_call += 1;
+                if rename_call == 2 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "injected replacement failure",
+                    ));
+                }
+                fs::rename(from, to)
+            },
+            |path| fs::remove_file(path),
+        )
+        .expect_err("replacement must fail");
+
+        assert!(error.contains("injected replacement failure"));
+        assert_eq!(
+            fs::read(&data_path).expect("restored original"),
+            b"original"
+        );
+        assert!(!backup_path.exists());
+        assert_eq!(
+            fs::read(&replacement_path).expect("unpublished replacement"),
+            b"replacement"
+        );
+    }
+
+    #[test]
+    fn failed_backup_replacement_and_restore_leave_a_recoverable_backup() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        let backup_path = data_json_backup_path(&data_path);
+        let replacement_path = temp.path().join("replacement.tmp");
+        fs::write(&data_path, b"original").expect("original data");
+        fs::write(&replacement_path, b"replacement").expect("replacement data");
+        let mut rename_call = 0;
+
+        let error = replace_data_json_with_backup(
+            &replacement_path,
+            &data_path,
+            &backup_path,
+            |from, to| {
+                rename_call += 1;
+                match rename_call {
+                    2 => Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "injected replacement failure",
+                    )),
+                    3 => Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "injected restore failure",
+                    )),
+                    _ => fs::rename(from, to),
+                }
+            },
+            |path| fs::remove_file(path),
+        )
+        .expect_err("replacement and immediate restore must fail");
+
+        assert!(error.contains("injected replacement failure"));
+        assert!(error.contains("injected restore failure"));
+        assert!(
+            error.contains(&backup_path.display().to_string()),
+            "the diagnostic must identify the recovery copy"
+        );
+        assert!(
+            !data_path.exists(),
+            "the failed restore leaves no partial final file"
+        );
+        assert_eq!(
+            fs::read(&backup_path).expect("recoverable original"),
+            b"original"
+        );
+        assert_eq!(
+            fs::read(&replacement_path).expect("unpublished replacement"),
+            b"replacement"
+        );
+
+        cleanup_stale_data_json_backup_for_platform(&data_path, true)
+            .expect("the next startup restores the recovery copy");
+        assert_eq!(
+            fs::read(&data_path).expect("restored original"),
+            b"original"
+        );
+        assert!(!backup_path.exists());
+    }
+
+    #[test]
+    fn stale_backup_cleanup_restores_or_discards_transactionally() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        let backup_path = data_json_backup_path(&data_path);
+        fs::write(&backup_path, b"recoverable").expect("backup");
+
+        cleanup_stale_data_json_backup_for_platform(&data_path, true)
+            .expect("restore missing data");
+        assert_eq!(fs::read(&data_path).expect("restored data"), b"recoverable");
+        assert!(!backup_path.exists());
+
+        fs::write(&backup_path, b"stale").expect("stale backup");
+        cleanup_stale_data_json_backup_for_platform(&data_path, true)
+            .expect("discard stale backup");
+        assert_eq!(
+            fs::read(&data_path).expect("canonical data"),
+            b"recoverable"
+        );
+        assert!(!backup_path.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_data_json_replacement_uses_backup_and_cleans_it() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let data_path = temp.path().join("data.json");
+        fs::write(&data_path, b"{\"version\":1}").expect("original");
+
+        write_data_json_file(&data_path, &serde_json::json!({ "version": 2 }))
+            .expect("Windows replacement");
+
+        assert_eq!(
+            read_json_with_retries(&data_path, 1).expect("new data")["version"],
+            2
+        );
+        assert!(!data_json_backup_path(&data_path).exists());
+    }
+
+    #[test]
     fn exact_replace_removes_rows_even_when_target_is_empty() {
         let mut conn = Connection::open_in_memory().expect("should open in-memory db");
         conn.execute_batch(SQLITE_SCHEMA)
@@ -5964,6 +6518,37 @@ mod tests {
     }
 
     #[test]
+    fn incremental_task_save_reports_commit_when_post_commit_snapshot_read_fails() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let task = serde_json::json!({
+            "id": "task-1", "title": "Durably committed", "status": "next",
+            "tags": [], "contexts": [], "rev": 1,
+            "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+        });
+
+        let result = persist_task_snapshot_with_reader(
+            &conn,
+            &task,
+            &temp.path().join("data.json"),
+            None,
+            || Err("injected post-commit read failure".to_string()),
+        )
+        .expect("a committed task save must not become a false failure");
+
+        assert!(result.committed);
+        assert!(result.canonical_reload_required);
+        assert!(result.canonical.is_none());
+        assert_eq!(
+            conn.query_row("SELECT title FROM tasks WHERE id = 'task-1'", [], |row| row
+                .get::<_, String>(0),)
+                .expect("committed row"),
+            "Durably committed"
+        );
+    }
+
+    #[test]
     fn task_snapshot_commit_releases_writer_before_data_json_publication() {
         let temp = tempfile::tempdir().expect("tempdir");
         let db_path = temp.path().join("data.db");
@@ -6157,6 +6742,252 @@ mod tests {
         );
         assert_eq!(stats.task_rows, 1);
         assert!(stats.statements <= 6);
+    }
+
+    #[test]
+    fn patch_scope_reads_current_and_requested_task_containers() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        replace_data_in_transaction(
+            &conn,
+            serde_json::json!({
+                "tasks": [{
+                    "id": "task-1", "title": "Task", "status": "next",
+                    "projectId": "project-a", "sectionId": "section-a",
+                    "tags": [], "contexts": [], "rev": 1,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                }],
+                "projects": [
+                    { "id": "project-a", "title": "A", "status": "active", "color": "#000", "tagIds": [],
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" },
+                    { "id": "project-b", "title": "B", "status": "active", "color": "#000", "tagIds": [],
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" }
+                ],
+                "sections": [
+                    { "id": "section-a", "projectId": "project-a", "title": "A section",
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" },
+                    { "id": "section-b", "projectId": "project-b", "title": "B section",
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" }
+                ],
+                "areas": [{ "id": "area-b", "name": "Area", "order": 0,
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" }],
+                "people": [], "settings": { "deviceId": "desktop-local-api" }
+            }),
+        )
+        .expect("seed store");
+
+        let scope = TaskMutationReadScope::patch(
+            "task-1",
+            Some("project-b"),
+            Some("section-b"),
+            Some("area-b"),
+        );
+        let (data, stats) = read_task_mutation_data(&conn, &scope).expect("patch context");
+
+        assert_eq!(data["tasks"].as_array().map(Vec::len), Some(1));
+        assert_eq!(data["projects"].as_array().map(Vec::len), Some(2));
+        assert_eq!(data["sections"].as_array().map(Vec::len), Some(2));
+        assert_eq!(data["areas"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            data[TASK_MUTATION_PROJECT_NEXT_ORDERS_KEY]["project-b"].as_f64(),
+            Some(0.0)
+        );
+        assert!(
+            stats.statements <= 9,
+            "patch reads remain row-scoped: {stats:?}"
+        );
+    }
+
+    #[test]
+    fn task_storage_uses_core_order_alias_precedence() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        for task in [
+            serde_json::json!({
+                "id": "conflicting", "title": "Conflicting", "status": "next",
+                "order": 2, "orderNum": 99,
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+            }),
+            serde_json::json!({
+                "id": "order-only", "title": "Order only", "status": "next",
+                "order": 4,
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+            }),
+            serde_json::json!({
+                "id": "order-num-only", "title": "OrderNum only", "status": "next",
+                "orderNum": 6,
+                "tags": [], "contexts": [], "rev": 1,
+                "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+            }),
+        ] {
+            replace_task_row(&conn, &task).expect("replace task row");
+        }
+
+        let stored = ["conflicting", "order-only", "order-num-only"].map(|task_id| {
+            conn.query_row(
+                "SELECT orderNum FROM tasks WHERE id = ?1",
+                [task_id],
+                |row| row.get::<_, f64>(0),
+            )
+            .expect("stored order")
+        });
+
+        assert_eq!(stored, [2.0, 4.0, 6.0]);
+    }
+
+    #[test]
+    fn bulk_task_storage_uses_core_order_alias_precedence() {
+        let conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        replace_data_in_transaction(
+            &conn,
+            serde_json::json!({
+                "tasks": [
+                    {
+                        "id": "conflicting", "title": "Conflicting", "status": "next",
+                        "order": 2, "orderNum": 99,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    },
+                    {
+                        "id": "order-only", "title": "Order only", "status": "next",
+                        "order": 4,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    },
+                    {
+                        "id": "order-num-only", "title": "OrderNum only", "status": "next",
+                        "orderNum": 6,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    }
+                ],
+                "projects": [], "sections": [], "areas": [], "people": [], "settings": {}
+            }),
+        )
+        .expect("replace full data");
+
+        let stored = ["conflicting", "order-only", "order-num-only"].map(|task_id| {
+            conn.query_row(
+                "SELECT orderNum FROM tasks WHERE id = ?1",
+                [task_id],
+                |row| row.get::<_, f64>(0),
+            )
+            .expect("stored order")
+        });
+
+        assert_eq!(stored, [2.0, 4.0, 6.0]);
+    }
+
+    #[test]
+    fn concurrent_project_moves_reserve_distinct_destination_orders_in_the_write_transaction() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("data.db");
+        let seed = Connection::open(&db_path).expect("seed connection");
+        seed.execute_batch(SQLITE_SCHEMA).expect("schema");
+        replace_data_in_transaction(
+            &seed,
+            serde_json::json!({
+                "tasks": [
+                    {
+                        "id": "move-1", "title": "Move one", "status": "next",
+                        "projectId": "project-a", "order": 0, "orderNum": 0,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    },
+                    {
+                        "id": "move-2", "title": "Move two", "status": "next",
+                        "projectId": "project-a", "order": 1, "orderNum": 1,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    },
+                    {
+                        "id": "destination-high", "title": "Destination", "status": "next",
+                        "projectId": "project-b", "sectionId": "section-b",
+                        "order": 5, "orderNum": 5,
+                        "tags": [], "contexts": [], "rev": 1,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                    },
+                    {
+                        "id": "destination-deleted", "title": "Deleted", "status": "next",
+                        "projectId": "project-b", "order": 99, "orderNum": 99,
+                        "deletedAt": "2026-08-02T10:00:00Z",
+                        "tags": [], "contexts": [], "rev": 2,
+                        "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-02T10:00:00Z"
+                    }
+                ],
+                "projects": [
+                    { "id": "project-a", "title": "A", "status": "active", "color": "#000", "tagIds": [],
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" },
+                    { "id": "project-b", "title": "B", "status": "active", "color": "#000", "tagIds": [],
+                      "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z" }
+                ],
+                "sections": [{
+                    "id": "section-b", "projectId": "project-b", "title": "B section",
+                    "createdAt": "2026-08-01T10:00:00Z", "updatedAt": "2026-08-01T10:00:00Z"
+                }],
+                "areas": [], "people": [],
+                "settings": { "deviceId": "desktop-local-api" }
+            }),
+        )
+        .expect("seed store");
+        drop(seed);
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let handles = ["move-1", "move-2"].map(|task_id| {
+            let db_path = db_path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let conn = Connection::open(db_path).expect("writer connection");
+                conn.busy_timeout(Duration::from_secs(5))
+                    .expect("writer busy timeout");
+                let scope = TaskMutationReadScope::patch(task_id, Some("project-b"), None, None);
+                let patch = serde_json::json!({ "projectId": "project-b" })
+                    .as_object()
+                    .expect("project patch")
+                    .clone();
+                let mut mutation = |data: &mut Value| {
+                    let task = crate::local_api::patch_task_in_data(data, task_id, &patch)?;
+                    Ok::<_, String>(((), vec![task]))
+                };
+                barrier.wait();
+                commit_task_row_mutation(&conn, &scope, &mut mutation)
+                    .expect("concurrent project move");
+            })
+        });
+        barrier.wait();
+        for handle in handles {
+            handle.join().expect("writer thread");
+        }
+
+        let verify = Connection::open(&db_path).expect("verify connection");
+        let mut statement = verify
+            .prepare(
+                "SELECT projectId, sectionId, orderNum FROM tasks
+                 WHERE id IN ('move-1', 'move-2') ORDER BY orderNum",
+            )
+            .expect("order query");
+        let moved = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, f64>(2)?,
+                ))
+            })
+            .expect("moved rows")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("valid moved rows");
+
+        assert_eq!(
+            moved,
+            vec![
+                ("project-b".to_string(), None, 6.0),
+                ("project-b".to_string(), None, 7.0),
+            ]
+        );
     }
 
     #[test]
@@ -6412,14 +7243,21 @@ mod tests {
             "areas": [{ "id": "area-live" }],
             "projects": [
                 { "id": "project-live" },
-                { "id": "project-dangling-area", "areaId": "area-missing" }
+                {
+                    "id": "project-dangling-area", "areaId": "area-missing",
+                    "rev": 2, "revBy": "old-project-writer",
+                    "updatedAt": "2026-07-01T00:00:00Z"
+                }
             ],
             "tasks": [{
                 "id": "task-1",
                 "projectId": "project-missing",
                 "sectionId": "section-missing",
-                "areaId": "area-live"
-            }]
+                "areaId": "area-live",
+                "rev": 3, "revBy": "old-task-writer",
+                "updatedAt": "2026-07-01T00:00:00Z"
+            }],
+            "settings": { "deviceId": "repair-device" }
         });
 
         let issues = sanitize_dangling_container_references(&mut data);
@@ -6435,24 +7273,40 @@ mod tests {
             data["tasks"][0]["areaId"], "area-live",
             "a live areaId must survive untouched"
         );
+        assert_eq!(data["projects"][1]["rev"], 3);
+        assert_eq!(data["projects"][1]["revBy"], "repair-device");
+        assert_ne!(data["projects"][1]["updatedAt"], "2026-07-01T00:00:00Z");
+        assert_eq!(data["tasks"][0]["rev"], 4);
+        assert_eq!(data["tasks"][0]["revBy"], "repair-device");
+        assert_ne!(data["tasks"][0]["updatedAt"], "2026-07-01T00:00:00Z");
 
         let kinds: Vec<&str> = issues.iter().map(|(kind, _, _)| *kind).collect();
         assert!(kinds.contains(&"project.areaId"));
         assert!(kinds.contains(&"task.projectId"));
         assert!(kinds.contains(&"task.sectionId"));
         assert!(!kinds.contains(&"task.areaId"));
+
+        let settled = data.clone();
+        assert!(sanitize_dangling_container_references(&mut data).is_empty());
+        assert_eq!(data, settled, "revision-stamped repairs are idempotent");
     }
 
     #[test]
-    fn sanitize_dangling_container_references_drops_section_with_missing_project() {
+    fn sanitize_dangling_container_references_tombstones_section_with_missing_project() {
         let mut data = serde_json::json!({
             "areas": [],
             "projects": [{ "id": "project-live" }],
             "sections": [
                 { "id": "section-live", "projectId": "project-live" },
-                { "id": "section-orphan", "projectId": "project-missing" }
+                {
+                    "id": "section-orphan", "projectId": "project-missing",
+                    "rev": 4, "revBy": "old-writer",
+                    "createdAt": "2026-07-01T00:00:00Z",
+                    "updatedAt": "2026-07-01T00:00:00Z"
+                }
             ],
-            "tasks": []
+            "tasks": [],
+            "settings": { "deviceId": "repair-device" }
         });
 
         let issues = sanitize_dangling_container_references(&mut data);
@@ -6463,10 +7317,252 @@ mod tests {
             .iter()
             .map(|section| section["id"].as_str().unwrap())
             .collect();
-        assert_eq!(remaining_section_ids, vec!["section-live"]);
-        assert!(issues.iter().any(|(kind, id, missing)| *kind == "section.projectId"
-            && id == "section-orphan"
-            && missing == "project-missing"));
+        assert_eq!(
+            remaining_section_ids,
+            vec!["section-live", "section-orphan"]
+        );
+        let orphan = data["sections"]
+            .as_array()
+            .expect("sections")
+            .iter()
+            .find(|section| section["id"] == "section-orphan")
+            .expect("orphan tombstone");
+        assert!(orphan.get("deletedAt").and_then(Value::as_str).is_some());
+        assert_eq!(orphan["updatedAt"], orphan["deletedAt"]);
+        assert_eq!(orphan["rev"], 5);
+        assert_eq!(orphan["revBy"], "repair-device");
+        assert!(issues
+            .iter()
+            .any(|(kind, id, missing)| *kind == "section.projectId"
+                && id == "section-orphan"
+                && missing == "project-missing"));
+
+        let settled = data.clone();
+        assert!(sanitize_dangling_container_references(&mut data).is_empty());
+        assert_eq!(data, settled, "repair is idempotent");
+    }
+
+    #[test]
+    fn exact_and_merge_clear_missing_container_refs_from_deleted_entities() {
+        let deleted_at = "2026-08-01T00:00:00Z";
+        let input = serde_json::json!({
+            "tasks": [{
+                "id": "task-deleted", "title": "Deleted task", "status": "next",
+                "projectId": "project-missing", "sectionId": "section-missing",
+                "areaId": "area-missing", "tags": [], "contexts": [],
+                "deletedAt": deleted_at, "rev": 7, "revBy": "remote-a",
+                "createdAt": "2026-07-01T00:00:00Z", "updatedAt": deleted_at
+            }],
+            "projects": [{
+                "id": "project-deleted", "title": "Deleted project", "status": "active",
+                "color": "#000000", "tagIds": [], "areaId": "area-missing",
+                "deletedAt": deleted_at, "rev": 5, "revBy": "remote-a",
+                "createdAt": "2026-07-01T00:00:00Z", "updatedAt": deleted_at
+            }],
+            "sections": [], "areas": [], "people": [],
+            "settings": { "deviceId": "repair-device" }
+        });
+
+        for exact in [true, false] {
+            let mut conn = Connection::open_in_memory().expect("database");
+            conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+            let canonical = if exact {
+                replace_json_in_sqlite(&mut conn, &input).expect("exact write")
+            } else {
+                merge_json_to_sqlite(&mut conn, &input, None).expect("merge write")
+            };
+
+            let project = &canonical["projects"][0];
+            let task = &canonical["tasks"][0];
+            assert!(project.get("areaId").is_none());
+            assert!(task.get("projectId").is_none());
+            assert!(task.get("sectionId").is_none());
+            assert!(task.get("areaId").is_none());
+            assert_eq!(
+                project["rev"], 5,
+                "repair must not revive the project tombstone"
+            );
+            assert_eq!(project["updatedAt"], deleted_at);
+            assert_eq!(task["rev"], 7, "repair must not revive the task tombstone");
+            assert_eq!(task["updatedAt"], deleted_at);
+            assert_eq!(
+                conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .expect("foreign key check"),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn orphan_section_tombstone_survives_exact_and_merge_round_trips() {
+        let mut conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let input = serde_json::json!({
+            "tasks": [], "projects": [], "areas": [], "people": [],
+            "sections": [{
+                "id": "section-orphan", "projectId": "project-missing", "title": "Preserve me",
+                "order": 0, "rev": 8, "revBy": "remote-a",
+                "createdAt": "2026-07-01T00:00:00Z",
+                "updatedAt": "2026-07-01T00:00:00Z"
+            }],
+            "settings": { "deviceId": "desktop-repair" }
+        });
+
+        let exact = replace_json_in_sqlite(&mut conn, &input).expect("exact repair");
+        let repaired = exact["sections"].as_array().expect("sections");
+        assert_eq!(repaired.len(), 1);
+        assert_eq!(repaired[0]["id"], "section-orphan");
+        assert!(repaired[0].get("deletedAt").is_some());
+        assert_eq!(repaired[0]["rev"], 9);
+        assert_eq!(repaired[0]["revBy"], "desktop-repair");
+        assert_eq!(
+            read_sqlite_data(&conn).expect("canonical read")["sections"],
+            exact["sections"]
+        );
+        let first_sidecar_payload: String = conn
+            .query_row(
+                "SELECT data FROM orphan_section_tombstones WHERE id = 'section-orphan'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("sidecar payload");
+
+        let exact_again = replace_json_in_sqlite(&mut conn, &exact).expect("second exact write");
+        assert_eq!(exact_again["sections"], exact["sections"]);
+        let second_sidecar_payload: String = conn
+            .query_row(
+                "SELECT data FROM orphan_section_tombstones WHERE id = 'section-orphan'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("stable sidecar payload");
+        assert_eq!(second_sidecar_payload, first_sidecar_payload);
+        let merged = merge_json_to_sqlite(&mut conn, &exact_again, None).expect("sync-style merge");
+        assert_eq!(merged["sections"], exact["sections"]);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("foreign key check"),
+            0
+        );
+
+        let mut cleaned = merged.clone();
+        cleaned["sections"] = Value::Array(Vec::new());
+        let cleaned = replace_json_in_sqlite(&mut conn, &cleaned).expect("retention cleanup write");
+        assert!(cleaned["sections"].as_array().expect("sections").is_empty());
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM orphan_section_tombstones", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("bounded sidecar"),
+            0,
+            "when canonical tombstone retention purges the section, the sidecar is purged transactionally"
+        );
+
+        replace_json_in_sqlite(&mut conn, &input).expect("reseed orphan tombstone");
+        let live_winner = serde_json::json!({
+            "tasks": [], "areas": [], "people": [],
+            "projects": [{
+                "id": "project-missing", "title": "Recovered project", "status": "active",
+                "color": "#000000", "order": 0, "tagIds": [], "rev": 10, "revBy": "remote-b",
+                "createdAt": "2026-07-01T00:00:00Z", "updatedAt": "2030-01-01T00:00:00Z"
+            }],
+            "sections": [{
+                "id": "section-orphan", "projectId": "project-missing", "title": "Recovered section",
+                "order": 0, "rev": 10, "revBy": "remote-b",
+                "createdAt": "2026-07-01T00:00:00Z", "updatedAt": "2030-01-01T00:00:00Z"
+            }],
+            "settings": { "deviceId": "desktop-repair" }
+        });
+        let recovered = merge_json_to_sqlite(&mut conn, &live_winner, None)
+            .expect("higher-revision live winner");
+        assert_eq!(recovered["sections"].as_array().map(Vec::len), Some(1));
+        assert_eq!(recovered["sections"][0]["title"], "Recovered section");
+        assert!(recovered["sections"][0].get("deletedAt").is_none());
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM orphan_section_tombstones",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
+            .expect("sidecar winner cleanup"),
+            0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM sections WHERE id = 'section-orphan'",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
+            .expect("live section row"),
+            1
+        );
+    }
+
+    #[test]
+    fn exact_write_ignores_a_spoofed_orphan_section_marker() {
+        let mut conn = Connection::open_in_memory().expect("database");
+        conn.execute_batch(SQLITE_SCHEMA).expect("schema");
+        let input = serde_json::json!({
+            "tasks": [{
+                "id": "task-1", "title": "Keep organized", "status": "next",
+                "projectId": "project-live", "sectionId": "section-live",
+                "tags": [], "contexts": [], "rev": 1, "revBy": "remote-a",
+                "createdAt": "2026-08-01T10:00:00Z",
+                "updatedAt": "2026-08-01T10:00:00Z"
+            }],
+            "projects": [{
+                "id": "project-live", "title": "Live", "status": "active",
+                "color": "#000000", "tagIds": [], "rev": 1, "revBy": "remote-a",
+                "createdAt": "2026-08-01T10:00:00Z",
+                "updatedAt": "2026-08-01T10:00:00Z"
+            }],
+            "sections": [{
+                "id": "section-live", "projectId": "project-live", "title": "Live section",
+                "order": 0, "rev": 1, "revBy": "remote-a",
+                "createdAt": "2026-08-01T10:00:00Z",
+                "updatedAt": "2026-08-01T10:00:00Z",
+                "_mindwtrOrphanSectionTombstone": true
+            }],
+            "areas": [], "people": [], "settings": { "deviceId": "desktop-a" }
+        });
+
+        let canonical = replace_json_in_sqlite(&mut conn, &input)
+            .expect("an untrusted marker cannot divert a live section");
+
+        assert_eq!(canonical["sections"].as_array().map(Vec::len), Some(1));
+        assert_eq!(canonical["sections"][0]["id"], "section-live");
+        assert!(canonical["sections"][0]
+            .get("_mindwtrOrphanSectionTombstone")
+            .is_none());
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM sections WHERE id = 'section-live'",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
+            .expect("primary section row"),
+            1
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM orphan_section_tombstones",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
+            .expect("sidecar count"),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("foreign key check"),
+            0
+        );
     }
 
     #[test]
@@ -6501,7 +7597,10 @@ mod tests {
         migrate_json_to_sqlite(&mut conn, &data)
             .expect("migration must not fail on a dangling container reference");
         let read = read_sqlite_data(&conn).expect("should read data");
-        let task = read["tasks"].as_array().and_then(|tasks| tasks.first()).expect("task should exist");
+        let task = read["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.first())
+            .expect("task should exist");
         assert_eq!(task.get("projectId"), None);
     }
 }

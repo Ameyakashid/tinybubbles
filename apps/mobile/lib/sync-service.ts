@@ -9,7 +9,14 @@ import { isSyncPathBookmarksAvailable, resolveSyncPathBookmark } from './sync-pa
 import { getBaseSyncUrl, getCloudBaseUrl, syncCloudAttachments, syncCloudKitAttachments, syncDropboxAttachments, syncFileAttachments, syncWebdavAttachments, cleanupAttachmentTempFiles, hasPendingAttachmentSyncWork } from './attachment-sync';
 import { runMobileAttachmentCleanup } from './sync-attachment-cleanup';
 import { getExternalCalendars, saveExternalCalendars } from './external-calendar';
-import { forceRefreshDropboxAccessToken, getValidDropboxAccessToken, isDropboxConnected } from './dropbox-auth';
+import {
+  forceRefreshDropboxAccessToken,
+  forceRefreshDropboxAccessTokenForTokens,
+  getValidDropboxAccessToken,
+  getValidDropboxAccessTokenForTokens,
+  isDropboxConnected,
+  type DropboxAuthTokens,
+} from './dropbox-auth';
 import {
   DropboxFileNotFoundError,
   deleteDropboxFile,
@@ -59,8 +66,18 @@ type MobileSyncSkipReason = 'offline' | 'requeued' | 'unchanged' | 'pendingRemot
 // online but the app's requests failed (per-app cellular block, VPN/firewall).
 type MobileSyncOfflineCause = 'network' | 'request';
 type MobileSyncResult = { success: boolean; stats?: MergeStats; error?: string; skipped?: MobileSyncSkipReason; offlineCause?: MobileSyncOfflineCause; remoteWriteDeferred?: boolean };
-type MobileWebDavSyncConfig = { url: string; username: string; password: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean };
-type MobileCloudSyncConfig = { url: string; token: string; allowInsecureHttp?: boolean };
+export type MobileWebDavSyncConfig = { url: string; username: string; password: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean };
+export type MobileCloudSyncConfig = { url: string; token: string; allowInsecureHttp?: boolean };
+export type MobileDropboxSyncCredentials = { tokens: DropboxAuthTokens };
+export type MobileSyncConfigOverride = {
+  backend: SyncBackend;
+  syncPath?: string;
+  syncPathBookmark?: string | null;
+  webdav?: MobileWebDavSyncConfig;
+  cloudProvider?: CloudProvider;
+  cloud?: MobileCloudSyncConfig;
+  dropbox?: MobileDropboxSyncCredentials;
+};
 const isFossBuild = (() => {
   const extra = Constants.expoConfig?.extra as { isFossBuild?: unknown } | undefined;
   return extra?.isFossBuild === true || extra?.isFossBuild === 'true';
@@ -451,7 +468,13 @@ const shouldSkipSyncForOfflineState = async (
   return false;
 };
 
-type MobileSyncRequest = { syncPathOverride?: string; manual?: boolean };
+type MobileSyncRequest = {
+  syncPathOverride?: string;
+  manual?: boolean;
+  activationProbe?: boolean;
+  ignorePendingRemoteWriteBackoff?: boolean;
+  configOverride?: MobileSyncConfigOverride;
+};
 
 type MobileRequestFollowUp = (nextArg?: MobileSyncRequest) => void;
 
@@ -465,6 +488,9 @@ class MobileSyncRun {
   private readonly backend: SyncBackend;
   private readonly syncPathOverride: string | undefined;
   private readonly manual: boolean;
+  private readonly activationProbe: boolean;
+  private readonly ignorePendingRemoteWriteBackoff: boolean;
+  private readonly configOverride: MobileSyncConfigOverride | undefined;
   private readonly requestFollowUp: MobileRequestFollowUp;
 
   private lastStep = 'init';
@@ -494,6 +520,9 @@ class MobileSyncRun {
     this.backend = backend;
     this.syncPathOverride = request?.syncPathOverride;
     this.manual = request?.manual === true;
+    this.activationProbe = request?.activationProbe === true;
+    this.ignorePendingRemoteWriteBackoff = request?.ignorePendingRemoteWriteBackoff === true;
+    this.configOverride = request?.configOverride;
     this.requestFollowUp = requestFollowUp;
     activeMobileSyncAbortController = this.requestAbortController;
     activeMobileSyncAbortReason = null;
@@ -506,7 +535,11 @@ class MobileSyncRun {
     try {
       this.subscribeNetworkListener();
       return await runSharedSyncCycle({
-        options: { manual: this.manual },
+        options: {
+          manual: this.manual,
+          activationProbe: this.activationProbe,
+          ignorePendingRemoteWriteBackoff: this.ignorePendingRemoteWriteBackoff,
+        },
         storage: this.createStorage(),
         notifier: this.createNotifier(),
         store: {
@@ -531,7 +564,13 @@ class MobileSyncRun {
   }
 
   private queueFollowUp(): void {
-    this.requestFollowUp({ syncPathOverride: this.syncPathOverride, manual: this.manual });
+    this.requestFollowUp({
+      syncPathOverride: this.syncPathOverride,
+      manual: this.manual,
+      activationProbe: this.activationProbe,
+      ignorePendingRemoteWriteBackoff: this.ignorePendingRemoteWriteBackoff,
+      configOverride: this.configOverride,
+    });
   }
 
   private logPhaseDiagnostic(phase: string, extra?: Record<string, string>): void {
@@ -595,18 +634,24 @@ class MobileSyncRun {
   /** Resolve and normalize the file-sync path. Returns false when no path is configured. */
   private async resolveFileBackendConfig(): Promise<boolean> {
     const configuredSyncPath = (await getCachedConfigValue(SYNC_PATH_KEY))?.trim() ?? null;
-    let fileSyncPath = this.syncPathOverride || configuredSyncPath;
-    const bookmarkResolution = await resolveBookmarkedFileSyncPath(fileSyncPath);
-    fileSyncPath = bookmarkResolution.path;
-    this.fileSyncBookmark = bookmarkResolution.bookmark;
+    let fileSyncPath = this.configOverride?.syncPath || this.syncPathOverride || configuredSyncPath;
+    if (this.configOverride?.syncPath) {
+      this.fileSyncBookmark = this.configOverride.syncPathBookmark ?? null;
+    } else {
+      const bookmarkResolution = await resolveBookmarkedFileSyncPath(fileSyncPath);
+      fileSyncPath = bookmarkResolution.path;
+      this.fileSyncBookmark = bookmarkResolution.bookmark;
+    }
     if (!fileSyncPath) {
       return false;
     }
     const normalizedPath = normalizeFileSyncPath(fileSyncPath, Platform.OS);
     if (normalizedPath && normalizedPath !== fileSyncPath) {
       fileSyncPath = normalizedPath;
-      await AsyncStorage.setItem(SYNC_PATH_KEY, normalizedPath);
-      syncConfigCache.set(SYNC_PATH_KEY, { value: normalizedPath, readAt: Date.now() });
+      if (!this.configOverride?.syncPath) {
+        await AsyncStorage.setItem(SYNC_PATH_KEY, normalizedPath);
+        syncConfigCache.set(SYNC_PATH_KEY, { value: normalizedPath, readAt: Date.now() });
+      }
       logSyncInfo('Normalized file sync path to iOS file URI');
     }
     if (fileSyncPath.startsWith('file://') && IOS_TEMP_INBOX_PATH_PATTERN.test(decodeUriSafe(fileSyncPath))) {
@@ -616,8 +661,10 @@ class MobileSyncRun {
       try {
         const resolvedPath = await resolveSyncFileUri(fileSyncPath, { createIfMissing: true });
         if (resolvedPath && resolvedPath !== fileSyncPath) {
-          await AsyncStorage.setItem(SYNC_PATH_KEY, resolvedPath);
-          syncConfigCache.set(SYNC_PATH_KEY, { value: resolvedPath, readAt: Date.now() });
+          if (!this.configOverride?.syncPath) {
+            await AsyncStorage.setItem(SYNC_PATH_KEY, resolvedPath);
+            syncConfigCache.set(SYNC_PATH_KEY, { value: resolvedPath, readAt: Date.now() });
+          }
           logSyncInfo('Normalized SAF sync path');
           fileSyncPath = resolvedPath;
         }
@@ -633,6 +680,18 @@ class MobileSyncRun {
   }
 
   private async resolveWebdavBackendConfig(): Promise<void> {
+    const override = this.configOverride?.webdav;
+    if (override) {
+      const url = override.url.trim();
+      if (!url) throw new Error('WebDAV URL not configured');
+      this.syncUrl = normalizeWebdavUrl(url);
+      this.webdavConfig = {
+        ...override,
+        url: this.syncUrl,
+        username: override.username.trim(),
+      };
+      return;
+    }
     const url = (await getCachedConfigValue(WEBDAV_URL_KEY))?.trim() ?? null;
     if (!url) throw new Error('WebDAV URL not configured');
     this.syncUrl = normalizeWebdavUrl(url);
@@ -644,6 +703,33 @@ class MobileSyncRun {
   }
 
   private async resolveCloudBackendConfig(): Promise<void> {
+    const overrideProvider = this.configOverride?.cloudProvider;
+    if (overrideProvider) {
+      if (!DROPBOX_SYNC_ENABLED && overrideProvider === CLOUD_PROVIDER_DROPBOX) {
+        throw new Error('Dropbox sync is unavailable in this build. Choose Self-hosted Cloud or install the Dropbox-enabled build.');
+      }
+      this.cloudProvider = overrideProvider;
+      if (this.cloudProvider === CLOUD_PROVIDER_DROPBOX) {
+        this.dropboxClientId = getDropboxAppKey();
+        if (!this.dropboxClientId) {
+          throw new Error('Dropbox app key is not configured');
+        }
+        this.dropboxLastRev = (await getCachedConfigValue(DROPBOX_LAST_REV_KEY))?.trim() ?? null;
+        this.syncUrl = 'dropbox://Apps/Mindwtr/data.json';
+        return;
+      }
+
+      const override = this.configOverride?.cloud;
+      const url = override?.url.trim() ?? '';
+      if (!url) throw new Error('Self-hosted URL not configured');
+      this.syncUrl = normalizeCloudUrl(url);
+      this.cloudConfig = {
+        ...override,
+        url: this.syncUrl,
+        token: override?.token.trim() ?? '',
+      };
+      return;
+    }
     const storedCloudProvider = (await getCachedConfigValue(CLOUD_PROVIDER_KEY))?.trim() ?? null;
     this.cloudProvider = resolveCloudProvider(storedCloudProvider);
     if (!DROPBOX_SYNC_ENABLED && storedCloudProvider === CLOUD_PROVIDER_DROPBOX) {
@@ -687,15 +773,41 @@ class MobileSyncRun {
    *  401-retry-once policy once for both platforms. */
   private async runDropboxOperation<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
     return withRetry(async () => {
-      let accessToken = await getValidDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort);
+      let accessToken = await this.resolveDropboxAccessToken(false);
       try {
         return await operation(accessToken);
       } catch (error) {
         if (!isDropboxUnauthorizedError(error)) throw error;
-        accessToken = await forceRefreshDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort);
+        accessToken = await this.resolveDropboxAccessToken(true);
         return operation(accessToken);
       }
     }, this.dropboxTransientRetryOptions());
+  }
+
+  private async resolveDropboxAccessToken(forceRefresh: boolean): Promise<string> {
+    const stagedCredentials = this.configOverride?.dropbox;
+    if (!stagedCredentials) {
+      return forceRefresh
+        ? forceRefreshDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort)
+        : getValidDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort);
+    }
+
+    const resolution = forceRefresh
+      ? await forceRefreshDropboxAccessTokenForTokens(
+        this.dropboxClientId,
+        stagedCredentials.tokens,
+        this.fetchWithAbort,
+      )
+      : await getValidDropboxAccessTokenForTokens(
+        this.dropboxClientId,
+        stagedCredentials.tokens,
+        this.fetchWithAbort,
+      );
+    // Preserve an OAuth refresh performed during the proof in the in-memory
+    // candidate bundle. The settings transaction promotes this exact bundle
+    // only after the proof succeeds.
+    stagedCredentials.tokens = resolution.tokens;
+    return resolution.accessToken;
   }
 
   /** One Dropbox transport call's transient-retry wrap (network/5xx). The
@@ -710,6 +822,7 @@ class MobileSyncRun {
 
   private async persistDropboxRev(rev: string | null): Promise<void> {
     this.dropboxLastRev = rev;
+    if (this.activationProbe) return;
     if (rev) {
       await AsyncStorage.setItem(DROPBOX_LAST_REV_KEY, rev);
       syncConfigCache.set(DROPBOX_LAST_REV_KEY, { value: rev, readAt: Date.now() });
@@ -1155,11 +1268,9 @@ class MobileSyncRun {
       cloudKitWrite: async (sanitized) => {
         await writeRemoteCloudKit(sanitized, { signal: this.requestAbortController.signal });
       },
-      resolveDropboxToken: (forceRefresh) => this.runDropboxTransientRetry(() => (
-        forceRefresh
-          ? forceRefreshDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort)
-          : getValidDropboxAccessToken(this.dropboxClientId, this.fetchWithAbort)
-      )),
+      resolveDropboxToken: (forceRefresh) => this.runDropboxTransientRetry(
+        () => this.resolveDropboxAccessToken(forceRefresh),
+      ),
       dropboxDownload: async (token) => {
         const result = await this.runDropboxTransientRetry(() => downloadDropboxAppData(token, this.fetchWithAbort));
         await this.persistDropboxRev(result.rev);
@@ -1173,24 +1284,38 @@ class MobileSyncRun {
         return result;
       },
       dropboxMetadata: (token) => this.runDropboxTransientRetry(() => getDropboxAppDataMetadata(token, this.fetchWithAbort)),
-      syncWebdavAttachments: async (data) => {
+      syncWebdavAttachments: async (data, helpers) => {
         const webdavConfig = this.webdavConfig!;
         const baseSyncUrl = getBaseSyncUrl(webdavConfig.url);
-        return syncWebdavAttachments(data, webdavConfig, baseSyncUrl, this.requestAbortController.signal);
+        return syncWebdavAttachments(data, webdavConfig, baseSyncUrl, this.requestAbortController.signal, {
+          activationProbe: helpers.activationProbe,
+        });
       },
-      syncCloudKitAttachments: async (data) => syncCloudKitAttachments(data, this.requestAbortController.signal),
+      syncCloudKitAttachments: async (data, helpers) => syncCloudKitAttachments(
+        data,
+        this.requestAbortController.signal,
+        { activationProbe: helpers.activationProbe }
+      ),
       syncCloudAttachments: async (data, helpers) => {
         const cloudConfig = this.cloudConfig!;
         const baseSyncUrl = getCloudBaseUrl(cloudConfig.url);
         return syncCloudAttachments(data, cloudConfig, baseSyncUrl, {
+          activationProbe: helpers.activationProbe,
           assertCurrent: () => helpers.ensureLocalSnapshotFresh(),
           signal: this.requestAbortController.signal,
         });
       },
-      syncDropboxAttachments: async (data) => syncDropboxAttachments(data, this.dropboxClientId, this.fetchWithAbort, {
+      syncDropboxAttachments: async (data, helpers) => syncDropboxAttachments(data, this.dropboxClientId, this.fetchWithAbort, {
+        activationProbe: helpers.activationProbe,
+        resolveAccessToken: (forceRefresh) => this.resolveDropboxAccessToken(forceRefresh),
         signal: this.requestAbortController.signal,
       }),
-      syncFileAttachments: async (data) => syncFileAttachments(data, this.fileSyncPath!, this.requestAbortController.signal),
+      syncFileAttachments: async (data, helpers) => syncFileAttachments(
+        data,
+        this.fileSyncPath!,
+        this.requestAbortController.signal,
+        { activationProbe: helpers.activationProbe }
+      ),
     };
   }
 
@@ -1240,7 +1365,9 @@ const mobileSyncOrchestrator = createSyncOrchestrator<MobileSyncRequest | undefi
     return delayMs;
   },
   runCycle: async (request, { requestFollowUp }) => {
-    const rawBackend = (await getCachedConfigValue(SYNC_BACKEND_KEY))?.trim() ?? null;
+    const rawBackend = request?.configOverride?.backend
+      ?? (await getCachedConfigValue(SYNC_BACKEND_KEY))?.trim()
+      ?? null;
     const backend: SyncBackend = getSupportedBackend(rawBackend);
 
     if (backend === 'off') {
@@ -1269,9 +1396,34 @@ const mobileSyncOrchestrator = createSyncOrchestrator<MobileSyncRequest | undefi
  *  never the fast-check skip, so a stale cached fingerprint can't hide remote data. */
 export async function performMobileSync(
   syncPathOverride?: string,
-  options?: { manual?: boolean }
+  options?: {
+    manual?: boolean;
+    activationProbe?: boolean;
+    ignorePendingRemoteWriteBackoff?: boolean;
+    configOverride?: MobileSyncConfigOverride;
+  }
 ): Promise<MobileSyncResult> {
-  return mobileSyncOrchestrator.run({ syncPathOverride, manual: options?.manual });
+  const wasInFlight = mobileSyncOrchestrator.getState().inFlight;
+  if (wasInFlight && options?.activationProbe) {
+    // The caller that owns this session-only config must observe its proof.
+    // Never leave transient credentials queued after returning a requeue result.
+    return { success: true, skipped: 'requeued' };
+  }
+  const result = mobileSyncOrchestrator.run({
+    syncPathOverride,
+    manual: options?.manual,
+    activationProbe: options?.activationProbe,
+    ignorePendingRemoteWriteBackoff: options?.ignorePendingRemoteWriteBackoff,
+    configOverride: options?.configOverride,
+  });
+  if (wasInFlight && options?.configOverride) {
+    // A queued orchestrator call normally receives the active run's promise.
+    // That result did not exercise these pending settings, so surface a requeue
+    // instead of letting the settings UI treat it as proof and persist them.
+    void result.catch((error) => logSyncWarning('Active sync failed while a settings proof was queued', error));
+    return { success: true, skipped: 'requeued' };
+  }
+  return result;
 }
 
 export function abortMobileSync(): boolean {

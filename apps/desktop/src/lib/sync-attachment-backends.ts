@@ -1,6 +1,7 @@
 import {
     type AppData,
     type Attachment,
+    type SyncRunAttachmentHelpers,
     createWebdavDownloadBackoff,
     buildCloudKitAttachmentKey,
     cloudGetFile,
@@ -219,6 +220,7 @@ export async function syncWebdavAttachments(
     webDavConfig: WebDavConfig,
     baseSyncUrl: string,
     deps: AttachmentBackendDeps,
+    helpers?: SyncRunAttachmentHelpers,
 ): Promise<AppData | null> {
     if (!deps.isTauriRuntimeEnv()) return null;
     if (!webDavConfig.url) return null;
@@ -388,6 +390,7 @@ export async function syncWebdavAttachments(
 
     const syncMutated = await syncBasicRemoteAttachments({
         attachmentsById,
+        forceUploadExistingLocal: helpers?.activationProbe === true,
         localFileExists,
         policy: {
             shouldSkip: () => abortedByRateLimit,
@@ -554,6 +557,7 @@ export async function syncCloudAttachments(
     cloudConfig: CloudConfig,
     baseSyncUrl: string,
     deps: AttachmentBackendDeps,
+    helpers?: SyncRunAttachmentHelpers,
 ): Promise<boolean> {
     if (!deps.isTauriRuntimeEnv() || !cloudConfig.url) return false;
 
@@ -580,6 +584,7 @@ export async function syncCloudAttachments(
 
     return await syncBasicRemoteAttachments({
         attachmentsById,
+        forceUploadExistingLocal: helpers?.activationProbe === true,
         localFileExists,
         onUpload: async (attachment, localPath) => {
             const cloudKey = buildCloudKey(attachment);
@@ -701,6 +706,7 @@ export async function syncDropboxAttachments(
     appData: AppData,
     resolveAccessToken: (forceRefresh?: boolean) => Promise<string>,
     deps: AttachmentBackendDeps,
+    helpers?: SyncRunAttachmentHelpers,
 ): Promise<boolean> {
     if (!deps.isTauriRuntimeEnv()) return false;
 
@@ -739,6 +745,7 @@ export async function syncDropboxAttachments(
 
     return await syncBasicRemoteAttachments({
         attachmentsById,
+        forceUploadExistingLocal: helpers?.activationProbe === true,
         localFileExists,
         onUpload: async (attachment, localPath) => {
             const cloudKey = buildCloudKey(attachment);
@@ -847,7 +854,11 @@ export async function syncDropboxAttachments(
     });
 }
 
-export async function syncCloudKitAttachments(appData: AppData, deps: AttachmentBackendDeps): Promise<boolean> {
+export async function syncCloudKitAttachments(
+    appData: AppData,
+    deps: AttachmentBackendDeps,
+    helpers?: SyncRunAttachmentHelpers,
+): Promise<boolean> {
     if (!deps.isTauriRuntimeEnv()) return false;
 
     const { BaseDirectory, exists, mkdir, readFile } = await import('@tauri-apps/plugin-fs');
@@ -882,6 +893,7 @@ export async function syncCloudKitAttachments(appData: AppData, deps: Attachment
 
     const syncMutated = await syncBasicRemoteAttachments({
         attachmentsById,
+        forceUploadExistingLocal: helpers?.activationProbe === true,
         localFileExists,
         // A cloudKey written by a different backend before a provider switch isn't a valid
         // CloudKit record key, so CloudKit must still treat the attachment as needing upload.
@@ -967,6 +979,7 @@ export async function syncFileAttachments(
     appData: AppData,
     baseSyncDir: string,
     deps: AttachmentBackendDeps,
+    helpers?: SyncRunAttachmentHelpers,
 ): Promise<boolean> {
     if (!deps.isTauriRuntimeEnv() || !baseSyncDir) return false;
 
@@ -999,6 +1012,7 @@ export async function syncFileAttachments(
 
     return await syncBasicRemoteAttachments({
         attachmentsById,
+        forceUploadExistingLocal: helpers?.activationProbe === true,
         localFileExists,
         onUpload: async (attachment, localPath) => {
             const cloudKey = buildCloudKey(attachment);

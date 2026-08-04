@@ -31,7 +31,8 @@ import {
 export const syncFileAttachments = async (
   appData: AppData,
   syncPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { activationProbe?: boolean } = {}
 ): Promise<boolean> => {
   assertAttachmentSyncNotAborted(signal);
   const syncDir = await resolveFileSyncDir(syncPath);
@@ -94,13 +95,26 @@ export const syncFileAttachments = async (
   const syncMutated = await runMobileAttachmentLifecycle({
     attachmentsById,
     localFileExists: fileExists,
+    forceUploadExistingLocal: options.activationProbe === true,
     isFatalError: (error) => isAttachmentSyncAbortError(error, signal),
-    // The file backend never proactively downloads during background sync — a cloudKey'd
-    // attachment missing locally is left for `ensureAttachmentAvailable`'s on-demand fetch
-    // (attachment-sync-availability.ts) to resolve when the user opens it. Preserved verbatim;
-    // desktop's file backend DOES download proactively, a pre-existing platform difference this
-    // refactor found but did not unify — see the result report.
-    onDownload: async () => false,
+    // Normal background sync leaves remote-only files for on-demand fetch. An
+    // activation probe is different: its cloned snapshot must prove that every
+    // referenced object exists before settings commit. Marking the clone
+    // available is only the proof signal consumed by the shared probe; neither
+    // localStatus nor this clone is persisted.
+    onDownload: async (attachment) => {
+      if (!options.activationProbe || !attachment.cloudKey) return false;
+      const filename = remoteFilenameFor(attachment.cloudKey, attachment);
+      const remoteExists = syncDir.type === 'file'
+        ? await fileExists(`${syncDir.attachmentsDirUri}${filename}`)
+        : (await getSafEntriesByName()).has(filename);
+      if (!remoteExists) {
+        attachment.cloudKey = undefined;
+        return true;
+      }
+      attachment.localStatus = 'available';
+      return true;
+    },
     onDownloadError: () => {},
     onUpload: async (attachment, localPath) => {
       const cloudKey = buildCloudKey(attachment);

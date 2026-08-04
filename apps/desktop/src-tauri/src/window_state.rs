@@ -512,7 +512,10 @@ mod tests {
     fn signature_ignores_where_the_desktop_starts() {
         // Same two screens, same relative placement, different origin.
         assert_eq!(
-            layout_signature(&[screen(0, 0, 1920, 1080, 1.0), screen(1920, 0, 1280, 720, 1.0)]),
+            layout_signature(&[
+                screen(0, 0, 1920, 1080, 1.0),
+                screen(1920, 0, 1280, 720, 1.0)
+            ]),
             layout_signature(&[
                 screen(-1920, -300, 1920, 1080, 1.0),
                 screen(0, -300, 1280, 720, 1.0)
@@ -526,8 +529,14 @@ mod tests {
         assert_ne!(base, layout_signature(&[screen(0, 0, 1280, 720, 1.0)]));
         assert_ne!(base, layout_signature(&[screen(0, 0, 1920, 1080, 2.0)]));
         assert_ne!(
-            layout_signature(&[screen(0, 0, 1920, 1080, 1.0), screen(1920, 0, 1920, 1080, 1.0)]),
-            layout_signature(&[screen(0, 0, 1920, 1080, 1.0), screen(0, 1080, 1920, 1080, 1.0)]),
+            layout_signature(&[
+                screen(0, 0, 1920, 1080, 1.0),
+                screen(1920, 0, 1920, 1080, 1.0)
+            ]),
+            layout_signature(&[
+                screen(0, 0, 1920, 1080, 1.0),
+                screen(0, 1080, 1920, 1080, 1.0)
+            ]),
         );
     }
 

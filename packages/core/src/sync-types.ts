@@ -99,6 +99,11 @@ export type SyncCycleIO = {
     flushPendingLocalBeforeRetryRead?: () => Promise<void>;
     prepareRemoteWrite?: (data: AppData) => Promise<AppData | void>;
     writeRemote: (data: AppData) => Promise<void>;
+    /** The remote was just written by a successful candidate probe. For live
+     *  attachments present on both sides, its destination-specific cloud key
+     *  is authoritative during this one merge; local URI/status still win as
+     *  usual so downloaded bytes are not discarded. */
+    preferIncomingAttachmentCloudKeys?: boolean;
     historyContext?: {
         backend?: SyncHistoryEntry['backend'];
         type?: SyncHistoryEntry['type'];

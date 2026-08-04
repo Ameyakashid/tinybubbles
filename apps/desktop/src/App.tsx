@@ -123,6 +123,7 @@ import { useStartupPromptQueue, type StartupPromptDescriptor } from '@mindwtr/co
 import { useUiStore } from './store/ui-store';
 import { useObsidianStore } from './store/obsidian-store';
 import type { SettingsOnboardingHintPage, SettingsPage } from './components/views/SettingsView';
+import { installKeyringFallbackWarningListener } from './lib/keyring-fallback-warning';
 
 const ProjectsView = import.meta.env.DEV
     ? ProjectsViewEager
@@ -982,6 +983,16 @@ function App() {
             if (unlisten) unlisten();
         };
     }, [setError]);
+
+    useEffect(() => {
+        if (!isTauriRuntime()) return;
+        return installKeyringFallbackWarningListener({
+            onWarning: (message) => showToast(message, 'error', 8000),
+            onError: (error) => {
+                void logError(error, { scope: 'app', step: 'keyringFallbackWarningListener' });
+            },
+        });
+    }, [showToast]);
 
     useEffect(() => {
         if (!isTauriRuntime()) return;

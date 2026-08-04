@@ -1,8 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppData, Attachment } from '@mindwtr/core';
 import { DropboxUnauthorizedError } from './dropbox-sync';
-import { fallbackHashString, getFileSyncDir, hashString, normalizeSyncBackend } from './sync-service-utils';
-import { CLOUD_REMEMBER_TOKEN_KEY, CLOUD_TOKEN_KEY } from './sync-service-config';
+import {
+    fallbackHashString,
+    getFileSyncDir,
+    hashString,
+    normalizeSyncBackend,
+    type SyncBackend,
+} from './sync-service-utils';
+import {
+    CLOUD_ALLOW_INSECURE_HTTP_KEY,
+    CLOUD_PROVIDER_KEY,
+    CLOUD_REMEMBER_TOKEN_KEY,
+    CLOUD_TOKEN_KEY,
+    CLOUD_URL_KEY,
+    SYNC_BACKEND_KEY,
+    WEBDAV_ALLOW_INSECURE_HTTP_KEY,
+    WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY,
+    WEBDAV_PASSWORD_KEY,
+    WEBDAV_URL_KEY,
+    WEBDAV_USERNAME_KEY,
+} from './sync-service-config';
 import { useUiStore } from '../store/ui-store';
 
 const markLocalWriteMock = vi.hoisted(() => vi.fn());
@@ -87,6 +105,29 @@ describe('sync-service test utils', () => {
 });
 
 describe('SyncService testability hooks', () => {
+    it('retains one opaque Dropbox credential handle until its matching recovery completes', () => {
+        const listener = vi.fn();
+        const unsubscribe = SyncService.subscribePendingDropboxCredentialHandleForSession(listener);
+
+        SyncService.rememberPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('opaque-candidate-handle');
+        expect(() => {
+            SyncService.rememberPendingDropboxCredentialHandleForSession('different-candidate-handle');
+        }).toThrow('must be resolved');
+
+        SyncService.forgetPendingDropboxCredentialHandleForSession('different-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('opaque-candidate-handle');
+
+        SyncService.forgetPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+        expect(listener.mock.calls).toEqual([
+            [null],
+            ['opaque-candidate-handle'],
+            [null],
+        ]);
+        unsubscribe();
+    });
+
     it('supports resetting singleton state between tests', async () => {
         (SyncService as any).syncQueued = true;
         (SyncService as any).syncStatus = {
@@ -158,6 +199,573 @@ describe('SyncService testability hooks', () => {
 
         expect(backend).toBe('cloud');
         expect(invoke).toHaveBeenCalledWith('get_sync_backend', undefined);
+    });
+
+    it('persists the cloud provider natively with exact readback before retiring legacy renderer state', async () => {
+        let nativeProvider = 'selfhosted';
+        const events: string[] = [];
+        localStorage.setItem('mindwtr-cloud-provider', 'selfhosted');
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'set_sync_cloud_provider') {
+                events.push(`set:${localStorage.getItem('mindwtr-cloud-provider')}`);
+                nativeProvider = String(args?.provider);
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') {
+                events.push(`get:${localStorage.getItem('mindwtr-cloud-provider')}`);
+                return nativeProvider;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await SyncService.setCloudProvider('dropbox');
+
+        expect(events).toEqual(['set:selfhosted', 'get:selfhosted']);
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+        await expect(SyncService.getCloudProvider()).resolves.toBe('dropbox');
+    });
+
+    it('rejects a cloud-provider write whose native readback disagrees and preserves the renderer cache', async () => {
+        localStorage.setItem('mindwtr-cloud-provider', 'selfhosted');
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'set_sync_cloud_provider') return true;
+            if (command === 'get_sync_cloud_provider') return 'selfhosted';
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await expect(SyncService.setCloudProvider('dropbox')).rejects.toThrow(
+            'Cloud sync provider did not persist correctly',
+        );
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBe('selfhosted');
+    });
+
+    it('finishes provider-only legacy migration before returning the native configuration snapshot', async () => {
+        let nativeProvider: 'selfhosted' | 'dropbox' = 'selfhosted';
+        let providerAuthority: 'uninitialized' | 'native' = 'uninitialized';
+        let releaseProviderWrite!: () => void;
+        const events: string[] = [];
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+
+        const nativeSnapshot = () => ({
+            backend: 'cloud' as const,
+            syncPath: '',
+            cloudProvider: nativeProvider,
+            cloudProviderAuthority: providerAuthority,
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_webdav_config') {
+                return { url: '', username: '', hasPassword: false, allowInsecureHttp: false };
+            }
+            if (command === 'get_cloud_config') {
+                return { url: '', token: '', allowInsecureHttp: false };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: nativeProvider, authority: providerAuthority };
+            }
+            if (command === 'set_sync_cloud_provider') {
+                await new Promise<void>((resolve) => {
+                    releaseProviderWrite = resolve;
+                });
+                nativeProvider = args?.provider as typeof nativeProvider;
+                providerAuthority = 'native';
+                return true;
+            }
+            if (command === 'get_sync_configuration_snapshot') return nativeSnapshot();
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        const snapshotPromise = SyncService.getPersistedSyncConfigurationSnapshot();
+        await waitForAssertion(() => expect(events).toContain('set_sync_cloud_provider'));
+        expect(events).not.toContain('get_sync_configuration_snapshot');
+
+        releaseProviderWrite();
+        await expect(snapshotPromise).resolves.toMatchObject({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+        });
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+        expect(events[0]).toBe('recover_dropbox_credentials_before_sync_configuration');
+        expect(events.indexOf('recover_dropbox_credentials_before_sync_configuration')).toBeLessThan(
+            events.indexOf('set_sync_cloud_provider'),
+        );
+        expect(events.indexOf('set_sync_cloud_provider')).toBeLessThan(
+            events.indexOf('get_sync_configuration_snapshot'),
+        );
+    });
+
+    it('does not read or write native configuration when the migration recovery barrier fails', async () => {
+        const events: string[] = [];
+        localStorage.setItem(SYNC_BACKEND_KEY, 'cloud');
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                throw new Error('native Dropbox recovery failed');
+            }
+            throw new Error(`Unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).rejects.toThrow(
+            'native Dropbox recovery failed',
+        );
+
+        expect(events).toEqual(['recover_dropbox_credentials_before_sync_configuration']);
+        expect(localStorage.getItem(SYNC_BACKEND_KEY)).toBe('cloud');
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBe('dropbox');
+    });
+
+    it('makes concurrent native getters await the same provider migration', async () => {
+        let nativeProvider: 'selfhosted' | 'dropbox' = 'selfhosted';
+        let providerAuthority: 'uninitialized' | 'native' = 'uninitialized';
+        let releaseProviderWrite!: () => void;
+        let backendResolved = false;
+        let providerResolved = false;
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_webdav_config') {
+                return { url: '', username: '', hasPassword: false, allowInsecureHttp: false };
+            }
+            if (command === 'get_cloud_config') {
+                return { url: '', token: '', allowInsecureHttp: false };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: nativeProvider, authority: providerAuthority };
+            }
+            if (command === 'set_sync_cloud_provider') {
+                await new Promise<void>((resolve) => {
+                    releaseProviderWrite = resolve;
+                });
+                nativeProvider = args?.provider as typeof nativeProvider;
+                providerAuthority = 'native';
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return nativeProvider;
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        const backendPromise = SyncService.getSyncBackend().then((backend) => {
+            backendResolved = true;
+            return backend;
+        });
+        const providerPromise = SyncService.getCloudProvider().then((provider) => {
+            providerResolved = true;
+            return provider;
+        });
+        await waitForAssertion(() => {
+            expect(invoke).toHaveBeenCalledWith('set_sync_cloud_provider', { provider: 'dropbox' });
+        });
+        expect(backendResolved).toBe(false);
+        expect(providerResolved).toBe(false);
+        expect(invoke.mock.calls.filter(([command]) => command === 'set_sync_cloud_provider')).toHaveLength(1);
+
+        releaseProviderWrite();
+        await expect(Promise.all([backendPromise, providerPromise])).resolves.toEqual(['cloud', 'dropbox']);
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+    });
+
+    it('retains a failed legacy provider migration for a later successful retry', async () => {
+        let nativeProvider: 'selfhosted' | 'dropbox' = 'selfhosted';
+        let providerAuthority: 'uninitialized' | 'native' = 'uninitialized';
+        let shouldFail = true;
+        const events: string[] = [];
+        const reportError = vi.fn();
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+
+        const nativeSnapshot = () => ({
+            backend: 'cloud' as const,
+            syncPath: '',
+            cloudProvider: nativeProvider,
+            cloudProviderAuthority: providerAuthority,
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_webdav_config') {
+                return { url: '', username: '', hasPassword: false, allowInsecureHttp: false };
+            }
+            if (command === 'get_cloud_config') {
+                return { url: '', token: '', allowInsecureHttp: false };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: nativeProvider, authority: providerAuthority };
+            }
+            if (command === 'set_sync_cloud_provider') {
+                if (shouldFail) throw new Error('native provider unavailable');
+                nativeProvider = args?.provider as typeof nativeProvider;
+                providerAuthority = 'native';
+                return true;
+            }
+            if (command === 'get_sync_configuration_snapshot') return nativeSnapshot();
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            reportError,
+        });
+
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).rejects.toThrow(
+            'native provider unavailable',
+        );
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBe('dropbox');
+        expect(events).not.toContain('get_sync_configuration_snapshot');
+        expect(reportError).toHaveBeenCalledTimes(1);
+
+        shouldFail = false;
+        events.length = 0;
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).resolves.toMatchObject({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+        });
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+        expect(events).toContain('get_sync_configuration_snapshot');
+        expect(invoke.mock.calls.filter(([command]) => command === 'set_sync_cloud_provider')).toHaveLength(2);
+    });
+
+    it('ignores a stale legacy provider once native authority has been established', async () => {
+        const events: string[] = [];
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_webdav_config') {
+                return { url: '', username: '', hasPassword: false, allowInsecureHttp: false };
+            }
+            if (command === 'get_cloud_config') {
+                return { url: '', token: '', allowInsecureHttp: false };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: 'selfhosted', authority: 'native' };
+            }
+            if (command === 'get_sync_configuration_snapshot') {
+                return {
+                    backend: 'cloud',
+                    syncPath: '',
+                    cloudProvider: 'selfhosted',
+                    cloudProviderAuthority: 'native',
+                    webdav: {
+                        url: '',
+                        username: '',
+                        password: null,
+                        passwordAuthority: 'opaque',
+                        hasPassword: null,
+                        allowInsecureHttp: false,
+                        allowWeakFingerprint: true,
+                    },
+                    cloud: {
+                        url: '',
+                        token: null,
+                        tokenAuthority: 'opaque',
+                        allowInsecureHttp: false,
+                        rememberToken: false,
+                    },
+                };
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).resolves.toMatchObject({
+            backend: 'cloud',
+            cloudProvider: 'selfhosted',
+        });
+        expect(events).not.toContain('set_sync_cloud_provider');
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+    });
+
+    it('retires every inspected legacy field when populated native state needs no setters', async () => {
+        const localLegacyValues: Record<string, string> = {
+            [SYNC_BACKEND_KEY]: 'cloud',
+            [WEBDAV_URL_KEY]: 'https://legacy-webdav.example.com',
+            [WEBDAV_USERNAME_KEY]: 'legacy-user',
+            [WEBDAV_PASSWORD_KEY]: 'legacy-local-password',
+            [WEBDAV_ALLOW_INSECURE_HTTP_KEY]: 'true',
+            [WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY]: 'false',
+            [CLOUD_URL_KEY]: 'https://legacy-cloud.example.com',
+            [CLOUD_TOKEN_KEY]: 'legacy-local-token',
+            [CLOUD_ALLOW_INSECURE_HTTP_KEY]: 'true',
+            [CLOUD_REMEMBER_TOKEN_KEY]: 'false',
+            [CLOUD_PROVIDER_KEY]: 'dropbox',
+        };
+        Object.entries(localLegacyValues).forEach(([key, value]) => localStorage.setItem(key, value));
+        sessionStorage.setItem(WEBDAV_PASSWORD_KEY, 'legacy-session-password');
+        sessionStorage.setItem(CLOUD_TOKEN_KEY, 'legacy-session-token');
+
+        const nativeSnapshot = {
+            backend: 'cloud' as const,
+            syncPath: '',
+            cloudProvider: 'selfhosted' as const,
+            webdav: {
+                url: 'https://native-webdav.example.com',
+                username: 'native-user',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: true,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: 'https://native-cloud.example.com',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        };
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return nativeSnapshot.backend;
+            if (command === 'get_webdav_config') {
+                return {
+                    url: nativeSnapshot.webdav.url,
+                    username: nativeSnapshot.webdav.username,
+                    hasPassword: true,
+                    allowInsecureHttp: false,
+                    allowWeakFingerprint: true,
+                };
+            }
+            if (command === 'get_cloud_config') {
+                return {
+                    url: nativeSnapshot.cloud.url,
+                    token: 'native-token',
+                    allowInsecureHttp: false,
+                };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: 'selfhosted', authority: 'native' };
+            }
+            if (command === 'get_sync_configuration_snapshot') return nativeSnapshot;
+            throw new Error(`Unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).resolves.toMatchObject({
+            backend: 'cloud',
+            cloudProvider: 'selfhosted',
+        });
+
+        expect(invoke.mock.calls.some(([command]) => command.startsWith('set_'))).toBe(false);
+        Object.keys(localLegacyValues).forEach((key) => expect(localStorage.getItem(key)).toBeNull());
+        expect(sessionStorage.getItem(WEBDAV_PASSWORD_KEY)).toBeNull();
+        expect(sessionStorage.getItem(CLOUD_TOKEN_KEY)).toBeNull();
+    });
+
+    it('preserves a non-remembered local legacy token when native provider migration fails', async () => {
+        localStorage.setItem(CLOUD_URL_KEY, 'https://legacy-cloud.example.com');
+        localStorage.setItem(CLOUD_TOKEN_KEY, 'must-survive-failed-migration');
+        localStorage.setItem(CLOUD_REMEMBER_TOKEN_KEY, 'false');
+        localStorage.setItem(CLOUD_PROVIDER_KEY, 'dropbox');
+
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_backend') return 'cloud';
+            if (command === 'get_webdav_config') {
+                return { url: '', username: '', hasPassword: false, allowInsecureHttp: false, allowWeakFingerprint: true };
+            }
+            if (command === 'get_cloud_config') {
+                return { url: 'https://native-cloud.example.com', token: 'native-token', allowInsecureHttp: false };
+            }
+            if (command === 'get_sync_cloud_provider_state') {
+                return { provider: 'selfhosted', authority: 'uninitialized' };
+            }
+            if (command === 'set_sync_cloud_provider') throw new Error('native provider unavailable');
+            throw new Error(`Unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.getPersistedSyncConfigurationSnapshot()).rejects.toThrow(
+            'native provider unavailable',
+        );
+
+        expect(localStorage.getItem(CLOUD_TOKEN_KEY)).toBe('must-survive-failed-migration');
+        expect(localStorage.getItem(CLOUD_URL_KEY)).toBe('https://legacy-cloud.example.com');
+        expect(localStorage.getItem(CLOUD_REMEMBER_TOKEN_KEY)).toBe('false');
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBe('dropbox');
+        expect(sessionStorage.getItem(CLOUD_TOKEN_KEY)).toBeNull();
+    });
+
+    it('commits self-hosted sync from the native provider snapshot after renderer storage is lost', async () => {
+        let backend: SyncBackend = 'cloud';
+        let nativeProvider: 'selfhosted' | 'dropbox' = 'dropbox';
+        let cloudUrl = '';
+        let cloudToken = '';
+        const events: string[] = [];
+        localStorage.removeItem('mindwtr-cloud-provider');
+        const snapshot = (args?: Record<string, unknown>) => ({
+            backend,
+            cloudProvider: nativeProvider,
+            syncPath: '',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: args?.requireCloudToken === true
+                ? {
+                    url: cloudUrl,
+                    token: cloudToken,
+                    tokenAuthority: 'known' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                }
+                : {
+                    url: cloudUrl,
+                    token: null,
+                    tokenAuthority: 'opaque' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                events.push('dropbox:recover-before-configuration');
+                return true;
+            }
+            if (command === 'get_sync_configuration_snapshot') {
+                events.push(args?.requireCloudToken === true ? 'snapshot:strict-cloud' : 'snapshot:tolerant');
+                return snapshot(args);
+            }
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                events.push(`backend:${backend}`);
+                return undefined;
+            }
+            if (command === 'set_cloud_config') {
+                cloudUrl = String(args?.url ?? '');
+                cloudToken = String(args?.token ?? '');
+                events.push(`cloud:${cloudUrl}`);
+                return undefined;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                nativeProvider = args?.provider as typeof nativeProvider;
+                events.push(`provider:${nativeProvider}`);
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return nativeProvider;
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await SyncService.commitProvenSyncConfiguration({
+            backend: 'cloud',
+            cloudProvider: 'selfhosted',
+            cloud: {
+                url: 'https://new-cloud.example.com',
+                token: 'new-cloud-token',
+            },
+        });
+
+        expect(backend).toBe('cloud');
+        expect(nativeProvider).toBe('selfhosted');
+        expect(cloudToken).toBe('new-cloud-token');
+        expect(localStorage.getItem(CLOUD_PROVIDER_KEY)).toBeNull();
+        expect(events[0]).toBe('dropbox:recover-before-configuration');
+        expect(events).toContain('snapshot:strict-cloud');
+        expect(events.indexOf('provider:selfhosted')).toBeLessThan(events.lastIndexOf('backend:cloud'));
+    });
+
+    it('prevents every configuration read and write when native Dropbox recovery fails', async () => {
+        const events: string[] = [];
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                throw new Error('native Dropbox recovery failed');
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await expect(SyncService.commitProvenSyncConfiguration({
+            backend: 'file',
+            syncPath: '/must-not-write',
+        })).rejects.toThrow('native Dropbox recovery failed');
+
+        expect(events).toEqual(['recover_dropbox_credentials_before_sync_configuration']);
     });
 
     it('holds snapshot restore behind pending saves through the refresh', async () => {
@@ -266,7 +874,10 @@ describe('SyncService testability hooks', () => {
         },
     ])('rejects when native $name persistence fails', async ({ label, save }) => {
         const persistenceError = new Error('native config write failed');
-        const invoke = vi.fn().mockRejectedValue(persistenceError);
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            throw persistenceError;
+        });
         const reportError = vi.fn();
         __syncServiceTestUtils.setDependenciesForTests({
             isTauriRuntime: () => true,
@@ -401,6 +1012,1102 @@ describe('SyncService testability hooks', () => {
         expect(await SyncService.getDropboxAppKey()).toBe(baseline);
         await SyncService.setDropboxAppKey('');
         expect(await SyncService.getDropboxAppKey()).toBe(baseline);
+    });
+
+    it('settles native recovery before staging OAuth after renderer lifecycle state was lost', async () => {
+        const events: string[] = [];
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'connect_dropbox') return 'opaque-candidate-handle';
+            if (command === 'get_dropbox_access_token') return 'candidate-access-token';
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.connectDropbox('client-id')).resolves.toBe('opaque-candidate-handle');
+        await expect(SyncService.getDropboxAccessToken('client-id', {
+            credentialHandle: 'opaque-candidate-handle',
+            forceRefresh: true,
+        })).resolves.toBe('candidate-access-token');
+
+        expect((SyncService as any).pendingDropboxFinalizeHandles.size).toBe(0);
+        expect(events.slice(0, 2)).toEqual([
+            'recover_dropbox_credentials_before_sync_configuration',
+            'connect_dropbox',
+        ]);
+        expect(invoke).toHaveBeenNthCalledWith(2, 'connect_dropbox', { clientId: 'client-id' });
+        expect(invoke).toHaveBeenNthCalledWith(3, 'get_dropbox_access_token', {
+            clientId: 'client-id',
+            credentialHandle: 'opaque-candidate-handle',
+            forceRefresh: true,
+        });
+    });
+
+    it('does not start Dropbox OAuth when native recovery fails', async () => {
+        const events: string[] = [];
+        const invoke = vi.fn(async (command: string) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                throw new Error('native Dropbox recovery failed');
+            }
+            throw new Error(`Unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(SyncService.connectDropbox('client-id')).rejects.toThrow(
+            'native Dropbox recovery failed',
+        );
+
+        expect(events).toEqual(['recover_dropbox_credentials_before_sync_configuration']);
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+    });
+
+    it('keeps attachment cleanup token resolution on the staged Dropbox account', async () => {
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'get_dropbox_access_token') return 'candidate-access-token';
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        await expect(__syncServiceTestUtils.runSyncRestoreExclusiveForTests(() => (
+            __syncServiceTestUtils.resolveDropboxCleanupTokenForTests(
+                'client-id',
+                'opaque-candidate-handle',
+                true,
+            )
+        ))).resolves.toBe('candidate-access-token');
+
+        expect(invoke).toHaveBeenCalledWith('get_dropbox_access_token', {
+            clientId: 'client-id',
+            credentialHandle: 'opaque-candidate-handle',
+            forceRefresh: true,
+        });
+    });
+
+    it('durably disables an active Dropbox backend before revoking its tokens', async () => {
+        let backend: SyncBackend = 'cloud';
+        const events: string[] = [];
+        const snapshot = () => ({
+            backend,
+            cloudProvider: 'dropbox' as const,
+            syncPath: '',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            events.push(command);
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') return snapshot();
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                return undefined;
+            }
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'disconnect_dropbox') return true;
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await SyncService.disconnectDropbox('client-id');
+
+        expect(backend).toBe('off');
+        expect(events.indexOf('set_sync_backend')).toBeGreaterThan(events.indexOf('get_sync_configuration_snapshot'));
+        expect(events.lastIndexOf('get_sync_configuration_snapshot')).toBeGreaterThan(events.indexOf('set_sync_backend'));
+        expect(events.indexOf('disconnect_dropbox')).toBeGreaterThan(events.lastIndexOf('get_sync_configuration_snapshot'));
+    });
+
+    it('does not revoke Dropbox tokens when disabling the active backend fails', async () => {
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') {
+                return {
+                    backend: 'cloud',
+                    cloudProvider: 'dropbox',
+                    syncPath: '',
+                    webdav: {
+                        url: '',
+                        username: '',
+                        password: null,
+                        passwordAuthority: 'opaque',
+                        hasPassword: null,
+                        allowInsecureHttp: false,
+                        allowWeakFingerprint: true,
+                    },
+                    cloud: {
+                        url: '',
+                        token: null,
+                        tokenAuthority: 'opaque',
+                        allowInsecureHttp: false,
+                        rememberToken: false,
+                    },
+                };
+            }
+            if (command === 'set_sync_backend') throw new Error('disk full');
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+
+        await expect(SyncService.disconnectDropbox('client-id')).rejects.toThrow('disk full');
+        expect(invoke.mock.calls.some(([command]) => command === 'disconnect_dropbox')).toBe(false);
+    });
+
+    it('serializes Dropbox disconnect and reconnect so an older disconnect cannot lose the new handle', async () => {
+        let releaseDisconnect!: () => void;
+        const disconnectGate = new Promise<void>((resolve) => {
+            releaseDisconnect = resolve;
+        });
+        const events: string[] = [];
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') {
+                return {
+                    backend: 'off',
+                    cloudProvider: 'dropbox',
+                    syncPath: '',
+                    webdav: {
+                        url: '',
+                        username: '',
+                        password: null,
+                        passwordAuthority: 'opaque',
+                        hasPassword: null,
+                        allowInsecureHttp: false,
+                        allowWeakFingerprint: true,
+                    },
+                    cloud: {
+                        url: '',
+                        token: null,
+                        tokenAuthority: 'opaque',
+                        allowInsecureHttp: false,
+                        rememberToken: false,
+                    },
+                };
+            }
+            if (command === 'disconnect_dropbox') {
+                events.push('disconnect:start');
+                await disconnectGate;
+                events.push('disconnect:finish');
+                return true;
+            }
+            if (command === 'connect_dropbox') {
+                events.push('connect');
+                return 'new-opaque-handle';
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+
+        const disconnect = SyncService.disconnectDropbox('client-id');
+        await waitForAssertion(() => expect(events).toContain('disconnect:start'));
+        const reconnect = SyncService.connectDropbox('client-id');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const connectedBeforeDisconnectFinished = events.includes('connect');
+
+        releaseDisconnect();
+        await expect(disconnect).resolves.toBeUndefined();
+        await expect(reconnect).resolves.toBe('new-opaque-handle');
+        expect(connectedBeforeDisconnectFinished).toBe(false);
+        expect(events).toEqual(['disconnect:start', 'disconnect:finish', 'connect']);
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('new-opaque-handle');
+    });
+
+    it('queues staged credential cleanup behind an in-flight configuration transaction', async () => {
+        let releaseConfigurationRead!: () => void;
+        const configurationReadGate = new Promise<void>((resolve) => {
+            releaseConfigurationRead = resolve;
+        });
+        const events: string[] = [];
+        let firstConfigurationRead = true;
+        const snapshot = {
+            backend: 'off' as const,
+            cloudProvider: 'selfhosted' as const,
+            syncPath: '',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        };
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') {
+                if (firstConfigurationRead) {
+                    firstConfigurationRead = false;
+                    events.push('transaction:start');
+                    await configurationReadGate;
+                }
+                return snapshot;
+            }
+            if (command === 'get_sync_backend') return 'off';
+            if (command === 'discard_staged_dropbox_credentials') {
+                events.push('credential:discard');
+                return true;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        const transaction = SyncService.commitProvenSyncConfiguration({ backend: 'off' });
+        await waitForAssertion(() => expect(events).toContain('transaction:start'));
+        const cleanup = SyncService.resolvePendingDropboxCredentialForSession('opaque-candidate-handle');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const cleanupStartedBeforeTransactionFinished = events.includes('credential:discard');
+
+        releaseConfigurationRead();
+        await expect(transaction).resolves.toEqual({
+            committed: true,
+            cleanupPending: false,
+            handleFinalized: true,
+        });
+        await expect(cleanup).resolves.toBeUndefined();
+        appKeySpy.mockRestore();
+
+        expect(cleanupStartedBeforeTransactionFinished).toBe(false);
+        expect(events).toContain('credential:discard');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+    });
+
+    it('queues Dropbox status and connection tests behind credential promotion without nesting the token queue', async () => {
+        let releasePromotion!: () => void;
+        const promotionGate = new Promise<void>((resolve) => {
+            releasePromotion = resolve;
+        });
+        let backend: SyncBackend = 'cloud';
+        let cloudProvider = 'dropbox' as const;
+        const events: string[] = [];
+        const snapshot = () => ({
+            backend,
+            cloudProvider,
+            syncPath: '',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'get_sync_configuration_snapshot') {
+                events.push('snapshot:native');
+                return snapshot();
+            }
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                events.push(`backend:${backend}`);
+                return undefined;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                cloudProvider = args?.provider as typeof cloudProvider;
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return cloudProvider;
+            if (command === 'promote_staged_dropbox_credentials') {
+                events.push('promotion:start');
+                await promotionGate;
+                events.push('promotion:finish');
+                return true;
+            }
+            if (command === 'finalize_staged_dropbox_credentials') {
+                events.push('promotion:finalize');
+                return true;
+            }
+            if (command === 'is_dropbox_connected') {
+                events.push('status:native');
+                return true;
+            }
+            if (command === 'get_dropbox_access_token') {
+                events.push('test:token');
+                if (args?.credentialHandle) {
+                    throw new Error('finalized candidate handle is invalid');
+                }
+                return 'durable-access-token';
+            }
+            return undefined;
+        });
+        const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            getTauriFetch: async () => fetchSpy as unknown as typeof fetch,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        const commit = SyncService.commitProvenSyncConfiguration({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+            dropboxCredentialHandle: 'opaque-candidate-handle',
+        });
+        await waitForAssertion(() => expect(events).toContain('promotion:start'));
+        const status = SyncService.isDropboxConnected('client-id');
+        const test = SyncService.testDropboxConnection('client-id', {
+            credentialHandle: 'opaque-candidate-handle',
+        });
+        const snapshotReadsBeforeRemount = events.filter((event) => event === 'snapshot:native').length;
+        const remountSnapshot = SyncService.getPersistedSyncConfigurationSnapshot();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const statusEnteredDuringPromotion = events.includes('status:native');
+        const testEnteredDuringPromotion = events.includes('test:token');
+        const remountReadEnteredDuringPromotion = events.filter(
+            (event) => event === 'snapshot:native',
+        ).length > snapshotReadsBeforeRemount;
+
+        releasePromotion();
+        await expect(commit).resolves.toEqual({
+            committed: true,
+            cleanupPending: false,
+            handleFinalized: true,
+        });
+        await expect(status).resolves.toBe(true);
+        await expect(test).resolves.toBeUndefined();
+        await expect(remountSnapshot).resolves.toMatchObject({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+        });
+        appKeySpy.mockRestore();
+
+        expect(statusEnteredDuringPromotion).toBe(false);
+        expect(testEnteredDuringPromotion).toBe(false);
+        expect(remountReadEnteredDuringPromotion).toBe(false);
+        expect(events.indexOf('status:native')).toBeGreaterThan(events.indexOf('promotion:finalize'));
+        expect(events.indexOf('test:token')).toBeGreaterThan(events.indexOf('status:native'));
+        expect(invoke).toHaveBeenCalledWith('get_dropbox_access_token', {
+            clientId: 'client-id',
+            credentialHandle: undefined,
+            forceRefresh: false,
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['journal-clear', 'entry-removal'] as const)(
+        'keeps the committed Dropbox backend and retries finalize after a lost response at %s',
+        async (lostResponseStage) => {
+            let backend: SyncBackend = 'file';
+            let cloudProvider = 'selfhosted' as 'selfhosted' | 'dropbox';
+            let finalizeAttempts = 0;
+            const events: string[] = [];
+            const snapshot = () => ({
+                backend,
+                cloudProvider,
+                syncPath: '/previous-file-sync',
+                webdav: {
+                    url: '',
+                    username: '',
+                    password: null,
+                    passwordAuthority: 'opaque' as const,
+                    hasPassword: null,
+                    allowInsecureHttp: false,
+                    allowWeakFingerprint: true,
+                },
+                cloud: {
+                    url: '',
+                    token: null,
+                    tokenAuthority: 'opaque' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                },
+            });
+            const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+                if (command === 'get_sync_configuration_snapshot') return snapshot();
+                if (command === 'get_sync_backend') return backend;
+                if (command === 'set_sync_backend') {
+                    backend = args?.backend as SyncBackend;
+                    events.push(`backend:${backend}`);
+                    return undefined;
+                }
+                if (command === 'set_sync_cloud_provider') {
+                    cloudProvider = args?.provider as typeof cloudProvider;
+                    events.push(`provider:${cloudProvider}`);
+                    return true;
+                }
+                if (command === 'get_sync_cloud_provider') return cloudProvider;
+                if (command === 'promote_staged_dropbox_credentials') {
+                    events.push(`promote:${String(args?.credentialHandle)}`);
+                    return true;
+                }
+                if (command === 'finalize_staged_dropbox_credentials') {
+                    finalizeAttempts += 1;
+                    events.push(`finalize:${lostResponseStage}:${finalizeAttempts}`);
+                    if (finalizeAttempts === 1) {
+                        throw new Error(`lost response after ${lostResponseStage}`);
+                    }
+                    return true;
+                }
+                return undefined;
+            });
+            __syncServiceTestUtils.setDependenciesForTests({
+                isTauriRuntime: () => true,
+                invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            });
+            (SyncService as any).didMigrate = true;
+            SyncService.rememberPendingDropboxCredentialHandleForSession('committed-handle');
+            const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+            await expect(SyncService.commitProvenSyncConfiguration({
+                backend: 'cloud',
+                cloudProvider: 'dropbox',
+                dropboxCredentialHandle: 'committed-handle',
+            })).resolves.toEqual({
+                committed: true,
+                cleanupPending: true,
+                handleFinalized: false,
+            });
+            await waitForAssertion(() => expect(finalizeAttempts).toBe(2));
+            appKeySpy.mockRestore();
+
+            expect(backend).toBe('cloud');
+            expect(cloudProvider).toBe('dropbox');
+            expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+            expect((SyncService as any).pendingDropboxFinalizeHandles.size).toBe(0);
+            expect(events).not.toContain('backend:file');
+            expect(events.some((event) => event.startsWith('rollback:'))).toBe(false);
+        },
+    );
+
+    it('keeps finalize-pending credentials out of a later Sync and isolates a newer candidate', async () => {
+        let backend: SyncBackend = 'file';
+        let cloudProvider = 'selfhosted' as 'selfhosted' | 'dropbox';
+        let finalizeAttempts = 0;
+        const events: string[] = [];
+        const snapshot = () => ({
+            backend,
+            cloudProvider,
+            syncPath: '/previous-file-sync',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') return snapshot();
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                events.push(`backend:${backend}`);
+                return undefined;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                cloudProvider = args?.provider as typeof cloudProvider;
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return cloudProvider;
+            if (command === 'promote_staged_dropbox_credentials') {
+                events.push(`promote:${String(args?.credentialHandle)}`);
+                return true;
+            }
+            if (command === 'finalize_staged_dropbox_credentials') {
+                finalizeAttempts += 1;
+                events.push(`finalize:${String(args?.credentialHandle)}:${finalizeAttempts}:failed`);
+                throw new Error('finalize still unavailable');
+            }
+            if (command === 'discard_staged_dropbox_credentials') {
+                events.push(`discard:${String(args?.credentialHandle)}`);
+                return true;
+            }
+            if (command === 'rollback_staged_dropbox_credentials') {
+                events.push(`rollback:${String(args?.credentialHandle)}`);
+                return true;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('committed-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        await expect(SyncService.commitProvenSyncConfiguration({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+            dropboxCredentialHandle: 'committed-handle',
+        })).resolves.toMatchObject({ committed: true, cleanupPending: true });
+        await waitForAssertion(() => expect(finalizeAttempts).toBeGreaterThanOrEqual(2));
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+
+        SyncService.rememberPendingDropboxCredentialHandleForSession('newer-candidate-handle');
+        const backendSpy = vi.spyOn(SyncService, 'getSyncBackend').mockResolvedValue('off');
+        await expect(SyncService.performSync({ manual: true })).resolves.toMatchObject({ success: true });
+        backendSpy.mockRestore();
+        appKeySpy.mockRestore();
+
+        expect(finalizeAttempts).toBeGreaterThanOrEqual(3);
+        expect(backend).toBe('cloud');
+        expect(cloudProvider).toBe('dropbox');
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('newer-candidate-handle');
+        expect(events.filter((event) => event === 'promote:committed-handle')).toHaveLength(1);
+        expect(events).not.toContain('promote:newer-candidate-handle');
+        expect(events.some((event) => event.startsWith('discard:committed-handle'))).toBe(false);
+        expect(events.some((event) => event.startsWith('rollback:committed-handle'))).toBe(false);
+        expect((SyncService as any).pendingDropboxFinalizeHandles.has('committed-handle')).toBe(true);
+    });
+
+    it.each(['off', 'disconnect'] as const)(
+        'settles committed Dropbox recovery before standalone %s mutation',
+        async (action) => {
+            let backend: SyncBackend = 'file';
+            let cloudProvider = 'selfhosted' as 'selfhosted' | 'dropbox';
+            let durableAccount = 'old-account';
+            let revokedAccount: string | null = null;
+            let journalPending = false;
+            let finalizeAttempts = 0;
+            const events: string[] = [];
+            const snapshot = () => ({
+                backend,
+                cloudProvider,
+                syncPath: '/previous-file-sync',
+                webdav: {
+                    url: '',
+                    username: '',
+                    password: null,
+                    passwordAuthority: 'opaque' as const,
+                    hasPassword: null,
+                    allowInsecureHttp: false,
+                    allowWeakFingerprint: true,
+                },
+                cloud: {
+                    url: '',
+                    token: null,
+                    tokenAuthority: 'opaque' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                },
+            });
+            const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+                if (command === 'get_sync_configuration_snapshot') return snapshot();
+                if (command === 'get_sync_backend') return backend;
+                if (command === 'set_sync_backend') {
+                    backend = args?.backend as SyncBackend;
+                    events.push(`backend:${backend}`);
+                    return undefined;
+                }
+                if (command === 'set_sync_cloud_provider') {
+                    cloudProvider = args?.provider as typeof cloudProvider;
+                    return true;
+                }
+                if (command === 'get_sync_cloud_provider') return cloudProvider;
+                if (command === 'promote_staged_dropbox_credentials') {
+                    durableAccount = 'candidate-account';
+                    journalPending = true;
+                    events.push('promote:candidate-account');
+                    return true;
+                }
+                if (command === 'finalize_staged_dropbox_credentials') {
+                    finalizeAttempts += 1;
+                    events.push(`finalize:${finalizeAttempts}:failed`);
+                    throw new Error('finalize response unavailable');
+                }
+                if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                    events.push(`recover:${backend}:${cloudProvider}`);
+                    expect(backend).toBe('cloud');
+                    expect(cloudProvider).toBe('dropbox');
+                    expect(journalPending).toBe(true);
+                    journalPending = false;
+                    return true;
+                }
+                if (command === 'disconnect_dropbox') {
+                    revokedAccount = durableAccount;
+                    durableAccount = '';
+                    events.push(`disconnect:${String(revokedAccount)}`);
+                    return true;
+                }
+                return undefined;
+            });
+            __syncServiceTestUtils.setDependenciesForTests({
+                isTauriRuntime: () => true,
+                invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            });
+            (SyncService as any).didMigrate = true;
+            SyncService.rememberPendingDropboxCredentialHandleForSession('committed-handle');
+            const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+            await expect(SyncService.commitProvenSyncConfiguration({
+                backend: 'cloud',
+                cloudProvider: 'dropbox',
+                dropboxCredentialHandle: 'committed-handle',
+            })).resolves.toMatchObject({ committed: true, cleanupPending: true });
+            await waitForAssertion(() => expect(finalizeAttempts).toBeGreaterThanOrEqual(2));
+
+            if (action === 'off') {
+                await SyncService.setSyncBackend('off');
+            } else {
+                await SyncService.disconnectDropbox('client-id');
+            }
+            appKeySpy.mockRestore();
+
+            const recoveryIndex = events.indexOf('recover:cloud:dropbox');
+            expect(recoveryIndex).toBeGreaterThan(-1);
+            expect(events.lastIndexOf('backend:off')).toBeGreaterThan(recoveryIndex);
+            expect(backend).toBe('off');
+            expect(journalPending).toBe(false);
+            expect((SyncService as any).pendingDropboxFinalizeHandles.size).toBe(0);
+            if (action === 'off') {
+                expect(durableAccount).toBe('candidate-account');
+                expect(revokedAccount).toBeNull();
+            } else {
+                expect(revokedAccount).toBe('candidate-account');
+                expect(durableAccount).toBe('');
+            }
+        },
+    );
+
+    it('publishes finalize-pending ownership before a queued Off barrier and emits no stale retry warning', async () => {
+        let backend: SyncBackend = 'file';
+        let cloudProvider = 'selfhosted' as 'selfhosted' | 'dropbox';
+        let releaseFinalize!: () => void;
+        let finalizeAttempts = 0;
+        let barrierSawFinalizeOwnership = false;
+        const finalizeGate = new Promise<void>((resolve) => {
+            releaseFinalize = resolve;
+        });
+        const logWarn = vi.fn(async () => null);
+        const showToast = vi.fn();
+        const originalShowToast = useUiStore.getState().showToast;
+        useUiStore.setState({ showToast });
+        const snapshot = () => ({
+            backend,
+            cloudProvider,
+            syncPath: '/previous-file-sync',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'get_sync_configuration_snapshot') return snapshot();
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                return undefined;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                cloudProvider = args?.provider as typeof cloudProvider;
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return cloudProvider;
+            if (command === 'promote_staged_dropbox_credentials') return true;
+            if (command === 'finalize_staged_dropbox_credentials') {
+                finalizeAttempts += 1;
+                await finalizeGate;
+                throw new Error('finalize response unavailable');
+            }
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                barrierSawFinalizeOwnership = (SyncService as any)
+                    .pendingDropboxFinalizeHandles
+                    .has('committed-handle');
+                return true;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            logWarn,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('committed-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        try {
+            const commit = SyncService.commitProvenSyncConfiguration({
+                backend: 'cloud',
+                cloudProvider: 'dropbox',
+                dropboxCredentialHandle: 'committed-handle',
+            });
+            await waitForAssertion(() => expect(finalizeAttempts).toBe(1));
+            const disable = SyncService.setSyncBackend('off');
+
+            releaseFinalize();
+            await expect(commit).resolves.toMatchObject({ committed: true, cleanupPending: true });
+            await expect(disable).resolves.toBeUndefined();
+
+            expect(barrierSawFinalizeOwnership).toBe(true);
+            expect(backend).toBe('off');
+            expect(finalizeAttempts).toBe(1);
+            expect((SyncService as any).pendingDropboxFinalizeHandles.size).toBe(0);
+            expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBeNull();
+            expect(logWarn).not.toHaveBeenCalled();
+            expect(showToast).not.toHaveBeenCalled();
+        } finally {
+            appKeySpy.mockRestore();
+            useUiStore.setState({ showToast: originalShowToast });
+        }
+    });
+
+    it.each([
+        {
+            label: 'file',
+            candidate: { backend: 'file' as const, syncPath: '/next-file-sync' },
+        },
+        {
+            label: 'self-hosted',
+            candidate: {
+                backend: 'cloud' as const,
+                cloudProvider: 'selfhosted' as const,
+                cloud: {
+                    url: 'https://next-cloud.example.com',
+                    token: 'next-cloud-token',
+                },
+            },
+        },
+    ])('settles finalize-pending Dropbox state before activating $label sync', async ({ candidate }) => {
+        let backend: SyncBackend = 'file';
+        let cloudProvider = 'selfhosted' as 'selfhosted' | 'dropbox';
+        let syncPath = '/previous-file-sync';
+        let cloudUrl = '';
+        let cloudToken = '';
+        let journalPending = false;
+        let finalizeAttempts = 0;
+        const events: string[] = [];
+        const snapshot = (args?: Record<string, unknown>) => ({
+            backend,
+            cloudProvider,
+            syncPath,
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: args?.requireCloudToken === true
+                ? {
+                    url: cloudUrl,
+                    token: cloudToken,
+                    tokenAuthority: 'known' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                }
+                : {
+                    url: cloudUrl,
+                    token: null,
+                    tokenAuthority: 'opaque' as const,
+                    allowInsecureHttp: false,
+                    rememberToken: false,
+                },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'get_sync_configuration_snapshot') return snapshot(args);
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                events.push(`backend:${backend}`);
+                return undefined;
+            }
+            if (command === 'set_sync_path') {
+                syncPath = String(args?.syncPath ?? '');
+                events.push(`path:${syncPath}`);
+                return { success: true, path: syncPath };
+            }
+            if (command === 'set_cloud_config') {
+                cloudUrl = String(args?.url ?? '');
+                cloudToken = String(args?.token ?? '');
+                events.push(`cloud:${cloudUrl}`);
+                return true;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                cloudProvider = args?.provider as typeof cloudProvider;
+                events.push(`provider:${cloudProvider}`);
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return cloudProvider;
+            if (command === 'promote_staged_dropbox_credentials') {
+                journalPending = true;
+                events.push('promote:committed-handle');
+                return true;
+            }
+            if (command === 'finalize_staged_dropbox_credentials') {
+                finalizeAttempts += 1;
+                events.push(`finalize:${finalizeAttempts}:failed`);
+                throw new Error('finalize response unavailable');
+            }
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') {
+                events.push(`recover:${backend}:${cloudProvider}`);
+                expect(backend).toBe('cloud');
+                expect(cloudProvider).toBe('dropbox');
+                expect(journalPending).toBe(true);
+                journalPending = false;
+                return true;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('committed-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        await SyncService.commitProvenSyncConfiguration({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+            dropboxCredentialHandle: 'committed-handle',
+        });
+        await waitForAssertion(() => expect(finalizeAttempts).toBeGreaterThanOrEqual(2));
+
+        await expect(SyncService.commitProvenSyncConfiguration(candidate)).resolves.toEqual({
+            committed: true,
+            cleanupPending: false,
+            handleFinalized: true,
+        });
+        await SyncService.retryPendingDropboxCredentialFinalizationForSession();
+        appKeySpy.mockRestore();
+
+        const recoveryIndex = events.indexOf('recover:cloud:dropbox');
+        expect(recoveryIndex).toBeGreaterThan(-1);
+        expect(recoveryIndex).toBeLessThan(events.indexOf('backend:off', recoveryIndex));
+        expect(backend).toBe(candidate.backend);
+        expect(journalPending).toBe(false);
+        expect(finalizeAttempts).toBe(2);
+        expect((SyncService as any).pendingDropboxFinalizeHandles.size).toBe(0);
+        if (candidate.backend === 'file') {
+            expect(syncPath).toBe('/next-file-sync');
+        } else {
+            expect(cloudProvider).toBe('selfhosted');
+            expect(cloudUrl).toBe('https://next-cloud.example.com');
+            expect(cloudToken).toBe('next-cloud-token');
+        }
+    });
+
+    it('rejects a queued stale credential request rather than touching a newer authorization', async () => {
+        let releaseTransaction!: () => void;
+        const transactionGate = new Promise<void>((resolve) => {
+            releaseTransaction = resolve;
+        });
+        const invoke = vi.fn(async () => 'candidate-access-token');
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        SyncService.rememberPendingDropboxCredentialHandleForSession('old-candidate-handle');
+
+        const transaction = __syncServiceTestUtils.runSyncRestoreExclusiveForTests(
+            () => transactionGate,
+        );
+        const token = SyncService.getDropboxAccessToken('client-id', {
+            credentialHandle: 'old-candidate-handle',
+        });
+        SyncService.forgetPendingDropboxCredentialHandleForSession('old-candidate-handle');
+        SyncService.rememberPendingDropboxCredentialHandleForSession('new-candidate-handle');
+
+        releaseTransaction();
+        await transaction;
+        await expect(token).rejects.toThrow('A different Dropbox authorization is pending');
+        expect(invoke).not.toHaveBeenCalled();
+        expect(SyncService.getPendingDropboxCredentialHandleForSession()).toBe('new-candidate-handle');
+    });
+
+    it('queues public backend writes behind a commit so a later Off action wins durably', async () => {
+        let releasePromotion!: () => void;
+        const promotionGate = new Promise<void>((resolve) => {
+            releasePromotion = resolve;
+        });
+        let backend: SyncBackend = 'off';
+        let cloudProvider = 'dropbox' as const;
+        const events: string[] = [];
+        const snapshot = () => ({
+            backend,
+            cloudProvider,
+            syncPath: '',
+            webdav: {
+                url: '',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque' as const,
+                hasPassword: null,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: true,
+            },
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque' as const,
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
+            if (command === 'get_sync_configuration_snapshot') return snapshot();
+            if (command === 'get_sync_backend') return backend;
+            if (command === 'set_sync_backend') {
+                backend = args?.backend as SyncBackend;
+                events.push(`backend:${backend}`);
+                return undefined;
+            }
+            if (command === 'set_sync_cloud_provider') {
+                cloudProvider = args?.provider as typeof cloudProvider;
+                return true;
+            }
+            if (command === 'get_sync_cloud_provider') return cloudProvider;
+            if (command === 'promote_staged_dropbox_credentials') {
+                events.push('promotion:start');
+                await promotionGate;
+                events.push('promotion:finish');
+                return true;
+            }
+            if (command === 'finalize_staged_dropbox_credentials') {
+                events.push('promotion:finalize');
+                return true;
+            }
+            return undefined;
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+        });
+        (SyncService as any).didMigrate = true;
+        SyncService.rememberPendingDropboxCredentialHandleForSession('opaque-candidate-handle');
+        const appKeySpy = vi.spyOn(SyncService, 'getDropboxAppKey').mockResolvedValue('client-id');
+
+        const commit = SyncService.commitProvenSyncConfiguration({
+            backend: 'cloud',
+            cloudProvider: 'dropbox',
+            dropboxCredentialHandle: 'opaque-candidate-handle',
+        });
+        await waitForAssertion(() => expect(events).toContain('promotion:start'));
+        const disable = SyncService.setSyncBackend('off');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const offWrittenDuringPromotion = events.includes('backend:off')
+            && events.lastIndexOf('backend:off') > events.indexOf('promotion:start');
+
+        releasePromotion();
+        await commit;
+        await disable;
+        appKeySpy.mockRestore();
+
+        expect(offWrittenDuringPromotion).toBe(false);
+        expect(backend).toBe('off');
+        expect(events.lastIndexOf('backend:off')).toBeGreaterThan(events.indexOf('promotion:finalize'));
+    });
+
+    it('queues manual attachment cleanup behind sync lifecycle transactions', async () => {
+        let releaseTransaction!: () => void;
+        const transactionGate = new Promise<void>((resolve) => {
+            releaseTransaction = resolve;
+        });
+        const events: string[] = [];
+        __syncServiceTestUtils.setDependenciesForTests({
+            isTauriRuntime: () => true,
+            flushPendingSave: async () => {
+                events.push('cleanup:flush');
+                throw new Error('stop after queue proof');
+            },
+        });
+
+        const transaction = __syncServiceTestUtils.runSyncRestoreExclusiveForTests(async () => {
+            events.push('transaction:start');
+            await transactionGate;
+            events.push('transaction:finish');
+        });
+        await waitForAssertion(() => expect(events).toContain('transaction:start'));
+        const cleanup = SyncService.cleanupAttachmentsNow();
+        const cleanupResult = cleanup.then(
+            () => null,
+            (error: unknown) => error,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const cleanupStartedDuringTransaction = events.includes('cleanup:flush');
+
+        releaseTransaction();
+        await transaction;
+        const cleanupError = await cleanupResult;
+
+        expect(cleanupStartedDuringTransaction).toBe(false);
+        expect(events.indexOf('cleanup:flush')).toBeGreaterThan(events.indexOf('transaction:finish'));
+        expect(cleanupError).toEqual(new Error('stop after queue proof'));
     });
 
     it('tests WebDAV connectivity against the normalized data.json URL', async () => {
@@ -773,6 +2480,37 @@ describe('SyncService orchestration', () => {
 
         expect(snapshots.some((status) => status.inFlight === true)).toBe(true);
         expect(snapshots.some((status) => status.queued === true)).toBe(true);
+    });
+
+    it('does not return an active cycle as proof for a queued transient configuration', async () => {
+        const firstRun = createDeferred();
+        const backendSpy = vi.spyOn(SyncService as any, 'getSyncBackend');
+        backendSpy.mockImplementation(async () => {
+            await firstRun.promise;
+            return 'off';
+        });
+
+        const first = SyncService.performSync();
+        await waitForAssertion(() => {
+            expect(SyncService.getSyncStatus().inFlight).toBe(true);
+        });
+        const proofResult = await SyncService.performSync({
+            activationProbe: true,
+            configOverride: { backend: 'off' },
+            manual: true,
+        });
+
+        expect(proofResult).toEqual({ success: true, skipped: 'requeued' });
+        expect(SyncService.getSyncStatus().queued).toBe(false);
+        firstRun.resolve();
+        await first;
+        await waitForAssertion(() => {
+            expect(SyncService.getSyncStatus()).toMatchObject({
+                inFlight: false,
+                queued: false,
+            });
+        });
+        expect(backendSpy).toHaveBeenCalledTimes(1);
     });
 
     it('serializes re-entrant sync calls triggered by sync status listeners', async () => {

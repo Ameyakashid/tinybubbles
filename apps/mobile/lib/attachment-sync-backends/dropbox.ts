@@ -25,12 +25,15 @@ import {
   reportProgress,
   runDropboxAuthorized,
   toArrayBuffer,
+  type DropboxAccessTokenResolver,
   validateAttachmentHash,
   writeBytesSafely,
 } from '../attachment-sync-utils';
 import { migrateAttachmentsLocallyBeforeSync } from './common';
 
 export type DropboxAttachmentSyncOptions = {
+  activationProbe?: boolean;
+  resolveAccessToken?: DropboxAccessTokenResolver;
   signal?: AbortSignal;
 };
 
@@ -87,8 +90,13 @@ export const syncDropboxAttachments = async (
       didMutate = true;
     }
 
+    if (options.activationProbe && existsLocally && attachment.cloudKey) {
+      attachment.cloudKey = undefined;
+      didMutate = true;
+    }
+
     if (!attachment.cloudKey && hasLocalPath && existsLocally && !isHttp) {
-      if (uploadCount >= DROPBOX_ATTACHMENT_MAX_UPLOADS_PER_SYNC) {
+      if (!options.activationProbe && uploadCount >= DROPBOX_ATTACHMENT_MAX_UPLOADS_PER_SYNC) {
         if (!uploadLimitLogged) {
           uploadLimitLogged = true;
           logAttachmentInfo('Dropbox attachment upload limit reached', {
@@ -141,7 +149,8 @@ export const syncDropboxAttachments = async (
               attachment.mimeType || DEFAULT_CONTENT_TYPE,
               fetcher
             ),
-          fetcher
+          fetcher,
+          options.resolveAccessToken,
         );
 
         assertNotAborted(options.signal);
@@ -195,7 +204,7 @@ export const syncDropboxAttachments = async (
     if (attachment.kind !== 'file') continue;
     if (attachment.deletedAt) continue;
     if (!attachment.cloudKey) continue;
-    if (downloadCount >= DROPBOX_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC) {
+    if (!options.activationProbe && downloadCount >= DROPBOX_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC) {
       logAttachmentInfo('Dropbox attachment download limit reached', {
         limit: String(DROPBOX_ATTACHMENT_MAX_DOWNLOADS_PER_SYNC),
       });
@@ -210,7 +219,8 @@ export const syncDropboxAttachments = async (
       const data = await runDropboxAuthorized(
         dropboxClientId,
         (accessToken) => downloadDropboxFile(accessToken, cloudKey, fetcher),
-        fetcher
+        fetcher,
+        options.resolveAccessToken,
       );
       const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data as ArrayBuffer);
       await validateAttachmentHash(attachment, bytes);

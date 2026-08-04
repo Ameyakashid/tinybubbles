@@ -28,6 +28,7 @@ import { Dialog } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
 import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from '@mindwtr/core/global-search-filter';
 import { resolveTaskNavigationView } from '../lib/task-navigation';
+import { useFutureStartRevealTick, useLocalDayKey } from '../hooks/useLocalDayKey';
 
 interface GlobalSearchProps {
     onNavigate: (view: string, itemId?: string) => void;
@@ -83,6 +84,8 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     const setProjectView = useUiStore((state) => state.setProjectView);
     const showToast = useUiStore((state) => state.showToast);
     const { t } = useLanguage();
+    const futureStartDayKey = useLocalDayKey(isOpen && hideFutureTasks);
+    const futureStartRevealTick = useFutureStartRevealTick(_allTasks, isOpen && hideFutureTasks);
 
     // Toggle search with Cmd+K / Ctrl+K
     useEffect(() => {
@@ -225,6 +228,8 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
         scope,
         settings?.weekStart,
         ftsResults,
+        futureStartDayKey,
+        futureStartRevealTick,
     ]);
 
     useEffect(() => {

@@ -97,6 +97,76 @@ type SharedSyncRunState = {
 
 const DEFAULT_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+const withoutInheritedPendingRemoteWrite = (data: AppData): AppData => {
+    if (
+        !data.settings.pendingRemoteWriteAt
+        && data.settings.pendingRemoteWriteRetryAt === undefined
+        && data.settings.pendingRemoteWriteAttempts === undefined
+    ) {
+        return data;
+    }
+    return {
+        ...data,
+        settings: {
+            ...data.settings,
+            pendingRemoteWriteAt: undefined,
+            pendingRemoteWriteRetryAt: undefined,
+            pendingRemoteWriteAttempts: undefined,
+        },
+    };
+};
+
+const withoutInheritedPendingRemoteWriteBackoff = (data: AppData): AppData => {
+    if (data.settings.pendingRemoteWriteRetryAt === undefined) return data;
+    return {
+        ...data,
+        settings: {
+            ...data.settings,
+            pendingRemoteWriteRetryAt: undefined,
+        },
+    };
+};
+
+const visitLiveFileAttachments = (
+    data: AppData,
+    visit: (attachment: NonNullable<AppData['tasks'][number]['attachments']>[number]) => void,
+): number => {
+    let count = 0;
+    for (const owner of [...data.tasks, ...data.projects]) {
+        if (owner.deletedAt) continue;
+        for (const attachment of owner.attachments ?? []) {
+            if (attachment.kind !== 'file' || attachment.deletedAt) continue;
+            count += 1;
+            visit(attachment);
+        }
+    }
+    return count;
+};
+
+const prepareActivationAttachmentSnapshot = (data: AppData): { data: AppData; count: number } => {
+    const candidate = cloneAppData(data);
+    const count = visitLiveFileAttachments(candidate, (attachment) => {
+        // A candidate adapter must actively rediscover local presence. Leaving
+        // the old status intact would let a skipped/capped transfer look like
+        // proof that the candidate backend has the blob.
+        attachment.localStatus = 'missing';
+    });
+    return { data: candidate, count };
+};
+
+const assertActivationAttachmentsProven = (data: AppData, expectedCount: number): void => {
+    let provenCount = 0;
+    visitLiveFileAttachments(data, (attachment) => {
+        if (!attachment.cloudKey || attachment.localStatus !== 'available') {
+            throw new Error(`Candidate attachment proof failed for ${attachment.id}`);
+        }
+        provenCount += 1;
+    });
+    if (provenCount !== expectedCount) {
+        throw new Error(`Candidate attachment proof incomplete: expected ${expectedCount}, proved ${provenCount}`);
+    }
+};
+
 class SharedSyncRunMachine {
     private readonly options: SyncRunOptions;
     private readonly storage: SyncRunStorage;
@@ -169,8 +239,11 @@ class SharedSyncRunMachine {
         if (this.policy.preSyncAttachmentsBeforeFastCheck) {
             await this.runAttachmentPreSyncPhase();
         }
-        let skipResult = await this.trySkipUnchangedFastSync();
-        if (!skipResult && this.policy.enableReadCheckSkip) {
+        let skipResult: SyncRunResult | null = null;
+        if (!this.options.activationProbe) {
+            skipResult = await this.trySkipUnchangedFastSync();
+        }
+        if (!this.options.activationProbe && !skipResult && this.policy.enableReadCheckSkip) {
             skipResult = await this.trySkipUnchangedReadSync();
         }
         if (skipResult) {
@@ -210,9 +283,15 @@ class SharedSyncRunMachine {
         await this.hooks.ensureNetworkStillAvailable?.();
     }
 
+    private requestFollowUp(): void {
+        if (this.options.activationProbe) return;
+        this.hooks.requestFollowUp();
+    }
+
     private attachmentHelpers() {
         return {
             ensureLocalSnapshotFresh: () => this.ensureLocalSnapshotFresh(),
+            activationProbe: this.options.activationProbe === true,
         };
     }
 
@@ -232,7 +311,7 @@ class SharedSyncRunMachine {
             acceptCoveredSnapshot: expectedData && this.hooks.acceptCoveredSnapshot
                 ? () => this.acceptCoveredLocalSnapshot(expectedData)
                 : undefined,
-            requestFollowUp: () => this.hooks.requestFollowUp(),
+            requestFollowUp: () => this.requestFollowUp(),
             onStale: this.hooks.onStaleSnapshot
                 ? (details) => this.hooks.onStaleSnapshot?.({ ...details, step: this.state.step })
                 : undefined,
@@ -265,7 +344,9 @@ class SharedSyncRunMachine {
         const baseData = this.state.preSyncedLocalData
             ? mergeAppData(this.state.preSyncedLocalData, inMemorySnapshot)
             : mergeAppData(await this.storage.readPersistedLocal(), inMemorySnapshot);
-        const data = await this.storage.injectExternalCalendars(baseData);
+        const data = this.options.activationProbe
+            ? baseData
+            : await this.storage.injectExternalCalendars(baseData);
         // Stamp with currentChangeAt (captured above, before readPersistedLocal/
         // injectExternalCalendars yielded) rather than re-reading the change
         // stamp now: a write landing during those awaits must never be marked
@@ -365,7 +446,8 @@ class SharedSyncRunMachine {
         const remoteNeedsTombstoneCompaction = state.remoteDataForCompare
             ? hasUncompactedPurgedTombstones(state.remoteDataForCompare)
             : false;
-        if (previousRemoteDocument
+        if (!this.options.activationProbe
+            && previousRemoteDocument
             && !remoteNeedsTombstoneCompaction
             && areRemoteSyncDocumentsEqual(previousRemoteDocument, remoteDocument)) {
             if (this.backend !== 'cloudkit') {
@@ -382,7 +464,7 @@ class SharedSyncRunMachine {
         } catch (error) {
             if (error instanceof SyncRemoteWriteConflict) {
                 // Another device wrote between readRemote and writeRemote; retry next cycle.
-                this.hooks.requestFollowUp();
+                this.requestFollowUp();
                 throw new LocalSyncAbort();
             }
             throw error;
@@ -395,7 +477,7 @@ class SharedSyncRunMachine {
         state.lastRemoteWriteMergedServerData = serverMergedRemoteData;
         if (serverMergedRemoteData) {
             state.remoteDataForCompare = null;
-            this.hooks.requestFollowUp();
+            this.requestFollowUp();
         } else {
             state.remoteDataForCompare = remoteDocument;
         }
@@ -522,7 +604,7 @@ class SharedSyncRunMachine {
     }
 
     private async runAttachmentPreSyncPhase(): Promise<void> {
-        if (!this.policy.attachmentPhasesEnabled) return;
+        if (!this.policy.attachmentPhasesEnabled || this.options.activationProbe) return;
         try {
             const localData = await this.readLocalDataForSyncCycle();
             if (this.hooks.shouldRunAttachmentPhase
@@ -559,9 +641,37 @@ class SharedSyncRunMachine {
         }
     }
 
-    /** Final attachment upload pass right before the remote write when uploads
-     *  are still pending after the merge. */
+    /** Candidate attachment proof, or the normal final pending-upload pass,
+     *  immediately before the merged document is written remotely. */
     private async prepareRemoteWriteData(data: AppData): Promise<AppData> {
+        if (this.options.activationProbe) {
+            const activationSnapshot = prepareActivationAttachmentSnapshot(data);
+            if (activationSnapshot.count === 0) return data;
+            const io = this.requireIo();
+            if (!io.syncAttachments) {
+                throw new Error('Candidate backend cannot prove attachments');
+            }
+            this.setStep('attachments_finalize');
+            await this.yieldToUi();
+            if (isRemoteSyncBackend(this.backend)) {
+                await this.ensureNetwork();
+            }
+            const result = await io.syncAttachments(
+                activationSnapshot.data,
+                this.attachmentHelpers(),
+            );
+            const provenData = result && typeof result === 'object'
+                ? result
+                : activationSnapshot.data;
+            assertActivationAttachmentsProven(provenData, activationSnapshot.count);
+            this.ensureLocalSnapshotFresh();
+            this.notifier.onDiagnostic?.({
+                event: 'attachments-prepare-complete',
+                data: provenData,
+                extra: { mutated: String(result === true || Boolean(result && typeof result === 'object')) },
+            });
+            return provenData;
+        }
         const pendingUploads = findPendingAttachmentUploads(data);
         if (pendingUploads.length === 0) return data;
         const io = this.requireIo();
@@ -595,6 +705,7 @@ class SharedSyncRunMachine {
         mergedData: AppData,
         markFastSyncStateUnsafe: () => void,
     ): Promise<AppData> {
+        if (this.options.activationProbe) return mergedData;
         if (!this.policy.attachmentPhasesEnabled) return mergedData;
         const io = this.requireIo();
         if (!io.syncAttachments) return mergedData;
@@ -643,7 +754,17 @@ class SharedSyncRunMachine {
     private buildSyncCycleIO(): SyncCycleIO {
         return {
             readLocal: async () => {
-                const data = await this.readLocalDataForSyncCycle();
+                const localData = await this.readLocalDataForSyncCycle();
+                // Retry metadata belongs to the currently proven transport.
+                // A candidate transport must perform its own read/write proof
+                // even while the old backend is waiting in backoff. This copy
+                // is in-memory only; the durable old-backend retry state stays
+                // intact unless and until settings activate the candidate.
+                const data = this.options.activationProbe
+                    ? withoutInheritedPendingRemoteWrite(localData)
+                    : this.options.ignorePendingRemoteWriteBackoff
+                        ? withoutInheritedPendingRemoteWriteBackoff(localData)
+                        : localData;
                 this.notifier.tracePayload?.('read-local', data, { backend: this.backend });
                 return data;
             },
@@ -658,9 +779,13 @@ class SharedSyncRunMachine {
                     step: this.state.step,
                 });
                 this.ensureLocalSnapshotFresh(data);
+                if (this.options.activationProbe) {
+                    return data;
+                }
                 return this.persistLocalDataWithTracking(data);
             },
             clearPendingRemoteWriteAfterLocalAbort: async (pendingAt) => {
+                if (this.options.activationProbe) return;
                 const current = this.store.getInMemorySnapshot();
                 if (current.settings.pendingRemoteWriteAt && current.settings.pendingRemoteWriteAt !== pendingAt) return;
                 await this.persistLocalDataWithTracking({
@@ -673,13 +798,17 @@ class SharedSyncRunMachine {
                     },
                 });
             },
-            flushPendingLocalBeforeRetryRead: () => this.store.flushPendingSave(),
+            flushPendingLocalBeforeRetryRead: () => this.options.activationProbe
+                ? Promise.resolve()
+                : this.store.flushPendingSave(),
             prepareRemoteWrite: (data) => this.prepareRemoteWriteData(data),
             writeRemote: async (data) => {
                 this.notifier.tracePayload?.('write-remote', data, { backend: this.backend });
                 this.ensureLocalSnapshotFresh(data);
                 await this.writeRemoteForCycle(data);
             },
+            preferIncomingAttachmentCloudKeys:
+                this.options.ignorePendingRemoteWriteBackoff === true,
             onStep: (next) => this.setStep(next),
             yieldToUi: this.notifier.yieldToUi ? () => this.notifier.yieldToUi!() : undefined,
             historyContext: {
@@ -727,6 +856,10 @@ class SharedSyncRunMachine {
         const mergeLog = buildMergeSummaryLog(stats, { clockSkewThresholdMs: CLOCK_SKEW_THRESHOLD_MS });
         if (mergeLog) {
             this.notifier.logMergeSummary(mergeLog);
+        }
+
+        if (this.options.activationProbe) {
+            return { success: true, stats };
         }
 
         let canRecordFastSyncState = true;
@@ -793,11 +926,19 @@ class SharedSyncRunMachine {
             getWroteLocal: () => this.state.wroteLocal,
             persistPreSyncedData: () => this.persistPreSyncedDataAfterAbort(),
         };
-        const beforeResult = await this.hooks.handleRunErrorBeforeRequeue?.(error, errorContext);
+        const beforeResult = this.options.activationProbe
+            ? null
+            : await this.hooks.handleRunErrorBeforeRequeue?.(error, errorContext);
         if (beforeResult) return beforeResult;
 
         if (error instanceof LocalSyncAbort) {
-            await this.persistPreSyncedDataAfterAbort();
+            // A normal cycle must retain local attachment bookkeeping that was
+            // completed before a requeue. Candidate probes operate on a clone,
+            // though: none of that destination-specific metadata is durable
+            // until the configuration has activated and a normal sync runs.
+            if (!this.options.activationProbe) {
+                await this.persistPreSyncedDataAfterAbort();
+            }
             this.notifier.onDiagnostic?.({
                 event: 'requeued',
                 extra: {
@@ -812,6 +953,9 @@ class SharedSyncRunMachine {
         if (afterResult) return afterResult;
 
         this.notifier.logWarning('Sync failed', error);
+        if (this.options.activationProbe) {
+            return { success: false, error: this.hooks.formatErrorMessage(error, this.backend) };
+        }
         const now = this.nowIso();
         const safeMessage = this.hooks.formatErrorMessage(error, this.backend);
         let logHint = '';

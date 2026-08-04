@@ -317,6 +317,48 @@ describe('ListView', () => {
     }
   });
 
+  it('reveals Next actions at midnight and at their explicit start time', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-04-16T23:59:30'));
+      useTaskStore.setState({
+        _allTasks: [
+          makeTask('tomorrow-date', {
+            title: 'Tomorrow date task',
+            status: 'next',
+            startTime: '2026-04-17',
+          }),
+          makeTask('tomorrow-time', {
+            title: 'Tomorrow timed task',
+            status: 'next',
+            startTime: '2026-04-17T00:01',
+          }),
+        ],
+        lastDataChangeAt: 1,
+      });
+
+      const next = renderListView('next', 'Next');
+      expect(next.queryByText('Tomorrow date task')).not.toBeInTheDocument();
+      expect(next.queryByText('Tomorrow timed task')).not.toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_100);
+        await Promise.resolve();
+      });
+      expect(next.getByText('Tomorrow date task')).toBeInTheDocument();
+      expect(next.queryByText('Tomorrow timed task')).not.toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_100);
+        await Promise.resolve();
+      });
+      expect(next.getByText('Tomorrow timed task')).toBeInTheDocument();
+      next.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('always defers a due-only recurring chore out of Next, with no notice or Show control', async () => {
     vi.useFakeTimers();
     try {
@@ -559,6 +601,42 @@ describe('ListView', () => {
 
     expect(view.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'true');
     expect(view.getByText('Work done')).toBeInTheDocument();
+    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+  });
+
+  it('keeps other collapsed groups folded when a highlighted task appears in more than one', () => {
+    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    useTaskStore.setState({
+      _allTasks: [
+        makeTask('1', {
+          title: 'Dual-tag done',
+          status: 'done',
+          tags: ['#alpha', '#beta'],
+          completedAt: now,
+        }),
+      ],
+      lastDataChangeAt: 1,
+    });
+    useUiStore.setState((state) => ({
+      ...state,
+      listOptions: {
+        ...state.listOptions,
+        doneGroupBy: 'tag',
+      },
+    }));
+
+    const view = renderListView('done', 'Done');
+    const alpha = () => view.getByRole('button', { name: /#alpha\s*1/i });
+    const beta = () => view.getByRole('button', { name: /#beta\s*1/i });
+    fireEvent.click(alpha());
+    fireEvent.click(beta());
+
+    act(() => {
+      useTaskStore.setState({ highlightTaskId: '1' });
+    });
+
+    expect([alpha(), beta()].filter((group) => group.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
+    expect(view.getAllByText('Dual-tag done')).toHaveLength(1);
     window.localStorage.removeItem('mindwtr:view:list:done:v1');
   });
 

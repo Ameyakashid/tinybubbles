@@ -28,8 +28,13 @@ type SaveQueueOutcome = {
     error?: unknown;
 };
 type SaveOperationResult = {
-    canonical: AppData;
+    canonical: AppData | null;
     attempted: AppData | null;
+};
+type NativeTaskSaveResult = {
+    committed: true;
+    canonical: AppData | null;
+    canonicalReloadRequired: boolean;
 };
 let saveQueue: Promise<SaveQueueOutcome> = Promise.resolve({
     canonical: null,
@@ -56,9 +61,9 @@ const scheduleCanonicalReconciliation = (
     canonical: AppData | null,
     attemptedSaveVersion: number,
 ): void => {
-    if (!attempted || !canonical) return;
+    if (!attempted) return;
     const attemptedFingerprint = computeStableValueFingerprint(attempted);
-    if (attemptedFingerprint === computeStableValueFingerprint(canonical)) return;
+    if (canonical && attemptedFingerprint === computeStableValueFingerprint(canonical)) return;
     if (saveVersion !== attemptedSaveVersion) return;
 
     // Store actions finish applying their optimistic state after the adapter
@@ -97,7 +102,10 @@ const scheduleCanonicalReconciliation = (
             // Unsubscribe before fetchData mutates the store so its synchronous
             // state updates cannot re-enter this reconciliation callback.
             cleanup();
-            Promise.resolve(state.fetchData({ silent: true, preloadedData: canonical })).catch((error) => {
+            const options = canonical
+                ? { silent: true, preloadedData: canonical }
+                : { silent: true };
+            Promise.resolve(state.fetchData(options)).catch((error) => {
                 reportError('canonical storage reconciliation failure', error, {
                     category: 'storage',
                     scope: 'storage',
@@ -204,7 +212,7 @@ const enqueueSave = (
             return {
                 canonical: null,
                 confirmedBefore,
-                provenance: provenanceBefore && persistedResult?.attempted
+                provenance: provenanceBefore && persistedResult?.attempted && persistedResult.canonical
                     ? advanceSaveProvenance(
                         provenanceBefore,
                         persistedResult.attempted,
@@ -394,7 +402,41 @@ export const tauriStorage: StorageAdapter = {
                     ? predecessor.provenance.tasks.find((item) => item.id === task.id)
                     : baselineTask;
                 const args = effectiveBaselineTask ? { task, baselineTask: effectiveBaselineTask } : { task };
-                const canonical = await invoke<AppData>('save_task' as any, args as any);
+                const nativeResult = await invoke<AppData | NativeTaskSaveResult>('save_task' as any, args as any);
+                if (
+                    nativeResult
+                    && typeof nativeResult === 'object'
+                    && 'committed' in nativeResult
+                    && nativeResult.committed === true
+                    && 'canonicalReloadRequired' in nativeResult
+                ) {
+                    const canonical = nativeResult.canonical;
+                    if (!canonical && nativeResult.canonicalReloadRequired) {
+                        // SQLite already committed. Keep the optimistic store
+                        // intact and reload canonical state after the store action
+                        // finishes instead of falsely rejecting and retrying.
+                        if (saveVersion === queuedSaveVersion) {
+                            lastObservedData = attemptedData;
+                        }
+                        scheduleCanonicalReconciliation(attemptedData, null, queuedSaveVersion);
+                        markLocalSqliteWrite();
+                        logStorageInitIfNeeded();
+                        return { canonical: null, attempted: attemptedData };
+                    }
+                    if (!canonical) {
+                        throw new Error('save_task returned no canonical data');
+                    }
+                    lastPersistedData = canonical;
+                    recordPersisted({ canonical, attempted: attemptedData });
+                    if (saveVersion === queuedSaveVersion) {
+                        lastObservedData = canonical;
+                    }
+                    scheduleCanonicalReconciliation(attemptedData, canonical, queuedSaveVersion);
+                    markLocalSqliteWrite();
+                    logStorageInitIfNeeded();
+                    return { canonical, attempted: attemptedData };
+                }
+                const canonical = nativeResult as AppData;
                 lastPersistedData = canonical;
                 recordPersisted({ canonical, attempted: attemptedData });
                 if (saveVersion === queuedSaveVersion) {

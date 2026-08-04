@@ -113,16 +113,18 @@ import {
     uploadDropboxAppData,
 } from './dropbox-sync';
 import {
+    CLOUD_ALLOW_INSECURE_HTTP_KEY,
+    CLOUD_PROVIDER_KEY,
     CLOUD_REMEMBER_TOKEN_KEY,
     CLOUD_TOKEN_KEY,
     CLOUD_URL_KEY,
     SYNC_BACKEND_KEY,
+    WEBDAV_ALLOW_INSECURE_HTTP_KEY,
+    WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY,
     WEBDAV_PASSWORD_KEY,
     WEBDAV_URL_KEY,
     WEBDAV_USERNAME_KEY,
-    getCloudConfigLocal,
-    getSyncBackendLocal,
-    getWebDavConfigLocal,
+    clearSyncPath,
     readCloudConfig,
     readCloudProvider,
     readDropboxAppKey,
@@ -136,6 +138,13 @@ import {
     writeSyncPath,
     writeWebDavConfig,
 } from './sync-service-config';
+import {
+    commitProvenSyncConfiguration as commitProvenSyncConfigurationTransaction,
+    type DesktopSyncConfigOverride,
+    type PersistedDesktopSyncConfiguration,
+    type SyncConfigurationCommitResult,
+    type SyncConfigurationSecretRequirements,
+} from './sync-configuration-transaction';
 import {
     buildFastSyncScope,
     clearLocalSyncStatus,
@@ -541,6 +550,91 @@ async function getTauriFetch(): Promise<typeof fetch | undefined> {
     return syncServiceDependencies.getTauriFetch();
 }
 
+type DropboxCredentialHandleOptions = {
+    forceRefresh?: boolean;
+    credentialHandle?: string;
+};
+
+// Native token/status commands run crash-journal recovery. Public entry points
+// serialize them with configuration commits; sync/test code already holding
+// that queue must use these direct primitives to avoid nesting the queue.
+async function getDropboxAccessTokenDirect(
+    clientId: string,
+    options?: DropboxCredentialHandleOptions,
+): Promise<string> {
+    const normalized = clientId.trim();
+    if (!normalized) {
+        throw new Error('Dropbox app key is required');
+    }
+    if (!isTauriRuntimeEnv()) {
+        throw new Error('Dropbox sync is only available in the desktop app.');
+    }
+    return tauriInvoke<string>('get_dropbox_access_token', {
+        clientId: normalized,
+        credentialHandle: options?.credentialHandle?.trim() || undefined,
+        forceRefresh: options?.forceRefresh === true,
+    });
+}
+
+async function isDropboxConnectedDirect(clientId: string): Promise<boolean> {
+    const normalized = clientId.trim();
+    if (!normalized || !isTauriRuntimeEnv()) return false;
+    try {
+        return await tauriInvoke<boolean>('is_dropbox_connected', { clientId: normalized });
+    } catch (error) {
+        syncServiceDependencies.reportError('Failed to check Dropbox connection status', error);
+        return false;
+    }
+}
+
+async function testDropboxConnectionDirect(
+    clientId: string,
+    options?: Pick<DropboxCredentialHandleOptions, 'credentialHandle'>,
+): Promise<void> {
+    const normalized = clientId.trim();
+    if (!normalized) {
+        throw new Error('Dropbox app key is required');
+    }
+    const fetcher = await getTauriFetch();
+    const runTest = async (forceRefresh: boolean) => {
+        const accessToken = await getDropboxAccessTokenDirect(normalized, {
+            credentialHandle: options?.credentialHandle,
+            forceRefresh,
+        });
+        await withTimeout(
+            testDropboxAccess(accessToken, fetcher ?? fetch),
+            DROPBOX_TEST_TIMEOUT_MS,
+            'Dropbox connection test timed out. Please try again.',
+        );
+    };
+    try {
+        await runTest(false);
+    } catch (error) {
+        if (error instanceof DropboxUnauthorizedError) {
+            await runTest(true);
+            return;
+        }
+        throw error;
+    }
+}
+
+function resolveRequestedDropboxCredentialHandleAtExecution(
+    requestedHandle?: string,
+): string | undefined {
+    const normalizedRequestedHandle = requestedHandle?.trim();
+    if (!normalizedRequestedHandle) return undefined;
+    const pendingHandle = SyncService.getPendingDropboxCredentialHandleForSession();
+    if (!pendingHandle) {
+        // A commit queued ahead of this request finalized the candidate. The
+        // durable credential is now authoritative, so do not send a stale handle.
+        return undefined;
+    }
+    if (pendingHandle !== normalizedRequestedHandle) {
+        throw new Error('A different Dropbox authorization is pending; retry after it is resolved');
+    }
+    return pendingHandle;
+}
+
 async function resolveWebdavPassword(config: WebDavConfig): Promise<string> {
     if (typeof config.password === 'string') return config.password;
     if (config.hasPassword === false) return '';
@@ -561,10 +655,15 @@ const attachmentBackendDeps: AttachmentBackendDeps = {
     resolveWebdavPassword,
 };
 
-const getAttachmentCleanupDeps = (): AttachmentCleanupDeps => ({
+const getAttachmentCleanupDeps = (
+    dropboxCredentialHandle?: string | null,
+): AttachmentCleanupDeps => ({
     getCloudConfig: () => SyncService.getCloudConfig(),
     getCloudProvider: () => SyncService.getCloudProvider(),
-    getDropboxAccessToken: (clientId, options) => SyncService.getDropboxAccessToken(clientId, options),
+    getDropboxAccessToken: (clientId, options) => getDropboxAccessTokenDirect(clientId, {
+        ...options,
+        credentialHandle: dropboxCredentialHandle ?? undefined,
+    }),
     getDropboxAppKey: () => SyncService.getDropboxAppKey(),
     getSyncPath: () => SyncService.getSyncPath(),
     getTauriFetch,
@@ -583,11 +682,39 @@ const getSyncConfigDeps = () => ({
     tauriInvoke,
 });
 
+const writeSyncBackendDirect = (backend: SyncBackend): Promise<void> => (
+    writeSyncBackend(backend, getSyncConfigDeps())
+);
+const readCloudProviderDirect = (): Promise<CloudProvider> => (
+    readCloudProvider(getSyncConfigDeps())
+);
+const writeCloudProviderDirect = (provider: CloudProvider): Promise<void> => (
+    writeCloudProvider(provider, getSyncConfigDeps())
+);
+const recoverDropboxCredentialsBeforeConfigurationDirect = async (): Promise<void> => {
+    if (!isTauriRuntimeEnv()) return;
+    const settled = await tauriInvoke<boolean>('recover_dropbox_credentials_before_sync_configuration');
+    if (settled !== true) {
+        throw new Error('Dropbox credential recovery did not settle');
+    }
+};
+
+export type { DesktopSyncConfigOverride };
+
 type SyncRunOptions = {
     backendOverride?: SyncBackend;
+    /** Session-only transport values used to prove a new configuration before
+     *  the settings UI commits it to durable storage. */
+    configOverride?: DesktopSyncConfigOverride;
     /** User-initiated sync: always run the full read/merge cycle, never the
      *  fast-check skip, so a stale cached fingerprint can't hide remote data. */
     manual?: boolean;
+    /** Isolated candidate transport proof. The shared machine keeps merged
+     *  local writes in memory and suppresses durable/finalization side effects. */
+    activationProbe?: boolean;
+    /** The candidate was just activated; do not inherit the previous
+     *  transport's retry deadline on this first durable cycle. */
+    ignorePendingRemoteWriteBackoff?: boolean;
 };
 
 /** Desktop transport state for one sync cycle. Cycle sequencing/state lives in
@@ -595,6 +722,7 @@ type SyncRunOptions = {
  *  the desktop backend adapters need. */
 type DesktopSyncCycleContext = {
     backend: SyncBackend;
+    usesConfigOverride: boolean;
     networkWentOffline: boolean;
     removeNetworkListener: (() => void) | null;
     requestAbortController: AbortController;
@@ -602,6 +730,7 @@ type DesktopSyncCycleContext = {
     cloudProvider: CloudProvider;
     cloudConfig: CloudConfig | null;
     dropboxAppKey: string;
+    dropboxCredentialHandle: string | null;
     cachedDropboxAccessToken: string | null;
     syncPath: string;
     fileBaseDir: string;
@@ -609,6 +738,7 @@ type DesktopSyncCycleContext = {
 
 const createDesktopSyncCycleContext = (): DesktopSyncCycleContext => ({
     backend: 'off',
+    usesConfigOverride: false,
     networkWentOffline: false,
     removeNetworkListener: null,
     requestAbortController: new AbortController(),
@@ -616,6 +746,7 @@ const createDesktopSyncCycleContext = (): DesktopSyncCycleContext => ({
     cloudProvider: 'selfhosted',
     cloudConfig: null,
     dropboxAppKey: '',
+    dropboxCredentialHandle: null,
     cachedDropboxAccessToken: null,
     syncPath: '',
     fileBaseDir: '',
@@ -645,14 +776,24 @@ const resolveDropboxAccessTokenForContext = async (
         throw new Error('Dropbox app key is not configured');
     }
     if (!context.cachedDropboxAccessToken || forceRefresh) {
-        context.cachedDropboxAccessToken = await SyncService.getDropboxAccessToken(context.dropboxAppKey, { forceRefresh });
+        context.cachedDropboxAccessToken = await getDropboxAccessTokenDirect(context.dropboxAppKey, {
+            credentialHandle: context.dropboxCredentialHandle ?? undefined,
+            forceRefresh,
+        });
     }
     return context.cachedDropboxAccessToken;
 };
 
 export class SyncService {
     private static didMigrate = false;
+    private static legacyMigrationPromise: Promise<void> | null = null;
     private static queuedSyncOptions: SyncRunOptions | null = null;
+    // OAuth token bytes stay in native/keyring storage. The renderer keeps only
+    // the opaque native handle, at session scope, so a settings unmount cannot
+    // orphan a candidate that still needs discard/rollback recovery.
+    private static pendingDropboxCredentialHandle: string | null = null;
+    private static pendingDropboxFinalizeHandles = new Set<string>();
+    private static pendingDropboxCredentialHandleListeners = new Set<(handle: string | null) => void>();
     private static syncStatus: {
         inFlight: boolean;
         queued: boolean;
@@ -731,7 +872,11 @@ export class SyncService {
     }
 
     private static areSyncRunOptionsEquivalent(left?: SyncRunOptions | null, right?: SyncRunOptions | null): boolean {
-        return (left?.backendOverride ?? undefined) === (right?.backendOverride ?? undefined);
+        return (left?.backendOverride ?? undefined) === (right?.backendOverride ?? undefined)
+            && (left?.configOverride ?? undefined) === (right?.configOverride ?? undefined)
+            && (left?.activationProbe ?? false) === (right?.activationProbe ?? false)
+            && (left?.ignorePendingRemoteWriteBackoff ?? false)
+                === (right?.ignorePendingRemoteWriteBackoff ?? false);
     }
 
     /** Covered-snapshot check for the core machine's acceptCoveredSnapshot
@@ -777,6 +922,92 @@ export class SyncService {
         return SyncService.syncStatus;
     }
 
+    static getPendingDropboxCredentialHandleForSession(): string | null {
+        return SyncService.pendingDropboxCredentialHandle;
+    }
+
+    static subscribePendingDropboxCredentialHandleForSession(
+        listener: (handle: string | null) => void,
+    ): () => void {
+        SyncService.pendingDropboxCredentialHandleListeners.add(listener);
+        listener(SyncService.pendingDropboxCredentialHandle);
+        return () => SyncService.pendingDropboxCredentialHandleListeners.delete(listener);
+    }
+
+    static rememberPendingDropboxCredentialHandleForSession(credentialHandle: string): void {
+        const normalizedHandle = credentialHandle.trim();
+        if (!normalizedHandle) {
+            throw new Error('Dropbox credential handle is required');
+        }
+        const existingHandle = SyncService.pendingDropboxCredentialHandle;
+        if (existingHandle && existingHandle !== normalizedHandle) {
+            throw new Error('A pending Dropbox authorization must be resolved before connecting another account');
+        }
+        if (existingHandle === normalizedHandle) return;
+        SyncService.pendingDropboxCredentialHandle = normalizedHandle;
+        SyncService.pendingDropboxCredentialHandleListeners.forEach((listener) => listener(normalizedHandle));
+    }
+
+    static forgetPendingDropboxCredentialHandleForSession(expectedHandle?: string): void {
+        const normalizedExpectedHandle = expectedHandle?.trim();
+        if (
+            normalizedExpectedHandle
+            && SyncService.pendingDropboxCredentialHandle !== normalizedExpectedHandle
+        ) {
+            return;
+        }
+        if (!SyncService.pendingDropboxCredentialHandle) return;
+        SyncService.pendingDropboxCredentialHandle = null;
+        SyncService.pendingDropboxCredentialHandleListeners.forEach((listener) => listener(null));
+    }
+
+    private static moveDropboxCredentialToFinalizeRetry(credentialHandle: string): void {
+        const normalizedHandle = credentialHandle.trim();
+        if (!normalizedHandle) return;
+        // Record the committed phase before withdrawing the Candidate from UI
+        // so every synchronous subscriber sees a lifecycle with an owner.
+        SyncService.pendingDropboxFinalizeHandles.add(normalizedHandle);
+        SyncService.forgetPendingDropboxCredentialHandleForSession(normalizedHandle);
+    }
+
+    private static forgetDropboxFinalizeRetryHandle(credentialHandle: string): void {
+        const normalizedHandle = credentialHandle.trim();
+        if (!normalizedHandle) return;
+        SyncService.pendingDropboxFinalizeHandles.delete(normalizedHandle);
+    }
+
+    private static async retryDropboxCredentialFinalizations(
+        expectedHandle?: string,
+    ): Promise<void> {
+        const normalizedExpected = expectedHandle?.trim();
+        const handles = normalizedExpected
+            ? [normalizedExpected]
+            : Array.from(SyncService.pendingDropboxFinalizeHandles);
+        let firstError: unknown = null;
+        for (const handle of handles) {
+            if (!SyncService.pendingDropboxFinalizeHandles.has(handle)) continue;
+            try {
+                await SyncService.finalizeDropboxCredentials(handle);
+            } catch (error) {
+                firstError ??= error;
+            }
+        }
+        if (firstError) throw firstError;
+    }
+
+    static async retryPendingDropboxCredentialFinalizationForSession(): Promise<void> {
+        return runSyncRestoreExclusive(() => SyncService.retryDropboxCredentialFinalizations());
+    }
+
+    private static async recoverDropboxCredentialsBeforeConfigurationMutation(): Promise<void> {
+        await recoverDropboxCredentialsBeforeConfigurationDirect();
+        // The native recovery barrier removes committed orphan promotion
+        // entries only after exact marker recovery succeeds. Any renderer
+        // finalize handles are therefore stale, while Candidate ownership is
+        // intentionally unchanged.
+        SyncService.pendingDropboxFinalizeHandles.clear();
+    }
+
     static subscribeSyncStatus(listener: (status: typeof SyncService.syncStatus) => void): () => void {
         SyncService.syncListeners.add(listener);
         listener(SyncService.syncStatus);
@@ -808,8 +1039,10 @@ export class SyncService {
         // following test replaces the service dependencies underneath it.
         SyncService.syncOrchestrator.reset();
         await runSyncRestoreExclusive(async () => undefined);
+        await SyncService.legacyMigrationPromise?.catch(() => undefined);
         await SyncService.stopFileWatcher();
         SyncService.didMigrate = false;
+        SyncService.legacyMigrationPromise = null;
         SyncService.syncOrchestrator.reset();
         SyncService.queuedSyncOptions = null;
         SyncService.syncStatus = {
@@ -833,6 +1066,9 @@ export class SyncService {
         SyncService.externalSyncChangeListeners.clear();
         SyncService.consecutiveAttachmentWarningRuns = 0;
         SyncService.lastAttachmentWarningToastAt = 0;
+        SyncService.pendingDropboxCredentialHandle = null;
+        SyncService.pendingDropboxFinalizeHandles.clear();
+        SyncService.pendingDropboxCredentialHandleListeners.clear();
         clearFastSyncState();
         clearLocalSyncStatus();
         clearAttachmentSyncState();
@@ -876,52 +1112,178 @@ export class SyncService {
 
     static async maybeMigrateLegacyLocalStorageToConfig() {
         if (!isTauriRuntimeEnv() || SyncService.didMigrate) return;
-        SyncService.didMigrate = true;
+        if (SyncService.legacyMigrationPromise) {
+            return SyncService.legacyMigrationPromise;
+        }
 
-        const legacyBackend = getSyncBackendLocal();
-        const legacyWebdav = getWebDavConfigLocal();
-        const legacyCloud = getCloudConfigLocal();
-        const hasLegacyBackend = legacyBackend === 'webdav' || legacyBackend === 'cloud';
-        const hasLegacyWebdav = Boolean(legacyWebdav.url);
-        const hasLegacyCloud = Boolean(legacyCloud.url || legacyCloud.token);
-        if (!hasLegacyBackend && !hasLegacyWebdav && !hasLegacyCloud) return;
+        const migrationPromise = (async () => {
+            // Snapshot renderer-owned state without invoking the browser getters:
+            // getCloudConfigLocal intentionally relocates a non-remembered legacy
+            // token into sessionStorage, which would destroy the retry source if
+            // native migration failed and the app then closed.
+            const capturedLocalEntries = new Map<string, string | null>([
+                [SYNC_BACKEND_KEY, localStorage.getItem(SYNC_BACKEND_KEY)],
+                [WEBDAV_URL_KEY, localStorage.getItem(WEBDAV_URL_KEY)],
+                [WEBDAV_USERNAME_KEY, localStorage.getItem(WEBDAV_USERNAME_KEY)],
+                [WEBDAV_PASSWORD_KEY, localStorage.getItem(WEBDAV_PASSWORD_KEY)],
+                [WEBDAV_ALLOW_INSECURE_HTTP_KEY, localStorage.getItem(WEBDAV_ALLOW_INSECURE_HTTP_KEY)],
+                [WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY, localStorage.getItem(WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY)],
+                [CLOUD_URL_KEY, localStorage.getItem(CLOUD_URL_KEY)],
+                [CLOUD_TOKEN_KEY, localStorage.getItem(CLOUD_TOKEN_KEY)],
+                [CLOUD_ALLOW_INSECURE_HTTP_KEY, localStorage.getItem(CLOUD_ALLOW_INSECURE_HTTP_KEY)],
+                [CLOUD_REMEMBER_TOKEN_KEY, localStorage.getItem(CLOUD_REMEMBER_TOKEN_KEY)],
+                [CLOUD_PROVIDER_KEY, localStorage.getItem(CLOUD_PROVIDER_KEY)],
+            ]);
+            const capturedSessionEntries = new Map<string, string | null>([
+                [WEBDAV_PASSWORD_KEY, sessionStorage.getItem(WEBDAV_PASSWORD_KEY)],
+                [CLOUD_TOKEN_KEY, sessionStorage.getItem(CLOUD_TOKEN_KEY)],
+            ]);
+            const localValue = (key: string): string | null => capturedLocalEntries.get(key) ?? null;
+            const sessionValue = (key: string): string | null => capturedSessionEntries.get(key) ?? null;
+            const legacyBackend = normalizeSyncBackend(localValue(SYNC_BACKEND_KEY));
+            const legacyWebdavPassword = sessionValue(WEBDAV_PASSWORD_KEY)
+                ?? localValue(WEBDAV_PASSWORD_KEY)
+                ?? '';
+            const legacyWebdav: WebDavConfig = {
+                url: localValue(WEBDAV_URL_KEY) ?? '',
+                username: localValue(WEBDAV_USERNAME_KEY) ?? '',
+                password: legacyWebdavPassword,
+                hasPassword: Boolean(legacyWebdavPassword),
+                allowInsecureHttp: localValue(WEBDAV_ALLOW_INSECURE_HTTP_KEY) === 'true',
+                allowWeakFingerprint: localValue(WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY) !== 'false',
+            };
+            const legacyCloudRememberToken = localValue(CLOUD_REMEMBER_TOKEN_KEY) === 'true';
+            const legacyLocalCloudToken = localValue(CLOUD_TOKEN_KEY) ?? '';
+            const legacySessionCloudToken = sessionValue(CLOUD_TOKEN_KEY) ?? '';
+            const legacyCloud: CloudConfig = {
+                url: localValue(CLOUD_URL_KEY) ?? '',
+                token: legacyCloudRememberToken
+                    ? (legacyLocalCloudToken || legacySessionCloudToken)
+                    : (legacySessionCloudToken || legacyLocalCloudToken),
+                allowInsecureHttp: localValue(CLOUD_ALLOW_INSECURE_HTTP_KEY) === 'true',
+                rememberToken: legacyCloudRememberToken,
+            };
+            const rawLegacyCloudProvider = localValue(CLOUD_PROVIDER_KEY);
+            const legacyCloudProvider: CloudProvider | null = rawLegacyCloudProvider === 'dropbox'
+                || rawLegacyCloudProvider === 'selfhosted'
+                ? rawLegacyCloudProvider
+                : null;
+            const hasLegacyBackend = legacyBackend === 'webdav' || legacyBackend === 'cloud';
+            const hasLegacyWebdav = Boolean(legacyWebdav.url);
+            const hasLegacyCloud = Boolean(legacyCloud.url || legacyCloud.token);
+            const hasLegacyRendererState = Array.from(capturedLocalEntries.values()).some((value) => value !== null)
+                || Array.from(capturedSessionEntries.values()).some((value) => value !== null);
+            if (!hasLegacyRendererState) {
+                return;
+            }
 
-        try {
-            const [currentBackend, currentWebdav, currentCloud] = await Promise.all([
+            // Migration can run either inside the lifecycle queue (atomic
+            // snapshot/commit) or from a legacy individual getter. Use the
+            // direct native barrier here to avoid queue reentrancy while still
+            // settling any crash-left Dropbox journal before config writes.
+            await recoverDropboxCredentialsBeforeConfigurationDirect();
+
+            const [currentBackend, currentWebdav, currentCloud, currentCloudProviderState] = await Promise.all([
                 tauriInvoke<string>('get_sync_backend'),
                 tauriInvoke<WebDavConfig>('get_webdav_config'),
                 tauriInvoke<CloudConfig>('get_cloud_config'),
+                rawLegacyCloudProvider !== null
+                    ? tauriInvoke<{ provider: string; authority: string }>('get_sync_cloud_provider_state')
+                    : Promise.resolve<{ provider: string; authority: string } | null>(null),
             ]);
-
-            let migrated = false;
-            if (hasLegacyBackend && normalizeSyncBackend(currentBackend) === 'file') {
-                await tauriInvoke('set_sync_backend', { backend: legacyBackend });
-                migrated = true;
-            }
 
             if (hasLegacyWebdav && !currentWebdav.url) {
                 await tauriInvoke('set_webdav_config', legacyWebdav);
-                migrated = true;
+                const persistedWebdav = await tauriInvoke<WebDavConfig>('get_webdav_config');
+                if (
+                    persistedWebdav.url !== legacyWebdav.url
+                    || persistedWebdav.username !== legacyWebdav.username
+                    || persistedWebdav.hasPassword !== legacyWebdav.hasPassword
+                    || persistedWebdav.allowInsecureHttp !== legacyWebdav.allowInsecureHttp
+                    || persistedWebdav.allowWeakFingerprint !== legacyWebdav.allowWeakFingerprint
+                ) {
+                    throw new Error('Legacy WebDAV sync configuration did not persist correctly');
+                }
             }
 
             if (hasLegacyCloud && !currentCloud.url && !currentCloud.token) {
-                await tauriInvoke('set_cloud_config', { url: legacyCloud.url, token: legacyCloud.token });
-                migrated = true;
+                await tauriInvoke('set_cloud_config', {
+                    url: legacyCloud.url,
+                    token: legacyCloud.token,
+                    allowInsecureHttp: legacyCloud.allowInsecureHttp === true,
+                });
+                const persistedCloud = await tauriInvoke<CloudConfig>('get_cloud_config');
+                if (
+                    persistedCloud.url !== legacyCloud.url
+                    || persistedCloud.token !== legacyCloud.token
+                    || persistedCloud.allowInsecureHttp !== legacyCloud.allowInsecureHttp
+                ) {
+                    throw new Error('Legacy self-hosted sync configuration did not persist correctly');
+                }
             }
 
-            if (migrated) {
-                localStorage.removeItem(SYNC_BACKEND_KEY);
-                localStorage.removeItem(WEBDAV_URL_KEY);
-                localStorage.removeItem(WEBDAV_USERNAME_KEY);
-                localStorage.removeItem(WEBDAV_PASSWORD_KEY);
-                localStorage.removeItem(CLOUD_URL_KEY);
-                localStorage.removeItem(CLOUD_TOKEN_KEY);
-                localStorage.removeItem(CLOUD_REMEMBER_TOKEN_KEY);
-                sessionStorage.removeItem(WEBDAV_PASSWORD_KEY);
-                sessionStorage.removeItem(CLOUD_TOKEN_KEY);
+            // The provider selects the cloud transport, so make it durable and
+            // verify it before a legacy cloud backend can be activated.
+            if (rawLegacyCloudProvider !== null) {
+                if (
+                    !currentCloudProviderState
+                    || (currentCloudProviderState.provider !== 'selfhosted'
+                        && currentCloudProviderState.provider !== 'dropbox')
+                    || (currentCloudProviderState.authority !== 'uninitialized'
+                        && currentCloudProviderState.authority !== 'native')
+                ) {
+                    throw new Error('Invalid persisted cloud provider state');
+                }
+                if (legacyCloudProvider && currentCloudProviderState.authority === 'uninitialized') {
+                    await tauriInvoke('set_sync_cloud_provider', { provider: legacyCloudProvider });
+                    const persistedState = await tauriInvoke<{ provider: string; authority: string }>(
+                        'get_sync_cloud_provider_state',
+                    );
+                    if (
+                        persistedState.provider !== legacyCloudProvider
+                        || persistedState.authority !== 'native'
+                    ) {
+                        throw new Error('Legacy cloud sync provider did not persist correctly');
+                    }
+                }
             }
+
+            if (hasLegacyBackend && normalizeSyncBackend(currentBackend) === 'file') {
+                await tauriInvoke('set_sync_backend', { backend: legacyBackend });
+                const persistedBackend = normalizeSyncBackend(
+                    await tauriInvoke<string>('get_sync_backend'),
+                );
+                if (persistedBackend !== legacyBackend) {
+                    throw new Error('Legacy sync backend did not persist correctly');
+                }
+            }
+
+            // Every native read/write above completed successfully. Retire only
+            // the exact values inspected by this migration so a concurrent
+            // renderer update is never mistaken for legacy state.
+            capturedLocalEntries.forEach((value, key) => {
+                if (value !== null && localStorage.getItem(key) === value) {
+                    localStorage.removeItem(key);
+                }
+            });
+            capturedSessionEntries.forEach((value, key) => {
+                if (value !== null && sessionStorage.getItem(key) === value) {
+                    sessionStorage.removeItem(key);
+                }
+            });
+        })();
+        SyncService.legacyMigrationPromise = migrationPromise;
+
+        try {
+            await migrationPromise;
+            SyncService.didMigrate = true;
         } catch (error) {
             syncServiceDependencies.reportError('Failed to migrate legacy sync config', error);
+            throw error;
+        } finally {
+            if (SyncService.legacyMigrationPromise === migrationPromise) {
+                SyncService.legacyMigrationPromise = null;
+            }
         }
     }
 
@@ -929,15 +1291,66 @@ export class SyncService {
         return readSyncBackend(getSyncConfigDeps());
     }
 
+    private static async readPersistedSyncConfiguration(
+        requirements: SyncConfigurationSecretRequirements = {},
+    ): Promise<PersistedDesktopSyncConfiguration> {
+        if (isTauriRuntimeEnv()) {
+            await SyncService.maybeMigrateLegacyLocalStorageToConfig();
+            return tauriInvoke<PersistedDesktopSyncConfiguration>(
+                'get_sync_configuration_snapshot',
+                {
+                    requireWebdavPassword: requirements.requireWebdavPassword === true,
+                    requireCloudToken: requirements.requireCloudToken === true,
+                },
+            );
+        }
+
+        const [backend, syncPath, webdav, cloud, cloudProvider] = await Promise.all([
+            SyncService.getSyncBackend(),
+            SyncService.getSyncPath(),
+            SyncService.getWebDavConfig(),
+            SyncService.getCloudConfig(),
+            SyncService.getCloudProvider(),
+        ]);
+        const password = webdav.password ?? '';
+        return {
+            backend,
+            syncPath,
+            webdav: {
+                ...webdav,
+                password,
+                passwordAuthority: 'known',
+                hasPassword: Boolean(password) || webdav.hasPassword === true,
+                allowInsecureHttp: webdav.allowInsecureHttp === true,
+                allowWeakFingerprint: webdav.allowWeakFingerprint !== false,
+            },
+            cloud: {
+                ...cloud,
+                token: cloud.token ?? '',
+                tokenAuthority: 'known',
+                allowInsecureHttp: cloud.allowInsecureHttp === true,
+                rememberToken: cloud.rememberToken === true,
+            },
+            cloudProvider,
+        };
+    }
+
+    static async getPersistedSyncConfigurationSnapshot(): Promise<PersistedDesktopSyncConfiguration> {
+        return runSyncRestoreExclusive(() => SyncService.readPersistedSyncConfiguration());
+    }
+
     static async setSyncBackend(backend: SyncBackend): Promise<void> {
-        return writeSyncBackend(backend, getSyncConfigDeps());
+        return runSyncRestoreExclusive(async () => {
+            await SyncService.recoverDropboxCredentialsBeforeConfigurationMutation();
+            await writeSyncBackendDirect(backend);
+        });
     }
 
     static async getWebDavConfig(options?: { silent?: boolean }): Promise<WebDavConfig> {
         return readWebDavConfig(getSyncConfigDeps(), options);
     }
 
-    static async setWebDavConfig(config: { url: string; username?: string; password?: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean }): Promise<void> {
+    static async setWebDavConfig(config: { url: string; username?: string; password?: string; allowInsecureHttp?: boolean; allowWeakFingerprint?: boolean; replacePassword?: boolean }): Promise<void> {
         return writeWebDavConfig(config, getSyncConfigDeps());
     }
 
@@ -1005,11 +1418,82 @@ export class SyncService {
     }
 
     static async getCloudProvider(): Promise<CloudProvider> {
-        return readCloudProvider();
+        return readCloudProviderDirect();
     }
 
     static async setCloudProvider(provider: CloudProvider): Promise<void> {
-        return writeCloudProvider(provider);
+        return runSyncRestoreExclusive(async () => {
+            await SyncService.recoverDropboxCredentialsBeforeConfigurationMutation();
+            await writeCloudProviderDirect(provider);
+        });
+    }
+
+    static async commitProvenSyncConfiguration(
+        config: DesktopSyncConfigOverride,
+    ): Promise<SyncConfigurationCommitResult> {
+        const credentialHandle = config.dropboxCredentialHandle?.trim();
+        const result = await runSyncRestoreExclusive(async () => {
+            const committed = await commitProvenSyncConfigurationTransaction(config, {
+                recoverDropboxCredentialsBeforeConfiguration: () => (
+                    SyncService.recoverDropboxCredentialsBeforeConfigurationMutation()
+                ),
+                readConfiguration: (requirements) => SyncService.readPersistedSyncConfiguration(requirements),
+                writeBackend: writeSyncBackendDirect,
+                writeSyncPath: (path) => SyncService.setSyncPath(path),
+                clearSyncPath: () => clearSyncPath(getSyncConfigDeps()),
+                writeWebDav: (webdav) => SyncService.setWebDavConfig({
+                    ...webdav,
+                    replacePassword: true,
+                }),
+                writeCloud: (cloud) => SyncService.setCloudConfig(cloud),
+                writeCloudProvider: writeCloudProviderDirect,
+                promoteDropboxCredentials: (handle) => (
+                    SyncService.promoteDropboxCredentials(handle)
+                ),
+                discardDropboxCredentials: (handle) => (
+                    SyncService.discardDropboxCredentials(handle)
+                ),
+                rollbackDropboxCredentials: (handle) => (
+                    SyncService.rollbackDropboxCredentials(handle)
+                ),
+                finalizeDropboxCredentials: (handle) => (
+                    SyncService.finalizeDropboxCredentials(handle)
+                ),
+            });
+            if (committed.cleanupPending && credentialHandle) {
+                // Phase ownership changes before releasing the lifecycle queue;
+                // a queued Off/disconnect barrier must see and settle this slot.
+                SyncService.moveDropboxCredentialToFinalizeRetry(credentialHandle);
+            }
+            return committed;
+        });
+        if (result.cleanupPending && credentialHandle) {
+            // Schedule the post-commit notice/retry behind anything that was
+            // already queued during commit. A newer Off/disconnect barrier may
+            // settle and clear this handle first, in which case no stale notice
+            // or finalize attempt is emitted.
+            void runSyncRestoreExclusive(async () => {
+                if (!SyncService.pendingDropboxFinalizeHandles.has(credentialHandle)) return;
+                logSyncWarning('Dropbox setup committed; credential cleanup will retry');
+                try {
+                    useUiStore.getState().showToast(
+                        'Dropbox setup was saved. Credential cleanup will retry.',
+                        'info',
+                        6000,
+                    );
+                } catch {
+                    // The UI store can be unavailable during shutdown/tests.
+                }
+                try {
+                    // Native finalize is idempotent at the committed marker,
+                    // including a lost response after cleanup.
+                    await SyncService.retryDropboxCredentialFinalizations(credentialHandle);
+                } catch {
+                    logSyncWarning('Dropbox credential cleanup retry is still pending');
+                }
+            });
+        }
+        return result;
     }
 
     static async getDropboxAppKey(): Promise<string> {
@@ -1030,18 +1514,10 @@ export class SyncService {
     }
 
     static async isDropboxConnected(clientId: string): Promise<boolean> {
-        const normalized = clientId.trim();
-        if (!normalized) return false;
-        if (!isTauriRuntimeEnv()) return false;
-        try {
-            return await tauriInvoke<boolean>('is_dropbox_connected', { clientId: normalized });
-        } catch (error) {
-            syncServiceDependencies.reportError('Failed to check Dropbox connection status', error);
-            return false;
-        }
+        return runSyncRestoreExclusive(() => isDropboxConnectedDirect(clientId));
     }
 
-    static async connectDropbox(clientId: string): Promise<void> {
+    static async connectDropbox(clientId: string): Promise<string> {
         const normalized = clientId.trim();
         if (!normalized) {
             throw new Error('Dropbox app key is required');
@@ -1049,7 +1525,18 @@ export class SyncService {
         if (!isTauriRuntimeEnv()) {
             throw new Error('Dropbox sync is only available in the desktop app.');
         }
-        await tauriInvoke('connect_dropbox', { clientId: normalized });
+        return runSyncRestoreExclusive(async () => {
+            if (SyncService.pendingDropboxCredentialHandle) {
+                throw new Error('A pending Dropbox authorization must be resolved before connecting another account');
+            }
+            // Renderer finalize ownership is session-only and may be empty
+            // after reload. Native recovery must settle any prior promotion
+            // journal before a new OAuth candidate is allowed to mutate it.
+            await SyncService.recoverDropboxCredentialsBeforeConfigurationMutation();
+            const credentialHandle = await tauriInvoke<string>('connect_dropbox', { clientId: normalized });
+            SyncService.rememberPendingDropboxCredentialHandleForSession(credentialHandle);
+            return credentialHandle;
+        });
     }
 
     static async disconnectDropbox(clientId: string): Promise<void> {
@@ -1060,46 +1547,150 @@ export class SyncService {
         if (!isTauriRuntimeEnv()) {
             throw new Error('Dropbox sync is only available in the desktop app.');
         }
-        await tauriInvoke('disconnect_dropbox', { clientId: normalized });
+        await runSyncRestoreExclusive(async () => {
+            const pendingCredentialHandle = SyncService.pendingDropboxCredentialHandle;
+            await SyncService.recoverDropboxCredentialsBeforeConfigurationMutation();
+            const current = await SyncService.readPersistedSyncConfiguration();
+            const activeDropbox = current.backend === 'cloud'
+                && current.cloudProvider === 'dropbox';
+            if (activeDropbox) {
+                await writeSyncBackendDirect('off');
+                const disabled = await SyncService.readPersistedSyncConfiguration();
+                if (disabled.backend !== 'off') {
+                    throw new Error('Dropbox could not be disconnected because sync is not durably disabled');
+                }
+
+                SyncService.syncOrchestrator.reset();
+                SyncService.queuedSyncOptions = null;
+                SyncService.updateSyncStatus({ queued: false });
+                await SyncService.stopFileWatcher();
+                clearFastSyncState();
+                clearLocalSyncStatus();
+                clearAttachmentSyncState();
+            }
+            await tauriInvoke('disconnect_dropbox', { clientId: normalized });
+            if (pendingCredentialHandle) {
+                SyncService.forgetPendingDropboxCredentialHandleForSession(pendingCredentialHandle);
+            }
+        });
     }
 
-    static async getDropboxAccessToken(clientId: string, options?: { forceRefresh?: boolean }): Promise<string> {
-        const normalized = clientId.trim();
-        if (!normalized) {
+    private static async invokeStagedDropboxCredentialCommand(
+        command: string,
+        credentialHandle: string,
+    ): Promise<void> {
+        const normalizedHandle = credentialHandle.trim();
+        if (!normalizedHandle) {
+            throw new Error('Dropbox credential handle is required');
+        }
+        const clientId = (await SyncService.getDropboxAppKey()).trim();
+        if (!clientId) {
             throw new Error('Dropbox app key is required');
         }
         if (!isTauriRuntimeEnv()) {
             throw new Error('Dropbox sync is only available in the desktop app.');
         }
-        return await tauriInvoke<string>('get_dropbox_access_token', {
-            clientId: normalized,
-            forceRefresh: options?.forceRefresh === true,
+        await tauriInvoke(command, {
+            clientId,
+            credentialHandle: normalizedHandle,
         });
     }
 
-    static async testDropboxConnection(clientId: string): Promise<void> {
-        const normalized = clientId.trim();
-        if (!normalized) {
-            throw new Error('Dropbox app key is required');
+    static async resolvePendingDropboxCredentialForSession(credentialHandle: string): Promise<void> {
+        const normalizedHandle = credentialHandle.trim();
+        if (!normalizedHandle) {
+            throw new Error('Dropbox credential handle is required');
         }
-        const fetcher = await getTauriFetch();
-        const runTest = async (forceRefresh: boolean) => {
-            const accessToken = await SyncService.getDropboxAccessToken(normalized, { forceRefresh });
-            await withTimeout(
-                testDropboxAccess(accessToken, fetcher ?? fetch),
-                DROPBOX_TEST_TIMEOUT_MS,
-                'Dropbox connection test timed out. Please try again.'
-            );
-        };
-        try {
-            await runTest(false);
-        } catch (error) {
-            if (error instanceof DropboxUnauthorizedError) {
-                await runTest(true);
+        await runSyncRestoreExclusive(async () => {
+            if (SyncService.pendingDropboxFinalizeHandles.has(normalizedHandle)) {
+                // This handle is past the exact active-backend commit point.
+                // Its only legal transition is idempotent finalize.
+                await SyncService.retryDropboxCredentialFinalizations(normalizedHandle);
                 return;
             }
-            throw error;
-        }
+            const pendingHandle = SyncService.pendingDropboxCredentialHandle;
+            // A transaction or disconnect that ran first already resolved this
+            // handle. A different handle must never be touched by stale cleanup.
+            if (!pendingHandle) return;
+            if (pendingHandle !== normalizedHandle) {
+                throw new Error('A different Dropbox authorization is pending recovery');
+            }
+            try {
+                // Native discard is idempotent for a missing/expired Candidate.
+                // Promoted entries are never TTL-pruned and deliberately reject
+                // discard, so rollback remains the safe second phase.
+                await SyncService.discardDropboxCredentials(normalizedHandle);
+            } catch (discardError) {
+                try {
+                    await SyncService.rollbackDropboxCredentials(normalizedHandle);
+                } catch (rollbackError) {
+                    const discardMessage = discardError instanceof Error
+                        ? discardError.message
+                        : String(discardError);
+                    const rollbackMessage = rollbackError instanceof Error
+                        ? rollbackError.message
+                        : String(rollbackError);
+                    throw new Error(
+                        `Pending Dropbox authorization could not be discarded (${discardMessage}) or rolled back (${rollbackMessage})`,
+                    );
+                }
+            }
+        });
+    }
+
+    static async promoteDropboxCredentials(credentialHandle: string): Promise<void> {
+        await SyncService.invokeStagedDropboxCredentialCommand(
+            'promote_staged_dropbox_credentials',
+            credentialHandle,
+        );
+    }
+
+    static async rollbackDropboxCredentials(credentialHandle: string): Promise<void> {
+        await SyncService.invokeStagedDropboxCredentialCommand(
+            'rollback_staged_dropbox_credentials',
+            credentialHandle,
+        );
+        SyncService.forgetPendingDropboxCredentialHandleForSession(credentialHandle);
+    }
+
+    static async finalizeDropboxCredentials(credentialHandle: string): Promise<void> {
+        await SyncService.invokeStagedDropboxCredentialCommand(
+            'finalize_staged_dropbox_credentials',
+            credentialHandle,
+        );
+        SyncService.forgetPendingDropboxCredentialHandleForSession(credentialHandle);
+        SyncService.forgetDropboxFinalizeRetryHandle(credentialHandle);
+    }
+
+    static async discardDropboxCredentials(credentialHandle: string): Promise<void> {
+        await SyncService.invokeStagedDropboxCredentialCommand(
+            'discard_staged_dropbox_credentials',
+            credentialHandle,
+        );
+        SyncService.forgetPendingDropboxCredentialHandleForSession(credentialHandle);
+    }
+
+    static async getDropboxAccessToken(
+        clientId: string,
+        options?: DropboxCredentialHandleOptions,
+    ): Promise<string> {
+        return runSyncRestoreExclusive(() => getDropboxAccessTokenDirect(clientId, {
+            ...options,
+            credentialHandle: resolveRequestedDropboxCredentialHandleAtExecution(
+                options?.credentialHandle,
+            ),
+        }));
+    }
+
+    static async testDropboxConnection(
+        clientId: string,
+        options?: { credentialHandle?: string },
+    ): Promise<void> {
+        return runSyncRestoreExclusive(() => testDropboxConnectionDirect(clientId, {
+            credentialHandle: resolveRequestedDropboxCredentialHandleAtExecution(
+                options?.credentialHandle,
+            ),
+        }));
     }
 
     /**
@@ -1166,7 +1757,11 @@ export class SyncService {
         options: SyncRunOptions,
         setStep: (step: string) => void
     ): Promise<SyncRunCycleSetup> {
-        context.backend = options.backendOverride ?? await SyncService.getSyncBackend();
+        const configOverride = options.configOverride;
+        context.usesConfigOverride = Boolean(configOverride);
+        context.backend = configOverride?.backend
+            ?? options.backendOverride
+            ?? await SyncService.getSyncBackend();
         if (context.backend === 'off') {
             return { kind: 'disabled' };
         }
@@ -1204,18 +1799,27 @@ export class SyncService {
             throw new Error('Offline: network connection is unavailable for remote sync.');
         }
 
-        context.webdavConfig = context.backend === 'webdav' ? await SyncService.getWebDavConfig() : null;
-        context.cloudProvider = context.backend === 'cloud' ? await SyncService.getCloudProvider() : 'selfhosted';
+        context.webdavConfig = context.backend === 'webdav'
+            ? configOverride?.webdav ?? await SyncService.getWebDavConfig()
+            : null;
+        context.cloudProvider = context.backend === 'cloud'
+            ? configOverride?.cloudProvider ?? await SyncService.getCloudProvider()
+            : 'selfhosted';
         context.cloudConfig = context.backend === 'cloud' && context.cloudProvider === 'selfhosted'
-            ? await SyncService.getCloudConfig()
+            ? configOverride?.cloud ?? await SyncService.getCloudConfig()
             : null;
         context.dropboxAppKey = context.backend === 'cloud' && context.cloudProvider === 'dropbox'
             ? (await SyncService.getDropboxAppKey()).trim()
             : '';
+        context.dropboxCredentialHandle = context.backend === 'cloud' && context.cloudProvider === 'dropbox'
+            ? configOverride?.dropboxCredentialHandle?.trim() || null
+            : null;
         if (context.backend === 'cloud' && context.cloudProvider === 'dropbox' && !context.dropboxAppKey) {
             throw new Error('Dropbox app key is not configured');
         }
-        context.syncPath = context.backend === 'file' ? await SyncService.getSyncPath() : '';
+        context.syncPath = context.backend === 'file'
+            ? configOverride?.syncPath ?? await SyncService.getSyncPath()
+            : '';
         context.fileBaseDir = context.backend === 'file'
             ? getFileSyncDir(context.syncPath, SYNC_FILE_NAME, LEGACY_SYNC_FILE_NAME)
             : '';
@@ -1277,36 +1881,38 @@ export class SyncService {
                     }
                     return data;
                 };
-                if (isTauriRuntimeEnv()) {
+                if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
                     return logMissingRemote(await withRetry(
                         () => tauriInvoke<AppData>('webdav_get_json'),
                         WEBDAV_READ_RETRY_OPTIONS,
                     ));
                 }
                 const webdavConfig = context.webdavConfig!;
+                const password = await resolveWebdavPassword(webdavConfig);
                 const fetcher = await createFetchWithAbortForContext(context);
                 return logMissingRemote(await withRetry(
                     () => webdavGetJson<AppData>(normalizedUrl, {
                         allowInsecureHttp: webdavConfig.allowInsecureHttp,
                         username: webdavConfig.username,
-                        password: webdavConfig.password || '',
+                        password,
                         fetcher,
                     }),
                     WEBDAV_READ_RETRY_OPTIONS,
                 ));
             },
             webdavPut: async (sanitized) => {
-                if (isTauriRuntimeEnv()) {
+                if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
                     return tauriInvoke<RemoteJsonWriteResult | boolean>('webdav_put_json', { data: sanitized });
                 }
-                const config = await SyncService.getWebDavConfig();
+                const config = context.webdavConfig ?? await SyncService.getWebDavConfig();
                 const normalizedUrl = normalizeWebdavUrl(config.url);
                 ctx.syncUrl = normalizedUrl;
+                const password = await resolveWebdavPassword(config);
                 const fetcher = await createFetchWithAbortForContext(context);
                 return webdavPutJson(normalizedUrl, sanitized, {
                     allowInsecureHttp: config.allowInsecureHttp,
                     username: config.username,
-                    password: config.password || '',
+                    password,
                     fetcher,
                 });
             },
@@ -1323,7 +1929,7 @@ export class SyncService {
                 });
             },
             cloudGet: async () => {
-                if (isTauriRuntimeEnv()) {
+                if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
                     return tauriInvoke<AppData | null>('cloud_get_json');
                 }
                 const fetcher = await createFetchWithAbortForContext(context);
@@ -1337,7 +1943,7 @@ export class SyncService {
                 const config = context.cloudConfig ?? await SyncService.getCloudConfig();
                 const normalizedUrl = normalizeCloudUrl(config.url);
                 ctx.syncUrl = normalizedUrl;
-                if (isTauriRuntimeEnv()) {
+                if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
                     return tauriInvoke<CloudJsonWriteResult | boolean>('cloud_put_json', { data: sanitized });
                 }
                 const fetcher = await createFetchWithAbortForContext(context);
@@ -1359,11 +1965,16 @@ export class SyncService {
                 if (!isTauriRuntimeEnv()) {
                     throw new Error('File sync is not available in the web app.');
                 }
-                return tauriInvoke<AppData>('read_sync_file');
+                return tauriInvoke<AppData>('read_sync_file', context.usesConfigOverride
+                    ? { path: context.syncPath }
+                    : undefined);
             },
             fileWrite: async (sanitized) => {
                 await SyncService.markSyncWrite(sanitized);
-                await tauriInvoke('write_sync_file', { data: sanitized });
+                await tauriInvoke('write_sync_file', {
+                    data: sanitized,
+                    ...(context.usesConfigOverride ? { path: context.syncPath } : {}),
+                });
             },
             cloudKitRead: async () => syncServiceDependencies.readRemoteCloudKit(),
             cloudKitWrite: async (sanitized) => {
@@ -1383,20 +1994,30 @@ export class SyncService {
                 const fetcher = await createFetchWithAbortForContext(context);
                 return SyncService.runDropboxTransientRetry(() => getDropboxAppDataMetadata(token, fetcher));
             },
-            syncWebdavAttachments: async (data) => {
+            syncWebdavAttachments: async (data, helpers) => {
                 const baseUrl = getBaseSyncUrl(context.webdavConfig!.url);
-                return syncAttachments(data, context.webdavConfig!, baseUrl, attachmentBackendDeps);
+                return syncAttachments(data, context.webdavConfig!, baseUrl, attachmentBackendDeps, helpers);
             },
-            syncCloudKitAttachments: async (data) => syncCloudKitAttachments(data, attachmentBackendDeps),
-            syncFileAttachments: async (data) => syncFileAttachments(data, context.fileBaseDir, attachmentBackendDeps),
-            syncCloudAttachments: async (data) => {
+            syncCloudKitAttachments: async (data, helpers) => syncCloudKitAttachments(
+                data,
+                attachmentBackendDeps,
+                helpers,
+            ),
+            syncFileAttachments: async (data, helpers) => syncFileAttachments(
+                data,
+                context.fileBaseDir,
+                attachmentBackendDeps,
+                helpers,
+            ),
+            syncCloudAttachments: async (data, helpers) => {
                 const baseUrl = getCloudBaseUrl(context.cloudConfig!.url);
-                return syncCloudAttachments(data, context.cloudConfig!, baseUrl, attachmentBackendDeps);
+                return syncCloudAttachments(data, context.cloudConfig!, baseUrl, attachmentBackendDeps, helpers);
             },
-            syncDropboxAttachments: async (data) => syncDropboxAttachments(
+            syncDropboxAttachments: async (data, helpers) => syncDropboxAttachments(
                 data,
                 (forceRefresh) => resolveDropboxAccessTokenForContext(context, forceRefresh),
-                attachmentBackendDeps
+                attachmentBackendDeps,
+                helpers,
             ),
         };
 
@@ -1647,27 +2268,29 @@ export class SyncService {
 
     static async cleanupAttachmentsNow(): Promise<void> {
         if (!isTauriRuntimeEnv()) return;
-        await syncServiceDependencies.flushPendingSave();
-        const localSnapshotChangeAt = getStoreState().lastDataChangeAt;
-        const ensureLocalSnapshotFresh = () => {
-            ensureFreshLocalSyncSnapshot({
-                localSnapshotChangeAt,
-                getCurrentChangeAt: () => getStoreState().lastDataChangeAt,
-                requestFollowUp: () => SyncService.requestQueuedSyncRun(),
-            });
-        };
-        const backend = await SyncService.getSyncBackend();
-        const data = await tauriInvoke<AppData>('get_data');
-        ensureLocalSnapshotFresh();
-        const cleaned = await cleanupOrphanedAttachments(
-            data,
-            backend,
-            getAttachmentCleanupDeps(),
-            { ensureLocalSnapshotFresh },
-        );
-        ensureLocalSnapshotFresh();
-        await persistLocalDataForSync(cleaned, { baseline: data });
-        await getStoreState().fetchData({ silent: true });
+        await runSyncRestoreExclusive(async () => {
+            await syncServiceDependencies.flushPendingSave();
+            const localSnapshotChangeAt = getStoreState().lastDataChangeAt;
+            const ensureLocalSnapshotFresh = () => {
+                ensureFreshLocalSyncSnapshot({
+                    localSnapshotChangeAt,
+                    getCurrentChangeAt: () => getStoreState().lastDataChangeAt,
+                    requestFollowUp: () => SyncService.requestQueuedSyncRun(),
+                });
+            };
+            const backend = await SyncService.getSyncBackend();
+            const data = await tauriInvoke<AppData>('get_data');
+            ensureLocalSnapshotFresh();
+            const cleaned = await cleanupOrphanedAttachments(
+                data,
+                backend,
+                getAttachmentCleanupDeps(),
+                { ensureLocalSnapshotFresh },
+            );
+            ensureLocalSnapshotFresh();
+            await persistLocalDataForSync(cleaned, { baseline: data });
+            await getStoreState().fetchData({ silent: true });
+        });
     }
 
     static async listDataSnapshots(): Promise<string[]> {
@@ -1719,10 +2342,24 @@ export class SyncService {
      * 4. Refresh Core Store
      */
     static async performSync(options: SyncRunOptions = {}): Promise<SyncRunResult> {
-        if (SyncService.syncOrchestrator.getState().inFlight) {
+        const wasInFlight = SyncService.syncOrchestrator.getState().inFlight;
+        if (wasInFlight && options.activationProbe) {
+            // A candidate must be proven by the call that will commit it. Do not
+            // queue transient credentials after returning a requeue result.
+            return { success: true, skipped: 'requeued' };
+        }
+        if (wasInFlight) {
             SyncService.queuedSyncOptions = options;
         }
-        return SyncService.syncOrchestrator.run(options);
+        const result = SyncService.syncOrchestrator.run(options);
+        if (wasInFlight && options.configOverride) {
+            // The orchestrator returns the active cycle's promise when it queues
+            // another request. That active result did not use this transient
+            // config and must never authorize the settings UI to persist it.
+            void result.catch((error) => logSyncWarning('Active sync failed while a settings proof was queued', error));
+            return { success: true, skipped: 'requeued' };
+        }
+        return result;
     }
 
     private static runSyncCycle(options: SyncRunOptions): Promise<SyncRunResult> {
@@ -1731,6 +2368,13 @@ export class SyncService {
 
     private static async runSyncCycleExclusive(options: SyncRunOptions): Promise<SyncRunResult> {
         SyncService.queuedSyncOptions = null;
+        try {
+            await SyncService.retryDropboxCredentialFinalizations();
+        } catch (error) {
+            // The active configuration is already committed and durable. A
+            // cleanup retry must not block sync through those credentials.
+            logSyncWarning('Dropbox credential cleanup remains pending', error);
+        }
         const context = createDesktopSyncCycleContext();
         const persistLocalData = async (data: AppData): Promise<AppData | void> => {
             if (isTauriRuntimeEnv()) {
@@ -1751,7 +2395,11 @@ export class SyncService {
         let result: SyncRunResult;
         try {
             result = await runSharedSyncCycle({
-                options: { manual: options.manual },
+                options: {
+                    manual: options.manual,
+                    activationProbe: options.activationProbe,
+                    ignorePendingRemoteWriteBackoff: options.ignorePendingRemoteWriteBackoff,
+                },
                 storage: {
                     readPersistedLocal: () => readLocalDataForSync(),
                     persistLocal: persistLocalData,
@@ -1829,7 +2477,7 @@ export class SyncService {
                         const cleanedData = await cleanupOrphanedAttachments(
                             data,
                             context.backend,
-                            getAttachmentCleanupDeps(),
+                            getAttachmentCleanupDeps(context.dropboxCredentialHandle),
                             { ensureLocalSnapshotFresh },
                         );
                         return {
@@ -1883,7 +2531,7 @@ export class SyncService {
             SyncService.finalizeSyncWriteIgnoreWindow();
         }
         const skippedRequeue = result.skipped === 'requeued';
-        if (!skippedRequeue) {
+        if (!options.activationProbe && !skippedRequeue) {
             SyncService.finalizeAttachmentWarningState(
                 { hadAttachmentWarning: result.hadAttachmentWarning === true },
                 result
@@ -1892,12 +2540,12 @@ export class SyncService {
         SyncService.updateSyncStatus({
             inFlight: false,
             step: null,
-            lastResult: skippedRequeue
+            lastResult: options.activationProbe || skippedRequeue
                 ? SyncService.syncStatus.lastResult
                 : result.success
                     ? 'success'
                     : 'error',
-            lastResultAt: skippedRequeue
+            lastResultAt: options.activationProbe || skippedRequeue
                 ? SyncService.syncStatus.lastResultAt
                 : new Date().toISOString(),
         });
@@ -1940,5 +2588,12 @@ export const __syncServiceTestUtils = {
     },
     getAttachmentValidationFailureAttempts(attachmentId: string) {
         return getAttachmentValidationFailureAttempts(attachmentId);
+    },
+    resolveDropboxCleanupTokenForTests(
+        clientId: string,
+        credentialHandle: string,
+        forceRefresh = false,
+    ) {
+        return getAttachmentCleanupDeps(credentialHandle).getDropboxAccessToken(clientId, { forceRefresh });
     },
 };

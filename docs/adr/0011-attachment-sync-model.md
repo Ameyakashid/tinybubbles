@@ -32,6 +32,9 @@ The transfer contract is:
 2. Attachment upload/download is backend-specific but must update local metadata through the same task/project records.
 3. Merge logic must preserve a usable local URI when two devices have different valid local paths for the same attachment.
 4. Remote deletes are retried through attachment cleanup state rather than blocking the main sync cycle indefinitely.
+5. Before a new or changed backend becomes active, its activation probe must account for every live file attachment. The backend must verify the remote object or upload a local copy; an object key from another backend does not prove availability.
+6. Activation probes merge the candidate document first, then run attachment transfer against a clone of that merged snapshot immediately before the candidate write. This accounts for candidate-remote-only attachments as well as local ones, and prevents a newer remote metadata row from replacing a key that the probe just proved. The probe can publish proven attachment metadata to the candidate remote, but it does not persist that metadata into the local store until the candidate configuration passes and a normal sync completes.
+7. The first durable sync after activation treats the live attachment keys in that proven candidate document as authoritative for the new destination while preserving local file URIs and availability.
 
 ## Consequences
 
@@ -39,4 +42,5 @@ The transfer contract is:
 - Device-local paths and transient transfer state do not create false conflicts.
 - Users can see whether an attachment is available, missing, uploading, or downloading on the current device.
 - Backends need attachment-specific validation and cleanup code.
+- A backend switch fails closed when Mindwtr cannot prove one of the live attachments at the candidate destination.
 - Future attachment work should preserve the metadata-vs-bytes split unless a new storage architecture replaces snapshot sync entirely.

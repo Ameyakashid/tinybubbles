@@ -97,6 +97,14 @@ export type AttachmentTransferLifecycleOptions = {
      */
     hasCloudCopy?: (attachment: Attachment) => boolean;
     /**
+     * Re-upload every locally available file even when it already has a cloud
+     * key. Activation probes use this because a key issued by the previous
+     * transport is not evidence that the candidate transport has the bytes.
+     * The stale key is cleared before upload so a failed attempt cannot be
+     * mistaken for candidate proof by the caller.
+     */
+    forceUploadExistingLocal?: boolean;
+    /**
      * Optional throttle/backoff/cap gate. Every field is optional, and the whole object may be
      * omitted; omitting it (the default) preserves today's unthrottled behaviour, so the callers
      * that don't need it are unaffected. A backend that needs rate-limit protection (e.g. WebDAV)
@@ -170,6 +178,11 @@ export async function runAttachmentTransferLifecycle(
         const nextStatus: Attachment['localStatus'] = existsLocally ? 'available' : 'missing';
         if (attachment.localStatus !== nextStatus) {
             attachment.localStatus = nextStatus;
+            didMutate = true;
+        }
+
+        if (options.forceUploadExistingLocal && existsLocally && attachment.cloudKey !== undefined) {
+            attachment.cloudKey = undefined;
             didMutate = true;
         }
 

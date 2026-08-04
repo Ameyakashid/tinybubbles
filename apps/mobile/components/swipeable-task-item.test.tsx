@@ -69,6 +69,18 @@ const translate = vi.hoisted(() => {
     'projects.nextActionPromptAddButton': 'Add next action',
     'projects.nextActionPromptComplete': 'Complete project',
     'task.aria.delete': 'Delete task',
+    'task.aria.actionsHint': 'Double-tap to edit task details. More actions are available in the accessibility actions menu.',
+    'task.aria.selectionHint': 'Double-tap to toggle task selection.',
+    'task.aria.openProject': 'Open project {name}',
+    'task.aria.openContext': 'Open context {name}',
+    'task.aria.openTag': 'Open tag {name}',
+    'task.aria.action': '{action} action',
+    'task.aria.changeStatus': 'Change status. Current status: {status}',
+    'task.aria.changeStatusHint': 'Double-tap to open status menu',
+    'task.select': 'Select task',
+    'task.deselect': 'Deselect task',
+    'taskEdit.statusLabel': 'Status',
+    'taskEdit.dueDateLabel': 'Due',
     'task.deleteConfirmBody': 'Move this task to Trash?',
     'taskEdit.recurrenceLabel': 'Recurrence',
     'taskEdit.startDateLabel': 'Start',
@@ -76,7 +88,11 @@ const translate = vi.hoisted(() => {
     'recurrence.repeatEvery': 'Repeat every',
     'recurrence.dayUnit': 'day(s)',
   };
-  return (key: string) => labels[key] ?? key;
+  const translator = ((key: string) => translator.overrides[key] ?? labels[key] ?? key) as (
+    ((key: string) => string) & { overrides: Record<string, string> }
+  );
+  translator.overrides = {};
+  return translator;
 });
 
 vi.mock('@mindwtr/core', async (importOriginal) => {
@@ -212,6 +228,7 @@ describe('SwipeableTaskItem', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    translate.overrides = {};
     storeState.projects = [];
     storeState._allProjects = [];
     storeState.areas = [];
@@ -1104,7 +1121,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     expect(hasText(tree, 'Completed: May 12, 2026, 8:30 AM')).toBe(true);
   });
 
-  it('announces swipe directions and triggers haptics for status actions', () => {
+  it('announces the localized accessibility action menu and triggers status actions', () => {
     const onStatusChange = vi.fn();
 
     let tree!: renderer.ReactTestRenderer;
@@ -1137,8 +1154,10 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     const taskButton = tree.root.find((node) => node.props.accessibilityRole === 'button' && node.props.accessibilityLabel?.includes('Status: Inbox'));
     const nextAction = tree.root.find((node) => node.props.accessibilityLabel === 'Next action' && typeof node.props.onPress === 'function');
 
-    expect(taskButton.props.accessibilityHint).toContain('Swipe right to next');
-    expect(taskButton.props.accessibilityHint).toContain('swipe left to delete');
+    expect(taskButton.props.accessibilityHint).toBe(
+      'Double-tap to edit task details. More actions are available in the accessibility actions menu.'
+    );
+    expect(taskButton.props.accessibilityHint).not.toContain('Swipe right');
 
     renderer.act(() => {
       nextAction.props.onPress();
@@ -1146,6 +1165,176 @@ it('can keep the focus star without adding a redundant focus outline', () => {
 
     expect(onStatusChange).toHaveBeenCalledWith('next');
     expect(hapticsMocks.notificationAsync).toHaveBeenCalledWith('success');
+  });
+
+  it('uses localized status, due-date, and action-menu accessibility copy', () => {
+    translate.overrides = {
+      'task.aria.actionsHint': 'Touchez deux fois pour modifier. Les autres actions sont dans le menu.',
+      'taskEdit.statusLabel': 'Statut',
+      'taskEdit.dueDateLabel': 'Échéance',
+      'status.next': 'Suivante',
+    };
+    safeFormatDate.mockReturnValue('12 mai 2026');
+
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(
+        <SwipeableTaskItem
+          task={{
+            id: 'task-localized-a11y',
+            title: 'Préparer le lancement',
+            status: 'next',
+            dueDate: '2026-05-12',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          } as any}
+          isDark={false}
+          tc={{
+            taskItemBg: '#111111',
+            border: '#222222',
+            text: '#ffffff',
+            secondaryText: '#999999',
+            tint: '#3b82f6',
+            warning: '#f59e0b',
+          } as any}
+          onPress={vi.fn()}
+          onStatusChange={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      );
+    });
+
+    const taskButton = tree.root.find((node) => (
+      node.props.accessibilityRole === 'button'
+      && node.props.accessibilityLabel?.includes('Statut: Suivante')
+    ));
+    expect(taskButton.props.accessibilityLabel).toContain('Échéance: 12 mai 2026');
+    expect(taskButton.props.accessibilityHint).toBe(
+      'Touchez deux fois pour modifier. Les autres actions sont dans le menu.'
+    );
+  });
+
+  it('localizes metadata links, the status control, and revealed swipe actions', () => {
+    translate.overrides = {
+      'task.aria.openProject': 'Ouvrir le projet {name}',
+      'task.aria.openContext': 'Ouvrir le contexte {name}',
+      'task.aria.openTag': 'Ouvrir le tag {name}',
+      'task.aria.action': 'Action : {action}',
+      'task.aria.changeStatus': 'Changer le statut. Statut actuel : {status}',
+      'task.aria.changeStatusHint': 'Touchez deux fois pour ouvrir le menu des statuts',
+      'status.inbox': 'Boite de reception',
+      'status.next': 'Suivante',
+    };
+    storeState.projects = [{ id: 'project-1', title: 'Mindwtr' }];
+
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(
+        <SwipeableTaskItem
+          task={{
+            id: 'task-localized-controls',
+            title: 'Preparer le lancement',
+            status: 'inbox',
+            projectId: 'project-1',
+            contexts: ['@travail'],
+            tags: ['#urgent'],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          } as any}
+          isDark={false}
+          tc={{
+            taskItemBg: '#111111',
+            border: '#222222',
+            text: '#ffffff',
+            secondaryText: '#999999',
+            tint: '#3b82f6',
+            warning: '#f59e0b',
+          } as any}
+          onPress={vi.fn()}
+          onStatusChange={vi.fn()}
+          onDelete={vi.fn()}
+          onProjectPress={vi.fn()}
+          onContextPress={vi.fn()}
+          onTagPress={vi.fn()}
+        />
+      );
+    });
+
+    expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le projet Mindwtr' })).toBeDefined();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le contexte @travail' })).toBeDefined();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le tag #urgent' })).toBeDefined();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Action : Suivante' })).toBeDefined();
+    const statusButton = tree.root.findByProps({
+      accessibilityLabel: 'Changer le statut. Statut actuel : Boite de reception',
+    });
+    expect(statusButton.props.accessibilityHint).toBe(
+      'Touchez deux fois pour ouvrir le menu des statuts'
+    );
+  });
+
+  it('announces selection-mode activation as selecting or deselecting the task', () => {
+    translate.overrides = {
+      'task.select': 'Choisir la tache',
+      'task.deselect': 'Retirer la selection',
+      'task.aria.selectionHint': 'Touchez deux fois pour changer la selection.',
+    };
+    const onToggleSelect = vi.fn();
+    const renderSelected = (isMultiSelected: boolean) => renderer.create(
+      <SwipeableTaskItem
+        task={{
+          id: 'task-selection-a11y',
+          title: 'Preparer le lancement',
+          status: 'inbox',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        } as any}
+        isDark={false}
+        tc={{
+          taskItemBg: '#111111',
+          border: '#222222',
+          text: '#ffffff',
+          secondaryText: '#999999',
+          tint: '#3b82f6',
+          warning: '#f59e0b',
+        } as any}
+        onPress={vi.fn()}
+        onStatusChange={vi.fn()}
+        onDelete={vi.fn()}
+        selectionMode
+        isMultiSelected={isMultiSelected}
+        onToggleSelect={onToggleSelect}
+      />
+    );
+
+    let unselectedTree!: renderer.ReactTestRenderer;
+    let selectedTree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      unselectedTree = renderSelected(false);
+      selectedTree = renderSelected(true);
+    });
+    const findTaskButton = (tree: renderer.ReactTestRenderer) => tree.root.find((node) => (
+      node.props.accessibilityRole === 'button'
+      && node.props.accessibilityLabel?.includes('Preparer le lancement')
+    ));
+    const unselectedButton = findTaskButton(unselectedTree);
+    const selectedButton = findTaskButton(selectedTree);
+
+    expect(unselectedButton.props.accessibilityHint).toBe(
+      'Touchez deux fois pour changer la selection.'
+    );
+    expect(unselectedButton.props.accessibilityActions).toEqual([
+      { name: 'activate', label: 'Choisir la tache' },
+    ]);
+    expect(unselectedButton.props.accessibilityState).toEqual({ selected: false });
+    expect(selectedButton.props.accessibilityActions).toEqual([
+      { name: 'activate', label: 'Retirer la selection' },
+    ]);
+    expect(selectedButton.props.accessibilityState).toEqual({ selected: true });
+
+    renderer.act(() => {
+      unselectedButton.props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } });
+    });
+    expect(onToggleSelect).toHaveBeenCalledTimes(1);
   });
 
   it('saves completion time and time spent from the revealed Done action', async () => {
@@ -1244,7 +1433,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     });
 
     const statusBadge = tree.root.find(
-      (node) => node.props.accessibilityLabel === 'Change status. Current status: inbox'
+      (node) => node.props.accessibilityLabel === 'Change status. Current status: Inbox'
     );
     renderer.act(() => {
       statusBadge.props.onPress({ stopPropagation: vi.fn() });
@@ -1297,7 +1486,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     // Icon variant renders the status dot, not the redundant "Inbox" label.
     expect(tree.root.findAll((node) => (node.type as unknown) === 'CircleDot')).toHaveLength(1);
     const statusControl = tree.root.find(
-      (node) => node.props.accessibilityLabel === 'Change status. Current status: inbox'
+      (node) => node.props.accessibilityLabel === 'Change status. Current status: Inbox'
     );
     expect(flattenText(statusControl.props.children)).not.toContain('Inbox');
 

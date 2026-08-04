@@ -545,17 +545,26 @@ export function ArchiveView() {
             if (!hasActiveFilterCriteria(activeFilterCriteria) && !searchQuery.trim()) return;
             clearFilters();
             setSearchQuery('');
-            showToast('Cleared the archive filters so the selected task is visible.', 'info');
+            showToast(tFallback(
+                t,
+                'archive.filtersClearedForTask',
+                'Cleared the archive filters so the selected task is visible.',
+            ), 'info');
             return;
         }
 
         if (isGrouping) {
-            const collapsedGroup = groupedTasks.find((group) => (
-                collapsedGroupIds.has(group.id) && group.tasks.some((task) => task.id === highlightTaskId)
-            ));
-            if (collapsedGroup) {
-                toggleGroup(collapsedGroup.id);
-                return;
+            // A multi-tag/context task may belong to several groups. If one copy
+            // is already rendered, do not consume the user's other collapse
+            // preferences while the highlight effect re-runs.
+            if (!orderedTasks.some((task) => task.id === highlightTaskId)) {
+                const collapsedGroup = groupedTasks.find((group) => (
+                    collapsedGroupIds.has(group.id) && group.tasks.some((task) => task.id === highlightTaskId)
+                ));
+                if (collapsedGroup) {
+                    toggleGroup(collapsedGroup.id);
+                    return;
+                }
             }
         }
 
@@ -625,6 +634,7 @@ export function ArchiveView() {
         highlightTaskId,
         isGrouping,
         listHeight,
+        orderedTasks,
         rowHeights,
         rowOffsets,
         searchQuery,
@@ -632,6 +642,7 @@ export function ArchiveView() {
         shouldVirtualize,
         shouldVirtualizeFlatTasks,
         showToast,
+        t,
         toggleGroup,
         totalHeight,
     ]);

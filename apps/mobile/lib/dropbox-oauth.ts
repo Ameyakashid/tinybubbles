@@ -1,6 +1,6 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { saveDropboxTokens, type DropboxAuthTokens } from './dropbox-auth';
+import type { DropboxAuthTokens } from './dropbox-auth';
 
 const DROPBOX_DISCOVERY = {
     authorizationEndpoint: 'https://www.dropbox.com/oauth2/authorize',
@@ -78,6 +78,5 @@ export async function authorizeDropbox(clientId: string): Promise<DropboxAuthTok
         refreshToken,
         expiresAt: Date.now() + expiresInSeconds * 1000,
     };
-    await saveDropboxTokens(tokens);
     return tokens;
 }

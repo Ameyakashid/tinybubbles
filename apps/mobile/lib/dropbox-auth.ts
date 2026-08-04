@@ -11,6 +11,11 @@ export interface DropboxAuthTokens {
     expiresAt: number;
 }
 
+export interface DropboxAccessTokenResolution {
+    accessToken: string;
+    tokens: DropboxAuthTokens;
+}
+
 const secureAvailable = (() => {
     let cached: Promise<boolean> | null = null;
     return () => {
@@ -95,11 +100,11 @@ export async function isDropboxConnected(): Promise<boolean> {
     return Boolean(tokens?.refreshToken && tokens.accessToken);
 }
 
-export async function refreshDropboxAccessToken(
+const requestDropboxAccessToken = async (
     clientId: string,
     refreshToken: string,
     fetcher: typeof fetch = fetch
-): Promise<DropboxAuthTokens> {
+): Promise<DropboxAuthTokens> => {
     const resolvedClientId = requireDropboxClientId(clientId);
     const resolvedRefreshToken = refreshToken.trim();
     if (!resolvedRefreshToken) {
@@ -142,13 +147,57 @@ export async function refreshDropboxAccessToken(
         throw new Error('Dropbox token refresh returned an invalid response');
     }
 
-    const tokens: DropboxAuthTokens = {
+    return {
         accessToken,
         refreshToken: resolvedRefreshToken,
         expiresAt: Date.now() + expiresIn * 1000,
     };
+};
+
+export async function refreshDropboxAccessToken(
+    clientId: string,
+    refreshToken: string,
+    fetcher: typeof fetch = fetch
+): Promise<DropboxAuthTokens> {
+    const tokens = await requestDropboxAccessToken(clientId, refreshToken, fetcher);
     await saveDropboxTokens(tokens);
     return tokens;
+}
+
+const requireDropboxTokens = (tokens: DropboxAuthTokens): DropboxAuthTokens => {
+    const sanitized = sanitizeTokens(tokens);
+    if (!sanitized) {
+        throw new Error('Dropbox is not connected');
+    }
+    return sanitized;
+};
+
+/** Resolve an access token from an explicit credential bundle without touching storage. */
+export async function getValidDropboxAccessTokenForTokens(
+    clientId: string,
+    tokens: DropboxAuthTokens,
+    fetcher: typeof fetch = fetch
+): Promise<DropboxAccessTokenResolution> {
+    requireDropboxClientId(clientId);
+    const resolvedTokens = requireDropboxTokens(tokens);
+    if (Date.now() < resolvedTokens.expiresAt - ACCESS_TOKEN_REFRESH_SKEW_MS) {
+        return { accessToken: resolvedTokens.accessToken, tokens: resolvedTokens };
+    }
+
+    const refreshed = await requestDropboxAccessToken(clientId, resolvedTokens.refreshToken, fetcher);
+    return { accessToken: refreshed.accessToken, tokens: refreshed };
+}
+
+/** Force-refresh an explicit credential bundle without promoting it to storage. */
+export async function forceRefreshDropboxAccessTokenForTokens(
+    clientId: string,
+    tokens: DropboxAuthTokens,
+    fetcher: typeof fetch = fetch
+): Promise<DropboxAccessTokenResolution> {
+    requireDropboxClientId(clientId);
+    const resolvedTokens = requireDropboxTokens(tokens);
+    const refreshed = await requestDropboxAccessToken(clientId, resolvedTokens.refreshToken, fetcher);
+    return { accessToken: refreshed.accessToken, tokens: refreshed };
 }
 
 export async function getValidDropboxAccessToken(
@@ -182,6 +231,26 @@ export async function forceRefreshDropboxAccessToken(
     return refreshed.accessToken;
 }
 
+/** Revoke an explicit token bundle without reading or clearing durable credentials. */
+export async function revokeDropboxTokens(
+    clientId: string,
+    tokens: DropboxAuthTokens,
+    fetcher: typeof fetch = fetch
+): Promise<void> {
+    requireDropboxClientId(clientId);
+    const resolvedTokens = requireDropboxTokens(tokens);
+    try {
+        await fetcher('https://api.dropboxapi.com/2/auth/token/revoke', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${resolvedTokens.accessToken}`,
+            },
+        });
+    } catch {
+        // Disconnect must still remove the local candidate when revoke is offline.
+    }
+}
+
 export async function disconnectDropbox(clientId: string, fetcher: typeof fetch = fetch): Promise<void> {
     requireDropboxClientId(clientId);
     const stored = await getStoredDropboxTokens();
@@ -191,14 +260,7 @@ export async function disconnectDropbox(clientId: string, fetcher: typeof fetch 
     }
 
     try {
-        await fetcher('https://api.dropboxapi.com/2/auth/token/revoke', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${stored.accessToken}`,
-            },
-        });
-    } catch {
-        // Keep disconnect flow resilient even if revoke fails.
+        await revokeDropboxTokens(clientId, stored, fetcher);
     } finally {
         await clearDropboxTokens();
     }

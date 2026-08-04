@@ -7,6 +7,7 @@ import {
     createCurrentRecurringCalendarTask,
     expandCalendarRecurringTasks,
     expandCalendarRecurringTasksInRange,
+    expandCalendarRecurringTaskSetInRange,
     createProjectedRecurringTask,
     formatRecurrenceLabel,
     getProjectedRecurringTaskCalendarDate,
@@ -17,6 +18,7 @@ import {
     isProjectedRecurringTaskId,
     normalizeRecurrenceForLoad,
     CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
+    CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
 } from './recurrence';
 import type { Task, TaskStatus } from './types';
 
@@ -1763,6 +1765,231 @@ describe('expandCalendarRecurringTasksInRange', () => {
         expect(projected).toHaveLength(5);
         expect(projected[0]?.dueDate).toBe('2026-11-01');
         expect(projected[4]?.dueDate).toBe('2026-11-05');
+    });
+
+    it('jumps to a far-future visible range without dropping daily occurrences', () => {
+        const task = rangeTask({
+            id: 't-range-years-ahead',
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-03' },
+            '2026-08-02T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2030-08-01',
+            '2030-08-02',
+            '2030-08-03',
+        ]);
+    });
+
+    it('uses one far-range occurrence step for every schedule field', () => {
+        const task = rangeTask({
+            id: 't-range-multi-field-offset',
+            startTime: '2026-08-01',
+            dueDate: '2026-08-03',
+            recurrence: 'daily',
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-05' },
+            '2026-08-01T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected.map((occurrence) => ({
+            startTime: occurrence.startTime,
+            dueDate: occurrence.dueDate,
+        }))).toEqual([
+            { startTime: '2030-07-30', dueDate: '2030-08-01' },
+            { startTime: '2030-07-31', dueDate: '2030-08-02' },
+            { startTime: '2030-08-01', dueDate: '2030-08-03' },
+            { startTime: '2030-08-02', dueDate: '2030-08-04' },
+            { startTime: '2030-08-03', dueDate: '2030-08-05' },
+        ]);
+    });
+
+    it('charges far-range multi-field catch-up against COUNT once per occurrence', () => {
+        const task = rangeTask({
+            id: 't-range-multi-field-count',
+            startTime: '2026-08-01',
+            dueDate: '2026-08-03',
+            recurrence: {
+                rule: 'daily',
+                strategy: 'strict',
+                count: 1460,
+                completedOccurrences: 0,
+                rrule: 'FREQ=DAILY;COUNT=1460',
+            },
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-05' },
+            '2026-08-01T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected).toHaveLength(1);
+        expect(projected[0]).toMatchObject({
+            startTime: '2030-07-30',
+            dueDate: '2030-08-01',
+        });
+    });
+
+    it('recomputes a relative start from the shared far-range due occurrence', () => {
+        const task = rangeTask({
+            id: 't-range-relative-start',
+            startTime: '2026-01-30',
+            dueDate: '2026-01-31',
+            relativeStartOffset: { amount: -1, unit: 'day' },
+            recurrence: {
+                rule: 'monthly',
+                strategy: 'strict',
+                anchorDay: 31,
+                startAnchorDay: 30,
+                dueAnchorDay: 31,
+                rrule: 'FREQ=MONTHLY',
+            },
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2027-02-01', endIso: '2027-02-28' },
+            '2026-01-31T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected).toHaveLength(1);
+        expect(projected[0]).toMatchObject({
+            startTime: '2027-02-27',
+            dueDate: '2027-02-28',
+            relativeStartOffset: { amount: -1, unit: 'day' },
+        });
+    });
+
+    it('keeps the completion anchor when a fluid series catches up to a far-future range', () => {
+        const task = rangeTask({
+            id: 't-range-years-ahead-fluid',
+            dueDate: '2026-08-02',
+            recurrence: {
+                rule: 'daily',
+                strategy: 'fluid',
+                interval: 3,
+                rrule: 'FREQ=DAILY;INTERVAL=3',
+            },
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-09' },
+            '2026-08-02T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected.map((occurrence) => occurrence.dueDate)).toEqual([
+            '2030-08-02',
+            '2030-08-05',
+            '2030-08-08',
+        ]);
+    });
+
+    it('keeps COUNT authoritative when jumping past exhausted occurrences', () => {
+        const task = rangeTask({
+            id: 't-range-years-ahead-count',
+            dueDate: '2026-08-02',
+            recurrence: {
+                rule: 'daily',
+                strategy: 'strict',
+                count: 5,
+                completedOccurrences: 0,
+                rrule: 'FREQ=DAILY;COUNT=5',
+            },
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-03' },
+            '2026-08-02T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected).toEqual([]);
+    });
+
+    it('keeps fluid COUNT authoritative while catch-up skips discarded occurrences', () => {
+        const task = rangeTask({
+            id: 't-range-years-ahead-fluid-count',
+            dueDate: '2026-08-02',
+            recurrence: {
+                rule: 'daily',
+                strategy: 'fluid',
+                interval: 3,
+                count: 5,
+                completedOccurrences: 0,
+                rrule: 'FREQ=DAILY;INTERVAL=3;COUNT=5',
+            },
+        });
+
+        const projected = expandCalendarRecurringTasksInRange(
+            task,
+            { startIso: '2030-08-01', endIso: '2030-08-09' },
+            '2026-08-02T00:00:00.000Z',
+        ).slice(1);
+
+        expect(projected).toEqual([]);
+    });
+
+    it('shares the total projection budget across every recurring series', () => {
+        const tasks = Array.from({ length: 20 }, (_, index) => rangeTask({
+            id: `t-range-fair-${index}`,
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+        }));
+
+        const expanded = expandCalendarRecurringTaskSetInRange(
+            tasks,
+            { startIso: '2026-08-03', endIso: '2026-09-13' },
+            '2026-08-02T00:00:00.000Z',
+        );
+        const projected = expanded.filter(isProjectedRecurringTask);
+        const counts = new Map<string, number>();
+        projected.forEach((occurrence) => {
+            counts.set(occurrence.sourceTaskId, (counts.get(occurrence.sourceTaskId) ?? 0) + 1);
+        });
+
+        expect(projected).toHaveLength(CALENDAR_RANGE_PROJECTION_TOTAL_CAP);
+        expect(tasks.map((task) => counts.get(task.id))).toEqual(Array(20).fill(25));
+    });
+
+    it('redistributes projection budget that exhausted series cannot use', () => {
+        const exhausted = Array.from({ length: 3 }, (_, index) => rangeTask({
+            id: `t-range-exhausted-${index}`,
+            dueDate: '2026-08-02',
+            recurrence: {
+                rule: 'daily',
+                strategy: 'strict',
+                count: 1,
+                completedOccurrences: 0,
+                rrule: 'FREQ=DAILY;COUNT=1',
+            },
+        }));
+        const active = rangeTask({
+            id: 't-range-active',
+            dueDate: '2026-08-02',
+            recurrence: 'daily',
+        });
+
+        const expanded = expandCalendarRecurringTaskSetInRange(
+            [...exhausted, active],
+            { startIso: '2026-08-03', endIso: '2026-08-20' },
+            '2026-08-02T00:00:00.000Z',
+            8,
+        );
+        const projected = expanded.filter(isProjectedRecurringTask);
+
+        expect(projected).toHaveLength(8);
+        expect(projected.every((occurrence) => occurrence.sourceTaskId === active.id)).toBe(true);
     });
 });
 
