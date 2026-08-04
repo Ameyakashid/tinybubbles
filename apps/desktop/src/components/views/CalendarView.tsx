@@ -201,6 +201,11 @@ export function CalendarView() {
         setTaskQuickActionMenu({ task, x: event.clientX, y: event.clientY, kind });
     }, []);
     const closeTaskQuickActionMenu = useCallback(() => setTaskQuickActionMenu(null), []);
+    // The context menu names no task, so the chip it acts on keeps a ring while
+    // the menu is open (#999). Foreground-based so it reads on solid-primary blocks.
+    const taskMenuRingClass = (taskId: string) => (
+        taskQuickActionMenu?.task.id === taskId ? 'ring-2 ring-inset ring-foreground/60' : undefined
+    );
     const handleRemoveTaskFromCalendar = useCallback((task: Task, kind: 'scheduled' | 'deadline') => {
         // Clearing startTime alone does nothing visible: applyTaskUpdates
         // recomputes it from dueDate whenever relativeStartOffset is set, so
@@ -626,7 +631,8 @@ export function CalendarView() {
                                                         ? "bg-muted/60 text-muted-foreground"
                                                         : item.kind === 'scheduled'
                                                         ? "bg-primary/10 text-primary"
-                                                        : "border-l-[3px] border-destructive/70 bg-background/60 text-foreground"
+                                                        : "border-l-[3px] border-destructive/70 bg-background/60 text-foreground",
+                                                    taskMenuRingClass(task.id)
                                                 )}
                                                 title={projected ? `${task.title} (${projectedLabel})` : task.title}
                                                 onDragStart={(event) => handleCalendarTaskDragStart(event, task, item.kind)}
@@ -761,7 +767,8 @@ export function CalendarView() {
                                                             ? "border-transparent bg-muted/60 text-muted-foreground line-through"
                                                             : item.kind === 'scheduled'
                                                             ? "border-primary/70 bg-primary/5"
-                                                            : "border-destructive/70 bg-background/70"
+                                                            : "border-destructive/70 bg-background/70",
+                                                        taskMenuRingClass(item.task.id)
                                                     )}
                                                     title={projected ? `${item.title} (${projectedLabel})` : item.title}
                                                 >
@@ -867,7 +874,8 @@ export function CalendarView() {
                                                             "absolute z-10 overflow-hidden rounded px-2 py-1 text-left text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                             projected
                                                                 ? "border border-dashed border-primary/50 bg-primary/10 text-primary"
-                                                                : "bg-primary text-primary-foreground hover:bg-primary/90"
+                                                                : "bg-primary text-primary-foreground hover:bg-primary/90",
+                                                            taskMenuRingClass(item.task.id)
                                                         )}
                                                         style={commonStyle}
                                                         title={projected ? `${item.title} ${timeLabel} (${projectedLabel})` : `${item.title} ${timeLabel}`}
@@ -980,7 +988,8 @@ export function CalendarView() {
                                                                 ? "border border-dashed border-primary/50 bg-primary/5 text-primary"
                                                                 : completed
                                                                 ? "bg-muted/50 text-muted-foreground"
-                                                                : item.kind === 'scheduled' ? "bg-primary/10 text-primary" : "border-l-[3px] border-destructive/70 bg-background"
+                                                                : item.kind === 'scheduled' ? "bg-primary/10 text-primary" : "border-l-[3px] border-destructive/70 bg-background",
+                                                            taskMenuRingClass(item.task.id)
                                                         )}
                                                     >
                                                         <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">{timeLabel}</span>

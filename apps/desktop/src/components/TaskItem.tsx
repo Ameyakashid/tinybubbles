@@ -1380,7 +1380,10 @@ export const TaskItem = memo(function TaskItem({
                     "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/40 focus-within:bg-primary/5",
                     canCalendarDrag && "cursor-grab active:cursor-grabbing",
                     isSelected && "ring-2 ring-inset ring-primary/40 bg-primary/5",
-                    isHighlighted && "ring-2 ring-inset ring-primary/70 bg-primary/5"
+                    isHighlighted && "ring-2 ring-inset ring-primary/70 bg-primary/5",
+                    // The context menu names no task, so the row it acts on keeps the
+                    // selection ring while the menu is open (#999).
+                    quickActionMenu !== null && "ring-2 ring-inset ring-primary/40 bg-primary/5"
                 )}
             >
                 <div className={cn("flex items-start", isCondensed ? "gap-1.5" : isCompact ? "gap-2" : "gap-3")}>

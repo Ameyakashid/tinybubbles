@@ -1222,6 +1222,40 @@ describe('TaskItem', () => {
         });
     });
 
+    it('marks the row while its context menu is open so the menu target is visible (#999)', async () => {
+        const nextTask: Task = {
+            ...mockTask,
+            id: 'context-menu-ring-task',
+            status: 'next',
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [nextTask],
+                _allTasks: [nextTask],
+                projects: [],
+                _allProjects: [],
+            }));
+        });
+
+        const { container, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={nextTask} />
+            </LanguageProvider>
+        );
+
+        const row = container.querySelector('[data-task-id="context-menu-ring-task"]');
+        expect(row).toBeTruthy();
+        // Token check on purpose: the base class list carries focus-within:ring-*
+        // variants whose substrings would satisfy a plain toContain.
+        const rowClassTokens = () => (row as HTMLElement).className.split(/\s+/);
+        expect(rowClassTokens()).not.toContain('ring-primary/40');
+
+        fireEvent.contextMenu(row!);
+        expect(getByRole('menu')).toBeTruthy();
+        expect(rowClassTokens()).toContain('ring-primary/40');
+    });
+
     it('adds an eligible next action to today focus from the task quick actions menu', async () => {
         const nextTask: Task = {
             ...mockTask,
