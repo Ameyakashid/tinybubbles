@@ -2,11 +2,11 @@
 
 <img src="apps/mobile/assets/images/icon.png" width="120" alt="Mindwtr Logo">
 
-# Mindwtr
+# Mindwtr™
 
 English | [中文](./README_zh.md)
 
-**Get everything out of your head.** Mindwtr is a free, open-source to-do app built on the Getting Things Done (GTD) method: it captures every task and idea in seconds, then shows you the one next thing to do. No account, no subscription, and your data stays on your device.
+**Get everything out of your head.** Mindwtr™ is a free, open-source to-do app built on the Getting Things Done (GTD) method: it captures every task and idea in seconds, then shows you the one next thing to do. No account, no subscription, and your data stays on your device.
 
 _Mindwtr = "mind like water": the calm you get when nothing is rattling around in your head._
 
@@ -327,4 +327,10 @@ Thanks to these monthly sponsors for supporting Mindwtr.
 
 <p align="center">
   <sub><a href="https://github.com/jarrydstan">@jarrydstan</a> · <a href="https://github.com/ronmolenda">@ronmolenda</a> · <a href="https://github.com/karl1990">@karl1990</a> · <a href="https://github.com/srijan">@srijan</a> · <a href="https://github.com/davibicudo">@davibicudo</a> · <a href="https://github.com/PLPeeters">@PLPeeters</a> · <a href="https://github.com/danhs">@danhs</a> · <a href="https://github.com/NikoScotch">@NikoScotch</a> · <a href="https://github.com/nicopico-dev">@nicopico-dev</a></sub>
+</p>
+
+---
+
+<p align="center">
+  <sub>Mindwtr™ and the Mindwtr logo are trademarks of the Mindwtr project. Official website: <a href="https://mindwtr.app">mindwtr.app</a> · Official repository: <a href="https://github.com/dongdongbh/Mindwtr">github.com/dongdongbh/Mindwtr</a></sub>
 </p>

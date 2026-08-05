@@ -2,11 +2,11 @@
 
 <img src="apps/mobile/assets/images/icon.png" width="120" alt="Mindwtr Logo">
 
-# Mindwtr
+# Mindwtr™
 
 中文 | [English](./README.md)
 
-**把脑子里的事都倒出来。** Mindwtr 是一款免费开源的待办应用，基于「搞定」（Getting Things Done，GTD）方法：随手记下每个任务和想法，它帮你看清下一步该做什么。无需账号，无需订阅，数据保存在你自己的设备上。
+**把脑子里的事都倒出来。** Mindwtr™ 是一款免费开源的待办应用，基于「搞定」（Getting Things Done，GTD）方法：随手记下每个任务和想法，它帮你看清下一步该做什么。无需账号，无需订阅，数据保存在你自己的设备上。
 
 *Mindwtr 取自 "mind like water"（心静如水）：脑子里不再惦记一堆事，人自然就静了。项目统一使用 Mindwtr 作为正式名称；中文社区也可以亲切地简称为「如水」。*
 
@@ -321,4 +321,10 @@ Mindwtr 的发展离不开用户与贡献者的支持，感谢大家一起把它
 
 <p align="center">
   <sub><a href="https://github.com/jarrydstan">@jarrydstan</a> · <a href="https://github.com/ronmolenda">@ronmolenda</a> · <a href="https://github.com/karl1990">@karl1990</a> · <a href="https://github.com/srijan">@srijan</a> · <a href="https://github.com/davibicudo">@davibicudo</a> · <a href="https://github.com/PLPeeters">@PLPeeters</a> · <a href="https://github.com/danhs">@danhs</a> · <a href="https://github.com/NikoScotch">@NikoScotch</a> · <a href="https://github.com/nicopico-dev">@nicopico-dev</a></sub>
+</p>
+
+---
+
+<p align="center">
+  <sub>Mindwtr™ 及 Mindwtr 标识是 Mindwtr 项目的商标。官方网站：<a href="https://mindwtr.app">mindwtr.app</a> · 官方仓库：<a href="https://github.com/dongdongbh/Mindwtr">github.com/dongdongbh/Mindwtr</a></sub>
 </p>
