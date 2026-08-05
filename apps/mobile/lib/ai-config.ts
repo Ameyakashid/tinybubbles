@@ -3,15 +3,13 @@ import * as SecureStore from 'expo-secure-store';
 import type { AIProviderId, AppData } from '@mindwtr/core';
 import { buildAIConfig, buildCopilotConfig, getAIKeyStorageKey, loadAIKeyFromStorage, saveAIKeyToStorage } from '@mindwtr/core';
 
-const secureAvailable = (() => {
-    let cached: Promise<boolean> | null = null;
-    return () => {
-        if (!cached) {
-            cached = SecureStore.isAvailableAsync().catch(() => false);
-        }
-        return cached;
-    };
-})();
+import {
+    deleteSessionSecret,
+    evacuateLegacySecretToSession,
+    getSessionSecret,
+    isSecureStoreAvailable,
+    setSessionSecret,
+} from './secure-secret-store';
 
 const getSecureKey = (provider: AIProviderId) => {
     return getAIKeyStorageKey(provider).replace(/[^A-Za-z0-9._-]/g, '_');
@@ -19,25 +17,56 @@ const getSecureKey = (provider: AIProviderId) => {
 
 export async function loadAIKey(provider: AIProviderId): Promise<string> {
     const key = getSecureKey(provider);
-    if (await secureAvailable()) {
+    if (await isSecureStoreAvailable()) {
         const value = await SecureStore.getItemAsync(key);
-        if (value) return value;
+        if (value) {
+            await saveAIKeyToStorage(AsyncStorage, provider, '');
+            return value;
+        }
+
+        const legacyValue = await loadAIKeyFromStorage(AsyncStorage, provider);
+        if (legacyValue) {
+            await SecureStore.setItemAsync(key, legacyValue, {
+                keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+            });
+            await saveAIKeyToStorage(AsyncStorage, provider, '');
+        }
+        return legacyValue;
     }
-    return loadAIKeyFromStorage(AsyncStorage, provider);
+
+    const sessionValue = getSessionSecret(key);
+    if (sessionValue !== null) return sessionValue;
+
+    const legacyValue = await loadAIKeyFromStorage(AsyncStorage, provider);
+    if (legacyValue) {
+        await evacuateLegacySecretToSession(
+            key,
+            legacyValue,
+            () => saveAIKeyToStorage(AsyncStorage, provider, ''),
+        );
+    }
+    return legacyValue;
 }
 
 export async function saveAIKey(provider: AIProviderId, value: string): Promise<void> {
     const key = getSecureKey(provider);
-    if (await secureAvailable()) {
+    if (await isSecureStoreAvailable()) {
         if (!value) {
             await SecureStore.deleteItemAsync(key);
         } else {
             await SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
         }
         await saveAIKeyToStorage(AsyncStorage, provider, '');
+        deleteSessionSecret(key);
         return;
     }
-    await saveAIKeyToStorage(AsyncStorage, provider, value);
+
+    await saveAIKeyToStorage(AsyncStorage, provider, '');
+    if (value) {
+        setSessionSecret(key, value);
+    } else {
+        deleteSessionSecret(key);
+    }
 }
 
 export function isAIKeyRequired(settings: AppData['settings'] | undefined): boolean {

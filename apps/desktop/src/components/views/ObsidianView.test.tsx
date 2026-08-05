@@ -446,4 +446,215 @@ describe('ObsidianView', () => {
         expect(toggleTaskNotes).not.toHaveBeenCalled();
     });
 
+    it('keeps identical checkboxes distinct and recognizes one after its line number moves', async () => {
+        const sourceUri = 'obsidian://open?vault=Vault&file=Projects%2FLaunch';
+        const legacyTask = {
+            id: 'legacy-note-link',
+            title: 'Previously imported note task',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            attachments: [{
+                id: 'legacy-random-link-id',
+                kind: 'link' as const,
+                title: 'Obsidian source',
+                uri: sourceUri,
+                createdAt: '2026-03-14T09:00:00.000Z',
+                updatedAt: '2026-03-14T09:00:00.000Z',
+            }],
+            createdAt: '2026-03-14T09:00:00.000Z',
+            updatedAt: '2026-03-14T09:00:00.000Z',
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                tasks: [legacyTask],
+                _allTasks: [legacyTask],
+                _tasksById: new Map([[legacyTask.id, legacyTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+            }));
+            useObsidianStore.setState((state) => ({
+                ...state,
+                config: {
+                    vaultPath: '/Vault',
+                    vaultName: 'Vault',
+                    scanFolders: ['/'],
+                    inboxFile: 'Mindwtr/Inbox.md',
+                    taskNotesIncludeArchived: false,
+                    dataviewMetadataEnabled: false,
+                    newTaskFormat: 'auto',
+                    lastScannedAt: '2026-03-14T11:00:00.000Z',
+                    enabled: true,
+                },
+                scannedFileCount: 1,
+                importMode: 'inline',
+                tasks: [
+                    {
+                        id: 'obsidian-import-1',
+                        text: 'Draft launch brief',
+                        completed: false,
+                        tags: [],
+                        wikiLinks: [],
+                        nestingLevel: 0,
+                        source: {
+                            vaultName: 'Vault',
+                            vaultPath: '/Vault',
+                            relativeFilePath: 'Projects/Launch.md',
+                            lineNumber: 8,
+                            fileModifiedAt: '2026-03-14T10:00:00.000Z',
+                            noteTags: [],
+                        },
+                        format: 'inline',
+                    },
+                    {
+                        id: 'obsidian-import-2',
+                        text: 'Draft launch brief',
+                        completed: false,
+                        tags: [],
+                        wikiLinks: [],
+                        nestingLevel: 0,
+                        source: {
+                            vaultName: 'Vault',
+                            vaultPath: '/Vault',
+                            relativeFilePath: 'Projects/Launch.md',
+                            lineNumber: 12,
+                            fileModifiedAt: '2026-03-14T10:00:00.000Z',
+                            noteTags: [],
+                        },
+                        format: 'inline',
+                    },
+                ],
+            }));
+        });
+
+        const { getAllByRole } = renderWithProviders();
+        const promoteButtons = getAllByRole('button', { name: 'Bring into Mindwtr' });
+
+        fireEvent.click(promoteButtons[0]);
+        await waitFor(() => {
+            expect(useTaskStore.getState()._allTasks.some((task) => task.title === 'Draft launch brief')).toBe(true);
+        });
+
+        fireEvent.click(promoteButtons[1]);
+        await waitFor(() => {
+            const promoted = useTaskStore.getState()._allTasks.filter((task) => (
+                task.title === 'Draft launch brief'
+            ));
+            expect(promoted).toHaveLength(2);
+            expect(promoted.map((task) => task.attachments?.[0]?.id)).toHaveLength(2);
+            expect(new Set(promoted.map((task) => task.attachments?.[0]?.id)).size).toBe(2);
+            expect(promoted.every((task) => task.attachments?.[0]?.uri === sourceUri)).toBe(true);
+        });
+
+        fireEvent.click(promoteButtons[0]);
+        await waitFor(() => {
+            expect(useTaskStore.getState()._allTasks.filter((task) => task.title === 'Draft launch brief')).toHaveLength(2);
+        });
+
+        act(() => {
+            useObsidianStore.setState((state) => ({
+                ...state,
+                tasks: state.tasks.map((task) => task.id === 'obsidian-import-1'
+                    ? {
+                        ...task,
+                        id: 'obsidian-import-1-moved',
+                        source: { ...task.source, lineNumber: 10 },
+                    }
+                    : task),
+            }));
+        });
+
+        fireEvent.click(getAllByRole('button', { name: 'Bring into Mindwtr' })[0]);
+        await waitFor(() => {
+            expect(useTaskStore.getState()._allTasks.filter((task) => task.title === 'Draft launch brief')).toHaveLength(2);
+        });
+    });
+
+    it('recognizes the same checkbox imported with a legacy random attachment id', () => {
+        const sourceUri = 'obsidian://open?vault=Vault&file=Projects%2FLaunch';
+        const addTask = vi.fn().mockResolvedValue({ success: true });
+        const legacyTask = {
+            id: 'legacy-checkbox-task',
+            title: '  Draft   launch brief  ',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            attachments: [{
+                id: 'legacy-random-link-id',
+                kind: 'link' as const,
+                title: 'Obsidian source',
+                uri: sourceUri,
+                createdAt: '2026-03-14T09:00:00.000Z',
+                updatedAt: '2026-03-14T09:00:00.000Z',
+            }],
+            createdAt: '2026-03-14T09:00:00.000Z',
+            updatedAt: '2026-03-14T09:00:00.000Z',
+        };
+        act(() => {
+            useTaskStore.setState((state) => ({
+                ...state,
+                addTask,
+                tasks: [legacyTask],
+                _allTasks: [legacyTask],
+                _tasksById: new Map([[legacyTask.id, legacyTask]]),
+                projects: [],
+                _allProjects: [],
+                _projectsById: new Map(),
+                sections: [],
+                _allSections: [],
+                _sectionsById: new Map(),
+                areas: [],
+                _allAreas: [],
+                _areasById: new Map(),
+            }));
+            useObsidianStore.setState((state) => ({
+                ...state,
+                config: {
+                    vaultPath: '/Vault',
+                    vaultName: 'Vault',
+                    scanFolders: ['/'],
+                    inboxFile: 'Mindwtr/Inbox.md',
+                    taskNotesIncludeArchived: false,
+                    dataviewMetadataEnabled: false,
+                    newTaskFormat: 'auto',
+                    lastScannedAt: '2026-03-14T11:00:00.000Z',
+                    enabled: true,
+                },
+                scannedFileCount: 1,
+                importMode: 'inline',
+                tasks: [{
+                    id: 'obsidian-import-1',
+                    text: 'Draft launch brief',
+                    completed: false,
+                    tags: [],
+                    wikiLinks: [],
+                    nestingLevel: 0,
+                    source: {
+                        vaultName: 'Vault',
+                        vaultPath: '/Vault',
+                        relativeFilePath: 'Projects/Launch.md',
+                        lineNumber: 8,
+                        fileModifiedAt: '2026-03-14T10:00:00.000Z',
+                        noteTags: [],
+                    },
+                    format: 'inline',
+                }],
+            }));
+        });
+
+        const { getByRole } = renderWithProviders();
+        fireEvent.click(getByRole('button', { name: 'Bring into Mindwtr' }));
+
+        expect(addTask).not.toHaveBeenCalled();
+        expect(useTaskStore.getState()._allTasks).toEqual([legacyTask]);
+    });
+
 });

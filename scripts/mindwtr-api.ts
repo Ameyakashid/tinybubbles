@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { type Section, type Task } from '@mindwtr/core';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { asTaskStatus, createMindwtrAutomationService } from './mindwtr-automation-core';
 
@@ -34,11 +35,15 @@ function usage(exitCode: number) {
         '  --host <host>  Host to bind (default 127.0.0.1)',
         '  --data <path>  Override data.json location',
         '  --db <path>    Override mindwtr.db location',
+        '  --dangerously-disable-auth',
+        '                  Run without authentication (unsafe; loopback only is not browser-safe)',
         '',
         'Environment:',
         '  MINDWTR_DATA       Override data.json location (if --data is omitted)',
         '  MINDWTR_DB_PATH    Override mindwtr.db location (if --db is omitted)',
-        '  MINDWTR_API_TOKEN  If set, require Authorization: Bearer <token>',
+        '  MINDWTR_API_TOKEN  Required bearer token unless auth is dangerously disabled',
+        '  MINDWTR_API_CORS_ORIGIN',
+        '                      Optional exact http(s) origin allowed to call the API',
     ];
     console.log(lines.join('\n'));
     process.exit(exitCode);
@@ -46,45 +51,94 @@ function usage(exitCode: number) {
 
 const MAX_BODY_BYTES = Number(process.env.MINDWTR_API_MAX_BODY_BYTES || 1_000_000);
 const encoder = new TextEncoder();
-const corsOrigin = process.env.MINDWTR_API_CORS_ORIGIN || '*';
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
+function baseJsonResponse(body: unknown, init: ResponseInit = {}) {
     const headers = new Headers(init.headers);
     headers.set('Content-Type', 'application/json; charset=utf-8');
-    headers.set('Access-Control-Allow-Origin', corsOrigin);
-    headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    headers.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
     return new Response(JSON.stringify(body, null, 2), { ...init, headers });
 }
 
-function errorResponse(message: string, status = 400) {
-    return jsonResponse({ error: message }, { status });
+function applyCorsHeaders(req: Request, response: Response, configuredOrigin: string | null): Response {
+    if (!configuredOrigin) return response;
+
+    const headers = new Headers(response.headers);
+    headers.append('Vary', 'Origin');
+    if (req.headers.get('origin') === configuredOrigin) {
+        headers.set('Access-Control-Allow-Origin', configuredOrigin);
+        headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+        headers.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+    }
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+    });
 }
 
-function taskErrorResponse(error: unknown) {
+function baseErrorResponse(message: string, status = 400) {
+    return baseJsonResponse({ error: message }, { status });
+}
+
+function baseTaskErrorResponse(error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-  if (message === 'Task not found' || message.startsWith('Task not found:')) {
-    return errorResponse('Task not found', 404);
-  }
-  if (message === 'Section not found' || message.startsWith('Section not found:')) {
-    return errorResponse('Section not found', 404);
-  }
-  return errorResponse(message || 'Bad request', 400);
+    if (message === 'Task not found' || message.startsWith('Task not found:')) {
+        return baseErrorResponse('Task not found', 404);
+    }
+    if (message === 'Section not found' || message.startsWith('Section not found:')) {
+        return baseErrorResponse('Section not found', 404);
+    }
+    return baseErrorResponse(message || 'Bad request', 400);
 }
 
-function requireAuth(req: Request): Response | null {
-    const token = process.env.MINDWTR_API_TOKEN;
-    if (!token) return null;
+function resolveApiToken(flags: Flags, env: Record<string, string | undefined>): string | null {
+    if (flags['dangerously-disable-auth'] === true) return null;
+    const token = env.MINDWTR_API_TOKEN?.trim();
+    if (!token) {
+        throw new Error(
+            'MINDWTR_API_TOKEN is required. Set a strong bearer token, or explicitly pass ' +
+            '--dangerously-disable-auth only for isolated compatibility testing.'
+        );
+    }
+    return token;
+}
+
+function resolveCorsOrigin(env: Record<string, string | undefined>): string | null {
+    const value = env.MINDWTR_API_CORS_ORIGIN?.trim();
+    if (!value) return null;
+
+    try {
+        const url = new URL(value);
+        const isOriginOnly = url.pathname === '/' && !url.search && !url.hash
+            && !url.username && !url.password;
+        if (!['http:', 'https:'].includes(url.protocol) || !isOriginOnly || value === '*') {
+            throw new Error('invalid origin');
+        }
+        return url.origin;
+    } catch {
+        throw new Error(
+            'MINDWTR_API_CORS_ORIGIN must be one exact http(s) origin, for example ' +
+            'https://automation.example.'
+        );
+    }
+}
+
+function bearerTokensEqual(expected: string, provided: string): boolean {
+    const expectedDigest = createHash('sha256').update(expected).digest();
+    const providedDigest = createHash('sha256').update(provided).digest();
+    return timingSafeEqual(expectedDigest, providedDigest);
+}
+
+function requireAuth(req: Request, token: string | null): Response | null {
+    if (token === null) return null;
 
     const header = (req.headers.get('authorization') || '').trim();
     const match = header.match(/^Bearer\s+(.+)$/i);
     if (!match) {
-        return errorResponse('Unauthorized', 401);
+        return baseErrorResponse('Unauthorized', 401);
     }
-    const expected = token.trim();
     const value = match[1].trim();
-    if (value !== expected) {
-        return errorResponse('Unauthorized', 401);
+    if (!bearerTokensEqual(token, value)) {
+        return baseErrorResponse('Unauthorized', 401);
     }
     return null;
 }
@@ -112,6 +166,8 @@ async function main() {
 
     const port = Number(flags.port || 4317);
     const host = String(flags.host || '127.0.0.1');
+    const apiToken = resolveApiToken(flags, process.env);
+    const corsOrigin = resolveCorsOrigin(process.env);
     const service = await createMindwtrAutomationService({
         dataPath: flags.data as string | undefined,
         dbPath: flags.db as string | undefined,
@@ -127,15 +183,28 @@ async function main() {
     console.log(`[mindwtr-api] data: ${service.paths.dataPath}`);
     console.log(`[mindwtr-api] db: ${service.paths.dbPath}`);
     console.log(`[mindwtr-api] listening on http://${host}:${port}`);
+    if (apiToken === null) {
+        console.warn('[mindwtr-api] WARNING: authentication is dangerously disabled');
+    }
 
     Bun.serve({
         hostname: host,
         port,
         async fetch(req) {
+            const jsonResponse = (body: unknown, init: ResponseInit = {}) => {
+                return applyCorsHeaders(req, baseJsonResponse(body, init), corsOrigin);
+            };
+            const errorResponse = (message: string, status = 400) => {
+                return applyCorsHeaders(req, baseErrorResponse(message, status), corsOrigin);
+            };
+            const taskErrorResponse = (error: unknown) => {
+                return applyCorsHeaders(req, baseTaskErrorResponse(error), corsOrigin);
+            };
+
             if (req.method === 'OPTIONS') return jsonResponse({ ok: true });
 
-            const authError = requireAuth(req);
-            if (authError) return authError;
+            const authError = requireAuth(req, apiToken);
+            if (authError) return applyCorsHeaders(req, authError, corsOrigin);
 
             const url = new URL(req.url);
             const pathname = url.pathname.replace(/\/+$/, '') || '/';

@@ -30,11 +30,13 @@ const getFreePort = async (): Promise<number> =>
     });
   });
 
-const waitForHealth = async (baseUrl: string) => {
+const waitForHealth = async (baseUrl: string, token?: string) => {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
-      const response = await fetch(`${baseUrl}/health`);
+      const response = await fetch(`${baseUrl}/health`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (response.ok) return;
     } catch (error) {
       lastError = error;
@@ -44,9 +46,18 @@ const waitForHealth = async (baseUrl: string) => {
   throw lastError instanceof Error ? lastError : new Error('Local API did not become ready');
 };
 
-const spawnApi = (port: number, dataPath: string) =>
-  Bun.spawn({
-    cmd: [
+type SpawnApiOptions = {
+  corsOrigin?: string;
+  dangerouslyDisableAuth?: boolean;
+  token?: string;
+};
+
+const spawnApi = (
+  port: number,
+  dataPath: string,
+  options: SpawnApiOptions = { dangerouslyDisableAuth: true },
+) => {
+  const cmd = [
       BUN_BIN,
       'scripts/mindwtr-api.ts',
       '--',
@@ -56,12 +67,22 @@ const spawnApi = (port: number, dataPath: string) =>
       '127.0.0.1',
       '--data',
       dataPath,
-    ],
+  ];
+  if (options.dangerouslyDisableAuth !== false) {
+    cmd.push('--dangerously-disable-auth');
+  }
+  return Bun.spawn({
+    cmd,
     cwd: REPO_ROOT,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, MINDWTR_API_TOKEN: '' },
+    env: {
+      ...process.env,
+      MINDWTR_API_CORS_ORIGIN: options.corsOrigin ?? '',
+      MINDWTR_API_TOKEN: options.token ?? '',
+    },
   });
+};
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -71,6 +92,144 @@ afterEach(() => {
 });
 
 describe('mindwtr-api', () => {
+  test('refuses to start without a bearer token unless auth is dangerously disabled', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const server = spawnApi(port, dataPath, { dangerouslyDisableAuth: false });
+
+    const exitCode = await Promise.race([
+      server.exited,
+      Bun.sleep(5_000).then(() => null),
+    ]);
+    if (exitCode === null) {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+    const stderr = await new Response(server.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('MINDWTR_API_TOKEN');
+    expect(stderr).toContain('--dangerously-disable-auth');
+  });
+
+  test('refuses wildcard CORS configuration', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const server = spawnApi(port, dataPath, { corsOrigin: '*' });
+
+    const exitCode = await Promise.race([
+      server.exited,
+      Bun.sleep(5_000).then(() => null),
+    ]);
+    if (exitCode === null) {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+    const stderr = await new Response(server.stderr).text();
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('MINDWTR_API_CORS_ORIGIN');
+    expect(stderr).toContain('exact http(s) origin');
+  });
+
+  test('requires the configured bearer token for API requests', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const token = 'test-only-strong-local-api-token';
+    const server = spawnApi(port, dataPath, {
+      dangerouslyDisableAuth: false,
+      token,
+    });
+
+    try {
+      await waitForHealth(baseUrl, token);
+
+      expect((await fetch(`${baseUrl}/areas`)).status).toBe(401);
+      expect((await fetch(`${baseUrl}/areas`, {
+        headers: { Authorization: 'Bearer wrong-token' },
+      })).status).toBe(401);
+      expect((await fetch(`${baseUrl}/areas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })).status).toBe(200);
+    } finally {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+  });
+
+  test('does not expose CORS headers unless an origin is configured', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const server = spawnApi(port, dataPath);
+
+    try {
+      await waitForHealth(baseUrl);
+
+      const response = await fetch(`${baseUrl}/health`, {
+        headers: { Origin: 'https://untrusted.example' },
+      });
+      const preflight = await fetch(`${baseUrl}/tasks`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://untrusted.example',
+          'Access-Control-Request-Method': 'POST',
+        },
+      });
+
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+      expect(preflight.headers.get('access-control-allow-origin')).toBeNull();
+    } finally {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+  });
+
+  test('returns CORS headers only to the exact configured origin', async () => {
+    const dir = makeTempDir();
+    const dataPath = join(dir, 'data.json');
+    const port = await getFreePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const trustedOrigin = 'https://automation.example';
+    const server = spawnApi(port, dataPath, { corsOrigin: trustedOrigin });
+
+    try {
+      await waitForHealth(baseUrl);
+
+      const trustedPreflight = await fetch(`${baseUrl}/tasks`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: trustedOrigin,
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization,content-type',
+        },
+      });
+      const untrustedResponse = await fetch(`${baseUrl}/health`, {
+        headers: { Origin: 'https://untrusted.example' },
+      });
+      const untrustedPreflight = await fetch(`${baseUrl}/tasks`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://untrusted.example',
+          'Access-Control-Request-Method': 'POST',
+        },
+      });
+
+      expect(trustedPreflight.headers.get('access-control-allow-origin')).toBe(trustedOrigin);
+      expect(trustedPreflight.headers.get('vary')).toContain('Origin');
+      expect(untrustedResponse.headers.get('access-control-allow-origin')).toBeNull();
+      expect(untrustedPreflight.headers.get('access-control-allow-origin')).toBeNull();
+    } finally {
+      server.kill();
+      await server.exited.catch(() => undefined);
+    }
+  });
+
   test('lists active areas from the Local API', async () => {
     const dir = makeTempDir();
     const dataPath = join(dir, 'data.json');

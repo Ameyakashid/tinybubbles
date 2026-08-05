@@ -1,6 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Platform } from 'react-native';
-import { computeStableValueFingerprint, computeSyncPayloadFingerprint, type AppData } from '@mindwtr/core';
+import {
+  computeStableValueFingerprint,
+  computeSyncPayloadFingerprint,
+  runDataTransferTransaction,
+  type AppData,
+} from '@mindwtr/core';
 
 const emptyData = {
   tasks: [],
@@ -1245,6 +1250,115 @@ describe('mobile sync-service runtime', () => {
 
     expect(states[0]).toBe('idle');
     expect(states.at(-1)).toBe('idle');
+  });
+
+  it('keeps a data transfer from being overwritten by a sync that started first', async () => {
+    const importedData: AppData = {
+      ...emptyData,
+      settings: { language: 'de' },
+    };
+    let durableData: AppData = emptyData;
+    let releaseSync!: () => void;
+    let markSyncRead!: () => void;
+    const syncGate = new Promise<void>((resolve) => {
+      releaseSync = resolve;
+    });
+    const syncRead = new Promise<void>((resolve) => {
+      markSyncRead = resolve;
+    });
+
+    storageMocks.getData.mockImplementation(async () => durableData);
+    storageMocks.saveData.mockImplementation(async (data: AppData) => {
+      durableData = data;
+    });
+    coreMocks.webdavGetJson.mockResolvedValue(remoteChangedData);
+    coreMocks.performSyncCycle.mockImplementation(async (io: any) => {
+      const staleLocal = await io.readLocal();
+      markSyncRead();
+      await syncGate;
+      await io.writeLocal(staleLocal);
+      return { status: 'success', stats: emptyStats, data: staleLocal };
+    });
+
+    const syncPromise = syncServiceModule.performMobileSync();
+    await syncRead;
+
+    let transferSettled = false;
+    const transferPromise = runDataTransferTransaction({
+      operation: 'restoreBackup',
+      flushPendingSave: async () => undefined,
+      getCurrentChangeAt: () => 1,
+      readCurrentData: async () => durableData,
+      createRecoverySnapshot: async () => 'before-import.json',
+      apply: () => ({ data: importedData, result: undefined }),
+      persistData: async (data) => {
+        durableData = data;
+      },
+      refreshData: async () => undefined,
+    }).finally(() => {
+      transferSettled = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const transferSettledBeforeSyncFinished = transferSettled;
+    releaseSync();
+    await Promise.all([syncPromise, transferPromise]);
+    expect(transferSettledBeforeSyncFinished).toBe(false);
+    expect(durableData).toEqual(importedData);
+  });
+
+  it('makes a sync that starts during a data transfer read the imported snapshot', async () => {
+    const importedData: AppData = {
+      ...emptyData,
+      settings: { language: 'de' },
+    };
+    let durableData: AppData = emptyData;
+    let releaseTransfer!: () => void;
+    let markTransferPersisted!: () => void;
+    const transferGate = new Promise<void>((resolve) => {
+      releaseTransfer = resolve;
+    });
+    const transferPersisted = new Promise<void>((resolve) => {
+      markTransferPersisted = resolve;
+    });
+
+    storageMocks.getData.mockImplementation(async () => durableData);
+    storageMocks.saveData.mockImplementation(async (data: AppData) => {
+      durableData = data;
+    });
+    coreMocks.webdavGetJson.mockResolvedValue(remoteChangedData);
+    let syncLocalSnapshot: AppData | null = null;
+    coreMocks.performSyncCycle.mockImplementation(async (io: any) => {
+      syncLocalSnapshot = await io.readLocal();
+      await io.readRemote();
+      await io.writeLocal(syncLocalSnapshot);
+      return { status: 'success', stats: emptyStats, data: syncLocalSnapshot };
+    });
+
+    const transferPromise = runDataTransferTransaction({
+      operation: 'restoreBackup',
+      flushPendingSave: async () => undefined,
+      getCurrentChangeAt: () => 1,
+      readCurrentData: async () => durableData,
+      createRecoverySnapshot: async () => 'before-import.json',
+      apply: () => ({ data: importedData, result: undefined }),
+      persistData: async (data) => {
+        durableData = data;
+        markTransferPersisted();
+        await transferGate;
+      },
+      refreshData: async () => undefined,
+    });
+    await transferPersisted;
+
+    const syncPromise = syncServiceModule.performMobileSync();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(coreMocks.performSyncCycle).not.toHaveBeenCalled();
+
+    releaseTransfer();
+    await Promise.all([transferPromise, syncPromise]);
+    expect(syncLocalSnapshot).toMatchObject({ settings: { language: 'de' } });
+    expect(durableData).toMatchObject({ settings: { language: 'de' } });
   });
 
   it('does not return an active cycle as proof for a queued transient configuration', async () => {

@@ -2,6 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 import { CLOUD_TOKEN_KEY, WEBDAV_PASSWORD_KEY } from './sync-constants';
+import {
+    deleteSessionSecret,
+    evacuateLegacySecretToSession,
+    getSessionSecret,
+    isSecureStoreAvailable,
+    setSessionSecret,
+} from './secure-secret-store';
 
 // Sync credentials that must live in the platform keystore (iOS Keychain /
 // Android Keystore) rather than plaintext AsyncStorage, which lands in device
@@ -20,59 +27,59 @@ const SECURE_WRITE_OPTIONS: SecureStore.SecureStoreOptions = {
     keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
-const secureAvailable = (() => {
-    let cached: Promise<boolean> | null = null;
-    return () => {
-        if (!cached) {
-            cached = SecureStore.isAvailableAsync().catch(() => false);
-        }
-        return cached;
-    };
-})();
-
 const migrateLegacyValue = async (key: string, legacyValue: string): Promise<void> => {
-    try {
-        await SecureStore.setItemAsync(secureKeyFor(key), legacyValue, SECURE_WRITE_OPTIONS);
-        await AsyncStorage.removeItem(key);
-    } catch {
-        // Keep the AsyncStorage copy until a secure write succeeds; the next
-        // read retries the migration.
-    }
+    await SecureStore.setItemAsync(secureKeyFor(key), legacyValue, SECURE_WRITE_OPTIONS);
+    await AsyncStorage.removeItem(key);
 };
 
 export const getSecureConfigValue = async (key: string): Promise<string | null> => {
-    if (await secureAvailable()) {
-        try {
-            const secureValue = await SecureStore.getItemAsync(secureKeyFor(key));
-            if (secureValue !== null) return secureValue;
-        } catch {
-            // Fall through to the legacy value rather than dropping credentials.
+    const secureKey = secureKeyFor(key);
+    if (await isSecureStoreAvailable()) {
+        const secureValue = await SecureStore.getItemAsync(secureKey);
+        if (secureValue !== null) {
+            await AsyncStorage.removeItem(key);
+            return secureValue;
         }
+
         const legacyValue = await AsyncStorage.getItem(key);
         if (legacyValue !== null) {
             await migrateLegacyValue(key, legacyValue);
         }
         return legacyValue;
     }
-    return AsyncStorage.getItem(key);
+
+    const sessionValue = getSessionSecret(secureKey);
+    if (sessionValue !== null) return sessionValue;
+
+    const legacyValue = await AsyncStorage.getItem(key);
+    if (legacyValue !== null) {
+        await evacuateLegacySecretToSession(
+            secureKey,
+            legacyValue,
+            () => AsyncStorage.removeItem(key),
+        );
+    }
+    return legacyValue;
 };
 
 export const setSecureConfigValue = async (key: string, value: string): Promise<void> => {
-    if (await secureAvailable()) {
-        await SecureStore.setItemAsync(secureKeyFor(key), value, SECURE_WRITE_OPTIONS);
+    const secureKey = secureKeyFor(key);
+    if (await isSecureStoreAvailable()) {
+        await SecureStore.setItemAsync(secureKey, value, SECURE_WRITE_OPTIONS);
         await AsyncStorage.removeItem(key);
+        deleteSessionSecret(secureKey);
         return;
     }
-    await AsyncStorage.setItem(key, value);
+
+    await AsyncStorage.removeItem(key);
+    setSessionSecret(secureKey, value);
 };
 
 export const deleteSecureConfigValue = async (key: string): Promise<void> => {
-    if (await secureAvailable()) {
-        try {
-            await SecureStore.deleteItemAsync(secureKeyFor(key));
-        } catch {
-            // Best effort; the AsyncStorage removal below still runs.
-        }
+    const secureKey = secureKeyFor(key);
+    if (await isSecureStoreAvailable()) {
+        await SecureStore.deleteItemAsync(secureKey);
     }
     await AsyncStorage.removeItem(key);
+    deleteSessionSecret(secureKey);
 };

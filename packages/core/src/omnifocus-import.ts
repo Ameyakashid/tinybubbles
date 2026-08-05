@@ -720,10 +720,7 @@ const parseSupportedRRule = (
         : undefined;
     let byDay = parseByDayValues(tokens.BYDAY);
     const byMonthDay = parseByMonthDayValues(tokens.BYMONTHDAY);
-    const bySetPos = tokens.BYSETPOS ? readNumberValue(tokens.BYSETPOS) : undefined;
-    if ((!byDay || byDay.length === 0) && tokens.BYDAY && bySetPos && ['1', '2', '3', '4', '-1'].includes(String(bySetPos))) {
-        byDay = parseByDayValues(`${bySetPos}${tokens.BYDAY}`);
-    }
+    const bySetPosToken = tokens.BYSETPOS?.trim();
     const interval = tokens.INTERVAL ? readNumberValue(tokens.INTERVAL) : undefined;
     const count = tokens.COUNT ? readNumberValue(tokens.COUNT) : undefined;
     const until = tokens.UNTIL ? parseRRuleString(`FREQ=DAILY;UNTIL=${tokens.UNTIL}`).until : undefined;
@@ -733,7 +730,22 @@ const parseSupportedRRule = (
         return { note: `Original OmniFocus repeat rule: ${trimmed}` };
     }
 
-    if (unknownKeys.length > 0 || (tokens.BYSETPOS && (!byDay || byDay.length === 0))) {
+    const hasBySetPos = Boolean(tokens.BYSETPOS);
+    const canConvertBySetPos = hasBySetPos
+        && rule === 'monthly'
+        && byDay?.length === 1
+        && /^(SU|MO|TU|WE|TH|FR|SA)$/.test(byDay[0])
+        && ['-1', '1', '2', '3', '4'].includes(bySetPosToken ?? '');
+    if (canConvertBySetPos && byDay) {
+        byDay = parseByDayValues(`${bySetPosToken}${byDay[0]}`);
+    }
+
+    if (hasBySetPos && !canConvertBySetPos) {
+        counters.unsupportedRecurrencePatterns += 1;
+        return { note: `Original OmniFocus repeat rule: ${trimmed}` };
+    }
+
+    if (unknownKeys.length > 0) {
         counters.unsupportedRecurrencePatterns += 1;
         return {
             recurrence: buildImportedRecurrence(rule, strategy, { byDay, byMonthDay, count, interval, until }),

@@ -664,15 +664,21 @@ function nextMonthlyByDay(base: Date, byDay: RecurrenceByDay[], interval: number
             if (typeof candidate.ordinal === 'number') {
                 const result = getNthWeekdayOfMonth(year, month, candidate.weekday, candidate.ordinal);
                 if (result) {
-                    monthCandidates.push(new Date(
+                    monthCandidates.push(buildDateWithTime(
                         result.getFullYear(),
                         result.getMonth(),
                         result.getDate(),
-                        base.getHours(),
-                        base.getMinutes(),
-                        base.getSeconds(),
-                        base.getMilliseconds()
+                        base
                     ));
+                }
+                return;
+            }
+
+            const targetWeekday = weekdayIndex(candidate.weekday);
+            for (let day = 1; day <= getLastDayOfMonth(year, month); day += 1) {
+                const result = buildDateWithTime(year, month, day, base);
+                if (result.getDay() === targetWeekday) {
+                    monthCandidates.push(result);
                 }
             }
         });
@@ -828,7 +834,7 @@ const getProjectionBaseDate = (projectedAtIso: string): Date => {
 
 const hasMonthlyRuleDateAnchor = (byDay?: RecurrenceByDay[], byMonthDay?: number[]): boolean => (
     Boolean(byMonthDay?.length)
-    || Boolean(byDay?.some((day) => typeof parseOrdinalByDay(day)?.ordinal === 'number'))
+    || Boolean(byDay?.length)
 );
 
 function projectStrictIsoFrom(

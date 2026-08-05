@@ -3,8 +3,18 @@ import { cloneAppData } from './sync-runtime-utils';
 import { createSerializedAsyncQueue } from './async-queue';
 import type { AppData } from './types';
 
-const dataTransferQueue = createSerializedAsyncQueue();
+const syncDocumentOperationQueue = createSerializedAsyncQueue();
 let activeDataTransferBarrier: Promise<void> | null = null;
+
+/**
+ * Serializes operations that read and later replace the complete sync document.
+ * Normal store edits intentionally stay outside this lane: sync detects them via
+ * its freshness guard and requeues, while imports/restores block those writes via
+ * `runAfterStoreWriteLock` only after they reach the front of this queue.
+ */
+export const runSerializedSyncDocumentOperation = <T>(
+    operation: () => Promise<T> | T
+): Promise<T> => syncDocumentOperationQueue.run(operation);
 
 export const runAfterStoreWriteLock = <T>(operation: () => Promise<T>): Promise<T> => {
     const barrier = activeDataTransferBarrier;
@@ -12,7 +22,15 @@ export const runAfterStoreWriteLock = <T>(operation: () => Promise<T>): Promise<
 };
 
 const runWithStoreWriteLock = <T>(operation: () => Promise<T>): Promise<T> => {
-    const result = dataTransferQueue.run(operation);
+    // The serialized queue already invokes this callback from a promise turn.
+    // Start the transfer immediately once it reaches the front so callers can
+    // observe the write barrier without an additional scheduling delay.
+    let result: Promise<T>;
+    try {
+        result = operation();
+    } catch (error) {
+        result = Promise.reject(error);
+    }
     const barrier = result.then(
         () => undefined,
         () => undefined,
@@ -69,7 +87,7 @@ export class DataTransferRefreshError extends Error {
 export async function runDataTransferTransaction<TResult, TSnapshot>(
     options: DataTransferTransactionWithSnapshotOptions<TResult, TSnapshot>
 ): Promise<{ result: TResult; snapshot: TSnapshot }> {
-    return runWithStoreWriteLock(async () => {
+    return runSerializedSyncDocumentOperation(() => runWithStoreWriteLock(async () => {
         await options.flushPendingSave();
         const localSnapshotChangeAt = options.getCurrentChangeAt();
         const currentData = await options.readCurrentData();
@@ -106,7 +124,7 @@ export async function runDataTransferTransaction<TResult, TSnapshot>(
             result: application.result,
             snapshot,
         };
-    });
+    }));
 }
 
 export const runDataTransferTransactionWithoutSnapshot = async <TResult>(

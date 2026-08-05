@@ -8,21 +8,14 @@ import {
     unlinkSync,
     writeFileSync,
 } from 'fs';
+import { createHash } from 'crypto';
 import { basename, dirname, join, relative, resolve, sep } from 'path';
 import { sleep, type AppData } from '@mindwtr/core';
 import {
     ATTACHMENT_PATH_ALLOWLIST,
-    CLOUD_DATA_LOCK_REFRESH_MS,
-    CLOUD_DATA_LOCK_TTL_MS,
     CLOUD_DATA_LOCK_WAIT_TIMEOUT_MS,
     logError,
 } from './server-config';
-
-type CloudFileLock = {
-    owner: string;
-    acquiredAt: number;
-    heartbeatAt: number;
-};
 
 export type RequestAbortError = Error & {
     status: number;
@@ -36,7 +29,7 @@ type BodyReadError = {
 };
 
 export type WriteLockRunner = {
-    <T>(key: string, fn: () => Promise<T>): Promise<T>;
+    <T>(key: string, fn: () => Promise<T>, signal?: AbortSignal): Promise<T>;
     getPendingLockCount: () => number;
 };
 
@@ -356,93 +349,90 @@ export function writeData(filePath: string, data: unknown) {
     }
 }
 
+const CLOUD_LOCK_SHARD_COUNT = 64;
+
 function getCloudLockPath(dataDir: string, key: string): string {
-    return join(dataDir, '.locks', `${key}.lock`);
+    const lockId = createHash('sha256').update(key).digest('hex');
+    const shard = Number.parseInt(lockId.slice(0, 8), 16) % CLOUD_LOCK_SHARD_COUNT;
+    return join(dataDir, '.locks', `shard-${shard.toString(16).padStart(2, '0')}.sqlite`);
 }
 
-function readCloudLock(lockPath: string): CloudFileLock | null {
-    try {
-        const raw = readFileSync(lockPath, 'utf8');
-        const parsed = JSON.parse(raw) as Partial<CloudFileLock>;
-        if (!parsed || typeof parsed.owner !== 'string') return null;
-        const acquiredAt = Number(parsed.acquiredAt);
-        const heartbeatAt = Number(parsed.heartbeatAt);
-        if (!Number.isFinite(acquiredAt) || !Number.isFinite(heartbeatAt)) return null;
-        return {
-            owner: parsed.owner,
-            acquiredAt,
-            heartbeatAt,
-        };
-    } catch {
-        return null;
+const isSqliteBusyError = (error: unknown): boolean => {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    const message = error instanceof Error ? error.message : String(error);
+    return code === 'SQLITE_BUSY'
+        || code === 'SQLITE_LOCKED'
+        || /database is (?:busy|locked)/i.test(message);
+};
+
+const waitForCloudLockRetry = async (delayMs: number, signal?: AbortSignal): Promise<void> => {
+    if (!signal) {
+        await sleep(delayMs);
+        return;
     }
-}
+    throwIfRequestAborted(signal);
+    await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            signal.removeEventListener('abort', onAbort);
+            resolve();
+        }, delayMs);
+        const onAbort = () => {
+            clearTimeout(timeout);
+            signal.removeEventListener('abort', onAbort);
+            reject(resolveRequestAbortError(signal, 'Request timed out'));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+};
 
-function writeCloudLock(lockPath: string, lock: CloudFileLock, flag: 'wx' | 'w'): void {
-    mkdirSync(dirname(lockPath), { recursive: true });
-    writeFileSync(lockPath, JSON.stringify(lock), { flag, mode: 0o600 });
-}
-
-async function withCloudFileLock<T>(dataDir: string, key: string, fn: () => Promise<T>): Promise<T> {
-    const owner = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+async function withCloudFileLock<T>(
+    dataDir: string,
+    key: string,
+    fn: () => Promise<T>,
+    signal?: AbortSignal,
+): Promise<T> {
+    throwIfRequestAborted(signal);
     const lockPath = getCloudLockPath(dataDir, key);
+    mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
     const startedAt = Date.now();
     let attempt = 0;
+    const { Database } = await import('bun:sqlite');
+    let lockDatabase: InstanceType<typeof Database> | null = null;
+
     while (true) {
-        const now = Date.now();
+        throwIfRequestAborted(signal);
+        const candidate = new Database(lockPath);
         try {
-            writeCloudLock(lockPath, { owner, acquiredAt: now, heartbeatAt: now }, 'wx');
+            // Poll with a zero SQLite busy timeout instead of blocking Bun's event
+            // loop. BEGIN IMMEDIATE is an OS-backed process lock; the kernel drops
+            // it when a process crashes, so there is no stale lease to unlink.
+            candidate.exec('PRAGMA busy_timeout = 0;');
+            candidate.exec('BEGIN IMMEDIATE;');
+            lockDatabase = candidate;
             break;
         } catch (error) {
-            const isExistingLock = typeof error === 'object'
-                && error !== null
-                && 'code' in error
-                && (error as { code?: string }).code === 'EEXIST';
-            if (!isExistingLock) {
-                throw error;
-            }
-            const currentLock = readCloudLock(lockPath);
-            const lastHeartbeatAt = currentLock?.heartbeatAt ?? currentLock?.acquiredAt ?? 0;
-            if (Number.isFinite(lastHeartbeatAt) && now - lastHeartbeatAt > CLOUD_DATA_LOCK_TTL_MS) {
-                try {
-                    unlinkSync(lockPath);
-                    continue;
-                } catch {
-                    // Another process may have refreshed or released the lock.
-                }
-            }
-            if (now - startedAt > CLOUD_DATA_LOCK_WAIT_TIMEOUT_MS) {
+            candidate.close();
+            if (!isSqliteBusyError(error)) throw error;
+            if (Date.now() - startedAt > CLOUD_DATA_LOCK_WAIT_TIMEOUT_MS) {
                 throw new Error('Timed out waiting for cloud data lock');
             }
             attempt += 1;
-            await sleep(Math.min(1000, 25 * attempt));
+            await waitForCloudLockRetry(Math.min(1000, 25 * attempt), signal);
         }
-    }
-
-    const refreshTimer = setInterval(() => {
-        try {
-            const currentLock = readCloudLock(lockPath);
-            if (!currentLock || currentLock.owner !== owner) return;
-            writeCloudLock(lockPath, { ...currentLock, heartbeatAt: Date.now() }, 'w');
-        } catch {
-            // Best effort only; stale-lock cleanup covers crashes.
-        }
-    }, CLOUD_DATA_LOCK_REFRESH_MS);
-    if (typeof refreshTimer.unref === 'function') {
-        refreshTimer.unref();
     }
 
     try {
+        throwIfRequestAborted(signal);
         return await fn();
     } finally {
-        clearInterval(refreshTimer);
         try {
-            const currentLock = readCloudLock(lockPath);
-            if (currentLock?.owner === owner && existsSync(lockPath)) {
-                unlinkSync(lockPath);
-            }
+            lockDatabase?.exec('ROLLBACK;');
         } catch {
-            // Best-effort cleanup if another process already reclaimed the stale lock.
+            // Closing the connection below still releases the OS lock.
+        } finally {
+            lockDatabase?.close();
         }
     }
 }
@@ -544,20 +534,36 @@ export async function readJsonBody(req: Request, maxBodyBytes: number, signal?: 
 
 export function createWriteLockRunner(dataDir?: string): WriteLockRunner {
     const writeLocks = new Map<string, Promise<void>>();
-    const withWriteLock = async <T>(key: string, fn: () => Promise<T>) => {
+    const withWriteLock = async <T>(key: string, fn: () => Promise<T>, signal?: AbortSignal) => {
         const current = writeLocks.get(key) ?? Promise.resolve();
-        const run = current.catch(() => undefined).then(() => (
-            dataDir ? withCloudFileLock(dataDir, key, fn) : fn()
-        ));
+        let removeQueuedAbortListener: () => void = () => undefined;
+        const abortBeforeStart = signal
+            ? new Promise<never>((_resolve, reject) => {
+                const onAbort = () => reject(resolveRequestAbortError(signal, 'Request timed out'));
+                removeQueuedAbortListener = () => signal.removeEventListener('abort', onAbort);
+                if (signal.aborted) {
+                    onAbort();
+                } else {
+                    signal.addEventListener('abort', onAbort, { once: true });
+                }
+            })
+            : null;
+        const run = current.catch(() => undefined).then(() => {
+            removeQueuedAbortListener();
+            throwIfRequestAborted(signal);
+            return dataDir ? withCloudFileLock(dataDir, key, fn, signal) : fn();
+        });
         const queueTail = run.then(() => undefined, () => undefined);
         writeLocks.set(key, queueTail);
-        try {
-            return await run;
-        } finally {
+        void queueTail.then(() => {
             if (writeLocks.get(key) === queueTail) {
                 writeLocks.delete(key);
             }
+        });
+        if (abortBeforeStart) {
+            return Promise.race([run, abortBeforeStart]);
         }
+        return run;
     };
     withWriteLock.getPendingLockCount = () => writeLocks.size;
     return withWriteLock;

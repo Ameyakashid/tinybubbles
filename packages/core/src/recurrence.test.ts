@@ -699,6 +699,104 @@ describe('recurrence', () => {
         expect(next?.dueDate).toBe('2025-01-06T09:00:00.000Z');
     });
 
+    it('uses the earliest matching weekday for monthly BYDAY without ordinals', () => {
+        const task: Task = {
+            id: 't6-plain-byday',
+            title: 'Office days',
+            status: 'done',
+            tags: [],
+            contexts: [],
+            dueDate: '2026-08-03',
+            recurrence: {
+                rule: 'monthly',
+                strategy: 'strict',
+                rrule: 'FREQ=MONTHLY;BYDAY=MO,WE',
+            },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+        };
+
+        const next = createNextRecurringTask(task, '2026-08-03T12:00:00.000Z', 'done');
+
+        expect(next?.dueDate).toBe('2026-08-05');
+    });
+
+    it('preserves the interval and time for strict monthly BYDAY without ordinals', () => {
+        const task: Task = {
+            id: 't6-plain-byday-strict-interval',
+            title: 'Office days every other month',
+            status: 'done',
+            tags: [],
+            contexts: [],
+            dueDate: '2026-08-31T09:30:00.000Z',
+            recurrence: {
+                rule: 'monthly',
+                strategy: 'strict',
+                byDay: ['MO', 'WE'],
+                rrule: 'FREQ=MONTHLY;INTERVAL=2;BYDAY=MO,WE',
+            },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+        };
+
+        const next = createNextRecurringTask(task, '2026-08-31T12:00:00.000Z', 'done');
+
+        expect(next?.dueDate).toBe('2026-10-05T09:30:00.000Z');
+    });
+
+    it('uses completion time as the anchor for fluid monthly BYDAY without ordinals', () => {
+        const task: Task = {
+            id: 't6-plain-byday-fluid-interval',
+            title: 'Office days after completion',
+            status: 'done',
+            tags: [],
+            contexts: [],
+            dueDate: '2026-08-03',
+            recurrence: {
+                rule: 'monthly',
+                strategy: 'fluid',
+                byDay: ['MO', 'WE'],
+                rrule: 'FREQ=MONTHLY;INTERVAL=2;BYDAY=MO,WE',
+            },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+        };
+
+        const next = createNextRecurringTask(task, '2026-08-03T12:00:00.000Z', 'done');
+
+        expect(next?.dueDate).toBe('2026-09-07');
+    });
+
+    it('keeps projected schedule fields on the same plain monthly BYDAY occurrence', () => {
+        const task: Task = {
+            id: 't6-plain-byday-projected-fields',
+            title: 'Office day schedule',
+            status: 'next',
+            tags: [],
+            contexts: [],
+            startTime: '2026-08-03T09:00:00.000Z',
+            dueDate: '2026-08-03T17:00:00.000Z',
+            reviewAt: '2026-08-03T18:00:00.000Z',
+            recurrence: {
+                rule: 'monthly',
+                strategy: 'strict',
+                byDay: ['MO', 'WE'],
+                rrule: 'FREQ=MONTHLY;BYDAY=MO,WE',
+            },
+            showFutureRecurrence: true,
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+        };
+
+        const projected = createProjectedRecurringTask(task, '2026-08-03T20:00:00.000Z');
+
+        expect(projected).toMatchObject({
+            startTime: '2026-08-05T09:00:00.000Z',
+            dueDate: '2026-08-05T17:00:00.000Z',
+            reviewAt: '2026-08-05T18:00:00.000Z',
+        });
+    });
+
     it('checks the current month for monthly BYDAY rules with interval greater than 1', () => {
         const task: Task = {
             id: 't6-interval-current-month',
@@ -2019,6 +2117,14 @@ describe('getRecurringTaskPreviewDate', () => {
             recurrence: { rule: 'monthly', strategy: 'strict', byDay: ['3TH'], rrule: 'FREQ=MONTHLY;BYDAY=3TH' },
         };
         expect(getRecurringTaskPreviewDate(task, nowIso)).toBe('2026-07-16');
+    });
+
+    it('shows the first upcoming occurrence for an unscheduled plain monthly BYDAY rule', () => {
+        const task: Task = {
+            ...base,
+            recurrence: { rule: 'monthly', strategy: 'strict', rrule: 'FREQ=MONTHLY;BYDAY=MO,WE' },
+        };
+        expect(getRecurringTaskPreviewDate(task, nowIso)).toBe('2026-07-06');
     });
 
     it('shows the projected next occurrence for a scheduled task', () => {

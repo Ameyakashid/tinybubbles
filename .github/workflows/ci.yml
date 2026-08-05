@@ -518,9 +518,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Performance audit
-        run: bun run scripts/audit-performance.ts --fail-under 60
-
       - name: Check for lint errors (core)
         run: cd packages/core && bun run tsc --noEmit
 

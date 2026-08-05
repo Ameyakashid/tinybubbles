@@ -27,6 +27,8 @@ env:
   PAGER: cat
   NPM_CONFIG_AUDIT: "false"
   NPM_CONFIG_FUND: "false"
+  MCP_PUBLISHER_VERSION: "1.8.0"
+  MCP_PUBLISHER_LINUX_AMD64_SHA256: "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf"
 
 jobs:
   publish:
@@ -48,7 +50,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Ensure npm supports trusted publishing
-        run: npm install -g npm@^11.5.1
+        run: npm install -g npm@11.5.1
 
       - name: Remove obsolete npm auth config
         run: |
@@ -175,7 +177,13 @@ jobs:
       - name: Install mcp-publisher
         run: |
           set -euo pipefail
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/${archive}"
+          printf '%s  %s\n' "$MCP_PUBLISHER_LINUX_AMD64_SHA256" "$archive" | sha256sum --check --strict
+          tar -xzf "$archive" mcp-publisher
+          ./mcp-publisher --version
 
       - name: Validate MCP Registry metadata
         run: |

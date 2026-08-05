@@ -72,6 +72,7 @@ package-lock.json
 !apps/mobile/package-lock.json
 !apps/desktop/package-lock.json
 !packages/core/package-lock.json
+!tools/eas-cli/package-lock.json
 yarn.lock
 
 # AUR build artifacts

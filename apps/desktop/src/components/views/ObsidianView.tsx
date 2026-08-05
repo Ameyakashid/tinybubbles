@@ -16,7 +16,7 @@ import {
     Tags,
 } from 'lucide-react';
 
-import { DEFAULT_TASKNOTES_FOLDER, generateUUID, safeFormatDate, translateWithFallback, useTaskStore, type ObsidianTask, type Task } from '@mindwtr/core';
+import { DEFAULT_TASKNOTES_FOLDER, safeFormatDate, translateWithFallback, useTaskStore, type ObsidianTask, type Task } from '@mindwtr/core';
 
 import { ObsidianService } from '../../lib/obsidian-service';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
@@ -101,12 +101,56 @@ const normalizeImportedContext = (value: string): string | null => {
     return trimmed ? `@${trimmed}` : null;
 };
 
-const buildMindwtrTaskInitialProps = (task: ObsidianTask, sourceUri: string, sourceTitle: string): Partial<Task> => {
+const normalizeObsidianIdentityText = (value: string): string => (
+    value.trim().replace(/\s+/g, ' ').toLowerCase()
+);
+
+type ObsidianSourceAttachmentIdentity = {
+    id: string;
+    stablePrefix: string;
+};
+
+const buildObsidianSourceAttachmentIdentity = (
+    task: ObsidianTask,
+    scannedTasks: ObsidianTask[],
+): ObsidianSourceAttachmentIdentity => {
+    const normalizedText = normalizeObsidianIdentityText(task.text);
+    const matchingTasks = scannedTasks
+        .filter((candidate) => (
+            candidate.source.vaultName === task.source.vaultName
+            && candidate.source.relativeFilePath === task.source.relativeFilePath
+            && candidate.format === task.format
+            && normalizeObsidianIdentityText(candidate.text) === normalizedText
+        ))
+        .sort((left, right) => (
+            left.source.lineNumber - right.source.lineNumber || left.id.localeCompare(right.id)
+        ));
+    const occurrence = Math.max(0, matchingTasks.findIndex((candidate) => candidate.id === task.id));
+    const fingerprint = [
+        encodeURIComponent(task.source.vaultName),
+        encodeURIComponent(task.source.relativeFilePath),
+        task.format,
+        encodeURIComponent(normalizedText),
+        String(occurrence),
+    ].join(':');
+    const stablePrefix = `obsidian-source:v2:${fingerprint}`;
+    return {
+        id: `${stablePrefix}:${task.id}`,
+        stablePrefix,
+    };
+};
+
+const buildMindwtrTaskInitialProps = (
+    task: ObsidianTask,
+    sourceUri: string,
+    sourceTitle: string,
+    sourceAttachmentId: string,
+): Partial<Task> => {
     const metadata = task.taskNotesData ?? task.dataviewData;
     const now = new Date().toISOString();
     const status = task.completed ? 'done' : (task.taskNotesData?.mindwtrStatus ?? 'inbox');
     const attachment = {
-        id: generateUUID(),
+        id: sourceAttachmentId,
         kind: 'link' as const,
         title: sourceTitle,
         uri: sourceUri,
@@ -126,10 +170,29 @@ const buildMindwtrTaskInitialProps = (task: ObsidianTask, sourceUri: string, sou
     };
 };
 
-const hasObsidianSourceAttachment = (task: Task, sourceUri: string): boolean => (
-    !task.deletedAt
-    && task.attachments?.some((attachment) => !attachment.deletedAt && attachment.kind === 'link' && attachment.uri === sourceUri) === true
-);
+const hasObsidianSourceAttachment = (
+    task: Task,
+    sourceIdentity: ObsidianSourceAttachmentIdentity,
+    sourceUri: string,
+    sourceTaskText: string,
+): boolean => {
+    if (task.deletedAt) return false;
+    const normalizedSourceText = normalizeObsidianIdentityText(sourceTaskText);
+    const isLegacyTitleMatch = normalizeObsidianIdentityText(task.title) === normalizedSourceText;
+    return task.attachments?.some((attachment) => (
+        !attachment.deletedAt
+        && attachment.kind === 'link'
+        && (
+            attachment.id === sourceIdentity.id
+            || attachment.id.startsWith(`${sourceIdentity.stablePrefix}:`)
+            || (
+                isLegacyTitleMatch
+                && !attachment.id.startsWith('obsidian-source:')
+                && attachment.uri === sourceUri
+            )
+        )
+    )) === true;
+};
 
 export function ObsidianView() {
     const { t } = useLanguage();
@@ -241,7 +304,13 @@ export function ObsidianView() {
 
     const handleBringIntoMindwtr = useCallback(async (task: typeof tasks[number]) => {
         const sourceUri = ObsidianService.buildObsidianUri(task.source);
-        if (mindwtrTasks.some((existingTask) => hasObsidianSourceAttachment(existingTask, sourceUri))) {
+        const sourceIdentity = buildObsidianSourceAttachmentIdentity(task, tasks);
+        if (mindwtrTasks.some((existingTask) => hasObsidianSourceAttachment(
+            existingTask,
+            sourceIdentity,
+            sourceUri,
+            task.text,
+        ))) {
             showToast(resolveText('obsidian.bringIntoMindwtrAlreadyExists', 'Task already exists in Mindwtr.'), 'info');
             return;
         }
@@ -252,7 +321,8 @@ export function ObsidianView() {
                 buildMindwtrTaskInitialProps(
                     task,
                     sourceUri,
-                    resolveText('obsidian.sourceAttachmentTitle', 'Obsidian source')
+                    resolveText('obsidian.sourceAttachmentTitle', 'Obsidian source'),
+                    sourceIdentity.id,
                 )
             );
             if (!result.success) {
@@ -274,7 +344,7 @@ export function ObsidianView() {
                 return next;
             });
         }
-    }, [addTask, mindwtrTasks, resolveText, showToast]);
+    }, [addTask, mindwtrTasks, resolveText, showToast, tasks]);
 
     const handleToggleTask = useCallback(async (task: typeof tasks[number]) => {
         if (!config.vaultPath) return;

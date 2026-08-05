@@ -1,6 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+import {
+    deleteSessionSecret,
+    evacuateLegacySecretToSession,
+    getSessionSecret,
+    isSecureStoreAvailable,
+    setSessionSecret,
+} from './secure-secret-store';
+
 const DROPBOX_SECURESTORE_TOKENS_KEY = 'mindwtr_dropbox_tokens';
 const DROPBOX_ASYNC_TOKENS_KEY = '@mindwtr_dropbox_tokens';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
@@ -16,16 +24,6 @@ export interface DropboxAccessTokenResolution {
     tokens: DropboxAuthTokens;
 }
 
-const secureAvailable = (() => {
-    let cached: Promise<boolean> | null = null;
-    return () => {
-        if (!cached) {
-            cached = SecureStore.isAvailableAsync().catch(() => false);
-        }
-        return cached;
-    };
-})();
-
 const sanitizeTokens = (value: unknown): DropboxAuthTokens | null => {
     if (!value || typeof value !== 'object') return null;
     const record = value as Record<string, unknown>;
@@ -38,29 +36,57 @@ const sanitizeTokens = (value: unknown): DropboxAuthTokens | null => {
 };
 
 const readRawTokenPayload = async (): Promise<string | null> => {
-    if (await secureAvailable()) {
+    if (await isSecureStoreAvailable()) {
         const secureValue = await SecureStore.getItemAsync(DROPBOX_SECURESTORE_TOKENS_KEY);
-        if (secureValue) return secureValue;
+        if (secureValue) {
+            await AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY);
+            return secureValue;
+        }
+
+        const legacyValue = await AsyncStorage.getItem(DROPBOX_ASYNC_TOKENS_KEY);
+        if (legacyValue !== null) {
+            await SecureStore.setItemAsync(DROPBOX_SECURESTORE_TOKENS_KEY, legacyValue, {
+                keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+            });
+            await AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY);
+        }
+        return legacyValue;
     }
-    return AsyncStorage.getItem(DROPBOX_ASYNC_TOKENS_KEY);
+
+    const sessionValue = getSessionSecret(DROPBOX_SECURESTORE_TOKENS_KEY);
+    if (sessionValue !== null) return sessionValue;
+
+    const legacyValue = await AsyncStorage.getItem(DROPBOX_ASYNC_TOKENS_KEY);
+    if (legacyValue !== null) {
+        await evacuateLegacySecretToSession(
+            DROPBOX_SECURESTORE_TOKENS_KEY,
+            legacyValue,
+            () => AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY),
+        );
+    }
+    return legacyValue;
 };
 
 const writeRawTokenPayload = async (value: string): Promise<void> => {
-    if (await secureAvailable()) {
+    if (await isSecureStoreAvailable()) {
         await SecureStore.setItemAsync(DROPBOX_SECURESTORE_TOKENS_KEY, value, {
             keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
         });
         await AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY);
+        deleteSessionSecret(DROPBOX_SECURESTORE_TOKENS_KEY);
         return;
     }
-    await AsyncStorage.setItem(DROPBOX_ASYNC_TOKENS_KEY, value);
+
+    await AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY);
+    setSessionSecret(DROPBOX_SECURESTORE_TOKENS_KEY, value);
 };
 
 const clearRawTokenPayload = async (): Promise<void> => {
-    if (await secureAvailable()) {
+    if (await isSecureStoreAvailable()) {
         await SecureStore.deleteItemAsync(DROPBOX_SECURESTORE_TOKENS_KEY);
     }
     await AsyncStorage.removeItem(DROPBOX_ASYNC_TOKENS_KEY);
+    deleteSessionSecret(DROPBOX_SECURESTORE_TOKENS_KEY);
 };
 
 const requireDropboxClientId = (clientId: string): string => {

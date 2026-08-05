@@ -1,15 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLOUD_TOKEN_KEY, WEBDAV_PASSWORD_KEY } from './sync-constants';
+
 const storeMocks = vi.hoisted(() => ({
     secureAvailable: true,
+    availabilityFailuresRemaining: 0,
     secureItems: new Map<string, string>(),
     asyncItems: new Map<string, string>(),
     failSecureWrites: false,
+    isAvailableAsync: vi.fn(),
     setItemAsync: vi.fn(),
 }));
 
 vi.mock('expo-secure-store', () => ({
-    isAvailableAsync: vi.fn(async () => storeMocks.secureAvailable),
+    isAvailableAsync: storeMocks.isAvailableAsync.mockImplementation(async () => {
+        if (storeMocks.availabilityFailuresRemaining > 0) {
+            storeMocks.availabilityFailuresRemaining -= 1;
+            throw new Error('keystore probe failed');
+        }
+        return storeMocks.secureAvailable;
+    }),
     getItemAsync: vi.fn(async (key: string) => storeMocks.secureItems.get(key) ?? null),
     setItemAsync: storeMocks.setItemAsync.mockImplementation(async (key: string, value: string) => {
         if (storeMocks.failSecureWrites) throw new Error('keystore unavailable');
@@ -34,32 +44,27 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     },
 }));
 
-import { CLOUD_TOKEN_KEY, WEBDAV_PASSWORD_KEY } from './sync-constants';
-import {
-    deleteSecureConfigValue,
-    getSecureConfigValue,
-    isSecretConfigKey,
-    setSecureConfigValue,
-} from './secure-config';
-
-// The module caches isAvailableAsync for its lifetime, so this suite keeps
-// secureAvailable=true throughout and covers the unavailable path via the
-// migration-failure case instead.
 describe('secure-config', () => {
     beforeEach(() => {
+        vi.resetModules();
+        storeMocks.secureAvailable = true;
+        storeMocks.availabilityFailuresRemaining = 0;
         storeMocks.secureItems.clear();
         storeMocks.asyncItems.clear();
         storeMocks.failSecureWrites = false;
-        storeMocks.setItemAsync.mockClear();
+        vi.clearAllMocks();
     });
 
-    it('flags only the cloud token and WebDAV password as secrets', () => {
+    it('flags only the cloud token and WebDAV password as secrets', async () => {
+        const { isSecretConfigKey } = await import('./secure-config');
+
         expect(isSecretConfigKey(CLOUD_TOKEN_KEY)).toBe(true);
         expect(isSecretConfigKey(WEBDAV_PASSWORD_KEY)).toBe(true);
         expect(isSecretConfigKey('@mindwtr_cloud_url')).toBe(false);
     });
 
     it('writes secrets to the secure store and scrubs the plaintext copy', async () => {
+        const { setSecureConfigValue } = await import('./secure-config');
         storeMocks.asyncItems.set(CLOUD_TOKEN_KEY, 'old-plaintext');
 
         await setSecureConfigValue(CLOUD_TOKEN_KEY, 'fresh-token');
@@ -74,13 +79,16 @@ describe('secure-config', () => {
     });
 
     it('reads from the secure store first', async () => {
+        const { getSecureConfigValue } = await import('./secure-config');
         storeMocks.secureItems.set('mindwtr_webdav_password', 'secure-pass');
         storeMocks.asyncItems.set(WEBDAV_PASSWORD_KEY, 'stale-plaintext');
 
         await expect(getSecureConfigValue(WEBDAV_PASSWORD_KEY)).resolves.toBe('secure-pass');
+        expect(storeMocks.asyncItems.has(WEBDAV_PASSWORD_KEY)).toBe(false);
     });
 
     it('migrates a legacy plaintext value into the secure store on read', async () => {
+        const { getSecureConfigValue } = await import('./secure-config');
         storeMocks.asyncItems.set(CLOUD_TOKEN_KEY, 'legacy-token');
 
         await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).resolves.toBe('legacy-token');
@@ -88,19 +96,57 @@ describe('secure-config', () => {
         expect(storeMocks.asyncItems.has(CLOUD_TOKEN_KEY)).toBe(false);
     });
 
-    it('keeps the plaintext copy when the secure write fails, so credentials are not lost', async () => {
+    it('fails closed and keeps the legacy copy when secure migration transiently fails', async () => {
+        const { getSecureConfigValue } = await import('./secure-config');
         storeMocks.asyncItems.set(CLOUD_TOKEN_KEY, 'legacy-token');
         storeMocks.failSecureWrites = true;
 
-        await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).resolves.toBe('legacy-token');
+        await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).rejects.toThrow('keystore unavailable');
         expect(storeMocks.asyncItems.get(CLOUD_TOKEN_KEY)).toBe('legacy-token');
     });
 
+    it('retries a transient availability failure without writing plaintext', async () => {
+        const { setSecureConfigValue } = await import('./secure-config');
+        storeMocks.availabilityFailuresRemaining = 1;
+
+        await expect(setSecureConfigValue(CLOUD_TOKEN_KEY, 'fresh-token')).rejects.toThrow(
+            'keystore probe failed',
+        );
+        expect(storeMocks.asyncItems.has(CLOUD_TOKEN_KEY)).toBe(false);
+
+        await expect(setSecureConfigValue(CLOUD_TOKEN_KEY, 'fresh-token')).resolves.toBeUndefined();
+        expect(storeMocks.isAvailableAsync).toHaveBeenCalledTimes(2);
+        expect(storeMocks.secureItems.get('mindwtr_cloud_token')).toBe('fresh-token');
+    });
+
+    it('keeps new secrets in memory only when secure storage is unsupported', async () => {
+        const { getSecureConfigValue, setSecureConfigValue } = await import('./secure-config');
+        storeMocks.secureAvailable = false;
+
+        await setSecureConfigValue(CLOUD_TOKEN_KEY, 'session-token');
+
+        expect(storeMocks.asyncItems.has(CLOUD_TOKEN_KEY)).toBe(false);
+        expect(storeMocks.secureItems.has('mindwtr_cloud_token')).toBe(false);
+        await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).resolves.toBe('session-token');
+    });
+
+    it('evacuates legacy plaintext into memory when secure storage is unsupported', async () => {
+        const { getSecureConfigValue } = await import('./secure-config');
+        storeMocks.secureAvailable = false;
+        storeMocks.asyncItems.set(CLOUD_TOKEN_KEY, 'legacy-session-token');
+
+        await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).resolves.toBe('legacy-session-token');
+        expect(storeMocks.asyncItems.has(CLOUD_TOKEN_KEY)).toBe(false);
+        await expect(getSecureConfigValue(CLOUD_TOKEN_KEY)).resolves.toBe('legacy-session-token');
+    });
+
     it('returns null when neither store has a value', async () => {
+        const { getSecureConfigValue } = await import('./secure-config');
         await expect(getSecureConfigValue(WEBDAV_PASSWORD_KEY)).resolves.toBeNull();
     });
 
     it('deletes from both stores', async () => {
+        const { deleteSecureConfigValue } = await import('./secure-config');
         storeMocks.secureItems.set('mindwtr_webdav_password', 'secure-pass');
         storeMocks.asyncItems.set(WEBDAV_PASSWORD_KEY, 'stale-plaintext');
 

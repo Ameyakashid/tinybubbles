@@ -38,6 +38,12 @@ export type ServerConfig = {
     maxPerWindow: number;
     unauthorizedResponse: (req: Request, token?: string | null) => Response;
     /**
+     * Reserves a new namespace while admission is locked. Routes that cannot
+     * create a namespace may deliberately provide a no-op.
+     */
+    initializeNamespace: (filePath: string) => Promise<void> | void;
+    runWithNamespaceAdmission: <T>(handler: () => Promise<T>, signal?: AbortSignal) => Promise<T>;
+    /**
      * Which HTTP methods on this route must pass the namespace write cap before the
      * handler runs. Defaults to every method except GET/HEAD (i.e. every write).
      * Override only when a route's writes are known not to create a new namespace
@@ -56,8 +62,8 @@ export function normalizeRequestPathname(url: URL): string {
 /**
  * The namespace write cap: in "any token" mode (no allowlist configured), a token
  * that hasn't written data yet may only do so while the server is under
- * maxAnyTokenNamespaces total namespaces. Exported standalone for /v1/data's GET
- * branch, which only needs the guard on the narrow "create an empty doc" path.
+ * maxAnyTokenNamespaces total namespaces. Exported so admission can recheck the
+ * cap after acquiring the process-safe global lock.
  */
 export function ensureNamespaceWriteAllowed(cfg: Pick<ServerConfig, 'allowedAuthTokens' | 'dataDir' | 'maxAnyTokenNamespaces'>, key: string): Response | null {
     if (cfg.allowedAuthTokens) return null;
@@ -85,6 +91,7 @@ export async function withNamespace(
     url: URL,
     cfg: ServerConfig,
     handler: (ctx: { key: string; filePath: string }) => Promise<Response | null>,
+    signal?: AbortSignal,
 ): Promise<Response | null> {
     const token = getToken(req);
     if (!token) return cfg.unauthorizedResponse(req);
@@ -96,8 +103,24 @@ export async function withNamespace(
     if (rateLimitResponse) return rateLimitResponse;
     const guardMethods = cfg.guardMethods ?? defaultGuardMethods;
     if (guardMethods(req.method)) {
-        const namespaceResponse = ensureNamespaceWriteAllowed(cfg, key);
-        if (namespaceResponse) return namespaceResponse;
+        if (!cfg.allowedAuthTokens && !namespaceExists(cfg.dataDir, key)) {
+            const admissionResponse = await cfg.runWithNamespaceAdmission(async (): Promise<Response | null> => {
+                // Recheck after taking the process-safe global lock. Write routes
+                // reserve a valid empty document here, keeping the lock window short:
+                // untrusted request bodies are read and validated after admission.
+                const namespaceResponse = ensureNamespaceWriteAllowed(cfg, key);
+                if (namespaceResponse) return namespaceResponse;
+                const filePath = join(cfg.dataDir, `${key}.json`);
+                if (!namespaceExists(cfg.dataDir, key)) {
+                    await cfg.initializeNamespace(filePath);
+                }
+                return null;
+            }, signal);
+            if (admissionResponse) return admissionResponse;
+        } else {
+            const namespaceResponse = ensureNamespaceWriteAllowed(cfg, key);
+            if (namespaceResponse) return namespaceResponse;
+        }
     }
     const filePath = join(cfg.dataDir, `${key}.json`);
     return handler({ key, filePath });

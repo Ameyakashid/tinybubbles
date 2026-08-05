@@ -109,8 +109,13 @@ jobs:
       - name: Setup Ruby
         run: bash scripts/ci/setup-ruby.sh 3.3
 
-      - name: Install Fastlane
-        run: gem install fastlane --no-document
+      - name: Install locked Fastlane bundle
+        run: |
+          set -euo pipefail
+          gem install bundler --version 4.0.3 --no-document
+          bundle config set --local path vendor/bundle
+          bundle config set --local frozen true
+          bundle install --jobs 4 --retry 3
 
       - name: Select Xcode (iOS 26 SDK required)
         run: |
@@ -1157,7 +1162,7 @@ jobs:
           FASTLANE_ASC_KEY_ID="$ASC_KEY_ID_CLEAN" \
           FASTLANE_ASC_ISSUER_ID="$ASC_ISSUER_ID_CLEAN" \
           ASC_KEY_PATH="$ASC_KEY_PATH" \
-          fastlane ios upload_app_store
+          bundle exec fastlane ios upload_app_store
 
       - name: Distribute upload to TestFlight external group
         if: ${{ inputs.upload }}
@@ -1267,7 +1272,7 @@ jobs:
           EOF
 
           echo "Distributing iOS build ${APP_VERSION} (${APP_BUILD_NUMBER}) to TestFlight group: ${TESTFLIGHT_EXTERNAL_GROUP}"
-          ASC_KEY_PATH="$ASC_KEY_PATH" fastlane ios distribute_external_group
+          ASC_KEY_PATH="$ASC_KEY_PATH" bundle exec fastlane ios distribute_external_group
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

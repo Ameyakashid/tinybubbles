@@ -136,6 +136,27 @@ const buildOmniFocusJsonZip = (): Uint8Array => zipSync({
     })),
 });
 
+const buildOmniFocusRRuleZip = (ruleString: string): Uint8Array => zipSync({
+    'OmniFocus.json': strToU8(JSON.stringify({
+        tasks: [{
+            id: 'recurring-task',
+            name: 'Recurring task',
+            note: '',
+            dueDate: '2026-08-03',
+            deferDate: null,
+            plannedDate: null,
+            flagged: false,
+            completed: false,
+            tagIds: [],
+            parentTaskId: null,
+            repetition: { ruleString },
+            projectId: null,
+            completionDate: null,
+        }],
+    })),
+    'metadata.json': strToU8(JSON.stringify({ projects: [], tags: [] })),
+});
+
 describe('omnifocus import', () => {
     it('parses OmniFocus CSV rows into projects and tasks, preserving unmapped fields in notes', () => {
         const csv = [
@@ -361,6 +382,45 @@ describe('omnifocus import', () => {
 
         const deepFlattenedChild = parsed?.tasks.find((task) => task.title === 'Plan sprint -> Book room -> Share agenda');
         expect(deepFlattenedChild?.description).toContain('Original OmniFocus hierarchy: Plan sprint > Book room');
+    });
+
+    it.each([
+        ['-1', '-1MO'],
+        ['1', '1MO'],
+        ['2', '2MO'],
+        ['3', '3MO'],
+        ['4', '4MO'],
+    ])('converts OmniFocus monthly BYSETPOS=%s with one weekday to ordinal BYDAY', (setPosition, ordinalByDay) => {
+        const result = parseOmniFocusImportSource({
+            fileName: 'omnifocus-ordinal-repeat.zip',
+            bytes: buildOmniFocusRRuleZip(`FREQ=MONTHLY;BYDAY=MO;BYSETPOS=${setPosition}`),
+        });
+
+        expect(result.valid).toBe(true);
+        expect(result.parsedData?.tasks[0]?.recurrence).toMatchObject({
+            rule: 'monthly',
+            byDay: [ordinalByDay],
+            rrule: `FREQ=MONTHLY;BYDAY=${ordinalByDay}`,
+        });
+        expect(result.warnings).toEqual([]);
+    });
+
+    it.each([
+        'FREQ=MONTHLY;BYDAY=MO,WE;BYSETPOS=-1',
+        'FREQ=MONTHLY;BYDAY=MO;BYSETPOS=5',
+        'FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1,2',
+    ])('keeps an unrepresentable OmniFocus BYSETPOS rule as a warned note: %s', (ruleString) => {
+        const result = parseOmniFocusImportSource({
+            fileName: 'omnifocus-unsupported-repeat.zip',
+            bytes: buildOmniFocusRRuleZip(ruleString),
+        });
+
+        expect(result.valid).toBe(true);
+        expect(result.parsedData?.tasks[0]?.recurrence).toBeUndefined();
+        expect(result.parsedData?.tasks[0]?.description).toContain(`Original OmniFocus repeat rule: ${ruleString}`);
+        expect(result.warnings).toContain(
+            '1 OmniFocus repeat rule was only imported best-effort and the original rule was preserved in notes.'
+        );
     });
 
     it('imports OmniFocus Omni Automation JSON ZIP exports into areas, projects, and checklist tasks', () => {

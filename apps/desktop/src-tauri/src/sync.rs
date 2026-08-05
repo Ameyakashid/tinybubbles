@@ -1065,7 +1065,9 @@ fn discard_staged_dropbox_credentials_in_store(
 // TLS-1.3-only servers reject it with "bad protocol version". Linux keeps
 // rustls with native roots (covers private CAs in the system store).
 // Known ceiling: schannel on Windows 10 has no TLS 1.3, matching 1.1.0-1.1.5.
-fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Client, String> {
+fn blocking_http_client_builder(
+    proxy_url: Option<&str>,
+) -> Result<reqwest::blocking::ClientBuilder, String> {
     let builder =
         reqwest::blocking::Client::builder().timeout(Duration::from_secs(NATIVE_HTTP_TIMEOUT_SECS));
     #[cfg(target_os = "windows")]
@@ -1077,9 +1079,54 @@ fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Cl
             .map_err(|error| format!("Invalid proxy URL ({url}): {error}"))?;
         builder = builder.proxy(proxy);
     }
-    builder
+    Ok(builder)
+}
+
+fn blocking_http_client(proxy_url: Option<&str>) -> Result<reqwest::blocking::Client, String> {
+    blocking_http_client_builder(proxy_url)?
         .build()
         .map_err(|error| format!("Failed to create HTTP client: {error}"))
+}
+
+fn is_webdav_https_downgrade(next: &reqwest::Url, previous: &[reqwest::Url]) -> bool {
+    previous
+        .last()
+        .is_some_and(|previous| previous.scheme() == "https" && next.scheme() == "http")
+}
+
+fn webdav_redirect_security_error(
+    next: &reqwest::Url,
+    previous: &[reqwest::Url],
+    allow_insecure_http: bool,
+) -> Option<&'static str> {
+    if is_webdav_https_downgrade(next, previous) {
+        Some("WebDAV refused an HTTPS to HTTP redirect")
+    } else if assert_webdav_url_allowed(next.as_str(), allow_insecure_http).is_err() {
+        Some("WebDAV refused an insecure redirect target")
+    } else {
+        None
+    }
+}
+
+fn webdav_blocking_http_client(
+    proxy_url: Option<&str>,
+    allow_insecure_http: bool,
+) -> Result<reqwest::blocking::Client, String> {
+    let redirect_policy = reqwest::redirect::Policy::custom(move |attempt| {
+        if let Some(error) =
+            webdav_redirect_security_error(attempt.url(), attempt.previous(), allow_insecure_http)
+        {
+            attempt.error(error)
+        } else if attempt.previous().len() > 10 {
+            attempt.error("too many WebDAV redirects")
+        } else {
+            attempt.follow()
+        }
+    });
+    blocking_http_client_builder(proxy_url)?
+        .redirect(redirect_policy)
+        .build()
+        .map_err(|error| format!("Failed to create WebDAV HTTP client: {error}"))
 }
 
 fn app_blocking_http_client(app: &tauri::AppHandle) -> Result<reqwest::blocking::Client, String> {
@@ -2765,6 +2812,39 @@ fn assert_cloud_url_allowed(url: &str, allow_insecure_http: bool) -> Result<(), 
     }
 }
 
+pub(crate) fn assert_webdav_url_allowed(
+    url: &str,
+    allow_insecure_http: bool,
+) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "WebDAV URL is invalid".to_string())?;
+    match parsed.scheme() {
+        "https" => Ok(()),
+        "http" => {
+            let host = parsed.host_str().unwrap_or_default();
+            if allow_insecure_http || is_private_http_host(host) {
+                Ok(())
+            } else {
+                Err("WebDAV requires HTTPS for public URLs (HTTP allowed for localhost, private IPs, and local hostnames).".to_string())
+            }
+        }
+        _ => Err("WebDAV URL must use HTTP or HTTPS.".to_string()),
+    }
+}
+
+fn resolve_webdav_request_url(config: &AppConfigToml) -> Result<String, String> {
+    let url = normalize_webdav_url(config.webdav_url.as_deref().unwrap_or_default());
+    if url.trim().is_empty() {
+        return Err("WebDAV URL not configured".to_string());
+    }
+    let allow_insecure_http = config.webdav_allow_insecure_http.as_deref() == Some("true");
+    assert_webdav_url_allowed(&url, allow_insecure_http)?;
+    Ok(url)
+}
+
+fn webdav_allows_insecure_http(config: &AppConfigToml) -> bool {
+    config.webdav_allow_insecure_http.as_deref() == Some("true")
+}
+
 fn parent_webdav_collection_url(raw: &str) -> Option<String> {
     let mut parsed = reqwest::Url::parse(raw).ok()?;
     let trimmed_path = parsed.path().trim_end_matches('/').to_string();
@@ -2854,10 +2934,8 @@ fn webdav_error_body_snippet(body: &str) -> String {
 
 fn webdav_get_json_blocking(app: &tauri::AppHandle) -> Result<Value, String> {
     let config = read_config(app);
-    let url = normalize_webdav_url(&config.webdav_url.unwrap_or_default());
-    if url.trim().is_empty() {
-        return Err("WebDAV URL not configured".to_string());
-    }
+    let allow_insecure_http = webdav_allows_insecure_http(&config);
+    let url = resolve_webdav_request_url(&config)?;
     let username = config.webdav_username.unwrap_or_default();
     let password = match get_keyring_secret(app, KEYRING_WEB_DAV_PASSWORD) {
         Ok(value) => value,
@@ -2869,7 +2947,7 @@ fn webdav_get_json_blocking(app: &tauri::AppHandle) -> Result<Value, String> {
     .or(config.webdav_password.clone())
     .ok_or_else(|| "WebDAV password not configured".to_string())?;
 
-    let client = blocking_http_client(config.proxy_url.as_deref())?;
+    let client = webdav_blocking_http_client(config.proxy_url.as_deref(), allow_insecure_http)?;
     let response = client
         .get(url.as_str())
         .basic_auth(username, Some(password))
@@ -2912,10 +2990,8 @@ fn webdav_put_json_blocking(
     data: &Value,
 ) -> Result<RemoteJsonWriteResult, String> {
     let config = read_config(app);
-    let url = normalize_webdav_url(&config.webdav_url.unwrap_or_default());
-    if url.trim().is_empty() {
-        return Err("WebDAV URL not configured".to_string());
-    }
+    let allow_insecure_http = webdav_allows_insecure_http(&config);
+    let url = resolve_webdav_request_url(&config)?;
     let username = config.webdav_username.unwrap_or_default();
     let password = match get_keyring_secret(app, KEYRING_WEB_DAV_PASSWORD) {
         Ok(value) => value,
@@ -2929,7 +3005,7 @@ fn webdav_put_json_blocking(
 
     let payload = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to encode WebDAV payload: {e}"))?;
-    let client = blocking_http_client(config.proxy_url.as_deref())?;
+    let client = webdav_blocking_http_client(config.proxy_url.as_deref(), allow_insecure_http)?;
     let send_put = || {
         client
             .put(url.clone())
@@ -3250,6 +3326,57 @@ mod tests {
         assert!(assert_cloud_url_allowed("http://nas.local:8787/v1/data", false).is_ok());
         assert!(assert_cloud_url_allowed("http://example.com/v1/data", false).is_err());
         assert!(assert_cloud_url_allowed("http://example.com/v1/data", true).is_ok());
+    }
+
+    #[test]
+    fn webdav_url_security_allows_https_and_local_http_only_by_default() {
+        assert!(assert_webdav_url_allowed("https://dav.example.com/data.json", false).is_ok());
+        assert!(assert_webdav_url_allowed("http://localhost:8080/data.json", false).is_ok());
+        assert!(assert_webdav_url_allowed("http://192.168.1.50:8080/data.json", false).is_ok());
+        assert!(assert_webdav_url_allowed("http://nas.local:8080/data.json", false).is_ok());
+        assert!(assert_webdav_url_allowed("http://dav.example.com/data.json", false).is_err());
+        assert!(assert_webdav_url_allowed("http://dav.example.com/data.json", true).is_ok());
+        assert!(assert_webdav_url_allowed("ftp://dav.example.com/data.json", true).is_err());
+    }
+
+    #[test]
+    fn webdav_request_rejects_public_http_from_inconsistent_stored_config() {
+        let config = AppConfigToml {
+            webdav_url: Some("http://dav.example.com/mindwtr".to_string()),
+            webdav_allow_insecure_http: Some("false".to_string()),
+            ..AppConfigToml::default()
+        };
+
+        let error = resolve_webdav_request_url(&config).unwrap_err();
+
+        assert!(
+            error.contains("requires HTTPS"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn webdav_redirect_security_rejects_downgrades_and_unapproved_public_http() {
+        let https = reqwest::Url::parse("https://dav.example.com/data.json").unwrap();
+        let next_https = reqwest::Url::parse("https://cdn.example.com/data.json").unwrap();
+        let next_http = reqwest::Url::parse("http://dav.example.com/data.json").unwrap();
+        let initial_http = reqwest::Url::parse("http://nas.local/data.json").unwrap();
+
+        assert!(
+            webdav_redirect_security_error(&next_https, std::slice::from_ref(&https), false)
+                .is_none()
+        );
+        assert!(
+            webdav_redirect_security_error(&next_http, std::slice::from_ref(&https), true)
+                .is_some()
+        );
+        assert!(webdav_redirect_security_error(
+            &next_http,
+            std::slice::from_ref(&initial_http),
+            false,
+        )
+        .is_some());
+        assert!(webdav_redirect_security_error(&next_http, &[initial_http], true).is_none());
     }
 
     #[test]

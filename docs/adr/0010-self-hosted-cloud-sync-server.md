@@ -25,9 +25,10 @@ Server responsibilities are limited to:
 1. Authenticate requests with bearer tokens or an explicit token-namespace opt-in.
 2. Map each token to an isolated namespace.
 3. Validate incoming snapshots and task mutation payloads.
-4. Serialize read-modify-write operations per namespace.
+4. Serialize read-modify-write operations per namespace across every server process that shares the data directory.
 5. Merge incoming snapshots with existing on-disk state using shared core sync semantics.
 6. Store attachments with path traversal and executable-content protections.
+7. Admit the first durable namespace write under a process-safe global lock so the configured namespace cap cannot be oversubscribed by concurrent tokens.
 
 Clients remain responsible for normal app state, local SQLite persistence, and user-facing sync recovery. The cloud server must not become a separate product-state authority with divergent merge behavior.
 
@@ -35,6 +36,7 @@ Clients remain responsible for normal app state, local SQLite persistence, and u
 
 - The server stays simple to deploy and reason about.
 - Sync behavior remains consistent between local, WebDAV/file, and cloud paths because the same core merge rules are used.
-- Concurrent writes need per-namespace serialization to avoid file-level lost updates.
+- Concurrent writes need per-namespace serialization to avoid file-level lost updates. Process locks use a bounded set of SQLite lock shards so attacker-controlled tokens cannot create unbounded lock files; the operating system releases each transaction when a worker exits. Timestamp-based stale-lock deletion is not safe.
+- Dynamic namespace quota checks and reservation of a valid empty sync document form one short critical section across processes. Existing namespaces do not take that global admission lock, and request bodies are read only after admission is released.
 - Operators must handle TLS, token secrecy, reverse proxy configuration, backups, and host hardening.
 - If Mindwtr later needs hosted multi-user collaboration, that should be a separate ADR because it would require a different trust, authorization, and storage model.

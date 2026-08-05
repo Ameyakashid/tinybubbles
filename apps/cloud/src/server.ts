@@ -88,7 +88,7 @@ import {
     writeCloudData,
 } from './server-data-cache';
 import { createRateLimiter } from './server-rate-limit';
-import { ensureNamespaceWriteAllowed, normalizeRequestPathname, withNamespace, type ServerConfig } from './server-request';
+import { normalizeRequestPathname, withNamespace, type ServerConfig } from './server-request';
 import {
     CALENDAR_FEED_PATH_PREFIX,
     calendarFeedResponse,
@@ -101,6 +101,15 @@ import {
 } from './server-calendar-feed';
 
 const ANY_TOKEN_NAMESPACE_LIMIT_DEFAULT = 32;
+const NAMESPACE_ADMISSION_LOCK_KEY = '__namespace_admission__';
+const createEmptyCloudData = (): AppData => ({
+    tasks: [],
+    projects: [],
+    sections: [],
+    areas: [],
+    people: [],
+    settings: {},
+});
 
 const generateRequestId = (): string => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -898,12 +907,26 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         rateLimiter,
         maxPerWindow,
         unauthorizedResponse,
+        initializeNamespace: (filePath) => {
+            if (!existsSync(filePath)) writeCloudData(filePath, createEmptyCloudData());
+        },
+        runWithNamespaceAdmission: (handler, signal) => (
+            withWriteLock(NAMESPACE_ADMISSION_LOCK_KEY, handler, signal)
+        ),
     };
-    // /v1/data only ever guarded PUT explicitly; GET guards itself inline only when
-    // creating an empty doc, and HEAD/other methods were never guarded (an unmatched
-    // method like POST falls through this route entirely to a 404, not the cap).
-    // Restricting the auto-guard to PUT here keeps that exactly as it was.
-    const dataServerConfig: ServerConfig = { ...baseServerConfig, guardMethods: (method) => method === 'PUT' };
+    // GET creates the initial empty document when the token has no namespace, so
+    // it needs the same atomic admission section as PUT. Existing namespaces skip
+    // the global admission lock in withNamespace.
+    const dataServerConfig: ServerConfig = {
+        ...baseServerConfig,
+        guardMethods: (method) => method === 'PUT' || method === 'GET',
+    };
+    const calendarFeedServerConfig: ServerConfig = {
+        ...baseServerConfig,
+        // Feed rotation is valid only after a real sync document exists. It
+        // checks quota under admission but must not reserve an empty namespace.
+        initializeNamespace: () => undefined,
+    };
     const attachmentServerConfig: ServerConfig = { ...baseServerConfig, maxPerWindow: maxAttachmentPerWindow };
     // /v1/attachments/orphans previously checked "is this POST or DELETE" *before*
     // ever consulting the namespace guard, so an unsupported method (e.g. PATCH)
@@ -913,6 +936,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const orphansServerConfig: ServerConfig = {
         ...attachmentServerConfig,
         guardMethods: (method) => method === 'POST' || method === 'DELETE',
+        initializeNamespace: () => undefined,
     };
     // /v1/attachments/:path only ever guarded PUT (the only method that can create a
     // new file). DELETE was never guarded pre-refactor; kept that way here rather
@@ -975,6 +999,12 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         async fetch(req: Request) {
             const requestId = generateRequestId();
             const requestAbortController = new AbortController();
+            const withRequestWriteLock = Object.assign(
+                <T>(key: string, handler: () => Promise<T>) => (
+                    withWriteLock(key, handler, requestAbortController.signal)
+                ),
+                { getPendingLockCount: withWriteLock.getPendingLockCount },
+            );
             const requestTimeout = setTimeout(() => {
                 requestAbortController.abort(createRequestAbortError('Request timed out', 408));
             }, requestTimeoutMs);
@@ -1008,7 +1038,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             const action = actionMatch[2];
                             const status: TaskStatus = action === 'archive' ? 'archived' : 'done';
 
-                            return await withWriteLock(ctx.key, async () => {
+                            return await withRequestWriteLock(ctx.key, async () => {
                                 throwIfRequestAborted(requestAbortController.signal);
                                 const data = loadAppData(ctx.filePath);
                                 const idx = data.tasks.findIndex((t) => t.id === taskId && !t.deletedAt);
@@ -1042,7 +1072,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                                 filePath: ctx.filePath,
                                 maxBodyBytes,
                                 signal: requestAbortController.signal,
-                                withWriteLock,
+                                withWriteLock: withRequestWriteLock,
                             });
                             if (entityRouteResponse) return entityRouteResponse;
                         }
@@ -1091,7 +1121,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         }
 
                         return errorResponse('Method not allowed', 405);
-                    });
+                    }, requestAbortController.signal);
                     if (groupResponse) return groupResponse;
                 }
 
@@ -1101,7 +1131,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     const filePath = ctx.filePath;
 
                     if (req.method === 'HEAD') {
-                        return await withWriteLock(key, async () => {
+                        return await withRequestWriteLock(key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
                             if (!existsSync(filePath)) return emptyCorsResponse(404);
                             return dataMetadataResponse(filePath);
@@ -1109,12 +1139,10 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     }
 
                     if (req.method === 'GET') {
-                        return await withWriteLock(key, async () => {
+                        return await withRequestWriteLock(key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
                             if (!existsSync(filePath)) {
-                                const namespaceResponse = ensureNamespaceWriteAllowed(baseServerConfig, key);
-                                if (namespaceResponse) return namespaceResponse;
-                                const emptyData: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
+                                const emptyData = createEmptyCloudData();
                                 throwIfRequestAborted(requestAbortController.signal);
                                 if (!existsSync(filePath)) writeCloudData(filePath, emptyData);
                                 return jsonResponse(emptyData);
@@ -1142,8 +1170,9 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     }
 
                     if (req.method === 'PUT') {
-                        // Namespace write cap already enforced by withNamespace's
-                        // guardMethods override (dataServerConfig) before this runs.
+                        // Namespace admission has already reserved a valid empty
+                        // document, so body streaming and validation never hold the
+                        // global admission lock.
                         const body = await readJsonBody(req, maxBodyBytes, requestAbortController.signal);
                         if (isBodyReadError(body)) {
                             const err = body.__mindwtrError;
@@ -1153,7 +1182,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         if (typeof body !== 'object') return errorResponse('Invalid JSON body');
                         const validated = validateAppData(body);
                         if (!validated.ok) return errorResponse(validated.error, 400);
-                        return await withWriteLock(key, async () => {
+                        return await withRequestWriteLock(key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
                             const existingDataResult = loadExistingDataForMerge(filePath, key);
                             if ('error' in existingDataResult) return existingDataResult.error;
@@ -1210,12 +1239,12 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     // Unmatched method (only HEAD/GET/PUT are handled): fall through to
                     // later routes exactly as before, instead of a route-specific 405.
                     return null;
-                    });
+                    }, requestAbortController.signal);
                     if (dataResponse) return dataResponse;
                 }
 
                 if (pathname === '/v1/calendar/feed') {
-                    const feedResponse = await withNamespace(req, url, baseServerConfig, async (ctx) => {
+                    const feedResponse = await withNamespace(req, url, calendarFeedServerConfig, async (ctx) => {
                         if (req.method === 'GET') {
                             return jsonResponse({ feed: describeCalendarFeed(readCalendarFeed(dataDir, ctx.key)) });
                         }
@@ -1224,7 +1253,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             // nothing, and letting one be created would let unknown tokens
                             // plant sidecar files past the namespace cap.
                             if (!existsSync(ctx.filePath)) return errorResponse('No synced data to publish', 404);
-                            return await withWriteLock(ctx.key, async () => {
+                            return await withRequestWriteLock(ctx.key, async () => {
                                 throwIfRequestAborted(requestAbortController.signal);
                                 return jsonResponse(
                                     { feed: describeCalendarFeed(rotateCalendarFeed(dataDir, ctx.key)) },
@@ -1233,14 +1262,14 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             });
                         }
                         if (req.method === 'DELETE') {
-                            return await withWriteLock(ctx.key, async () => {
+                            return await withRequestWriteLock(ctx.key, async () => {
                                 throwIfRequestAborted(requestAbortController.signal);
                                 revokeCalendarFeed(dataDir, ctx.key);
                                 return jsonResponse({ feed: null });
                             });
                         }
                         return errorResponse('Method not allowed', 405);
-                    });
+                    }, requestAbortController.signal);
                     if (feedResponse) return feedResponse;
                 }
 
@@ -1281,11 +1310,11 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             return errorResponse('Method not allowed', 405);
                         }
 
-                        return await withWriteLock(ctx.key, async () => {
+                        return await withRequestWriteLock(ctx.key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
                             return handleOrphanAttachmentGcRequest(dataDir, ctx.key, ctx.filePath);
                         });
-                    });
+                    }, requestAbortController.signal);
                     if (orphansResponse) return orphansResponse;
                 }
 
@@ -1301,7 +1330,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             maxAttachmentBytes,
                             abortSignal: requestAbortController.signal,
                         });
-                    });
+                    }, requestAbortController.signal);
                     if (attachmentPathResponse) return attachmentPathResponse;
                 }
 

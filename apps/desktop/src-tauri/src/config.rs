@@ -1495,6 +1495,13 @@ pub(crate) fn get_webdav_config(app: tauri::AppHandle) -> Result<Value, String> 
     }))
 }
 
+fn validate_webdav_config_url(url: &str, allow_insecure_http: bool) -> Result<(), String> {
+    if url.trim().is_empty() {
+        return Ok(());
+    }
+    crate::sync::assert_webdav_url_allowed(url, allow_insecure_http)
+}
+
 #[tauri::command]
 pub(crate) fn set_webdav_config(
     app: tauri::AppHandle,
@@ -1506,6 +1513,8 @@ pub(crate) fn set_webdav_config(
     replace_password: Option<bool>,
 ) -> Result<bool, String> {
     let url = url.trim().to_string();
+    let allow_insecure_http = allow_insecure_http.unwrap_or(false);
+    validate_webdav_config_url(&url, allow_insecure_http)?;
     let config_path = get_config_path(&app);
     let mut config = read_config(&app);
 
@@ -1519,7 +1528,7 @@ pub(crate) fn set_webdav_config(
     } else {
         config.webdav_url = Some(url);
         config.webdav_username = Some(username.trim().to_string());
-        config.webdav_allow_insecure_http = Some(if allow_insecure_http.unwrap_or(false) {
+        config.webdav_allow_insecure_http = Some(if allow_insecure_http {
             "true".to_string()
         } else {
             "false".to_string()
@@ -1757,6 +1766,14 @@ mod tests {
         assert!(!is_valid_calendar_url("file://agenda.ics"));
         assert!(!is_valid_calendar_url("file:///tmp/agenda.txt"));
         assert!(!is_valid_calendar_url("file:///tmp/bad%ZZ.ics"));
+    }
+
+    #[test]
+    fn webdav_config_save_requires_https_for_public_urls_without_override() {
+        assert!(validate_webdav_config_url("https://dav.example.com/mindwtr", false).is_ok());
+        assert!(validate_webdav_config_url("http://nas.local:8080/mindwtr", false).is_ok());
+        assert!(validate_webdav_config_url("http://dav.example.com/mindwtr", false).is_err());
+        assert!(validate_webdav_config_url("http://dav.example.com/mindwtr", true).is_ok());
     }
 
     #[test]

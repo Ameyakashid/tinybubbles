@@ -110,8 +110,6 @@ export const AUTH_FAILURE_RATE_MAX = Number.isFinite(authFailureRateMaxValue) &&
     ? Math.floor(authFailureRateMaxValue)
     : 30;
 export const ATTACHMENT_PATH_ALLOWLIST = /^[a-zA-Z0-9._/-]+$/;
-export const CLOUD_DATA_LOCK_TTL_MS = 30_000;
-export const CLOUD_DATA_LOCK_REFRESH_MS = 2_000;
 export const CLOUD_DATA_LOCK_WAIT_TIMEOUT_MS = 60_000;
 // Generated from TASK_SYNC_FIELD_SCHEMA's cloudWrite flag (task-sync-schema.ts): a field
 // with cloudWrite 'create-patch' is writable both at task creation and via patch; 'patch'

@@ -40,6 +40,9 @@ jobs:
             exit 1
           fi
 
+      - name: Audit repository-locked EAS CLI
+        run: npm audit --prefix tools/eas-cli --audit-level=low
+
   cargo-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -53,10 +56,34 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
+      - name: Assert locked rkyv is unreachable
+        run: |
+          set -euo pipefail
+          tree_output="$RUNNER_TEMP/rkyv-feature-tree.txt"
+          if ! cargo tree --locked \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --target all \
+            --edges all \
+            --invert rkyv \
+            > "$tree_output"; then
+            echo "Failed to determine whether rkyv is active." >&2
+            exit 1
+          fi
+          if [ -s "$tree_output" ]; then
+            echo "rkyv entered the active desktop feature graph; remove the audit ignore and update the dependency chain." >&2
+            cat "$tree_output" >&2
+            exit 1
+          fi
+
       - name: Audit Rust dependencies
         run: |
           set -euo pipefail
           # Temporary ignores:
+          # - RUSTSEC-2026-0235: Cargo.lock contains rkyv 0.7 through the
+          #   optional rust_decimal metadata recorded under byte-unit. The
+          #   preceding all-target feature-tree assertion proves no active
+          #   normal/build/dev edge enables rkyv; fail that assertion instead
+          #   of carrying this ignore if the feature graph changes.
           # - RUSTSEC-2026-0097: rand advisory only reachable through upstream
           #   Tauri/wry transitive dependencies.
           # - RUSTSEC-2026-0194 / RUSTSEC-2026-0195: quick-xml DoS advisories.
@@ -67,6 +94,7 @@ jobs:
           #   nom 5 under the imap crate (email capture). No compatible fix on
           #   nom 5; drop once imap releases a stable on nom >=7.
           if ! cargo audit --deny warnings \
+            --ignore RUSTSEC-2026-0235 \
             --ignore RUSTSEC-2026-0097 \
             --ignore RUSTSEC-2026-0194 \
             --ignore RUSTSEC-2026-0195 \

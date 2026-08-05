@@ -8,8 +8,11 @@ import {
     sortTasksBy,
 } from './task-utils';
 import { flushPendingSave, resetForTests, setStorageAdapter, useTaskStore } from './store';
-import { buildEntityMap } from './store-helpers';
+import { buildEntityMap, computeTaskDerivedState } from './store-helpers';
+import { computeSyncChangeFingerprint } from './sync-helpers';
 import type {
+    AppData,
+    Area,
     Project,
     Section,
     Task,
@@ -21,28 +24,24 @@ import type {
 
 type LargeStoreSize = 1_000 | 10_000 | 50_000;
 
-type ProjectTaskSummary = {
-    activeTaskCount: number;
-    nextAction?: Task;
-};
-
 type LargeStoreFixture = {
+    areas: Area[];
+    data: AppData;
     projectCount: number;
     projects: Project[];
     sections: Section[];
     selectedProjectId: string;
     targetTaskId: string;
-    taskIndexById: Map<string, number>;
     tasks: Task[];
     tasksById: Map<string, Task>;
 };
 
 type BudgetedOperationId =
     | 'projectDetailLookupAndSort'
-    | 'projectSummaryAggregation'
+    | 'taskDerivedState'
     | 'focusDerivation'
     | 'searchFilterSort'
-    | 'oneTaskNormalizedUpdate';
+    | 'syncChangeFingerprint';
 
 type BudgetedOperation = {
     id: BudgetedOperationId;
@@ -68,26 +67,35 @@ const GROWTH_BASELINE_FLOOR_MS = 5;
 const LARGE_STORE_PERFORMANCE_BUDGETS_MS: Record<LargeStoreSize, Record<BudgetedOperationId, number>> = {
     1_000: {
         projectDetailLookupAndSort: 25,
-        projectSummaryAggregation: 20,
+        taskDerivedState: 50,
         focusDerivation: 40,
         searchFilterSort: 30,
-        oneTaskNormalizedUpdate: 20,
+        syncChangeFingerprint: 20,
     },
     10_000: {
         projectDetailLookupAndSort: 90,
-        projectSummaryAggregation: 70,
+        taskDerivedState: 250,
         focusDerivation: 500,
         searchFilterSort: 130,
-        oneTaskNormalizedUpdate: 80,
+        syncChangeFingerprint: 80,
     },
     50_000: {
         projectDetailLookupAndSort: 450,
-        projectSummaryAggregation: 300,
+        taskDerivedState: 1_200,
         focusDerivation: 2_500,
         searchFilterSort: 650,
-        oneTaskNormalizedUpdate: 350,
+        syncChangeFingerprint: 350,
     },
 };
+
+const STORE_MUTATION_BUDGETS_MS: Record<LargeStoreSize, number> = {
+    1_000: 100,
+    10_000: 250,
+    50_000: 1_000,
+};
+
+const STORE_MUTATION_MAX_GROWTH_FROM_10K_TO_50K = 12;
+const STORE_MUTATION_ATTEMPTS = 3;
 
 function createProject(index: number, selectedProjectId: string): Project {
     const id = index === 0 ? selectedProjectId : `project-${index}`;
@@ -180,52 +188,50 @@ function createLargeStoreFixture(taskCount: LargeStoreSize): LargeStoreFixture {
         });
     }
 
-    const taskIndexById = new Map<string, number>();
+    const areas: Area[] = Array.from({ length: 5 }, (_, index) => ({
+        id: `area-${index}`,
+        name: `Area ${index}`,
+        order: index,
+        createdAt: BASE_ISO,
+        updatedAt: BASE_ISO,
+        rev: 1,
+        revBy: 'perf-suite',
+    }));
     const tasksById = new Map<string, Task>();
-    tasks.forEach((task, index) => {
-        taskIndexById.set(task.id, index);
+    tasks.forEach((task) => {
         tasksById.set(task.id, task);
     });
+    const data: AppData = {
+        tasks,
+        projects,
+        sections,
+        areas,
+        people: [],
+        settings: {
+            deviceId: 'perf-suite',
+            migrations: {
+                version: 9999,
+                lastAutoArchiveAt: NOW.toISOString(),
+                lastTombstoneCleanupAt: NOW.toISOString(),
+            },
+            gtd: {
+                taskEditor: { defaultsVersion: 9999 },
+                focusGroupByDefaultsVersion: 1,
+            },
+        },
+    };
 
     return {
+        areas,
+        data,
         projectCount,
         projects,
         sections,
         selectedProjectId,
         targetTaskId: tasks[Math.floor(taskCount * 0.73)].id,
-        taskIndexById,
         tasks,
         tasksById,
     };
-}
-
-function buildProjectTaskSummaryById(tasks: readonly Task[]): Map<string, ProjectTaskSummary> {
-    const summaries = new Map<string, ProjectTaskSummary>();
-
-    tasks.forEach((task) => {
-        if (
-            !task.projectId ||
-            task.deletedAt ||
-            task.status === 'done' ||
-            task.status === 'reference' ||
-            task.status === 'archived'
-        ) {
-            return;
-        }
-
-        const existing = summaries.get(task.projectId);
-        if (existing) {
-            existing.activeTaskCount += 1;
-            if (!existing.nextAction && task.status === 'next') existing.nextAction = task;
-        } else {
-            summaries.set(task.projectId, {
-                activeTaskCount: 1,
-                nextAction: task.status === 'next' ? task : undefined,
-            });
-        }
-    });
-
-    return summaries;
 }
 
 function measureBest(operation: () => number, attempts = 3): { durationMs: number; value: number } {
@@ -264,10 +270,13 @@ const operations: BudgetedOperation[] = [
         },
     },
     {
-        id: 'projectSummaryAggregation',
-        label: 'Project summary aggregation',
-        maxGrowthFrom10kTo50k: 10,
-        run: (fixture) => buildProjectTaskSummaryById(fixture.tasks).size,
+        id: 'taskDerivedState',
+        label: 'Production task-derived state',
+        maxGrowthFrom10kTo50k: 8,
+        run: (fixture) => {
+            const derived = computeTaskDerivedState(fixture.tasks, fixture.tasksById);
+            return derived.tasksById.size + derived.projectTaskSummaryById.size;
+        },
     },
     {
         id: 'focusDerivation',
@@ -297,26 +306,10 @@ const operations: BudgetedOperation[] = [
         },
     },
     {
-        id: 'oneTaskNormalizedUpdate',
-        label: 'One-task normalized update',
-        maxGrowthFrom10kTo50k: 10,
-        run: (fixture) => {
-            const targetIndex = fixture.taskIndexById.get(fixture.targetTaskId);
-            if (targetIndex === undefined) throw new Error(`Missing target task ${fixture.targetTaskId}`);
-
-            const oldTask = fixture.tasks[targetIndex];
-            const updatedTask = {
-                ...oldTask,
-                title: `${oldTask.title} updated`,
-                updatedAt: '2026-06-06T12:30:00.000Z',
-            };
-            const nextTasks = fixture.tasks.slice();
-            nextTasks[targetIndex] = updatedTask;
-            const nextTasksById = new Map(fixture.tasksById);
-            nextTasksById.set(updatedTask.id, updatedTask);
-
-            return nextTasks[targetIndex] === nextTasksById.get(updatedTask.id) ? 1 : 0;
-        },
+        id: 'syncChangeFingerprint',
+        label: 'Production sync-change fingerprint',
+        maxGrowthFrom10kTo50k: 8,
+        run: (fixture) => computeSyncChangeFingerprint(fixture.data).length,
     },
 ];
 
@@ -381,41 +374,32 @@ describePerf('large-store performance budgets', () => {
                 `${operation.label} grew ${growth.toFixed(2)}x from 10k to 50k tasks; max allowed is ${operation.maxGrowthFrom10kTo50k}x`,
             ).toBeLessThanOrEqual(operation.maxGrowthFrom10kTo50k);
         });
+    }, 30_000);
+
+    it('keeps sync-change fingerprints deterministic and sensitive at every budgeted size', () => {
+        DATASET_SIZES.forEach((size) => {
+            const fixture = createLargeStoreFixture(size);
+            const first = computeSyncChangeFingerprint(fixture.data);
+            const second = computeSyncChangeFingerprint(fixture.data);
+            const targetIndex = fixture.tasks.findIndex((task) => task.id === fixture.targetTaskId);
+            if (targetIndex < 0) throw new Error(`Missing target task ${fixture.targetTaskId}`);
+            const changedTasks = fixture.tasks.slice();
+            changedTasks[targetIndex] = {
+                ...changedTasks[targetIndex],
+                rev: (changedTasks[targetIndex].rev ?? 0) + 1,
+                updatedAt: '2026-06-06T12:30:00.000Z',
+            };
+
+            expect(second, `${size.toLocaleString()}-task aligned data should remain a no-op`).toBe(first);
+            expect(computeSyncChangeFingerprint({ ...fixture.data, tasks: changedTasks })).not.toBe(first);
+        });
     });
 
     it('keeps an unchanged 50k-task preloaded refresh subscriber-free and within budget', async () => {
         const fixture = createLargeStoreFixture(50_000);
-        const areas = Array.from({ length: 5 }, (_, index) => ({
-            id: `area-${index}`,
-            name: `Area ${index}`,
-            order: index,
-            createdAt: BASE_ISO,
-            updatedAt: BASE_ISO,
-            rev: 1,
-            revBy: 'perf-suite',
-        }));
-        const settings = {
-            deviceId: 'perf-suite',
-            migrations: {
-                version: 9999,
-                lastAutoArchiveAt: NOW.toISOString(),
-                lastTombstoneCleanupAt: NOW.toISOString(),
-            },
-            gtd: {
-                taskEditor: { defaultsVersion: 9999 },
-                focusGroupByDefaultsVersion: 1,
-            },
-        };
         resetForTests();
         setStorageAdapter({
-            getData: async () => ({
-                tasks: fixture.tasks,
-                projects: fixture.projects,
-                sections: fixture.sections,
-                areas,
-                people: [],
-                settings,
-            }),
+            getData: async () => fixture.data,
             saveData: async () => undefined,
         });
         useTaskStore.setState({
@@ -474,55 +458,86 @@ describePerf('large-store performance budgets', () => {
         }
     });
 
-    it('persists one task through the incremental path on a 50k-task store', async () => {
-        const fixture = createLargeStoreFixture(50_000);
-        let saveDataCalls = 0;
-        let savedTask: Task | null = null;
-        setStorageAdapter({
-            getData: async () => ({ tasks: [], projects: [], sections: [], areas: [], settings: {} }),
-            saveData: async () => {
-                saveDataCalls += 1;
-            },
-            saveTask: async (task) => {
-                savedTask = task;
-            },
-        });
-        useTaskStore.setState({
-            tasks: fixture.tasks,
-            projects: fixture.projects,
-            sections: fixture.sections,
-            areas: [],
-            settings: {},
-            isLoading: false,
-            error: null,
-            _allTasks: fixture.tasks,
-            _allProjects: fixture.projects,
-            _allSections: fixture.sections,
-            _allAreas: [],
-            _tasksById: buildEntityMap(fixture.tasks),
-            _projectsById: buildEntityMap(fixture.projects),
-            _sectionsById: buildEntityMap(fixture.sections),
-            _areasById: new Map(),
-        });
+    it('persists one task through the production incremental path within absolute and growth budgets', async () => {
+        const measurements = new Map<LargeStoreSize, number>();
 
-        try {
-            const startedAt = performance.now();
-            const result = await useTaskStore.getState().updateTask(fixture.targetTaskId, {
-                title: 'Incrementally persisted task',
-            });
-            const durationMs = performance.now() - startedAt;
-            await Promise.resolve();
+        for (const size of DATASET_SIZES) {
+            const fixture = createLargeStoreFixture(size);
+            let bestDurationMs = Number.POSITIVE_INFINITY;
 
-            expect(result).toEqual({ success: true });
-            expect(savedTask).toMatchObject({
-                id: fixture.targetTaskId,
-                title: 'Incrementally persisted task',
-            });
-            expect(saveDataCalls).toBe(0);
-            expectWithinBudget('One-task incremental persisted update', 50_000, durationMs, 1_000);
-        } finally {
-            await flushPendingSave();
-            resetForTests();
+            for (let attempt = 0; attempt < STORE_MUTATION_ATTEMPTS; attempt += 1) {
+                let saveDataCalls = 0;
+                let savedTask: Task | null = null;
+                resetForTests();
+                setStorageAdapter({
+                    getData: async () => fixture.data,
+                    saveData: async () => {
+                        saveDataCalls += 1;
+                    },
+                    saveTask: async (task) => {
+                        savedTask = task;
+                    },
+                });
+                useTaskStore.setState({
+                    tasks: fixture.tasks,
+                    projects: fixture.projects,
+                    sections: fixture.sections,
+                    areas: fixture.areas,
+                    people: [],
+                    settings: fixture.data.settings,
+                    isLoading: false,
+                    error: null,
+                    _allTasks: fixture.tasks,
+                    _allProjects: fixture.projects,
+                    _allSections: fixture.sections,
+                    _allAreas: fixture.areas,
+                    _allPeople: [],
+                    _tasksById: buildEntityMap(fixture.tasks),
+                    _projectsById: buildEntityMap(fixture.projects),
+                    _sectionsById: buildEntityMap(fixture.sections),
+                    _areasById: buildEntityMap(fixture.areas),
+                    _peopleById: new Map(),
+                });
+
+                try {
+                    const startedAt = performance.now();
+                    const result = await useTaskStore.getState().updateTask(fixture.targetTaskId, {
+                        title: `Incrementally persisted task at ${size}`,
+                    });
+                    const durationMs = performance.now() - startedAt;
+                    await flushPendingSave();
+
+                    expect(result).toEqual({ success: true });
+                    expect(savedTask).toMatchObject({
+                        id: fixture.targetTaskId,
+                        title: `Incrementally persisted task at ${size}`,
+                    });
+                    expect(saveDataCalls).toBe(0);
+                    bestDurationMs = Math.min(bestDurationMs, durationMs);
+                } finally {
+                    await flushPendingSave();
+                    resetForTests();
+                }
+            }
+
+            expectWithinBudget(
+                'Production one-task store mutation',
+                size,
+                bestDurationMs,
+                STORE_MUTATION_BUDGETS_MS[size],
+            );
+            measurements.set(size, bestDurationMs);
         }
+
+        const tenKDuration = measurements.get(10_000);
+        const fiftyKDuration = measurements.get(50_000);
+        if (tenKDuration === undefined || fiftyKDuration === undefined) {
+            throw new Error('Missing production store mutation measurements');
+        }
+        const growth = fiftyKDuration / Math.max(tenKDuration, GROWTH_BASELINE_FLOOR_MS);
+        expect(
+            growth,
+            `Production store mutation grew ${growth.toFixed(2)}x from 10k to 50k tasks; max allowed is ${STORE_MUTATION_MAX_GROWTH_FROM_10K_TO_50K}x`,
+        ).toBeLessThanOrEqual(STORE_MUTATION_MAX_GROWTH_FROM_10K_TO_50K);
     });
 });

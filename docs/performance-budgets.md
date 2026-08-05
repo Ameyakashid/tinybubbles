@@ -24,10 +24,12 @@ Budgets are intentionally explicit and conservative. They should only change in 
 | Operation | 1k tasks | 10k tasks | 50k tasks | Growth Guard |
 | --- | ---: | ---: | ---: | ---: |
 | Project detail lookup and sort | 25ms | 90ms | 450ms | 50k <= 12x 10k |
-| Project summary aggregation | 20ms | 70ms | 300ms | 50k <= 10x 10k |
+| Production task-derived state | 50ms | 250ms | 1200ms | 50k <= 8x 10k |
 | Focus derivation | 40ms | 500ms | 2500ms | 50k <= 12x 10k |
 | Search/filter/sort derivation | 30ms | 130ms | 650ms | 50k <= 12x 10k |
-| One-task normalized update | 20ms | 80ms | 350ms | 50k <= 10x 10k |
+| Production sync-change fingerprint | 20ms | 80ms | 350ms | 50k <= 8x 10k |
+
+The suite also runs the real Zustand `updateTask` mutation and incremental persistence path at every dataset size. Its absolute budgets are 100ms at 1k, 250ms at 10k, and 1000ms at 50k, with a maximum 12x growth from 10k to 50k. Like the pure hot-path rows, this path uses the best of three measured runs to reduce runner and garbage-collection noise. Fingerprint cases assert both deterministic no-op behavior for aligned data and sensitivity to a synced revision change.
 
 The absolute budgets catch obvious regressions. The growth guard catches bad scaling, especially O(n^2) patterns that may still pass on small datasets. Growth comparisons use a 5ms denominator floor so very fast 10k measurements do not fail only because of runner timing noise.
 
@@ -43,6 +45,4 @@ Add or update a budget when a PR touches a hot path:
 - task mutation or persistence
 - large list rendering
 
-Prefer core tests for pure derivation and platform tests for render or native-thread behavior. Release-mode profiling belongs in issue #649; this suite is the CI regression radar.
-
-Related roadmap issues: #645, #646, #647, #648, #649.
+Prefer core tests for pure derivation and platform tests for render or native-thread behavior. This suite is the CI regression radar; use release-mode device profiling to diagnose regressions that cross native or render-thread boundaries.

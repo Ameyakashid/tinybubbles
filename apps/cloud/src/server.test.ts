@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { spawn, type ChildProcess } from 'child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { tmpdir } from 'os';
+import { fileURLToPath } from 'url';
 import { CLOUD_SYNC_TOKEN_PATTERN, cloudHeadJson, cloudPutJson, TASK_SORT_BY_VALUES, type AppData, type Task } from '@mindwtr/core';
 import {
     getAuthFailureRateKey,
@@ -38,6 +40,7 @@ import {
     writeCloudData,
 } from './server-data-cache';
 import {
+    createRequestAbortError,
     createWriteLockRunner,
     isBodyReadError,
     isPathWithinRoot,
@@ -57,6 +60,35 @@ import { resolveServerMergeTimestamp, startCloudServer } from './server';
 const expireFileForOrphanGc = (path: string): void => {
     const staleTime = new Date(Date.now() - 10 * 60 * 1000);
     utimesSync(path, staleTime, staleTime);
+};
+
+const testDirectory = dirname(fileURLToPath(import.meta.url));
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const waitForChildExit = async (
+    child: ChildProcess,
+    timeoutMs: number,
+): Promise<{ timedOut: boolean; code: number | null }> => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+        return { timedOut: false, code: child.exitCode };
+    }
+    return new Promise((resolve) => {
+        const onExit = (code: number | null) => {
+            clearTimeout(timeout);
+            resolve({ timedOut: false, code });
+        };
+        const timeout = setTimeout(() => {
+            child.off('exit', onExit);
+            resolve({ timedOut: true, code: null });
+        }, timeoutMs);
+        child.once('exit', onExit);
+    });
+};
+const collectChildStderr = (child: ChildProcess): (() => string) => {
+    let stderr = '';
+    child.stderr?.on('data', (chunk) => {
+        stderr += String(chunk);
+    });
+    return () => stderr.trim();
 };
 
 const makeTestTask = (overrides: Pick<Task, 'id' | 'title'> & Partial<Task>): Task => ({
@@ -798,6 +830,175 @@ describe('cloud server utils', () => {
         expect(withWriteLock.getPendingLockCount()).toBe(0);
     });
 
+    test('bounds cross-process lock files independently of attacker-controlled keys', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-shards-'));
+        try {
+            const withWriteLock = createWriteLockRunner(dir);
+            for (let index = 0; index < 96; index += 1) {
+                await withWriteLock(`untrusted-token-key-${index}`, async () => undefined);
+            }
+
+            const lockDir = join(dir, '.locks');
+            const lockFiles = existsSync(lockDir)
+                ? readdirSync(lockDir).filter((name) => name.endsWith('.sqlite'))
+                : [];
+            expect(lockFiles.length).toBeGreaterThan(0);
+            expect(lockFiles.length).toBeLessThanOrEqual(64);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('cancels a queued in-process lock wait when its request is aborted', async () => {
+        const withWriteLock = createWriteLockRunner();
+        let releaseHolder!: () => void;
+        const holderGate = new Promise<void>((resolve) => {
+            releaseHolder = resolve;
+        });
+        const holder = withWriteLock('key', async () => holderGate);
+        const abortController = new AbortController();
+        const abortableWithWriteLock = withWriteLock as unknown as <T>(
+            key: string,
+            handler: () => Promise<T>,
+            signal?: AbortSignal,
+        ) => Promise<T>;
+        const waiter = abortableWithWriteLock('key', async () => 'unexpected', abortController.signal);
+
+        abortController.abort(createRequestAbortError('Request timed out', 408));
+        const outcome = await Promise.race([
+            waiter.then(
+                () => ({ kind: 'resolved' as const }),
+                (error: unknown) => ({ kind: 'rejected' as const, error }),
+            ),
+            delay(200).then(() => ({ kind: 'timed-out' as const })),
+        ]);
+
+        releaseHolder();
+        await holder;
+        await waiter.catch(() => undefined);
+        for (let attempt = 0; attempt < 20 && withWriteLock.getPendingLockCount() > 0; attempt += 1) {
+            await delay(1);
+        }
+        expect(outcome.kind).toBe('rejected');
+        if (outcome.kind === 'rejected') {
+            expect((outcome.error as { status?: number }).status).toBe(408);
+        }
+        expect(withWriteLock.getPendingLockCount()).toBe(0);
+    });
+
+    test('cancels a cross-process lock poll when its request is aborted', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-abort-'));
+        const holderLock = createWriteLockRunner(dir);
+        const waiterLock = createWriteLockRunner(dir);
+        let releaseHolder!: () => void;
+        let markHolderReady!: () => void;
+        const holderGate = new Promise<void>((resolve) => {
+            releaseHolder = resolve;
+        });
+        const holderReady = new Promise<void>((resolve) => {
+            markHolderReady = resolve;
+        });
+        const holder = holderLock('same-key', async () => {
+            markHolderReady();
+            return holderGate;
+        });
+        try {
+            await holderReady;
+            const abortController = new AbortController();
+            const waiter = waiterLock('same-key', async () => 'unexpected', abortController.signal);
+            await delay(25);
+            abortController.abort(createRequestAbortError('Request timed out', 408));
+
+            const outcome = await Promise.race([
+                waiter.then(
+                    () => ({ kind: 'resolved' as const }),
+                    (error: unknown) => ({ kind: 'rejected' as const, error }),
+                ),
+                delay(200).then(() => ({ kind: 'timed-out' as const })),
+            ]);
+            expect(outcome.kind).toBe('rejected');
+            if (outcome.kind === 'rejected') {
+                expect((outcome.error as { status?: number }).status).toBe(408);
+            }
+        } finally {
+            releaseHolder();
+            await holder;
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('releases the cross-process write lock immediately when its owner crashes', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-crash-'));
+        const workerPath = join(testDirectory, 'test-fixtures', 'cloud-lock-worker.ts');
+        const holderReadyPath = join(dir, 'holder-ready');
+        const contenderReadyPath = join(dir, 'contender-ready');
+        const holder = spawn(process.execPath, [workerPath, 'hold', dir, holderReadyPath], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        const holderStderr = collectChildStderr(holder);
+        let contender: ChildProcess | null = null;
+        try {
+            for (let attempt = 0; attempt < 1_000 && !existsSync(holderReadyPath); attempt += 1) {
+                await delay(10);
+            }
+            if (!existsSync(holderReadyPath)) {
+                throw new Error(`Lock holder did not become ready: ${holderStderr()}`);
+            }
+            expect(existsSync(holderReadyPath)).toBe(true);
+            holder.kill('SIGKILL');
+            const holderExit = await waitForChildExit(holder, 5_000);
+            if (holderExit.timedOut) {
+                throw new Error(`Lock holder did not exit after SIGKILL: ${holderStderr()}`);
+            }
+            expect(holderExit.timedOut).toBe(false);
+
+            contender = spawn(process.execPath, [workerPath, 'acquire', dir, contenderReadyPath], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            const contenderStderr = collectChildStderr(contender);
+            const exit = await waitForChildExit(contender, 5_000);
+            if (exit.timedOut || exit.code !== 0 || !existsSync(contenderReadyPath)) {
+                throw new Error(`Lock contender failed: ${JSON.stringify(exit)} ${contenderStderr()}`);
+            }
+            expect(exit).toEqual({ timedOut: false, code: 0 });
+            expect(existsSync(contenderReadyPath)).toBe(true);
+        } finally {
+            holder.kill('SIGKILL');
+            contender?.kill('SIGKILL');
+            if (contender) await waitForChildExit(contender, 1_000);
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('serializes a real two-process read-modify-write stress run', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-stress-'));
+        const workerPath = join(testDirectory, 'test-fixtures', 'cloud-lock-worker.ts');
+        const firstDonePath = join(dir, 'first-done');
+        const secondDonePath = join(dir, 'second-done');
+        const counterPath = join(dir, 'cross-process-counter.txt');
+        const workers = [
+            spawn(process.execPath, [workerPath, 'increment', dir, firstDonePath, '30'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+            spawn(process.execPath, [workerPath, 'increment', dir, secondDonePath, '30'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+        ];
+        try {
+            const exits = await Promise.all(workers.map((worker) => waitForChildExit(worker, 10_000)));
+            expect(exits).toEqual([
+                { timedOut: false, code: 0 },
+                { timedOut: false, code: 0 },
+            ]);
+            expect(existsSync(firstDonePath)).toBe(true);
+            expect(existsSync(secondDonePath)).toBe(true);
+            expect(Number(readFileSync(counterPath, 'utf8'))).toBe(60);
+        } finally {
+            for (const worker of workers) worker.kill('SIGKILL');
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
     test('writeData atomically replaces the JSON file and cleans up temp files', () => {
         const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-write-data-'));
         const filePath = join(dir, 'data.json');
@@ -1067,6 +1268,156 @@ describe('cloud server utils', () => {
 });
 
 describe('cloud server namespace mode', () => {
+    test('keeps arbitrary HEAD probes from allocating unbounded lock files or namespaces', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-head-lock-growth-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: tempDataDir,
+            allowedAuthTokens: null,
+            maxAnyTokenNamespaces: 1,
+            maxPerWindow: 200,
+        });
+        try {
+            const url = `http://127.0.0.1:${server.port}`;
+            for (let index = 0; index < 80; index += 1) {
+                const response = await fetch(`${url}/v1/data`, {
+                    method: 'HEAD',
+                    headers: { Authorization: `Bearer head-probe-token-${index}-1234567890` },
+                });
+                expect(response.status).toBe(404);
+            }
+
+            expect(readdirSync(tempDataDir).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))).toHaveLength(0);
+            const lockFiles = readdirSync(join(tempDataDir, '.locks'))
+                .filter((name) => name.endsWith('.sqlite'));
+            expect(lockFiles.length).toBeLessThanOrEqual(64);
+        } finally {
+            server.stop();
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('admits only one concurrent first writer when a single any-token namespace remains', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-race-'));
+        const server = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: tempDataDir,
+            allowedAuthTokens: null,
+            maxAnyTokenNamespaces: 1,
+        });
+        const url = `http://127.0.0.1:${server.port}`;
+        let releaseBodies!: () => void;
+        const bodyGate = new Promise<void>((resolve) => {
+            releaseBodies = resolve;
+        });
+        const payload = JSON.stringify({ tasks: [], projects: [], sections: [], areas: [], settings: {} });
+        const createGatedBody = () => new ReadableStream<Uint8Array>({
+            start(controller) {
+                const splitAt = Math.floor(payload.length / 2);
+                controller.enqueue(new TextEncoder().encode(payload.slice(0, splitAt)));
+                void bodyGate.then(() => {
+                    controller.enqueue(new TextEncoder().encode(payload.slice(splitAt)));
+                    controller.close();
+                });
+            },
+        });
+
+        try {
+            const write = (token: string) => fetch(`${url}/v1/data`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'content-type': 'application/json',
+                },
+                body: createGatedBody(),
+                duplex: 'half',
+            });
+            const first = write('namespace-race-token-one-1234567890');
+            for (let attempt = 0; attempt < 100; attempt += 1) {
+                const namespaceCount = readdirSync(tempDataDir)
+                    .filter((name) => /^[a-f0-9]{64}\.json$/.test(name)).length;
+                if (namespaceCount === 1) break;
+                await delay(10);
+            }
+            expect(readdirSync(tempDataDir).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))).toHaveLength(1);
+
+            const secondStatus = await Promise.race([
+                write('namespace-race-token-two-1234567890').then((response) => response.status),
+                delay(500).then(() => 'timed-out' as const),
+            ]);
+            expect(secondStatus).toBe(403);
+            releaseBodies();
+
+            expect((await first).status).toBe(200);
+            expect(readdirSync(tempDataDir).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))).toHaveLength(1);
+        } finally {
+            releaseBodies();
+            server.stop();
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('enforces namespace admission across two cloud server processes', async () => {
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-process-race-'));
+        const workerPath = join(testDirectory, 'test-fixtures', 'cloud-server-worker.ts');
+        const readyPaths = [join(tempDataDir, 'server-one-ready'), join(tempDataDir, 'server-two-ready')];
+        const workers = readyPaths.map((readyPath) => spawn(
+            process.execPath,
+            [workerPath, tempDataDir, readyPath],
+            { stdio: ['ignore', 'pipe', 'pipe'] },
+        ));
+        const workerStderr = workers.map(collectChildStderr);
+        let releaseBodies!: () => void;
+        const bodyGate = new Promise<void>((resolve) => {
+            releaseBodies = resolve;
+        });
+        const payload = JSON.stringify({ tasks: [], projects: [], sections: [], areas: [], settings: {} });
+        const createGatedBody = () => new ReadableStream<Uint8Array>({
+            start(controller) {
+                const splitAt = Math.floor(payload.length / 2);
+                controller.enqueue(new TextEncoder().encode(payload.slice(0, splitAt)));
+                void bodyGate.then(() => {
+                    controller.enqueue(new TextEncoder().encode(payload.slice(splitAt)));
+                    controller.close();
+                });
+            },
+        });
+
+        try {
+            for (let attempt = 0; attempt < 1_000 && readyPaths.some((path) => !existsSync(path)); attempt += 1) {
+                await delay(10);
+            }
+            if (!readyPaths.every((path) => existsSync(path))) {
+                const stderr = workerStderr.map((readStderr) => readStderr()).filter(Boolean).join('\n');
+                throw new Error(`Cloud server workers did not become ready: ${stderr}`);
+            }
+            expect(readyPaths.every((path) => existsSync(path))).toBe(true);
+            const ports = readyPaths.map((path) => Number(readFileSync(path, 'utf8')));
+            const requests = ports.map((port, index) => fetch(`http://127.0.0.1:${port}/v1/data`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer namespace-process-token-${index}-1234567890`,
+                    'content-type': 'application/json',
+                },
+                body: createGatedBody(),
+                duplex: 'half',
+            }));
+            await delay(50);
+            releaseBodies();
+
+            const responses = await Promise.all(requests);
+            expect(responses.map((response) => response.status).sort()).toEqual([200, 403]);
+            expect(readdirSync(tempDataDir).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))).toHaveLength(1);
+        } finally {
+            releaseBodies();
+            for (const worker of workers) worker.kill('SIGKILL');
+            await Promise.all(workers.map((worker) => waitForChildExit(worker, 5_000)));
+            rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
     test('caps new namespace creation when any-token mode is enabled', async () => {
         const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-test-'));
         const firstToken = 'namespace-token-one-1234567890';
@@ -1181,11 +1532,11 @@ describe('cloud server namespace mode', () => {
         }
     });
 
-    // Integration-level regression for the same bug: before the fix, a single GET
-    // (or DELETE) from a stranger token who had never written data would silently
+    // Integration-level regression for the same bug: before the fix, a read or
+    // cleanup request from a stranger token who had never written data would silently
     // consume the any-token namespace cap by planting an attachments directory as a
     // side effect of path resolution, starving a legitimate first writer.
-    test('GET/DELETE on an attachment path never consumes the any-token namespace cap', async () => {
+    test('attachment reads and cleanup never consume the any-token namespace cap', async () => {
         const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-cap-bypass-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
@@ -1200,6 +1551,8 @@ describe('cloud server namespace mode', () => {
             const strangerHeaders = { Authorization: `Bearer ${strangerToken}` };
             await fetch(`${url}/v1/attachments/probe.bin`, { headers: strangerHeaders });
             await fetch(`${url}/v1/attachments/probe.bin`, { method: 'DELETE', headers: strangerHeaders });
+            await fetch(`${url}/v1/attachments/orphans`, { method: 'POST', headers: strangerHeaders });
+            await fetch(`${url}/v1/attachments/orphans`, { method: 'DELETE', headers: strangerHeaders });
 
             // Neither read consumed the (single) namespace slot, so a different
             // token's first real write must still succeed.
