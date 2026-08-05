@@ -2,7 +2,7 @@
 
 <img src="apps/mobile/assets/images/icon.png" width="120" alt="Mindwtr Logo">
 
-# Mindwtr™
+# Mindwtr
 
 中文 | [English](./README.md)
 
