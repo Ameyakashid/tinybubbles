@@ -25,7 +25,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { shallow, useTaskStore, safeFormatDate, tFallback } from '@mindwtr/core';
+import { shallow, useTaskStore, safeFormatDate, tFallback, isAllowedInsecureUrl } from '@mindwtr/core';
 import type { StoreActionResult, TaskStatus } from '@mindwtr/core';
 import { registerUndoableAction } from '../lib/undo-registry';
 import { formatTaskMovedMessage } from './views/list/task-list-scope';
@@ -591,10 +591,18 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     }, []);
 
     const refreshCleartextSyncWarning = useCallback(async () => {
+        // Loopback HTTP never leaves the machine, so the cleartext banner would
+        // nag about a setup the app itself auto-allows (base-options
+        // isAllowedInsecureUrl admits exactly https and loopback http). LAN HTTP
+        // keeps the banner: that traffic really does cross a network.
+        const isCleartextNetworkUrl = (rawUrl: string): boolean => {
+            const url = rawUrl.trim().toLowerCase();
+            return url.startsWith('http://') && !isAllowedInsecureUrl(url);
+        };
         try {
             const configuration = await SyncService.getPersistedSyncConfigurationSnapshot();
             if (configuration.backend === 'webdav') {
-                if (configuration.webdav.url.trim().toLowerCase().startsWith('http://')) {
+                if (isCleartextNetworkUrl(configuration.webdav.url)) {
                     setCleartextSyncWarning(tFallback(t,
                         'settings.cleartextSyncWarningWebdav',
                         'WebDAV sync is using HTTP. Data is unencrypted; use it only on a trusted network.'
@@ -605,7 +613,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 configuration.backend === 'cloud'
                 && configuration.cloudProvider === 'selfhosted'
             ) {
-                if (configuration.cloud.url.trim().toLowerCase().startsWith('http://')) {
+                if (isCleartextNetworkUrl(configuration.cloud.url)) {
                     setCleartextSyncWarning(tFallback(t,
                         'settings.cleartextSyncWarningCloud',
                         'Self-hosted sync is using HTTP. Data is unencrypted; use it only on a trusted network.'

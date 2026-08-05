@@ -546,6 +546,44 @@ describe('Layout sync security warning', () => {
         }
     });
 
+    // Loopback HTTP never leaves the machine and is auto-allowed without the
+    // insecure toggle, so a permanent banner for it is pure noise (discussion #1001).
+    it('shows no cleartext banner for loopback HTTP WebDAV sync', async () => {
+        const configurationSpy = vi.spyOn(
+            SyncService,
+            'getPersistedSyncConfigurationSnapshot',
+        ).mockResolvedValue({
+            backend: 'webdav',
+            syncPath: '',
+            webdav: {
+                url: 'http://127.0.0.1:9328/Mindwtr',
+                username: '',
+                password: null,
+                passwordAuthority: 'opaque',
+                hasPassword: false,
+                allowInsecureHttp: false,
+                allowWeakFingerprint: false,
+            },
+            cloudProvider: 'selfhosted',
+            cloud: {
+                url: '',
+                token: null,
+                tokenAuthority: 'opaque',
+                allowInsecureHttp: false,
+                rememberToken: false,
+            },
+        });
+
+        try {
+            const { queryByText } = renderLayout();
+
+            await waitFor(() => expect(configurationSpy).toHaveBeenCalledTimes(1));
+            expect(queryByText(/WebDAV sync is using HTTP/)).not.toBeInTheDocument();
+        } finally {
+            configurationSpy.mockRestore();
+        }
+    });
+
     it('ignores stale cleartext WebDAV settings while file sync is active', async () => {
         const configurationSpy = vi.spyOn(
             SyncService,
