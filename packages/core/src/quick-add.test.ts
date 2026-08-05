@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { getTaskDateCoherenceIssues } from './task-date-coherence';
+import { configureDateFormatting } from './date';
 import { getQuickAddProjectInitialProps, parseProjectNextActionInput, parseQuickAdd, parseQuickAddDateCommands, splitQuickAddBulkLines } from './quick-add';
 
 describe('quick-add', () => {
@@ -333,6 +334,42 @@ describe('quick-add', () => {
     // detection only. Matrix: {toggle on, toggle off} x {preserveText on,
     // off} x {bare NL phrase, explicit /due:NL-value, @context + #tag, plain
     // title}.
+    // Ambiguous slash dates follow the active date-format setting: `/due:10/8`
+    // is August 10 under d/m/y, October 8 under m/d/y (#1006).
+    describe('slash dates follow the date format setting (#1006)', () => {
+        afterEach(() => {
+            configureDateFormatting({});
+        });
+
+        it('parses day-first under the dmy setting', () => {
+            configureDateFormatting({ dateFormat: 'dmy' });
+            const now = new Date('2026-08-04T10:00:00');
+            const result = parseQuickAdd('Pay rent /due:10/8', undefined, now);
+            expect(result.props.dueDate).toContain('2026-08-10');
+        });
+
+        it('parses month-first under the mdy setting', () => {
+            configureDateFormatting({ dateFormat: 'mdy' });
+            const now = new Date('2026-08-04T10:00:00');
+            const result = parseQuickAdd('Pay rent /due:10/8', undefined, now);
+            expect(result.props.dueDate).toContain('2026-10-08');
+        });
+
+        it('applies day-first to trailing title dates too', () => {
+            configureDateFormatting({ dateFormat: 'dmy' });
+            const now = new Date('2026-08-04T10:00:00');
+            const result = parseQuickAdd('Pay rent 10/8', undefined, now);
+            expect(result.detectedDate?.date ?? result.props.dueDate).toContain('2026-08-10');
+        });
+
+        it('keeps unambiguous dot dates day-first in both modes', () => {
+            configureDateFormatting({ dateFormat: 'mdy' });
+            const now = new Date('2026-08-04T10:00:00');
+            const result = parseQuickAdd('Pay rent /due:10.08.', undefined, now);
+            expect(result.props.dueDate).toContain('2026-08-10');
+        });
+    });
+
     describe('naturalLanguageDates toggle', () => {
         const now = new Date('2026-07-16T10:00:00Z');
 

@@ -4,7 +4,7 @@ import type { Area, Attachment, Project, Task, TaskEnergyLevel, TaskStatus } fro
 import { generateUUID } from './uuid';
 import { normalizeTaskStatus } from './task-status';
 import { normalizeLinkAttachmentInput } from './attachment-link-utils';
-import { normalizeClockTimeInput } from './date';
+import { isActiveDateFormatDayFirst, normalizeClockTimeInput } from './date';
 
 export interface QuickAddDetectedDate {
     date: string;
@@ -183,8 +183,7 @@ type DateDefaultTimeMode = 'now' | 'startOfDay';
 // like "python 3.12" from parsing as dates; a bare "26.06" stays literal text.
 // (No lookbehind — the boundary check runs in extract() — because older
 // WKWebView builds lack lookbehind support.)
-const quickAddChrono = chrono.casual.clone();
-quickAddChrono.parsers.push({
+const dotDateParser: chrono.Parser = {
     pattern: () => /(\d{1,2})\.(\d{1,2})\.(\d{4})?(?=[\s,;:!?)\]]|$)/,
     extract: (context, match) => {
         const index = match.index ?? 0;
@@ -197,7 +196,20 @@ quickAddChrono.parsers.push({
         if (match[3]) components.year = Number.parseInt(match[3], 10);
         return components;
     },
-});
+};
+
+const quickAddChrono = chrono.casual.clone();
+quickAddChrono.parsers.push(dotDateParser);
+
+// chrono.en.GB is the casual configuration in little-endian mode, so ambiguous
+// slash dates ("10/8") read day-first. Selected per parse from the active date
+// format so `/due:10/8` means August 10 under a d/m/y setting (#1006).
+const quickAddChronoDayFirst = chrono.en.GB.clone();
+quickAddChronoDayFirst.parsers.push(dotDateParser);
+
+const getQuickAddChrono = (): chrono.Chrono => (
+    isActiveDateFormatDayFirst() ? quickAddChronoDayFirst : quickAddChrono
+);
 
 type DateCommandParseOptions = {
     defaultScheduleTime?: string | null;
@@ -263,7 +275,7 @@ function parseNaturalDate(raw: string, now: Date, defaultTimeMode: DateDefaultTi
     const text = raw.trim();
     if (!text) return { date: buildDefaultDate(now, defaultTimeMode), hasExplicitTime: defaultTimeMode === 'now' };
 
-    const results = quickAddChrono.parse(text, { instant: now }, { forwardDate: true });
+    const results = getQuickAddChrono().parse(text, { instant: now }, { forwardDate: true });
     const result = results[0];
     if (!result) return null;
 
@@ -281,7 +293,7 @@ function detectTrailingDate(title: string, now: Date): QuickAddDetectedDate | un
     const trimmed = title.trim();
     if (!trimmed) return undefined;
 
-    const results = quickAddChrono.parse(trimmed, { instant: now }, { forwardDate: true });
+    const results = getQuickAddChrono().parse(trimmed, { instant: now }, { forwardDate: true });
     for (let index = results.length - 1; index >= 0; index -= 1) {
         const result = results[index];
         const matchedText = result.text.trim();

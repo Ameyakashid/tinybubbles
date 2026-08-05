@@ -8,6 +8,7 @@ import {
     normalizeDateFormatSetting,
     normalizeTimeFormatSetting,
     normalizeWeekStartPreference,
+    normalizeWeekStartSetting,
     resolveCalendarSystemSetting,
     tFallback,
     useTaskStore,
@@ -80,15 +81,26 @@ export function GeneralSettingsScreen() {
                     : t('nav.contexts'),
     }));
     const currentQuickAccessLabel = quickAccessOptions.find((opt) => opt.value === quickAccessView)?.label ?? t('tab.review');
+    // Both "System default" labels show what they resolve to: the runtime locale
+    // decides, which on a customized OS can differ from the OS setting (#1006).
+    const systemWeekStart = normalizeWeekStartSetting('system');
+    const systemWeekStartLabel = systemWeekStart === 'monday'
+        ? t('settings.weekStartMonday')
+        : systemWeekStart === 'saturday'
+            ? t('settings.weekStartSaturday')
+            : t('settings.weekStartSunday');
     const weekStartOptions: { value: 'system' | 'sunday' | 'monday' | 'saturday'; label: string }[] = [
-        { value: 'system', label: tFallback(t, 'settings.weekStartSystem', 'System default') },
+        { value: 'system', label: `${tFallback(t, 'settings.weekStartSystem', 'System default')} (${systemWeekStartLabel})` },
         { value: 'sunday', label: t('settings.weekStartSunday') },
         { value: 'monday', label: t('settings.weekStartMonday') },
         { value: 'saturday', label: t('settings.weekStartSaturday') },
     ];
     const currentWeekStartLabel = weekStartOptions.find((opt) => opt.value === weekStart)?.label ?? tFallback(t, 'settings.weekStartSystem', 'System default');
+    // Show what "System default" actually resolves to — the runtime locale's
+    // short date, which on a customized OS can differ from the OS format (#1006).
+    const systemDateSample = new Date().toLocaleDateString();
     const dateFormatOptions: { value: 'system' | 'dmy' | 'mdy' | 'ymd'; label: string }[] = [
-        { value: 'system', label: t('settings.dateFormatSystem') },
+        { value: 'system', label: `${t('settings.dateFormatSystem')} (${systemDateSample})` },
         { value: 'dmy', label: t('settings.dateFormatDmy') },
         { value: 'mdy', label: t('settings.dateFormatMdy') },
         { value: 'ymd', label: t('settings.dateFormatYmd') },

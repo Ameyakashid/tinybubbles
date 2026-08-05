@@ -4,6 +4,7 @@ import {
     GLOBAL_QUICK_ADD_SHORTCUT_DISABLED,
     getGlobalQuickAddShortcutOptions,
 } from '../../../lib/global-quick-add-shortcut';
+import { normalizeWeekStartSetting } from '@mindwtr/core';
 import { Switch } from '../../ui/Switch';
 import { SettingRow, SettingsCard, SettingsSectionHeader } from './SettingRow';
 
@@ -287,7 +288,10 @@ export function SettingsMainPage({
                         onChange={(e) => onWeekStartChange(e.target.value as WeekStart)}
                         className={selectCls}
                     >
-                        <option value="system">{t.weekStartSystem}</option>
+                        {/* Both "System default" labels show what they resolve to:
+                            the runtime locale decides, which on a customized OS can
+                            differ from the OS setting (#1006). */}
+                        <option value="system">{`${t.weekStartSystem} (${normalizeWeekStartSetting('system') === 'monday' ? t.weekStartMonday : normalizeWeekStartSetting('system') === 'saturday' ? t.weekStartSaturday : t.weekStartSunday})`}</option>
                         <option value="sunday">{t.weekStartSunday}</option>
                         <option value="monday">{t.weekStartMonday}</option>
                         <option value="saturday">{t.weekStartSaturday}</option>
@@ -312,7 +316,10 @@ export function SettingsMainPage({
                         onChange={(e) => onDateFormatChange(e.target.value as DateFormatSetting)}
                         className={selectCls}
                     >
-                        <option value="system">{t.dateFormatSystem}</option>
+                        {/* Show what "System default" resolves to — the runtime
+                            locale's short date, which on a customized OS can
+                            differ from the OS format (#1006). */}
+                        <option value="system">{`${t.dateFormatSystem} (${new Date().toLocaleDateString()})`}</option>
                         <option value="dmy">{t.dateFormatDmy}</option>
                         <option value="mdy">{t.dateFormatMdy}</option>
                         <option value="ymd">{t.dateFormatYmd}</option>

@@ -411,6 +411,24 @@ export function configureDateFormatting(params: {
 }
 
 /**
+ * Whether ambiguous slash dates ("10/8") read day-first under the active date
+ * format. Explicit dmy says yes; mdy and ymd say no; System derives it from
+ * the resolved locale's short-date order (#1006).
+ */
+export function isActiveDateFormatDayFirst(): boolean {
+    if (activeDateFormatSetting === 'dmy') return true;
+    if (activeDateFormatSetting === 'mdy' || activeDateFormatSetting === 'ymd') return false;
+    try {
+        const sample = format(new Date(2001, 10, 22), 'P', { locale: activeLocale });
+        const dayIndex = sample.indexOf('22');
+        const monthIndex = sample.indexOf('11');
+        return dayIndex !== -1 && monthIndex !== -1 && dayIndex < monthIndex;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Safely formats a date string, handling undefined, null, or invalid dates.
  * 
  * @param dateStr - The date string to format (e.g. ISO string) or Date object
