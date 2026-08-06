@@ -202,6 +202,10 @@ jobs:
     if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
     needs: validate
     uses: ./.github/workflows/release-windows.yml
+    permissions:
+      contents: read
+      # SignPath signing reads the unsigned-binaries artifact (#965).
+      actions: read
     with:
       tag: ${{ needs.validate.outputs.tag }}
       run_msstore: false
