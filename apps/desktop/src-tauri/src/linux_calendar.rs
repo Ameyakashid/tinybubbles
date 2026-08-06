@@ -280,6 +280,20 @@ mod imp {
         slist_free: SListFree,
     }
 
+    /// GLib/GObject stacks must never be dlclosed: EDS registers static GTypes
+    /// and e_source_registry_new_sync spawns D-Bus worker threads that outlive
+    /// any handle we hold. Loading per call dropped the Library (dlclose) while
+    /// those threads still ran code in libecal (random SIGSEGV), and the next
+    /// dlopen re-registered GTypes that libgobject still knew at the old
+    /// address, so the registry failed on later calls (#990).
+    fn eds_api() -> Result<&'static EdsApi, String> {
+        static EDS_API: std::sync::OnceLock<Result<EdsApi, String>> = std::sync::OnceLock::new();
+        EDS_API
+            .get_or_init(EdsApi::load)
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
     impl EdsApi {
         fn load() -> Result<Self, String> {
             // Load ONLY libecal and resolve every symbol (including libedataserver,
@@ -570,10 +584,10 @@ mod imp {
     }
 
     pub(super) fn permission_status() -> String {
-        let Ok(api) = EdsApi::load() else {
+        let Ok(api) = eds_api() else {
             return "unsupported".to_string();
         };
-        if Session::new(&api).is_ok() {
+        if Session::new(api).is_ok() {
             "granted".to_string()
         } else {
             "unsupported".to_string()
@@ -581,8 +595,8 @@ mod imp {
     }
 
     pub(super) fn get_writable_calendars() -> Result<Vec<MacOsCalendarPushTarget>, String> {
-        let api = EdsApi::load()?;
-        let session = Session::new(&api)?;
+        let api = eds_api()?;
+        let session = Session::new(api)?;
         let sources = session.list_sources();
         let targets = sources
             .iter()
@@ -594,8 +608,8 @@ mod imp {
     pub(super) fn ensure_mindwtr_calendar(
         stored_calendar_id: Option<&str>,
     ) -> Result<Option<MacOsCalendarPushTarget>, String> {
-        let api = EdsApi::load()?;
-        let session = Session::new(&api)?;
+        let api = eds_api()?;
+        let session = Session::new(api)?;
 
         if let Some(stored_id) = stored_calendar_id
             .map(str::trim)
@@ -686,7 +700,7 @@ mod imp {
         range_start: &str,
         range_end: &str,
     ) -> Result<LinuxCalendarReadResult, String> {
-        let api = match EdsApi::load() {
+        let api = match eds_api() {
             Ok(api) => api,
             Err(_) => {
                 return Ok(LinuxCalendarReadResult {
@@ -696,7 +710,7 @@ mod imp {
                 })
             }
         };
-        let session = match Session::new(&api) {
+        let session = match Session::new(api) {
             Ok(session) => session,
             Err(_) => {
                 return Ok(LinuxCalendarReadResult {
@@ -817,8 +831,8 @@ mod imp {
     fn with_session<T>(
         operation: impl FnOnce(&Session<'_>) -> Result<T, String>,
     ) -> Result<T, String> {
-        let api = EdsApi::load()?;
-        let session = Session::new(&api)?;
+        let api = eds_api()?;
+        let session = Session::new(api)?;
         operation(&session)
     }
 
