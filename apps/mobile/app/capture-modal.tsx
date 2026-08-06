@@ -43,6 +43,7 @@ import { useLanguage } from '../contexts/language-context';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
 import { addHardwareBackPressListener } from '@/lib/hardware-back';
+import { ThemedAlertHost } from '@/components/themed-alert';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 
 type CaptureSearchParams = {
@@ -735,6 +736,9 @@ export default function CaptureScreen() {
           </View>
         </View>
       ) : null}
+      {/* This route is presented modally, so a root-level alert never reaches
+          the screen on iOS (#940). */}
+      <ThemedAlertHost />
     </KeyboardAvoidingView>
   );
 }

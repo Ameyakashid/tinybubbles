@@ -44,6 +44,7 @@ import { ExpandedMarkdownEditor } from '../../components/expanded-markdown-edito
 import { MarkdownFormatToolbar } from '../../components/markdown-format-toolbar';
 import { MarkdownReferenceAutocomplete } from '../../components/markdown-reference-autocomplete';
 import { MarkdownText } from '../../components/markdown-text';
+import { ThemedAlertHost } from '../../components/themed-alert';
 import { TaskList } from '../../components/task-list';
 import { TaskListBulkBar, type TaskListBulkBarProps } from '../task-list/TaskListBulkBar';
 import { TaskListSortModal } from '../task-list/TaskListSortModal';
@@ -365,6 +366,8 @@ function ProjectSectionManagerModal({
                     )}
                 </View>
             </View>
+            {/* Its own delete/reorder confirms fire while this sheet is up (#940). */}
+            <ThemedAlertHost />
         </Modal>
     );
 }
@@ -1672,6 +1675,8 @@ export function ProjectDetailModal({
                     </SafeAreaView>
                 </KeyboardAccessoryHost>
                 <ToastViewport />
+                {/* Last child so the alert covers the header and the toasts (#940). */}
+                <ThemedAlertHost />
             </GestureHandlerRootView>
         </Modal>
     );

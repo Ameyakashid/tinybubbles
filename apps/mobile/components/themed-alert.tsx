@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useLanguage } from '@/contexts/language-context';
@@ -63,6 +63,82 @@ export function setThemedAlertPresenter(presenter: ThemedAlertPresenter | null) 
   activePresenter = presenter;
 }
 
+function ThemedAlertOverlay({
+  embedded = false,
+  request,
+  onButtonPress,
+  onDismiss,
+}: {
+  embedded?: boolean;
+  request: ThemedAlertRequest;
+  onButtonPress: (button: ThemedAlertButton) => void;
+  onDismiss: () => void;
+}) {
+  const tc = useThemeColors();
+  const { t } = useLanguage();
+  const canDismiss = getOptionsConfig(request.options).cancelable !== false;
+  const horizontalActions = request.buttons.length <= 2;
+  const defaultButtonText = t('common.ok');
+
+  const handleDismiss = () => {
+    if (!canDismiss) return;
+    onDismiss();
+  };
+
+  return (
+    <Pressable
+      style={embedded ? [styles.overlay, styles.embeddedOverlay] : styles.overlay}
+      onPress={handleDismiss}
+      accessibilityRole="button"
+      accessibilityLabel={request.title}
+      accessibilityViewIsModal={embedded || undefined}
+    >
+      <Pressable
+        style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border }]}
+        onPress={() => {}}
+      >
+        <Text style={[styles.title, { color: tc.text }]}>{request.title}</Text>
+        {request.message ? (
+          <ScrollView style={styles.messageContainer} contentContainerStyle={styles.messageContent}>
+            <Text style={[styles.message, { color: tc.secondaryText }]}>{request.message}</Text>
+          </ScrollView>
+        ) : null}
+        <View style={[styles.actions, horizontalActions ? styles.actionsHorizontal : styles.actionsVertical]}>
+          {request.buttons.map((button, index) => {
+            const isDestructive = button.style === 'destructive';
+            const isCancel = button.style === 'cancel';
+            const isPrimary = !isCancel && !isDestructive && index === request.buttons.length - 1;
+            const backgroundColor = isDestructive
+              ? tc.danger
+              : isPrimary
+                ? tc.tint
+                : tc.filterBg;
+            const color = isDestructive || isPrimary ? tc.onTint : tc.text;
+
+            return (
+              <TouchableOpacity
+                key={`${button.text ?? defaultButtonText}-${index}`}
+                style={[
+                  styles.actionButton,
+                  horizontalActions && styles.actionButtonHorizontal,
+                  {
+                    backgroundColor,
+                    borderColor: isDestructive || isPrimary ? backgroundColor : tc.border,
+                  },
+                ]}
+                accessibilityRole="button"
+                onPress={() => onButtonPress(button)}
+              >
+                <Text style={[styles.actionText, { color }]}>{button.text ?? defaultButtonText}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Pressable>
+    </Pressable>
+  );
+}
+
 function ThemedAlertModal({
   request,
   onButtonPress,
@@ -72,17 +148,7 @@ function ThemedAlertModal({
   onButtonPress: (button: ThemedAlertButton) => void;
   onDismiss: () => void;
 }) {
-  const tc = useThemeColors();
-  const { t } = useLanguage();
-  const options = getOptionsConfig(request.options);
-  const canDismiss = options.cancelable !== false;
-  const horizontalActions = request.buttons.length <= 2;
-  const defaultButtonText = t('common.ok');
-
-  const handleDismiss = () => {
-    if (!canDismiss) return;
-    onDismiss();
-  };
+  const canDismiss = getOptionsConfig(request.options).cancelable !== false;
 
   const handleRequestClose = () => {
     if (canDismiss) {
@@ -107,56 +173,47 @@ function ThemedAlertModal({
       accessibilityViewIsModal
       onRequestClose={handleRequestClose}
     >
-      <Pressable
-        style={styles.overlay}
-        onPress={handleDismiss}
-        accessibilityRole="button"
-        accessibilityLabel={request.title}
-      >
-        <Pressable
-          style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border }]}
-          onPress={() => {}}
-        >
-          <Text style={[styles.title, { color: tc.text }]}>{request.title}</Text>
-          {request.message ? (
-            <ScrollView style={styles.messageContainer} contentContainerStyle={styles.messageContent}>
-              <Text style={[styles.message, { color: tc.secondaryText }]}>{request.message}</Text>
-            </ScrollView>
-          ) : null}
-          <View style={[styles.actions, horizontalActions ? styles.actionsHorizontal : styles.actionsVertical]}>
-            {request.buttons.map((button, index) => {
-              const isDestructive = button.style === 'destructive';
-              const isCancel = button.style === 'cancel';
-              const isPrimary = !isCancel && !isDestructive && index === request.buttons.length - 1;
-              const backgroundColor = isDestructive
-                ? tc.danger
-                : isPrimary
-                  ? tc.tint
-                  : tc.filterBg;
-              const color = isDestructive || isPrimary ? tc.onTint : tc.text;
-
-              return (
-                <TouchableOpacity
-                  key={`${button.text ?? defaultButtonText}-${index}`}
-                  style={[
-                    styles.actionButton,
-                    horizontalActions && styles.actionButtonHorizontal,
-                    {
-                      backgroundColor,
-                      borderColor: isDestructive || isPrimary ? backgroundColor : tc.border,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  onPress={() => onButtonPress(button)}
-                >
-                  <Text style={[styles.actionText, { color }]}>{button.text ?? defaultButtonText}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Pressable>
+      <ThemedAlertOverlay request={request} onButtonPress={onButtonPress} onDismiss={onDismiss} />
     </Modal>
+  );
+}
+
+type ThemedAlertHostId = object;
+
+type ThemedAlertHostContextValue = {
+  activeHostId: ThemedAlertHostId | null;
+  onButtonPress: (button: ThemedAlertButton) => void;
+  onDismiss: () => void;
+  registerHost: (hostId: ThemedAlertHostId) => () => void;
+  request: ThemedAlertRequest | null;
+};
+
+const ThemedAlertHostContext = createContext<ThemedAlertHostContextValue | null>(null);
+
+/**
+ * Renders the themed alert inside an already-presented modal. On iOS the
+ * provider's root <Modal> is a second native presentation stacked on the
+ * presented one, so it never reaches the screen — every modal surface that can
+ * raise an alert mounts this as its last child instead (#940/#941, PR #1005).
+ * Renders nothing on Android, and nothing unless it is the topmost host.
+ */
+export function ThemedAlertHost() {
+  const context = useContext(ThemedAlertHostContext);
+  const hostId = useRef<ThemedAlertHostId>({}).current;
+  const registerHost = context?.registerHost;
+
+  useEffect(() => registerHost?.(hostId), [hostId, registerHost]);
+
+  if (!context || !context.request || context.activeHostId !== hostId) return null;
+
+  return (
+    <ThemedAlertOverlay
+      key={context.request.id}
+      embedded
+      request={context.request}
+      onButtonPress={context.onButtonPress}
+      onDismiss={context.onDismiss}
+    />
   );
 }
 
@@ -164,6 +221,7 @@ export function ThemedAlertProvider({ children }: { children: React.ReactNode })
   const [request, setRequest] = useState<ThemedAlertRequest | null>(null);
   const requestRef = useRef<ThemedAlertRequest | null>(null);
   const queueRef = useRef<ThemedAlertRequest[]>([]);
+  const [hostStack, setHostStack] = useState<ThemedAlertHostId[]>([]);
 
   const showNextRequest = useCallback(() => {
     const nextRequest = queueRef.current.shift() ?? null;
@@ -200,10 +258,30 @@ export function ThemedAlertProvider({ children }: { children: React.ReactNode })
     button.onPress?.();
   }, [showNextRequest]);
 
+  const registerHost = useCallback((hostId: ThemedAlertHostId) => {
+    // A host only exists while its modal is mounted (RN <Modal> renders its
+    // children only while visible), so registration order is presentation
+    // order: the last registered host is the topmost surface on screen.
+    setHostStack((prev) => [...prev, hostId]);
+    return () => setHostStack((prev) => prev.filter((id) => id !== hostId));
+  }, []);
+
+  // Android presents sibling modals fine, so it keeps the root <Modal> path
+  // (and its hardware-back handling) whether or not a host is mounted.
+  const activeHostId = Platform.OS === 'ios' ? hostStack[hostStack.length - 1] ?? null : null;
+
+  const hostContext = useMemo<ThemedAlertHostContextValue>(() => ({
+    activeHostId,
+    onButtonPress: handleButtonPress,
+    onDismiss: handleDismiss,
+    registerHost,
+    request,
+  }), [activeHostId, handleButtonPress, handleDismiss, registerHost, request]);
+
   return (
-    <>
+    <ThemedAlertHostContext.Provider value={hostContext}>
       {children}
-      {request ? (
+      {request && !activeHostId ? (
         <ThemedAlertModal
           key={request.id}
           request={request}
@@ -211,7 +289,7 @@ export function ThemedAlertProvider({ children }: { children: React.ReactNode })
           onDismiss={handleDismiss}
         />
       ) : null}
-    </>
+    </ThemedAlertHostContext.Provider>
   );
 }
 
@@ -221,6 +299,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.58)',
     justifyContent: 'center',
     padding: 24,
+  },
+  embeddedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    elevation: 1000,
   },
   card: {
     borderRadius: 18,

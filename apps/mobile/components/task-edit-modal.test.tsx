@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert, Modal, Text } from 'react-native';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import renderer, { act } from 'react-test-renderer';
 
@@ -167,6 +167,35 @@ describe('TaskEditModal', () => {
         );
       });
     }).not.toThrow();
+  });
+
+  it('mounts a themed alert host inside its modal', () => {
+    // Alerts raised from the editor (e.g. the layout help button) are invisible
+    // on iOS without a host inside the presented modal (#940).
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <TaskEditModal
+          visible
+          task={{
+            id: 't1',
+            title: 'Test task',
+            status: 'inbox',
+            tags: [],
+            contexts: [],
+            createdAt: '2025-01-01T00:00:00.000Z',
+            updatedAt: '2025-01-01T00:00:00.000Z',
+          }}
+          onClose={vi.fn()}
+          onSave={vi.fn()}
+        />
+      );
+    });
+
+    const hosts = tree.root
+      .findAllByType(Modal)[0]
+      .findAll((node) => (node.type as { name?: string })?.name === 'ThemedAlertHost', { deep: true });
+    expect(hosts).toHaveLength(1);
   });
 
   it('announces the selected tab and hides the inactive pager page from accessibility', async () => {

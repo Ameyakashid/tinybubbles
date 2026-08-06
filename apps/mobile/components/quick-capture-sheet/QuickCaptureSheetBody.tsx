@@ -7,6 +7,7 @@ import { tFallback } from '@mindwtr/core';
 import { ToastViewport } from '@/contexts/toast-context';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText, CompactTextInput } from '@/components/compact-text';
+import { ThemedAlertHost } from '@/components/themed-alert';
 import { QuickDateChips } from '../QuickDateChips';
 import { FocusStarIcon, FOCUS_STAR_COLOR } from '../FocusStarIcon';
 import { styles } from './quick-capture-sheet.styles';
@@ -596,6 +597,9 @@ export function QuickCaptureSheetBody({
           <ToastViewport />
         </KeyboardAvoidingView>
         {children}
+        {/* Audio/permission alerts fire while the sheet is up (#940); last child
+            so the overlay covers the sheet and its own pickers. */}
+        <ThemedAlertHost />
       </View>
     </Modal>
   );

@@ -23,6 +23,7 @@ import { ToastViewport, useToast } from '@/contexts/toast-context';
 import { ExpandedMarkdownEditor } from './expanded-markdown-editor';
 import { KeyboardAccessoryHost } from './keyboard-accessory-host';
 import { MarkdownFormatToolbar } from './markdown-format-toolbar';
+import { ThemedAlertHost } from './themed-alert';
 import { styles } from './task-edit/task-edit-modal.styles';
 import { TaskEditFieldRenderer } from './task-edit/TaskEditFieldRenderer';
 import { useTaskDescriptionEditor } from './task-edit/use-task-description-editor';
@@ -1107,6 +1108,8 @@ function TaskEditModalInner({
                 </SafeAreaView>
             </KeyboardAccessoryHost>
             <ToastViewport />
+            {/* Last child so the alert covers the header and the toasts (#940). */}
+            <ThemedAlertHost />
         </Modal>
         {visible && completedAtPickerVisible ? (
             <CompletedAtPicker

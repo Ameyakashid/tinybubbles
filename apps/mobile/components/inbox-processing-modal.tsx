@@ -5,6 +5,7 @@ import { tFallback } from '@mindwtr/core';
 
 import { AIResponseModal } from './ai-response-modal';
 import { ToastViewport } from '@/contexts/toast-context';
+import { ThemedAlertHost } from '@/components/themed-alert';
 import { styles } from './inbox-processing-modal.styles';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { useInboxProcessingController } from './inbox-processing/useInboxProcessingController';
@@ -546,6 +547,8 @@ export function InboxProcessingModal({ visible, onClose }: InboxProcessingModalP
           </KeyboardAvoidingView>
         </View>
         <ToastViewport />
+        {/* The AI failure alert fires while this modal is up (#940). */}
+        <ThemedAlertHost />
       </Modal>
       {aiModal && (
         <AIResponseModal

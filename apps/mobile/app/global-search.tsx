@@ -38,6 +38,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Search, X, Folder, CheckCircle, ChevronRight, SlidersHorizontal } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TaskEditModal } from '@/components/task-edit-modal';
+import { ThemedAlertHost } from '@/components/themed-alert';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { useFutureStartRevealTick, useLocalDayKey } from '@/hooks/use-local-day-key';
 
@@ -767,6 +768,9 @@ export default function SearchScreen() {
                     router.push(`/check-focus?id=${taskId}`);
                 }}
             />
+            {/* This route is presented modally, so a root-level alert never
+                reaches the screen on iOS (#940). */}
+            <ThemedAlertHost />
         </SafeAreaView>
     );
 }

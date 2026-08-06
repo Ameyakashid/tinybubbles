@@ -11,6 +11,7 @@ import {
 import { X } from 'lucide-react-native';
 
 import { CompactText } from '@/components/compact-text';
+import { ThemedAlertHost } from '@/components/themed-alert';
 import type { TaskFilterSelections } from '@/hooks/use-task-filter-selections';
 
 /**
@@ -390,6 +391,9 @@ export function TaskFilterSheet({
         </View>
       </View>
       )}
+      {/* Confirms raised by the host screen while this sheet is up would
+          otherwise never reach the screen on iOS (#940). */}
+      <ThemedAlertHost />
     </Modal>
   );
 }
