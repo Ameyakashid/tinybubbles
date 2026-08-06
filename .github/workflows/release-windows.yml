@@ -88,13 +88,29 @@ jobs:
 
       - name: Build Tauri app
         timeout-minutes: 30
+        shell: pwsh
         run: |
+          # rust-cache can restore whisper-rs-sys build dirs whose CMake cache
+          # still has AVX2 enabled. Clear them so the GGML_* env below applies.
+          if (Test-Path apps/desktop/src-tauri/target) {
+            Get-ChildItem -Path apps/desktop/src-tauri/target -Recurse -Directory -Filter 'whisper-rs-sys-*' |
+              Where-Object { $_.Parent.Name -eq 'build' } |
+              Remove-Item -Recurse -Force
+          }
           cd apps/desktop
           bunx tauri build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_ANALYTICS_HEARTBEAT_URL: ${{ secrets.ANALYTICS_HEARTBEAT_URL }}
           VITE_ANALYTICS_RELEASE_VERSION: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
+          # Bundled whisper must run on AVX-only CPUs (pre-Haswell, e.g. i7-3770).
+          # ggml's portable default still enables AVX2/FMA, which crashes those
+          # machines with 0xc000001d. whisper-rs-sys forwards GGML_* to CMake. (#1008)
+          GGML_NATIVE: "OFF"
+          GGML_AVX2: "OFF"
+          GGML_FMA: "OFF"
+          GGML_F16C: "OFF"
+          GGML_BMI2: "OFF"
 
       - name: Create portable ZIP
         shell: pwsh

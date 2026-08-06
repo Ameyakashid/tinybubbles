@@ -774,6 +774,14 @@ fn transcribe_whisper_blocking(
     audio_path: String,
     language: Option<String>,
 ) -> Result<String, String> {
+    // Packaged Windows builds compile whisper with an AVX baseline (#1008).
+    // Refuse cleanly on older CPUs instead of dying with an illegal instruction.
+    #[cfg(target_arch = "x86_64")]
+    if cfg!(windows) && !std::arch::is_x86_feature_detected!("avx") {
+        return Err(
+            "Local transcription requires a CPU with AVX support. Please use a cloud transcription provider instead.".into(),
+        );
+    }
     let model_path = validate_managed_whisper_model_path(data_dir, Path::new(&model_path))?;
     let audio_path = validate_managed_audio_path(data_dir, Path::new(&audio_path))?;
 
