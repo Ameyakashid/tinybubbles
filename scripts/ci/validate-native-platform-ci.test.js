@@ -6,9 +6,17 @@ test("native CI generates clean projects and compiles Android and iOS sources", 
 
   expect(workflow).toContain('apps/mobile/modules/**/android/**');
   expect(workflow).toContain('apps/mobile/modules/**/ios/**');
+  // The maintained iOS sources live outside the gitignored generated ios/
+  // project, so the triggers must name them directly or edits skip CI.
+  expect(workflow.match(/- "apps\/mobile\/ios-app-intents\/\*\*"/g)).toHaveLength(2);
+  expect(workflow.match(/- "apps\/mobile\/widgets-ios\/\*\*"/g)).toHaveLength(2);
   expect(workflow.match(/- "scripts\/ci\/setup-ruby\.sh"/g)).toHaveLength(2);
   expect(workflow).toContain("ios: ${{ steps.filter.outputs.ios }}");
-  expect(workflow).toMatch(/apps\/mobile\/ios\/\*\|[^\n]*scripts\/ci\/setup-ruby\.sh\|/);
+  expect(workflow).toMatch(/apps\/mobile\/ios-app-intents\/\*\|apps\/mobile\/widgets-ios\/\*\|[^\n]*scripts\/ci\/setup-ruby\.sh\|/);
+  // The generated projects are gitignored; filters on them never match a
+  // committed diff and only feign coverage.
+  expect(workflow).not.toContain("apps/mobile/ios/**");
+  expect(workflow).not.toContain("apps/mobile/android/**");
 
   expect(workflow).toContain("Generate Android native project");
   expect(workflow).toMatch(/prebuild \\\n\s+--clean \\\n\s+--platform android/);
