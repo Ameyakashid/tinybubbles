@@ -143,8 +143,8 @@ describe('quick-add', () => {
         );
 
         expect(result.title).toBe('Review proposal');
-        expect(result.props.startTime).toBe(new Date(2025, 0, 2, 0, 0, 0, 0).toISOString());
-        expect(result.props.reviewAt).toBe(new Date(2025, 0, 3, 0, 0, 0, 0).toISOString());
+        expect(result.props.startTime).toBe('2025-01-02');
+        expect(result.props.reviewAt).toBe('2025-01-03');
         expect(result.props.dueDate).toBe('2025-01-08');
     });
 
@@ -186,7 +186,7 @@ describe('quick-add', () => {
     it('parses abbreviated weekday commands like /start:mon', () => {
         const now = new Date('2026-02-27T09:40:00Z');
         const result = parseQuickAdd('Task /start:mon', undefined, now);
-        expect(result.props.startTime).toBe(new Date(2026, 2, 2, 0, 0, 0, 0).toISOString());
+        expect(result.props.startTime).toBe('2026-03-02');
         expect(result.invalidDateCommands).toBeUndefined();
     });
 
@@ -195,7 +195,7 @@ describe('quick-add', () => {
         const result = parseQuickAdd('Task /due:tomorrow /start:friday', undefined, now);
 
         expect(result.props.dueDate).toBe('2026-04-21');
-        expect(result.props.startTime).toBe(new Date(2026, 3, 24, 0, 0, 0, 0).toISOString());
+        expect(result.props.startTime).toBe('2026-04-24');
         expect(getTaskDateCoherenceIssues(result.props)).toEqual([{
             code: 'start_after_due',
             field: 'startTime',
@@ -219,9 +219,9 @@ describe('quick-add', () => {
         );
 
         expect(result.title).toBe('Review talk @school #urgent');
-        expect(result.props.startTime).toBe(new Date(2026, 3, 14, 0, 0, 0, 0).toISOString());
+        expect(result.props.startTime).toBe('2026-04-14');
         expect(result.props.dueDate).toBe(new Date(2026, 3, 17, 14, 0, 0, 0).toISOString());
-        expect(result.props.reviewAt).toBe(new Date(2026, 3, 20, 0, 0, 0, 0).toISOString());
+        expect(result.props.reviewAt).toBe('2026-04-20');
     });
 
     it('keeps invalid date commands in the title-only parser output', () => {

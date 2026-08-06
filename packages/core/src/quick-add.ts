@@ -242,7 +242,9 @@ function applyDefaultScheduleTime(
     const clock = parseDefaultScheduleTime(defaultScheduleTime);
     if (!clock) return parsed;
     return {
-        ...parsed,
+        // The applied default is a real clock time; without this the value
+        // below would store date-only and drop the configured time.
+        hasExplicitTime: true,
         date: set(parsed.date, { hours: clock.hours, minutes: clock.minutes, seconds: 0, milliseconds: 0 }),
     };
 }
@@ -522,7 +524,10 @@ function parseDateCommand(
     }
     const nextWorking = stripToken(working, match[0]);
     return {
-        value: command === 'due' ? formatDueDateValue(parsed) : parsed.date.toISOString(),
+        // Timeless values stay date-only for every command — a blank default
+        // schedule time must not stamp midnight on /start: or /review: (#797),
+        // matching the GUI pickers (joinDateTime in date-draft.ts).
+        value: formatDueDateValue(parsed),
         working: nextWorking,
     };
 }
