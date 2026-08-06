@@ -332,5 +332,5 @@ Thanks to these monthly sponsors for supporting Mindwtr.
 ---
 
 <p align="center">
-  <sub>Mindwtr™ and the Mindwtr logo are trademarks of the Mindwtr project. Official website: <a href="https://mindwtr.app">mindwtr.app</a> · Official repository: <a href="https://github.com/dongdongbh/Mindwtr">github.com/dongdongbh/Mindwtr</a></sub>
+  <sub>Mindwtr™ and the Mindwtr logo are trademarks of the Mindwtr project. Official website: <a href="https://mindwtr.app">mindwtr.app</a></sub>
 </p>

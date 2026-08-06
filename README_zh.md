@@ -326,5 +326,5 @@ Mindwtr 的发展离不开用户与贡献者的支持，感谢大家一起把它
 ---
 
 <p align="center">
-  <sub>Mindwtr™ 及 Mindwtr 标识是 Mindwtr 项目的商标。官方网站：<a href="https://mindwtr.app">mindwtr.app</a> · 官方仓库：<a href="https://github.com/dongdongbh/Mindwtr">github.com/dongdongbh/Mindwtr</a></sub>
+  <sub>Mindwtr™ 及 Mindwtr 标识是 Mindwtr 项目的商标。官方网站：<a href="https://mindwtr.app">mindwtr.app</a></sub>
 </p>
