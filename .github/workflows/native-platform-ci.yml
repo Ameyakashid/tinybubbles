@@ -232,6 +232,47 @@ jobs:
       - name: Install pinned CocoaPods
         run: gem install cocoapods --version 1.16.2 --no-document
 
+      - name: Select Xcode (iOS 26 SDK required)
+        run: |
+          set -euo pipefail
+          XCODE_26_PATH="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "${XCODE_26_PATH:-}" ]; then
+            sudo xcode-select -s "$XCODE_26_PATH"
+          else
+            XCODE_FALLBACK_PATH="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+            if [ -n "${XCODE_FALLBACK_PATH:-}" ]; then
+              echo "::warning::No Xcode_26*.app found; falling back to latest available: ${XCODE_FALLBACK_PATH}"
+              sudo xcode-select -s "$XCODE_FALLBACK_PATH"
+            else
+              echo "::warning::No explicit Xcode*.app found; using runner default Xcode."
+            fi
+          fi
+
+          echo "Selected DEVELOPER_DIR: $(xcode-select -p)"
+          xcodebuild -version
+
+          IOS_SDK_VERSION="$(xcodebuild -showsdks | awk '/-sdk iphoneos/{gsub(/iphoneos/, "", $NF); ver=$NF} END{print ver}')"
+          if [ -z "${IOS_SDK_VERSION:-}" ]; then
+            echo "::error::No iPhoneOS SDK found on runner. Current SDKs:"
+            xcodebuild -showsdks
+            exit 1
+          fi
+
+          IOS_SDK_MAJOR="${IOS_SDK_VERSION%%.*}"
+          if ! [[ "${IOS_SDK_MAJOR}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Unable to parse iPhoneOS SDK version: ${IOS_SDK_VERSION}"
+            xcodebuild -showsdks
+            exit 1
+          fi
+
+          if [ "${IOS_SDK_MAJOR}" -lt 26 ]; then
+            echo "::error::Detected iPhoneOS SDK ${IOS_SDK_VERSION}. The App Intents source (IntentModes/supportedModes) needs the iOS 26 SDK, matching the release build."
+            echo "::error::Install/select Xcode 26+ on the runner."
+            exit 1
+          fi
+
+          echo "Using iPhoneOS SDK ${IOS_SDK_VERSION}"
+
       - name: Generate iOS native project
         working-directory: apps/mobile
         env:
