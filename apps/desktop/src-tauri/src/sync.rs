@@ -2651,7 +2651,9 @@ pub(crate) fn clear_sync_path(app: tauri::AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
-#[tauri::command]
+// Off the UI thread: validation creates the folder and round-trips a write test
+// on a path the user just picked, which may be a slow mount.
+#[tauri::command(async)]
 pub(crate) fn set_sync_path(
     app: tauri::AppHandle,
     sync_path: String,
@@ -3488,6 +3490,27 @@ mod tests {
             "Sync lock held by another process"
         );
         release_sync_lock(&first);
+    }
+
+    #[test]
+    fn sync_folder_commands_never_run_on_the_ui_thread() {
+        // A plain `#[tauri::command]` on a blocking fn runs on the main thread,
+        // so a slow sync mount freezes the whole window until the I/O returns.
+        let source = include_str!("sync.rs");
+        for command in ["set_sync_path", "read_sync_file", "write_sync_file"] {
+            let declaration = format!("fn {command}(");
+            let offset = source
+                .find(&declaration)
+                .unwrap_or_else(|| panic!("{command} not found"));
+            let attribute = source[..offset]
+                .rsplit_once("#[tauri::command")
+                .expect("command attribute")
+                .1;
+            assert!(
+                attribute.starts_with("(async)"),
+                "{command} must be #[tauri::command(async)] so sync I/O stays off the UI thread"
+            );
+        }
     }
 
     #[test]
@@ -6946,7 +6969,10 @@ fn empty_remote_app_data() -> serde_json::Value {
     })
 }
 
-#[tauri::command]
+// Runs off the UI thread: the sync folder can be a network or FUSE mount
+// (rclone, WinFSP) where a single read blocks for tens of seconds, and a
+// plain `#[tauri::command]` executes on the main thread and freezes the window.
+#[tauri::command(async)]
 pub(crate) fn read_sync_file(
     app: tauri::AppHandle,
     path: Option<String>,
@@ -7038,7 +7064,9 @@ pub(crate) fn read_sync_file(
     }
 }
 
-#[tauri::command]
+// Off the UI thread for the same reason as `read_sync_file`; concurrent writers
+// are already rejected by `acquire_sync_lock`.
+#[tauri::command(async)]
 pub(crate) fn write_sync_file(
     app: tauri::AppHandle,
     data: Value,
