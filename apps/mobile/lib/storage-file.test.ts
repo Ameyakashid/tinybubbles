@@ -22,6 +22,7 @@ const fileSystemMock = vi.hoisted(() => {
       createFileAsync: vi.fn(),
       readDirectoryAsync: vi.fn(),
       deleteAsync: vi.fn(),
+      requestDirectoryPermissionsAsync: vi.fn(),
     },
     getInfoAsync: vi.fn().mockResolvedValue({ exists: false }),
     readAsStringAsync: vi.fn(),
@@ -148,6 +149,38 @@ describe('storage-file sync writes', () => {
     expect(written.slice(next.length)).toMatch(/^\s+$/);
     expect(JSON.parse(fileSystemMock.__getStoredText())).toEqual(nextData);
   }, 10_000);
+
+  it('retries the SAF write once when the provider pre-check reports not writable', async () => {
+    const nextData = appData({ weekStart: 'monday' });
+    fileSystemMock.StorageAccessFramework.writeAsStringAsync.mockRejectedValueOnce(
+      new Error("Location 'content://x/data.json' isn't writable.")
+    );
+
+    await writeSyncFile(syncFileUri, nextData);
+
+    expect(fileSystemMock.StorageAccessFramework.writeAsStringAsync).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fileSystemMock.__getStoredText())).toEqual(nextData);
+  }, 10_000);
+
+  it('completes Android folder setup when the test-file content write fails after creation', async () => {
+    const treeUri = 'content://com.chiller3.rsaf.documents/tree/remote%3AStaleCheck';
+    const dataUri = `${treeUri}/document/remote%3AStaleCheck%2Fdata.json`;
+    const testUri = `${treeUri}/document/remote%3AStaleCheck%2Fmindwtr-write-test`;
+    fileSystemMock.StorageAccessFramework.requestDirectoryPermissionsAsync.mockResolvedValue({
+      granted: true,
+      directoryUri: treeUri,
+    });
+    fileSystemMock.StorageAccessFramework.createFileAsync.mockImplementation(
+      async (_dir: string, name: string) => (name === 'data.json' ? dataUri : testUri)
+    );
+    fileSystemMock.StorageAccessFramework.writeAsStringAsync.mockRejectedValue(
+      new Error(`Location '${testUri}' isn't writable.`)
+    );
+
+    const result = await pickAndParseSyncFolder();
+
+    expect(result?.__fileUri).toBe(dataUri);
+  });
 });
 
 describe('iOS sync file bookmarks', () => {

@@ -2546,7 +2546,12 @@ fn validate_sync_dir(path: &PathBuf) -> Result<PathBuf, String> {
         fs::create_dir_all(path).map_err(|e| e.to_string())?;
     }
 
-    let canonical = fs::canonicalize(path).map_err(|e| e.to_string())?;
+    // Virtual filesystems (WinFSP/rclone mounts) cannot serve the final-path
+    // query canonicalize needs (os error 1005) even though the directory
+    // works; fall back to the path validated above.
+    let Ok(canonical) = fs::canonicalize(path) else {
+        return Ok(path.clone());
+    };
     let metadata = fs::symlink_metadata(&canonical).map_err(|e| e.to_string())?;
     if metadata.file_type().is_symlink() {
         return Err("Sync path must not be a symlink".to_string());

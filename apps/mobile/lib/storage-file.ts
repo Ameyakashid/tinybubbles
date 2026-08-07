@@ -343,8 +343,6 @@ const assertDirectoryWritable = async (
                 `mindwtr-write-test-${Date.now()}`,
                 'text/plain'
             );
-            await StorageAccessFramework.writeAsStringAsync(testUri, 'ok');
-            return;
         } catch (error) {
             if (existingFileUri) {
                 await StorageAccessFramework.writeAsStringAsync(existingFileUri, existingContent ?? '');
@@ -352,6 +350,15 @@ const assertDirectoryWritable = async (
             }
             throw error;
         }
+        try {
+            await StorageAccessFramework.writeAsStringAsync(testUri, 'ok');
+        } catch {
+            // Creating the test file already proved write access. Passthrough
+            // providers (e.g. RSAF over rclone crypt) can fail expo's canWrite
+            // pre-check on a just-created document while the provider's
+            // metadata query is still stale — don't block setup on that.
+        }
+        return;
     } catch (error) {
         if (isReadOnlyError(error)) {
             throw new Error(READONLY_FOLDER_MESSAGE);
@@ -621,10 +628,18 @@ export const writeSyncFile = async (fileUri: string, data: AppData, options?: Sy
         // SAF URIs (content://) require special handling on Android
         if (resolvedUri.startsWith('content://') && StorageAccessFramework) {
             const previousContent = await readFileText(resolvedUri).catch(() => null);
-            await StorageAccessFramework.writeAsStringAsync(
-                resolvedUri,
-                padForNonTruncatingOverwrite(content, previousContent)
-            );
+            const paddedContent = padForNonTruncatingOverwrite(content, previousContent);
+            try {
+                await StorageAccessFramework.writeAsStringAsync(resolvedUri, paddedContent);
+            } catch (error) {
+                // Passthrough providers (e.g. RSAF over rclone crypt) can fail
+                // expo's canWrite pre-check on a just-created data.json while
+                // the provider's metadata query is still stale. One delayed
+                // retry, then surface the failure.
+                if (!isReadOnlyError(error)) throw error;
+                await sleep(1000);
+                await StorageAccessFramework.writeAsStringAsync(resolvedUri, paddedContent);
+            }
             const writtenContent = await readFileText(resolvedUri);
             if (!writtenContent) {
                 throw new Error('Sync file write verification failed: file is empty after write.');
