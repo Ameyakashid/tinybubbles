@@ -1,6 +1,5 @@
 import {
-  isTaskInActiveProject,
-  taskMatchesAreaFilterSelection,
+  isTaskVisibleInArea,
   type Area,
   type AreaFilterSelection,
   type Project,
@@ -56,12 +55,11 @@ export function getReviewOverviewTasks({
   resolvedAreaFilter,
   tasks,
 }: GetReviewOverviewTasksParams): Task[] {
+  const visibility = { areaById, projectById, resolvedAreaFilter };
   return tasks.filter((task) => (
-    !task.deletedAt
+    isTaskVisibleInArea(task, visibility)
     && task.status !== 'reference'
     && task.status !== 'done'
-    && isTaskInActiveProject(task, projectById)
-    && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
   ));
 }
 

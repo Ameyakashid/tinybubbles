@@ -3,7 +3,7 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Brain, ListChecks } from 'lucide-react-native';
 
-import { isTaskInActiveProject, shallow, useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@mindwtr/core';
 import { TaskList, type TaskListGroupBy } from '../../../components/task-list';
 import { InboxProcessingModal } from '../../../components/inbox-processing-modal';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
@@ -13,16 +13,11 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useThemeTokens } from '@/hooks/use-theme-tokens';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { CompactText } from '@/components/compact-text';
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { useQuickCapture } from '../../../contexts/quick-capture-context';
 
 export default function InboxScreen() {
-  const { tasks, projects, settings } = useTaskStore((state) => ({
-    tasks: state.tasks,
-    projects: state.projects,
-    settings: state.settings,
-  }), shallow);
+  const settings = useTaskStore((state) => state.settings);
   const { t } = useLanguage();
   const tc = useThemeColors();
   const tokens = useThemeTokens();
@@ -41,18 +36,14 @@ export default function InboxScreen() {
   const router = useRouter();
   const [showProcessing, setShowProcessing] = useState(false);
   const [groupBy, setGroupBy] = useState<TaskListGroupBy>('none');
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { visibleTasks } = useVisibleTaskContext();
 
-  const inboxTasks = useMemo(() => {
-    return tasks.filter(t => {
-      if (t.deletedAt) return false;
-      if (t.status !== 'inbox') return false;
-      if (!isTaskInActiveProject(t, projectById)) return false;
-      if (!taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectById, areaById)) return false;
-      return true;
-    });
-  }, [tasks, resolvedAreaFilter, projectById, areaById]);
+  // The same base set TaskList narrows below, so the Process count and the list
+  // can only ever differ by the user's own filter chips.
+  const inboxTasks = useMemo(
+    () => visibleTasks.filter((task) => task.status === 'inbox'),
+    [visibleTasks],
+  );
 
   const defaultCaptureMethod = settings.gtd?.defaultCaptureMethod ?? 'text';
   const emptyHint = defaultCaptureMethod === 'audio'

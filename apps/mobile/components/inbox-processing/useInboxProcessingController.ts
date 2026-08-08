@@ -20,17 +20,15 @@ import {
   getProcessInboxCurrentCandidate,
   getProcessInboxRemainingCandidates,
   hasTimeComponent,
-  isTaskInActiveProject,
   normalizeClockTimeInput,
-  resolveAreaFilterSelection,
   safeFormatDate,
   safeParseDate,
+  isTaskVisibleInArea,
   selectProcessInboxCandidates,
   skipCurrentProcessInboxTask,
   startProcessInboxSession,
   tFallback,
   resolveAutoTextDirection,
-  taskMatchesAreaFilterSelection,
   useTaskStore,
   type AIProviderId,
   type ProcessInboxSession,
@@ -56,6 +54,7 @@ import { useLanguage } from '../../contexts/language-context';
 import { useTheme } from '../../contexts/theme-context';
 import { useToast } from '../../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { getAssignedToSuggestions } from '../task-metadata-suggestions';
 import { buildAIConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logWarn } from '../../lib/app-log';
@@ -188,24 +187,13 @@ export function useInboxProcessingController({
       : MOBILE_TIME_ESTIMATE_OPTIONS;
   }, [selectedTimeEstimate, settings?.gtd?.timeEstimatePresets]);
 
-  const projectById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project])),
-    [projects],
+  const { areaById, visibility } = useVisibleTaskContext();
+  const inboxTasks = useMemo(
+    // Not `visibleTasks`: the queue is the process-inbox candidate set, which
+    // has its own status rule on top of the shared visibility predicate.
+    () => selectProcessInboxCandidates(tasks, (task) => isTaskVisibleInArea(task, visibility)),
+    [tasks, visibility],
   );
-  const areaById = useMemo(
-    () => new Map(areas.map((area) => [area.id, area])),
-    [areas],
-  );
-  const resolvedAreaFilter = useMemo(
-    () => resolveAreaFilterSelection(settings?.filters, areas),
-    [settings?.filters, areas],
-  );
-  const inboxTasks = useMemo(() => {
-    return selectProcessInboxCandidates(tasks, (task) => (
-      isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-    ));
-  }, [areaById, projectById, resolvedAreaFilter, tasks]);
 
   const processingQueue = useMemo(
     () => getProcessInboxRemainingCandidates(processingSession, inboxTasks),

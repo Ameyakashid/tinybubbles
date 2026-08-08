@@ -74,6 +74,7 @@ const storeState = {
   deleteTask,
   addProject,
   addTask,
+  updateSettings: vi.fn(async () => {}),
 };
 const originalPlatformOs = Platform.OS;
 
@@ -214,7 +215,11 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
       const translated = t(key);
       return translated && translated !== key ? translated : fallback;
     }),
-    useTaskStore: () => storeState,
+    // The real store is selector-based; the controller's shared visible-task
+    // context subscribes field by field, so the mock has to honour selectors.
+    useTaskStore: (selector?: (state: typeof storeState) => unknown) => (
+      selector ? selector(storeState) : storeState
+    ),
     loadAIKey: vi.fn(),
   };
 });
