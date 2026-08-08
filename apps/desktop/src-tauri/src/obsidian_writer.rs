@@ -4,6 +4,7 @@ use crate::obsidian_paths::{
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Mutex;
 use tempfile::Builder;
 use time::{format_description, OffsetDateTime};
 
@@ -379,7 +380,25 @@ fn build_tasknotes_content(title: &str, line_ending: &str) -> String {
     .join(line_ending)
 }
 
-#[tauri::command]
+// Every write below is a read-modify-write against a file in the user's vault,
+// and `obsidian_create_tasknotes` also picks a filename it then creates. The
+// main thread used to serialize them for free; now that they run off the UI
+// thread, two toggles in the same note would each read the same content and
+// write back only their own edit, losing the other one in the user's notes.
+// ponytail: one global lock, so a write to note A waits on an unrelated write
+// to note B. These are single user-initiated actions with no bulk caller, so
+// the wait is one file write; make it a per-path lock map if a bulk path lands.
+static VAULT_WRITE_MUTEX: Mutex<()> = Mutex::new(());
+
+fn lock_vault_write() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    VAULT_WRITE_MUTEX
+        .lock()
+        .map_err(|_| "Obsidian vault write lock is unavailable".to_string())
+}
+
+// Off the UI thread: a vault on a network share or a FUSE mount makes this
+// read plus atomic write block for as long as the mount takes to answer.
+#[tauri::command(async)]
 pub(crate) fn obsidian_toggle_task(
     vault_path: String,
     relative_file_path: String,
@@ -387,6 +406,7 @@ pub(crate) fn obsidian_toggle_task(
     task_text: String,
     set_completed: bool,
 ) -> Result<(), String> {
+    let _vault_guard = lock_vault_write()?;
     let normalized_relative_path = normalize_obsidian_relative_path(&relative_file_path)?;
     if !is_obsidian_markdown_relative_path(&normalized_relative_path) {
         return Err("Obsidian tasks can only be updated in Markdown files.".to_string());
@@ -407,12 +427,15 @@ pub(crate) fn obsidian_toggle_task(
     atomic_write_text(&absolute_path, &rebuild_lines(&lines))
 }
 
-#[tauri::command]
+// Off the UI thread, and serialized, for the same reasons as
+// `obsidian_toggle_task`.
+#[tauri::command(async)]
 pub(crate) fn obsidian_toggle_tasknotes(
     vault_path: String,
     relative_file_path: String,
     set_completed: bool,
 ) -> Result<(), String> {
+    let _vault_guard = lock_vault_write()?;
     let normalized_relative_path = normalize_obsidian_relative_path(&relative_file_path)?;
     if !is_obsidian_markdown_relative_path(&normalized_relative_path) {
         return Err("TaskNotes files must be Markdown files ending in .md.".to_string());
@@ -456,12 +479,15 @@ pub(crate) fn obsidian_toggle_tasknotes(
     atomic_write_text(&absolute_path, &rebuild_lines(&lines))
 }
 
-#[tauri::command]
+// Off the UI thread, and serialized: two captures into the same inbox note
+// would otherwise each append to the content the other one read.
+#[tauri::command(async)]
 pub(crate) fn obsidian_create_task(
     vault_path: String,
     relative_file_path: String,
     task_text: String,
 ) -> Result<(), String> {
+    let _vault_guard = lock_vault_write()?;
     let normalized_relative_path = normalize_obsidian_relative_path(&relative_file_path)?;
     if normalized_relative_path.is_empty() {
         return Err("Choose an Obsidian inbox note before creating a task.".to_string());
@@ -494,12 +520,16 @@ pub(crate) fn obsidian_create_task(
     atomic_write_text(&absolute_path, &next_content)
 }
 
-#[tauri::command]
+// Off the UI thread, and serialized across the whole body: the guard has to
+// span the `exists()` check AND the write, or two creations from the same title
+// in the same second both see a free filename and one overwrites the other.
+#[tauri::command(async)]
 pub(crate) fn obsidian_create_tasknotes(
     vault_path: String,
     folder: String,
     title: String,
 ) -> Result<String, String> {
+    let _vault_guard = lock_vault_write()?;
     let normalized_folder = normalize_obsidian_relative_path(&folder)?;
     if normalized_folder.is_empty() {
         return Err("Choose a TaskNotes folder before creating a task.".to_string());

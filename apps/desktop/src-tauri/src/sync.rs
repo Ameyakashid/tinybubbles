@@ -3535,7 +3535,10 @@ mod tests {
         // so a slow sync mount freezes the whole window until the I/O returns.
         // Email capture is the same class, on a five-minute timer: an IMAP
         // round trip would otherwise block the UI for the life of the socket.
-        let sources: [(&str, &[&str]); 2] = [
+        // So are the Obsidian writers, against a vault on a network share or a
+        // FUSE mount; `VAULT_WRITE_MUTEX` keeps their read-modify-write atomic
+        // once they are no longer serialized by the main thread.
+        let sources: [(&str, &[&str]); 3] = [
             (
                 include_str!("sync.rs"),
                 &["set_sync_path", "read_sync_file", "write_sync_file"],
@@ -3546,6 +3549,15 @@ mod tests {
                     "set_email_capture_config",
                     "email_capture_poll",
                     "email_capture_commit",
+                ],
+            ),
+            (
+                include_str!("obsidian_writer.rs"),
+                &[
+                    "obsidian_toggle_task",
+                    "obsidian_toggle_tasknotes",
+                    "obsidian_create_task",
+                    "obsidian_create_tasknotes",
                 ],
             ),
         ];
