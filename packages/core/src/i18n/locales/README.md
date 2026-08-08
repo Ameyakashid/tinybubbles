@@ -29,7 +29,13 @@ Parser and command tokens stay in English inside translated help text, for examp
 2. Add or update keys in `<lang>Overrides`.
 3. For a new language, start with one entry in `i18n-locales.ts`. `Language`, `SUPPORTED_LANGUAGES`, the loader's dispatch, both apps' language pickers, and the parity rosters all derive from that table. Four places still need a manual entry: `DATE_LOCALE_BY_LANGUAGE` and `LOCALE_TAG_BY_LANGUAGE` in `date.ts`, `translationsByLocale` in `locale-parity.test.ts`, and the locale's mirrored-English allow-list in `locale-quality.ts` if it needs one.
 4. Keep command tokens in English where applicable (`/start:`, `/due:`, `/review:`, `/note:`, `/energy:`, `/next`, `@context`, `#tag`, `+Project`).
-5. Run tests:
+5. If you touched any `starter.*` string, regenerate the seed table. `starter-seed-strings.ts` is generated and must not be hand-edited; `bun run i18n:check` fails with "starter-seed-strings.ts: out of date" until you run:
+
+```bash
+bun run scripts/i18n-locale-parity.ts --fix
+```
+
+6. Run tests:
 
 ```bash
 bun run --filter @mindwtr/core test
