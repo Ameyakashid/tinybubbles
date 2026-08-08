@@ -37,7 +37,7 @@ import {
     type TimeEstimate,
 } from '@mindwtr/core';
 import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
-import { readFile, remove } from '@tauri-apps/plugin-fs';
+import { remove } from '@tauri-apps/plugin-fs';
 
 import { useMarkdownReferenceAutocomplete } from '../MarkdownReferenceAutocomplete';
 import { DateField } from '../ui/DateField';
@@ -64,17 +64,10 @@ import {
     restoreScrollSnapshotSoon,
 } from '../../lib/scroll-preservation';
 import { logWarn } from '../../lib/app-log';
-import { isTauriRuntime } from '../../lib/runtime';
+import { startAudioCapture, type AudioCaptureSession } from '../../lib/audio-capture';
 import { processAudioCapture, resolveSpeechCapture } from '../../lib/speech-to-text';
 
 type DescriptionAudioState = 'idle' | 'recording' | 'transcribing';
-
-type NativeAudioCaptureResult = {
-    path: string;
-    sampleRate: number;
-    channels: number;
-    size: number;
-};
 
 const isRangeSelection = (selection: MarkdownSelection | null | undefined): selection is MarkdownSelection => (
     selection != null && selection.start !== selection.end
@@ -271,23 +264,15 @@ export function TaskItemFieldRenderer({
     const [descriptionAudioState, setDescriptionAudioState] = useState<DescriptionAudioState>('idle');
     const [descriptionAudioError, setDescriptionAudioError] = useState<string | null>(null);
     const descriptionAudioStateRef = useRef<DescriptionAudioState>('idle');
+    const descriptionCaptureRef = useRef<AudioCaptureSession | null>(null);
     useEffect(() => {
         descriptionAudioStateRef.current = descriptionAudioState;
     }, [descriptionAudioState]);
     useEffect(() => () => {
-        if (descriptionAudioStateRef.current !== 'recording' || !isTauriRuntime()) return;
-        void import('@tauri-apps/api/core')
-            .then(({ invoke }) => invoke<NativeAudioCaptureResult>('stop_audio_recording'))
-            .then((result) => {
-                if (!result.path) return;
-                return remove(result.path);
-            })
-            .catch((error) => {
-                void logWarn('Description audio cleanup failed', {
-                    scope: 'audio',
-                    extra: { error: error instanceof Error ? error.message : String(error) },
-                });
-            });
+        const session = descriptionCaptureRef.current;
+        descriptionCaptureRef.current = null;
+        if (descriptionAudioStateRef.current !== 'recording' || !session) return;
+        void session.cancel();
     }, []);
     useEffect(() => {
         descriptionSelectionRef.current = {
@@ -610,17 +595,13 @@ export function TaskItemFieldRenderer({
     }, [editDescription]);
     const handleDescriptionAudioInput = useCallback(async () => {
         if (descriptionAudioState === 'transcribing') return;
-        if (!isTauriRuntime()) {
-            setDescriptionAudioError(tFallback(t, 'attachments.fileNotSupported', 'File not supported.'));
-            return;
-        }
-
-        const { invoke } = await import('@tauri-apps/api/core');
 
         if (descriptionAudioState !== 'recording') {
             setDescriptionAudioError(null);
             try {
-                await invoke('start_audio_recording');
+                descriptionCaptureRef.current = await startAudioCapture({
+                    defaultName: () => 'description-audio.wav',
+                });
                 setDescriptionAudioState('recording');
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
@@ -629,10 +610,18 @@ export function TaskItemFieldRenderer({
             return;
         }
 
-        let capture: NativeAudioCaptureResult | null = null;
+        const session = descriptionCaptureRef.current;
+        descriptionCaptureRef.current = null;
+        if (!session) {
+            setDescriptionAudioState('idle');
+            return;
+        }
+
+        let capture: { path: string } | null = null;
         setDescriptionAudioError(null);
         try {
-            capture = await invoke<NativeAudioCaptureResult>('stop_audio_recording');
+            const stopped = await session.stop();
+            capture = stopped;
             setDescriptionAudioState('transcribing');
 
             const currentSettings = useTaskStore.getState().settings;
@@ -641,8 +630,7 @@ export function TaskItemFieldRenderer({
                 throw new Error(tFallback(t, 'attachments.transcriptionUnavailable', 'Speech-to-text is not ready. Check your AI settings and try again.'));
             }
 
-            const bytes = await readFile(capture.path);
-            const audioBytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+            const audioBytes = await stopped.bytes();
             const timeZone = typeof Intl === 'object' && typeof Intl.DateTimeFormat === 'function'
                 ? Intl.DateTimeFormat().resolvedOptions().timeZone
                 : undefined;
@@ -650,8 +638,8 @@ export function TaskItemFieldRenderer({
                 {
                     bytes: audioBytes,
                     mimeType: 'audio/wav',
-                    name: 'description-audio.wav',
-                    path: capture.path,
+                    name: stopped.name,
+                    path: stopped.path,
                 },
                 {
                     ...speechConfig,

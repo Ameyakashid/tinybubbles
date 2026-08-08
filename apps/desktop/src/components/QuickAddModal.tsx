@@ -33,18 +33,17 @@ import {
     type QuickAddResult,
     type Task,
 } from '@mindwtr/core';
-import { mkdir, readFile, remove, writeFile } from '@tauri-apps/plugin-fs';
+import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import { getManagedPath } from '../lib/managed-paths';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
-import { isFlatpakRuntime, isTauriRuntime } from '../lib/runtime';
+import { isTauriRuntime } from '../lib/runtime';
 import { reportError } from '../lib/report-error';
 import { logWarn } from '../lib/app-log';
 import { createDesktopRecoverySnapshot } from '../lib/data-transfer';
-import { encodeWav, resampleAudio } from '../lib/audio-utils';
-import { appendAudioChunkWithLimit, getMaxAudioSamples, MAX_AUDIO_RECORDING_SECONDS } from '../lib/audio-capture-buffer';
-import { getPreferredDesktopAudioCaptureBackend } from '../lib/audio-capture-backend';
+import { MAX_AUDIO_RECORDING_SECONDS } from '../lib/audio-capture-buffer';
+import { AudioCaptureError, startAudioCapture, type AudioCaptureSession } from '../lib/audio-capture';
 import { processAudioCapture, resolveSpeechCapture, type SpeechToTextResult } from '../lib/speech-to-text';
 import { dispatchNavigateEvent } from '../lib/navigation-events';
 import { Dialog, DialogBody } from './ui/Dialog';
@@ -61,9 +60,7 @@ import { QuickAddSyntaxHint } from './ui/QuickAddSyntaxHint';
 import { FocusStarIcon } from './FocusStarIcon';
 
 // Relative to the managed data dir (portable-aware, #855).
-const AUDIO_CAPTURE_DIR = 'audio-captures';
 const QUICK_ADD_IMAGE_CAPTURE_DIR = 'quick-add-images';
-const TARGET_SAMPLE_RATE = 16_000;
 
 type PastedImageAttachment = {
     attachment: Attachment;
@@ -181,7 +178,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
     const [isRecording, setIsRecording] = useState(false);
     const [recordingBusy, setRecordingBusy] = useState(false);
     const [recordingError, setRecordingError] = useState<string | null>(null);
-    const [recordingBackend, setRecordingBackend] = useState<'web' | 'native' | null>(null);
     const [pastedImageAttachments, setPastedImageAttachments] = useState<PastedImageAttachment[]>([]);
     const [pastedImageError, setPastedImageError] = useState<string | null>(null);
     const [pastingImageCount, setPastingImageCount] = useState(0);
@@ -190,14 +186,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
     const lastActiveElementRef = useRef<HTMLElement | null>(null);
     const modalRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const audioStreamRef = useRef<MediaStream | null>(null);
-    const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
-    const audioChunksRef = useRef<Float32Array[]>([]);
-    const audioSampleCountRef = useRef(0);
-    const audioDurationLimitHitRef = useRef(false);
-    const inputSampleRateRef = useRef<number>(16_000);
+    const captureSessionRef = useRef<AudioCaptureSession | null>(null);
     const isOpenRef = useRef(false);
     const openRequestInFlightRef = useRef(false);
     const standaloneDataRefreshRef = useRef<Promise<void> | null>(null);
@@ -579,78 +568,19 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             return;
         }
         try {
-            const preferredBackend = getPreferredDesktopAudioCaptureBackend({
-                isTauriRuntime: isTauriRuntime(),
-                isFlatpakRuntime: isFlatpakRuntime(),
+            captureSessionRef.current = await startAudioCapture({
+                defaultName: () => `mindwtr-audio-${safeFormatDate(new Date(), 'yyyyMMdd-HHmmss')}.wav`,
             });
-
-            if (preferredBackend === 'native') {
-                try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    await invoke('start_audio_recording');
-                    setRecordingBackend('native');
-                    setIsRecording(true);
-                    return;
-                } catch (error) {
-                    void logWarn('Native audio recording failed, falling back to web capture', {
-                        scope: 'audio',
-                        extra: {
-                            error: error instanceof Error ? error.message : String(error),
-                            preferredBackend,
-                        },
-                    });
-                }
-            }
-            if (!navigator.mediaDevices?.getUserMedia) {
+            setIsRecording(true);
+        } catch (error) {
+            if (error instanceof AudioCaptureError && error.reason === 'unsupported') {
                 setRecordingError(t('quickAdd.audioErrorBody'));
                 return;
             }
-            if (navigator.mediaDevices.enumerateDevices) {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const hasInput = devices.some((device) => device.kind === 'audioinput');
-                if (!hasInput) {
-                    setRecordingError(`${t('quickAdd.audioErrorBody')} (No microphone detected)`);
-                    return;
-                }
+            if (error instanceof AudioCaptureError && error.reason === 'no-microphone') {
+                setRecordingError(`${t('quickAdd.audioErrorBody')} (${error.message})`);
+                return;
             }
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const AudioContextConstructor =
-                window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-            if (!AudioContextConstructor) {
-                throw new Error('AudioContext unavailable');
-            }
-            const context = new AudioContextConstructor();
-            await context.resume();
-            const source = context.createMediaStreamSource(stream);
-            const processor = context.createScriptProcessor(4096, 1, 1);
-            const zeroGain = context.createGain();
-            zeroGain.gain.value = 0;
-            audioChunksRef.current = [];
-            audioSampleCountRef.current = 0;
-            audioDurationLimitHitRef.current = false;
-            inputSampleRateRef.current = context.sampleRate;
-            processor.onaudioprocess = (event) => {
-                if (audioDurationLimitHitRef.current) return;
-                const channel = event.inputBuffer.getChannelData(0);
-                const result = appendAudioChunkWithLimit({
-                    chunks: audioChunksRef.current,
-                    chunk: channel,
-                    maxSamples: getMaxAudioSamples(inputSampleRateRef.current),
-                    sampleCount: audioSampleCountRef.current,
-                });
-                audioSampleCountRef.current = result.sampleCount;
-                audioDurationLimitHitRef.current = result.limitHit;
-            };
-            source.connect(processor);
-            processor.connect(zeroGain);
-            zeroGain.connect(context.destination);
-            audioContextRef.current = context;
-            audioStreamRef.current = stream;
-            audioSourceRef.current = source;
-            audioProcessorRef.current = processor;
-            setRecordingBackend('web');
-            setIsRecording(true);
-        } catch (error) {
             reportError('Audio recording failed', error);
             const message = error instanceof Error ? error.message : String(error);
             setRecordingError(`${t('quickAdd.audioErrorBody')} (${message})`);
@@ -662,81 +592,20 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         if (!isRecording) return;
         setRecordingBusy(true);
         setIsRecording(false);
+        const session = captureSessionRef.current;
+        captureSessionRef.current = null;
         try {
-            type NativeResult = {
-                path: string;
-                sampleRate: number;
-                channels: number;
-                size: number;
-            };
-
-            let wavBytes: Uint8Array | null = null;
-            let fileName: string;
-            let absolutePath: string;
-            let audioByteSize: number | undefined;
-
+            if (!session) return;
             const now = new Date();
-            if (recordingBackend === 'native' && isTauriRuntime()) {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const result = await invoke<NativeResult>('stop_audio_recording');
-                absolutePath = result.path;
-                const parts = absolutePath.split(/[\\/]/);
-                fileName = parts[parts.length - 1] || 'mindwtr-audio.wav';
-                audioByteSize = result.size;
-            } else {
-                const currentAudioContext = audioContextRef.current;
-                if (currentAudioContext?.state === 'running') {
-                    // Suspending the graph gives ScriptProcessorNode one stable stop point before teardown.
-                    await currentAudioContext.suspend();
-                }
-                audioProcessorRef.current?.disconnect();
-                audioSourceRef.current?.disconnect();
-                audioProcessorRef.current = null;
-                audioSourceRef.current = null;
-                audioStreamRef.current?.getTracks().forEach((track) => track.stop());
-                audioStreamRef.current = null;
-                if (currentAudioContext && currentAudioContext.state !== 'closed') {
-                    await currentAudioContext.close();
-                }
-                audioContextRef.current = null;
-
-                const chunks = audioChunksRef.current;
-                audioChunksRef.current = [];
-                audioSampleCountRef.current = 0;
-                audioDurationLimitHitRef.current = false;
-                if (!saveTask) return;
-                if (!chunks.length) {
-                    throw new Error('No audio data captured');
-                }
-
-                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                const buffer = new Float32Array(totalLength);
-                let offset = 0;
-                for (const chunk of chunks) {
-                    buffer.set(chunk, offset);
-                    offset += chunk.length;
-                }
-                const resampled = resampleAudio(buffer, inputSampleRateRef.current, TARGET_SAMPLE_RATE);
-                wavBytes = encodeWav(resampled, TARGET_SAMPLE_RATE);
-                audioByteSize = wavBytes.length;
-
-                const timestamp = safeFormatDate(now, 'yyyyMMdd-HHmmss');
-                fileName = `mindwtr-audio-${timestamp}.wav`;
-                const audioCaptureDir = await getManagedPath(AUDIO_CAPTURE_DIR);
-                await mkdir(audioCaptureDir, { recursive: true });
-                absolutePath = await join(audioCaptureDir, fileName);
-                await writeFile(absolutePath, wavBytes);
-            }
-
             if (!saveTask) {
-                remove(absolutePath).catch((error) => {
-                    void logWarn('Audio cleanup failed', {
-                        scope: 'audio',
-                        extra: { error: error instanceof Error ? error.message : String(error) },
-                    });
-                });
+                await session.cancel();
                 return;
             }
+
+            const capture = await session.stop();
+            const fileName = capture.name;
+            const absolutePath = capture.path;
+            const audioByteSize = capture.size;
 
             const nowIso = now.toISOString();
             const displayTitle = `${t('quickAdd.audioNoteTitle')} ${safeFormatDate(now, 'Pp')}`;
@@ -808,29 +677,24 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             };
 
             if (speechReady) {
-                if (wavBytes) {
-                    void runSpeech(wavBytes);
-                } else {
-                    void readFile(absolutePath)
-                        .then((bytes) => (bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)))
-                        .then((bytes) => runSpeech(bytes))
-                        .catch((error) => {
-                            void logWarn('Failed to load audio for transcription', {
-                                scope: 'audio',
-                                extra: { error: error instanceof Error ? error.message : String(error) },
-                            });
-                            if (!saveAudioAttachments) {
-                                remove(absolutePath).catch((cleanupError) => {
-                                    void logWarn('Audio cleanup failed', {
-                                        scope: 'audio',
-                                        extra: {
-                                            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-                                        },
-                                    });
-                                });
-                            }
+                void capture.bytes()
+                    .then((bytes) => runSpeech(bytes))
+                    .catch((error) => {
+                        void logWarn('Failed to load audio for transcription', {
+                            scope: 'audio',
+                            extra: { error: error instanceof Error ? error.message : String(error) },
                         });
-                }
+                        if (!saveAudioAttachments) {
+                            remove(absolutePath).catch((cleanupError) => {
+                                void logWarn('Audio cleanup failed', {
+                                    scope: 'audio',
+                                    extra: {
+                                        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+                                    },
+                                });
+                            });
+                        }
+                    });
             } else if (!saveAudioAttachments) {
                 remove(absolutePath).catch((error) => {
                     void logWarn('Audio cleanup failed', {
@@ -845,7 +709,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             setRecordingError(`${t('quickAdd.audioErrorBody')} (${message})`);
         } finally {
             setRecordingBusy(false);
-            setRecordingBackend(null);
         }
     }, [
         addTask,
@@ -854,7 +717,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         initialProps,
         isRecording,
         recordingBusy,
-        recordingBackend,
         refreshStandaloneData,
         notifyStandaloneTaskSaved,
         standaloneWindow,
