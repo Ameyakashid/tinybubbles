@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
-import type { Task } from '@mindwtr/core';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import type { Attachment, Task } from '@mindwtr/core';
+import { LanguageProvider } from '../../contexts/language-context';
+import { TaskAttachmentOverlays } from './TaskAttachmentOverlays';
 import { useTaskItemAttachments } from './useTaskItemAttachments';
 
 const openMock = vi.fn();
@@ -16,6 +18,7 @@ vi.mock('@tauri-apps/api/path', () => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: (...args: unknown[]) => invokeMock(...args),
+    convertFileSrc: (path: string) => `asset://${path}`,
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -272,5 +275,66 @@ describe('useTaskItemAttachments resetAttachmentState orphan cleanup', () => {
         });
 
         expect(removeMock).not.toHaveBeenCalled();
+    });
+});
+
+// The overlays take the hook's result whole, so they can be rendered over the
+// real hook instead of a wall of hand-built props.
+function OverlaysHarness({ openTarget }: { openTarget?: Attachment }) {
+    const attachments = useTaskItemAttachments({ task, t });
+    return (
+        <LanguageProvider>
+            <button type="button" onClick={attachments.addLinkAttachment}>add-link</button>
+            <button type="button" onClick={attachments.addObsidianNoteAttachment}>add-obsidian</button>
+            {openTarget && (
+                <button type="button" onClick={() => attachments.openAttachment(openTarget)}>open-attachment</button>
+            )}
+            <ul>
+                {attachments.editAttachments.map((attachment) => (
+                    <li key={attachment.id}>{attachment.uri}</li>
+                ))}
+            </ul>
+            <TaskAttachmentOverlays attachments={attachments} t={t} />
+        </LanguageProvider>
+    );
+}
+
+describe('TaskAttachmentOverlays', () => {
+    it('adds the typed link through the hook when the link prompt is confirmed', () => {
+        render(<OverlaysHarness />);
+
+        fireEvent.click(screen.getByText('add-link'));
+        expect(screen.getByRole('dialog', { name: 'attachments.addLink' })).toBeTruthy();
+
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: 'https://example.com' } });
+        fireEvent.click(screen.getByText('common.save'));
+
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(screen.getByText('https://example.com')).toBeTruthy();
+    });
+
+    it('labels the prompt for the Obsidian variant', () => {
+        render(<OverlaysHarness />);
+
+        fireEvent.click(screen.getByText('add-obsidian'));
+
+        expect(screen.getByRole('dialog', { name: 'attachments.attachObsidianNote' })).toBeTruthy();
+    });
+
+    it('shows the image viewer for an image the hook opened', () => {
+        const image: Attachment = {
+            id: 'image-1',
+            kind: 'file',
+            title: 'photo.png',
+            uri: '/data/mindwtr/attachments/photo.png',
+            mimeType: 'image/png',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        render(<OverlaysHarness openTarget={image} />);
+
+        fireEvent.click(screen.getByText('open-attachment'));
+
+        expect(screen.getByRole('dialog', { name: 'photo.png' })).toBeTruthy();
     });
 });

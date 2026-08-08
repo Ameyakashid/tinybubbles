@@ -28,8 +28,6 @@ import {
     isTaskDraftDirty,
     type TaskDraftSetter,
 } from '@mindwtr/core';
-import { browseForLinkTarget } from '../lib/attachment-import';
-import { isTauriRuntime } from '../lib/runtime';
 import { cn } from '../lib/utils';
 import { useObsidianStore } from '../store/obsidian-store';
 import { useLanguage } from '../contexts/language-context';
@@ -38,8 +36,10 @@ import { TaskItemDisplay } from './Task/TaskItemDisplay';
 import { TaskItemEditorSurface } from './Task/TaskItemEditorSurface';
 import { TaskItemFieldRenderer } from './Task/TaskItemFieldRenderer';
 import { releaseTaskEditSession, tryClaimTaskEditSession } from './Task/task-edit-session';
-import { TaskItemOverlays } from './Task/TaskItemOverlays';
+import { TaskAttachmentOverlays } from './Task/TaskAttachmentOverlays';
+import { TaskRecurrenceOverlay } from './Task/TaskRecurrenceOverlay';
 import { ProjectNextActionPrompt } from './Task/ProjectNextActionPrompt';
+import { ConfirmModal } from './ConfirmModal';
 import { PromptModal } from './PromptModal';
 import { getDialogFocusableElements } from './ui/Dialog';
 import { deleteTaskWithUndo, duplicateTaskAndReveal, TaskQuickActionMenuHost } from './Task/useTaskQuickActionMenuProps';
@@ -201,44 +201,21 @@ export const TaskItem = memo(function TaskItem({
         () => getLocalizedWeekdayLabels(language, 'long'),
         [language]
     );
+    // Kept whole: the attachment overlays take the hook result itself, so only
+    // what the row's own surfaces need is unpacked here.
+    const attachments = useTaskItemAttachments({ task, t });
     const {
         editAttachments,
         attachmentError,
-        showLinkPrompt,
-        editingLinkAttachmentId,
-        linkPromptDefaultValue,
-        linkPromptVariant,
-        closeLinkPrompt,
         addFileAttachment,
         addDroppedFileAttachments,
         addLinkAttachment,
         addObsidianNoteAttachment,
         editLinkAttachment,
-        handleAddLinkAttachment,
         removeAttachment,
         openAttachment,
         resetAttachmentState,
-        audioAttachment,
-        audioSource,
-        audioError,
-        audioTranscribing,
-        audioTranscriptionError,
-        audioRef,
-        openAudioExternally,
-        handleAudioError,
-        retryAudioTranscription,
-        closeAudio,
-        imageAttachment,
-        imageSource,
-        closeImage,
-        textAttachment,
-        textContent,
-        textError,
-        textLoading,
-        openTextExternally,
-        openImageExternally,
-        closeText,
-    } = useTaskItemAttachments({ task, t });
+    } = attachments;
     const {
         draft,
         setField: setDraftField,
@@ -380,27 +357,12 @@ export const TaskItem = memo(function TaskItem({
         );
         void updateTask(task.id, { checklist: nextChecklist });
     }, [effectiveReadOnly, task, updateTask]);
-    const {
-        monthlyRecurrence,
-        showCustomRecurrence,
-        setShowCustomRecurrence,
-        customInterval,
-        setCustomInterval,
-        customMode,
-        setCustomMode,
-        customOrdinal,
-        setCustomOrdinal,
-        customWeekday,
-        setCustomWeekday,
-        customMonthDay,
-        setCustomMonthDay,
-        openCustomRecurrence,
-        applyCustomRecurrence,
-    } = useTaskItemRecurrence({
+    const recurrence = useTaskItemRecurrence({
         task,
         draft,
         setField: setDraftField,
     });
+    const { monthlyRecurrence, setShowCustomRecurrence, openCustomRecurrence } = recurrence;
 
     useEffect(() => {
         if (!isHighlighted) return;
@@ -1479,73 +1441,43 @@ export const TaskItem = memo(function TaskItem({
                     t={t}
                 />
             )}
-            <TaskItemOverlays
-                applyCustomRecurrence={applyCustomRecurrence}
-                audioAttachment={audioAttachment}
-                audioError={audioError}
-                audioRef={audioRef}
-                audioSource={audioSource}
-                audioTranscribing={audioTranscribing}
-                audioTranscriptionError={audioTranscriptionError}
-                clearLinkPrompt={closeLinkPrompt}
-                closeAudio={closeAudio}
-                closeImage={closeImage}
-                closeText={closeText}
-                customInterval={customInterval}
-                customMode={customMode}
-                customMonthDay={customMonthDay}
-                customOrdinal={customOrdinal}
-                customWeekday={customWeekday}
-                handleAddLinkAttachment={handleAddLinkAttachment}
-                handleAudioError={handleAudioError}
-                handleDiscardChanges={handleDiscardChanges}
-                handleOpenDiscardConfirm={setShowDiscardConfirm}
-                imageAttachment={imageAttachment}
-                imageSource={imageSource}
-                onOpenImageExternally={openImageExternally}
-                onOpenTextExternally={openTextExternally}
-                openAudioExternally={openAudioExternally}
-                openDiscardConfirm={showDiscardConfirm}
-                openLinkPrompt={showLinkPrompt}
-                linkPromptDefaultValue={linkPromptDefaultValue}
-                linkPromptTitle={editingLinkAttachmentId
-                    ? t('common.edit')
-                    : linkPromptVariant === 'obsidian'
-                        ? t('attachments.attachObsidianNote')
-                        : t('attachments.addLink')}
-                linkPromptDescription={linkPromptVariant === 'obsidian'
-                    ? t('attachments.obsidianLinkInputHint')
-                    : t('attachments.linkInputHint')}
-                linkPromptPlaceholder={linkPromptVariant === 'obsidian'
-                    ? t('attachments.obsidianLinkPlaceholder')
-                    : t('attachments.linkPlaceholder')}
-                linkPromptBrowseLabel={linkPromptVariant === 'link' && isTauriRuntime()
-                    ? t('attachments.linkToFile')
-                    : undefined}
-                onBrowseLinkFile={linkPromptVariant === 'link' && isTauriRuntime()
-                    ? () => browseForLinkTarget(t('attachments.linkToFile'))
-                    : undefined}
-                openWaitingAssignmentPrompt={showWaitingAssignmentPrompt}
-                onCancelWaitingAssignmentPrompt={closeWaitingAssignmentPrompt}
-                onConfirmWaitingAssignmentPrompt={applyWaitingAssignment}
-                onCreateWaitingAssignmentPerson={createWaitingAssignmentPerson}
-                waitingAssignmentDefaultValue={task.assignedTo || ''}
-                waitingAssignmentSuggestions={waitingAssignmentSuggestions}
-                retryAudioTranscription={retryAudioTranscription}
-                setCustomInterval={setCustomInterval}
-                setCustomMode={setCustomMode}
-                setCustomMonthDay={setCustomMonthDay}
-                setCustomOrdinal={setCustomOrdinal}
-                setCustomWeekday={setCustomWeekday}
-                setShowCustomRecurrence={setShowCustomRecurrence}
-                showCustomRecurrence={showCustomRecurrence}
-                t={t}
-                textAttachment={textAttachment}
-                textContent={textContent}
-                textError={textError}
-                textLoading={textLoading}
+            <TaskRecurrenceOverlay
+                recurrence={recurrence}
                 weekdayLabels={recurrenceWeekdayLabels}
+                t={t}
             />
+            <TaskAttachmentOverlays attachments={attachments} t={t} />
+            {showWaitingAssignmentPrompt && (
+                <PromptModal
+                    isOpen
+                    title={tFallback(t, 'process.waitingFor', 'Who/what are you waiting for?')}
+                    description={tFallback(t, 'process.waitingForDesc', "Add a note to remember what you're waiting on")}
+                    placeholder={tFallback(t, 'taskEdit.assignedToPlaceholder', 'Who is this waiting for?')}
+                    defaultValue={task.assignedTo || ''}
+                    suggestions={waitingAssignmentSuggestions}
+                    createLabel={tFallback(t, 'people.new', 'New Person')}
+                    onCreate={createWaitingAssignmentPerson}
+                    allowEmptyConfirm
+                    confirmLabel={t('common.save')}
+                    cancelLabel={t('common.cancel')}
+                    onCancel={closeWaitingAssignmentPrompt}
+                    onConfirm={applyWaitingAssignment}
+                />
+            )}
+            {showDiscardConfirm && (
+                <ConfirmModal
+                    isOpen
+                    title={tFallback(t, 'taskEdit.discardChanges', 'Discard unsaved changes?')}
+                    description={tFallback(t, 'taskEdit.discardChangesDesc', 'Your changes will be lost if you leave now.')}
+                    confirmLabel={tFallback(t, 'common.discard', 'Discard')}
+                    cancelLabel={t('common.cancel')}
+                    onCancel={() => setShowDiscardConfirm(false)}
+                    onConfirm={() => {
+                        setShowDiscardConfirm(false);
+                        handleDiscardChanges();
+                    }}
+                />
+            )}
             {completedAtPrompt && (
                 <PromptModal
                     isOpen
