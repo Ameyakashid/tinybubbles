@@ -36,7 +36,7 @@ export function AgendaHeader({
 }: AgendaHeaderProps) {
     const filtersActive = filtersOpen || filterCount > 0;
     const filtersLabel = resolveText('filters.label', 'Filters');
-    // Names the action, not the state — see ListHeader.
+    // Names the action, not the state, and carries no aria-pressed — see ListHeader.
     const detailsLabel = showListDetails
         ? tFallback(t, 'list.hideDetails', 'Hide details')
         : tFallback(t, 'list.showDetails', 'Show details');
@@ -74,7 +74,6 @@ export function AgendaHeader({
                 <ToolbarButton
                     active={showListDetails}
                     onClick={onToggleDetails}
-                    aria-pressed={showListDetails}
                     title={detailsLabel}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >

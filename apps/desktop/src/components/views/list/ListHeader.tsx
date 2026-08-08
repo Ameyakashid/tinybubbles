@@ -59,6 +59,9 @@ export function ListHeader({
 }: ListHeaderProps) {
     // The button names what clicking it does, not the current state — "Details off"
     // read as a disabled control rather than a way to show the dates and project.
+    // A flipping name IS the state for a screen reader, so it carries no
+    // aria-pressed: "Hide details, pressed" announced the action and the state at
+    // once and they contradict each other.
     const detailsLabel = showListDetails
         ? tFallback(t, 'list.hideDetails', 'Hide details')
         : tFallback(t, 'list.showDetails', 'Show details');
@@ -145,7 +148,6 @@ export function ListHeader({
                 <ToolbarButton
                     active={showListDetails}
                     onClick={onToggleDetails}
-                    aria-pressed={showListDetails}
                     title={detailsLabel}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >

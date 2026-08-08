@@ -188,6 +188,58 @@ describe('ListHeader', () => {
         expect(button).toHaveAttribute('aria-pressed', 'true');
     });
 
+    // "Hide details, toggle button, pressed" told a screen-reader user the action
+    // and the state at once, and the two read as contradicting each other.
+    it('names the details button by its action without also claiming a pressed state', () => {
+        const { rerender } = render(
+            <ListHeader
+                title="Focus"
+                showNextCount={false}
+                nextCount={0}
+                taskCount={3}
+                hasFilters={false}
+                filterSummaryLabel=""
+                filterSummarySuffix=""
+                sortBy="default"
+                onChangeSortBy={vi.fn()}
+                selectionMode={false}
+                onToggleSelection={vi.fn()}
+                showListDetails={false}
+                onToggleDetails={vi.fn()}
+                densityMode="comfortable"
+                onToggleDensity={vi.fn()}
+                t={t}
+            />
+        );
+
+        const showButton = screen.getByRole('button', { name: 'Show details' });
+        expect(showButton).not.toHaveAttribute('aria-pressed');
+
+        rerender(
+            <ListHeader
+                title="Focus"
+                showNextCount={false}
+                nextCount={0}
+                taskCount={3}
+                hasFilters={false}
+                filterSummaryLabel=""
+                filterSummarySuffix=""
+                sortBy="default"
+                onChangeSortBy={vi.fn()}
+                selectionMode={false}
+                onToggleSelection={vi.fn()}
+                showListDetails
+                onToggleDetails={vi.fn()}
+                densityMode="comfortable"
+                onToggleDensity={vi.fn()}
+                t={t}
+            />
+        );
+
+        const hideButton = screen.getByRole('button', { name: 'Hide details' });
+        expect(hideButton).not.toHaveAttribute('aria-pressed');
+    });
+
     it('renders a Filters toggle that reflects and drives the panel open state', () => {
         const onToggleFilters = vi.fn();
         render(
