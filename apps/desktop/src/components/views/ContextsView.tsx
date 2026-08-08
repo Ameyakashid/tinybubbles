@@ -3,7 +3,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     useTaskStore,
     matchesHierarchicalToken,
-    isTaskInActiveProject,
     shallow,
     sortTasksBy,
     TaskStatus,
@@ -11,6 +10,7 @@ import {
     getUsedTaskTokens,
     collectBulkTaskTokens,
     tFallback,
+    type Task,
 } from '@mindwtr/core';
 import { AtSign, CheckSquare, ChevronDown, ChevronRight, Filter, Hash, Tag, type LucideIcon } from 'lucide-react';
 import { TokenPickerModal } from '../TokenPickerModal';
@@ -20,8 +20,8 @@ import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useVisibleTaskContext } from '../../hooks/useVisibleTaskContext';
 import { useTaskSelection } from './list/useTaskSelection';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
@@ -51,15 +51,21 @@ type BulkTokenPickerState = {
     action: 'add' | 'remove';
 } | null;
 
+// Module scope so the memos below can depend on them: as render-body closures
+// they were a fresh identity every render and would have defeated every memo.
+const matchesSelected = (task: Task, context: string) => {
+    const tokens = [...(task.contexts || []), ...(task.tags || [])];
+    return tokens.some(token => matchesHierarchicalToken(context, token));
+};
+
+const hasContext = (task: Task) => (task.contexts?.length || 0) > 0 || (task.tags?.length || 0) > 0;
+
 export function ContextsView() {
     const perf = usePerformanceMonitor('ContextsView');
-    const { tasks, tasksById, projects, areas, areaFilters, taskSortBy, theme, undoNotificationsEnabled, updateSettings } = useTaskStore(
+    const { tasksById, areas, taskSortBy, theme, undoNotificationsEnabled, updateSettings } = useTaskStore(
         (state) => ({
-            tasks: state.tasks,
             tasksById: state._tasksById,
-            projects: state.projects,
             areas: state.areas,
-            areaFilters: state.settings?.filters,
             taskSortBy: state.settings?.taskSortBy,
             theme: state.settings?.theme,
             undoNotificationsEnabled: state.settings?.undoNotificationsEnabled !== false,
@@ -114,11 +120,9 @@ export function ContextsView() {
         setSelectedContext(nextSelectedContext);
         setSearchQuery('');
     }), [setSelectedContext]);
-    const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilterSelection(areaFilters, areas),
-        [areaFilters, areas],
-    );
+    // Deleted, parked-project and out-of-area tasks are all gone from
+    // `activeTasks` — one core predicate, shared with every other list.
+    const { projectById: projectMap, visibleTasks: activeTasks } = useVisibleTaskContext();
 
     useEffect(() => {
         if (!perf.enabled) return;
@@ -128,26 +132,30 @@ export function ContextsView() {
         return () => window.clearTimeout(timer);
     }, [perf.enabled]);
 
-    // Filter out deleted tasks first
-    const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-    const activeTasks = tasks.filter(t =>
-        !t.deletedAt
-        && isTaskInActiveProject(t, projectMap)
-        && taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectMap, areaById)
-    );
     const hasExplicitStatusFilter = statusFilters.length > 0;
-    const baseTasks = activeTasks.filter(t =>
-        t.status !== 'archived'
-        && (selectedStatusSet.has('done') || t.status !== 'done')
-    );
-    const scopedTasks = hasExplicitStatusFilter
-        ? baseTasks.filter(t => selectedStatusSet.has(t.status))
-        : baseTasks;
+    // One memoized chain from here to sortedTasks: every step feeds a downstream
+    // useMemo, the virtualizer's count and getItemKey, and the array handed to
+    // useTaskSelection, so a fresh array anywhere invalidates all of them (#856).
+    const scopedTasks = useMemo(() => {
+        const baseTasks = activeTasks.filter(t =>
+            t.status !== 'archived'
+            && (selectedStatusSet.has('done') || t.status !== 'done')
+        );
+        return hasExplicitStatusFilter
+            ? baseTasks.filter(t => selectedStatusSet.has(t.status))
+            : baseTasks;
+    }, [activeTasks, hasExplicitStatusFilter, selectedStatusSet]);
 
     // Extract unique context and tag tokens separately for the selector sidebar.
-    const allContextTokens = Array.from(new Set(scopedTasks.flatMap(t => t.contexts || []))).sort();
-    const allTagTokens = Array.from(new Set(scopedTasks.flatMap(t => t.tags || []))).sort();
-    const allTokens = [...allContextTokens, ...allTagTokens];
+    const allContextTokens = useMemo(
+        () => Array.from(new Set(scopedTasks.flatMap(t => t.contexts || []))).sort(),
+        [scopedTasks],
+    );
+    const allTagTokens = useMemo(
+        () => Array.from(new Set(scopedTasks.flatMap(t => t.tags || []))).sort(),
+        [scopedTasks],
+    );
+    const allTokens = useMemo(() => [...allContextTokens, ...allTagTokens], [allContextTokens, allTagTokens]);
 
     useEffect(() => {
         // Keep persisted context selections through the empty startup frame; reset only after active tasks expose tokens.
@@ -156,24 +164,17 @@ export function ContextsView() {
         setSelectedContext(null);
     }, [allTokens, selectedContext, setSelectedContext]);
 
-    const matchesSelected = (task: typeof activeTasks[number], context: string) => {
-        const tokens = [...(task.contexts || []), ...(task.tags || [])];
-        return tokens.some(token => matchesHierarchicalToken(context, token));
-    };
-
-    const hasContext = (task: typeof activeTasks[number]) =>
-        (task.contexts?.length || 0) > 0 || (task.tags?.length || 0) > 0;
-
-    const contextFilteredTasks = selectedContext === NO_CONTEXT_TOKEN
-        ? scopedTasks.filter((t) => !hasContext(t))
-        : selectedContext
-            ? scopedTasks.filter(t => matchesSelected(t, selectedContext))
-            : scopedTasks.filter((t) => hasContext(t));
+    const contextFilteredTasks = useMemo(() => {
+        if (selectedContext === NO_CONTEXT_TOKEN) return scopedTasks.filter((t) => !hasContext(t));
+        if (selectedContext) return scopedTasks.filter(t => matchesSelected(t, selectedContext));
+        return scopedTasks.filter((t) => hasContext(t));
+    }, [scopedTasks, selectedContext]);
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    const filteredTasks = normalizedSearchQuery
+    const filteredTasks = useMemo(() => (normalizedSearchQuery
         ? contextFilteredTasks.filter((task) => task.title.toLowerCase().includes(normalizedSearchQuery))
-        : contextFilteredTasks;
-    const sortedTasks = sortTasksBy(filteredTasks, sortBy);
+        : contextFilteredTasks
+    ), [contextFilteredTasks, normalizedSearchQuery]);
+    const sortedTasks = useMemo(() => sortTasksBy(filteredTasks, sortBy), [filteredTasks, sortBy]);
     const groupBy = persistedViewState.groupBy;
     const setGroupBy = useCallback((value: ContextsViewGroupBy) => {
         setPersistedViewState((current) => ({

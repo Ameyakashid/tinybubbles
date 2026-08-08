@@ -14,7 +14,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, removeAdvancedFilterCriteriaChip, formatFocusTaskLimitText,
-    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, isTaskInActiveProject, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@mindwtr/core';
+    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@mindwtr/core';
 import type { MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@mindwtr/core';
 import { useTaskFilterSelections } from '@mindwtr/core/task-filter-selections';
 import { useLanguage } from '../../contexts/language-context';
@@ -24,7 +24,8 @@ import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X } from 'lucide-
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea, projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { PomodoroPanel } from './PomodoroPanel';
 import { AgendaFiltersPanel, type AgendaActiveFilterChip, type AgendaProjectFilterOption } from './agenda/AgendaFiltersPanel';
@@ -279,10 +280,13 @@ export function AgendaView() {
     const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
     const pomodoroEnabled = settings?.features?.pomodoro === true;
     const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
-    const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilterSelection(settings?.filters, areas),
-        [settings?.filters, areas],
+    const { areaById, resolvedAreaFilter } = useAreaVisibility();
+    // The derived `projectMap` on purpose, not the hook's: Focus reads the
+    // tombstone-aware map so a task under a just-deleted project resolves the
+    // same way here as it does in the store's own derived state.
+    const visibility = useMemo(
+        () => ({ areaById, projectById: projectMap, resolvedAreaFilter }),
+        [areaById, projectMap, resolvedAreaFilter],
     );
 
     useEffect(() => {
@@ -299,11 +303,8 @@ export function AgendaView() {
 
     // Filter active tasks
     const baseActiveTasks = useMemo(() => (
-        derivedActiveTasks.filter(t =>
-            isTaskInActiveProject(t, projectMap)
-            && taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectMap, areaById)
-        )
-    ), [derivedActiveTasks, projectMap, resolvedAreaFilter, areaById]);
+        derivedActiveTasks.filter((t) => isTaskVisibleInArea(t, visibility))
+    ), [derivedActiveTasks, visibility]);
 
     const futureStartTick = useFutureStartRevealTick(baseActiveTasks);
     const { activeTasks, allTokens } = useMemo(() => {

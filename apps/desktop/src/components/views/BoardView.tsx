@@ -19,7 +19,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { TaskItem } from '../TaskItem';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, isTaskInActiveProject, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
+import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
 import { resolveBoardDragEnd } from './board-view-dnd';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
@@ -27,7 +27,8 @@ import { Filter, GripVertical } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea, projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
 import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
@@ -201,14 +202,13 @@ function DraggableTask({ task, dragLabel }: { task: Task; dragLabel: string }) {
 
 export function BoardView() {
     const perf = usePerformanceMonitor('BoardView');
-    const { tasks, moveTask, reorderBoardTasks, settings, projects, areas } = useTaskStore(
+    const { tasks, moveTask, reorderBoardTasks, settings, projects } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             moveTask: state.moveTask,
             reorderBoardTasks: state.reorderBoardTasks,
             settings: state.settings,
             projects: state.projects,
-            areas: state.areas,
         }),
         shallow
     );
@@ -240,12 +240,8 @@ export function BoardView() {
     const selectedDuePreset = criteria.dueDateRange && 'preset' in criteria.dueDateRange
         ? criteria.dueDateRange.preset
         : undefined;
-    const areaById = React.useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const projectMap = React.useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-    const resolvedAreaFilter = React.useMemo(
-        () => resolveAreaFilterSelection(settings?.filters, areas),
-        [settings?.filters, areas],
-    );
+    const visibility = useAreaVisibility();
+    const { areaById, projectById: projectMap, resolvedAreaFilter } = visibility;
     const sortedProjects = React.useMemo(
         () =>
             projects
@@ -329,11 +325,8 @@ export function BoardView() {
         [tasks, sortBy],
     );
     const areaFilteredTasks = React.useMemo(
-        () => sortedTasks.filter((task) =>
-            isTaskInActiveProject(task, projectMap) &&
-            taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)
-        ),
-        [sortedTasks, projectMap, resolvedAreaFilter, areaById]
+        () => sortedTasks.filter((task) => isTaskVisibleInArea(task, visibility)),
+        [sortedTasks, visibility]
     );
     const allTokens = React.useMemo(
         () => getUsedTaskTokens(areaFilteredTasks, (task) => [...(task.contexts || []), ...(task.tags || [])]),

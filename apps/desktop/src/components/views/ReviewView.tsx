@@ -12,14 +12,15 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { collectBulkTaskTokens, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Project, type Task, type TaskStatus, isTaskInActiveProject } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Task, type TaskStatus } from '@mindwtr/core';
 
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea } from '@mindwtr/core';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { useUiStore } from '../../store/ui-store';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { CONTEXTS_AXES, groupTasks, sanitizeAxis, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
@@ -107,12 +108,8 @@ export function ReviewView() {
     const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     const statusOptions = STATUS_OPTIONS;
-    const projectMapById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-    const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilterSelection(settings?.filters, areas),
-        [settings?.filters, areas],
-    );
+    const visibility = useAreaVisibility();
+    const projectMapById = visibility.projectById;
 
     useEffect(() => {
         if (!perf.enabled) return;
@@ -125,25 +122,18 @@ export function ReviewView() {
     const { tasksById, statusCounts, filteredTasks } = useMemo(() => {
         perf.trackUseMemo();
         return perf.measure('reviewData', () => {
-            const nextProjectMap: Record<string, Project> = {};
             const nextTasksById: Record<string, Task> = {};
             const nextStatusCounts: Record<string, number> = { all: 0 };
             statusOptions.forEach((status) => {
                 nextStatusCounts[status] = 0;
             });
 
-            projects.forEach((project) => {
-                nextProjectMap[project.id] = project;
-            });
-
             const nextVisibleTasks: Task[] = [];
             const nextOpenTasks: Task[] = [];
             tasks.forEach((task) => {
                 nextTasksById[task.id] = task;
-                if (task.deletedAt) return;
                 if (task.status === 'reference') return;
-                if (!isTaskInActiveProject(task, nextProjectMap)) return;
-                if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMapById, areaById)) return;
+                if (!isTaskVisibleInArea(task, visibility)) return;
                 nextVisibleTasks.push(task);
                 if (task.status !== 'done') {
                     nextOpenTasks.push(task);
@@ -168,7 +158,7 @@ export function ReviewView() {
                 filteredTasks: searchFilteredTasks,
             };
         });
-    }, [filterStatus, normalizedSearchQuery, projects, sortBy, tasks, resolvedAreaFilter, projectMapById, areaById]);
+    }, [filterStatus, normalizedSearchQuery, sortBy, tasks, visibility]);
 
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
     const {
