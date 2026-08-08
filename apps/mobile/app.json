@@ -61,6 +61,7 @@
     },
     "plugins": [
       "./plugins/ios-cloudkit-sync",
+      "./plugins/ios-fabric-unmount-guard",
       "./plugins/expo-router",
       [
         "expo-splash-screen",
