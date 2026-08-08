@@ -6,7 +6,9 @@ import {
   type UpdateInfo,
 } from "../../../lib/update-service";
 
-export type LinuxDistroInfo = { id?: string; id_like?: string[] };
+import type { LinuxDistroInfo } from "../../../lib/runtime";
+
+export type { LinuxDistroInfo };
 export type LinuxFlavor = "arch" | "debian" | "rpm" | "other";
 
 export type RecommendedDownload = {
