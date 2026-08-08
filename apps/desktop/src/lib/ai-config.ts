@@ -6,6 +6,7 @@ import {
 } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
 import { logError } from './app-log';
+import { invokeNative } from './tauri-invoke';
 
 const AI_SECRET_KEY = 'mindwtr-ai-key-secret';
 
@@ -133,8 +134,7 @@ const saveLocalKey = async (provider: AIProviderId, value: string): Promise<void
 export async function loadAIKey(provider: AIProviderId): Promise<string> {
     if (isTauriRuntime()) {
         try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const value = await invoke<string | null>('get_ai_key', { provider });
+            const value = await invokeNative<string | null>('get_ai_key', { provider });
             if (typeof value === 'string') return value;
         } catch (error) {
             void logError(error, { scope: 'ai', step: 'loadKey' });
@@ -147,8 +147,7 @@ export async function loadAIKey(provider: AIProviderId): Promise<string> {
 export async function saveAIKey(provider: AIProviderId, value: string): Promise<void> {
     if (isTauriRuntime()) {
         try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('set_ai_key', { provider, value: value || null });
+            await invokeNative('set_ai_key', { provider, value: value || null });
             return;
         } catch (error) {
             void logError(error, { scope: 'ai', step: 'saveKey' });

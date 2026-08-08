@@ -133,8 +133,7 @@ const transcribeWhisper = async (audio: AudioInput, config: SpeechToTextConfig) 
         throw new Error('Whisper is only available in the desktop app');
     }
     const language = normalizeSpeechLanguage(config.language);
-    const { invoke } = await import('@tauri-apps/api/core');
-    const text = await invoke<string>('transcribe_whisper', {
+    const text = await invokeNative<string>('transcribe_whisper', {
         modelPath: config.modelPath,
         audioPath: audio.path,
         language: language === 'auto' ? null : language,
@@ -154,8 +153,7 @@ const transcribeParakeet = async (audio: AudioInput, config: SpeechToTextConfig)
         throw new Error('Parakeet is only available in the desktop app');
     }
     const language = normalizeSpeechLanguage(config.language);
-    const { invoke } = await import('@tauri-apps/api/core');
-    const text = await invoke<string>('transcribe_parakeet', {
+    const text = await invokeNative<string>('transcribe_parakeet', {
         modelPath: config.modelPath,
         audioPath: audio.path,
         language: language === 'auto' ? null : language,

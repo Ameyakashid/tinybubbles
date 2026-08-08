@@ -7,6 +7,7 @@ import {
 } from '@mindwtr/core';
 
 import { getInstallSourceOrFallback, isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 import { normalizeAnalyticsInstallChannel } from './install-source';
 import { webStorage } from './storage-adapter-web';
 
@@ -110,8 +111,7 @@ export const getDesktopVersion = async (): Promise<string> => {
 const getStartupAnalyticsHeartbeatEnabled = async (): Promise<boolean> => {
     if (isTauriRuntime()) {
         try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const data = await invoke<AppData>('get_data');
+            const data = await invokeNative<AppData>('get_data');
             return data?.settings?.analytics?.heartbeatEnabled !== false;
         } catch {
             return true;

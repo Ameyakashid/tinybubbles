@@ -17,6 +17,7 @@ import {
 } from '@mindwtr/core';
 import { useTaskStore } from '@mindwtr/core';
 import { isFlatpakRuntime, isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 
 const notifiedAtByTask = new Map<string, string>();
 const repeatNotifiedByTask = new Map<string, string>();
@@ -168,8 +169,7 @@ async function sendFlatpakPortalNotification(title: string, body?: string): Prom
     if (!isTauriRuntime() || !isFlatpakRuntime()) return false;
 
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('send_flatpak_notification', {
+        await invokeNative('send_flatpak_notification', {
             title,
             body: body?.trim() ? body : undefined,
         });

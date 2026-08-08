@@ -4,6 +4,7 @@
 
 import { reportError } from "./report-error";
 import { isFlatpakRuntime, isTauriRuntime } from "./runtime";
+import { invokeNative } from "./tauri-invoke";
 
 const GITHUB_RELEASES_API =
   "https://api.github.com/repos/dongdongbh/Mindwtr/releases/latest";
@@ -549,9 +550,8 @@ const fetchMicrosoftStoreUpdateInfo = async (
   if (!isTauriRuntime()) {
     throw new Error("Microsoft Store update checks require the desktop app.");
   }
-  const { invoke } = await import("@tauri-apps/api/core");
   return normalizeMicrosoftStoreUpdateInfo(
-    await invoke<MicrosoftStoreUpdateInfo>("check_microsoft_store_update"),
+    await invokeNative<MicrosoftStoreUpdateInfo>("check_microsoft_store_update"),
   );
 };
 

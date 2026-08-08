@@ -14,6 +14,7 @@ import { isLocalCalendarFileUrl } from './external-calendar-source';
 import { isTauriRuntime } from './runtime';
 import { fetchSystemCalendarEvents } from './system-calendar';
 import { getTauriHttpFetch } from './tauri-http';
+import { invokeNative } from './tauri-invoke';
 
 const ICS_MONTH_CACHE_TTL_MS = 5 * 60 * 1000;
 const ICS_MONTH_CACHE_MAX_ENTRIES = 120;
@@ -158,8 +159,7 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
         // Read through our own command, not the fs plugin: the plugin's scope
         // check canonicalizes first, which fails outright on virtual volumes
         // such as rclone/WinFSP mounts.
-        const mod: any = await import('@tauri-apps/api/core');
-        return await mod.invoke('read_external_calendar_file', { url });
+        return await invokeNative<string>('read_external_calendar_file', { url });
     }
 
     if (isTauriRuntime()) {

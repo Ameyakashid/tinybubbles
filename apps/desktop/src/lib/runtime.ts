@@ -46,8 +46,9 @@ async function resolveWithTimeout<T>(promise: Promise<T>, fallback: T, timeoutMs
 
 export async function getInstallSourceOrFallback(fallback = 'unknown'): Promise<string> {
     if (!isTauriRuntime()) return fallback;
-    const { invoke } = await import('@tauri-apps/api/core');
-    return resolveWithTimeout(invoke<string>('get_install_source'), fallback, INSTALL_SOURCE_TIMEOUT_MS);
+    // Imported lazily: tauri-invoke guards on isTauriRuntime from this module.
+    const { invokeNative } = await import('./tauri-invoke');
+    return resolveWithTimeout(invokeNative<string>('get_install_source'), fallback, INSTALL_SOURCE_TIMEOUT_MS);
 }
 
 /** Mirrors the Rust `LinuxDistroInfo` returned by `get_linux_distro`. */

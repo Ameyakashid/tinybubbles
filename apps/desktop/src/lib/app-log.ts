@@ -9,6 +9,7 @@ import {
     useTaskStore,
 } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 import { getManagedPath } from './managed-paths';
 
 const LOG_DIR_NAME = 'logs';
@@ -58,8 +59,7 @@ async function appendLogLine(entry: LogEntry, options?: AppendLogOptions): Promi
     try {
         const line = `${JSON.stringify(entry)}\n`;
         try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            return await invoke<string>('append_log_line', { line });
+            return await invokeNative<string>('append_log_line', { line });
         } catch (error) {
             const logDir = await ensureLogDir();
             const logFile = await join(logDir, LOG_FILE_NAME);
@@ -87,8 +87,7 @@ export async function getLogPath(): Promise<string | null> {
 export async function clearLog(): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('clear_log_file');
+        await invokeNative('clear_log_file');
     } catch (error) {
         try {
             const logFile = await getManagedPath(LOG_DIR_NAME, LOG_FILE_NAME);

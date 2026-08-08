@@ -1,5 +1,6 @@
 import { useTaskStore, type AppSettings } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 
 type TauriHttpFetch = typeof fetch;
 type TauriFetchInit = RequestInit & {
@@ -54,8 +55,7 @@ export const withTauriHttpProxy = (
 export const syncNativeProxyUrl = async (proxyUrl: string | undefined): Promise<void> => {
     if (!isTauriRuntime()) return;
     if (proxyUrl === undefined) return;
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('set_network_proxy', { proxyUrl: normalizeProxyUrl(proxyUrl) });
+    await invokeNative('set_network_proxy', { proxyUrl: normalizeProxyUrl(proxyUrl) });
 };
 
 export const getTauriHttpFetch = async (): Promise<TauriHttpFetch | undefined> => {
