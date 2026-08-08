@@ -6,8 +6,9 @@ import {
     type TaskDraftSetter,
     type TimeEstimate,
     createAIProvider,
+    generateUUID,
+    useTaskStore,
 } from '@mindwtr/core';
-import { isTauriRuntime } from '../../lib/runtime';
 import { buildAIConfig, buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logWarn } from '../../lib/app-log';
 
@@ -163,23 +164,19 @@ export function useTaskItemAi({
         };
     }, []);
 
-    const logAIDebug = useCallback(async (context: string, message: string) => {
-        if (!isTauriRuntime()) return;
-        try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('log_ai_debug', {
-                context,
-                message,
+    // One log line per AI failure, through the app-log adapter: the provider,
+    // model and task that produced it are the whole point of the entry.
+    const logAIFailure = useCallback((step: string, message: string) => {
+        void logWarn(`AI ${step} failed`, {
+            scope: 'ai',
+            extra: {
+                step,
                 provider: aiProvider,
                 model: settings?.ai?.model ?? '',
                 taskId,
-            });
-        } catch (error) {
-            void logWarn('AI debug log failed', {
-                scope: 'ai',
-                extra: { error: error instanceof Error ? error.message : String(error) },
-            });
-        }
+                error: message,
+            },
+        });
     }, [aiProvider, settings?.ai?.model, taskId]);
 
     const getAIProvider = useCallback(async () => {
@@ -272,15 +269,11 @@ export function useTaskItemAi({
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setAiError(message);
-            await logAIDebug('clarify', message);
-            void logWarn('AI suggestions failed', {
-                scope: 'ai',
-                extra: { error: error instanceof Error ? error.message : String(error) },
-            });
+            logAIFailure('clarify', message);
         } finally {
             setIsAIWorking(false);
         }
-    }, [contextOptions, editContexts, editDueDate, editReviewAt, editStartTime, editTitle, getAIProvider, isAIWorking, logAIDebug, projectContext]);
+    }, [contextOptions, editContexts, editDueDate, editReviewAt, editStartTime, editTitle, getAIProvider, isAIWorking, logAIFailure, projectContext]);
 
     const handleAIBreakdown = useCallback(async () => {
         if (isAIWorking) return;
@@ -303,15 +296,37 @@ export function useTaskItemAi({
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             setAiError(message);
-            await logAIDebug('breakdown', message);
-            void logWarn('AI breakdown failed', {
-                scope: 'ai',
-                extra: { error: error instanceof Error ? error.message : String(error) },
-            });
+            logAIFailure('breakdown', message);
         } finally {
             setIsAIWorking(false);
         }
-    }, [editDescription, editTitle, getAIProvider, isAIWorking, logAIDebug, projectContext]);
+    }, [editDescription, editTitle, getAIProvider, isAIWorking, logAIFailure, projectContext]);
+
+    // The three behaviours below used to live as inline closures on the row
+    // component; they are AI outcomes, so they belong beside the state they
+    // consume.
+    const addBreakdownStepsToChecklist = useCallback(() => {
+        if (!aiBreakdownSteps?.length) return;
+        const { _tasksById, updateTask } = useTaskStore.getState();
+        const checklist = _tasksById.get(taskId)?.checklist ?? [];
+        const newItems = aiBreakdownSteps.map((step) => ({
+            id: generateUUID(),
+            title: step,
+            isCompleted: false,
+        }));
+        void updateTask(taskId, { checklist: [...checklist, ...newItems] });
+        setAiBreakdownSteps(null);
+    }, [aiBreakdownSteps, taskId]);
+
+    const selectClarifyOption = useCallback((action: string) => {
+        setField('title', action);
+        setAiClarifyResponse(null);
+    }, [setField]);
+
+    const applyClarifySuggestion = useCallback(() => {
+        if (!aiClarifyResponse?.suggestedAction) return;
+        applyAISuggestion(aiClarifyResponse.suggestedAction);
+    }, [aiClarifyResponse, applyAISuggestion]);
 
     return {
         aiEnabled,
@@ -328,7 +343,9 @@ export function useTaskItemAi({
         clearAiBreakdown,
         clearAiClarify,
         applyCopilotSuggestion,
-        applyAISuggestion,
+        addBreakdownStepsToChecklist,
+        selectClarifyOption,
+        applyClarifySuggestion,
         handleAIClarify,
         handleAIBreakdown,
     };

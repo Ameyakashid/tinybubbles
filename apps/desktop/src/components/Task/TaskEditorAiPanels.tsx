@@ -1,0 +1,206 @@
+import { Loader2, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type { useTaskItemAi } from './useTaskItemAi';
+
+type TaskEditorAi = ReturnType<typeof useTaskItemAi>;
+
+type TaskEditorAiMenuProps = {
+    ai: TaskEditorAi;
+    t: (key: string) => string;
+};
+
+/** Trigger for the two AI actions, rendered inside the editor's title row. */
+export function TaskEditorAiMenu({ ai, t }: TaskEditorAiMenuProps) {
+    const { aiEnabled, isAIWorking, handleAIClarify, handleAIBreakdown } = ai;
+    const [aiMenuOpen, setAiMenuOpen] = useState(false);
+    const aiMenuRef = useRef<HTMLDivElement>(null);
+    const aiAssistantLabel = t('taskEdit.aiAssistant');
+    const aiAssistantAriaLabel = aiAssistantLabel === 'taskEdit.aiAssistant' ? 'AI assistant' : aiAssistantLabel;
+    const aiWorkingLabel = t('ai.working');
+    const aiWorkingText = aiWorkingLabel === 'ai.working' ? 'Working...' : aiWorkingLabel;
+
+    useEffect(() => {
+        if (!aiMenuOpen) return;
+        const handleClick = (event: MouseEvent) => {
+            if (!aiMenuRef.current) return;
+            if (aiMenuRef.current.contains(event.target as Node)) return;
+            setAiMenuOpen(false);
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [aiMenuOpen]);
+
+    if (!aiEnabled) return null;
+    return (
+        <div className="flex items-center gap-2">
+            <div className="relative" ref={aiMenuRef}>
+                <button
+                    type="button"
+                    onClick={() => setAiMenuOpen((prev) => !prev)}
+                    disabled={isAIWorking}
+                    aria-label={aiAssistantAriaLabel}
+                    aria-expanded={aiMenuOpen}
+                    aria-busy={isAIWorking}
+                    className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    {isAIWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                </button>
+                {aiMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-44 rounded-md border border-border bg-card shadow-lg overflow-hidden z-10">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAiMenuOpen(false);
+                                handleAIClarify();
+                            }}
+                            disabled={isAIWorking}
+                            aria-busy={isAIWorking}
+                            className="w-full text-left text-xs px-3 py-2 hover:bg-muted/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {isAIWorking && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {t('taskEdit.aiClarify')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAiMenuOpen(false);
+                                handleAIBreakdown();
+                            }}
+                            disabled={isAIWorking}
+                            aria-busy={isAIWorking}
+                            className="w-full text-left text-xs px-3 py-2 hover:bg-muted/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {isAIWorking && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {t('taskEdit.aiBreakdown')}
+                        </button>
+                    </div>
+                )}
+            </div>
+            {isAIWorking && (
+                <div role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                    {aiWorkingText}
+                </div>
+            )}
+        </div>
+    );
+}
+
+type TaskEditorAiPanelsProps = {
+    ai: TaskEditorAi;
+    timeEstimatesEnabled: boolean;
+    t: (key: string) => string;
+};
+
+/** Copilot, error, breakdown and clarify panels, stacked under the title row. */
+export function TaskEditorAiPanels({ ai, timeEstimatesEnabled, t }: TaskEditorAiPanelsProps) {
+    const {
+        aiEnabled,
+        aiError,
+        aiBreakdownSteps,
+        aiClarifyResponse,
+        copilotSuggestion,
+        copilotApplied,
+        copilotContext,
+        copilotEstimate,
+        applyCopilotSuggestion,
+        addBreakdownStepsToChecklist,
+        clearAiBreakdown,
+        selectClarifyOption,
+        applyClarifySuggestion,
+        clearAiClarify,
+    } = ai;
+    if (!aiEnabled) return null;
+    const copilotTags = copilotSuggestion?.tags ?? [];
+
+    return (
+        <>
+            {copilotSuggestion && !copilotApplied && (
+                <button
+                    type="button"
+                    onClick={applyCopilotSuggestion}
+                    className="text-xs px-2 py-1 rounded bg-muted/30 border border-border text-muted-foreground hover:bg-muted/60 transition-colors text-left"
+                >
+                    ✨ {t('copilot.suggested')}{' '}
+                    {copilotSuggestion.context ? `${copilotSuggestion.context} ` : ''}
+                    {timeEstimatesEnabled && copilotSuggestion.timeEstimate ? `${copilotSuggestion.timeEstimate}` : ''}
+                    {copilotSuggestion.tags?.length ? copilotSuggestion.tags.join(' ') : ''}
+                    <span className="ml-2 text-muted-foreground/70">{t('copilot.applyHint')}</span>
+                </button>
+            )}
+            {copilotApplied && (
+                <div className="text-xs px-2 py-1 rounded bg-muted/30 border border-border text-muted-foreground">
+                    ✅ {t('copilot.applied')}{' '}
+                    {copilotContext ? `${copilotContext} ` : ''}
+                    {timeEstimatesEnabled && copilotEstimate ? `${copilotEstimate}` : ''}
+                    {copilotTags.length ? copilotTags.join(' ') : ''}
+                </div>
+            )}
+            {aiError && (
+                <div className="text-xs text-muted-foreground border border-border rounded-md p-2 bg-muted/20 break-words whitespace-pre-wrap">
+                    {aiError}
+                </div>
+            )}
+            {aiBreakdownSteps && (
+                <div className="border border-border rounded-md p-2 space-y-2 text-xs">
+                    <div className="text-muted-foreground">{t('ai.breakdownTitle')}</div>
+                    <div className="space-y-1">
+                        {aiBreakdownSteps.map((step, index) => (
+                            <div key={`${step}-${index}`} className="text-foreground">
+                                {index + 1}. {step}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={addBreakdownStepsToChecklist}
+                            className="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        >
+                            {t('ai.addSteps')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={clearAiBreakdown}
+                            className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                    </div>
+                </div>
+            )}
+            {aiClarifyResponse && (
+                <div className="border border-border rounded-md p-2 space-y-2 text-xs">
+                    <div className="text-muted-foreground">{aiClarifyResponse.question}</div>
+                    <div className="flex flex-wrap gap-2">
+                        {aiClarifyResponse.options.map((option) => (
+                            <button
+                                key={option.label}
+                                type="button"
+                                onClick={() => selectClarifyOption(option.action)}
+                                className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors"
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                        {aiClarifyResponse.suggestedAction?.title && (
+                            <button
+                                type="button"
+                                onClick={applyClarifySuggestion}
+                                className="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                            >
+                                {t('ai.applySuggestion')}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={clearAiClarify}
+                            className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}

@@ -1,18 +1,16 @@
 import { useState, useEffect, useRef, type DragEvent, type FormEvent, type ReactNode } from 'react';
-import { Check, ChevronDown, ChevronRight, HelpCircle, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, HelpCircle, Trash2 } from 'lucide-react';
 import {
     filterProjectsBySelectedArea,
     resolveAutoTextDirection,
     tFallback,
     type Area,
-    type ClarifyResponse,
     type Project,
     type Section,
     type TaskDraft,
     type TaskDraftSetter,
     type TaskEditorFieldId,
     type TaskEditorSectionId,
-    type TimeEstimate,
 } from '@mindwtr/core';
 import { AreaSelector } from '../ui/AreaSelector';
 import { ProjectSelector } from '../ui/ProjectSelector';
@@ -22,32 +20,18 @@ import { cn } from '../../lib/utils';
 import { QUICK_ADD_FIELD_TOKENS, QuickAddTokenBadge, taskEditorLabelClassName } from './task-editor-label';
 import { findAttachmentsSection } from './task-item-helpers';
 import { FocusStarIcon } from '../FocusStarIcon';
+import { TaskEditorAiMenu, TaskEditorAiPanels } from './TaskEditorAiPanels';
+import type { useTaskItemAi } from './useTaskItemAi';
 
 interface TaskItemEditorProps {
     t: (key: string) => string;
     draft: TaskDraft;
     setField: TaskDraftSetter;
     autoFocusTitle?: boolean;
-    resetCopilotDraft: () => void;
-    aiEnabled: boolean;
-    isAIWorking: boolean;
-    handleAIClarify: () => void;
-    handleAIBreakdown: () => void;
-    copilotSuggestion: { context?: string; timeEstimate?: TimeEstimate; tags?: string[] } | null;
-    copilotApplied: boolean;
-    applyCopilotSuggestion: () => void;
-    copilotContext?: string;
-    copilotEstimate?: TimeEstimate;
-    copilotTags: string[];
+    // One seam for the whole AI feature: the editor forwards it to the menu
+    // and panel components and otherwise knows nothing about AI.
+    ai: ReturnType<typeof useTaskItemAi>;
     timeEstimatesEnabled: boolean;
-    aiError: string | null;
-    aiBreakdownSteps: string[] | null;
-    onAddBreakdownSteps: () => void;
-    onDismissBreakdown: () => void;
-    aiClarifyResponse: ClarifyResponse | null;
-    onSelectClarifyOption: (action: string) => void;
-    onApplyAISuggestion: () => void;
-    onDismissClarify: () => void;
     projects: Project[];
     sections: Section[];
     areas: Area[];
@@ -109,26 +93,8 @@ export function TaskItemEditor({
     draft,
     setField,
     autoFocusTitle = false,
-    resetCopilotDraft,
-    aiEnabled,
-    isAIWorking,
-    handleAIClarify,
-    handleAIBreakdown,
-    copilotSuggestion,
-    copilotApplied,
-    applyCopilotSuggestion,
-    copilotContext,
-    copilotEstimate,
-    copilotTags,
+    ai,
     timeEstimatesEnabled,
-    aiError,
-    aiBreakdownSteps,
-    onAddBreakdownSteps,
-    onDismissBreakdown,
-    aiClarifyResponse,
-    onSelectClarifyOption,
-    onApplyAISuggestion,
-    onDismissClarify,
     projects,
     sections,
     areas,
@@ -174,10 +140,7 @@ export function TaskItemEditor({
     const setEditSectionId = (value: string) => setField('sectionId', value);
     const setEditAreaId = (value: string) => setField('areaId', value);
     const titleDirection = resolveAutoTextDirection(editTitle, language);
-    const aiAssistantLabel = t('taskEdit.aiAssistant');
-    const aiAssistantAriaLabel = aiAssistantLabel === 'taskEdit.aiAssistant' ? 'AI assistant' : aiAssistantLabel;
-    const aiWorkingLabel = t('ai.working');
-    const aiWorkingText = aiWorkingLabel === 'ai.working' ? 'Working...' : aiWorkingLabel;
+    const { resetCopilotDraft } = ai;
     const taskEditorLayoutHelpLabel = tFallback(t, 'taskEdit.editorLayoutHelpLabel', 'Editor layout help');
     const taskEditorLayoutHelpText = tFallback(
         t,
@@ -195,8 +158,6 @@ export function TaskItemEditor({
     const [schedulingOpen, setSchedulingOpen] = useState(sectionOpenDefaults.scheduling);
     const [organizationOpen, setOrganizationOpen] = useState(sectionOpenDefaults.organization);
     const [detailsOpen, setDetailsOpen] = useState(sectionOpenDefaults.details);
-    const [aiMenuOpen, setAiMenuOpen] = useState(false);
-    const aiMenuRef = useRef<HTMLDivElement>(null);
 
     // Attachments can live in any of the three collapsible sections (user
     // configurable layout); a dropped file needs to expand whichever one
@@ -290,16 +251,6 @@ export function TaskItemEditor({
         return false;
     };
 
-    useEffect(() => {
-        if (!aiMenuOpen) return;
-        const handleClick = (event: MouseEvent) => {
-            if (!aiMenuRef.current) return;
-            if (aiMenuRef.current.contains(event.target as Node)) return;
-            setAiMenuOpen(false);
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, [aiMenuOpen]);
     return (
         <form
             onSubmit={onSubmit}
@@ -389,146 +340,9 @@ export function TaskItemEditor({
                             <FocusStarIcon filled={focusStar.isFocused} className="w-4 h-4" />
                         </button>
                     )}
-                    {aiEnabled && (
-                        <div className="flex items-center gap-2">
-                            <div className="relative" ref={aiMenuRef}>
-                                <button
-                                    type="button"
-                                    onClick={() => setAiMenuOpen((prev) => !prev)}
-                                    disabled={isAIWorking}
-                                    aria-label={aiAssistantAriaLabel}
-                                    aria-expanded={aiMenuOpen}
-                                    aria-busy={isAIWorking}
-                                    className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                    {isAIWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                </button>
-                                {aiMenuOpen && (
-                                    <div className="absolute right-0 mt-2 w-44 rounded-md border border-border bg-card shadow-lg overflow-hidden z-10">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setAiMenuOpen(false);
-                                                handleAIClarify();
-                                            }}
-                                            disabled={isAIWorking}
-                                            aria-busy={isAIWorking}
-                                            className="w-full text-left text-xs px-3 py-2 hover:bg-muted/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {isAIWorking && <Loader2 className="w-3 h-3 animate-spin" />}
-                                            {t('taskEdit.aiClarify')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setAiMenuOpen(false);
-                                                handleAIBreakdown();
-                                            }}
-                                            disabled={isAIWorking}
-                                            aria-busy={isAIWorking}
-                                            className="w-full text-left text-xs px-3 py-2 hover:bg-muted/60 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {isAIWorking && <Loader2 className="w-3 h-3 animate-spin" />}
-                                            {t('taskEdit.aiBreakdown')}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            {isAIWorking && (
-                                <div role="status" aria-live="polite" className="text-xs text-muted-foreground">
-                                    {aiWorkingText}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <TaskEditorAiMenu ai={ai} t={t} />
                 </div>
-            {aiEnabled && copilotSuggestion && !copilotApplied && (
-                <button
-                    type="button"
-                    onClick={applyCopilotSuggestion}
-                    className="text-xs px-2 py-1 rounded bg-muted/30 border border-border text-muted-foreground hover:bg-muted/60 transition-colors text-left"
-                >
-                    ✨ {t('copilot.suggested')}{' '}
-                    {copilotSuggestion.context ? `${copilotSuggestion.context} ` : ''}
-                    {timeEstimatesEnabled && copilotSuggestion.timeEstimate ? `${copilotSuggestion.timeEstimate}` : ''}
-                    {copilotSuggestion.tags?.length ? copilotSuggestion.tags.join(' ') : ''}
-                    <span className="ml-2 text-muted-foreground/70">{t('copilot.applyHint')}</span>
-                </button>
-            )}
-            {aiEnabled && copilotApplied && (
-                <div className="text-xs px-2 py-1 rounded bg-muted/30 border border-border text-muted-foreground">
-                    ✅ {t('copilot.applied')}{' '}
-                    {copilotContext ? `${copilotContext} ` : ''}
-                    {timeEstimatesEnabled && copilotEstimate ? `${copilotEstimate}` : ''}
-                    {copilotTags.length ? copilotTags.join(' ') : ''}
-                </div>
-            )}
-            {aiEnabled && aiError && (
-                <div className="text-xs text-muted-foreground border border-border rounded-md p-2 bg-muted/20 break-words whitespace-pre-wrap">
-                    {aiError}
-                </div>
-            )}
-            {aiEnabled && aiBreakdownSteps && (
-                <div className="border border-border rounded-md p-2 space-y-2 text-xs">
-                    <div className="text-muted-foreground">{t('ai.breakdownTitle')}</div>
-                    <div className="space-y-1">
-                        {aiBreakdownSteps.map((step, index) => (
-                            <div key={`${step}-${index}`} className="text-foreground">
-                                {index + 1}. {step}
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            onClick={onAddBreakdownSteps}
-                            className="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                        >
-                            {t('ai.addSteps')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onDismissBreakdown}
-                            className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
-                        >
-                            {t('common.cancel')}
-                        </button>
-                    </div>
-                </div>
-            )}
-            {aiEnabled && aiClarifyResponse && (
-                <div className="border border-border rounded-md p-2 space-y-2 text-xs">
-                    <div className="text-muted-foreground">{aiClarifyResponse.question}</div>
-                    <div className="flex flex-wrap gap-2">
-                        {aiClarifyResponse.options.map((option) => (
-                            <button
-                                key={option.label}
-                                type="button"
-                                onClick={() => onSelectClarifyOption(option.action)}
-                                className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors"
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                        {aiClarifyResponse.suggestedAction?.title && (
-                            <button
-                                type="button"
-                                onClick={onApplyAISuggestion}
-                                className="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                            >
-                                {t('ai.applySuggestion')}
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={onDismissClarify}
-                            className="px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
-                        >
-                            {t('common.cancel')}
-                        </button>
-                    </div>
-                </div>
-            )}
+            <TaskEditorAiPanels ai={ai} timeEstimatesEnabled={timeEstimatesEnabled} t={t} />
             {basicFieldsBeforeOrganizers.length > 0 && (
                 <div className="space-y-3">
                     {basicFieldsBeforeOrganizers.map((fieldId) => (

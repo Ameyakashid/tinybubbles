@@ -1,8 +1,35 @@
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createTaskDraft, type Task } from '@mindwtr/core';
 
 import { TaskItemEditor } from './TaskItemEditor';
+
+type EditorAi = Parameters<typeof TaskItemEditor>[0]['ai'];
+
+// The editor takes the AI hook's result whole, so a panel test is a small
+// object literal instead of two dozen props.
+const createAi = (overrides: Partial<EditorAi> = {}): EditorAi => ({
+    aiEnabled: true,
+    isAIWorking: false,
+    aiClarifyResponse: null,
+    aiError: null,
+    aiBreakdownSteps: null,
+    copilotSuggestion: null,
+    copilotApplied: false,
+    copilotContext: undefined,
+    copilotEstimate: undefined,
+    resetCopilotDraft: vi.fn(),
+    resetAiState: vi.fn(),
+    clearAiBreakdown: vi.fn(),
+    clearAiClarify: vi.fn(),
+    applyCopilotSuggestion: vi.fn(),
+    addBreakdownStepsToChecklist: vi.fn(),
+    selectClarifyOption: vi.fn(),
+    applyClarifySuggestion: vi.fn(),
+    handleAIClarify: vi.fn(async () => undefined),
+    handleAIBreakdown: vi.fn(async () => undefined),
+    ...overrides,
+});
 
 const baseTask: Task = {
     id: 'task-1',
@@ -43,6 +70,12 @@ const translations: Record<string, string> = {
     'taskEdit.duplicateTask': 'Duplicate task',
     'taskEdit.aiAssistant': 'AI assistant',
     'ai.working': 'Working...',
+    'ai.breakdownTitle': 'Suggested steps',
+    'ai.addSteps': 'Add steps',
+    'ai.applySuggestion': 'Apply suggestion',
+    'copilot.suggested': 'Suggested:',
+    'copilot.applyHint': 'Click to apply',
+    'copilot.applied': 'Applied:',
     'common.delete': 'Delete',
     'common.save': 'Save',
     'common.cancel': 'Cancel',
@@ -66,26 +99,8 @@ const baseProps: Parameters<typeof TaskItemEditor>[0] = {
     draft: createTaskDraft(baseTask),
     setField: vi.fn(),
     autoFocusTitle: false,
-    resetCopilotDraft: vi.fn(),
-    aiEnabled: false,
-    isAIWorking: false,
-    handleAIClarify: vi.fn(),
-    handleAIBreakdown: vi.fn(),
-    copilotSuggestion: null,
-    copilotApplied: false,
-    applyCopilotSuggestion: vi.fn(),
-    copilotContext: undefined,
-    copilotEstimate: undefined,
-    copilotTags: [],
+    ai: createAi({ aiEnabled: false }),
     timeEstimatesEnabled: false,
-    aiError: null,
-    aiBreakdownSteps: null,
-    onAddBreakdownSteps: vi.fn(),
-    onDismissBreakdown: vi.fn(),
-    aiClarifyResponse: null,
-    onSelectClarifyOption: vi.fn(),
-    onApplyAISuggestion: vi.fn(),
-    onDismissClarify: vi.fn(),
     projects: [],
     sections: [],
     areas: [],
@@ -149,11 +164,7 @@ describe('TaskItemEditor', () => {
 
     it('shows a visible loading label while AI is working', () => {
         const { getByRole, getByText } = render(
-            <TaskItemEditor
-                {...baseProps}
-                aiEnabled
-                isAIWorking
-            />
+            <TaskItemEditor {...baseProps} ai={createAi({ isAIWorking: true })} />
         );
 
         expect(getByRole('button', { name: 'AI assistant' })).toBeDisabled();
@@ -250,6 +261,126 @@ describe('TaskItemEditor', () => {
         const { queryByRole } = render(<TaskItemEditor {...baseProps} />);
 
         expect(queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    });
+});
+
+describe('TaskItemEditor AI panels', () => {
+    it('renders nothing from the AI hook while AI is disabled', () => {
+        const { queryByRole, queryByText } = render(
+            <TaskItemEditor
+                {...baseProps}
+                ai={createAi({ aiEnabled: false, aiError: 'Rate limited', aiBreakdownSteps: ['Step one'] })}
+            />
+        );
+
+        expect(queryByRole('button', { name: 'AI assistant' })).not.toBeInTheDocument();
+        expect(queryByText('Rate limited')).not.toBeInTheDocument();
+        expect(queryByText('Suggested steps')).not.toBeInTheDocument();
+    });
+
+    it('lists breakdown steps and turns them into checklist items', () => {
+        const addBreakdownStepsToChecklist = vi.fn();
+        const clearAiBreakdown = vi.fn();
+        const { getByText } = render(
+            <TaskItemEditor
+                {...baseProps}
+                ai={createAi({
+                    aiBreakdownSteps: ['Call the clinic', 'Book a slot'],
+                    addBreakdownStepsToChecklist,
+                    clearAiBreakdown,
+                })}
+            />
+        );
+
+        const panel = getByText('Suggested steps').parentElement!;
+        expect(within(panel).getByText('1. Call the clinic')).toBeInTheDocument();
+        expect(within(panel).getByText('2. Book a slot')).toBeInTheDocument();
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Add steps' }));
+        expect(addBreakdownStepsToChecklist).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
+        expect(clearAiBreakdown).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers each clarify option and the suggested action', () => {
+        const selectClarifyOption = vi.fn();
+        const applyClarifySuggestion = vi.fn();
+        const { getByText } = render(
+            <TaskItemEditor
+                {...baseProps}
+                ai={createAi({
+                    aiClarifyResponse: {
+                        question: 'What does done look like?',
+                        options: [
+                            { label: 'Book it', action: 'Book the acupuncture slot' },
+                            { label: 'Ask first', action: 'Ask about availability' },
+                        ],
+                        suggestedAction: { title: 'Book the acupuncture slot' },
+                    },
+                    selectClarifyOption,
+                    applyClarifySuggestion,
+                })}
+            />
+        );
+
+        const panel = getByText('What does done look like?').parentElement!;
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Ask first' }));
+        expect(selectClarifyOption).toHaveBeenCalledWith('Ask about availability');
+
+        fireEvent.click(within(panel).getByRole('button', { name: 'Apply suggestion' }));
+        expect(applyClarifySuggestion).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies a copilot suggestion from the suggested chip', () => {
+        const applyCopilotSuggestion = vi.fn();
+        const { getByRole } = render(
+            <TaskItemEditor
+                {...baseProps}
+                timeEstimatesEnabled
+                ai={createAi({
+                    copilotSuggestion: { context: '@phone', timeEstimate: '15min', tags: ['#health'] },
+                    applyCopilotSuggestion,
+                })}
+            />
+        );
+
+        const chip = getByRole('button', { name: /Suggested:/ });
+        expect(chip).toHaveTextContent('@phone');
+        expect(chip).toHaveTextContent('15min');
+        expect(chip).toHaveTextContent('#health');
+
+        fireEvent.click(chip);
+        expect(applyCopilotSuggestion).toHaveBeenCalledTimes(1);
+    });
+
+    it('replaces the suggestion chip with the applied summary once applied', () => {
+        const { getByText, queryByRole } = render(
+            <TaskItemEditor
+                {...baseProps}
+                timeEstimatesEnabled
+                ai={createAi({
+                    copilotSuggestion: { context: '@phone' },
+                    copilotApplied: true,
+                    copilotContext: '@phone',
+                    copilotEstimate: '15min',
+                })}
+            />
+        );
+
+        expect(queryByRole('button', { name: /Suggested:/ })).not.toBeInTheDocument();
+        const applied = getByText(/Applied:/);
+        expect(applied).toHaveTextContent('@phone');
+        expect(applied).toHaveTextContent('15min');
+    });
+
+    it('shows the AI error text when a request fails', () => {
+        const { getByText } = render(
+            <TaskItemEditor {...baseProps} ai={createAi({ aiError: 'Rate limited by the provider' })} />
+        );
+
+        expect(getByText('Rate limited by the provider')).toBeInTheDocument();
     });
 });
 

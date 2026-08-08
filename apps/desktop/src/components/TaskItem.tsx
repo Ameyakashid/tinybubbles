@@ -10,7 +10,6 @@ import {
     normalizeWeekStartSetting,
     Project,
     type RangeSelectionOptions,
-    generateUUID,
     normalizeClockTimeInput,
     normalizeFocusTaskLimit,
     tFallback,
@@ -407,25 +406,8 @@ export const TaskItem = memo(function TaskItem({
         }
     }, [draft.projectId, draft.sectionId, sectionsByProject, setDraftField, task.projectId]);
 
-    const {
-        aiEnabled,
-        isAIWorking,
-        aiClarifyResponse,
-        aiError,
-        aiBreakdownSteps,
-        copilotSuggestion,
-        copilotApplied,
-        copilotContext,
-        copilotEstimate,
-        resetCopilotDraft,
-        resetAiState,
-        clearAiBreakdown,
-        clearAiClarify,
-        applyCopilotSuggestion,
-        applyAISuggestion,
-        handleAIClarify,
-        handleAIBreakdown,
-    } = useTaskItemAi({
+    // Kept whole: the editor's AI menu and panels take the hook result itself.
+    const ai = useTaskItemAi({
         taskId: task.id,
         settings,
         t,
@@ -442,6 +424,7 @@ export const TaskItem = memo(function TaskItem({
         timeEstimatesEnabled,
         setField: setDraftField,
     });
+    const { resetCopilotDraft, resetAiState } = ai;
 
     // Desktop-only copilot policy: hand-editing the description invalidates
     // the applied-copilot markers. Editing surfaces get this wrapped setter;
@@ -1179,42 +1162,8 @@ export const TaskItem = memo(function TaskItem({
             draft={draft}
             setField={setField}
             autoFocusTitle={autoFocusTitle}
-            resetCopilotDraft={resetCopilotDraft}
-            aiEnabled={aiEnabled}
-            isAIWorking={isAIWorking}
-            handleAIClarify={handleAIClarify}
-            handleAIBreakdown={handleAIBreakdown}
-            copilotSuggestion={copilotSuggestion}
-            copilotApplied={copilotApplied}
-            applyCopilotSuggestion={applyCopilotSuggestion}
-            copilotContext={copilotContext}
-            copilotEstimate={copilotEstimate}
-            copilotTags={copilotSuggestion?.tags ?? []}
+            ai={ai}
             timeEstimatesEnabled={timeEstimatesEnabled}
-            aiError={aiError}
-            aiBreakdownSteps={aiBreakdownSteps}
-            onAddBreakdownSteps={() => {
-                if (!aiBreakdownSteps?.length) return;
-                const newItems = aiBreakdownSteps.map((step) => ({
-                    id: generateUUID(),
-                    title: step,
-                    isCompleted: false,
-                }));
-                updateTask(task.id, { checklist: [...(task.checklist || []), ...newItems] });
-                clearAiBreakdown();
-            }}
-            onDismissBreakdown={clearAiBreakdown}
-            aiClarifyResponse={aiClarifyResponse}
-            onSelectClarifyOption={(action) => {
-                setField('title', action);
-                clearAiClarify();
-            }}
-            onApplyAISuggestion={() => {
-                if (aiClarifyResponse?.suggestedAction) {
-                    applyAISuggestion(aiClarifyResponse.suggestedAction);
-                }
-            }}
-            onDismissClarify={clearAiClarify}
             projects={projects}
             areas={areas}
             sections={projectSections}
