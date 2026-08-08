@@ -303,7 +303,7 @@ export function ArchiveView() {
         t,
         undoNotificationsEnabled: settings?.undoNotificationsEnabled !== false,
     });
-    const virtualRowCount = isGrouping ? groupedVirtualRows.length : archivedTasks.length;
+    const virtualRowCount = groupedVirtualRows?.length ?? archivedTasks.length;
     const shouldVirtualize = virtualRowCount > LIST_VIRTUALIZATION_THRESHOLD;
     // Keep the Projects segment's layout behavior tied to the old flat-task
     // condition. Grouping only changes how the task segment renders.
@@ -316,14 +316,14 @@ export function ArchiveView() {
         count: shouldVirtualize ? virtualRowCount : 0,
         getScrollElement: () => listScrollRef.current,
         estimateSize: (index) => (
-            isGrouping && groupedVirtualRows[index]?.kind === 'header'
+            groupedVirtualRows?.[index]?.kind === 'header'
                 ? LIST_VIRTUAL_HEADER_ESTIMATE
                 : LIST_VIRTUAL_ROW_ESTIMATE
         ),
         overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
         getItemKey: (index) => {
-            if (!isGrouping) return archivedTasks[index]?.id ?? index;
-            const row = groupedVirtualRows[index];
+            const row = groupedVirtualRows?.[index];
+            if (!row) return archivedTasks[index]?.id ?? index;
             if (!row) return index;
             return row.kind === 'header'
                 ? `group:${row.group.id}`
@@ -477,7 +477,7 @@ export function ArchiveView() {
         if (scrolledHighlightIdRef.current === highlightTaskId) return;
 
         if (shouldVirtualize) {
-            const rowIndex = isGrouping
+            const rowIndex = groupedVirtualRows
                 ? groupedVirtualRows.findIndex((row) => row.kind === 'task' && row.task.id === highlightTaskId)
                 : archivedTasks.findIndex((task) => task.id === highlightTaskId);
             if (rowIndex < 0) return;
@@ -725,7 +725,7 @@ export function ArchiveView() {
                     <GroupedTaskList
                         groups={groupedTasks}
                         tasks={archivedTasks}
-                        virtualRows={isGrouping ? groupedVirtualRows : null}
+                        virtualRows={groupedVirtualRows}
                         virtualizer={shouldVirtualize ? rowVirtualizer : null}
                         collapsedGroupIds={collapsedGroupIds}
                         onToggleGroup={toggleGroup}

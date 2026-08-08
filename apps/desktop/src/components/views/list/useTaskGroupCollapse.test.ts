@@ -1,8 +1,9 @@
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@mindwtr/core';
 import { buildGroupedVirtualRows } from './GroupedTaskSections';
-import type { TaskGroup } from './next-grouping';
-import { buildSectionDomId, getGroupDomIdSegment } from './useTaskGroupCollapse';
+import type { CollapsedGroups, TaskGroup } from './next-grouping';
+import { buildSectionDomId, getGroupDomIdSegment, useTaskGroupCollapse } from './useTaskGroupCollapse';
 
 const task = (id: string): Task => ({
     id,
@@ -95,5 +96,39 @@ describe('buildGroupedVirtualRows', () => {
 
     it('leaves out section ids when the caller does not build them', () => {
         expect(buildGroupedVirtualRows(groups, new Set()).every((row) => row.controlsId === undefined)).toBe(true);
+    });
+});
+
+// `GroupedTaskList` decides grouped-versus-flat from `virtualRows` alone, so
+// the hook has to answer "am I grouped" in the rows themselves. When both call
+// sites paired the rows with their own flag, a third one could forget the
+// pairing and render grouped data as a flat list with nothing to catch it.
+describe('useTaskGroupCollapse', () => {
+    const groups = [group('alpha', [task('a1'), task('a2')])];
+    const tasks = [task('a1'), task('a2')];
+    const options = (axis: 'none' | 'project') => ({
+        axis,
+        groups: axis === 'none' ? [] : groups,
+        tasks,
+        idPrefix: 'next-group',
+        collapsedGroups: { project: [] } as CollapsedGroups<'none' | 'project'>,
+        setCollapsedGroups: () => {},
+    });
+
+    it('returns no row model at all when the list is not grouped', () => {
+        const { result } = renderHook(() => useTaskGroupCollapse(options('none')));
+
+        expect(result.current.isGrouping).toBe(false);
+        expect(result.current.virtualRows).toBeNull();
+        expect(result.current.visibleTasks).toEqual(tasks);
+    });
+
+    it('returns the header and task rows when the list is grouped', () => {
+        const { result } = renderHook(() => useTaskGroupCollapse(options('project')));
+
+        expect(result.current.isGrouping).toBe(true);
+        expect(result.current.virtualRows?.map((row) => row.kind)).toEqual(['header', 'task', 'task']);
+        expect(result.current.virtualRows?.[0].kind === 'header'
+            && result.current.virtualRows?.[0].controlsId).toBe('next-group-project-0-alpha');
     });
 });

@@ -543,7 +543,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     });
     const firstGroupedRowIndexByTaskId = useMemo(() => {
         const indices = new Map<string, number>();
-        groupedVirtualRows.forEach((row, index) => {
+        groupedVirtualRows?.forEach((row, index) => {
             if (row.kind === 'task' && !indices.has(row.task.id)) {
                 indices.set(row.task.id, index);
             }
@@ -593,13 +593,13 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             });
     }, [showToast, t, updateProject]);
 
-    const virtualRowCount = isListGrouping ? groupedVirtualRows.length : filteredTasks.length;
+    const virtualRowCount = groupedVirtualRows?.length ?? filteredTasks.length;
     const shouldVirtualize = virtualRowCount > LIST_VIRTUALIZATION_THRESHOLD;
     const rowVirtualizer = useVirtualizer({
         count: shouldVirtualize ? virtualRowCount : 0,
         getScrollElement: () => listScrollRef.current,
         estimateSize: (index) => (
-            isListGrouping && groupedVirtualRows[index]?.kind === 'header'
+            groupedVirtualRows?.[index]?.kind === 'header'
                 ? LIST_VIRTUAL_HEADER_ESTIMATE
                 : densityMode === 'condensed'
                     ? 72
@@ -609,8 +609,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         ),
         overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
         getItemKey: (index) => {
-            if (!isListGrouping) return filteredTasks[index]?.id ?? index;
-            const row = groupedVirtualRows[index];
+            const row = groupedVirtualRows?.[index];
+            if (!row) return filteredTasks[index]?.id ?? index;
             if (!row) return index;
             return row.kind === 'header'
                 ? `group:${row.group.id}`
@@ -1223,7 +1223,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                     <GroupedTaskList
                         groups={groupedTasks}
                         tasks={filteredTasks}
-                        virtualRows={isListGrouping ? groupedVirtualRows : null}
+                        virtualRows={groupedVirtualRows}
                         virtualizer={shouldVirtualize ? rowVirtualizer : null}
                         collapsedGroupIds={collapsedGroupIds}
                         onToggleGroup={isListGrouping ? toggleGroup : undefined}

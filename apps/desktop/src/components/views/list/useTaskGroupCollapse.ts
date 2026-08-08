@@ -96,7 +96,8 @@ export function useTaskGroupCollapse<Axis extends TaskGroupAxis>({
     collapsedGroupIds: Set<string>;
     toggleGroup: (groupId: string) => void;
     getSectionDomId: (group: TaskGroup, groupIndex: number) => string;
-    virtualRows: GroupedVirtualRow[];
+    /** The header/task row model, null when the list is not grouped. */
+    virtualRows: GroupedVirtualRow[] | null;
     visibleTasks: Task[];
 } {
     const isGrouping = axis !== 'none';
@@ -121,8 +122,12 @@ export function useTaskGroupCollapse<Axis extends TaskGroupAxis>({
         (group: TaskGroup, groupIndex: number) => buildSectionDomId(idPrefix, axis, groupIndex, group.id),
         [axis, idPrefix],
     );
+    // Null rather than an empty array when the list is ungrouped: `GroupedTaskList`
+    // and the virtualizer both need to know which shape they are rendering, and
+    // one nullable value says it once instead of every caller pairing the rows
+    // with its own `isGrouping` flag and one of them forgetting.
     const virtualRows = useMemo(
-        () => buildGroupedVirtualRows(groups, collapsedGroupIds, isGrouping ? getSectionDomId : undefined),
+        () => (isGrouping ? buildGroupedVirtualRows(groups, collapsedGroupIds, getSectionDomId) : null),
         [collapsedGroupIds, getSectionDomId, groups, isGrouping],
     );
     const visibleTasks = useMemo(
