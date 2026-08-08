@@ -8,6 +8,10 @@ import TrashScreen from '../app/(drawer)/trash';
 
 const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),
+  areaFilter: {
+    areaById: new Map<string, any>(),
+    resolvedAreaFilter: { included: [] as string[], excluded: [] as string[] },
+  },
   storeState: {
     _allTasks: [] as any[],
     _allProjects: [] as any[],
@@ -50,10 +54,13 @@ vi.mock('@mindwtr/core', async () => {
   return {
     ...actual,
     shallow: Object.is,
-    useTaskStore: () => mocks.storeState,
+    // Run the real selector: the screen reads through
+    // `useTaskStore((state) => ({…}), shallow)`, so a mock that ignores the
+    // selector never executes the projection it is meant to cover.
+    useTaskStore: (selector?: (state: unknown) => unknown) => (
+      selector ? selector(mocks.storeState) : mocks.storeState
+    ),
     getInlineMarkdownPreview: vi.fn((markdown: string) => markdown),
-    projectMatchesAreaFilterSelection: vi.fn(() => true),
-    taskMatchesAreaFilterSelection: vi.fn(() => true),
   };
 });
 
@@ -86,10 +93,7 @@ vi.mock('../contexts/language-context', () => ({
 }));
 
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
-  useMobileAreaFilter: () => ({
-    areaById: new Map(),
-    resolvedAreaFilter: { included: [], excluded: [] },
-  }),
+  useMobileAreaFilter: () => mocks.areaFilter,
 }));
 
 vi.mock('@/hooks/use-theme-colors', () => ({
@@ -114,6 +118,8 @@ vi.mock('react-native-gesture-handler', () => ({
 describe('TrashScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.areaFilter.areaById = new Map();
+    mocks.areaFilter.resolvedAreaFilter = { included: [], excluded: [] };
     mocks.storeState._allTasks = [{
       id: 'recent-task',
       title: 'Recently deleted task',
@@ -150,6 +156,38 @@ describe('TrashScreen', () => {
     ));
 
     expect(itemIds).toEqual(['recent-task', 'older-project']);
+  });
+
+  const timelineIds = (tree: renderer.ReactTestRenderer) => tree.root
+    .findByType('FlatList' as unknown as React.ElementType).props.data
+    .map((item: any) => (item.type === 'task' ? item.task.id : item.project.id));
+
+  it('narrows the trash timeline to the areas the filter includes', () => {
+    mocks.areaFilter.areaById = new Map([['a1', { id: 'a1', name: 'Work', order: 0 }]]);
+    mocks.storeState._allTasks[0].areaId = 'a1';
+    mocks.areaFilter.resolvedAreaFilter = { included: ['a1'], excluded: [] };
+
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<TrashScreen />);
+    });
+
+    // The project has no area, so including "Work" leaves only the task.
+    expect(timelineIds(tree)).toEqual(['recent-task']);
+  });
+
+  it('drops trashed items whose area the filter excludes', () => {
+    mocks.areaFilter.areaById = new Map([['a1', { id: 'a1', name: 'Work', order: 0 }]]);
+    mocks.storeState._allTasks[0].areaId = 'a1';
+    mocks.storeState._allProjects[0].areaId = 'a1';
+    mocks.areaFilter.resolvedAreaFilter = { included: [], excluded: ['a1'] };
+
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<TrashScreen />);
+    });
+
+    expect(timelineIds(tree)).toEqual([]);
   });
 
   const findPressableByLabel = (tree: renderer.ReactTestRenderer, label: string) => tree.root.findAll((node) => (

@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => {
     deleteProject,
     setHighlightTask,
     showToast,
+    areaFilter: {
+      areaById: new Map<string, any>(),
+      resolvedAreaFilter: { included: [] as string[], excluded: [] as string[] },
+    },
     storeState: {
       _allTasks: [] as any[],
       projects: [] as any[],
@@ -86,11 +90,14 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
   return {
     ...actual,
     shallow: Object.is,
-    useTaskStore: () => mocks.storeState,
+    // Run the real selector: the screen reads through
+    // `useTaskStore((state) => ({…}), shallow)`, so a mock that ignores the
+    // selector never executes the projection it is meant to cover.
+    useTaskStore: (selector?: (state: unknown) => unknown) => (
+      selector ? selector(mocks.storeState) : mocks.storeState
+    ),
     getInlineMarkdownPreview: vi.fn((markdown: string) => (markdown || '').split('\n')[0] ?? ''),
     safeFormatDate: vi.fn(() => 'May 12, 2026, 8:30 AM'),
-    taskMatchesAreaFilterSelection: vi.fn(() => true),
-    projectMatchesAreaFilterSelection: vi.fn(() => true),
   };
 });
 
@@ -151,10 +158,7 @@ vi.mock('@/hooks/use-theme-colors', () => ({
 }));
 
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
-  useMobileAreaFilter: () => ({
-    areaById: new Map(),
-    resolvedAreaFilter: { included: [], excluded: [] },
-  }),
+  useMobileAreaFilter: () => mocks.areaFilter,
 }));
 
 vi.mock('@/lib/task-meta-navigation', () => ({
@@ -218,6 +222,8 @@ describe('ArchivedScreen', () => {
     // clearAllMocks keeps implementations, so restore the empty store or a test
     // that seeds persisted view state leaks it into the next one.
     vi.mocked(AsyncStorage.getItem).mockImplementation(async () => null);
+    mocks.areaFilter.areaById = new Map();
+    mocks.areaFilter.resolvedAreaFilter = { included: [], excluded: [] };
     mocks.storeState.projects = [];
     mocks.storeState.areas = [];
     mocks.storeState.settings = {};
@@ -420,6 +426,42 @@ describe('ArchivedScreen', () => {
     expect(hasText(tree, 'Quarterly report')).toBe(true);
   });
 
+  const workArea = { id: 'a1', name: 'Work', order: 0 };
+  const homeArea = { id: 'a2', name: 'Home', order: 1 };
+
+  const seedTwoAreaTasks = () => {
+    mocks.areaFilter.areaById = new Map([[workArea.id, workArea], [homeArea.id, homeArea]]);
+    mocks.storeState.areas = [workArea, homeArea];
+    mocks.storeState._allTasks = [
+      { ...mocks.storeState._allTasks[0], id: 'task-1', title: 'Quarterly report', areaId: 'a1' },
+      { ...mocks.storeState._allTasks[0], id: 'task-2', title: 'Fix the printer', areaId: 'a2' },
+    ];
+  };
+
+  it('shows only archived tasks the area filter includes', () => {
+    seedTwoAreaTasks();
+    mocks.areaFilter.resolvedAreaFilter = { included: ['a1'], excluded: [] };
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    expect(hasText(tree, 'Quarterly report')).toBe(true);
+    expect(hasText(tree, 'Fix the printer')).toBe(false);
+  });
+
+  it('drops archived tasks whose area the filter excludes', () => {
+    seedTwoAreaTasks();
+    mocks.areaFilter.resolvedAreaFilter = { included: [], excluded: ['a1'] };
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+
+    expect(hasText(tree, 'Quarterly report')).toBe(false);
+    expect(hasText(tree, 'Fix the printer')).toBe(true);
+  });
+
   it('folds a grouping heading, taking its rows off screen and out of Select all', async () => {
     mocks.storeState.areas = [{ id: 'a1', name: 'Work', order: 0 }];
     mocks.storeState._allTasks = [
@@ -536,6 +578,19 @@ describe('ArchivedScreen', () => {
     expect(hasText(tree, 'Archived project')).toBe(false);
     switchToProjects(tree);
     expect(hasText(tree, 'Archived project')).toBe(true);
+  });
+
+  it('hides an archived project whose area the filter excludes', () => {
+    mocks.areaFilter.areaById = new Map([[workArea.id, workArea]]);
+    mocks.storeState.projects = [{ ...archivedProject, areaId: 'a1' }];
+    mocks.areaFilter.resolvedAreaFilter = { included: [], excluded: ['a1'] };
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<ArchivedScreen />);
+    });
+    switchToProjects(tree);
+
+    expect(hasText(tree, 'Archived project')).toBe(false);
   });
 
   it('restores an archived project through updateProject with active status', () => {
