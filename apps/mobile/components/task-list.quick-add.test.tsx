@@ -222,8 +222,10 @@ vi.mock('../contexts/language-context', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-theme-colors', () => ({
-  useThemeColors: () => ({
+vi.mock('@/hooks/use-theme-colors', () => {
+  // One object, like the real hook: resolveThemeTokens caches its result, so a
+  // fresh literal per call would fake instability the app never sees (#766).
+  const themeColors = {
     bg: '#ffffff',
     border: '#d1d5db',
     cardBg: '#ffffff',
@@ -240,8 +242,9 @@ vi.mock('@/hooks/use-theme-colors', () => ({
     text: '#0f172a',
     tint: '#2563eb',
     warning: '#f59e0b',
-  }),
-}));
+  };
+  return { useThemeColors: () => themeColors };
+});
 
 vi.mock('@/hooks/use-reduced-motion', () => ({
   useReducedMotion: () => false,

@@ -355,44 +355,6 @@ function TaskListComponent({
 
   // Dynamic colors based on theme
   const themeColors = useThemeColors();
-  const themeColorsMemo = useMemo(
-    () => ({
-      bg: themeColors.bg,
-      cardBg: themeColors.cardBg,
-      taskItemBg: themeColors.taskItemBg,
-      text: themeColors.text,
-      secondaryText: themeColors.secondaryText,
-      icon: themeColors.icon,
-      border: themeColors.border,
-      tint: themeColors.tint,
-      onTint: themeColors.onTint,
-      tabIconDefault: themeColors.tabIconDefault,
-      tabIconSelected: themeColors.tabIconSelected,
-      inputBg: themeColors.inputBg,
-      danger: themeColors.danger,
-      success: themeColors.success,
-      warning: themeColors.warning,
-      filterBg: themeColors.filterBg,
-    }),
-    [
-      themeColors.bg,
-      themeColors.cardBg,
-      themeColors.taskItemBg,
-      themeColors.text,
-      themeColors.secondaryText,
-      themeColors.icon,
-      themeColors.border,
-      themeColors.tint,
-      themeColors.onTint,
-      themeColors.tabIconDefault,
-      themeColors.tabIconSelected,
-      themeColors.inputBg,
-      themeColors.danger,
-      themeColors.success,
-      themeColors.warning,
-      themeColors.filterBg,
-    ],
-  );
 
   const listContentStyle = useMemo(() => {
     if (!contentPaddingBottom || contentPaddingBottom <= 0) {
@@ -1098,7 +1060,7 @@ function TaskListComponent({
       selectedCount: selectedIdsArray.length,
       statusOptions: bulkMoveStatusOptions,
       t,
-      themeColors: themeColorsMemo,
+      themeColors: themeColors,
     };
   }, [
     bulkActionLabel,
@@ -1118,7 +1080,7 @@ function TaskListComponent({
     setRemoveTagPickerVisible,
     setTagModalVisible,
     t,
-    themeColorsMemo,
+    themeColors,
     toggleRangeSelectMode,
   ]);
 
@@ -1497,7 +1459,7 @@ function TaskListComponent({
           sequenceLabel={sequenceCue ? sequenceCueLabels?.[sequenceCue] : undefined}
           statusBadgeAsIcon={statusBadgeAsIconForList}
           task={item}
-          tc={themeColorsMemo}
+          tc={themeColors}
         />
       </ErrorBoundary>
     );
@@ -1511,7 +1473,7 @@ function TaskListComponent({
     selectionMode,
     hideChecklistProgressForList,
     statusBadgeAsIconForList,
-    themeColorsMemo,
+    themeColors,
     projectId,
     sequenceCueLabels,
     rowContext,
@@ -1538,18 +1500,18 @@ function TaskListComponent({
         <View
           style={[
             styles.projectReorderTaskCard,
-            { backgroundColor: themeColorsMemo.taskItemBg, borderColor: themeColorsMemo.border },
+            { backgroundColor: themeColors.taskItemBg, borderColor: themeColors.border },
           ]}
         >
           <Text
             numberOfLines={2}
-            style={[styles.projectReorderTaskTitle, { color: themeColorsMemo.text }]}
+            style={[styles.projectReorderTaskTitle, { color: themeColors.text }]}
           >
             {task.title}
           </Text>
           <CompactText
             numberOfLines={1}
-            style={[styles.projectReorderTaskMeta, { color: themeColorsMemo.secondaryText }]}
+            style={[styles.projectReorderTaskMeta, { color: themeColors.secondaryText }]}
           >
             {statusLabel}
           </CompactText>
@@ -1562,21 +1524,21 @@ function TaskListComponent({
           onPressIn={drag}
           style={[
             styles.projectDragHandle,
-            { backgroundColor: themeColorsMemo.filterBg, borderColor: themeColorsMemo.border },
+            { backgroundColor: themeColors.filterBg, borderColor: themeColors.border },
           ]}
           testID={`project-task-drag-handle-${task.id}`}
         >
-          <GripVertical size={20} color={themeColorsMemo.secondaryText} />
+          <GripVertical size={20} color={themeColors.secondaryText} />
         </TouchableOpacity>
       </View>
     );
   }, [
     t,
-    themeColorsMemo.border,
-    themeColorsMemo.filterBg,
-    themeColorsMemo.secondaryText,
-    themeColorsMemo.taskItemBg,
-    themeColorsMemo.text,
+    themeColors.border,
+    themeColors.filterBg,
+    themeColors.secondaryText,
+    themeColors.taskItemBg,
+    themeColors.text,
   ]);
 
   const toggleSection = useCallback((sectionId: string) => {
@@ -1601,15 +1563,15 @@ function TaskListComponent({
           >
             <View style={styles.sectionHeaderTitleBlock}>
               {item.collapsed ? (
-                <ChevronRight size={15} color={themeColorsMemo.secondaryText} />
+                <ChevronRight size={15} color={themeColors.secondaryText} />
               ) : (
-                <ChevronDown size={15} color={themeColorsMemo.secondaryText} />
+                <ChevronDown size={15} color={themeColors.secondaryText} />
               )}
-              <Text style={[styles.sectionTitle, { color: item.muted ? themeColorsMemo.secondaryText : themeColorsMemo.text }]}>
+              <Text style={[styles.sectionTitle, { color: item.muted ? themeColors.secondaryText : themeColors.text }]}>
                 {item.title}
               </Text>
             </View>
-            <Text style={[styles.sectionCount, { color: themeColorsMemo.secondaryText }]}>
+            <Text style={[styles.sectionCount, { color: themeColors.secondaryText }]}>
               {item.count}
             </Text>
           </TouchableOpacity>
@@ -1618,17 +1580,17 @@ function TaskListComponent({
 
       return (
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: item.muted ? themeColorsMemo.secondaryText : themeColorsMemo.text }]}>
+          <Text style={[styles.sectionTitle, { color: item.muted ? themeColors.secondaryText : themeColors.text }]}>
             {item.title}
           </Text>
-          <Text style={[styles.sectionCount, { color: themeColorsMemo.secondaryText }]}>
+          <Text style={[styles.sectionCount, { color: themeColors.secondaryText }]}>
             {item.count}
           </Text>
         </View>
       );
     }
     return renderTask({ item: item.task });
-  }, [renderTask, themeColorsMemo.secondaryText, themeColorsMemo.text, toggleSection]);
+  }, [renderTask, themeColors.secondaryText, themeColors.text, toggleSection]);
 
   const renderProjectReorderHeader = useCallback((group: ProjectTaskReorderGroup<Task>) => {
     const sectionIndex = typeof group.sectionId === 'string' ? projectSectionIds.indexOf(group.sectionId) : -1;
@@ -1641,10 +1603,10 @@ function TaskListComponent({
     return (
       <View style={styles.sectionHeader}>
         <View style={styles.sectionHeaderTitleBlock}>
-          <Text style={[styles.sectionTitle, { color: group.muted ? themeColorsMemo.secondaryText : themeColorsMemo.text }]} numberOfLines={1}>
+          <Text style={[styles.sectionTitle, { color: group.muted ? themeColors.secondaryText : themeColors.text }]} numberOfLines={1}>
             {group.title}
           </Text>
-          <Text style={[styles.sectionCount, { color: themeColorsMemo.secondaryText }]}>
+          <Text style={[styles.sectionCount, { color: themeColors.secondaryText }]}>
             {group.tasks.length}
           </Text>
         </View>
@@ -1658,11 +1620,11 @@ function TaskListComponent({
               onPress={() => handleProjectSectionMove(group.sectionId as string, -1)}
               style={[
                 styles.sectionReorderButton,
-                { borderColor: themeColorsMemo.border, backgroundColor: themeColorsMemo.filterBg },
+                { borderColor: themeColors.border, backgroundColor: themeColors.filterBg },
                 !canMoveSectionUp && styles.sectionReorderButtonDisabled,
               ]}
             >
-              <ArrowUp size={16} color={themeColorsMemo.secondaryText} />
+              <ArrowUp size={16} color={themeColors.secondaryText} />
             </TouchableOpacity>
             <TouchableOpacity
               accessibilityLabel={`${moveSectionDownLabel}: ${group.title}`}
@@ -1672,11 +1634,11 @@ function TaskListComponent({
               onPress={() => handleProjectSectionMove(group.sectionId as string, 1)}
               style={[
                 styles.sectionReorderButton,
-                { borderColor: themeColorsMemo.border, backgroundColor: themeColorsMemo.filterBg },
+                { borderColor: themeColors.border, backgroundColor: themeColors.filterBg },
                 !canMoveSectionDown && styles.sectionReorderButtonDisabled,
               ]}
             >
-              <ArrowDown size={16} color={themeColorsMemo.secondaryText} />
+              <ArrowDown size={16} color={themeColors.secondaryText} />
             </TouchableOpacity>
           </View>
         ) : null}
@@ -1686,10 +1648,10 @@ function TaskListComponent({
     handleProjectSectionMove,
     projectSectionIds,
     t,
-    themeColorsMemo.border,
-    themeColorsMemo.filterBg,
-    themeColorsMemo.secondaryText,
-    themeColorsMemo.text,
+    themeColors.border,
+    themeColors.filterBg,
+    themeColors.secondaryText,
+    themeColors.text,
   ]);
 
   const renderProjectReorderItem = useCallback(({ drag, isActive, item }: RenderItemParams<ProjectReorderFlatItem<Task>>) => {
@@ -1706,16 +1668,16 @@ function TaskListComponent({
       onPress={handleToggleProjectReorderMode}
       style={[
         styles.projectReorderIconButton,
-        { backgroundColor: themeColorsMemo.filterBg, borderColor: themeColorsMemo.border },
+        { backgroundColor: themeColors.filterBg, borderColor: themeColors.border },
       ]}
       testID="project-task-reorder-toggle"
     >
-      <GripVertical size={20} color={themeColorsMemo.secondaryText} />
+      <GripVertical size={20} color={themeColors.secondaryText} />
     </TouchableOpacity>
   ) : null;
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColorsMemo.bg }]}>
+    <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       <TaskListHeader
         activeFilterChips={activeFilterChips}
         count={orderedTasks.length}
@@ -1732,7 +1694,7 @@ function TaskListComponent({
         showSort={showSort}
         sortByLabel={t(`sort.${sortBy}`)}
         t={t}
-        themeColors={themeColorsMemo}
+        themeColors={themeColors}
         title={title}
       />
 
@@ -1747,7 +1709,7 @@ function TaskListComponent({
           timeEstimates: timeEstimateFilterOptions,
           visibility: metadataFilterVisibility,
         }}
-        themeColors={themeColorsMemo}
+        themeColors={themeColors}
         t={t}
       />
 
@@ -1756,8 +1718,8 @@ function TaskListComponent({
       ) : null}
 
       {canUseProjectReorder && hasProjectReorderItems && projectReorderMode && (
-        <View style={[styles.projectReorderModeBar, { backgroundColor: themeColorsMemo.cardBg, borderBottomColor: themeColorsMemo.border }]}>
-          <Text style={[styles.projectReorderTitle, { color: themeColorsMemo.text }]}>
+        <View style={[styles.projectReorderModeBar, { backgroundColor: themeColors.cardBg, borderBottomColor: themeColors.border }]}>
+          <Text style={[styles.projectReorderTitle, { color: themeColors.text }]}>
             {projectSections.length > 1
               ? tFallback(t, 'projects.projectOrder', 'Project order')
               : tFallback(t, 'projects.taskOrder', 'Task order')}
@@ -1771,15 +1733,15 @@ function TaskListComponent({
             style={[
               styles.projectReorderModeButton,
               {
-                backgroundColor: themeColorsMemo.tint,
-                borderColor: themeColorsMemo.tint,
+                backgroundColor: themeColors.tint,
+                borderColor: themeColors.tint,
               },
             ]}
             testID="project-task-reorder-toggle"
           >
             <Text style={[
               styles.projectReorderModeButtonText,
-              { color: themeColorsMemo.onTint },
+              { color: themeColors.onTint },
             ]}>
               {t('common.done')}
             </Text>
@@ -1830,7 +1792,7 @@ function TaskListComponent({
           projectId={projectId}
           setTypeaheadIndex={setTypeaheadIndex}
           t={t}
-          themeColors={themeColorsMemo}
+          themeColors={themeColors}
           title={title}
           trailingAccessory={projectReorderToggle}
           trigger={trigger}
@@ -1914,10 +1876,10 @@ function TaskListComponent({
             <ListEmptyState
               message={filteredEmptyMessage}
               hint={filteredEmptyHint}
-              backgroundColor={themeColorsMemo.cardBg}
-              borderColor={themeColorsMemo.border}
-              textColor={themeColorsMemo.text}
-              mutedTextColor={themeColorsMemo.secondaryText}
+              backgroundColor={themeColors.cardBg}
+              borderColor={themeColors.border}
+              textColor={themeColors.text}
+              mutedTextColor={themeColors.secondaryText}
               actionLabel={filteredEmptyActionLabel}
               onAction={filteredEmptyAction}
             />
@@ -1936,7 +1898,7 @@ function TaskListComponent({
         onSave={handleBatchAddTag}
         t={t}
         tagInput={tagInput}
-        themeColors={themeColorsMemo}
+        themeColors={themeColors}
         visible={tagModalVisible}
       />
 
@@ -1964,7 +1926,7 @@ function TaskListComponent({
         projects={projects}
         selectedCount={selectedIdsArray.length}
         t={t}
-        themeColors={themeColorsMemo}
+        themeColors={themeColors}
         visible={bulkOrganizeVisible}
       />
 
@@ -1981,7 +1943,7 @@ function TaskListComponent({
         sortBy={sortBy}
         sortOptions={sortOptions}
         t={t}
-        themeColors={themeColorsMemo}
+        themeColors={themeColors}
         visible={sortModalVisible}
       />
 
@@ -1993,8 +1955,8 @@ function TaskListComponent({
           onRequestClose={() => setReferenceGroupModalVisible(false)}
         >
           <Pressable style={styles.modalOverlay} onPress={() => setReferenceGroupModalVisible(false)}>
-            <View style={[styles.modalCard, { backgroundColor: themeColorsMemo.cardBg }]}>
-              <Text style={[styles.modalTitle, { color: themeColorsMemo.text }]}>{groupLabel}</Text>
+            <View style={[styles.modalCard, { backgroundColor: themeColors.cardBg }]}>
+              <Text style={[styles.modalTitle, { color: themeColors.text }]}>{groupLabel}</Text>
               <View style={styles.sortList}>
                 {groupByOptions.map((option) => (
                   <Pressable
@@ -2005,10 +1967,10 @@ function TaskListComponent({
                     }}
                     style={[
                       styles.sortItem,
-                      option === activeGroupBy && { backgroundColor: themeColorsMemo.filterBg },
+                      option === activeGroupBy && { backgroundColor: themeColors.filterBg },
                     ]}
                   >
-                    <Text style={[styles.sortItemText, { color: themeColorsMemo.text }]}>
+                    <Text style={[styles.sortItemText, { color: themeColors.text }]}>
                       {getGroupByLabel(option)}
                     </Text>
                   </Pressable>
