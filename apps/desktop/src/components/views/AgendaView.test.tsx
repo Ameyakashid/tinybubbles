@@ -205,7 +205,7 @@ describe('AgendaView', () => {
 
         expect(queryByText('Expanded task note')).toBeInTheDocument();
 
-        fireEvent.click(getByRole('button', { name: /^details$/i }));
+        fireEvent.click(getByRole('button', { name: /^hide details$/i }));
 
         expect(queryByText('Expanded task note')).not.toBeInTheDocument();
         expect(useUiStore.getState().listOptions.showDetails).toBe(false);

@@ -36,9 +36,10 @@ export function AgendaHeader({
 }: AgendaHeaderProps) {
     const filtersActive = filtersOpen || filterCount > 0;
     const filtersLabel = resolveText('filters.label', 'Filters');
+    // Names the action, not the state — see ListHeader.
     const detailsLabel = showListDetails
-        ? (tFallback(t, 'list.details', 'Details'))
-        : (tFallback(t, 'list.detailsOff', 'Details off'));
+        ? tFallback(t, 'list.hideDetails', 'Hide details')
+        : tFallback(t, 'list.showDetails', 'Show details');
 
     return (
         <header className="flex flex-wrap items-start justify-between gap-3">
@@ -74,7 +75,7 @@ export function AgendaHeader({
                     active={showListDetails}
                     onClick={onToggleDetails}
                     aria-pressed={showListDetails}
-                    title={showListDetails ? (tFallback(t, 'list.details', 'Details on')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
+                    title={detailsLabel}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >
                     {detailsLabel}

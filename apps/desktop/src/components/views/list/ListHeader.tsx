@@ -57,6 +57,11 @@ export function ListHeader({
     onToggleDensity,
     t,
 }: ListHeaderProps) {
+    // The button names what clicking it does, not the current state — "Details off"
+    // read as a disabled control rather than a way to show the dates and project.
+    const detailsLabel = showListDetails
+        ? tFallback(t, 'list.hideDetails', 'Hide details')
+        : tFallback(t, 'list.showDetails', 'Show details');
     const densityTitle = (() => {
         const value = t('list.density');
         return value === 'list.density' ? 'Density' : value;
@@ -141,10 +146,10 @@ export function ListHeader({
                     active={showListDetails}
                     onClick={onToggleDetails}
                     aria-pressed={showListDetails}
-                    title={showListDetails ? (tFallback(t, 'list.details', 'Details on')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
+                    title={detailsLabel}
                     icon={<List className="h-3.5 w-3.5" aria-hidden="true" />}
                 >
-                    {showListDetails ? (tFallback(t, 'list.details', 'Details')) : (tFallback(t, 'list.detailsOff', 'Details off'))}
+                    {detailsLabel}
                 </ToolbarButton>
                 <ToolbarButton
                     active={densityMode !== 'comfortable'}

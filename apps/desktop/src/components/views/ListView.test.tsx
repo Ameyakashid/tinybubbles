@@ -696,7 +696,7 @@ describe('ListView', () => {
 
     expect(queryByText('Expanded task note')).toBeInTheDocument();
 
-    fireEvent.click(getByRole('button', { name: /^details$/i }));
+    fireEvent.click(getByRole('button', { name: /^hide details$/i }));
 
     await waitFor(() => {
       expect(queryByText('Expanded task note')).not.toBeInTheDocument();
