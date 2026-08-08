@@ -124,4 +124,37 @@ describe('MobileAreaSwitcher', () => {
     areaFilterState.selection = { included: [homeArea.id, workArea.id], excluded: [] };
     expect(renderSwitcher().root.findByType('CompactText' as never).props.children).toBe('2');
   });
+
+  it('marks the excluded side of the trigger so it cannot read as an inclusion', () => {
+    areaFilterState.selection = { included: [], excluded: [homeArea.id] };
+    expect(renderSwitcher().root.findByType('CompactText' as never).props.children).toBe('−1');
+
+    areaFilterState.selection = { included: [workArea.id], excluded: [homeArea.id] };
+    expect(renderSwitcher().root.findByType('CompactText' as never).props.children).toBe('1 −1');
+  });
+
+  it('names the included and excluded areas for the screen reader and the sheet header', () => {
+    areaFilterState.selection = { included: [workArea.id], excluded: [homeArea.id] };
+    const tree = renderSwitcher();
+    const summary = 'Work · Excluded: Home';
+
+    const trigger = tree.root.findAll((node) => String(node.type) === 'Pressable'
+      && String(node.props.accessibilityLabel ?? '').startsWith('projects.areaFilter'))[0];
+    expect(trigger.props.accessibilityLabel).toBe(`projects.areaFilter: ${summary}`);
+    expect(tree.root.findAll((node) => (
+      String(node.type) === 'Text' && node.props.children === summary
+    ))).toHaveLength(1);
+  });
+
+  it('announces an excluded row as mixed rather than merely unselected', () => {
+    areaFilterState.selection = { included: [homeArea.id], excluded: [workArea.id] };
+    const tree = renderSwitcher();
+    const rowFor = (label: string) => tree.root.findAll((node) => (
+      String(node.type) === 'TouchableOpacity'
+      && String(node.props.accessibilityLabel ?? '').startsWith(label)
+    ))[0];
+
+    expect(rowFor('Home').props.accessibilityState).toEqual({ checked: true });
+    expect(rowFor('Work').props.accessibilityState).toEqual({ checked: 'mixed' });
+  });
 });

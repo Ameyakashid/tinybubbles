@@ -43,18 +43,36 @@ export function MobileAreaSwitcher() {
   const isDefaultScope = !isAreaFilterSelectionActive(resolvedAreaFilter);
   // One included area reads better as its name; anything richer gets a count.
   const activeValue = areaFilterSelectionToValue(resolvedAreaFilter);
-  const activeCount = resolvedAreaFilter.included.length + resolvedAreaFilter.excluded.length;
   const excludedLabel = tFallback(t, 'filters.excluded', 'Excluded');
 
   const areaName = useCallback((id: string) => (
     id === AREA_FILTER_NONE ? t('projects.noArea') : areaById.get(id)?.name ?? t('projects.noArea')
   ), [areaById, t]);
 
+  // The same composition desktop's sidebar filter uses. Too long for a 160pt
+  // trigger, so it goes to the screen reader and the sheet header instead —
+  // those are the two places with room to say which areas are in and which are out.
+  const summaryLabel = useMemo(() => {
+    if (isDefaultScope) return t('projects.allAreas');
+    return [
+      resolvedAreaFilter.included.map(areaName).join(', '),
+      resolvedAreaFilter.excluded.length > 0
+        ? `${excludedLabel}: ${resolvedAreaFilter.excluded.map(areaName).join(', ')}`
+        : '',
+    ].filter(Boolean).join(' · ');
+  }, [areaName, excludedLabel, isDefaultScope, resolvedAreaFilter, t]);
+
   const currentLabel = useMemo(() => {
     if (isDefaultScope) return t('projects.allAreas');
     if (activeValue !== AREA_FILTER_ALL) return areaName(activeValue);
-    return String(activeCount);
-  }, [activeCount, activeValue, areaName, isDefaultScope, t]);
+    // A single count cannot tell "two areas in" from "one in, one out", and
+    // reads identically for a lone exclusion. Mark the excluded side.
+    const included = resolvedAreaFilter.included.length;
+    const excluded = resolvedAreaFilter.excluded.length;
+    return [included > 0 ? String(included) : '', excluded > 0 ? `−${excluded}` : '']
+      .filter(Boolean)
+      .join(' ');
+  }, [activeValue, areaName, isDefaultScope, resolvedAreaFilter, t]);
   const triggerLabel = useMemo(() => {
     if (isDefaultScope) return t('common.all');
     if (activeValue === AREA_FILTER_NONE) return t('common.none');
@@ -88,7 +106,7 @@ export function MobileAreaSwitcher() {
   return (
     <>
       <Pressable
-        accessibilityLabel={`${t('projects.areaFilter')}: ${currentLabel}`}
+        accessibilityLabel={`${t('projects.areaFilter')}: ${summaryLabel}`}
         accessibilityRole="button"
         onPress={() => setVisible(true)}
         style={({ pressed }) => [
@@ -131,9 +149,18 @@ export function MobileAreaSwitcher() {
               },
             ]}
           >
-            <Text style={[styles.sheetTitle, { color: tc.text }]}>
+            <Text style={[
+              styles.sheetTitle,
+              { color: tc.text },
+              isDefaultScope ? null : styles.sheetTitleWithSummary,
+            ]}>
               {t('projects.areaFilter')}
             </Text>
+            {isDefaultScope ? null : (
+              <Text numberOfLines={2} style={[styles.sheetSummary, { color: tc.secondaryText }]}>
+                {summaryLabel}
+              </Text>
+            )}
             <ScrollView
               contentContainerStyle={styles.sheetContent}
               showsVerticalScrollIndicator={false}
@@ -167,8 +194,11 @@ export function MobileAreaSwitcher() {
                   <TouchableOpacity
                     key={option.id}
                     accessibilityLabel={isExcluded ? `${option.label} (${excludedLabel})` : option.label}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isIncluded }}
+                    // Three states can't ride a boolean, and `selected` alone
+                    // announces an excluded area as merely unpicked. Checkbox
+                    // is the one RN role whose state takes 'mixed'.
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isExcluded ? 'mixed' : isIncluded }}
                     onPress={() => handleToggle(option.id)}
                     style={[
                       styles.optionRow,
@@ -243,6 +273,14 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
+    marginBottom: 12,
+  },
+  sheetTitleWithSummary: {
+    marginBottom: 4,
+  },
+  sheetSummary: {
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: 12,
   },
   sheetContent: {
