@@ -225,9 +225,44 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
         setIsTaskModalVisible(false);
         setEditingTask(null);
     };
-    const handleFollowUpToday = (task: Task) => {
+    const handleFollowUpToday = useCallback((task: Task) => {
         void updateTask(task.id, { reviewAt: followUpTodayReviewAt });
-    };
+    }, [followUpTodayReviewAt, updateTask]);
+
+    // The waiting step is the only one that gives rows a footer, and it shows at
+    // most 8. Building them once keeps `footerContent` identity-stable, so that
+    // step keeps the same row memo the other four already have (#766).
+    const followUpFooters = useMemo(() => {
+        const byTaskId = new Map<string, React.ReactNode>();
+        for (const task of waitingTasks.slice(0, 8)) {
+            const reviewDue = isDueForReview(task.reviewAt, today);
+            byTaskId.set(task.id, (
+                <TouchableOpacity
+                    style={[
+                        styles.followUpButton,
+                        { backgroundColor: tc.filterBg, opacity: reviewDue ? 0.7 : 1 },
+                    ]}
+                    onPress={(event) => {
+                        event.stopPropagation();
+                        handleFollowUpToday(task);
+                    }}
+                    disabled={reviewDue}
+                    hitSlop={6}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: Boolean(reviewDue) }}
+                    accessibilityLabel={`${followUpTodayLabel}: ${task.title}`}
+                >
+                    <Clock size={13} color={reviewDue ? tc.secondaryText : tc.tint} strokeWidth={2.2} />
+                    <Text style={[styles.followUpButtonText, { color: reviewDue ? tc.secondaryText : tc.tint }]}>
+                        {reviewDue ? reviewDueLabel : followUpTodayLabel}
+                    </Text>
+                </TouchableOpacity>
+            ));
+        }
+        return byTaskId;
+    }, [followUpTodayLabel, handleFollowUpToday, reviewDueLabel, tc, today, waitingTasks]);
+
     const handleNavigateToProject = (projectId: string) => {
         closeTask();
         onClose();
@@ -243,44 +278,17 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
         <FlatList
             testID={options?.testID}
             data={list}
-            renderItem={({ item: task }) => {
-                const reviewDue = options?.showFollowUpToday && isDueForReview(task.reviewAt, today);
-                const footerContent = options?.showFollowUpToday ? (
-                    <TouchableOpacity
-                        style={[
-                            styles.followUpButton,
-                            { backgroundColor: tc.filterBg, opacity: reviewDue ? 0.7 : 1 },
-                        ]}
-                        onPress={(event) => {
-                            event.stopPropagation();
-                            handleFollowUpToday(task);
-                        }}
-                        disabled={reviewDue}
-                        hitSlop={6}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: Boolean(reviewDue) }}
-                        accessibilityLabel={`${followUpTodayLabel}: ${task.title}`}
-                    >
-                        <Clock size={13} color={reviewDue ? tc.secondaryText : tc.tint} strokeWidth={2.2} />
-                        <Text style={[styles.followUpButtonText, { color: reviewDue ? tc.secondaryText : tc.tint }]}>
-                            {reviewDue ? reviewDueLabel : followUpTodayLabel}
-                        </Text>
-                    </TouchableOpacity>
-                ) : undefined;
-                const taskRow = (
-                    <SwipeableTaskItem
-                        task={task}
-                        isDark={isDark}
-                        tc={tc}
-                        actions={rowActions}
-                        showFocusToggle={options?.showFocusToggle}
-                        hideStatusBadge={options?.hideStatusBadge}
-                        footerContent={footerContent}
-                    />
-                );
-                return taskRow;
-            }}
+            renderItem={({ item: task }) => (
+                <SwipeableTaskItem
+                    task={task}
+                    isDark={isDark}
+                    tc={tc}
+                    actions={rowActions}
+                    showFocusToggle={options?.showFocusToggle}
+                    hideStatusBadge={options?.hideStatusBadge}
+                    footerContent={options?.showFollowUpToday ? followUpFooters.get(task.id) : undefined}
+                />
+            )}
             keyExtractor={(task) => task.id}
             style={styles.taskList}
             contentContainerStyle={styles.taskListContent}

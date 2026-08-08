@@ -113,8 +113,9 @@ vi.mock('../contexts/toast-context', () => ({
     ToastViewport: () => null,
 }));
 
-vi.mock('@/hooks/use-theme-colors', () => ({
-    useThemeColors: () => ({
+vi.mock('@/hooks/use-theme-colors', () => {
+    // One object, like the real hook: rows compare `tc` by identity (#766).
+    const themeColors = {
         bg: '#101214',
         border: '#334155',
         cardBg: '#1e293b',
@@ -125,8 +126,9 @@ vi.mock('@/hooks/use-theme-colors', () => ({
         taskItemBg: '#1e293b',
         text: '#f8fafc',
         tint: '#60a5fa',
-    }),
-}));
+    };
+    return { useThemeColors: () => themeColors };
+});
 
 vi.mock('@/hooks/use-filled-button-colors', () => ({
     useFilledButtonColors: () => ({ backgroundColor: '#60a5fa', textColor: '#0f172a' }),
@@ -270,5 +272,37 @@ describe('DailyReviewScreen', () => {
         });
 
         expect(rowProps()[1].actions).toBe(before[1].actions);
+    });
+
+    // The waiting step is the only one that gives rows a footer; a fresh element
+    // per render there would defeat the same memo boundary (#766).
+    it('keeps the waiting-step footer element stable across re-renders', async () => {
+        storeState.tasks = [
+            makeTask({ id: 'waiting-1', title: 'Waiting one', status: 'waiting', dueDate: undefined }),
+            makeTask({ id: 'waiting-2', title: 'Waiting two', status: 'waiting', dueDate: undefined }),
+        ];
+        const onClose = vi.fn();
+
+        let tree!: ReturnType<typeof create>;
+        await act(async () => {
+            tree = create(<DailyReviewScreen onClose={onClose} />);
+            await Promise.resolve();
+        });
+
+        const rowProps = () => tree.root
+            .findByProps({ testID: 'daily-review-step-scroll-waiting' })
+            .findAll((node) => (node.type as unknown) === 'SwipeableTaskItem')
+            .map((node) => node.props);
+        const before = rowProps();
+        expect(before).toHaveLength(2);
+        expect(before[1].footerContent).toBeTruthy();
+        expect(before[0].footerContent).not.toBe(before[1].footerContent);
+
+        await act(async () => {
+            tree.update(<DailyReviewScreen onClose={onClose} />);
+            await Promise.resolve();
+        });
+
+        expect(rowProps()[1].footerContent).toBe(before[1].footerContent);
     });
 });
