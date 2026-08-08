@@ -7,7 +7,7 @@ import {
     selectVisibleTasks,
 } from './store-helpers';
 import { generateUUID as uuidv4 } from './uuid';
-import { translations } from './i18n/i18n-translations';
+import { STARTER_SEED_STRINGS } from './i18n/starter-seed-strings';
 import { isSupportedLanguage } from './i18n/i18n-constants';
 import { getSystemDefaultLanguage } from './i18n/i18n-storage';
 import type { Language } from './i18n/i18n-types';
@@ -60,10 +60,15 @@ const STARTER_SAMPLE_TASK_KEYS = ['starter.sampleBuyMilk', 'starter.sampleReplyS
 const STARTER_PROJECT_TITLE_KEY = 'starter.projectTitle';
 const STARTER_PROJECT_NOTES_KEY = 'starter.projectNotes';
 
-const seedLanguages = (): Language[] => Object.keys(translations) as Language[];
+// Every app language, from the generated starter-seed table — the seed matches titles across
+// all of them (see getStarterTaskKeyByTitle below), so it needs the whole set, but only for
+// the ~39 `starter.*` keys. Loading the full locale dictionaries here would put ~45,000
+// strings on every platform's cold path, since store.ts reaches this module through
+// store-settings.ts.
+const seedLanguages = (): Language[] => Object.keys(STARTER_SEED_STRINGS) as Language[];
 
 const resolveStarterString = (lang: Language, key: string): string =>
-    translations[lang]?.[key] ?? translations.en[key] ?? key;
+    STARTER_SEED_STRINGS[lang]?.[key] ?? STARTER_SEED_STRINGS.en[key] ?? key;
 
 const resolveStarterTemplates = (lang: Language): ResolvedStarterTemplate[] =>
     STARTER_TASK_TEMPLATES.map((template) => ({

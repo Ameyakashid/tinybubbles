@@ -48,9 +48,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('packages/core/src/i18n/i18n-translations')) {
-            return 'i18n';
-          }
           if (id.includes('node_modules')) {
             if (id.includes('@radix-ui')) return 'radix-vendor';
             if (id.includes('lucide-react')) return 'icons-vendor';
