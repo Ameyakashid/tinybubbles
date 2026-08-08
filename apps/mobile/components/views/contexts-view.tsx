@@ -18,7 +18,6 @@ import {
   buildBulkTaskTokenUpdates,
   collectBulkTaskTokens,
   isTaskFinished,
-  isTaskInActiveProject,
   tFallback,
   type Task,
   type TaskStatus,
@@ -28,9 +27,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
 
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openProjectScreen } from '@/lib/task-meta-navigation';
 import { useToast } from '@/contexts/toast-context';
 import { TaskEditModal } from '../task-edit-modal';
@@ -55,7 +53,6 @@ type BulkTokenPickerState = {
 export function ContextsView() {
   const {
     tasks,
-    projects,
     updateTask,
     deleteTask,
     restoreTask,
@@ -65,7 +62,6 @@ export function ContextsView() {
     settings,
   } = useTaskStore((state) => ({
     tasks: state.tasks,
-    projects: state.projects,
     updateTask: state.updateTask,
     deleteTask: state.deleteTask,
     restoreTask: state.restoreTask,
@@ -84,8 +80,7 @@ export function ContextsView() {
 
   const tc = useThemeColors();
   const { showToast } = useToast();
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { visibleTasks } = useVisibleTaskContext();
   const requestedTokens = useMemo(() => {
     if (Array.isArray(token)) return token.filter(Boolean);
     if (typeof token === 'string' && token.trim()) return [token];
@@ -99,12 +94,7 @@ export function ContextsView() {
     setSelectedContexts(requestedTokens);
   }, [requestedTokens]);
 
-  const contextSourceTasks = tasks.filter((task) => (
-    !task.deletedAt
-    && !isTaskFinished(task)
-    && isTaskInActiveProject(task, projectById)
-    && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-  ));
+  const contextSourceTasks = visibleTasks.filter((task) => !isTaskFinished(task));
   const allContextTokens = getUsedTaskTokens(contextSourceTasks, (task) => task.contexts, { prefix: '@' });
   const allTagTokens = getUsedTaskTokens(contextSourceTasks, (task) => task.tags, { prefix: '#' });
   const filterSections = useMemo(

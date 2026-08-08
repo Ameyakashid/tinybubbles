@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { getTranslationsSync, getWaitingPerson, isTaskInActiveProject, safeParseDueDate, shallow, useTaskStore } from '@mindwtr/core';
+import { getTranslationsSync, getWaitingPerson, safeParseDueDate, shallow, useTaskStore } from '@mindwtr/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task, TaskStatus } from '@mindwtr/core';
 import { useTheme } from '../../contexts/theme-context';
@@ -9,8 +9,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { TaskEditModal } from '../task-edit-modal';
 import { getBulkMoveStatusOptions } from '../task-list/TaskListBulkBar';
@@ -44,8 +43,7 @@ export function WaitingView() {
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
   const navBarInset = Platform.OS === 'android' && insets.bottom >= 24 ? insets.bottom : 0;
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { areaById, resolvedAreaFilter, visibleTasks } = useVisibleTaskContext();
   const tasksById = useMemo(() => {
     return tasks.reduce((acc, task) => {
       acc[task.id] = task;
@@ -58,13 +56,8 @@ export function WaitingView() {
   );
 
   const waitingTasks = useMemo(() => {
-    return tasks
-      .filter((task) => (
-        !task.deletedAt
-        && task.status === 'waiting'
-        && isTaskInActiveProject(task, projectById)
-        && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-      ))
+    return visibleTasks
+      .filter((task) => task.status === 'waiting')
       .sort((a, b) => {
         if (a.dueDate && !b.dueDate) return -1;
         if (!a.dueDate && b.dueDate) return 1;
@@ -75,7 +68,7 @@ export function WaitingView() {
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [tasks, resolvedAreaFilter, projectById, areaById]);
+  }, [visibleTasks]);
   const waitingPeople = useMemo(() => {
     const people = new Map<string, string>();
     for (const task of waitingTasks) {

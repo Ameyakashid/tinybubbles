@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { getTranslationsSync, isTaskInActiveProject, shallow, useTaskStore } from '@mindwtr/core';
+import { getTranslationsSync, shallow, useTaskStore } from '@mindwtr/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task, TaskStatus } from '@mindwtr/core';
 import { useTheme } from '../../contexts/theme-context';
@@ -8,9 +8,8 @@ import { Lightbulb } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { TaskEditModal } from '../task-edit-modal';
 import { getBulkMoveStatusOptions } from '../task-list/TaskListBulkBar';
@@ -44,8 +43,7 @@ export function SomedayView() {
 
   const tc = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { areaById, resolvedAreaFilter, visibleTasks } = useVisibleTaskContext();
   const navBarInset = Platform.OS === 'android' && insets.bottom >= 24 ? insets.bottom : 0;
   const tasksById = useMemo(() => {
     return tasks.reduce((acc, task) => {
@@ -58,13 +56,8 @@ export function SomedayView() {
     [navBarInset],
   );
 
-  const somedayTasks = tasks
-    .filter((task) => (
-      !task.deletedAt
-      && task.status === 'someday'
-      && isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-    ))
+  const somedayTasks = visibleTasks
+    .filter((task) => task.status === 'someday')
     .sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
