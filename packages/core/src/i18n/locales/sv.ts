@@ -1243,6 +1243,7 @@ export const svOverrides: Record<string, string> = {
         'settings.pomodoroLinkTask': 'Länka timer till uppgift',
         'settings.pomodoroLinkTaskDesc': 'Visa uppgiftsväljaren för timern och åtgärden Uppgift klar i Fokus.',
         'settings.pomodoroSettings': 'Pomodoro-inställningar',
+        'pomodoro.title': 'Pomodoro-fokus',
         'pomodoro.mobileTitle': 'Pomodoro-timer',
         'pomodoro.startForTask': 'Starta fokuspass',
         'pomodoro.phaseFocusShort': 'Fokus',

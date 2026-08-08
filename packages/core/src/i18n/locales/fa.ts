@@ -1243,6 +1243,7 @@ export const faOverrides: Record<string, string> = {
         'settings.pomodoroLinkTask': 'پیوند تایمر به کار',
         'settings.pomodoroLinkTaskDesc': 'نمایش انتخاب‌گر کار تایمر و اقدام تکمیل کار در تمرکز.',
         'settings.pomodoroSettings': 'تنظیمات پومودورو',
+        'pomodoro.title': 'تمرکز پومودورو',
         'pomodoro.mobileTitle': 'تایمر پومودورو',
         'pomodoro.startForTask': 'شروع جلسه تمرکز',
         'pomodoro.phaseFocusShort': 'تمرکز',
