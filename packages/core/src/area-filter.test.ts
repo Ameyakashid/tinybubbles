@@ -12,6 +12,7 @@ import {
     projectMatchesAreaFilterSelection,
     resolveAreaFilter,
     resolveAreaFilterSelection,
+    isTaskVisibleInArea,
     taskMatchesAreaFilter,
     taskMatchesAreaFilterSelection,
 } from './area-filter';
@@ -151,5 +152,42 @@ describe('area filter selection', () => {
     it('round-trips what it stores', () => {
         const selection = { included: [workArea.id, AREA_FILTER_NONE], excluded: [homeArea.id] };
         expect(resolveAreaFilterSelection(areaFilterSelectionToFilters(selection), allAreas)).toEqual(selection);
+    });
+});
+
+describe('isTaskVisibleInArea', () => {
+    const areaById = new Map([[workArea.id, workArea], [homeArea.id, homeArea]]);
+    const ctxFor = (projects: Project[], resolvedAreaFilter = { included: [] as string[], excluded: [] as string[] }) => ({
+        areaById,
+        projectById: new Map(projects.map((entry) => [entry.id, entry])),
+        resolvedAreaFilter,
+    });
+
+    it('accepts a loose task with no filter active', () => {
+        expect(isTaskVisibleInArea(baseTask, ctxFor([project]))).toBe(true);
+    });
+
+    // One case per clause: drop any one of the three and exactly one of these flips.
+    it('rejects a soft-deleted task', () => {
+        expect(isTaskVisibleInArea({ ...baseTask, deletedAt: '2026-03-17T00:00:00.000Z' }, ctxFor([project]))).toBe(false);
+    });
+
+    it('rejects a task whose project is parked', () => {
+        const somedayProject: Project = { ...project, status: 'someday' };
+        const task = { ...baseTask, projectId: project.id };
+        expect(isTaskVisibleInArea(task, ctxFor([somedayProject]))).toBe(false);
+        expect(isTaskVisibleInArea(task, ctxFor([{ ...somedayProject, isFocused: true }]))).toBe(true);
+    });
+
+    it('rejects a task outside the area selection', () => {
+        const task = { ...baseTask, projectId: project.id };
+        expect(isTaskVisibleInArea(task, ctxFor([project], { included: [homeArea.id], excluded: [] }))).toBe(false);
+        expect(isTaskVisibleInArea(task, ctxFor([project], { included: [], excluded: [workArea.id] }))).toBe(false);
+        expect(isTaskVisibleInArea(task, ctxFor([project], { included: [workArea.id], excluded: [] }))).toBe(true);
+    });
+
+    it('keeps a purged task hidden without any purgedAt clause of its own', () => {
+        const purged = { ...baseTask, deletedAt: '2026-03-17T00:00:00.000Z', purgedAt: '2026-03-18T00:00:00.000Z' };
+        expect(isTaskVisibleInArea(purged, ctxFor([project]))).toBe(false);
     });
 });

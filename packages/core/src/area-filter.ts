@@ -1,5 +1,6 @@
 import type { Area, FilterSettings, Project, Task } from './types';
 import { getTaskAreaId } from './task-utils';
+import { isTaskInActiveProject } from './project-utils';
 
 export const AREA_FILTER_ALL = '__all__';
 export const AREA_FILTER_NONE = '__none__';
@@ -156,4 +157,34 @@ export function taskMatchesAreaFilterSelection(
 ): boolean {
     if (!isAreaFilterSelectionActive(selection)) return true;
     return areaIdMatchesSelection(normalizeAreaId(getTaskAreaId(task, projectMap), areaById), selection);
+}
+
+/**
+ * The lookups every task list needs to answer "is this task visible right now".
+ * One shape so a screen builds `projectById`/`areaById` once and hands the same
+ * object to every list it renders.
+ */
+export interface AreaVisibilityContext {
+    areaById?: Map<string, Area>;
+    projectById: Map<string, Project>;
+    resolvedAreaFilter: AreaFilterSelection;
+}
+
+/**
+ * Base visibility for a task in any list: not in the trash, not owned by a
+ * project the user has parked, and inside the current area filter. Callers add
+ * their own status clause on top (`.filter(t => t.status === 'waiting')`).
+ *
+ * `deletedAt` lives INSIDE the predicate rather than at each call site. Screens
+ * reading the store's `tasks` projection get it for free — that list is already
+ * tombstone-free — but Trash and Archive read `_allTasks`, which is not, and
+ * the whole point of one predicate is that it cannot be handed a list it
+ * quietly mis-answers. `purgedAt` deliberately stays out: a purged task is
+ * still deleted, so `deletedAt` already hides it, and Trash needs to tell the
+ * two apart itself.
+ */
+export function isTaskVisibleInArea(task: Task, ctx: AreaVisibilityContext): boolean {
+    return !task.deletedAt
+        && isTaskInActiveProject(task, ctx.projectById)
+        && taskMatchesAreaFilterSelection(task, ctx.resolvedAreaFilter, ctx.projectById, ctx.areaById);
 }
