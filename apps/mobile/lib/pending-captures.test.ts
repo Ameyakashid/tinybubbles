@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppData, Project, Task } from '@mindwtr/core';
+import type { AppData, Person, Project, Task } from '@mindwtr/core';
 
 const fileSystemMocks = vi.hoisted(() => ({
     documentDirectory: 'file:///data/Documents/',
@@ -138,7 +138,7 @@ describe('ingestPendingCaptures', () => {
         }));
         const addTask = vi.fn(async () => ({ id: 'task-1' }));
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(2);
         expect(addTask).toHaveBeenNthCalledWith(1, 'First', { status: 'inbox', tags: ['#home'] });
@@ -151,7 +151,7 @@ describe('ingestPendingCaptures', () => {
         fileSystemMocks.readAsStringAsync.mockResolvedValue(JSON.stringify({ id: 'a', title: 'Keep me' }));
         const addTask = vi.fn(async () => ({ success: false }));
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(0);
         expect(fileSystemMocks.deleteAsync).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('ingestPendingCaptures', () => {
         fileSystemMocks.readAsStringAsync.mockResolvedValue('{broken');
         const addTask = vi.fn();
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(0);
         expect(addTask).not.toHaveBeenCalled();
@@ -173,7 +173,7 @@ describe('ingestPendingCaptures', () => {
         fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: false });
         const addTask = vi.fn();
 
-        expect(await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings })).toBe(0);
+        expect(await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings })).toBe(0);
         expect(fileSystemMocks.readDirectoryAsync).not.toHaveBeenCalled();
         expect(addTask).not.toHaveBeenCalled();
     });
@@ -183,7 +183,7 @@ describe('ingestPendingCaptures', () => {
         const addTask = addTaskMock();
         const settings = { quickAddAutoClean: true } as AppData['settings'];
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings });
 
         expect(ingested).toBe(1);
         expect(addTask).toHaveBeenCalledTimes(1);
@@ -198,7 +198,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk /due:2026-07-24 @errands #personal' });
         const addTask = addTaskMock();
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(1);
         const [title, props] = addTask.mock.calls[0] as [string, Partial<Task>];
@@ -210,12 +210,26 @@ describe('ingestPendingCaptures', () => {
         expect(props.tags).toContain('#personal');
     });
 
+    it('matches a multi-word person against the people list, like the in-app capture box', async () => {
+        oneFile('a.json', { id: 'a', title: 'Chase invoice %Jim Smith' });
+        const addTask = addTaskMock();
+        const people = [{ id: 'person-1', name: 'Jim Smith' } as Person];
+
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people, settings: emptySettings });
+
+        const [title, props] = addTask.mock.calls[0] as [string, Partial<Task>];
+        // Without the people list the parser takes only the first word, so this
+        // capture used to create a second person called "Jim" (see #895).
+        expect(props.assignedTo).toBe('Jim Smith');
+        expect(title).toBe('Chase invoice');
+    });
+
     it('attaches an existing selectable project matched by a parsed +Project token without creating one', async () => {
         const active = project({ id: 'p-active', title: 'Errands' });
         oneFile('a.json', { id: 'a', title: 'Buy milk +Errands' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [active], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [active], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(addProject).not.toHaveBeenCalled();
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
@@ -226,7 +240,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk +NewProject' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(addProject).toHaveBeenCalledTimes(1);
         expect(addProject.mock.calls[0][0]).toBe('NewProject');
@@ -239,7 +253,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk +UnknownProject', project: 'Errands' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [active], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [active], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(addProject).not.toHaveBeenCalled();
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
@@ -250,7 +264,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk /due:2026-07-24', dueDate: '2026-08-14', startDate: '2026-08-01' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
         expect(props.dueDate).toBe('2026-08-14');
@@ -261,7 +275,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk #urgent', tags: 'work,urgent' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
         expect(props.tags).toEqual(expect.arrayContaining(['#urgent', '#work']));
@@ -274,7 +288,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk /due:friday', createdAt: '2026-07-13T12:00:00' });
         const addTask = addTaskMock();
 
-        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         const [, props] = addTask.mock.calls[0] as [string, Partial<Task>];
         expect(props.dueDate).toBe('2026-07-17');
@@ -284,7 +298,7 @@ describe('ingestPendingCaptures', () => {
         oneFile('a.json', { id: 'a', title: 'Buy milk /due:2026-04-31' });
         const addTask = addTaskMock();
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(1);
         expect(addTask).toHaveBeenCalledWith('Buy milk /due:2026-04-31', { status: 'inbox' });
@@ -301,7 +315,7 @@ describe('ingestPendingCaptures', () => {
         addProject.mockRejectedValue(new Error('store unavailable'));
         const addTask = addTaskMock();
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: emptySettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: emptySettings });
 
         expect(ingested).toBe(2);
         expect(addTask).toHaveBeenNthCalledWith(1, 'Buy milk +NewProject', { status: 'inbox' });
@@ -324,7 +338,7 @@ describe('ingestPendingCaptures', () => {
         }) as AppData['settings'];
         const addTask = addTaskMock();
 
-        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], settings: poisonedSettings });
+        const ingested = await ingestPendingCaptures({ addTask, addProject, projects: [], areas: [], tasks: [], people: [], settings: poisonedSettings });
 
         expect(ingested).toBe(2);
         expect(addTask).toHaveBeenNthCalledWith(1, 'First', { status: 'inbox' });

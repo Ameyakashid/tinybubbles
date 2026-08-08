@@ -1,13 +1,13 @@
 import {
-    isNaturalLanguageDatesEnabled,
+    buildQuickAddParseOptions,
     isSelectableProjectForTaskAssignment,
-    normalizeClockTimeInput,
     parseQuickAdd,
     prepareCaptureTask,
     safeParseDate,
     type Area,
     type AppData,
     type CaptureAssemblyInput,
+    type Person,
     type Project,
     type Task,
 } from '@mindwtr/core';
@@ -129,6 +129,10 @@ type IngestDeps = {
     addProject: (title: string, color: string, initialProps?: Partial<Project>) => Promise<Project | null>;
     projects: Project[];
     areas: Area[];
+    // Parse context, same as the in-app capture sheet: `@contexts`, `#tags` and
+    // `%People` in a queued title only match what already exists if they are here.
+    tasks: Task[];
+    people: Person[];
     settings: AppData['settings'];
 };
 
@@ -144,7 +148,7 @@ const isFailedResult = (result: unknown): boolean => (
 // same precedence as a surface's own picker beating a typed `+Project`.
 async function assembleCaptureTask(
     capture: PendingCapture,
-    { addProject, projects, areas, settings }: Omit<IngestDeps, 'addTask'>,
+    { addProject, projects, areas, tasks, people, settings }: Omit<IngestDeps, 'addTask'>,
 ): Promise<{ title: string; props: Partial<Task> } | null> {
     try {
         // Relative dates (`/due:friday`, "tomorrow") resolve against the moment
@@ -152,11 +156,8 @@ async function assembleCaptureTask(
         // means that Monday's "tomorrow" even if the app first opens on Wednesday.
         const capturedAt = capture.createdAt ? new Date(capture.createdAt) : null;
         const now = capturedAt && !Number.isNaN(capturedAt.getTime()) ? capturedAt : new Date();
-        const parsed = parseQuickAdd(capture.title, projects, now, areas, {
-            defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-            preserveText: settings.quickAddAutoClean !== true,
-            naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-        });
+        const parsed = parseQuickAdd(capture.title, projects, now, areas,
+            buildQuickAddParseOptions(settings, { tasks, people }));
 
         const input: CaptureAssemblyInput = {
             parsed,
@@ -203,7 +204,7 @@ async function assembleCaptureTask(
     }
 }
 
-export async function ingestPendingCaptures({ addTask, addProject, projects, areas, settings }: IngestDeps): Promise<number> {
+export async function ingestPendingCaptures({ addTask, addProject, projects, areas, tasks, people, settings }: IngestDeps): Promise<number> {
     if (!documentDirectory) return 0;
     const dir = `${documentDirectory}${PENDING_CAPTURES_DIRECTORY}`;
 
@@ -237,7 +238,7 @@ export async function ingestPendingCaptures({ addTask, addProject, projects, are
             continue;
         }
 
-        const assembled = await assembleCaptureTask(capture, { addProject, projects, areas, settings });
+        const assembled = await assembleCaptureTask(capture, { addProject, projects, areas, tasks, people, settings });
         const result = assembled
             ? await addTask(assembled.title, assembled.props)
             : await addTask(capture.title, buildPendingCaptureTaskProps(capture, projects));
