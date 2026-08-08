@@ -54,6 +54,7 @@ vi.mock('@mindwtr/core', async () => {
   return {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
+  buildQuickAddParseOptions: actual.buildQuickAddParseOptions,
   getPersonOptionNames: actual.getPersonOptionNames,
   createAIProvider: vi.fn(),
   DEFAULT_PROJECT_COLOR: '#94a3b8',

@@ -21,15 +21,14 @@ import {
   hasExactCaptureProjectMatch,
   resolveCaptureAreaQuery,
   resolveCaptureProjectQuery,
+  buildQuickAddParseOptions,
   canStarNewCapture,
   formatFocusTaskLimitText,
   getDefaultTaskAreaMode,
   getUsedTaskTokens,
   hasTimeComponent,
-  isNaturalLanguageDatesEnabled,
   isSelectableProjectForTaskAssignment,
   parseQuickAdd,
-  normalizeClockTimeInput,
   normalizeFocusTaskLimit,
   resolveDefaultNewTaskAreaId,
   safeFormatDate,
@@ -471,7 +470,6 @@ export function QuickCaptureSheet({
     setShowPriorityPicker(false);
   }, [prioritiesEnabled]);
 
-  const naturalLanguageDates = isNaturalLanguageDatesEnabled(settings);
   const buildCaptureRequestForInput = useCallback((
     inputValue: string,
     fallbackTitle: string,
@@ -479,12 +477,12 @@ export function QuickCaptureSheet({
     currentProjects = projects,
   ): { input: CaptureAssemblyInput; options: CaptureTransactionOptions } => {
     const trimmed = inputValue.trim();
+    // Tasks/people are read here rather than subscribed to: the sheet stays off
+    // the hot render path (see loadContextOptions), and one capture is a user
+    // action, not a render.
     const parsed = trimmed
-      ? parseQuickAdd(trimmed, currentProjects, new Date(), areas, {
-        defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-        preserveText: settings.quickAddAutoClean !== true,
-        naturalLanguageDates,
-      })
+      ? parseQuickAdd(trimmed, currentProjects, new Date(), areas,
+        buildQuickAddParseOptions(settings, useTaskStore.getState()))
       : { title: '', props: {}, projectTitle: undefined, detectedDate: undefined, invalidDateCommands: undefined };
 
     const input: CaptureAssemblyInput = {
@@ -515,7 +513,7 @@ export function QuickCaptureSheet({
       },
     };
     return { input, options };
-  }, [areas, canFocusNewTask, contextTags, dueDate, dueDateHasTime, focusNewTask, initialProps, naturalLanguageDates, prioritiesEnabled, priority, projectId, projects, selectedAreaId, settings.gtd?.defaultScheduleTime, settings.quickAddAutoClean, startTime]);
+  }, [areas, canFocusNewTask, contextTags, dueDate, dueDateHasTime, focusNewTask, initialProps, prioritiesEnabled, priority, projectId, projects, selectedAreaId, settings, startTime]);
 
   const buildTaskPropsForInput = useCallback(async (inputValue: string, fallbackTitle: string, extraProps?: Partial<Task>) => {
     const request = buildCaptureRequestForInput(inputValue, fallbackTitle, extraProps);

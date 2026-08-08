@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+    buildQuickAddParseOptions,
     buildReviewSteps,
     createAIProvider,
     DEFAULT_AREA_COLOR,
     filterReviewSuggestionsToKnownIds,
     formatI18nTemplate,
     getExternalCalendarDaySummaries,
-    getPersonOptionNames,
     getStaleItems,
     getUsedTaskTokens,
     getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
-    isNaturalLanguageDatesEnabled,
     isTaskInActiveProject,
-    normalizeClockTimeInput,
     parseProjectNextActionInput,
     resolveReviewStepSession,
     safeFormatDate,
@@ -436,14 +434,7 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
             projectId: targetProject.projectId,
             projects: state.projects,
             areas: state.areas,
-            parseOptions: {
-                knownContexts: allContexts,
-                knownTags: allTags,
-                knownPeople: getPersonOptionNames(state.people, state.tasks),
-                defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-                preserveText: settings.quickAddAutoClean !== true,
-                naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-            },
+            parseOptions: buildQuickAddParseOptions(settings, state),
         });
         if (invalidDateCommands && invalidDateCommands.length > 0) {
             showToast(`${t('quickAdd.invalidDateCommand')}: ${invalidDateCommands.join(', ')}`, 'error');

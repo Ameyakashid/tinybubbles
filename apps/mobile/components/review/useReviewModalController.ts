@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+    buildQuickAddParseOptions,
     buildReviewSteps,
     createAIProvider,
     filterReviewSuggestionsToKnownIds,
@@ -9,8 +10,6 @@ import {
     getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
     isDueForReview,
-    isNaturalLanguageDatesEnabled,
-    normalizeClockTimeInput,
     parseProjectNextActionInput,
     resolveReviewStepSession,
     type AIProviderId,
@@ -86,7 +85,7 @@ export function useReviewModalController({
     onClose,
     visible,
 }: UseReviewModalControllerParams) {
-    const { tasks, projects, areas, updateTask, deleteTask, settings, batchUpdateTasks, addTask } = useTaskStore();
+    const { tasks, projects, people, areas, updateTask, deleteTask, settings, batchUpdateTasks, addTask } = useTaskStore();
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const { isDark } = useTheme();
     const { t } = useLanguage();
@@ -169,11 +168,7 @@ export function useReviewModalController({
                 projectId: targetProject.projectId,
                 projects,
                 areas,
-                parseOptions: {
-                    defaultScheduleTime: normalizeClockTimeInput(settings?.gtd?.defaultScheduleTime) || undefined,
-                    preserveText: settings?.quickAddAutoClean !== true,
-                    naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-                },
+                parseOptions: buildQuickAddParseOptions(settings, { tasks, people }),
             });
             const result = await addTask(title, props);
             if (result && result.success === false) {
@@ -194,7 +189,7 @@ export function useReviewModalController({
                 extra: { message: 'Failed to add task from project review', projectId: targetProject.projectId },
             });
         }
-    }, [addTask, areas, closeProjectTaskPrompt, projects, projectTaskPrompt, projectTaskTitle, settings]);
+    }, [addTask, areas, closeProjectTaskPrompt, people, projects, projectTaskPrompt, projectTaskTitle, settings, tasks]);
 
     const toggleExternalDayExpanded = useCallback((dayKey: string) => {
         setExpandedExternalDays((prev) => {

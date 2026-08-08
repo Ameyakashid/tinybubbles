@@ -1,7 +1,8 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { getTaskDateCoherenceIssues } from './task-date-coherence';
 import { configureDateFormatting } from './date';
-import { getQuickAddProjectInitialProps, parseProjectNextActionInput, parseQuickAdd, parseQuickAddDateCommands, splitQuickAddBulkLines } from './quick-add';
+import type { Person, Task } from './types';
+import { buildQuickAddParseOptions, getQuickAddProjectInitialProps, parseProjectNextActionInput, parseQuickAdd, parseQuickAddDateCommands, splitQuickAddBulkLines } from './quick-add';
 
 describe('quick-add', () => {
     it('splits bulk quick-add text into trimmed nonblank lines', () => {
@@ -1062,6 +1063,69 @@ describe('quick-add', () => {
                 now,
             });
             expect(result.invalidDateCommands).toBeUndefined();
+        });
+    });
+
+    describe('buildQuickAddParseOptions', () => {
+        const task = (props: Partial<Task>): Task => ({
+            id: 't1',
+            title: 'T',
+            status: 'inbox',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            ...props,
+        } as Task);
+
+        const person = (name: string): Person => ({
+            id: `person-${name}`,
+            name,
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+        } as Person);
+
+        it('collects contexts, tags and people from the store snapshot', () => {
+            const options = buildQuickAddParseOptions(
+                { quickAddAutoClean: true, gtd: { defaultScheduleTime: '9:00' } },
+                {
+                    tasks: [task({ contexts: ['@office'], tags: ['#deep'], assignedTo: 'Ada Byron' })],
+                    people: [person('Jim Smith')],
+                },
+            );
+
+            expect(options.knownContexts).toEqual(['@office']);
+            expect(options.knownTags).toEqual(['#deep']);
+            expect(options.knownPeople).toEqual(['Jim Smith', 'Ada Byron']);
+            expect(options.defaultScheduleTime).toBe('09:00');
+            expect(options.preserveText).toBe(false);
+            expect(options.naturalLanguageDates).toBe(true);
+        });
+
+        it('keeps preserve-text on and natural-language dates off when settings say so', () => {
+            const options = buildQuickAddParseOptions({ gtd: { naturalLanguageDates: false } });
+
+            expect(options.preserveText).toBe(true);
+            expect(options.naturalLanguageDates).toBe(false);
+            expect(options.defaultScheduleTime).toBeUndefined();
+            expect(options.knownPeople).toEqual([]);
+        });
+
+        // The regression that let the capture surfaces drift: every field in the
+        // bag is optional, so a surface that dropped knownPeople still compiled
+        // and only showed up as `%Jim Smith` capturing as `%Jim`.
+        it('resolves a multi-word known person, which a bag missing knownPeople cannot', () => {
+            const source = { tasks: [], people: [person('Jim Smith')] };
+            const now = new Date('2026-07-11T10:00:00Z');
+            const input = 'Follow up %Jim Smith about budget';
+
+            const withPeople = parseQuickAdd(input, undefined, now, undefined, buildQuickAddParseOptions({}, source));
+            expect(withPeople.props.assignedTo).toBe('Jim Smith');
+            expect(withPeople.title).toBe('Follow up about budget');
+
+            const withoutPeople = parseQuickAdd(input, undefined, now, undefined, {
+                ...buildQuickAddParseOptions({}, source),
+                knownPeople: undefined,
+            });
+            expect(withoutPeople.props.assignedTo).toBe('Jim');
         });
     });
 });

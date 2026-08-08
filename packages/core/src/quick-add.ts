@@ -1,10 +1,12 @@
 import * as chrono from 'chrono-node';
 import { format, isValid, set } from 'date-fns';
-import type { Area, Attachment, Project, Task, TaskEnergyLevel, TaskStatus } from './types';
+import type { Area, Attachment, Person, Project, Task, TaskEnergyLevel, TaskStatus } from './types';
 import { generateUUID } from './uuid';
 import { normalizeTaskStatus } from './task-status';
 import { normalizeLinkAttachmentInput } from './attachment-link-utils';
 import { isActiveDateFormatDayFirst, normalizeClockTimeInput } from './date';
+import { getUsedTaskTokens } from './task-token-usage';
+import { getPersonOptionNames } from './people';
 
 export interface QuickAddDetectedDate {
     date: string;
@@ -44,6 +46,42 @@ export function isNaturalLanguageDatesEnabled(
     settings?: { gtd?: { naturalLanguageDates?: boolean } } | null,
 ): boolean {
     return settings?.gtd?.naturalLanguageDates !== false;
+}
+
+/** The settings a capture surface reads to configure quick-add parsing. */
+export interface QuickAddParseSettings {
+    quickAddAutoClean?: boolean;
+    gtd?: {
+        defaultScheduleTime?: string | null;
+        naturalLanguageDates?: boolean;
+    };
+}
+
+/** Everything the bag is derived from; `useTaskStore.getState()` satisfies it. */
+export interface QuickAddParseSource {
+    tasks?: Task[];
+    people?: readonly Person[];
+}
+
+/**
+ * Assemble the quick-add parse options — the one place capture surfaces get
+ * them from. Hand-rolled bags drifted: every field is optional, so a surface
+ * that forgot `knownPeople` still compiled and silently captured `%John Smith`
+ * as `%John` while the surface next door resolved it to the known person.
+ */
+export function buildQuickAddParseOptions(
+    settings?: QuickAddParseSettings | null,
+    source: QuickAddParseSource = {},
+): QuickAddParseOptions {
+    const tasks = source.tasks ?? [];
+    return {
+        knownContexts: getUsedTaskTokens(tasks, (task) => task.contexts, { prefix: '@' }),
+        knownTags: getUsedTaskTokens(tasks, (task) => task.tags, { prefix: '#' }),
+        knownPeople: getPersonOptionNames(source.people, tasks),
+        defaultScheduleTime: normalizeClockTimeInput(settings?.gtd?.defaultScheduleTime) || undefined,
+        preserveText: settings?.quickAddAutoClean !== true,
+        naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
+    };
 }
 
 export function getQuickAddProjectInitialProps(

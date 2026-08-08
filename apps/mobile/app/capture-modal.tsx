@@ -16,13 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   executeCaptureTransaction,
   prepareCaptureTask,
+  buildQuickAddParseOptions,
   createAIProvider,
-  getPersonOptionNames,
   getUsedTaskTokens,
-  isNaturalLanguageDatesEnabled,
   isSelectableProjectForTaskAssignment,
   parseQuickAdd,
-  normalizeClockTimeInput,
   resolveDefaultNewTaskAreaId,
   shallow,
   splitQuickAddBulkLines,
@@ -283,20 +281,9 @@ export default function CaptureScreen() {
   const tagOptions = React.useMemo(() => {
     return getUsedTaskTokens(tasks, (task) => task.tags, { prefix: '#' });
   }, [tasks]);
-  const personOptions = React.useMemo(() => {
-    return getPersonOptionNames(people, tasks);
-  }, [people, tasks]);
-  const naturalLanguageDates = isNaturalLanguageDatesEnabled(settings);
   const quickAddParseOptions = React.useMemo(
-    () => ({
-      knownContexts: contextOptions,
-      knownTags: tagOptions,
-      knownPeople: personOptions,
-      defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-      preserveText: settings.quickAddAutoClean !== true,
-      naturalLanguageDates,
-    }),
-    [contextOptions, tagOptions, personOptions, settings.gtd?.defaultScheduleTime, settings.quickAddAutoClean, naturalLanguageDates]
+    () => buildQuickAddParseOptions(settings, { tasks, people }),
+    [people, settings, tasks]
   );
 
   useEffect(() => {

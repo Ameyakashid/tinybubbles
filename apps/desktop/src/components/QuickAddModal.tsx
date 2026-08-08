@@ -10,10 +10,8 @@ import {
     flushPendingSave,
     findSelectableProjectByTitleAndArea,
     getQuickAddProjectInitialProps,
-    getPersonOptionNames,
-    isNaturalLanguageDatesEnabled,
+    buildQuickAddParseOptions,
     parseQuickAdd,
-    normalizeClockTimeInput,
     normalizeFocusTaskLimit,
     getDefaultTaskAreaMode,
     resolveDefaultNewTaskAreaId,
@@ -206,21 +204,9 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         ? activeAreaId ?? ''
         : resolveDefaultNewTaskAreaId(settings, sortedAreas) ?? '';
     // Read lazily on each open: the modal does not subscribe to tasks/people.
-    const personOptionNames = useMemo(() => {
-        if (!isOpen) return [];
-        const { people, tasks } = useTaskStore.getState();
-        return getPersonOptionNames(people, tasks);
-    }, [isOpen]);
     const quickAddParseOptions = useMemo(
-        () => ({
-            knownContexts: allContexts,
-            knownTags: allTags,
-            knownPeople: personOptionNames,
-            defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-            preserveText: settings.quickAddAutoClean !== true,
-            naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-        }),
-        [allContexts, allTags, personOptionNames, settings.gtd?.defaultScheduleTime, settings.quickAddAutoClean, settings.gtd?.naturalLanguageDates],
+        () => buildQuickAddParseOptions(settings, isOpen ? useTaskStore.getState() : {}),
+        [isOpen, settings],
     );
     const parsedInput = useMemo(
         () => parseQuickAdd(value, projects, new Date(), areas, quickAddParseOptions),
@@ -1048,7 +1034,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 projects={projects}
                                 contexts={suggestionTokens}
                                 areas={areas}
-                                people={personOptionNames}
+                                people={quickAddParseOptions.knownPeople}
                                 onCreateProject={async (title) => {
                                     const created = await addProject(
                                         title,

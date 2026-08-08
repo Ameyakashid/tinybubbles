@@ -83,6 +83,7 @@ vi.mock('@mindwtr/core', async () => {
   return {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
+  buildQuickAddParseOptions: actual.buildQuickAddParseOptions,
   DEFAULT_PROJECT_COLOR: actual.DEFAULT_PROJECT_COLOR,
   getDefaultTaskAreaMode: (settings: any) => {
     const mode = settings?.gtd?.defaultAreaMode;
