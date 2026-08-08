@@ -122,9 +122,12 @@ afterEach(() => {
 
 vi.mock('@mindwtr/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mindwtr/core')>();
-  const useTaskStore = Object.assign(() => storeState, {
-    getState: () => storeState,
-  });
+  // The real store is selector-based; the shared visible-task context
+  // subscribes field by field, so the mock has to honour selectors.
+  const useTaskStore = Object.assign(
+    (selector?: (state: typeof storeState) => unknown) => (selector ? selector(storeState) : storeState),
+    { getState: () => storeState },
+  );
 
   return {
     ...actual,
