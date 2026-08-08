@@ -82,7 +82,12 @@ import {
 } from './list/list-filter-controls';
 import { useListSelection } from './list/useListSelection';
 import { StoreTaskItem } from './list/StoreTaskItem';
-import { LIST_VIRTUALIZATION_THRESHOLD, LIST_VIRTUAL_ROW_ESTIMATE, LIST_VIRTUAL_OVERSCAN } from './list/useVirtualList';
+import {
+    LIST_VIRTUALIZATION_THRESHOLD,
+    LIST_VIRTUAL_HEADER_ESTIMATE,
+    LIST_VIRTUAL_OVERSCAN_ROWS,
+    LIST_VIRTUAL_ROW_ESTIMATE,
+} from './list/virtual-list';
 import { QuickAddSyntaxHint } from '../ui/QuickAddSyntaxHint';
 import { useFutureStartRevealTick, useLocalDayKey } from '../../hooks/useLocalDayKey';
 import { resolveDoneTaskSortBy, resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
@@ -658,14 +663,14 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         getScrollElement: () => listScrollRef.current,
         estimateSize: (index) => (
             isListGrouping && groupedVirtualRows[index]?.kind === 'header'
-                ? 42
+                ? LIST_VIRTUAL_HEADER_ESTIMATE
                 : densityMode === 'condensed'
                     ? 72
                     : densityMode === 'compact'
                         ? 90
                         : LIST_VIRTUAL_ROW_ESTIMATE
         ),
-        overscan: Math.max(2, Math.ceil(LIST_VIRTUAL_OVERSCAN / LIST_VIRTUAL_ROW_ESTIMATE)),
+        overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
         getItemKey: (index) => {
             if (!isListGrouping) return filteredTasks[index]?.id ?? index;
             const row = groupedVirtualRows[index];

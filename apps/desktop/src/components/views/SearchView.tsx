@@ -1,4 +1,5 @@
-import { useMemo, useCallback, useEffect, useState, useRef, type UIEvent } from 'react';
+import { useMemo, useCallback, useEffect, useState, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, tFallback } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
@@ -14,13 +15,11 @@ import { TokenPickerModal } from '../TokenPickerModal';
 import { cn } from '../../lib/utils';
 import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { VirtualTaskRow } from './list/VirtualTaskRow';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
+    LIST_VIRTUAL_OVERSCAN_ROWS,
     LIST_VIRTUAL_ROW_ESTIMATE,
-    LIST_VIRTUAL_OVERSCAN,
-    useVirtualList,
-} from './list/useVirtualList';
+} from './list/virtual-list';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
 import { LIST_END_GAP } from './list/list-toolbar';
@@ -59,10 +58,6 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
     const [contextPromptMode, setContextPromptMode] = useState<'add' | 'remove'>('add');
     const [bulkOrganizeOpen, setBulkOrganizeOpen] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const rowHeightsRef = useRef<Map<string, number>>(new Map());
-    const [measureVersion, setMeasureVersion] = useState(0);
-    const [listScrollTop, setListScrollTop] = useState(0);
-    const [listHeight, setListHeight] = useState(0);
     const { requestConfirmation, confirmModal } = useConfirmDialog();
 
     const savedSearch = settings?.savedSearches?.find(s => s.id === savedSearchId);
@@ -75,25 +70,6 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         }, 0);
         return () => window.clearTimeout(timer);
     }, [perf.enabled]);
-
-    useEffect(() => {
-        const element = listScrollRef.current;
-        if (!element) return;
-        const updateHeight = () => {
-            const nextHeight = element.clientHeight;
-            setListHeight((current) => (current === nextHeight ? current : nextHeight));
-        };
-        updateHeight();
-        window.addEventListener('resize', updateHeight);
-        const resizeObserver = typeof ResizeObserver === 'function'
-            ? new ResizeObserver(() => updateHeight())
-            : null;
-        resizeObserver?.observe(element);
-        return () => {
-            window.removeEventListener('resize', updateHeight);
-            resizeObserver?.disconnect();
-        };
-    }, []);
 
     const projectMapById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
@@ -119,23 +95,12 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         );
     }, [tasks, projects, query, sortBy, resolvedAreaFilter, projectMapById, areaById]);
     const shouldVirtualize = filteredTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
-    const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
-        if (rowHeightsRef.current.get(id) === height) return;
-        rowHeightsRef.current.set(id, height);
-        setMeasureVersion((current) => current + 1);
-    }, []);
-    const handleVirtualScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-        setListScrollTop(event.currentTarget.scrollTop);
-    }, []);
-    const { rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
-        tasks: filteredTasks,
-        shouldVirtualize,
-        rowHeightsRef,
-        measureVersion,
-        listScrollTop,
-        listHeight,
-        rowEstimate: LIST_VIRTUAL_ROW_ESTIMATE,
-        overscan: LIST_VIRTUAL_OVERSCAN,
+    const rowVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? filteredTasks.length : 0,
+        getScrollElement: () => listScrollRef.current,
+        estimateSize: () => LIST_VIRTUAL_ROW_ESTIMATE,
+        overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
+        getItemKey: (index) => filteredTasks[index]?.id ?? index,
     });
 
     const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
@@ -312,27 +277,39 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
 
             <div
                 ref={listScrollRef}
-                onScroll={handleVirtualScroll}
                 className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}
             >
                 <div data-list-end className={cn(LIST_END_GAP, !shouldVirtualize && "space-y-3")}>
                 {shouldVirtualize ? (
-                    <div style={{ height: totalHeight, position: 'relative' }}>
-                        {visibleTasks.map((task, visibleIndex) => {
-                            const taskIndex = startIndex + visibleIndex;
+                    <div
+                        data-testid="virtualized-task-list"
+                        style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+                    >
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const task = filteredTasks[virtualRow.index];
+                            if (!task) return null;
                             return (
-                                <VirtualTaskRow
-                                    key={task.id}
-                                    taskId={task.id}
-                                    index={taskIndex}
-                                    top={rowOffsets[taskIndex] ?? 0}
-                                    selectionMode={selectionMode}
-                                    isMultiSelected={multiSelectedIds.has(task.id)}
-                                    onToggleSelectId={toggleMultiSelect}
-                                    onMeasure={handleVirtualRowMeasure}
-                                    gapClassName="pb-3"
-                                    showDivider={false}
-                                />
+                                <div
+                                    key={virtualRow.key}
+                                    ref={rowVirtualizer.measureElement}
+                                    data-index={virtualRow.index}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                >
+                                    <div className="pb-3">
+                                        <StoreTaskItem
+                                            taskId={task.id}
+                                            selectionMode={selectionMode}
+                                            isMultiSelected={multiSelectedIds.has(task.id)}
+                                            onToggleSelectId={toggleMultiSelect}
+                                        />
+                                    </div>
+                                </div>
                             );
                         })}
                     </div>

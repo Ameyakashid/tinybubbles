@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useRef, type UIEvent } from 'react';
+import { memo, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ErrorBoundary } from '../ErrorBoundary';
 import {
@@ -23,12 +23,11 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { cn } from '../../lib/utils';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
+    LIST_VIRTUAL_HEADER_ESTIMATE,
+    LIST_VIRTUAL_OVERSCAN_ROWS,
     LIST_VIRTUAL_ROW_ESTIMATE,
-    LIST_VIRTUAL_OVERSCAN,
-    useVirtualList,
-} from './list/useVirtualList';
+} from './list/virtual-list';
 import { StoreTaskItem } from './list/StoreTaskItem';
-import { VirtualTaskRow } from './list/VirtualTaskRow';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
 import {
@@ -138,23 +137,6 @@ function getArchiveDomIdSegment(value: string): string {
 // App-wide flash duration for the shared highlight (#916).
 const HIGHLIGHT_FLASH_MS = 4000;
 
-/**
- * Where the flat virtualized task list has to scroll to centre a row, read from
- * the same measured row model that positions the rows. Never `index * estimate`:
- * a fabricated offset scrolls past the end of the content and blanks the list
- * (#916). Returns null when the row is not in the model.
- */
-export function getArchiveHighlightScrollTop(
-    rowTop: number | undefined,
-    rowHeight: number,
-    viewportHeight: number,
-    totalHeight: number,
-): number | null {
-    if (rowTop === undefined) return null;
-    const centered = rowTop - Math.max(0, (viewportHeight - rowHeight) / 2);
-    return Math.min(Math.max(0, centered), Math.max(0, totalHeight - viewportHeight));
-}
-
 export function ArchiveView() {
     const perf = usePerformanceMonitor('ArchiveView');
     const {
@@ -197,10 +179,6 @@ export function ArchiveView() {
     );
     const listScrollRef = useRef<HTMLDivElement>(null);
     const scrolledHighlightIdRef = useRef<string | null>(null);
-    const rowHeightsRef = useRef<Map<string, number>>(new Map());
-    const [measureVersion, setMeasureVersion] = useState(0);
-    const [listScrollTop, setListScrollTop] = useState(0);
-    const [listHeight, setListHeight] = useState(0);
     const {
         criteria: listFilterCriteria,
         filtersOpen,
@@ -230,25 +208,6 @@ export function ArchiveView() {
         }, 0);
         return () => window.clearTimeout(timer);
     }, [perf.enabled]);
-
-    useEffect(() => {
-        const element = listScrollRef.current;
-        if (!element) return;
-        const updateHeight = () => {
-            const nextHeight = element.clientHeight;
-            setListHeight((current) => (current === nextHeight ? current : nextHeight));
-        };
-        updateHeight();
-        window.addEventListener('resize', updateHeight);
-        const resizeObserver = typeof ResizeObserver === 'function'
-            ? new ResizeObserver(() => updateHeight())
-            : null;
-        resizeObserver?.observe(element);
-        return () => {
-            window.removeEventListener('resize', updateHeight);
-            resizeObserver?.disconnect();
-        };
-    }, []);
 
     // Everything in the archive, before the toolbar narrows it. The filter
     // chips, their counts and the priority/estimate section visibility all read
@@ -389,32 +348,20 @@ export function ArchiveView() {
     // condition. Grouping only changes how the task segment renders.
     const shouldVirtualizeFlatTasks = !isGrouping && archivedTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
     const shouldFillAvailableHeight = segment === 'tasks' ? shouldVirtualize : shouldVirtualizeFlatTasks;
-    const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
-        if (rowHeightsRef.current.get(id) === height) return;
-        rowHeightsRef.current.set(id, height);
-        setMeasureVersion((current) => current + 1);
-    }, []);
-    const handleVirtualScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-        setListScrollTop(event.currentTarget.scrollTop);
-    }, []);
-    const { rowHeights, rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
-        tasks: archivedTasks,
-        shouldVirtualize: shouldVirtualizeFlatTasks,
-        rowHeightsRef,
-        measureVersion,
-        listScrollTop,
-        listHeight,
-        rowEstimate: LIST_VIRTUAL_ROW_ESTIMATE,
-        overscan: LIST_VIRTUAL_OVERSCAN,
-    });
-    const groupedRowVirtualizer = useVirtualizer({
-        count: isGrouping && shouldVirtualize ? groupedVirtualRows.length : 0,
+    // One engine for both shapes, as in ListView: grouped rows carry headers,
+    // flat rows are the sorted tasks. Row heights are measured, never assumed
+    // — a fabricated offset scrolls past the content and blanks the list (#916).
+    const rowVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? virtualRowCount : 0,
         getScrollElement: () => listScrollRef.current,
-        estimateSize: (index) => groupedVirtualRows[index]?.kind === 'header'
-            ? 42
-            : LIST_VIRTUAL_ROW_ESTIMATE,
-        overscan: Math.max(2, Math.ceil(LIST_VIRTUAL_OVERSCAN / LIST_VIRTUAL_ROW_ESTIMATE)),
+        estimateSize: (index) => (
+            isGrouping && groupedVirtualRows[index]?.kind === 'header'
+                ? LIST_VIRTUAL_HEADER_ESTIMATE
+                : LIST_VIRTUAL_ROW_ESTIMATE
+        ),
+        overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
         getItemKey: (index) => {
+            if (!isGrouping) return archivedTasks[index]?.id ?? index;
             const row = groupedVirtualRows[index];
             if (!row) return index;
             return row.kind === 'header'
@@ -422,12 +369,7 @@ export function ArchiveView() {
                 : `task:${row.group.id}:${row.task.id}`;
         },
     });
-    const groupedVirtualItems = isGrouping && shouldVirtualize
-        ? groupedRowVirtualizer.getVirtualItems()
-        : [];
-    const groupedTotalHeight = isGrouping && shouldVirtualize
-        ? groupedRowVirtualizer.getTotalSize()
-        : 0;
+    const virtualItems = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
 
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
@@ -568,42 +510,27 @@ export function ArchiveView() {
             }
         }
 
-        // Measuring a row bumps the virtual model, which re-runs this effect. The
-        // obstacle steps above are idempotent, but scrolling is not: without this
-        // guard every row the user scrolls past yanks the list back to the
-        // highlighted one. The ref is set where a scroll actually lands, so an
+        // The obstacle steps above are idempotent, but scrolling is not: without
+        // this guard a re-render mid-flash yanks the list back to the highlighted
+        // row under the user. The ref is set where a scroll actually lands, so an
         // attempt cut short by a re-render still gets to retry.
         if (scrolledHighlightIdRef.current === highlightTaskId) return;
+
+        if (shouldVirtualize) {
+            const rowIndex = isGrouping
+                ? groupedVirtualRows.findIndex((row) => row.kind === 'task' && row.task.id === highlightTaskId)
+                : archivedTasks.findIndex((task) => task.id === highlightTaskId);
+            if (rowIndex < 0) return;
+            rowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
+            scrolledHighlightIdRef.current = highlightTaskId;
+            return;
+        }
 
         let retryTimer: number | null = null;
         let cancelled = false;
         let attempts = 0;
         const scrollHighlightedTask = () => {
             if (cancelled) return;
-            if (isGrouping && shouldVirtualize) {
-                const rowIndex = groupedVirtualRows.findIndex(
-                    (row) => row.kind === 'task' && row.task.id === highlightTaskId
-                );
-                if (rowIndex < 0) return;
-                groupedRowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
-                scrolledHighlightIdRef.current = highlightTaskId;
-                return;
-            }
-            if (shouldVirtualizeFlatTasks) {
-                const index = archivedTasks.findIndex((task) => task.id === highlightTaskId);
-                const scrollTop = getArchiveHighlightScrollTop(
-                    rowOffsets[index],
-                    rowHeights[index] ?? 0,
-                    listHeight,
-                    totalHeight,
-                );
-                if (scrollTop !== null && listScrollRef.current) {
-                    listScrollRef.current.scrollTop = scrollTop;
-                    setListScrollTop(scrollTop);
-                    scrolledHighlightIdRef.current = highlightTaskId;
-                }
-                return;
-            }
             const element = document.querySelector(`[data-task-id="${highlightTaskId}"]`) as HTMLElement | null;
             if (element && typeof element.scrollIntoView === 'function') {
                 element.scrollIntoView({ block: 'center' });
@@ -627,24 +554,19 @@ export function ArchiveView() {
         archivedTasks,
         clearFilters,
         collapsedGroupIds,
-        groupedRowVirtualizer,
         groupedTasks,
         groupedVirtualRows,
         handleSegmentChange,
         highlightTaskId,
         isGrouping,
-        listHeight,
         orderedTasks,
-        rowHeights,
-        rowOffsets,
+        rowVirtualizer,
         searchQuery,
         segment,
         shouldVirtualize,
-        shouldVirtualizeFlatTasks,
         showToast,
         t,
         toggleGroup,
-        totalHeight,
     ]);
 
     return (
@@ -831,7 +753,6 @@ export function ArchiveView() {
             ) : (
             <div
                 ref={listScrollRef}
-                onScroll={isGrouping ? undefined : handleVirtualScroll}
                 className={shouldVirtualize ? "flex-1 min-h-0 overflow-y-auto" : undefined}
             >
                 <div data-list-end className={LIST_END_GAP}>
@@ -844,16 +765,15 @@ export function ArchiveView() {
                     <div
                         data-testid="virtualized-task-list"
                         data-grouped={isGrouping ? 'true' : 'false'}
-                        style={{ height: isGrouping ? groupedTotalHeight : totalHeight, position: 'relative' }}
+                        style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
                     >
-                        {isGrouping ? groupedVirtualItems.map((virtualRow) => {
-                            const groupedRow = groupedVirtualRows[virtualRow.index];
-                            if (!groupedRow) return null;
-                            if (groupedRow.kind === 'header') {
+                        {virtualItems.map((virtualRow) => {
+                            const groupedRow = isGrouping ? groupedVirtualRows[virtualRow.index] : undefined;
+                            if (groupedRow?.kind === 'header') {
                                 return (
                                     <div
                                         key={virtualRow.key}
-                                        ref={groupedRowVirtualizer.measureElement}
+                                        ref={rowVirtualizer.measureElement}
                                         data-index={virtualRow.index}
                                         style={{
                                             position: 'absolute',
@@ -877,10 +797,14 @@ export function ArchiveView() {
                                     </div>
                                 );
                             }
+                            const task = groupedRow?.kind === 'task'
+                                ? groupedRow.task
+                                : archivedTasks[virtualRow.index];
+                            if (!task) return null;
                             return (
                                 <div
                                     key={virtualRow.key}
-                                    ref={groupedRowVirtualizer.measureElement}
+                                    ref={rowVirtualizer.measureElement}
                                     data-index={virtualRow.index}
                                     style={{
                                         position: 'absolute',
@@ -891,33 +815,21 @@ export function ArchiveView() {
                                     }}
                                 >
                                     <div
-                                        id={groupedRow.isFirst ? groupedRow.controlsId : undefined}
+                                        id={groupedRow?.kind === 'task' && groupedRow.isFirst ? groupedRow.controlsId : undefined}
                                         className={cn(
-                                            'border-x border-border/40 bg-card/30',
-                                            !groupedRow.isLast && 'border-b border-border/30',
-                                            groupedRow.isLast && 'rounded-b-md border-b border-border/40',
+                                            groupedRow?.kind === 'task'
+                                                ? [
+                                                    'border-x border-border/40 bg-card/30',
+                                                    !groupedRow.isLast && 'border-b border-border/30',
+                                                    groupedRow.isLast && 'rounded-b-md border-b border-border/40',
+                                                ]
+                                                : 'pb-1.5',
                                         )}
                                     >
-                                        {renderArchiveRow(groupedRow.task)}
+                                        {renderArchiveRow(task)}
+                                        {!groupedRow && <div className="mx-3 mt-1 h-px bg-border/30" />}
                                     </div>
                                 </div>
-                            );
-                        }) : visibleTasks.map((task, visibleIndex) => {
-                            const taskIndex = startIndex + visibleIndex;
-                            return (
-                                <VirtualTaskRow
-                                    key={task.id}
-                                    taskId={task.id}
-                                    index={taskIndex}
-                                    top={rowOffsets[taskIndex] ?? 0}
-                                    onMeasure={handleVirtualRowMeasure}
-                                    onToggleSelectId={toggleTaskSelection}
-                                    selectionMode={selectionMode}
-                                    isMultiSelected={selectedIds.has(task.id)}
-                                    readOnly
-                                    showQuickDone={false}
-                                    showProjectBadgeInActions={false}
-                                />
                             );
                         })}
                     </div>

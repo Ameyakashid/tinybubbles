@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef, type UIEvent } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     useTaskStore,
     matchesHierarchicalToken,
@@ -21,14 +22,12 @@ import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { VirtualTaskRow } from './list/VirtualTaskRow';
 import { useTaskSelection } from './list/useTaskSelection';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,
+    LIST_VIRTUAL_OVERSCAN_ROWS,
     LIST_VIRTUAL_ROW_ESTIMATE,
-    LIST_VIRTUAL_OVERSCAN,
-    useVirtualList,
-} from './list/useVirtualList';
+} from './list/virtual-list';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { useTaskListScope } from './list/task-list-scope';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
@@ -88,10 +87,6 @@ export function ContextsView() {
     const [contextsCollapsed, setContextsCollapsed] = useState(false);
     const [tagsCollapsed, setTagsCollapsed] = useState(false);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const rowHeightsRef = useRef<Map<string, number>>(new Map());
-    const [measureVersion, setMeasureVersion] = useState(0);
-    const [listScrollTop, setListScrollTop] = useState(0);
-    const [listHeight, setListHeight] = useState(0);
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const setSelectedContext = useCallback((value: string | null) => {
         setPersistedViewState((current) => ({
@@ -132,25 +127,6 @@ export function ContextsView() {
         }, 0);
         return () => window.clearTimeout(timer);
     }, [perf.enabled]);
-
-    useEffect(() => {
-        const element = listScrollRef.current;
-        if (!element) return;
-        const updateHeight = () => {
-            const nextHeight = element.clientHeight;
-            setListHeight((current) => (current === nextHeight ? current : nextHeight));
-        };
-        updateHeight();
-        window.addEventListener('resize', updateHeight);
-        const resizeObserver = typeof ResizeObserver === 'function'
-            ? new ResizeObserver(() => updateHeight())
-            : null;
-        resizeObserver?.observe(element);
-        return () => {
-            window.removeEventListener('resize', updateHeight);
-            resizeObserver?.disconnect();
-        };
-    }, []);
 
     // Filter out deleted tasks first
     const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
@@ -242,23 +218,12 @@ export function ContextsView() {
         undoNotificationsEnabled,
     });
     const shouldVirtualize = !isGrouping && filteredTasks.length > LIST_VIRTUALIZATION_THRESHOLD;
-    const handleVirtualRowMeasure = useCallback((id: string, height: number) => {
-        if (rowHeightsRef.current.get(id) === height) return;
-        rowHeightsRef.current.set(id, height);
-        setMeasureVersion((current) => current + 1);
-    }, []);
-    const handleVirtualScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-        setListScrollTop(event.currentTarget.scrollTop);
-    }, []);
-    const { rowOffsets, totalHeight, startIndex, visibleTasks } = useVirtualList({
-        tasks: sortedTasks,
-        shouldVirtualize,
-        rowHeightsRef,
-        measureVersion,
-        listScrollTop,
-        listHeight,
-        rowEstimate: LIST_VIRTUAL_ROW_ESTIMATE,
-        overscan: LIST_VIRTUAL_OVERSCAN,
+    const rowVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? sortedTasks.length : 0,
+        getScrollElement: () => listScrollRef.current,
+        estimateSize: () => LIST_VIRTUAL_ROW_ESTIMATE,
+        overscan: LIST_VIRTUAL_OVERSCAN_ROWS,
+        getItemKey: (index) => sortedTasks[index]?.id ?? index,
     });
     const addTagOptions = useMemo(
         () => Array.from(new Set([
@@ -646,7 +611,6 @@ export function ContextsView() {
 
                         <div
                             ref={listScrollRef}
-                            onScroll={handleVirtualScroll}
                             className="flex-1 min-h-0 overflow-y-auto pr-2"
                         >
                             <div
@@ -658,21 +622,37 @@ export function ContextsView() {
                             >
                             {sortedTasks.length > 0 ? (
                                 shouldVirtualize ? (
-                                    <div style={{ height: totalHeight, position: 'relative' }}>
-                                        {visibleTasks.map((task, visibleIndex) => {
-                                            const taskIndex = startIndex + visibleIndex;
+                                    <div
+                                        data-testid="virtualized-task-list"
+                                        style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+                                    >
+                                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                            const task = sortedTasks[virtualRow.index];
+                                            if (!task) return null;
                                             return (
-                                                <VirtualTaskRow
-                                                    key={task.id}
-                                                    taskId={task.id}
-                                                    index={taskIndex}
-                                                    top={rowOffsets[taskIndex] ?? 0}
-                                                    selectionMode={selectionMode}
-                                                    isMultiSelected={multiSelectedIds.has(task.id)}
-                                                    onToggleSelectId={toggleMultiSelect}
-                                                    onMeasure={handleVirtualRowMeasure}
-                                                    showProjectBadgeInActions={false}
-                                                />
+                                                <div
+                                                    key={virtualRow.key}
+                                                    ref={rowVirtualizer.measureElement}
+                                                    data-index={virtualRow.index}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        transform: `translateY(${virtualRow.start}px)`,
+                                                    }}
+                                                >
+                                                    <div className="pb-1.5">
+                                                        <StoreTaskItem
+                                                            taskId={task.id}
+                                                            selectionMode={selectionMode}
+                                                            isMultiSelected={multiSelectedIds.has(task.id)}
+                                                            onToggleSelectId={toggleMultiSelect}
+                                                            showProjectBadgeInActions={false}
+                                                        />
+                                                        <div className="mx-3 mt-1 h-px bg-border/30" />
+                                                    </div>
+                                                </div>
                                             );
                                         })}
                                     </div>

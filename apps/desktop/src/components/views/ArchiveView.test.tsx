@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
 import { useUiStore } from '../../store/ui-store';
-import { ArchiveView, getArchiveHighlightScrollTop } from './ArchiveView';
+import { ArchiveView } from './ArchiveView';
 import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 const initialTaskState = useTaskStore.getState();
@@ -648,10 +648,10 @@ describe('ArchiveView', () => {
             expect(showToast).not.toHaveBeenCalled();
         });
 
-        // Rows measure as they scroll into the window, which bumps the virtual
-        // model and re-runs the reveal effect. Scrolling has to be once per
-        // highlight or the list snaps back under the user for four seconds.
-        it('scrolls to the row once and lets the user scroll away while rows measure', () => {
+        // Rows measure as they scroll into the window, which re-renders the list.
+        // Scrolling has to be once per highlight, and it has to go through the
+        // virtualizer's measured row model rather than a fabricated offset (#916).
+        it('scrolls the virtualized row into view once and lets the user scroll away', () => {
             const originalRect = Element.prototype.getBoundingClientRect;
             // Without a height nothing virtualizes meaningfully in jsdom, so no
             // row ever measures and the bug cannot show itself.
@@ -660,10 +660,13 @@ describe('ArchiveView', () => {
             };
             vi.useFakeTimers();
             try {
+                // Distinct completion times so the default newest-first sort
+                // puts the rows in index order and row 30 is row 30.
                 const manyTasks = Array.from({ length: 40 }, (_, index): Task => ({
                     ...archivedTask,
                     id: `bulk-${index}`,
                     title: `Archived task ${index}`,
+                    completedAt: new Date(Date.UTC(2026, 4, 12, 8, 30) - index * 60_000).toISOString(),
                 }));
                 useTaskStore.setState({
                     _allTasks: manyTasks,
@@ -677,25 +680,29 @@ describe('ArchiveView', () => {
 
                 const scroller = container.querySelector('.overflow-y-auto') as HTMLElement;
                 expect(scroller).toBeTruthy();
-                // jsdom ignores scrollTop writes, so record them instead.
-                const scrollWrites: number[] = [];
-                Object.defineProperty(scroller, 'scrollTop', {
-                    configurable: true,
-                    get: () => scrollWrites[scrollWrites.length - 1] ?? 0,
-                    set: (value: number) => { scrollWrites.push(value); },
-                });
+                // jsdom has no Element.scrollTo — which is what the virtualizer
+                // scrolls with — and lays nothing out, so the scrollable extent
+                // it clamps the target against is 0 unless we supply one.
+                const scrollTo = vi.fn();
+                Object.defineProperty(scroller, 'scrollTo', { configurable: true, value: scrollTo });
+                Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 120 });
+                Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 40 * 120 });
 
                 act(() => {
                     useTaskStore.setState({ highlightTaskId: 'bulk-30' });
                 });
-                expect(scrollWrites).toHaveLength(1);
-                expect(scrollWrites[0]).toBeGreaterThan(0);
+                expect(scrollTo).toHaveBeenCalledTimes(1);
+                // Row 30 of 40 measured 120px rows starts at 3600: the reveal
+                // targets that row, not the top of the list and not past the end.
+                const { top } = scrollTo.mock.calls[0][0] as { top: number };
+                expect(top).toBeGreaterThanOrEqual(3_600);
+                expect(top).toBeLessThan(3_800);
 
+                scrollTo.mockClear();
                 act(() => {
                     fireEvent.scroll(scroller, { target: { scrollTop: 400 } });
                 });
-
-                expect(scrollWrites).toEqual([scrollWrites[0], 400]);
+                expect(scrollTo).not.toHaveBeenCalled();
 
                 // …and the flash still ends four seconds after the reveal rather
                 // than being pushed forward by every measurement.
@@ -724,23 +731,6 @@ describe('ArchiveView', () => {
             } finally {
                 vi.useRealTimers();
             }
-        });
-    });
-
-    // jsdom lays nothing out, so a rendered test would pass against broken
-    // offset math. Pin the arithmetic itself (#916).
-    describe('getArchiveHighlightScrollTop', () => {
-        it('centres a measured row in the viewport', () => {
-            expect(getArchiveHighlightScrollTop(1_000, 120, 600, 5_000)).toBe(760);
-        });
-
-        it('clamps to the top and to the end of the content', () => {
-            expect(getArchiveHighlightScrollTop(40, 120, 600, 5_000)).toBe(0);
-            expect(getArchiveHighlightScrollTop(4_900, 120, 600, 5_000)).toBe(4_400);
-        });
-
-        it('reports no scroll target for a row the model does not know', () => {
-            expect(getArchiveHighlightScrollTop(undefined, 120, 600, 5_000)).toBeNull();
         });
     });
 
