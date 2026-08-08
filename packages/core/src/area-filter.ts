@@ -160,9 +160,10 @@ export function taskMatchesAreaFilterSelection(
 }
 
 /**
- * The lookups every task list needs to answer "is this task visible right now".
- * One shape so a screen builds `projectById`/`areaById` once and hands the same
- * object to every list it renders.
+ * The lookups every task list needs to answer "is this task visible right now",
+ * in one shape so a caller can bundle them with the resolved filter and hand the
+ * same object to each list it renders. How widely that bundle gets shared is the
+ * caller's business — mobile screens each build their own.
  */
 export interface AreaVisibilityContext {
     areaById?: Map<string, Area>;

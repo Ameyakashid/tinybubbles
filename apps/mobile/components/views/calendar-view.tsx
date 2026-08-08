@@ -1007,7 +1007,7 @@ export function CalendarView() {
               <View style={[styles.allDayCard, styles.allDayPinned, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
                 <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>{t('calendar.allDay')}</Text>
                 <ScrollView style={styles.allDayList}>
-                {allDayItems.slice(0, 12).map((item) => {
+                {allDayItems.map((item) => {
                   const task = item.kind === 'event' ? null : item.task;
                   const projected = task ? isProjectedRecurringTask(task) : false;
                   const projectedDisplayLabel = projected && task

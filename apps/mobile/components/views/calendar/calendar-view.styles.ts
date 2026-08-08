@@ -395,7 +395,9 @@ export const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
   },
-  // Bounded so a day full of all-day items cannot crowd out the timeline.
+  // Bounded so a day full of all-day items cannot crowd out the timeline. The
+  // list scrolls past this height, so it holds every item — do not add a count
+  // cap on top of it: that drops the overflow with nothing on screen saying so.
   allDayList: {
     maxHeight: 132,
   },
