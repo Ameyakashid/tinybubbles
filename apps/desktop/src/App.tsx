@@ -115,6 +115,7 @@ import {
 } from './lib/update-service';
 import { getDesktopUpdateTarget, isDesktopUpdateReminderAllowed, isUpdateReminderVersionTrusted } from './lib/desktop-update-targets';
 import { usePomodoroStore } from './store/pomodoro-store';
+import { usePomodoroAlerts } from './hooks/usePomodoroAlerts';
 import {
     PROMPT_TEST_CONTROLS_ENABLED,
     subscribePromptTest,
@@ -296,6 +297,9 @@ function App() {
     const showToast = useUiStore((state) => state.showToast);
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const { t, language, setLanguage } = useLanguage();
+    // App-wide so a running timer still ticks and still alerts while the user is
+    // in another view or another workspace (#528).
+    usePomodoroAlerts();
     // Selected as one joined string, not an array: a fresh array would fail the
     // store's identity check and re-render on every write. NUL is the separator
     // because it cannot occur in a task title — a space would split multi-word

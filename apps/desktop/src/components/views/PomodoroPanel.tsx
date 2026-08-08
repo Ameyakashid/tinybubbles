@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
     formatPomodoroClock,
     getPomodoroPresetOptions,
@@ -11,7 +11,6 @@ import {
 import { Play, Pause, RotateCcw, TimerReset, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/language-context';
-import { sendDesktopPomodoroCompletionAlert } from '../../lib/pomodoro-alert';
 import { reconcilePomodoroSnapshot, usePomodoroStore } from '../../store/pomodoro-store';
 import { PomodoroTaskPicker } from './PomodoroTaskPicker';
 
@@ -23,7 +22,6 @@ interface PomodoroPanelProps {
 
 export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
     const updateTask = useTaskStore((state) => state.updateTask);
-    const notificationsEnabled = useTaskStore((state) => state.settings.notificationsEnabled !== false);
     const customDurations = useTaskStore((state) => state.settings.gtd?.pomodoro?.customDurations);
     const linkTaskEnabled = useTaskStore((state) => state.settings.gtd?.pomodoro?.linkTask === true);
     // The tasks prop is the Focus list, which is what the picker below offers. It
@@ -48,7 +46,6 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
     const setCollapsed = usePomodoroStore((state) => state.setPomodoroCollapsed);
     const hydratePomodoro = usePomodoroStore((state) => state.hydratePomodoro);
     const commitSnapshot = usePomodoroStore((state) => state.commitPomodoro);
-    const previousEventRef = useRef(snapshot.lastEvent);
 
     useEffect(() => {
         // Re-read persisted state on mount, including any session that completed while the app was closed.
@@ -64,13 +61,10 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
         commitSnapshot((prev) => ({ ...prev, selectedTaskId: undefined }));
     }, [commitSnapshot, linkTaskEnabled, snapshot.selectedTaskId, liveTasks]);
 
-    useEffect(() => {
-        if (!snapshot.timerState.isRunning) return;
-        const intervalId = window.setInterval(() => {
-            commitSnapshot((prev) => reconcilePomodoroSnapshot(prev, Date.now(), autoStartOptions));
-        }, 1000);
-        return () => window.clearInterval(intervalId);
-    }, [autoStartOptions, commitSnapshot, snapshot.timerState.isRunning]);
+    // The clock tick and the completion alert live in usePomodoroAlerts, mounted
+    // by App: this panel only exists inside Agenda, so running them here meant a
+    // timer stopped ticking and stopped alerting the moment the user left the
+    // view (#528).
 
     const durations = snapshot.durations;
     const timerState = snapshot.timerState;
@@ -109,15 +103,6 @@ export function PomodoroPanel({ tasks }: PomodoroPanelProps) {
     const expandLabel = resolveText('pomodoro.expand', 'Expand timer');
     const searchTaskLabel = resolveText('common.search', 'Search');
     const noMatchesLabel = resolveText('common.noMatches', 'No matches');
-
-    useEffect(() => {
-        const previous = previousEventRef.current;
-        if (lastEvent && lastEvent !== previous && notificationsEnabled) {
-            const message = lastEvent === 'focus-finished' ? focusDoneLabel : breakDoneLabel;
-            void sendDesktopPomodoroCompletionAlert(cardTitle, message);
-        }
-        previousEventRef.current = lastEvent;
-    }, [breakDoneLabel, cardTitle, focusDoneLabel, lastEvent, notificationsEnabled]);
 
     const handleApplyPreset = (focusMinutes: number, breakMinutes: number) => {
         const nextDurations = { focusMinutes, breakMinutes };
