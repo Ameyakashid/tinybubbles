@@ -177,6 +177,24 @@ describe('date utils', () => {
         configureDateFormatting({ language: 'en', dateFormat: 'system', timeFormat: 'system', systemLocale: 'en-US' });
     });
 
+    // date.ts maps `pt` two different ways: DATE_LOCALE_BY_LANGUAGE gives date-fns the
+    // BRAZILIAN locale (ptBR), LOCALE_TAG_BY_LANGUAGE gives Intl the EUROPEAN tag (pt-PT).
+    // That is a real, user-visible split, not a typo to quietly unify — a Portuguese user
+    // sees Brazilian abbreviations from every date-fns format and European ones from every
+    // Intl format. Pinned here so whichever way it is eventually resolved is a deliberate
+    // product decision with a failing test to change, not a silent drift.
+    it('keeps Portuguese on Brazilian date-fns output and European Intl output', () => {
+        expect(resolveDateLocaleTag({ language: 'pt', dateFormat: 'dmy' })).toBe('pt-PT');
+
+        configureDateFormatting({ language: 'pt', dateFormat: 'dmy', timeFormat: 'system' });
+        // ptBR: "8 ago 2026". European pt would be "8 de ago. de 2026".
+        expect(safeFormatDate('2026-08-08', 'PP')).toBe('8 ago 2026');
+        // ptBR drops the accent European Portuguese keeps.
+        expect(safeFormatDate('2026-08-08', 'EEEEEE')).toBe('sab');
+
+        configureDateFormatting({ language: 'en', dateFormat: 'system', timeFormat: 'system', systemLocale: 'en-US' });
+    });
+
     it('detects when a review date is due', () => {
         const now = new Date('2025-01-10T10:00:00Z');
         expect(isDueForReview('2025-01-10T09:00:00Z', now)).toBe(true);

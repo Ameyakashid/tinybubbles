@@ -16,6 +16,10 @@ type LocaleDescriptorCommon = {
     // synchronously under CJS/Node and Metro's require shim) and falls back to loadAsync.
     loadSync: () => Record<string, unknown>;
     loadAsync: () => Promise<Record<string, unknown>>;
+    // Basename under ./locales, for tooling that reads the file rather than importing it
+    // (scripts/i18n-locale-parity.ts). Usually the locale key, except zh -> 'zh-Hans'; that
+    // one difference is the whole reason the script used to hand-mirror this table.
+    file: string;
     // Export name to read off the loaded module (e.g. 'viOverrides', 'zhHans').
     export: string;
     native: string;
@@ -72,6 +76,7 @@ export const LOCALES = {
     vi: {
         loadSync: () => require('./locales/vi') as typeof import('./locales/vi'),
         loadAsync: () => import('./locales/vi'),
+        file: 'vi',
         export: 'viOverrides',
         mode: 'overrides',
         native: 'Tiếng Việt',
@@ -81,6 +86,7 @@ export const LOCALES = {
     zh: {
         loadSync: () => require('./locales/zh-Hans') as typeof import('./locales/zh-Hans'),
         loadAsync: () => import('./locales/zh-Hans'),
+        file: 'zh-Hans',
         export: 'zhHans',
         mode: 'full',
         native: '中文（简体）',
@@ -90,6 +96,7 @@ export const LOCALES = {
     'zh-Hant': {
         loadSync: () => require('./locales/zh-Hant') as typeof import('./locales/zh-Hant'),
         loadAsync: () => import('./locales/zh-Hant'),
+        file: 'zh-Hant',
         export: 'zhHant',
         mode: 'full',
         native: '中文（繁體）',
@@ -99,6 +106,7 @@ export const LOCALES = {
     es: {
         loadSync: () => require('./locales/es') as typeof import('./locales/es'),
         loadAsync: () => import('./locales/es'),
+        file: 'es',
         export: 'esOverrides',
         mode: 'overrides',
         native: 'Español',
@@ -108,6 +116,7 @@ export const LOCALES = {
     hi: {
         loadSync: () => require('./locales/hi') as typeof import('./locales/hi'),
         loadAsync: () => import('./locales/hi'),
+        file: 'hi',
         export: 'hiOverrides',
         mode: 'overrides',
         native: 'हिन्दी',
@@ -117,6 +126,7 @@ export const LOCALES = {
     ar: {
         loadSync: () => require('./locales/ar') as typeof import('./locales/ar'),
         loadAsync: () => import('./locales/ar'),
+        file: 'ar',
         export: 'arOverrides',
         mode: 'overrides',
         native: 'العربية',
@@ -126,6 +136,7 @@ export const LOCALES = {
     de: {
         loadSync: () => require('./locales/de') as typeof import('./locales/de'),
         loadAsync: () => import('./locales/de'),
+        file: 'de',
         export: 'deOverrides',
         mode: 'overrides',
         native: 'Deutsch',
@@ -135,6 +146,7 @@ export const LOCALES = {
     ru: {
         loadSync: () => require('./locales/ru') as typeof import('./locales/ru'),
         loadAsync: () => import('./locales/ru'),
+        file: 'ru',
         export: 'ruOverrides',
         mode: 'overrides',
         native: 'Русский',
@@ -144,6 +156,7 @@ export const LOCALES = {
     ja: {
         loadSync: () => require('./locales/ja') as typeof import('./locales/ja'),
         loadAsync: () => import('./locales/ja'),
+        file: 'ja',
         export: 'jaOverrides',
         mode: 'overrides',
         native: '日本語',
@@ -153,6 +166,7 @@ export const LOCALES = {
     fr: {
         loadSync: () => require('./locales/fr') as typeof import('./locales/fr'),
         loadAsync: () => import('./locales/fr'),
+        file: 'fr',
         export: 'frOverrides',
         mode: 'overrides',
         native: 'Français',
@@ -162,6 +176,7 @@ export const LOCALES = {
     pt: {
         loadSync: () => require('./locales/pt') as typeof import('./locales/pt'),
         loadAsync: () => import('./locales/pt'),
+        file: 'pt',
         export: 'ptOverrides',
         mode: 'overrides',
         native: 'Português',
@@ -171,6 +186,7 @@ export const LOCALES = {
     pl: {
         loadSync: () => require('./locales/pl') as typeof import('./locales/pl'),
         loadAsync: () => import('./locales/pl'),
+        file: 'pl',
         export: 'plOverrides',
         mode: 'overrides',
         native: 'Polski',
@@ -180,6 +196,7 @@ export const LOCALES = {
     cs: {
         loadSync: () => require('./locales/cs') as typeof import('./locales/cs'),
         loadAsync: () => import('./locales/cs'),
+        file: 'cs',
         export: 'csOverrides',
         mode: 'overrides',
         native: 'Čeština',
@@ -189,6 +206,7 @@ export const LOCALES = {
     ko: {
         loadSync: () => require('./locales/ko') as typeof import('./locales/ko'),
         loadAsync: () => import('./locales/ko'),
+        file: 'ko',
         export: 'koOverrides',
         mode: 'overrides',
         native: '한국어',
@@ -200,6 +218,7 @@ export const LOCALES = {
     it: {
         loadSync: () => require('./locales/it') as typeof import('./locales/it'),
         loadAsync: () => import('./locales/it'),
+        file: 'it',
         export: 'itOverrides',
         mode: 'overrides',
         native: 'Italiano',
@@ -209,6 +228,7 @@ export const LOCALES = {
     tr: {
         loadSync: () => require('./locales/tr') as typeof import('./locales/tr'),
         loadAsync: () => import('./locales/tr'),
+        file: 'tr',
         export: 'trOverrides',
         mode: 'overrides',
         native: 'Türkçe',
@@ -218,6 +238,7 @@ export const LOCALES = {
     nl: {
         loadSync: () => require('./locales/nl') as typeof import('./locales/nl'),
         loadAsync: () => import('./locales/nl'),
+        file: 'nl',
         export: 'nlOverrides',
         mode: 'overrides',
         native: 'Nederlands',
@@ -227,6 +248,7 @@ export const LOCALES = {
     fa: {
         loadSync: () => require('./locales/fa') as typeof import('./locales/fa'),
         loadAsync: () => import('./locales/fa'),
+        file: 'fa',
         export: 'faOverrides',
         mode: 'overrides',
         native: 'فارسی',
@@ -238,6 +260,7 @@ export const LOCALES = {
     sv: {
         loadSync: () => require('./locales/sv') as typeof import('./locales/sv'),
         loadAsync: () => import('./locales/sv'),
+        file: 'sv',
         export: 'svOverrides',
         mode: 'overrides',
         native: 'Svenska',

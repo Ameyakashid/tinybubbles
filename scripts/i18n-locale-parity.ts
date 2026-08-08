@@ -2,45 +2,30 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { en } from '../packages/core/src/i18n/locales/en';
+import { LOCALES, isMixedEnglishChecked } from '../packages/core/src/i18n/i18n-locales';
 import { hasTranslatableEnglishText, isAllowedEnglishMirrorKey } from '../packages/core/src/i18n/locale-quality';
 
 type Dictionary = Record<string, string>;
 
-type LocaleTarget = {
-    locale: string;
-    path: string;
-    fullParity?: boolean;
-};
+const englishKeys = Object.keys(en).sort();
+const englishKeySet = new Set(englishKeys);
 
-// Hand-maintained mirror of packages/core/src/i18n/i18n-locales.ts's LOCALES table
-// (the zh entry there maps to two files, so a mechanical derivation isn't 1:1). A
-// locale missing here is SILENTLY skipped by this script — fa was, once — though
-// locale-parity.test.ts (which does derive from the real table) still covers it.
-const LOCALES: LocaleTarget[] = [
-    { locale: 'ar', path: 'packages/core/src/i18n/locales/ar.ts' },
-    { locale: 'fa', path: 'packages/core/src/i18n/locales/fa.ts' },
-    { locale: 'cs', path: 'packages/core/src/i18n/locales/cs.ts' },
-    { locale: 'de', path: 'packages/core/src/i18n/locales/de.ts' },
-    { locale: 'es', path: 'packages/core/src/i18n/locales/es.ts' },
-    { locale: 'fr', path: 'packages/core/src/i18n/locales/fr.ts' },
-    { locale: 'hi', path: 'packages/core/src/i18n/locales/hi.ts' },
-    { locale: 'it', path: 'packages/core/src/i18n/locales/it.ts' },
-    { locale: 'ja', path: 'packages/core/src/i18n/locales/ja.ts' },
-    { locale: 'ko', path: 'packages/core/src/i18n/locales/ko.ts' },
-    { locale: 'nl', path: 'packages/core/src/i18n/locales/nl.ts' },
-    { locale: 'pl', path: 'packages/core/src/i18n/locales/pl.ts' },
-    { locale: 'pt', path: 'packages/core/src/i18n/locales/pt.ts' },
-    { locale: 'ru', path: 'packages/core/src/i18n/locales/ru.ts' },
-    { locale: 'sv', path: 'packages/core/src/i18n/locales/sv.ts' },
-    { locale: 'tr', path: 'packages/core/src/i18n/locales/tr.ts' },
-    { locale: 'vi', path: 'packages/core/src/i18n/locales/vi.ts' },
-    { locale: 'zh-Hans', path: 'packages/core/src/i18n/locales/zh-Hans.ts', fullParity: true },
-    { locale: 'zh-Hant', path: 'packages/core/src/i18n/locales/zh-Hant.ts', fullParity: true },
-];
-// Mirrors locale-parity.test.ts: non-Latin locales still meaningfully partial, i.e. whose
-// coverageFloor in i18n-locales.ts sits under MIXED_ENGLISH_COVERAGE_CEILING. A locale that
-// has been translated through drops out — the English left in it is then deliberate.
-const NON_LATIN_PARTIAL_LOCALES = new Set(['ar', 'hi', 'ja', 'ru']);
+// Derived from packages/core/src/i18n/i18n-locales.ts, the same table locale-parity.test.ts
+// derives its rosters from. This was a hand-kept mirror of that table until 2026-08-08, plus
+// hand-kept copies of its fullParity flags and its mixed-English roster, and a locale missing
+// from the mirror was SILENTLY skipped — fa was, once. The stated reason for not deriving
+// ("the zh entry maps to two files") was not true: LOCALES has separate zh and zh-Hant
+// entries. The real mismatch was that this script keyed by filename while LOCALES keys by
+// Language, which the `file` field now covers — and keying by Language also means an
+// allowedEnglishMirrorKeysByLocale entry for zh (the test keys it that way) is no longer
+// silently ignored here.
+const localeTargets = Object.entries(LOCALES).map(([locale, descriptor]) => ({
+    locale,
+    path: `packages/core/src/i18n/locales/${descriptor.file}.ts`,
+    // Must translate every English key, not just a floor's worth of them.
+    fullParity: descriptor.translatedKeyFloor === 'all',
+    mixedEnglishChecked: isMixedEnglishChecked(descriptor, englishKeys.length),
+}));
 
 const args = new Set(process.argv.slice(2));
 const shouldFix = args.has('--fix');
@@ -73,11 +58,9 @@ function removeKeys(filePath: string, keys: Set<string>) {
     writeFileSync(filePath, nextLines.join('\n'));
 }
 
-const englishKeys = Object.keys(en).sort();
-const englishKeySet = new Set(englishKeys);
 let problemCount = 0;
 
-for (const target of LOCALES) {
+for (const target of localeTargets) {
     const modulePath = join('..', target.path);
     const moduleExports = await import(modulePath);
     const dictionary = resolveDictionary(moduleExports);
@@ -88,7 +71,7 @@ for (const target of LOCALES) {
         .filter((key) => dictionary[key] === en[key]
             && hasTranslatableEnglishText(en[key])
             && !isAllowedEnglishMirrorKey(target.locale, key));
-    const mixedEnglishKeys = !target.fullParity && NON_LATIN_PARTIAL_LOCALES.has(target.locale)
+    const mixedEnglishKeys = target.mixedEnglishChecked
         ? Object.keys(dictionary).filter((key) => hasTranslatableEnglishText(dictionary[key]))
         : [];
     const missingKeys = target.fullParity
