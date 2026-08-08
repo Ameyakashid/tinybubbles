@@ -7,7 +7,9 @@ Mindwtr keeps translations under this folder so community contributions are easy
 - `zh-Hant.ts`: Full Traditional Chinese dictionary.
 - `*.ts` for other languages: manual override dictionaries. These locales are partial by design; missing keys fall back to English.
 
-English and Chinese are the only full dictionaries today. For languages using overrides, prefer adding explicit translations for all keys, but do not copy English strings into override files as placeholders. CI enforces each partial locale's current coverage floor so newly added English keys cannot silently lower existing coverage.
+English and Chinese are the only standalone dictionaries today. For languages using overrides, prefer adding explicit translations for all keys, but do not copy English strings into override files as placeholders.
+
+Each locale carries a `translatedKeyFloor` in `i18n-locales.ts`, and CI enforces it. It is an absolute **number of keys**, not a percentage: deleting a translation always fails the gate, and adding a new English string never does. Raise a floor when real translation work lands; never lower it. A floor of `'all'` means every key in `en.ts` has to be translated — `zh` and `zh-Hant` carry it because they are full dictionaries, and `fa` and `sv` carry it because they are maintained at full parity even though they load as override dictionaries.
 
 ## When a translation matches English
 
@@ -21,7 +23,7 @@ Parser and command tokens stay in English inside translated help text, for examp
 
 1. Open the language file (for example `vi.ts` for Vietnamese or `fr.ts` for French).
 2. Add or update keys in `<lang>Overrides`.
-3. For a new language, also register it in `i18n-types.ts`, `i18n-constants.ts`, `i18n-translations.ts`, `i18n-loader.ts`, `date.ts`, app language pickers, and the locale parity checks.
+3. For a new language, start with one entry in `i18n-locales.ts`. `Language`, `SUPPORTED_LANGUAGES`, the loader's dispatch, both apps' language pickers, and the parity rosters all derive from that table. Four places still need a manual entry: `DATE_LOCALE_BY_LANGUAGE` and `LOCALE_TAG_BY_LANGUAGE` in `date.ts`, `translationsByLocale` in `locale-parity.test.ts`, and the locale's mirrored-English allow-list in `locale-quality.ts` if it needs one.
 4. Keep command tokens in English where applicable (`/start:`, `/due:`, `/review:`, `/note:`, `/energy:`, `/next`, `@context`, `#tag`, `+Project`).
 5. Run tests:
 
@@ -46,3 +48,5 @@ The script reports:
 - locale coverage percentage
 - keys that exist in `en.ts` but are missing from the locale file and currently fall back to English
 - keys that exist in the locale file but no longer exist in `en.ts`
+
+The percentage is informational only. The gate compares the locale's translated **key count** against its `translatedKeyFloor`, so the number to watch when you are clearing a CI failure is the count of missing keys, not the percentage.
