@@ -269,7 +269,6 @@ pub(crate) struct TaskQueryOptions {
     is_focused_today: Option<bool>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StorageMode {
     Standard,

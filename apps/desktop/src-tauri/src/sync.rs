@@ -1,5 +1,42 @@
-use crate::*;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use rand::RngCore;
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::error::Error as StdError;
+#[cfg(target_os = "macos")]
+use std::ffi::{CStr, CString};
+use std::fs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tauri::Manager;
+use tauri_plugin_fs::FsExt;
+
+use crate::config::{
+    get_keyring_secret, read_config, read_dropbox_credential_state, set_keyring_secret,
+    update_dropbox_credential_state, write_config_files,
+};
+use crate::storage::{get_config_path, get_secrets_path, read_json_with_retries};
+#[cfg(target_os = "macos")]
+use crate::{
+    mindwtr_macos_create_security_bookmark, mindwtr_macos_free_bookmark_string,
+    mindwtr_macos_resolve_security_bookmark,
+};
+use crate::{
+    AppConfigToml, DropboxResolvedCredentialHandle, DropboxTokenBundle, DropboxTokenResponse,
+    APP_NAME, DATA_FILE_NAME, DROPBOX_AUTH_ENDPOINT, DROPBOX_DEFAULT_TOKEN_LIFETIME_SECS,
+    DROPBOX_OAUTH_TIMEOUT_SECS, DROPBOX_REDIRECT_HOST, DROPBOX_REDIRECT_PATH,
+    DROPBOX_REDIRECT_PORT, DROPBOX_REVOKE_ENDPOINT, DROPBOX_SCOPES, DROPBOX_TOKEN_ENDPOINT,
+    DROPBOX_TOKEN_REFRESH_SKEW_MS, KEYRING_CLOUD_TOKEN, KEYRING_DROPBOX_TOKENS,
+    KEYRING_WEB_DAV_PASSWORD,
+};
 
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]

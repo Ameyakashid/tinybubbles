@@ -2,15 +2,11 @@
 // default macro recursion depth.
 #![recursion_limit = "256"]
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use keyring::{Entry, Error as KeyringError};
 use rand::RngCore;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
 #[cfg(target_os = "macos")]
@@ -19,7 +15,6 @@ use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
-use std::net::TcpListener;
 #[cfg(target_os = "macos")]
 use std::os::raw::{c_char, c_int};
 #[cfg(target_os = "linux")]
@@ -31,7 +26,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 #[cfg(target_os = "macos")]
@@ -39,7 +34,6 @@ use tauri::menu::HELP_SUBMENU_ID;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
-use tauri_plugin_fs::FsExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use time::OffsetDateTime;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -133,17 +127,15 @@ use ui::{
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
 use config::read_config_toml;
 pub(crate) use config::{
-    get_keyring_secret, parse_toml_string_value, read_config, read_dropbox_credential_state,
-    set_keyring_secret, update_dropbox_credential_state, write_config_files,
+    get_keyring_secret, parse_toml_string_value, read_config, set_keyring_secret,
+    write_config_files,
 };
 #[cfg(test)]
 use install::parse_flatpak_install_channel;
-pub(crate) use storage::{
-    ensure_data_file, get_config_path, get_data_dir, get_secrets_path, read_json_with_retries,
-};
+pub(crate) use storage::{ensure_data_file, get_config_path, get_data_dir, get_secrets_path};
+pub(crate) use sync::expand_tauri_fs_scope;
 #[cfg(target_os = "macos")]
 use sync::resolve_sync_path_bookmark;
-pub(crate) use sync::expand_tauri_fs_scope;
 
 /// App name used for config directories and files
 const APP_NAME: &str = "mindwtr";
