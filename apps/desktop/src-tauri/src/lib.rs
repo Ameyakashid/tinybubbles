@@ -8,7 +8,6 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use keyring::{Entry, Error as KeyringError};
 use rand::RngCore;
 use reqwest::StatusCode;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, ToSql};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -38,7 +37,6 @@ use tauri::image::Image;
 #[cfg(target_os = "macos")]
 use tauri::menu::HELP_SUBMENU_ID;
 use tauri::menu::{Menu, MenuItem};
-use tauri::path::BaseDirectory;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
@@ -145,7 +143,7 @@ pub(crate) use storage::{
 };
 #[cfg(target_os = "macos")]
 use sync::resolve_sync_path_bookmark;
-pub(crate) use sync::{expand_tauri_fs_scope, is_icloud_evicted};
+pub(crate) use sync::expand_tauri_fs_scope;
 
 /// App name used for config directories and files
 const APP_NAME: &str = "mindwtr";

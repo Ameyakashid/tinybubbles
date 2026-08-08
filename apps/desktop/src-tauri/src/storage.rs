@@ -1,5 +1,23 @@
-use crate::*;
-use std::collections::HashSet;
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, ToSql};
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use std::collections::{HashMap, HashSet};
+use std::env;
+use std::fs;
+use std::fs::File;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::path::BaseDirectory;
+use tauri::Manager;
+use time::OffsetDateTime;
+
+use crate::config::write_config_files;
+use crate::sync::is_icloud_evicted;
+use crate::{
+    AppConfigToml, LegacyAppConfigJson, APP_NAME, CONFIG_FILE_NAME, DATA_FILE_NAME, DB_FILE_NAME,
+    SECRETS_FILE_NAME,
+};
 
 const PORTABLE_MARKER_FILE_NAME: &str = "portable.txt";
 const PORTABLE_PROFILE_DIR_NAME: &str = "profile";
