@@ -4,7 +4,6 @@ import type { ToastOptions } from '@/contexts/toast-context';
  * The one warning a capture surface shows when quick-add reports a date command
  * it could not read. The literal was copy-pasted at six mobile sites, which is
  * six chances for the wording, tone or duration to drift apart.
- * `use-quick-capture-audio.ts` still holds its own two copies.
  */
 export function showInvalidDateCommandToast(
     showToast: (options: ToastOptions) => void,

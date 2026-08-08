@@ -17,6 +17,7 @@ import {
 import { loadAIKey } from '../lib/ai-config';
 import { persistAttachmentLocally } from '../lib/attachment-sync';
 import { getAttachmentsDir } from '../lib/attachment-sync-utils';
+import { showInvalidDateCommandToast } from '../lib/quick-add-toast';
 import { useToast } from '../contexts/toast-context';
 import {
   ensureWhisperModelPathForConfigAsync,
@@ -501,12 +502,7 @@ export function useQuickCaptureAudio({
         if (attachment) attachments.push(attachment);
         const { title, props, invalidDateCommands } = await buildTaskProps(displayTitle, { attachments });
         if (invalidDateCommands && invalidDateCommands.length > 0) {
-          showToast({
-            title: t('common.notice'),
-            message: `${t('quickAdd.invalidDateCommand')}: ${invalidDateCommands.join(', ')}`,
-            tone: 'warning',
-            durationMs: 4200,
-          });
+          showInvalidDateCommandToast(showToast, t, invalidDateCommands);
           return;
         }
         if (!title.trim()) return;
@@ -708,12 +704,7 @@ export function useQuickCaptureAudio({
       if (attachment) attachments.push(attachment);
       const { title, props, invalidDateCommands } = await buildTaskProps(displayTitle, { attachments });
       if (invalidDateCommands && invalidDateCommands.length > 0) {
-        showToast({
-          title: t('common.notice'),
-          message: `${t('quickAdd.invalidDateCommand')}: ${invalidDateCommands.join(', ')}`,
-          tone: 'warning',
-          durationMs: 4200,
-        });
+        showInvalidDateCommandToast(showToast, t, invalidDateCommands);
         return;
       }
       if (!title.trim()) return;
