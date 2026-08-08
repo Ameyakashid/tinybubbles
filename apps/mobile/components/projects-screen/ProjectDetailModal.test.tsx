@@ -938,7 +938,7 @@ describe('ProjectDetailModal project task scrolling', () => {
 });
 
 describe('ProjectDetailModal keyboard handling', () => {
-    it('uses Android height-based keyboard avoidance for project task quick-add', () => {
+    it('uses Android height-based keyboard avoidance for the project workspace', () => {
         setPlatform('android');
         let tree!: ReturnType<typeof create>;
 
@@ -948,7 +948,6 @@ describe('ProjectDetailModal keyboard handling', () => {
 
         expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('height');
         expect(taskListPropsSpy).toHaveBeenCalled();
-        expect(typeof taskListPropsSpy.mock.calls.at(-1)?.[0].project.onQuickAddInputFocus).toBe('function');
     });
 
     it('adds Android keyboard bottom space so project quick-add can scroll above the keyboard', () => {
@@ -975,57 +974,6 @@ describe('ProjectDetailModal keyboard handling', () => {
         expect(taskListPropsSpy.mock.calls.at(-1)?.[0].contentPaddingBottom).toBe(292);
     });
 
-    it('keeps the project quick-add row visible when Android resizes the modal before the keyboard event', () => {
-        setPlatform('android');
-        vi.spyOn(Dimensions, 'get').mockImplementation(((dimension: 'window' | 'screen') => ({
-            width: 390,
-            height: dimension === 'screen' ? 800 : 520,
-            scale: 3,
-            fontScale: 1,
-        })) as any);
-        const listeners = new Map<string, (event?: any) => void>();
-        vi.spyOn(Keyboard, 'addListener').mockImplementation(((eventName: string, listener: (event?: any) => void) => {
-            listeners.set(eventName, listener);
-            return { remove: () => listeners.delete(eventName) };
-        }) as any);
-        vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(((callback: FrameRequestCallback) => {
-            callback(0);
-            return 1;
-        }) as any);
-        const targetY = 500;
-        const targetH = 44;
-        const scrollY = 0;
-        const scrollH = 520;
-        mockMeasureInWindow.mockImplementation(((handle: number, callback: any) => {
-            if (handle === 42) {
-                callback(0, targetY, 320, targetH);
-                return;
-            }
-            callback(0, scrollY, 390, scrollH);
-        }) as any);
-        act(() => {
-            create(<ProjectDetailModal {...createProjectDetailModalProps()} />);
-        });
-        mockScrollToOffset.mockClear();
-
-        act(() => {
-            taskListPropsSpy.mock.calls.at(-1)?.[0].onListScroll({ nativeEvent: { contentOffset: { y: 360 } } });
-            taskListPropsSpy.mock.calls.at(-1)?.[0].project.onQuickAddInputFocus(42);
-        });
-
-        expect(mockScrollToOffset).not.toHaveBeenCalled();
-
-        act(() => {
-            listeners.get('keyboardDidShow')?.({ endCoordinates: { screenY: 520, height: 280 } });
-        });
-
-        const visibleBottom = Math.min(scrollY + scrollH, 520);
-        const visibleHeight = visibleBottom - scrollY;
-        const bottomClearance = visibleHeight * 0.18;
-        const measuredOverlap = (targetY + targetH) - (visibleBottom - bottomClearance);
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].contentPaddingBottom).toBe(292);
-        expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 360 + measuredOverlap, animated: true });
-    });
 });
 
 describe('ProjectDetailModal lifecycle actions', () => {

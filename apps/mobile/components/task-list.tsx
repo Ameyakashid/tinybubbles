@@ -133,7 +133,6 @@ export interface TaskListProjectOptions {
   enableReorder?: boolean;
   reorderMode?: boolean;
   onReorderModeChange?: (active: boolean) => void;
-  onQuickAddInputFocus?: (targetInput?: number | string) => void;
 }
 
 const NO_PROJECT_OPTIONS: Partial<TaskListProjectOptions> = {};

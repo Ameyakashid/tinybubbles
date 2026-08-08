@@ -40,7 +40,6 @@ export interface ProjectTaskListProps {
     onBulkBarPropsChange: (props: TaskListBulkBarProps | null) => void;
     filterOpenSignal: number;
     onFilterStateChange: (state: { activeCount: number; hasActive: boolean }) => void;
-    onQuickAddInputFocus: (targetInput?: number | string) => void;
 }
 
 /**
@@ -58,7 +57,6 @@ export function ProjectTaskList({
     onBulkBarPropsChange,
     onFilterStateChange,
     onListScroll,
-    onQuickAddInputFocus,
     onReorderModeChange,
     project,
     reorderMode,
@@ -83,11 +81,9 @@ export function ProjectTaskList({
             enableReorder: options.enableProjectReorder,
             reorderMode,
             onReorderModeChange,
-            onQuickAddInputFocus,
         };
     }, [
         getTaskSequenceCue,
-        onQuickAddInputFocus,
         onReorderModeChange,
         project,
         reorderMode,

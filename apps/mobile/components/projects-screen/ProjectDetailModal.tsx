@@ -1,8 +1,6 @@
 import React from 'react';
 import {
     Alert,
-    Dimensions,
-    findNodeHandle,
     type FlatList,
     Keyboard,
     Modal,
@@ -14,7 +12,6 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    UIManager,
     View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -580,9 +577,6 @@ export function ProjectDetailModal({
     const projectDetailScrollOffsetRef = React.useRef(0);
     const pendingProjectDetailScrollRestoreRef = React.useRef<number | null>(null);
     const projectTaskBulkBarPropsRef = React.useRef<TaskListBulkBarProps | null>(null);
-    const projectDetailKeyboardTopRef = React.useRef(Dimensions.get('window').height);
-    const projectDetailKeyboardVisibleRef = React.useRef(false);
-    const projectDetailFocusedInputHandleRef = React.useRef<number | null>(null);
     const [projectDetailKeyboardBottomInset, setProjectDetailKeyboardBottomInset] = React.useState(0);
     const safeAreaEdges = getProjectDetailModalSafeAreaEdges(presentationStyle);
     const taskListOptions = getProjectDetailTaskListOptions(selectedProject, showCompletedTasks);
@@ -878,93 +872,24 @@ export function ProjectDetailModal({
         setShowReviewPicker(false);
     }, [overlayVisible, selectedProject?.id]);
 
-    const scrollProjectInputIntoView = React.useCallback((targetInput?: number | string) => {
-        if (Platform.OS !== 'android') return;
-        const targetHandle = typeof targetInput === 'number'
-            ? targetInput
-            : typeof targetInput === 'string'
-                ? Number(targetInput)
-                : NaN;
-        if (!Number.isFinite(targetHandle) || targetHandle <= 0) return;
-        projectDetailFocusedInputHandleRef.current = targetHandle;
-        if (!projectDetailKeyboardVisibleRef.current) return;
-        const listView = projectDetailListRef.current;
-        if (!listView) return;
-        const scrollHandle = findNodeHandle(listView);
-        if (!scrollHandle) return;
-
-        const measureAndScroll = () => {
-            UIManager.measureInWindow(targetHandle, (_x, targetY, _w, targetH) => {
-                if (!Number.isFinite(targetY) || !Number.isFinite(targetH)) return;
-                UIManager.measureInWindow(scrollHandle, (_sx, scrollY, _sw, scrollH) => {
-                    if (!Number.isFinite(scrollY) || !Number.isFinite(scrollH)) return;
-                    const visibleTop = scrollY;
-                    const keyboardTop = projectDetailKeyboardTopRef.current;
-                    const visibleBottom = Math.min(scrollY + scrollH, keyboardTop);
-                    const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-                    const bottomClearance = visibleHeight * 0.18;
-                    const effectiveVisibleBottom = visibleBottom - bottomClearance;
-                    const targetBottom = targetY + targetH;
-                    if (targetBottom <= effectiveVisibleBottom) return;
-                    const delta = targetBottom - effectiveVisibleBottom;
-                    const nextOffset = Math.max(0, projectDetailScrollOffsetRef.current + delta);
-                    projectDetailListRef.current?.scrollToOffset({ offset: nextOffset, animated: true });
-                });
-            });
-        };
-
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => {
-                measureAndScroll();
-                requestAnimationFrame(measureAndScroll);
-            });
-        } else {
-            setTimeout(measureAndScroll, 0);
-        }
-    }, []);
-
     React.useEffect(() => {
         if (Platform.OS !== 'android') return;
         if (typeof Keyboard?.addListener !== 'function') return;
-        const updateKeyboardTop = (event: { endCoordinates?: { screenY?: number; height?: number } }) => {
-            const frame = getAndroidKeyboardFrame(event);
-            projectDetailKeyboardTopRef.current = frame.keyboardTop;
-            projectDetailKeyboardVisibleRef.current = frame.visible;
-            setProjectDetailKeyboardBottomInset(frame.inset);
-            const focusedInputHandle = projectDetailFocusedInputHandleRef.current;
-            if (projectDetailKeyboardVisibleRef.current && focusedInputHandle) {
-                if (typeof requestAnimationFrame === 'function') {
-                    requestAnimationFrame(() => scrollProjectInputIntoView(focusedInputHandle));
-                } else {
-                    setTimeout(() => scrollProjectInputIntoView(focusedInputHandle), 0);
-                }
-            }
+        const updateKeyboardInset = (event: { endCoordinates?: { screenY?: number; height?: number } }) => {
+            setProjectDetailKeyboardBottomInset(getAndroidKeyboardFrame(event).inset);
         };
-        const resetKeyboardTop = () => {
-            projectDetailKeyboardTopRef.current = Dimensions.get('window').height;
-            projectDetailKeyboardVisibleRef.current = false;
+        const resetKeyboardInset = () => {
             setProjectDetailKeyboardBottomInset(0);
         };
-        const showListener = Keyboard.addListener('keyboardDidShow', updateKeyboardTop);
-        const changeListener = Keyboard.addListener('keyboardDidChangeFrame', updateKeyboardTop);
-        const hideListener = Keyboard.addListener('keyboardDidHide', resetKeyboardTop);
+        const showListener = Keyboard.addListener('keyboardDidShow', updateKeyboardInset);
+        const changeListener = Keyboard.addListener('keyboardDidChangeFrame', updateKeyboardInset);
+        const hideListener = Keyboard.addListener('keyboardDidHide', resetKeyboardInset);
         return () => {
             showListener.remove();
             changeListener.remove();
             hideListener.remove();
         };
-    }, [scrollProjectInputIntoView]);
-
-    React.useEffect(() => {
-        if (Platform.OS !== 'android' || projectDetailKeyboardBottomInset <= 0) return;
-        const focusedInputHandle = projectDetailFocusedInputHandleRef.current;
-        if (!focusedInputHandle) return;
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => scrollProjectInputIntoView(focusedInputHandle));
-        } else {
-            setTimeout(() => scrollProjectInputIntoView(focusedInputHandle), 0);
-        }
-    }, [projectDetailKeyboardBottomInset, scrollProjectInputIntoView]);
+    }, []);
 
     // Scrolls away with the task rows as the list's ListHeaderComponent in
     // normal mode; stays pinned above the self-scrolling reorder list in reorder mode.
@@ -1532,7 +1457,6 @@ export function ProjectDetailModal({
                                         onBulkBarPropsChange={handleProjectBulkBarPropsChange}
                                         filterOpenSignal={projectTaskFilterOpenSignal}
                                         onFilterStateChange={handleProjectFilterStateChange}
-                                        onQuickAddInputFocus={scrollProjectInputIntoView}
                                     />
                                 </View>
                                 </ProjectDetailScrollFrame>
