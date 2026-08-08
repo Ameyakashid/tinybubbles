@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const invokeMock = vi.hoisted(() => vi.fn(async () => {
+    throw new Error('no ipc');
+}));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 import { invokeNative, invokeNativeOr, setNativeInvokeTransport } from './tauri-invoke';
 
@@ -9,6 +14,10 @@ const enableTauri = () => {
 const disableTauri = () => {
     delete (window as any).__TAURI_INTERNALS__;
 };
+
+beforeEach(() => {
+    invokeMock.mockClear();
+});
 
 afterEach(() => {
     setNativeInvokeTransport(null);
@@ -29,6 +38,12 @@ describe('invokeNative', () => {
         setNativeInvokeTransport(transport as never);
         await expect(invokeNative<string>('get_thing', { id: 7 })).resolves.toBe('ok');
         expect(transport).toHaveBeenCalledWith('get_thing', { id: 7 });
+    });
+
+    it('leaves an argument-less command argument-less on the wire', async () => {
+        enableTauri();
+        await expect(invokeNative('get_thing')).rejects.toThrow();
+        expect(invokeMock.mock.calls[0]).toEqual(['get_thing']);
     });
 
     it('propagates transport failures', async () => {
