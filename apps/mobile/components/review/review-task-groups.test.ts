@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AREA_FILTER_ALL, type Area, type Project, type Task } from '@mindwtr/core';
+import type { Area, Project, Task } from '@mindwtr/core';
 
 import { buildReviewTaskGroups, getReviewOverviewTasks } from './review-task-groups';
 
@@ -88,7 +88,7 @@ describe('buildReviewTaskGroups', () => {
         [activeProject.id, activeProject],
         [inactiveProject.id, inactiveProject],
       ]),
-      resolvedAreaFilter: AREA_FILTER_ALL,
+      resolvedAreaFilter: { included: [], excluded: [] },
       tasks: [
         visibleTask,
         task('done', 'Completed task', { projectId: activeProject.id, status: 'done' }),

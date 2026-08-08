@@ -174,7 +174,7 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
     parseSearchQuery: vi.fn(() => ({ filters: [], text: '' })),
     sortTasksBy: (tasks: Task[]) => tasks,
     splitCompletedTasks: (tasks: Task[]) => ({ activeTasks: tasks, completedTasks: [] }),
-    taskMatchesAreaFilter: vi.fn(() => true),
+    taskMatchesAreaFilterSelection: vi.fn(() => true),
     taskMatchesFilterCriteria: vi.fn(() => true),
   });
 });
@@ -250,7 +250,7 @@ vi.mock('@/hooks/use-reduced-motion', () => ({
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: new Map(),
-    resolvedAreaFilter: null,
+    resolvedAreaFilter: { included: [], excluded: [] },
     selectedAreaIdForNewTasks: selectedAreaIdForNewTasksMock.current,
   }),
 }));

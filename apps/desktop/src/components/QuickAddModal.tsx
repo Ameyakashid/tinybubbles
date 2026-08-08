@@ -19,7 +19,8 @@ import {
     resolveDefaultNewTaskAreaId,
     AREA_FILTER_ALL,
     AREA_FILTER_NONE,
-    resolveAreaFilter,
+    areaFilterSelectionToValue,
+    resolveAreaFilterSelection,
     safeFormatDate,
     generateUUID,
     splitQuickAddBulkLines,
@@ -204,11 +205,12 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
     const sortedAreas = useMemo(() => [...areas].filter((area) => !area.deletedAt).sort((a, b) => a.order - b.order), [areas]);
     const defaultAreaMode = getDefaultTaskAreaMode(settings);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, sortedAreas),
-        [settings?.filters?.areaId, sortedAreas],
+        () => resolveAreaFilterSelection(settings?.filters, sortedAreas),
+        [settings?.filters, sortedAreas],
     );
-    const activeAreaId = resolvedAreaFilter !== AREA_FILTER_ALL && resolvedAreaFilter !== AREA_FILTER_NONE
-        ? resolvedAreaFilter
+    const activeAreaFilterValue = areaFilterSelectionToValue(resolvedAreaFilter);
+    const activeAreaId = activeAreaFilterValue !== AREA_FILTER_ALL && activeAreaFilterValue !== AREA_FILTER_NONE
+        ? activeAreaFilterValue
         : undefined;
     const defaultAreaId = defaultAreaMode === 'active'
         ? activeAreaId ?? ''

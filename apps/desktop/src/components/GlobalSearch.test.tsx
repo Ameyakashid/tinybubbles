@@ -246,7 +246,7 @@ describe('GlobalSearch', () => {
             await Promise.resolve();
         });
 
-        expect(updateSettings).toHaveBeenCalledWith({ filters: { areaId: AREA_FILTER_ALL } });
+        expect(updateSettings).toHaveBeenCalledWith({ filters: { areaId: AREA_FILTER_ALL, areaIds: [], excludedAreaIds: [] } });
         expect(showToast).toHaveBeenCalledWith(
             'Switched to All Areas so the selected item is visible.',
             'info',

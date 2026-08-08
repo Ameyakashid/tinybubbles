@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { Trash2 } from 'lucide-react-native';
 import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';
@@ -54,7 +54,7 @@ export default function SavedSearchScreen() {
     const projectMap = new Map(projects.map((project) => [project.id, project]));
     return sortTasksBy(
       filterTasksBySearch(tasks, projects, query).filter((task) => (
-        taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)
+        taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)
       )),
       sortBy,
     );

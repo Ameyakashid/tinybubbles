@@ -34,7 +34,7 @@ import { useUiStore } from '../store/ui-store';
 import { useObsidianStore } from '../store/obsidian-store';
 import { reportError } from '../lib/report-error';
 import { ToastHost } from './ToastHost';
-import { AREA_FILTER_ALL, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { areaFilterSelectionToFilters, resolveAreaFilterSelection, taskMatchesAreaFilterSelection, type AreaFilterSelection } from '@mindwtr/core';
 import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
@@ -265,8 +265,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
     const sortedAreas = useMemo(() => [...areas].sort((a, b) => a.order - b.order), [areas]);
     const inboxCount = useMemo(() => {
@@ -274,7 +274,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         for (const task of tasks) {
             if (task.deletedAt) continue;
             if (task.status !== 'inbox') continue;
-            if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)) continue;
+            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)) continue;
             count += 1;
         }
         return count;
@@ -556,15 +556,16 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
 
     useEffect(() => {
         if (areas.length === 0) return;
-        if (!settings?.filters?.areaId) {
-            updateSettings({ filters: { ...(settings?.filters ?? {}), areaId: AREA_FILTER_ALL } })
-                .catch((error) => reportError('Failed to set default area filter', error));
-            return;
-        }
-        if (resolvedAreaFilter === settings?.filters?.areaId) return;
-        updateSettings({ filters: { ...(settings?.filters ?? {}), areaId: resolvedAreaFilter } })
+        // Write back the normalized selection whenever the stored one differs —
+        // seeds the default and drops ids whose area was deleted.
+        const stored = settings?.filters;
+        const next = areaFilterSelectionToFilters(resolvedAreaFilter);
+        if (stored?.areaId === next.areaId
+            && (stored?.areaIds ?? []).join(' ') === next.areaIds.join(' ')
+            && (stored?.excludedAreaIds ?? []).join(' ') === next.excludedAreaIds.join(' ')) return;
+        updateSettings({ filters: { ...(stored ?? {}), ...next } })
             .catch((error) => reportError('Failed to update area filter', error));
-    }, [areas.length, resolvedAreaFilter, settings?.filters?.areaId, updateSettings]);
+    }, [areas.length, resolvedAreaFilter, settings?.filters, updateSettings]);
 
     useEffect(() => {
         const handleOnline = () => setIsOnline(true);
@@ -643,8 +644,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         };
     }, [refreshCleartextSyncWarning]);
 
-    const handleAreaFilterChange = (value: string) => {
-        updateSettings({ filters: { ...(settings?.filters ?? {}), areaId: value } })
+    const handleAreaFilterChange = (selection: AreaFilterSelection) => {
+        updateSettings({ filters: { ...(settings?.filters ?? {}), ...areaFilterSelectionToFilters(selection) } })
             .catch((error) => reportError('Failed to update area filter', error));
     };
 
@@ -853,11 +854,12 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                     <div className={cn("pb-1.5", isCollapsed && "flex justify-center")}>
                         <SidebarAreaFilter
                             areas={sortedAreas}
-                            value={resolvedAreaFilter}
+                            selection={resolvedAreaFilter}
                             onChange={handleAreaFilterChange}
                             ariaLabel={t('projects.areaFilter')}
                             allAreasLabel={t('projects.allAreas')}
                             noAreaLabel={t('projects.noArea')}
+                            excludedLabel={tFallback(t, 'filters.excluded', 'Excluded')}
                             collapsed={isCollapsed}
                         />
                     </div>

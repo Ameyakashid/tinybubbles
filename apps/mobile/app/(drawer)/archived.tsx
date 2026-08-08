@@ -5,12 +5,12 @@ import {
     getInlineMarkdownPreview,
     getTaskMetadataFilterVisibility,
     getUsedTaskTokens,
-    projectMatchesAreaFilter,
+    projectMatchesAreaFilterSelection,
     safeFormatDate,
     shallow,
     sortDoneTasksForListView,
     sortTasksBy,
-    taskMatchesAreaFilter,
+    taskMatchesAreaFilterSelection,
     tFallback,
     useTaskStore,
 } from '@mindwtr/core';
@@ -348,7 +348,7 @@ export default function ArchivedScreen() {
     // narrow it. The bulk "select all" and the counts work off the narrowed list
     // below, so acting on a filtered view never reaches a row that is not on screen.
     const allArchivedTasks = useMemo(
-        () => sortedArchivedTasks.filter((task) => taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)),
+        () => sortedArchivedTasks.filter((task) => taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)),
         [sortedArchivedTasks, resolvedAreaFilter, projectById, areaById],
     );
 
@@ -415,7 +415,7 @@ export default function ArchivedScreen() {
         () => projects
             .filter((project) => (
                 project.status === 'archived'
-                && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)
+                && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
             ))
             .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')),
         [projects, resolvedAreaFilter, areaById],

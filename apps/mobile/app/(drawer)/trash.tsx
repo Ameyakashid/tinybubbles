@@ -1,5 +1,5 @@
 import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
-import { buildTrashTimeline, getInlineMarkdownPreview, projectMatchesAreaFilter, shallow, taskMatchesAreaFilter, tFallback, useTaskStore } from '@mindwtr/core';
+import { buildTrashTimeline, getInlineMarkdownPreview, projectMatchesAreaFilterSelection, shallow, taskMatchesAreaFilterSelection, tFallback, useTaskStore } from '@mindwtr/core';
 import type { Project, StoreActionResult, Task } from '@mindwtr/core';
 import { MarkdownInlineText } from '@/components/markdown-text';
 import { assertBulkActionSucceeded } from '@/components/use-task-list-selection';
@@ -242,13 +242,13 @@ export default function TrashScreen() {
   const trashedTasks = useMemo(() => _allTasks.filter((task) => (
     task.deletedAt
     && !task.purgedAt
-    && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+    && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
   )), [_allTasks, areaById, projectById, resolvedAreaFilter]);
 
   const trashedProjects = useMemo(() => _allProjects.filter((project) => (
       project.deletedAt
       && !project.purgedAt
-      && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)
+      && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
     )), [_allProjects, areaById, resolvedAreaFilter]);
 
   const trashItems = useMemo(

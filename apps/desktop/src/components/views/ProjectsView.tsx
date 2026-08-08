@@ -42,7 +42,7 @@ import {
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useUiStore } from '../../store/ui-store';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilterSelection } from '@mindwtr/core';
 import { reportError } from '../../lib/report-error';
 import { useAreaSidebarState } from './projects/useAreaSidebarState';
 import { useProjectsViewStore } from './projects/useProjectsViewStore';
@@ -427,6 +427,7 @@ export function ProjectsView() {
 
     const {
         selectedArea,
+        selectedAreaValue,
         sortedAreas,
         areaById,
         areaFilterLabel,
@@ -448,8 +449,8 @@ export function ProjectsView() {
     const getProjectColorForTask = (project: Project) => getProjectColor(project, areaById, DEFAULT_AREA_COLOR);
 
     useEffect(() => {
-        setNewProjectAreaId(selectedArea !== ALL_AREAS && selectedArea !== NO_AREA ? selectedArea : '');
-    }, [selectedArea, ALL_AREAS, NO_AREA]);
+        setNewProjectAreaId(selectedAreaValue !== ALL_AREAS && selectedAreaValue !== NO_AREA ? selectedAreaValue : '');
+    }, [selectedAreaValue, ALL_AREAS, NO_AREA]);
 
     const sortAreasByName = () => reorderAreas(sortAreasByNameIds(sortedAreas));
     const sortAreasByColor = () => reorderAreas(sortAreasByColorIds(sortedAreas));
@@ -488,9 +489,7 @@ export function ProjectsView() {
             return a.title.localeCompare(b.title);
         });
         const filtered = sorted.filter((project) => {
-            if (selectedArea === ALL_AREAS) return true;
-            if (selectedArea === NO_AREA) return !project.areaId || !areaById.has(project.areaId);
-            return project.areaId === selectedArea;
+            return projectMatchesAreaFilterSelection(project, selectedArea, areaById);
         });
         const filteredByTag = filtered.filter((project) => {
             const tags = project.tagIds || [];
@@ -698,7 +697,7 @@ export function ProjectsView() {
             );
             setNewProjectTitle('');
             setIsCreating(false);
-            setNewProjectAreaId(selectedArea !== ALL_AREAS && selectedArea !== NO_AREA ? selectedArea : '');
+            setNewProjectAreaId(selectedAreaValue !== ALL_AREAS && selectedAreaValue !== NO_AREA ? selectedAreaValue : '');
         } catch (error) {
             reportError('Failed to create project', error);
             showToast(tFallback(t, 'projects.createFailed', 'Failed to create project'), 'error');
@@ -717,7 +716,7 @@ export function ProjectsView() {
 
     useEffect(() => {
         if (!selectedProjectId || !selectedProject) return;
-        if (!projectMatchesAreaFilter(selectedProject, selectedArea, areaById)) {
+        if (!projectMatchesAreaFilterSelection(selectedProject, selectedArea, areaById)) {
             setSelectedProjectId(null);
         }
     }, [areaById, selectedArea, selectedProject, selectedProjectId, setSelectedProjectId]);
@@ -764,7 +763,7 @@ export function ProjectsView() {
                                     onStartCreate={() => setIsCreating(true)}
                                     onCancelCreate={() => {
                                         setIsCreating(false);
-                                        setNewProjectAreaId(selectedArea !== ALL_AREAS && selectedArea !== NO_AREA ? selectedArea : '');
+                                        setNewProjectAreaId(selectedAreaValue !== ALL_AREAS && selectedAreaValue !== NO_AREA ? selectedAreaValue : '');
                                     }}
                                     onCreateProject={handleCreateProject}
                                     onChangeNewProjectTitle={setNewProjectTitle}

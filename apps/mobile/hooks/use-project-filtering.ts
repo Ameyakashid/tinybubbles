@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { type Area, getUsedTaskTokens, type Project, type Task } from '@mindwtr/core';
 
-import { projectMatchesAreaFilter, type AreaFilterValue } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, type AreaFilterSelection } from '@mindwtr/core';
 
 export type ProjectSectionItem = { type: 'project'; data: Project };
 
@@ -72,7 +72,7 @@ type UseProjectFilteringParams = {
     sortedAreas: Area[];
     areaById: Map<string, Area>;
     selectedTagFilter: string;
-    selectedAreaFilter: AreaFilterValue;
+    selectedAreaFilter: AreaFilterSelection;
     allTagsValue: string;
     noTagsValue: string;
     focusedProjectCount: number;
@@ -145,7 +145,7 @@ export function useProjectFiltering({
         });
 
         const areaFilteredProjects = tagFilteredProjects.filter((project) => (
-            projectMatchesAreaFilter(project, selectedAreaFilter, areaById)
+            projectMatchesAreaFilterSelection(project, selectedAreaFilter, areaById)
         ));
         const { active, deferred, archived } = splitProjectsForMobileProjects(areaFilteredProjects);
 

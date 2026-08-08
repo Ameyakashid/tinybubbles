@@ -19,7 +19,7 @@ import { TokenPickerModal } from '../TokenPickerModal';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useUiStore } from '../../store/ui-store';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { CONTEXTS_AXES, groupTasks, sanitizeAxis, type ContextsGroupBy, type TaskGroup } from './list/next-grouping';
@@ -110,8 +110,8 @@ export function ReviewView() {
     const projectMapById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
 
     useEffect(() => {
@@ -143,7 +143,7 @@ export function ReviewView() {
                 if (task.deletedAt) return;
                 if (task.status === 'reference') return;
                 if (!isTaskInActiveProject(task, nextProjectMap)) return;
-                if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectMapById, areaById)) return;
+                if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMapById, areaById)) return;
                 nextVisibleTasks.push(task);
                 if (task.status !== 'done') {
                     nextOpenTasks.push(task);

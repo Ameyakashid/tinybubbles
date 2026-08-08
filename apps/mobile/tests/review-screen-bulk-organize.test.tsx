@@ -125,7 +125,7 @@ vi.mock('@/hooks/use-theme-colors', () => ({
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: new Map(mocks.storeState.areas.map((area) => [area.id, area])),
-    resolvedAreaFilter: '__all__',
+    resolvedAreaFilter: { included: [], excluded: [] },
     sortedAreas: mocks.storeState.areas,
   }),
 }));

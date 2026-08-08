@@ -30,7 +30,7 @@ import { useLanguage } from '../../contexts/language-context';
 
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openProjectScreen } from '@/lib/task-meta-navigation';
 import { useToast } from '@/contexts/toast-context';
 import { TaskEditModal } from '../task-edit-modal';
@@ -103,7 +103,7 @@ export function ContextsView() {
     !task.deletedAt
     && !isTaskFinished(task)
     && isTaskInActiveProject(task, projectById)
-    && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+    && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
   ));
   const allContextTokens = getUsedTaskTokens(contextSourceTasks, (task) => task.contexts, { prefix: '@' });
   const allTagTokens = getUsedTaskTokens(contextSourceTasks, (task) => task.tags, { prefix: '#' });

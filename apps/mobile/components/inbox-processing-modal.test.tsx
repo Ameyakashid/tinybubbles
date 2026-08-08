@@ -137,17 +137,6 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
       && project.status !== 'completed'
       && (!selectedAreaId || project.areaId === selectedAreaId)
     ))),
-    resolveAreaFilter: vi.fn((value: string | undefined, areas: any[]) => {
-      if (!value || value === '__all__' || value === '__none__') return value ?? '__all__';
-      return areas.some((area: any) => !area.deletedAt && area.id === value) ? value : '__all__';
-    }),
-    taskMatchesAreaFilter: vi.fn((task: any, filter: string, projectMap: Map<string, any>, areaById?: Map<string, any>) => {
-      if (filter === '__all__') return true;
-      const taskAreaId = task.areaId || (task.projectId ? projectMap.get(task.projectId)?.areaId : undefined);
-      const effectiveAreaId = taskAreaId && (!areaById || areaById.has(taskAreaId)) ? taskAreaId : undefined;
-      if (filter === '__none__') return !effectiveAreaId;
-      return effectiveAreaId === filter;
-    }),
     QUICK_DATE_PRESETS: ['today', 'tomorrow', 'in_3_days', 'next_week', 'next_month', 'no_date'],
     getQuickDate: vi.fn((preset: string) => {
       const today = new Date(2025, 0, 1);

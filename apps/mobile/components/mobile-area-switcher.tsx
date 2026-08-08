@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, ChevronDown } from 'lucide-react-native';
+import { Check, ChevronDown, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLanguage } from '../contexts/language-context';
@@ -16,7 +16,14 @@ import { useToast } from '../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { CompactText } from '@/components/compact-text';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE } from '@mindwtr/core';
+import {
+  AREA_FILTER_ALL,
+  AREA_FILTER_NONE,
+  areaFilterSelectionToValue,
+  cycleAreaFilterSelection,
+  isAreaFilterSelectionActive,
+  tFallback,
+} from '@mindwtr/core';
 
 export function MobileAreaSwitcher() {
   const { t } = useLanguage();
@@ -33,27 +40,34 @@ export function MobileAreaSwitcher() {
   const [visible, setVisible] = useState(false);
   const staleFilterAlertShown = useRef(false);
 
+  const isDefaultScope = !isAreaFilterSelectionActive(resolvedAreaFilter);
+  // One included area reads better as its name; anything richer gets a count.
+  const activeValue = areaFilterSelectionToValue(resolvedAreaFilter);
+  const activeCount = resolvedAreaFilter.included.length + resolvedAreaFilter.excluded.length;
+  const excludedLabel = tFallback(t, 'filters.excluded', 'Excluded');
+
+  const areaName = useCallback((id: string) => (
+    id === AREA_FILTER_NONE ? t('projects.noArea') : areaById.get(id)?.name ?? t('projects.noArea')
+  ), [areaById, t]);
+
   const currentLabel = useMemo(() => {
-    if (resolvedAreaFilter === AREA_FILTER_ALL) return t('projects.allAreas');
-    if (resolvedAreaFilter === AREA_FILTER_NONE) return t('projects.noArea');
-    return areaById.get(resolvedAreaFilter)?.name ?? t('projects.allAreas');
-  }, [areaById, resolvedAreaFilter, t]);
+    if (isDefaultScope) return t('projects.allAreas');
+    if (activeValue !== AREA_FILTER_ALL) return areaName(activeValue);
+    return String(activeCount);
+  }, [activeCount, activeValue, areaName, isDefaultScope, t]);
   const triggerLabel = useMemo(() => {
-    if (resolvedAreaFilter === AREA_FILTER_ALL) return t('common.all');
-    if (resolvedAreaFilter === AREA_FILTER_NONE) return t('common.none');
+    if (isDefaultScope) return t('common.all');
+    if (activeValue === AREA_FILTER_NONE) return t('common.none');
     return currentLabel;
-  }, [currentLabel, resolvedAreaFilter, t]);
-  const isDefaultScope = resolvedAreaFilter === AREA_FILTER_ALL;
+  }, [activeValue, currentLabel, isDefaultScope, t]);
 
   const options = useMemo(() => ([
-    { id: AREA_FILTER_ALL, label: t('projects.allAreas') },
-    { id: AREA_FILTER_NONE, label: t('projects.noArea') },
     ...sortedAreas.map((area) => ({ id: area.id, label: area.name })),
+    { id: AREA_FILTER_NONE, label: t('projects.noArea') },
   ]), [sortedAreas, t]);
 
-  const handleSelect = (value: string) => {
-    setAreaFilter(value);
-    setVisible(false);
+  const handleToggle = (id: string) => {
+    setAreaFilter(cycleAreaFilterSelection(resolvedAreaFilter, id));
   };
 
   useEffect(() => {
@@ -124,19 +138,43 @@ export function MobileAreaSwitcher() {
               contentContainerStyle={styles.sheetContent}
               showsVerticalScrollIndicator={false}
             >
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ selected: isDefaultScope }}
+                onPress={() => setAreaFilter({ included: [], excluded: [] })}
+                style={[
+                  styles.optionRow,
+                  {
+                    backgroundColor: isDefaultScope ? `${tc.tint}18` : tc.cardBg,
+                    borderColor: isDefaultScope ? tc.tint : tc.border,
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.optionText, { color: isDefaultScope ? tc.tint : tc.text }]}
+                >
+                  {t('projects.allAreas')}
+                </Text>
+                {isDefaultScope ? <Check color={tc.tint} size={16} /> : null}
+              </TouchableOpacity>
               {options.map((option) => {
-                const isSelected = option.id === resolvedAreaFilter;
+                const isIncluded = resolvedAreaFilter.included.includes(option.id);
+                const isExcluded = resolvedAreaFilter.excluded.includes(option.id);
+                const tone = isExcluded ? tc.danger : isIncluded ? tc.tint : null;
                 return (
                   <TouchableOpacity
                     key={option.id}
+                    accessibilityLabel={isExcluded ? `${option.label} (${excludedLabel})` : option.label}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    onPress={() => handleSelect(option.id)}
+                    accessibilityState={{ selected: isIncluded }}
+                    onPress={() => handleToggle(option.id)}
                     style={[
                       styles.optionRow,
                       {
-                        backgroundColor: isSelected ? `${tc.tint}18` : tc.cardBg,
-                        borderColor: isSelected ? tc.tint : tc.border,
+                        backgroundColor: tone ? `${tone}18` : tc.cardBg,
+                        borderColor: tone ?? tc.border,
                       },
                     ]}
                   >
@@ -145,12 +183,15 @@ export function MobileAreaSwitcher() {
                       ellipsizeMode="tail"
                       style={[
                         styles.optionText,
-                        { color: isSelected ? tc.tint : tc.text },
+                        { color: tone ?? tc.text },
+                        isExcluded ? styles.optionTextExcluded : null,
                       ]}
                     >
                       {option.label}
                     </Text>
-                    {isSelected ? <Check color={tc.tint} size={16} /> : null}
+                    {isExcluded
+                      ? <X color={tc.danger} size={16} />
+                      : isIncluded ? <Check color={tc.tint} size={16} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -222,5 +263,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
+  },
+  optionTextExcluded: {
+    textDecorationLine: 'line-through',
   },
 });

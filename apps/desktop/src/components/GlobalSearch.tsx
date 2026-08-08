@@ -16,10 +16,11 @@ import { shallow,
     isTaskFinished,
     safeFormatDate,
     TaskStatus,
-    AREA_FILTER_ALL,
-    resolveAreaFilter,
-    taskMatchesAreaFilter,
-    projectMatchesAreaFilter, tFallback, } from '@mindwtr/core';
+    areaFilterSelectionToFilters,
+    isAreaFilterSelectionActive,
+    resolveAreaFilterSelection,
+    taskMatchesAreaFilterSelection,
+    projectMatchesAreaFilterSelection, tFallback, } from '@mindwtr/core';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
 import { getUrgencyColor } from './Task/TaskItemDisplay';
@@ -78,8 +79,8 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
     // completedAt — the full task behind the row does (#991).
     const taskById = useMemo(() => new Map(_allTasks.map((task) => [task.id, task])), [_allTasks]);
     const activeAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas]
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas]
     );
     const setProjectView = useUiStore((state) => state.setProjectView);
     const showToast = useUiStore((state) => state.showToast);
@@ -329,13 +330,13 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
 
     const handleSelect = (result: { type: 'project'; item: SearchProjectResult } | { type: 'task'; item: SearchTaskResult }) => {
         setIsOpen(false);
-        const shouldSwitchToAllAreas = activeAreaFilter !== AREA_FILTER_ALL && (
+        const shouldSwitchToAllAreas = isAreaFilterSelectionActive(activeAreaFilter) && (
             result.type === 'project'
-                ? !projectMatchesAreaFilter(result.item as Project, activeAreaFilter, areaById)
-                : !taskMatchesAreaFilter(result.item as Task, activeAreaFilter, projectMap, areaById)
+                ? !projectMatchesAreaFilterSelection(result.item as Project, activeAreaFilter, areaById)
+                : !taskMatchesAreaFilterSelection(result.item as Task, activeAreaFilter, projectMap, areaById)
         );
         if (shouldSwitchToAllAreas) {
-            void updateSettings({ filters: { ...(settings?.filters ?? {}), areaId: AREA_FILTER_ALL } })
+            void updateSettings({ filters: { ...(settings?.filters ?? {}), ...areaFilterSelectionToFilters({ included: [], excluded: [] }) } })
                 .catch(() => showToast('Failed to update area filter.', 'error'));
             showToast('Switched to All Areas so the selected item is visible.', 'info');
         }

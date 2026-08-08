@@ -1,15 +1,29 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { type FilterSettings, useTaskStore } from '@mindwtr/core';
 
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, resolveAreaFilter, type AreaFilterValue } from '@mindwtr/core';
+import {
+  AREA_FILTER_ALL,
+  AREA_FILTER_NONE,
+  areaFilterSelectionToFilters,
+  areaFilterSelectionToValue,
+  resolveAreaFilterSelection,
+  type AreaFilterSelection,
+} from '@mindwtr/core';
 
 let staleAreaFilterResetInFlight: string | null = null;
+
+const filterKey = (filters: FilterSettings | undefined) => [
+  filters?.areaId ?? '',
+  (filters?.areaIds ?? []).join(' '),
+  (filters?.excludedAreaIds ?? []).join(' '),
+].join('|');
 
 export function useMobileAreaFilter() {
   const areas = useTaskStore((state) => state.areas);
   const settings = useTaskStore((state) => state.settings);
   const updateSettings = useTaskStore((state) => state.updateSettings);
   const filterSettings: FilterSettings | undefined = settings?.filters;
+  const storedFilterKey = filterKey(filterSettings);
 
   const sortedAreas = useMemo(() => (
     [...areas]
@@ -26,47 +40,54 @@ export function useMobileAreaFilter() {
   );
 
   const resolvedAreaFilter = useMemo(
-    () => resolveAreaFilter(filterSettings?.areaId, sortedAreas),
-    [filterSettings?.areaId, sortedAreas],
+    () => resolveAreaFilterSelection(filterSettings, sortedAreas),
+    [storedFilterKey, sortedAreas],
   );
+  // True once the stored filter names an area that no longer exists, so the
+  // resolved selection is narrower than what was saved.
   const didResetDeletedAreaFilter = useMemo(() => {
-    const savedAreaFilter = filterSettings?.areaId;
-    if (!savedAreaFilter || savedAreaFilter === AREA_FILTER_ALL || savedAreaFilter === AREA_FILTER_NONE) {
-      return false;
-    }
-    return !sortedAreas.some((area) => area.id === savedAreaFilter);
-  }, [filterSettings?.areaId, sortedAreas]);
+    const hasLists = Boolean(filterSettings?.areaIds || filterSettings?.excludedAreaIds);
+    const stored = hasLists
+      ? [...(filterSettings?.areaIds ?? []), ...(filterSettings?.excludedAreaIds ?? [])]
+      : [filterSettings?.areaId ?? ''];
+    return stored.some((id) => (
+      id
+      && id !== AREA_FILTER_ALL
+      && id !== AREA_FILTER_NONE
+      && !sortedAreas.some((area) => area.id === id)
+    ));
+  }, [filterSettings, sortedAreas]);
 
   useEffect(() => {
-    const staleAreaFilter = filterSettings?.areaId;
-    if (!didResetDeletedAreaFilter || !staleAreaFilter) return;
-    if (staleAreaFilterResetInFlight === staleAreaFilter) return;
-    staleAreaFilterResetInFlight = staleAreaFilter;
+    if (!didResetDeletedAreaFilter) return;
+    if (staleAreaFilterResetInFlight === storedFilterKey) return;
+    staleAreaFilterResetInFlight = storedFilterKey;
     void updateSettings({
       filters: {
         ...(filterSettings ?? {}),
-        areaId: AREA_FILTER_ALL,
+        ...areaFilterSelectionToFilters(resolvedAreaFilter),
       },
     }).finally(() => {
-      if (staleAreaFilterResetInFlight === staleAreaFilter) {
+      if (staleAreaFilterResetInFlight === storedFilterKey) {
         staleAreaFilterResetInFlight = null;
       }
     });
-  }, [didResetDeletedAreaFilter, filterSettings, updateSettings]);
+  }, [didResetDeletedAreaFilter, filterSettings, resolvedAreaFilter, storedFilterKey, updateSettings]);
 
-  const setAreaFilter = useCallback((value: AreaFilterValue) => {
+  const setAreaFilter = useCallback((selection: AreaFilterSelection) => {
     void updateSettings({
       filters: {
         ...(filterSettings ?? {}),
-        areaId: value,
+        ...areaFilterSelectionToFilters(selection),
       },
     });
   }, [filterSettings, updateSettings]);
 
   const selectedAreaIdForNewTasks = useMemo(() => {
-    if (resolvedAreaFilter === AREA_FILTER_ALL) return undefined;
-    if (resolvedAreaFilter === AREA_FILTER_NONE) return null;
-    return resolvedAreaFilter;
+    const value = areaFilterSelectionToValue(resolvedAreaFilter);
+    if (value === AREA_FILTER_ALL) return undefined;
+    if (value === AREA_FILTER_NONE) return null;
+    return value;
   }, [resolvedAreaFilter]);
 
   return {

@@ -1,28 +1,34 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Area } from '@mindwtr/core';
-import { Check, ChevronDown, Layers } from 'lucide-react';
+import type { Area, AreaFilterSelection } from '@mindwtr/core';
+import { Check, ChevronDown, Layers, X } from 'lucide-react';
 
-import { AREA_FILTER_ALL, AREA_FILTER_NONE } from '@mindwtr/core';
+import {
+    AREA_FILTER_NONE,
+    cycleAreaFilterSelection,
+    isAreaFilterSelectionActive,
+} from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { useDropdownPosition } from './use-dropdown-position';
 
 interface SidebarAreaFilterProps {
     areas: Area[];
-    value: string;
-    onChange: (value: string) => void;
+    selection: AreaFilterSelection;
+    onChange: (selection: AreaFilterSelection) => void;
     ariaLabel: string;
     allAreasLabel: string;
     noAreaLabel: string;
+    excludedLabel: string;
     collapsed?: boolean;
 }
 
 export function SidebarAreaFilter({
     areas,
-    value,
+    selection,
     onChange,
     ariaLabel,
     allAreasLabel,
     noAreaLabel,
+    excludedLabel,
     collapsed = false,
 }: SidebarAreaFilterProps) {
     const [open, setOpen] = useState(false);
@@ -35,12 +41,21 @@ export function SidebarAreaFilter({
     });
 
     const options = useMemo(() => ([
-        { id: AREA_FILTER_ALL, label: allAreasLabel },
         ...areas.map((area) => ({ id: area.id, label: area.name })),
         { id: AREA_FILTER_NONE, label: noAreaLabel },
-    ]), [allAreasLabel, areas, noAreaLabel]);
+    ]), [areas, noAreaLabel]);
 
-    const selectedLabel = options.find((option) => option.id === value)?.label ?? allAreasLabel;
+    const isActive = isAreaFilterSelectionActive(selection);
+    const activeCount = selection.included.length + selection.excluded.length;
+    // One included area reads as its name; a richer selection lists what it
+    // covers and leans on the count badge for the summary.
+    const labelFor = (id: string) => options.find((option) => option.id === id)?.label ?? noAreaLabel;
+    const selectedLabel = !isActive
+        ? allAreasLabel
+        : [
+            selection.included.map(labelFor).join(', '),
+            selection.excluded.length > 0 ? `${excludedLabel}: ${selection.excluded.map(labelFor).join(', ')}` : '',
+        ].filter(Boolean).join(' · ');
     const triggerLabel = collapsed ? `${ariaLabel}: ${selectedLabel}` : ariaLabel;
 
     useEffect(() => {
@@ -103,17 +118,29 @@ export function SidebarAreaFilter({
                         ? 'h-10 w-10 justify-center hover:bg-accent hover:text-accent-foreground'
                         : 'h-9 w-full justify-between px-3',
                 )}
-                aria-haspopup="listbox"
+                aria-haspopup="true"
                 aria-expanded={open}
                 aria-label={triggerLabel}
                 title={triggerLabel}
             >
                 {collapsed ? (
-                    <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="relative">
+                        <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        {isActive && (
+                            <span className="absolute -right-1.5 -top-1.5 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                        )}
+                    </span>
                 ) : (
                     <>
                         <span className="truncate">{selectedLabel}</span>
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                        <span className="flex items-center gap-1.5 shrink-0">
+                            {activeCount > 1 && (
+                                <span className="rounded-full bg-primary px-1.5 text-[11px] leading-4 text-primary-foreground">
+                                    {activeCount}
+                                </span>
+                            )}
+                            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                        </span>
                     </>
                 )}
             </button>
@@ -127,27 +154,45 @@ export function SidebarAreaFilter({
                     )}
                     onKeyDown={handleKeyDown}
                 >
-                    <div role="listbox" aria-label={ariaLabel} className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
+                    <div role="group" aria-label={ariaLabel} className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
+                        <button
+                            type="button"
+                            data-area-filter-option="true"
+                            onClick={() => onChange({ included: [], excluded: [] })}
+                            aria-pressed={!isActive}
+                            className={cn(
+                                'w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted/50',
+                                !isActive && 'bg-muted/70',
+                            )}
+                        >
+                            <span className="truncate">{allAreasLabel}</span>
+                            <Check className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'opacity-0' : 'opacity-100')} />
+                        </button>
                         {options.map((option) => {
-                            const selected = option.id === value;
+                            const isIncluded = selection.included.includes(option.id);
+                            const isExcluded = selection.excluded.includes(option.id);
                             return (
                                 <button
                                     key={option.id}
                                     type="button"
                                     data-area-filter-option="true"
-                                    role="option"
-                                    aria-selected={selected}
-                                    onClick={() => {
-                                        onChange(option.id);
-                                        closeDropdown();
-                                    }}
+                                    onClick={() => onChange(cycleAreaFilterSelection(selection, option.id))}
+                                    // Three states can't ride a boolean: 'mixed' marks excluded.
+                                    aria-pressed={isExcluded ? 'mixed' : isIncluded}
+                                    aria-label={isExcluded ? `${option.label} (${excludedLabel})` : undefined}
                                     className={cn(
-                                        'w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground hover:bg-muted/50',
-                                        selected && 'bg-muted/70',
+                                        'w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/50',
+                                        isExcluded
+                                            ? 'border border-destructive bg-destructive/10 text-destructive line-through'
+                                            : isIncluded
+                                                ? 'bg-muted/70 text-foreground'
+                                                : 'text-foreground',
                                     )}
                                 >
                                     <span className="truncate">{option.label}</span>
-                                    <Check className={cn('h-3.5 w-3.5 shrink-0', selected ? 'opacity-100' : 'opacity-0')} />
+                                    {isExcluded
+                                        ? <X className="h-3.5 w-3.5 shrink-0" />
+                                        : <Check className={cn('h-3.5 w-3.5 shrink-0', isIncluded ? 'opacity-100' : 'opacity-0')} />}
                                 </button>
                             );
                         })}

@@ -52,8 +52,8 @@ vi.mock('@mindwtr/core', async () => {
     shallow: Object.is,
     useTaskStore: () => mocks.storeState,
     getInlineMarkdownPreview: vi.fn((markdown: string) => markdown),
-    projectMatchesAreaFilter: vi.fn(() => true),
-    taskMatchesAreaFilter: vi.fn(() => true),
+    projectMatchesAreaFilterSelection: vi.fn(() => true),
+    taskMatchesAreaFilterSelection: vi.fn(() => true),
   };
 });
 
@@ -88,7 +88,7 @@ vi.mock('../contexts/language-context', () => ({
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: new Map(),
-    resolvedAreaFilter: '__all__',
+    resolvedAreaFilter: { included: [], excluded: [] },
   }),
 }));
 

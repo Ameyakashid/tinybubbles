@@ -10,7 +10,7 @@ import Animated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { isTaskInActiveProject, shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, taskMatchesAreaFilter, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilter, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
+import { isTaskInActiveProject, shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, taskMatchesAreaFilterSelection, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilterSelection, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
 import { useToast } from '@/contexts/toast-context';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
@@ -411,7 +411,7 @@ export function BoardView() {
   const sortedProjects = useMemo(() => (
     projects
       .filter((project) => !project.deletedAt)
-      .filter((project) => projectMatchesAreaFilter(project, resolvedAreaFilter, areaById))
+      .filter((project) => projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById))
       .sort((a, b) => a.title.localeCompare(b.title))
   ), [projects, resolvedAreaFilter, areaById]);
   const projectById = useMemo(() => {
@@ -428,7 +428,7 @@ export function BoardView() {
       !task.deletedAt
       && task.status !== 'reference'
       && isTaskInActiveProject(task, projectMap)
-      && taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)
+      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)
     ));
   }, [tasks, projectMap, resolvedAreaFilter, areaById]);
 

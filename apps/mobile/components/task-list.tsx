@@ -50,7 +50,7 @@ import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useToast } from '@/contexts/toast-context';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
@@ -624,7 +624,7 @@ function TaskListComponent({
       const matchesStatus = statusFilter === 'all' ? true : task.status === statusFilter;
       const matchesProject = projectId ? task.projectId === projectId : true;
       if (!projectId && !isTaskInActiveProject(task, projectById)) return false;
-      if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)) return false;
+      if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)) return false;
       return matchesStatus && matchesProject;
     });
   }, [areaById, includeDone, projectById, projectId, resolvedAreaFilter, statusFilter, tasks]);

@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => {
   return {
     alert,
     areaById: new Map(),
+    // Stable identity: the controller memoizes task filtering on it, and a
+    // fresh object per render would fake an extra store expansion.
+    areaFilterSelection: { included: [] as string[], excluded: [] as string[] },
     expandTaskSet: vi.fn(),
     storeState: {
       tasks: [] as Task[],
@@ -70,7 +73,7 @@ vi.mock('@/hooks/use-theme-colors', () => ({
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: mocks.areaById,
-    resolvedAreaFilter: '__all__',
+    resolvedAreaFilter: mocks.areaFilterSelection,
   }),
 }));
 

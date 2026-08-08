@@ -19,7 +19,7 @@ import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { VirtualTaskRow } from './list/VirtualTaskRow';
 import { useTaskSelection } from './list/useTaskSelection';
@@ -54,13 +54,13 @@ type BulkTokenPickerState = {
 
 export function ContextsView() {
     const perf = usePerformanceMonitor('ContextsView');
-    const { tasks, tasksById, projects, areas, areaFilterId, taskSortBy, theme, undoNotificationsEnabled, updateSettings } = useTaskStore(
+    const { tasks, tasksById, projects, areas, areaFilters, taskSortBy, theme, undoNotificationsEnabled, updateSettings } = useTaskStore(
         (state) => ({
             tasks: state.tasks,
             tasksById: state._tasksById,
             projects: state.projects,
             areas: state.areas,
-            areaFilterId: state.settings?.filters?.areaId,
+            areaFilters: state.settings?.filters,
             taskSortBy: state.settings?.taskSortBy,
             theme: state.settings?.theme,
             undoNotificationsEnabled: state.settings?.undoNotificationsEnabled !== false,
@@ -121,8 +121,8 @@ export function ContextsView() {
     }), [setSelectedContext]);
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(areaFilterId, areas),
-        [areaFilterId, areas],
+        () => resolveAreaFilterSelection(areaFilters, areas),
+        [areaFilters, areas],
     );
 
     useEffect(() => {
@@ -157,7 +157,7 @@ export function ContextsView() {
     const activeTasks = tasks.filter(t =>
         !t.deletedAt
         && isTaskInActiveProject(t, projectMap)
-        && taskMatchesAreaFilter(t, resolvedAreaFilter, projectMap, areaById)
+        && taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectMap, areaById)
     );
     const hasExplicitStatusFilter = statusFilters.length > 0;
     const baseTasks = activeTasks.filter(t =>

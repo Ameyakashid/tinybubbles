@@ -265,7 +265,7 @@ vi.mock('react-native-safe-area-context', () => ({
 }));
 
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
-  useMobileAreaFilter: () => ({ areaById: new Map(), resolvedAreaFilter: '__all__' }),
+  useMobileAreaFilter: () => ({ areaById: new Map(), resolvedAreaFilter: { included: [], excluded: [] } }),
 }));
 
 vi.mock('@/lib/task-meta-navigation', () => ({

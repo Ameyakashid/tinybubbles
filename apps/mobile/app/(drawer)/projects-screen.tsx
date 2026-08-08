@@ -44,7 +44,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { ListSectionHeader, defaultListContentStyle } from '@/components/list-layout';
 import { logError, logWarn } from '../../lib/app-log';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { CompactText, CompactTextInput } from '@/components/compact-text';
 
@@ -151,11 +151,13 @@ export default function ProjectsScreen() {
     sortedAreas,
   } = useMobileAreaFilter();
 
+  const selectedAreaFilterValue = areaFilterSelectionToValue(selectedAreaFilter);
+
   useEffect(() => {
     setNewProjectAreaId(
-      selectedAreaFilter !== ALL_AREAS && selectedAreaFilter !== NO_AREA ? selectedAreaFilter : ''
+      selectedAreaFilterValue !== ALL_AREAS && selectedAreaFilterValue !== NO_AREA ? selectedAreaFilterValue : ''
     );
-  }, [selectedAreaFilter, ALL_AREAS, NO_AREA]);
+  }, [selectedAreaFilterValue, ALL_AREAS, NO_AREA]);
 
   const logProjectError = useCallback((message: string, error?: unknown) => {
     if (!error) return;
@@ -610,7 +612,7 @@ export default function ProjectsScreen() {
       });
       setNewProjectTitle('');
       setNewProjectAreaId(
-        selectedAreaFilter !== ALL_AREAS && selectedAreaFilter !== NO_AREA ? selectedAreaFilter : ''
+        selectedAreaFilterValue !== ALL_AREAS && selectedAreaFilterValue !== NO_AREA ? selectedAreaFilterValue : ''
       );
     }
   };

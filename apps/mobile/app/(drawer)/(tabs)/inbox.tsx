@@ -14,7 +14,7 @@ import { useThemeTokens } from '@/hooks/use-theme-tokens';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { CompactText } from '@/components/compact-text';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useQuickCapture } from '../../../contexts/quick-capture-context';
 
 export default function InboxScreen() {
@@ -49,7 +49,7 @@ export default function InboxScreen() {
       if (t.deletedAt) return false;
       if (t.status !== 'inbox') return false;
       if (!isTaskInActiveProject(t, projectById)) return false;
-      if (!taskMatchesAreaFilter(t, resolvedAreaFilter, projectById, areaById)) return false;
+      if (!taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectById, areaById)) return false;
       return true;
     });
   }, [tasks, resolvedAreaFilter, projectById, areaById]);

@@ -24,7 +24,7 @@ import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X } from 'lucide-
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { PomodoroPanel } from './PomodoroPanel';
 import { AgendaFiltersPanel, type AgendaActiveFilterChip, type AgendaProjectFilterOption } from './agenda/AgendaFiltersPanel';
@@ -285,7 +285,10 @@ export function AgendaView() {
     const pomodoroEnabled = settings?.features?.pomodoro === true;
     const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-    const resolvedAreaFilter = resolveAreaFilter(settings?.filters?.areaId, areas);
+    const resolvedAreaFilter = useMemo(
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
+    );
 
     useEffect(() => {
         if (!perf.enabled) return;
@@ -303,7 +306,7 @@ export function AgendaView() {
     const baseActiveTasks = useMemo(() => (
         derivedActiveTasks.filter(t =>
             isTaskInActiveProject(t, projectMap)
-            && taskMatchesAreaFilter(t, resolvedAreaFilter, projectMap, areaById)
+            && taskMatchesAreaFilterSelection(t, resolvedAreaFilter, projectMap, areaById)
         )
     ), [derivedActiveTasks, projectMap, resolvedAreaFilter, areaById]);
 
@@ -531,7 +534,7 @@ export function AgendaView() {
             .filter((project) => {
                 if (project.deletedAt) return false;
                 if (project.status === 'archived') return false;
-                if (!projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)) return false;
+                if (!projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)) return false;
                 if (!matchesSearchQuery(project.title)) return false;
                 return isDueForReview(project.reviewAt, now);
             })

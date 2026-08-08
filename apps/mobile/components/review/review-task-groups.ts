@@ -1,8 +1,8 @@
 import {
   isTaskInActiveProject,
-  taskMatchesAreaFilter,
+  taskMatchesAreaFilterSelection,
   type Area,
-  type AreaFilterValue,
+  type AreaFilterSelection,
   type Project,
   type Task,
 } from '@mindwtr/core';
@@ -43,7 +43,7 @@ type BuildReviewTaskGroupsParams = {
 type GetReviewOverviewTasksParams = {
   areaById: Map<string, Area>;
   projectById: Map<string, Project>;
-  resolvedAreaFilter: AreaFilterValue;
+  resolvedAreaFilter: AreaFilterSelection;
   tasks: Task[];
 };
 
@@ -61,7 +61,7 @@ export function getReviewOverviewTasks({
     && task.status !== 'reference'
     && task.status !== 'done'
     && isTaskInActiveProject(task, projectById)
-    && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+    && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
   ));
 }
 

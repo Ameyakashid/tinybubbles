@@ -468,7 +468,10 @@ export interface NetworkSettings {
 }
 
 export interface FilterSettings {
+    /** Legacy single-area mirror of `areaIds`, kept so older builds still read something sane. */
     areaId?: string;
+    areaIds?: string[];
+    excludedAreaIds?: string[];
 }
 
 export interface MigrationSettings {

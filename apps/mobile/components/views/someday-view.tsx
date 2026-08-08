@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { TaskEditModal } from '../task-edit-modal';
 import { getBulkMoveStatusOptions } from '../task-list/TaskListBulkBar';
@@ -63,7 +63,7 @@ export function SomedayView() {
       !task.deletedAt
       && task.status === 'someday'
       && isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
     ))
     .sort((a, b) => {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

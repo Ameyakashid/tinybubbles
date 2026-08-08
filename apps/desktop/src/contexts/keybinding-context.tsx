@@ -14,7 +14,7 @@ import {
     matchesGlobalQuickAddShortcut,
     normalizeGlobalQuickAddShortcut,
 } from '../lib/global-quick-add-shortcut';
-import { AREA_FILTER_ALL } from '@mindwtr/core';
+import { areaFilterSelectionToFilters } from '@mindwtr/core';
 import type { TaskStatus } from '@mindwtr/core';
 
 export type KeybindingStyle = 'vim' | 'emacs' | 'standard';
@@ -260,13 +260,17 @@ export function KeybindingProvider({
             .catch((error) => reportError('Failed to update density', error));
     }, [settings.appearance?.density, updateSettings]);
     const applyAreaFilterShortcut = useCallback((key: string): boolean => {
-        if (key === '0') {
+        const applySelection = (included: string[]) => {
             updateSettings({
                 filters: {
                     ...(useTaskStore.getState().settings?.filters ?? {}),
-                    areaId: AREA_FILTER_ALL,
+                    ...areaFilterSelectionToFilters({ included, excluded: [] }),
                 },
             }).catch((error) => reportError('Failed to update area filter', error));
+        };
+
+        if (key === '0') {
+            applySelection([]);
             return true;
         }
 
@@ -276,12 +280,7 @@ export function KeybindingProvider({
         const targetArea = sortedAreas[areaIndex];
         if (!targetArea) return false;
 
-        updateSettings({
-            filters: {
-                ...(useTaskStore.getState().settings?.filters ?? {}),
-                areaId: targetArea.id,
-            },
-        }).catch((error) => reportError('Failed to update area filter', error));
+        applySelection([targetArea.id]);
         return true;
     }, [sortedAreas, updateSettings]);
 

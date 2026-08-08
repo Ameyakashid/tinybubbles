@@ -21,12 +21,12 @@ import {
     isTaskInCalendarHistoryProject,
     isProjectedRecurringTask,
     hasTimeComponent,
-    resolveAreaFilter,
+    resolveAreaFilterSelection,
     resolveCalendarSystemSetting,
     safeParseDate,
     safeParseDueDate,
     shallow,
-    taskMatchesAreaFilter,
+    taskMatchesAreaFilterSelection,
     timeEstimateToMinutes as resolveTimeEstimateToMinutes,
     translateWithFallback,
     type ExternalCalendarEvent,
@@ -116,8 +116,8 @@ export function useDesktopCalendarController() {
     const prioritiesEnabled = settings?.features?.priorities !== false;
     const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
     const weekStartsOn = getWeekStartsOnIndex(settings?.weekStart);
     const systemLocale = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined;
@@ -187,13 +187,13 @@ export function useDesktopCalendarController() {
     const isCalendarTaskInScope = useCallback((task: Task) => {
         if (!isTaskInCalendarHistoryProject(task, projectMap)) return false;
         if (normalizedViewFilterQuery && !task.title.toLowerCase().includes(normalizedViewFilterQuery)) return false;
-        return taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById);
+        return taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById);
     }, [projectMap, resolvedAreaFilter, areaById, normalizedViewFilterQuery]);
 
     const isSchedulableTask = useCallback((task: Task) => {
         if (!isSchedulableCalendarTask(task)) return false;
         if (!isTaskInActiveProject(task, projectMap)) return false;
-        if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)) return false;
+        if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)) return false;
         return true;
     }, [projectMap, resolvedAreaFilter, areaById]);
 

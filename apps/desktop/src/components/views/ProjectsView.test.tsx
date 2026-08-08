@@ -106,7 +106,8 @@ vi.mock('../../store/ui-store', () => ({
 
 vi.mock('./projects/useAreaSidebarState', () => ({
     useAreaSidebarState: () => ({
-        selectedArea: '__all__',
+        selectedArea: { included: [], excluded: [] },
+        selectedAreaValue: '__all__',
         sortedAreas: [],
         areaById: new Map(),
         areaFilterLabel: null,

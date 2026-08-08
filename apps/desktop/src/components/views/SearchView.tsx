@@ -12,7 +12,7 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { cn } from '../../lib/utils';
-import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { VirtualTaskRow } from './list/VirtualTaskRow';
 import {
@@ -105,15 +105,15 @@ export function SearchView({ savedSearchId, onDelete }: SearchViewProps) {
         [areas],
     );
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
 
     const filteredTasks = useMemo(() => {
         if (!query) return [];
         return sortTasksBy(
             filterTasksBySearch(tasks, projects, query).filter((task) =>
-                taskMatchesAreaFilter(task, resolvedAreaFilter, projectMapById, areaById)
+                taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMapById, areaById)
             ),
             sortBy
         );

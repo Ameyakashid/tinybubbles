@@ -30,7 +30,7 @@ import type {
 import type { InboxProcessingScheduleFieldKey, InboxProcessingScheduleFieldsControls } from '../../InboxProcessingScheduleFields';
 import type { ProcessingStep } from '../../InboxProcessingWizard';
 import { DEFAULT_TASK_EDITOR_HIDDEN } from '../../Task/task-item-helpers';
-import { resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import {
     getDateFieldDraft,
     mergeSuggestedTokens,
@@ -186,11 +186,11 @@ export function useInboxProcessingState({
         });
     }, [projectMap]);
     const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
     const matchesAreaFilter = useCallback(
-        (task: Task) => taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById),
+        (task: Task) => taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById),
         [resolvedAreaFilter, projectMap, areaById],
     );
     const processingStep = processingSession.currentStep ?? 'actionable';

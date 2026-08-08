@@ -22,7 +22,7 @@ import {
   hasTimeComponent,
   isTaskInActiveProject,
   normalizeClockTimeInput,
-  resolveAreaFilter,
+  resolveAreaFilterSelection,
   safeFormatDate,
   safeParseDate,
   selectProcessInboxCandidates,
@@ -30,7 +30,7 @@ import {
   startProcessInboxSession,
   tFallback,
   resolveAutoTextDirection,
-  taskMatchesAreaFilter,
+  taskMatchesAreaFilterSelection,
   useTaskStore,
   type AIProviderId,
   type ProcessInboxSession,
@@ -197,13 +197,13 @@ export function useInboxProcessingController({
     [areas],
   );
   const resolvedAreaFilter = useMemo(
-    () => resolveAreaFilter(settings?.filters?.areaId, areas),
-    [settings?.filters?.areaId, areas],
+    () => resolveAreaFilterSelection(settings?.filters, areas),
+    [settings?.filters, areas],
   );
   const inboxTasks = useMemo(() => {
     return selectProcessInboxCandidates(tasks, (task) => (
       isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
     ));
   }, [areaById, projectById, resolvedAreaFilter, tasks]);
 

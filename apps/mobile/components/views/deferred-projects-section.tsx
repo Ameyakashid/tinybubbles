@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Folder } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { projectMatchesAreaFilter, tFallback } from '@mindwtr/core';
-import type { Area, AreaFilterValue, Project } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, tFallback } from '@mindwtr/core';
+import type { Area, AreaFilterSelection, Project } from '@mindwtr/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
@@ -15,14 +15,14 @@ import type { ThemeColors } from '@/hooks/use-theme-colors';
 export function selectDeferredProjects(
   projects: Project[],
   status: 'someday' | 'waiting',
-  resolvedAreaFilter: AreaFilterValue,
+  resolvedAreaFilter: AreaFilterSelection,
   areaById: Map<string, Area>,
 ): Project[] {
   return [...projects]
     .filter((project) => (
       !project.deletedAt
       && project.status === status
-      && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)
+      && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
     ))
     .sort((a, b) => {
       const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.POSITIVE_INFINITY;

@@ -89,8 +89,8 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
     useTaskStore: () => mocks.storeState,
     getInlineMarkdownPreview: vi.fn((markdown: string) => (markdown || '').split('\n')[0] ?? ''),
     safeFormatDate: vi.fn(() => 'May 12, 2026, 8:30 AM'),
-    taskMatchesAreaFilter: vi.fn(() => true),
-    projectMatchesAreaFilter: vi.fn(() => true),
+    taskMatchesAreaFilterSelection: vi.fn(() => true),
+    projectMatchesAreaFilterSelection: vi.fn(() => true),
   };
 });
 
@@ -153,7 +153,7 @@ vi.mock('@/hooks/use-theme-colors', () => ({
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: new Map(),
-    resolvedAreaFilter: '__all__',
+    resolvedAreaFilter: { included: [], excluded: [] },
   }),
 }));
 

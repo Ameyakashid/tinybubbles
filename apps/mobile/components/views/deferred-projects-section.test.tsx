@@ -1,8 +1,8 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter } from '@mindwtr/core';
-import type { Area, AreaFilterValue, Project } from '@mindwtr/core';
+import { AREA_FILTER_NONE, projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import type { Area, AreaFilterSelection, Project } from '@mindwtr/core';
 
 import { DeferredProjectsSection, selectDeferredProjects } from './deferred-projects-section';
 
@@ -42,12 +42,12 @@ const areaById = new Map<string, Area>([[homeArea.id, homeArea]]);
 const legacySelectDeferredProjects = (
   projects: Project[],
   status: 'someday' | 'waiting',
-  resolvedAreaFilter: AreaFilterValue,
+  resolvedAreaFilter: AreaFilterSelection,
 ) => [...projects]
   .filter((project) => (
     !project.deletedAt
     && project.status === status
-    && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById)
+    && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
   ))
   .sort((a, b) => {
     const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.POSITIVE_INFINITY;
@@ -71,7 +71,12 @@ const candidates: Project[] = [
 ];
 
 describe('selectDeferredProjects', () => {
-  const filters: AreaFilterValue[] = [AREA_FILTER_ALL, AREA_FILTER_NONE, homeArea.id];
+  const filters: AreaFilterSelection[] = [
+    { included: [], excluded: [] },
+    { included: [AREA_FILTER_NONE], excluded: [] },
+    { included: [homeArea.id], excluded: [] },
+    { included: [], excluded: [homeArea.id] },
+  ];
 
   it.each(['someday', 'waiting'] as const)('matches the old per-screen predicate for %s', (status) => {
     for (const filter of filters) {
@@ -81,7 +86,7 @@ describe('selectDeferredProjects', () => {
   });
 
   it('orders by order then title, with unordered projects last', () => {
-    const ids = selectDeferredProjects(candidates, 'someday', AREA_FILTER_ALL, areaById).map((p) => p.id);
+    const ids = selectDeferredProjects(candidates, 'someday', { included: [], excluded: [] }, areaById).map((p) => p.id);
     expect(ids).toEqual([
       'someday-early',
       'someday-home',

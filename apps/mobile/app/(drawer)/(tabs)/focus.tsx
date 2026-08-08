@@ -91,7 +91,7 @@ import { useTaskFilterSelections } from '@/hooks/use-task-filter-selections';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
-import { projectMatchesAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import {
   buildFocusListLayoutFrames,
@@ -266,12 +266,12 @@ export default function FocusScreen() {
   const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
   const visibleProjects = useMemo(() => (
-    projects.filter((project) => !project.deletedAt && projectMatchesAreaFilter(project, resolvedAreaFilter, areaById))
+    projects.filter((project) => !project.deletedAt && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById))
   ), [projects, resolvedAreaFilter, areaById]);
   const visibleTasks = useMemo(() => (
     tasks.filter((task) => (
       isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
     ))
   ), [tasks, resolvedAreaFilter, projectById, areaById]);
   const baseActiveTasks = useMemo(() => (

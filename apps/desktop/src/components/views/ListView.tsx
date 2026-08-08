@@ -50,7 +50,7 @@ import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { reportError } from '../../lib/report-error';
 import { nextDensityMode } from '../../lib/density';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
@@ -186,7 +186,12 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const density = settings?.appearance?.density ?? 'comfortable';
     const densityMode: 'comfortable' | 'compact' | 'condensed' =
         density === 'condensed' ? 'condensed' : density === 'compact' ? 'compact' : 'comfortable';
-    const resolvedAreaFilter = resolveAreaFilter(settings?.filters?.areaId, areas);
+    // Memoized: the resolved selection is an object, and a fresh identity on
+    // every render would invalidate every list memo downstream.
+    const resolvedAreaFilter = useMemo(
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
+    );
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [quickAddSyntaxOpen, setQuickAddSyntaxOpen] = useState(false);
     const [mindSweepOpen, setMindSweepOpen] = useState(false);
@@ -245,7 +250,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             if (task.deletedAt) return false;
             if (statusFilter !== 'all' && task.status !== statusFilter) return false;
             if (!allowDeferredProjectTasks && !isTaskInActiveProject(task, metadataProjectMap)) return false;
-            if (!taskMatchesAreaFilter(task, resolvedAreaFilter, metadataProjectMap, metadataAreaById)) return false;
+            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, metadataProjectMap, metadataAreaById)) return false;
             return true;
         });
     }, [baseTasks, metadataAreaById, metadataProjectMap, resolvedAreaFilter, statusFilter]);
@@ -270,8 +275,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         showTimeEstimateFilters,
     ]);
     const defaultAreaMode = getDefaultTaskAreaMode(settings);
-    const activeNewTaskAreaId = resolvedAreaFilter !== AREA_FILTER_ALL && resolvedAreaFilter !== AREA_FILTER_NONE
-        ? resolvedAreaFilter
+    const activeAreaFilterValue = areaFilterSelectionToValue(resolvedAreaFilter);
+    const activeNewTaskAreaId = activeAreaFilterValue !== AREA_FILTER_ALL && activeAreaFilterValue !== AREA_FILTER_NONE
+        ? activeAreaFilterValue
         : undefined;
     const defaultNewTaskAreaId = defaultAreaMode === 'active'
         ? activeNewTaskAreaId
@@ -394,7 +400,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         for (const task of baseTasks) {
             if (task.deletedAt || task.status !== 'waiting') continue;
             if (!isTaskInActiveProject(task, projectMap)) continue;
-            if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)) continue;
+            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)) continue;
             const person = getWaitingPerson(task);
             if (!person) continue;
             const key = person.toLowerCase();
@@ -482,7 +488,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 if (deferredFilterInputs.statusFilter !== 'all' && t.status !== deferredFilterInputs.statusFilter) return false;
                 // Respect statusFilter (handled above).
                 if (!allowDeferredProjectTasks && !isTaskInActiveProject(t, deferredFilterInputs.projectMap)) return false;
-                if (!taskMatchesAreaFilter(
+                if (!taskMatchesAreaFilterSelection(
                     t,
                     deferredFilterInputs.resolvedAreaFilter,
                     deferredFilterInputs.projectMap,
@@ -631,7 +637,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const deferredProjects = showDeferredProjects
         ? [...projects]
             .filter((project) => !project.deletedAt && project.status === statusFilter)
-            .filter((project) => projectMatchesAreaFilter(project, resolvedAreaFilter, areaById))
+            .filter((project) => projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById))
             .sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title))
         : [];
     const showDeferredProjectSection = showDeferredProjects && deferredProjects.length > 0;

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useSensor, useSensors, PointerSensor, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Area, AppData } from '@mindwtr/core';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, resolveAreaFilter, tFallback } from '@mindwtr/core';
+import { AREA_FILTER_NONE, areaFilterSelectionToValue, isAreaFilterSelectionActive, resolveAreaFilterSelection, tFallback } from '@mindwtr/core';
 import { reportError } from '../../../lib/report-error';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 import {
@@ -32,11 +32,10 @@ export function useAreaSidebarState({
     requestConfirmation,
     showToast,
 }: UseAreaSidebarStateParams) {
-    const ALL_AREAS = AREA_FILTER_ALL;
     const NO_AREA = AREA_FILTER_NONE;
     const selectedArea = useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
 
     const { sortedAreas, areaById } = useMemo(() => {
@@ -47,11 +46,17 @@ export function useAreaSidebarState({
         };
     }, [areas]);
 
+    const selectedAreaValue = areaFilterSelectionToValue(selectedArea);
+
     const areaFilterLabel = useMemo(() => {
-        if (selectedArea === ALL_AREAS) return null;
-        if (selectedArea === NO_AREA) return t('projects.noArea');
-        return areaById.get(selectedArea)?.name || t('projects.noArea');
-    }, [selectedArea, areaById, ALL_AREAS, NO_AREA, t]);
+        if (!isAreaFilterSelectionActive(selectedArea)) return null;
+        const nameOf = (id: string) => (id === NO_AREA ? t('projects.noArea') : areaById.get(id)?.name || t('projects.noArea'));
+        const included = selectedArea.included.map(nameOf).join(', ');
+        const excluded = selectedArea.excluded.length > 0
+            ? `${tFallback(t, 'filters.excluded', 'Excluded')}: ${selectedArea.excluded.map(nameOf).join(', ')}`
+            : '';
+        return [included, excluded].filter(Boolean).join(' · ');
+    }, [selectedArea, areaById, NO_AREA, t]);
 
     const areaSensors = useSensors(
         useSensor(PointerSensor, {
@@ -93,6 +98,7 @@ export function useAreaSidebarState({
 
     return {
         selectedArea,
+        selectedAreaValue,
         sortedAreas,
         areaById,
         areaFilterLabel,

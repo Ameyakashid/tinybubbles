@@ -27,7 +27,7 @@ import { Filter, GripVertical } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { projectMatchesAreaFilter, resolveAreaFilter, taskMatchesAreaFilter } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
 import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
@@ -243,14 +243,14 @@ export function BoardView() {
     const areaById = React.useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const projectMap = React.useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const resolvedAreaFilter = React.useMemo(
-        () => resolveAreaFilter(settings?.filters?.areaId, areas),
-        [settings?.filters?.areaId, areas],
+        () => resolveAreaFilterSelection(settings?.filters, areas),
+        [settings?.filters, areas],
     );
     const sortedProjects = React.useMemo(
         () =>
             projects
                 .filter((project) => !project.deletedAt)
-                .filter((project) => projectMatchesAreaFilter(project, resolvedAreaFilter, areaById))
+                .filter((project) => projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById))
                 .sort((a, b) => a.title.localeCompare(b.title)),
         [projects, resolvedAreaFilter, areaById]
     );
@@ -331,7 +331,7 @@ export function BoardView() {
     const areaFilteredTasks = React.useMemo(
         () => sortedTasks.filter((task) =>
             isTaskInActiveProject(task, projectMap) &&
-            taskMatchesAreaFilter(task, resolvedAreaFilter, projectMap, areaById)
+            taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)
         ),
         [sortedTasks, projectMap, resolvedAreaFilter, areaById]
     );

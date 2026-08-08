@@ -75,7 +75,7 @@ import { useTheme } from '../../../contexts/theme-context';
 import { useToast } from '../../../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
-import { taskMatchesAreaFilter } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useLanguage } from '../../../contexts/language-context';
 import { canOpenExternalCalendarEvent, fetchExternalCalendarEvents, openExternalCalendarEvent } from '../../../lib/external-calendar';
 import { logError } from '../../../lib/app-log';
@@ -349,7 +349,7 @@ export function useCalendarViewController() {
   const areaVisibleTasks = useMemo(() => (
     tasks.filter((task) => (
       isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)
+      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
     ))
   ), [tasks, resolvedAreaFilter, projectById, areaById]);
 
@@ -411,7 +411,7 @@ export function useCalendarViewController() {
     for (const task of allTasks) {
       if (!isCompletedCalendarTask(task)) continue;
       if (!isTaskInCalendarHistoryProject(task, projectById)) continue;
-      if (!taskMatchesAreaFilter(task, resolvedAreaFilter, projectById, areaById)) continue;
+      if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)) continue;
       const completedAt = getTaskCompletionInstant(task);
       if (completedAt) addCalendarMapItem(map, completedAt, task);
     }

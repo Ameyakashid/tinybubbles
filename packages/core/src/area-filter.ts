@@ -1,10 +1,20 @@
-import type { Area, Project, Task } from './types';
+import type { Area, FilterSettings, Project, Task } from './types';
 import { getTaskAreaId } from './task-utils';
 
 export const AREA_FILTER_ALL = '__all__';
 export const AREA_FILTER_NONE = '__none__';
 
 export type AreaFilterValue = typeof AREA_FILTER_ALL | typeof AREA_FILTER_NONE | string;
+
+/**
+ * Multi-select area filter: a union of included areas, minus the excluded ones.
+ * Both lists empty means "all areas". `AREA_FILTER_NONE` is a member of either
+ * list and stands for tasks/projects without an area.
+ */
+export interface AreaFilterSelection {
+    included: string[];
+    excluded: string[];
+}
 
 export function resolveAreaFilter(value: string | undefined, areas: Area[]): AreaFilterValue {
     if (!value || value === AREA_FILTER_ALL || value === AREA_FILTER_NONE) {
@@ -13,10 +23,97 @@ export function resolveAreaFilter(value: string | undefined, areas: Area[]): Are
     return areas.some((area) => !area.deletedAt && area.id === value) ? value : AREA_FILTER_ALL;
 }
 
+const isSelectableAreaId = (id: string, areas: Area[]): boolean =>
+    id === AREA_FILTER_NONE || areas.some((area) => !area.deletedAt && area.id === id);
+
+const sanitizeAreaIds = (value: unknown, areas: Area[]): string[] => {
+    if (!Array.isArray(value)) return [];
+    const kept: string[] = [];
+    for (const id of value) {
+        if (typeof id === 'string' && !kept.includes(id) && isSelectableAreaId(id, areas)) kept.push(id);
+    }
+    return kept;
+};
+
+/**
+ * Tolerant reader for the stored area filter. Accepts the legacy single-value
+ * string, the `FilterSettings` object, or a bare selection, and drops ids whose
+ * area was deleted or no longer exists.
+ */
+export function resolveAreaFilterSelection(value: unknown, areas: Area[]): AreaFilterSelection {
+    if (value == null || typeof value === 'string') {
+        const resolved = resolveAreaFilter(value ?? undefined, areas);
+        return { included: resolved === AREA_FILTER_ALL ? [] : [resolved], excluded: [] };
+    }
+    if (typeof value !== 'object') return { included: [], excluded: [] };
+    const source = value as {
+        areaId?: unknown;
+        areaIds?: unknown;
+        excludedAreaIds?: unknown;
+        included?: unknown;
+        excluded?: unknown;
+    };
+    const includedSource = source.areaIds ?? source.included;
+    const excludedSource = source.excludedAreaIds ?? source.excluded;
+    if (!Array.isArray(includedSource) && !Array.isArray(excludedSource)) {
+        return resolveAreaFilterSelection(typeof source.areaId === 'string' ? source.areaId : undefined, areas);
+    }
+    return {
+        included: sanitizeAreaIds(includedSource, areas),
+        excluded: sanitizeAreaIds(excludedSource, areas),
+    };
+}
+
+export function isAreaFilterSelectionActive(selection: AreaFilterSelection): boolean {
+    return selection.included.length > 0 || selection.excluded.length > 0;
+}
+
+/**
+ * Collapses a selection to the legacy single value: the one selected area when
+ * exactly one is included and nothing is excluded, otherwise "all areas".
+ */
+export function areaFilterSelectionToValue(selection: AreaFilterSelection): AreaFilterValue {
+    if (selection.excluded.length > 0 || selection.included.length !== 1) return AREA_FILTER_ALL;
+    return selection.included[0];
+}
+
+/** Settings patch for a selection, including the legacy `areaId` mirror. */
+export function areaFilterSelectionToFilters(selection: AreaFilterSelection): Required<Pick<FilterSettings, 'areaId' | 'areaIds' | 'excludedAreaIds'>> {
+    return {
+        areaId: areaFilterSelectionToValue(selection),
+        areaIds: selection.included,
+        excludedAreaIds: selection.excluded,
+    };
+}
+
+/** Tri-state cycle for one row: unselected -> included -> excluded -> unselected. */
+export function cycleAreaFilterSelection(selection: AreaFilterSelection, id: string): AreaFilterSelection {
+    if (selection.included.includes(id)) {
+        return {
+            included: selection.included.filter((entry) => entry !== id),
+            excluded: [...selection.excluded, id],
+        };
+    }
+    if (selection.excluded.includes(id)) {
+        return {
+            included: selection.included,
+            excluded: selection.excluded.filter((entry) => entry !== id),
+        };
+    }
+    return { included: [...selection.included, id], excluded: selection.excluded };
+}
+
 const normalizeAreaId = (areaId: string | undefined, areaById?: Map<string, Area>): string | undefined => {
     if (!areaId) return undefined;
     if (areaById && !areaById.has(areaId)) return undefined;
     return areaId;
+};
+
+// Exclusion wins over inclusion when an id somehow lands in both lists.
+const areaIdMatchesSelection = (areaId: string | undefined, selection: AreaFilterSelection): boolean => {
+    const key = areaId ?? AREA_FILTER_NONE;
+    if (selection.excluded.includes(key)) return false;
+    return selection.included.length === 0 || selection.included.includes(key);
 };
 
 export function projectMatchesAreaFilter(
@@ -40,4 +137,23 @@ export function taskMatchesAreaFilter(
     const taskAreaId = normalizeAreaId(getTaskAreaId(task, projectMap), areaById);
     if (filter === AREA_FILTER_NONE) return !taskAreaId;
     return taskAreaId === filter;
+}
+
+export function projectMatchesAreaFilterSelection(
+    project: Project,
+    selection: AreaFilterSelection,
+    areaById?: Map<string, Area>,
+): boolean {
+    if (!isAreaFilterSelectionActive(selection)) return true;
+    return areaIdMatchesSelection(normalizeAreaId(project.areaId, areaById), selection);
+}
+
+export function taskMatchesAreaFilterSelection(
+    task: Task,
+    selection: AreaFilterSelection,
+    projectMap: Map<string, Project>,
+    areaById?: Map<string, Area>,
+): boolean {
+    if (!isAreaFilterSelectionActive(selection)) return true;
+    return areaIdMatchesSelection(normalizeAreaId(getTaskAreaId(task, projectMap), areaById), selection);
 }
