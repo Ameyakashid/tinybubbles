@@ -179,7 +179,10 @@ export const LOCALES = {
         file: 'pt',
         export: 'ptOverrides',
         mode: 'overrides',
-        native: 'Português',
+        // Qualified because the app resolves Portuguese to Brazilian conventions in
+        // both date paths (date-fns ptBR + Intl pt-BR), so a Portugal user should see
+        // which variant they are choosing. Same reason zh/zh-Hant carry a script tag.
+        native: 'Português (Brasil)',
         nonLatin: false,
         translatedKeyFloor: 1463,
     },
