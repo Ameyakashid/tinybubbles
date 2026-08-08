@@ -7,7 +7,7 @@ import './index.css';
 import { type AppData, consoleLogger, setLogger, setStorageAdapter, SQLITE_SCHEMA_VERSION } from '@mindwtr/core';
 import { LanguageProvider } from './contexts/language-context';
 import { isTauriRuntime } from './lib/runtime';
-import { invokeNative } from './lib/tauri-invoke';
+import { invokeNative, preloadNativeTransport } from './lib/tauri-invoke';
 import { reportError } from './lib/report-error';
 import { webStorage } from './lib/storage-adapter-web';
 import { isDiagnosticsEnabled, logError, logInfo, logWarn, setupGlobalErrorLogging } from './lib/app-log';
@@ -232,6 +232,10 @@ function installFileDropNavigationGuard() {
 async function signalUiReady() {
     if (!isTauriRuntime()) return;
     try {
+        // Resolve the transport during the paint wait, not on the reveal call
+        // itself — the two frames below are the signal's timing, and nothing
+        // else may be added to it.
+        await preloadNativeTransport();
         await new Promise<void>((resolve) => {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });

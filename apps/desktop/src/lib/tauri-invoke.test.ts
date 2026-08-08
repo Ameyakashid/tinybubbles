@@ -7,7 +7,12 @@ const invokeMock = vi.hoisted(() => vi.fn(async () => {
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
-import { invokeNative, invokeNativeOr, setNativeInvokeTransport } from './tauri-invoke';
+import {
+    invokeNative,
+    invokeNativeOr,
+    preloadNativeTransport,
+    setNativeInvokeTransport,
+} from './tauri-invoke';
 
 const enableTauri = () => {
     (window as any).__TAURI_INTERNALS__ = {};
@@ -77,6 +82,14 @@ describe('invokeNativeOr', () => {
             throw new Error('boom');
         }) as never);
         await expect(invokeNativeOr('fallback', 'get_thing')).rejects.toThrow('boom');
+    });
+});
+
+describe('preloadNativeTransport', () => {
+    // Callers preload for timing, not for a result, so it must stay a no-op off
+    // Tauri — a rejection here would break the reveal path it exists to protect.
+    it('resolves without reaching for the module off Tauri', async () => {
+        await expect(preloadNativeTransport()).resolves.toBeUndefined();
     });
 });
 

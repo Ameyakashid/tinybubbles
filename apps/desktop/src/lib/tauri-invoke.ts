@@ -23,6 +23,17 @@ export function setNativeInvokeTransport(next: NativeInvokeTransport | null): vo
 }
 
 /**
+ * Resolves the transport module up front, so a later `invokeNative` pays only
+ * the call. Startup paths whose invoke is timed — `notify_ui_ready` fires after
+ * two animation frames and is what reveals the window (#936) — preload before
+ * the wait rather than resolving the module on the timed call itself.
+ */
+export async function preloadNativeTransport(): Promise<void> {
+    if (!isTauriRuntime()) return;
+    await import('@tauri-apps/api/core');
+}
+
+/**
  * Invokes a Rust command. Rejects when there is no Tauri runtime — use this
  * when the caller has already established it is running in the desktop shell,
  * or when failing is the correct outcome elsewhere.
