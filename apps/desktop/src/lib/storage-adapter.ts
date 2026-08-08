@@ -8,7 +8,7 @@ import {
     type TaskQueryOptions,
     useTaskStore,
 } from '@mindwtr/core';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeNative } from './tauri-invoke';
 import { logInfo, logWarn } from './app-log';
 import { reportError } from './report-error';
 import { markLocalSqliteWrite, markLocalWrite } from './local-data-watcher';
@@ -237,7 +237,7 @@ const invokeWithError = async <T>(
     args?: Record<string, unknown>
 ): Promise<T> => {
     try {
-        return await invoke<T>(command as any, args as any);
+        return await invokeNative<T>(command, args);
     } catch (error) {
         reportError(`Failed to ${action}`, error, { category: 'storage', scope: 'storage' });
         const detail = error instanceof Error ? error.message : String(error);
@@ -274,14 +274,14 @@ const logStorageInitIfNeeded = () => {
 export const tauriStorage: StorageAdapter = {
     getData: async (): Promise<AppData> => {
         try {
-            const data = await invoke<AppData>('get_data' as any);
+            const data = await invokeNative<AppData>('get_data');
             lastObservedData = data;
             lastPersistedData = data;
             logStorageInitIfNeeded();
             return data;
         } catch (error) {
             try {
-                const data = await invoke<AppData>('read_data_json' as any);
+                const data = await invokeNative<AppData>('read_data_json');
                 lastObservedData = data;
                 lastPersistedData = data;
                 void logWarn('getData fallback triggered', {
@@ -333,7 +333,7 @@ export const tauriStorage: StorageAdapter = {
                 const args = effectiveBaseline
                     ? { data: effectiveData, baselineEntities: effectiveBaseline }
                     : { data: effectiveData };
-                let canonical = await invoke<AppData>('save_data' as any, args as any);
+                let canonical = await invokeNative<AppData>('save_data', args);
                 lastPersistedData = canonical;
                 recordPersisted({ canonical, attempted: effectiveData });
                 const settingsBaseline = provenance ?? observedBeforeSave;
@@ -355,7 +355,7 @@ export const tauriStorage: StorageAdapter = {
                         const retryBaseline = buildChangedEntityBaseline(canonical, retryData);
                         markLocalWrite(retryData);
                         markLocalSqliteWrite();
-                        canonical = await invoke<AppData>('save_data' as any, {
+                        canonical = await invokeNative<AppData>('save_data', {
                             data: retryData,
                             baselineEntities: retryBaseline,
                         } as any);
@@ -402,7 +402,7 @@ export const tauriStorage: StorageAdapter = {
                     ? predecessor.provenance.tasks.find((item) => item.id === task.id)
                     : baselineTask;
                 const args = effectiveBaselineTask ? { task, baselineTask: effectiveBaselineTask } : { task };
-                const nativeResult = await invoke<AppData | NativeTaskSaveResult>('save_task' as any, args as any);
+                const nativeResult = await invokeNative<AppData | NativeTaskSaveResult>('save_task', args);
                 if (
                     nativeResult
                     && typeof nativeResult === 'object'

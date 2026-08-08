@@ -6,7 +6,7 @@ import {
     normalizeAppData,
     useTaskStore,
 } from '@mindwtr/core';
-import { invoke } from '@tauri-apps/api/core';
+import { invokeNative } from './tauri-invoke';
 import { getDesktopTimerHost, isTauriRuntime } from './runtime';
 import { hashString, toStableJson } from './sync-service-utils';
 import { logInfo, logWarn } from './app-log';
@@ -70,7 +70,7 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => 
 };
 
 const defaultDependencies: LocalDataWatcherDependencies = {
-    readDataJson: () => invoke<AppData>('read_data_json' as any),
+    readDataJson: () => invokeNative<AppData>('read_data_json'),
     refreshStorageData: async () => {
         await useTaskStore.getState().fetchData({ silent: true });
     },

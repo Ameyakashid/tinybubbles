@@ -1,7 +1,7 @@
-import { invoke } from '@tauri-apps/api/core';
 import { open as openShell } from '@tauri-apps/plugin-shell';
 import { isLocalAttachmentPath, resolveAttachmentOpenTarget, toAttachmentBrowserUrl } from './attachment-paths';
 import { isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 
 export async function openAttachmentTarget(uri: string): Promise<void> {
     const trimmed = uri.trim();
@@ -13,7 +13,7 @@ export async function openAttachmentTarget(uri: string): Promise<void> {
             return;
         }
 
-        await invoke('open_path', { path: resolveAttachmentOpenTarget(trimmed) });
+        await invokeNative('open_path', { path: resolveAttachmentOpenTarget(trimmed) });
         return;
     }
 

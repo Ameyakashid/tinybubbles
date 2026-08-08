@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTaskStore } from '@mindwtr/core';
+import { setNativeInvokeTransport } from './tauri-invoke';
 
 const invokeMock = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({
-    invoke: (...args: unknown[]) => invokeMock(...args),
-}));
+// tauriStorage reaches Rust through invokeNative. Replacing the transport keeps
+// the call synchronous (these tests drive save ordering with fake timers) and
+// the runtime stub gets past invokeNative's off-Tauri guard.
+(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
+setNativeInvokeTransport(((command: string, args?: Record<string, unknown>) => (
+    args === undefined ? invokeMock(command) : invokeMock(command, args)
+)) as never);
 
 vi.mock('./local-data-watcher', () => ({
     markLocalWrite: vi.fn(),

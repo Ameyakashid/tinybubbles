@@ -3,6 +3,7 @@ import { isTauriRuntime } from './runtime';
 import { logInfo, logWarn } from './app-log';
 import { normalizeAttachmentPathForUrl } from './attachment-paths';
 import { stripFileScheme } from './sync-service-utils';
+import { invokeNative } from './tauri-invoke';
 
 type PortableAttachmentMigration = {
     isPortable: boolean;
@@ -33,8 +34,7 @@ const legacyFileName = (attachment: Attachment, legacyPrefix: string): string | 
 export async function migratePortableAttachments(): Promise<void> {
     if (!isTauriRuntime()) return;
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const probe = await invoke<PortableAttachmentMigration>('migrate_portable_attachments', { fileNames: [] });
+        const probe = await invokeNative<PortableAttachmentMigration>('migrate_portable_attachments', { fileNames: [] });
         if (!probe.isPortable || !probe.legacyAttachmentsDir || !probe.managedAttachmentsDir) return;
         const legacyPrefix = normalizeDirPrefix(probe.legacyAttachmentsDir);
         const managedPrefix = normalizeDirPrefix(probe.managedAttachmentsDir);
@@ -62,7 +62,7 @@ export async function migratePortableAttachments(): Promise<void> {
         }
         if (fileNames.size === 0) return;
 
-        const result = await invoke<PortableAttachmentMigration>('migrate_portable_attachments', {
+        const result = await invokeNative<PortableAttachmentMigration>('migrate_portable_attachments', {
             fileNames: Array.from(fileNames),
         });
         const migrated = new Set(result.migratedFileNames);

@@ -2,6 +2,7 @@ import { type Attachment, DEFAULT_MAX_FILE_SIZE_BYTES, generateUUID } from '@min
 import { logWarn } from './app-log';
 import { getManagedPath } from './managed-paths';
 import { ATTACHMENTS_DIR_NAME, extractExtension } from './sync-service-utils';
+import { invokeNative } from './tauri-invoke';
 
 export type ImportPickedFileResult =
     | { attachment: Attachment }
@@ -26,8 +27,7 @@ export async function importPickedFileAttachment(selectedPath: string): Promise<
     const title = selectedPath.split(/[/\\]/).pop() || selectedPath;
     const id = generateUUID();
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const imported = await invoke<{ uri: string; size: number }>('import_attachment_file', {
+        const imported = await invokeNative<{ uri: string; size: number }>('import_attachment_file', {
             path: selectedPath,
             fileName: `${id}${extractExtension(title)}`,
             maxBytes: DEFAULT_MAX_FILE_SIZE_BYTES,

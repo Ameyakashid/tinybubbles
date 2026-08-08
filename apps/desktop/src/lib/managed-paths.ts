@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
 import { dataDir, join } from '@tauri-apps/api/path';
 import { isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 
 let cachedDir: string | null = null;
 let pendingDir: Promise<string> | null = null;
@@ -16,7 +16,7 @@ export async function getManagedDataDir(): Promise<string> {
         pendingDir = (async () => {
             if (isTauriRuntime()) {
                 try {
-                    const dir = (await invoke<string>('get_managed_data_dir')).trim();
+                    const dir = (await invokeNative<string>('get_managed_data_dir')).trim();
                     if (dir) return dir;
                 } catch {
                     // Older backend without the command — fall through.
