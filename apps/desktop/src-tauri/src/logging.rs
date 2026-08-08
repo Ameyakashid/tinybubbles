@@ -55,24 +55,6 @@ pub(crate) fn append_native_log_line(app: &tauri::AppHandle, message: &str) {
 }
 
 #[tauri::command]
-pub(crate) fn log_ai_debug(
-    context: String,
-    message: String,
-    provider: Option<String>,
-    model: Option<String>,
-    task_id: Option<String>,
-) {
-    println!(
-        "[ai-debug] context={} provider={} model={} task={} message={}",
-        context,
-        provider.unwrap_or_else(|| "unknown".into()),
-        model.unwrap_or_else(|| "unknown".into()),
-        task_id.unwrap_or_else(|| "-".into()),
-        message
-    );
-}
-
-#[tauri::command]
 pub(crate) fn append_log_line(app: tauri::AppHandle, line: String) -> Result<String, String> {
     write_log_line(&app, &line)
 }

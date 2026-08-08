@@ -84,7 +84,7 @@ use local_api::{
     get_local_api_server_status, set_local_api_server_config, start_configured_local_api_server,
     LocalApiServerState,
 };
-use logging::{append_log_line, append_native_log_line, clear_log_file, log_ai_debug};
+use logging::{append_log_line, append_native_log_line, clear_log_file};
 use obsidian_paths::default_obsidian_inbox_file;
 use obsidian_watcher::{start_obsidian_watcher, stop_obsidian_watcher, ObsidianWatcherState};
 use obsidian_writer::{
@@ -1597,7 +1597,6 @@ pub fn run() {
             transcribe_parakeet,
             download_parakeet_model,
             download_whisper_model,
-            log_ai_debug,
             append_log_line,
             clear_log_file,
             consume_quick_add_pending,
