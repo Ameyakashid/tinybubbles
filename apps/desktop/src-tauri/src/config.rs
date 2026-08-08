@@ -1415,7 +1415,9 @@ pub(crate) fn parse_obsidian_vault_registry(contents: &str) -> Vec<String> {
     paths
 }
 
-#[tauri::command]
+// Off the UI thread: a stale registry entry can point at an unmounted network
+// share, where the `is_dir` probe below blocks. Read-only, so no locking.
+#[tauri::command(async)]
 pub(crate) fn list_obsidian_vaults() -> Vec<DetectedObsidianVault> {
     let mut vaults = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -1442,7 +1444,9 @@ pub(crate) fn list_obsidian_vaults() -> Vec<DetectedObsidianVault> {
     vaults
 }
 
-#[tauri::command]
+// Off the UI thread for the same reason as `list_obsidian_vaults`: the vault
+// path comes from the user and may be a slow or dead mount.
+#[tauri::command(async)]
 pub(crate) fn check_obsidian_vault_marker(vault_path: String) -> Result<bool, String> {
     let trimmed = vault_path.trim();
     if trimmed.is_empty() {

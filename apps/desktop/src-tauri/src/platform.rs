@@ -158,7 +158,9 @@ pub(crate) async fn request_macos_calendar_permission() -> Result<String, String
     }
 }
 
-#[tauri::command]
+// Off the UI thread: `eventsMatchingPredicate:` is a synchronous EventKit query
+// Apple documents as slow, and the shim uses its own EKEventStore per call.
+#[tauri::command(async)]
 pub(crate) fn get_macos_calendar_events(
     range_start: String,
     range_end: String,
@@ -645,7 +647,10 @@ pub(crate) struct ImportedAttachmentFile {
     size: u64,
 }
 
-#[tauri::command]
+// Off the UI thread: this copies a user-picked file that may live on a network
+// share or removable drive. Concurrent imports are safe — the temp name is
+// unique per process and nanosecond, and the final rename is atomic.
+#[tauri::command(async)]
 pub(crate) fn import_attachment_file(
     app: tauri::AppHandle,
     path: String,
@@ -694,8 +699,9 @@ pub(crate) struct PortableAttachmentMigration {
 // the OS data dir before portable mode covered webview-managed files (#855).
 // Only the requested file names are touched, sources must live inside the
 // legacy attachments dir, and files are copied (not moved) when a standard
-// install shares the machine.
-#[tauri::command]
+// install shares the machine. Runs off the UI thread because it copies
+// attachment files at startup, often from a USB profile dir.
+#[tauri::command(async)]
 pub(crate) fn migrate_portable_attachments(
     app: tauri::AppHandle,
     file_names: Vec<String>,
