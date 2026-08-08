@@ -9,6 +9,9 @@ import {
 } from '@mindwtr/core/task-filter-selections';
 import type { SavedFilter, Task, TaskMetadataFilterVisibility } from '@mindwtr/core';
 
+// The hook only. The predicates it feeds are shared with desktop, so they are
+// covered where they live: packages/core/src/task-filter-selections.test.ts.
+
 const ALL_VISIBLE: TaskMetadataFilterVisibility = {
   energyLevel: true,
   location: true,
@@ -288,62 +291,5 @@ describe('useTaskFilterSelections', () => {
     act(() => handle.current.setMatchMode('context', 'any'));
     expect(handle.current.criteria.contextMatchMode).toBe('any');
     expect(taskMatchesFilterSelections({ ...task, contexts: ['@desk'] }, handle.current)).toBe(true);
-  });
-});
-
-describe('taskMatchesFilterSelections', () => {
-  const withSearch = (searchQuery: string) => ({ criteria: {}, searchQuery });
-
-  it('matches the search box against title and description', () => {
-    expect(taskMatchesFilterSelections(task, withSearch('release'))).toBe(true);
-    expect(taskMatchesFilterSelections(task, withSearch('launch notes'))).toBe(true);
-    expect(taskMatchesFilterSelections(task, withSearch('vacation'))).toBe(false);
-  });
-
-  it('matches fielded task id searches with full and partial UUIDs', () => {
-    expect(taskMatchesFilterSelections(task, withSearch('id:c5290e2c-1b77-4f77-8927-6d187e141891'))).toBe(true);
-    expect(taskMatchesFilterSelections(task, withSearch('id:6d187e141891'))).toBe(true);
-    expect(taskMatchesFilterSelections(task, withSearch('id:missing-task-id'))).toBe(false);
-  });
-
-  it('matches contexts and tags by hierarchy prefix', () => {
-    const { handle } = renderSelections();
-    act(() => handle.current.toggleToken('@work'));
-    expect(taskMatchesFilterSelections(task, handle.current)).toBe(true);
-
-    act(() => {
-      handle.current.clear();
-      handle.current.toggleToken('@workshop');
-    });
-    expect(taskMatchesFilterSelections(task, handle.current)).toBe(false);
-  });
-
-  it('matches custom time estimates by their coarse bucket', () => {
-    const { handle } = renderSelections();
-    const customTask = { ...task, timeEstimate: 'custom:150' as const };
-
-    act(() => handle.current.toggleTimeEstimate('3hr'));
-    expect(taskMatchesFilterSelections(customTask, handle.current)).toBe(true);
-
-    act(() => {
-      handle.current.toggleTimeEstimate('3hr');
-      handle.current.toggleTimeEstimate('2hr');
-    });
-    expect(taskMatchesFilterSelections(customTask, handle.current)).toBe(false);
-  });
-
-  it('matches priority, energy, time estimate, and location together', () => {
-    const { handle } = renderSelections();
-
-    act(() => {
-      handle.current.togglePriority('urgent');
-      handle.current.toggleEnergyLevel('high');
-      handle.current.toggleTimeEstimate('30min');
-      handle.current.setLocation('off');
-    });
-    expect(taskMatchesFilterSelections(task, handle.current)).toBe(true);
-
-    act(() => handle.current.setLocation('home'));
-    expect(taskMatchesFilterSelections(task, handle.current)).toBe(false);
   });
 });
