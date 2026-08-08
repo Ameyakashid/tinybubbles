@@ -30,7 +30,6 @@ import {
   isProjectedRecurringTask,
   isProjectedRecurringTaskId,
   isTaskFinished,
-  isTaskInActiveProject,
   isTaskInCalendarHistoryProject,
   parseCalendarTimeOnDate,
   safeFormatDate,
@@ -73,7 +72,7 @@ import {
 import { useTheme } from '../../../contexts/theme-context';
 import { useToast } from '../../../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { useLanguage } from '../../../contexts/language-context';
 import { canOpenExternalCalendarEvent, fetchExternalCalendarEvents, openExternalCalendarEvent } from '../../../lib/external-calendar';
@@ -181,7 +180,7 @@ export function useCalendarViewController() {
   const { showToast } = useToast();
   const tc = useThemeColors();
   const { t, language } = useLanguage();
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
+  const { areaById, projectById, resolvedAreaFilter, visibleTasks: areaVisibleTasks } = useVisibleTaskContext();
 
   const toRgba = (hex: string, alpha: number) => {
     const normalized = hex.replace('#', '');
@@ -234,7 +233,6 @@ export function useCalendarViewController() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [calendarComposer, setCalendarComposer] = useState<CalendarTaskComposerState | null>(null);
 
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
   const logCalendarError = (error: unknown) => {
     void logError(error, { scope: 'calendar' });
   };
@@ -335,13 +333,6 @@ export function useCalendarViewController() {
     viewMode,
     weekStartTime,
   }), [selectedDate, viewMode, weekStartTime]);
-
-  const areaVisibleTasks = useMemo(() => (
-    tasks.filter((task) => (
-      isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-    ))
-  ), [tasks, resolvedAreaFilter, projectById, areaById]);
 
   // The same visible-window bounds used to fetch/clip external calendar events
   // below double as the recurrence range: whatever window the month grid, week

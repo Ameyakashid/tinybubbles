@@ -46,7 +46,6 @@ import {
   useTaskStore,
   getAdvancedReviewDate,
   isTaskActionable,
-  isTaskInActiveProject,
   isDueForReview,
   safeFormatDate,
   safeParseDate,
@@ -87,10 +86,10 @@ import {
 import { FilterChip, TaskFilterSheet } from '@/components/task-filter-sheet';
 import { resolveTimeEstimateFilterOptions } from '@/components/time-estimate-filter-utils';
 import { useTaskFilterSelections } from '@/hooks/use-task-filter-selections';
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
-import { projectMatchesAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import {
   buildFocusListLayoutFrames,
@@ -262,22 +261,12 @@ export default function FocusScreen() {
   const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
   const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
   const focusGroupBy = normalizeFocusGroupBy(settings?.gtd?.focusGroupBy);
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { areaById, projectById, resolvedAreaFilter, visibleTasks } = useVisibleTaskContext();
   const visibleProjects = useMemo(() => (
     projects.filter((project) => !project.deletedAt && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById))
   ), [projects, resolvedAreaFilter, areaById]);
-  const visibleTasks = useMemo(() => (
-    tasks.filter((task) => (
-      isTaskInActiveProject(task, projectById)
-      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
-    ))
-  ), [tasks, resolvedAreaFilter, projectById, areaById]);
   const baseActiveTasks = useMemo(() => (
-    visibleTasks.filter((task) => (
-      !task.deletedAt
-      && isTaskActionable(task)
-    ))
+    visibleTasks.filter(isTaskActionable)
   ), [visibleTasks]);
   const futureStartTick = useFutureStartRevealTick(baseActiveTasks);
   const activeTasks = useMemo(() => {

@@ -10,10 +10,10 @@ import Animated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { isTaskInActiveProject, shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, taskMatchesAreaFilterSelection, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilterSelection, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
+import { shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilterSelection, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
 import { useToast } from '@/contexts/toast-context';
-import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
+import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';
 import { openContextsScreen, openProjectScreen, openTaskScreen } from '@/lib/task-meta-navigation';
 
@@ -363,10 +363,9 @@ function Column({
 }
 
 export function BoardView() {
-  const { tasks, projects, areas, updateTask, deleteTask, duplicateTask, reorderBoardTasks, timeEstimatesEnabled } = useTaskStore((state) => ({
+  const { tasks, projects, updateTask, deleteTask, duplicateTask, reorderBoardTasks, timeEstimatesEnabled } = useTaskStore((state) => ({
     tasks: state.tasks,
     projects: state.projects,
-    areas: state.areas,
     updateTask: state.updateTask,
     deleteTask: state.deleteTask,
     duplicateTask: state.duplicateTask,
@@ -405,9 +404,7 @@ export function BoardView() {
     [navBarInset],
   );
 
-  const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
-  const { resolvedAreaFilter } = useMobileAreaFilter();
-  const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+  const { areaById, resolvedAreaFilter, visibleTasks } = useVisibleTaskContext();
   const sortedProjects = useMemo(() => (
     projects
       .filter((project) => !project.deletedAt)
@@ -423,14 +420,10 @@ export function BoardView() {
   }, [projects, areaById]);
 
   // Tasks visible after the global area filter, before the board-level filter bar.
-  const areaActiveTasks = useMemo(() => {
-    return tasks.filter((task) => (
-      !task.deletedAt
-      && task.status !== 'reference'
-      && isTaskInActiveProject(task, projectMap)
-      && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)
-    ));
-  }, [tasks, projectMap, resolvedAreaFilter, areaById]);
+  const areaActiveTasks = useMemo(
+    () => visibleTasks.filter((task) => task.status !== 'reference'),
+    [visibleTasks],
+  );
 
   const allTokens = useMemo(
     () => getUsedTaskTokens(areaActiveTasks, (task) => [...(task.contexts || []), ...(task.tags || [])]),
