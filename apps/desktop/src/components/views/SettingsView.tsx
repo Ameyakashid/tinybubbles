@@ -25,7 +25,6 @@ import {
 import {
   DEFAULT_ANTHROPIC_THINKING_BUDGET,
   getEnglishI18nValue,
-  translateText,
   translateWithFallback,
   LOCALES,
   submitFeedbackSubmission,
@@ -433,9 +432,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
       case "sync":
         return t.sync;
       case "data":
-        if (language === "zh") return "数据";
-        if (language === "zh-Hant") return "數據";
-        return translateText("Data", language);
+        return t.data;
       case "integrations":
         return t.integrations;
       case "about":
@@ -513,12 +510,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
       {
         id: "data",
         icon: Database,
-        label:
-          language === "zh"
-            ? "数据"
-            : language === "zh-Hant"
-              ? "數據"
-              : translateText("Data", language),
+        label: t.data,
       },
       {
         id: "integrations",

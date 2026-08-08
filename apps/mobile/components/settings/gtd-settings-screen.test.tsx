@@ -77,7 +77,6 @@ vi.mock('@mindwtr/core', () => ({
     const translated = t(key);
     return translated && translated !== key ? translated : fallback;
   },
-  translateText: (value: string) => value,
   useTaskStore: () => storeState,
 }));
 

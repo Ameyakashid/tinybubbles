@@ -765,7 +765,6 @@
     "toTaskDraftDateTimeLocalValue",
     "toUint8Array",
     "toVisibleTask",
-    "translateText",
     "translateWithFallback",
     "undoTaskCompletion",
     "uniqueObsidianStrings",

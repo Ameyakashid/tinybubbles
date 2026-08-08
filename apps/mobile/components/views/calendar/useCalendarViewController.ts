@@ -41,7 +41,6 @@ import {
   resolveExternalCalendarColor,
   themeExternalCalendarDisplayColor,
   timeEstimateToMinutes as resolveTimeEstimateToMinutes,
-  translateText,
   type CalendarSettings,
   type ExternalCalendarEvent,
   type ExternalCalendarSubscription,
@@ -197,13 +196,10 @@ export function useCalendarViewController() {
   };
 
   const tr = (key: string, values?: Record<string, string | number | boolean | null | undefined>) => {
-    const english = getEnglishI18nValue(key);
     const translated = t(key);
-    const template = english && translated === english
-      ? translateText(english, language)
-      : translated && translated !== key
-        ? translated
-        : english ?? key;
+    const template = translated && translated !== key
+      ? translated
+      : getEnglishI18nValue(key) ?? key;
     return values ? formatI18nTemplate(template, values) : template;
   };
 

@@ -8,6 +8,7 @@ import { getEnglishI18nValue } from '@mindwtr/core';
 export const SETTINGS_LABEL_KEYS = [
     'title',
     'general',
+    'data',
     'integrations',
     'advanced',
     'subtitle',
@@ -167,6 +168,10 @@ export const SETTINGS_LABEL_KEYS = [
     'taskEditorFieldAttachments',
     'taskEditorFieldChecklist',
     'taskEditorFieldTextDirection',
+    'taskEditorSectionBasic',
+    'taskEditorSectionScheduling',
+    'taskEditorSectionOrganization',
+    'taskEditorSectionDetails',
     'featurePriorities',
     'featurePrioritiesDesc',
     'featureTimeEstimates',
@@ -636,6 +641,10 @@ export const labelKeyOverrides: Partial<Record<keyof SettingsLabels, string>> = 
     taskEditorFieldAttachments: 'attachments.title',
     taskEditorFieldChecklist: 'taskEdit.checklist',
     taskEditorFieldTextDirection: 'taskEdit.textDirectionLabel',
+    taskEditorSectionBasic: 'taskEdit.basic',
+    taskEditorSectionScheduling: 'taskEdit.scheduling',
+    taskEditorSectionOrganization: 'taskEdit.organization',
+    taskEditorSectionDetails: 'taskEdit.details',
 } as const;
 
 // English settings labels, resolved from core's i18n locale, keyed the same

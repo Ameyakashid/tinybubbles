@@ -7,7 +7,6 @@ import {
     getDefaultTaskAreaMode,
     resolveDefaultNewTaskAreaId,
     sanitizePomodoroDurations,
-    translateText,
 } from '@mindwtr/core';
 
 import type { ReactNode } from 'react';
@@ -113,6 +112,10 @@ type Labels = {
     taskEditorFieldReviewAt: string;
     taskEditorFieldAttachments: string;
     taskEditorFieldChecklist: string;
+    taskEditorSectionBasic: string;
+    taskEditorSectionScheduling: string;
+    taskEditorSectionOrganization: string;
+    taskEditorSectionDetails: string;
     featurePriorities: string;
     featurePrioritiesDesc: string;
     featureTimeEstimates: string;
@@ -208,7 +211,6 @@ function SettingsDisclosureCard({
 
 export function SettingsGtdPage({
     t,
-    language,
     settings,
     updateSettings,
     showSaved,
@@ -537,13 +539,13 @@ export function SettingsGtdPage({
     const taskEditorSectionLabel = (sectionId: TaskEditorSectionId) => {
         switch (sectionId) {
             case 'basic':
-                return translateText('Basic', language);
+                return t.taskEditorSectionBasic;
             case 'scheduling':
-                return translateText('Scheduling', language);
+                return t.taskEditorSectionScheduling;
             case 'organization':
-                return translateText('Organization', language);
+                return t.taskEditorSectionOrganization;
             case 'details':
-                return translateText('Details', language);
+                return t.taskEditorSectionDetails;
             default:
                 return sectionId;
         }

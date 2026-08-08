@@ -32,7 +32,6 @@ import {
     resolveDefaultNewTaskAreaId,
     sanitizePomodoroDurations,
     tFallback,
-    translateText,
     type DefaultProjectFlowMode,
     type FeatureSettings,
     type GtdSettings,
@@ -74,7 +73,7 @@ export function GtdSettingsScreen({
     const tc = useThemeColors();
     const filledButton = useFilledButtonColors();
     const insets = useSafeAreaInsets();
-    const { isChineseLanguage, language, tr, t } = useSettingsLocalization();
+    const { tr, t } = useSettingsLocalization();
     const { showToast } = useToast();
     const { settings, updateSettings, areas } = useTaskStore();
     const scrollContentStyle = useSettingsScrollContent();
@@ -923,7 +922,7 @@ export function GtdSettingsScreen({
         const autoArchiveOptions = [0, 1, 3, 7, 14, 30, 60];
         const formatAutoArchiveLabel = (days: number) => {
             if (days <= 0) return t('settings.autoArchiveNever');
-            return isChineseLanguage ? `${days} 天` : `${days} ${translateText('days', language)}`;
+            return `${days} ${tr('common.days')}`;
         };
 
         return (
