@@ -51,6 +51,7 @@ import { useToast } from '@/contexts/toast-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidKeyboardInset, useKeyboardInset } from '../lib/use-android-keyboard-inset';
 import { logError, logWarn } from '../lib/app-log';
+import { showInvalidDateCommandToast } from '@/lib/quick-add-toast';
 import { createMobileRecoverySnapshot } from '../lib/data-transfer';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 import {
@@ -624,12 +625,7 @@ export function QuickCaptureSheet({
       request.options,
     );
     if (!result.success && result.reason === 'invalid-date-command') {
-      showToast({
-        title: t('common.notice'),
-        message: `${t('quickAdd.invalidDateCommand')}: ${result.invalidDateCommands.join(', ')}`,
-        tone: 'warning',
-        durationMs: 4200,
-      });
+      showInvalidDateCommandToast(showToast, t, result.invalidDateCommands);
       return null;
     }
     if (!result.success) return null;
@@ -661,12 +657,7 @@ export function QuickCaptureSheet({
         const request = buildCaptureRequestForInput(line, line.trim(), undefined, currentProjects);
         const prepared = await prepareCaptureTask(request.input, { addProject }, request.options);
         if (!prepared.success && prepared.reason === 'invalid-date-command') {
-          showToast({
-            title: t('common.notice'),
-            message: `${t('quickAdd.invalidDateCommand')}: ${prepared.invalidDateCommands.join(', ')}`,
-            tone: 'warning',
-            durationMs: 4200,
-          });
+          showInvalidDateCommandToast(showToast, t, prepared.invalidDateCommands);
           return;
         }
         if (!prepared.success) return;

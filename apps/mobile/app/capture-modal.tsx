@@ -41,6 +41,7 @@ import { useLanguage } from '../contexts/language-context';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
 import { addHardwareBackPressListener } from '@/lib/hardware-back';
+import { showInvalidDateCommandToast } from '@/lib/quick-add-toast';
 import { ThemedAlertHost } from '@/components/themed-alert';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 
@@ -405,16 +406,10 @@ export default function CaptureScreen() {
     currentProjects = projects,
   ): Promise<{ input: CaptureAssemblyInput; options: CaptureTransactionOptions } | null> => {
     if (!inputValue.trim()) return null;
+    // Invalid date commands are not checked here: prepareCaptureTask rejects
+    // them with a typed reason, so the warning is raised once, where the write
+    // actually fails.
     const parsed = parseQuickAdd(inputValue, currentProjects, new Date(), areas, quickAddParseOptions);
-    if (parsed.invalidDateCommands && parsed.invalidDateCommands.length > 0) {
-      showToast({
-        title: t('common.notice'),
-        message: `${t('quickAdd.invalidDateCommand')}: ${parsed.invalidDateCommands.join(', ')}`,
-        tone: 'warning',
-        durationMs: 4200,
-      });
-      return null;
-    }
 
     // The deep-link `project` param is contextual (an id or a title). It is a
     // best-effort fallback, not a typed +Project token: resolve a selectable
@@ -487,7 +482,12 @@ export default function CaptureScreen() {
       { addProject, addTask },
       request.options,
     );
-    if (!result.success) return false;
+    if (!result.success) {
+      if (result.reason === 'invalid-date-command') {
+        showInvalidDateCommandToast(showToast, t, result.invalidDateCommands);
+      }
+      return false;
+    }
     const createdTaskId = result.createdTaskId;
     if (openAfterSave && createdTaskId) {
       openTaskScreen(createdTaskId, result.props.projectId, 'task');
@@ -503,7 +503,12 @@ export default function CaptureScreen() {
       const request = await buildCaptureRequestFromInput(line, currentProjects);
       if (!request) return;
       const prepared = await prepareCaptureTask(request.input, { addProject }, request.options);
-      if (!prepared.success) return;
+      if (!prepared.success) {
+        if (prepared.reason === 'invalid-date-command') {
+          showInvalidDateCommandToast(showToast, t, prepared.invalidDateCommands);
+        }
+        return;
+      }
       taskInputs.push({ title: prepared.title, initialProps: prepared.props });
       if (prepared.createdProject) currentProjects = [...currentProjects, prepared.createdProject];
     }

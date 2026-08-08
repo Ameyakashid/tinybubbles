@@ -57,6 +57,7 @@ import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
 import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
+import { showInvalidDateCommandToast } from '@/lib/quick-add-toast';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
 import {
@@ -1260,16 +1261,6 @@ function TaskListComponent({
       preserveText: settings.quickAddAutoClean !== true,
       naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
     });
-    if (parsed.invalidDateCommands && parsed.invalidDateCommands.length > 0) {
-      showToast({
-        title: t('common.notice'),
-        message: `${t('quickAdd.invalidDateCommand')}: ${parsed.invalidDateCommands.join(', ')}`,
-        tone: 'warning',
-        durationMs: 4200,
-      });
-      return;
-    }
-
     const result = await executeCaptureTransaction({
       parsed,
       rawInput: newTaskTitle,
@@ -1289,7 +1280,14 @@ function TaskListComponent({
         return taskProps;
       },
     });
-    if (!result.success) return;
+    if (!result.success) {
+      // Invalid date commands surface from core's typed reason rather than a
+      // pre-check: prepareCaptureTask already rejects them.
+      if (result.reason === 'invalid-date-command') {
+        showInvalidDateCommandToast(showToast, t, result.invalidDateCommands);
+      }
+      return;
+    }
     const createdTaskId = result.createdTaskId;
     newTaskTitleRef.current = '';
     inputSelectionRef.current = { start: 0, end: 0 };
