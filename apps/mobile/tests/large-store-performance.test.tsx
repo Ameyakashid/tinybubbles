@@ -260,25 +260,32 @@ vi.mock('@/lib/sync-service', () => ({
   performMobileSync: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+// resolveThemeTokens caches its result, so the real useThemeColors hands out the SAME
+// object until the theme actually changes, and every memo boundary taking `tc` compares
+// it by identity. Returning a fresh literal per call would switch those boundaries off
+// and measure an app that re-renders more than the real one. Keep one hoisted object so
+// the mock matches production's identity guarantee; do not inline it back.
+const themeColors = vi.hoisted(() => ({
+  bg: '#0f172a',
+  cardBg: '#111827',
+  taskItemBg: '#111827',
+  inputBg: '#111827',
+  filterBg: '#1f2937',
+  border: '#334155',
+  text: '#f8fafc',
+  secondaryText: '#94a3b8',
+  icon: '#94a3b8',
+  tint: '#3b82f6',
+  onTint: '#ffffff',
+  tabIconDefault: '#94a3b8',
+  tabIconSelected: '#3b82f6',
+  danger: '#ef4444',
+  success: '#10b981',
+  warning: '#f59e0b',
+}));
+
 vi.mock('@/hooks/use-theme-colors', () => ({
-  useThemeColors: () => ({
-    bg: '#0f172a',
-    cardBg: '#111827',
-    taskItemBg: '#111827',
-    inputBg: '#111827',
-    filterBg: '#1f2937',
-    border: '#334155',
-    text: '#f8fafc',
-    secondaryText: '#94a3b8',
-    icon: '#94a3b8',
-    tint: '#3b82f6',
-    onTint: '#ffffff',
-    tabIconDefault: '#94a3b8',
-    tabIconSelected: '#3b82f6',
-    danger: '#ef4444',
-    success: '#10b981',
-    warning: '#f59e0b',
-  }),
+  useThemeColors: () => themeColors,
 }));
 
 vi.mock('../lib/ai-config', () => ({
