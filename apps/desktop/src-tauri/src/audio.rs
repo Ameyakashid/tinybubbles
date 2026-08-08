@@ -5,6 +5,35 @@ use sha2::{Digest, Sha256};
 use std::os::unix::fs::PermissionsExt;
 use tar::Archive;
 
+#[derive(Default)]
+pub(crate) struct AudioRecorderState {
+    recorder: Mutex<Option<AudioRecorderHandle>>,
+    starting: AtomicBool,
+}
+
+#[derive(Clone, Debug)]
+struct RecorderInfo {
+    sample_rate: u32,
+    channels: u16,
+}
+
+struct AudioRecorderHandle {
+    stop_tx: mpsc::Sender<()>,
+    samples: Arc<Mutex<Vec<i16>>>,
+    info: Arc<Mutex<Option<RecorderInfo>>>,
+    limit_hit: Arc<AtomicBool>,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AudioCaptureResult {
+    path: String,
+    sample_rate: u32,
+    channels: u16,
+    size: usize,
+}
+
 const PARAKEET_MODEL_ID: &str = "parakeet-tdt-0.6b-v3-int8";
 const PARAKEET_ARCHIVE_ROOT: &str = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8";
 const PARAKEET_MODEL_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2";

@@ -57,7 +57,7 @@ mod window_state;
 
 use audio::{
     download_parakeet_model, download_whisper_model, start_audio_recording, stop_audio_recording,
-    transcribe_parakeet, transcribe_whisper,
+    transcribe_parakeet, transcribe_whisper, AudioRecorderState,
 };
 use autostart::{get_launch_at_startup_enabled, set_launch_at_startup_enabled};
 use config::{
@@ -604,34 +604,6 @@ struct QuickAddFocusSnapshot {
 
 #[derive(Default)]
 struct QuickAddFocusState(Mutex<QuickAddFocusSnapshot>);
-
-struct AudioRecorderState {
-    recorder: Mutex<Option<AudioRecorderHandle>>,
-    starting: AtomicBool,
-}
-
-#[derive(Clone, Debug)]
-struct RecorderInfo {
-    sample_rate: u32,
-    channels: u16,
-}
-
-struct AudioRecorderHandle {
-    stop_tx: mpsc::Sender<()>,
-    samples: Arc<Mutex<Vec<i16>>>,
-    info: Arc<Mutex<Option<RecorderInfo>>>,
-    limit_hit: Arc<AtomicBool>,
-    join: Option<std::thread::JoinHandle<()>>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AudioCaptureResult {
-    path: String,
-    sample_rate: u32,
-    channels: u16,
-    size: usize,
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1531,10 +1503,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .manage(AudioRecorderState {
-            recorder: Mutex::new(None),
-            starting: AtomicBool::new(false),
-        })
+        .manage(AudioRecorderState::default())
         .manage(ObsidianWatcherState::default())
         .invoke_handler(tauri::generate_handler![
             notify_ui_ready,
