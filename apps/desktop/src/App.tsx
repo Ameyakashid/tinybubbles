@@ -57,6 +57,7 @@ import { SyncService } from './lib/sync-service';
 import type { ExternalSyncChange, ExternalSyncChangeResolution } from './lib/sync-service';
 import { migratePortableAttachments } from './lib/portable-migration';
 import * as LocalDataWatcher from './lib/local-data-watcher';
+import { invokeNative } from './lib/tauri-invoke';
 import { getInstallSourceOrFallback, isFlatpakRuntime, isTauriRuntime } from './lib/runtime';
 import { useDesktopShellSync } from './lib/desktop-shell-sync';
 import { reportError as reportAppError } from './lib/report-error';
@@ -526,7 +527,6 @@ function App() {
         applyThemeMode(normalizedTheme);
         if (normalizedTheme === 'system' && isTauriRuntime()) {
             void resolveSystemThemeCommandPreference(
-                () => import('@tauri-apps/api/core'),
                 (step, error) => void logError(error, { scope: 'theme', step: `initial-command:${step}` }),
             ).then((theme) => {
                 if (!cancelled && theme) applyThemeMode('system', theme);
@@ -615,7 +615,6 @@ function App() {
             }
         );
         const stopWatchingCommandTheme = watchSystemThemeCommandPreference(
-            () => import('@tauri-apps/api/core'),
             (theme) => {
                 applyThemeMode('system', theme);
             },
@@ -718,9 +717,8 @@ function App() {
                 void logError(error, { scope: 'app', step: label });
             },
         });
-        const { invoke } = await import('@tauri-apps/api/core');
         void logInfo('Close trace: invoking quit_app', { scope: 'app', force: true });
-        await invoke('quit_app');
+        await invokeNative('quit_app');
         // app.exit(0) should tear the process down before this resolves; if
         // this line ever logs, the native exit call returned without exiting (#913).
         void logInfo('Close trace: quit_app invoke returned without exit', { scope: 'app', force: true });
@@ -833,14 +831,11 @@ function App() {
             SyncService.startFileWatcher().catch((error) => reportError('File watcher failed', error));
 
             // Watch local data.json and SQLite sidecar files for external changes (CLI/MCP/Local REST).
-            import('@tauri-apps/api/core')
-                .then(async (mod) => {
-                    const [dataPath, dbPath] = await Promise.all([
-                        mod.invoke<string>('get_data_path_cmd'),
-                        mod.invoke<string>('get_db_path_cmd'),
-                    ]);
-                    await LocalDataWatcher.start(dataPath, dbPath);
-                })
+            Promise.all([
+                invokeNative<string>('get_data_path_cmd'),
+                invokeNative<string>('get_db_path_cmd'),
+            ])
+                .then(([dataPath, dbPath]) => LocalDataWatcher.start(dataPath, dbPath))
                 .catch((error) => reportError('Local data watcher failed', error));
         }
 
@@ -1011,10 +1006,9 @@ function App() {
 
         const setup = async () => {
             const { listen } = await import('@tauri-apps/api/event');
-            const { invoke } = await import('@tauri-apps/api/core');
             const nextUnlisten = await listen('close-requested', async () => {
                 void logInfo('Close trace: close-requested event received', { scope: 'app', force: true });
-                await invoke('acknowledge_close_request').catch((error) => {
+                await invokeNative('acknowledge_close_request').catch((error) => {
                     void logError(error, { scope: 'app', step: 'acknowledgeCloseRequest' });
                 });
                 void logInfo('Close trace: close request acknowledged', { scope: 'app', force: true });

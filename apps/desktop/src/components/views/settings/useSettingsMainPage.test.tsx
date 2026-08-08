@@ -118,6 +118,9 @@ describe('useSettingsMainPage', () => {
     it('resolves System theme through the native command when webview media is stale', async () => {
         const originalMatchMedia = window.matchMedia;
         window.matchMedia = vi.fn().mockReturnValue({ matches: false } as MediaQueryList);
+        // The command goes through the invoke seam, which needs a Tauri runtime
+        // to reach the mocked @tauri-apps/api/core.
+        (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
 
         try {
             render(<Harness isFlatpak={false} isTauri settings={{ theme: 'system' }} />);
@@ -128,6 +131,7 @@ describe('useSettingsMainPage', () => {
             });
         } finally {
             window.matchMedia = originalMatchMedia;
+            delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
         }
     });
 });

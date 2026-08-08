@@ -111,7 +111,6 @@ export function useSettingsMainPage({
         applyThemeMode(themeMode);
         if (isTauri && themeMode === 'system') {
             void resolveSystemThemeCommandPreference(
-                () => import('@tauri-apps/api/core'),
                 (_step, error) => reportError('Failed to resolve system theme', error),
             ).then((theme) => {
                 if (!cancelled && theme) applyThemeMode('system', theme);

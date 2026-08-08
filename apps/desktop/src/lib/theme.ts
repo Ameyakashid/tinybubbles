@@ -1,15 +1,14 @@
 import type { AppData, AppTheme } from '@mindwtr/core';
 import { resolveThemeColorScheme } from '@mindwtr/core';
 
+import { invokeNative } from './tauri-invoke';
+
 export type DesktopThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia';
 export type SystemThemePreference = 'light' | 'dark' | null;
 type NativeThemePreference = Exclude<SystemThemePreference, null>;
 type NativeThemeSetter = (theme?: NativeThemePreference | null) => Promise<void>;
 type NativeThemeAppModule = {
     setTheme: NativeThemeSetter;
-};
-type TauriCoreModule = {
-    invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
 type NativeThemeWindow = {
     theme: () => Promise<SystemThemePreference>;
@@ -81,12 +80,10 @@ export const coerceSystemThemePreference = (value: unknown): SystemThemePreferen
 };
 
 export const resolveSystemThemeCommandPreference = async (
-    loadCoreModule: () => Promise<TauriCoreModule>,
     onError?: (step: 'resolveSystem', error: unknown) => void,
 ): Promise<SystemThemePreference> => {
     try {
-        const coreModule = await loadCoreModule();
-        return coerceSystemThemePreference(await coreModule.invoke('get_system_theme_preference'));
+        return coerceSystemThemePreference(await invokeNative('get_system_theme_preference'));
     } catch (error) {
         onError?.('resolveSystem', error);
         return null;
@@ -170,17 +167,14 @@ export const watchNativeSystemThemePreference = (
 };
 
 export const watchSystemThemeCommandPreference = (
-    loadCoreModule: () => Promise<TauriCoreModule>,
     onChange: (theme: NativeThemePreference) => void,
-    onError?: (step: 'resolveSystem' | 'watch', error: unknown) => void,
+    onError?: (step: 'resolveSystem', error: unknown) => void,
     pollIntervalMs = COMMAND_THEME_POLL_INTERVAL_MS,
 ): (() => void) => {
     if (typeof window === 'undefined') return () => { };
 
     let cancelled = false;
-    let coreModule: TauriCoreModule | null = null;
     let lastTheme: SystemThemePreference = null;
-    let pollTimer: number | null = null;
     let pollInFlight = false;
 
     const emitIfChanged = (theme: SystemThemePreference) => {
@@ -190,11 +184,11 @@ export const watchSystemThemeCommandPreference = (
     };
 
     const poll = async () => {
-        if (cancelled || !coreModule || pollInFlight) return;
+        if (cancelled || pollInFlight) return;
         pollInFlight = true;
         try {
             const theme = coerceSystemThemePreference(
-                await coreModule.invoke('get_system_theme_preference')
+                await invokeNative('get_system_theme_preference')
             );
             if (!cancelled) {
                 emitIfChanged(theme);
@@ -208,26 +202,14 @@ export const watchSystemThemeCommandPreference = (
         }
     };
 
-    void loadCoreModule()
-        .then((loadedCoreModule) => {
-            if (cancelled) return;
-            coreModule = loadedCoreModule;
-            void poll();
-            pollTimer = window.setInterval(() => {
-                void poll();
-            }, pollIntervalMs);
-        })
-        .catch((error) => {
-            if (!cancelled) {
-                onError?.('watch', error);
-            }
-        });
+    void poll();
+    const pollTimer = window.setInterval(() => {
+        void poll();
+    }, pollIntervalMs);
 
     return () => {
         cancelled = true;
-        if (pollTimer !== null) {
-            window.clearInterval(pollTimer);
-        }
+        window.clearInterval(pollTimer);
     };
 };
 

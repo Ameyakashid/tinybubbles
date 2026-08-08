@@ -10,6 +10,19 @@ import {
     watchNativeSystemThemePreference,
     watchSystemThemePreference,
 } from './theme';
+import { setNativeInvokeTransport } from './tauri-invoke';
+
+// The theme commands go through the invoke seam, which refuses to reach Rust
+// unless a Tauri runtime is present. Both are true in the desktop shell.
+const enableNativeInvoke = (transport: (command: string) => Promise<unknown>) => {
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    setNativeInvokeTransport(transport as never);
+};
+
+const disableNativeInvoke = () => {
+    setNativeInvokeTransport(null);
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+};
 
 const flushMicrotasks = async () => {
     await Promise.resolve();
@@ -181,28 +194,32 @@ describe('coerceSystemThemePreference', () => {
 });
 
 describe('resolveSystemThemeCommandPreference', () => {
+    afterEach(disableNativeInvoke);
+
     it('reads the native command preference', async () => {
         const invoke = vi.fn(async () => 'dark');
+        enableNativeInvoke(invoke);
 
-        await expect(resolveSystemThemeCommandPreference(async () => ({ invoke }))).resolves.toBe('dark');
-        expect(invoke).toHaveBeenCalledWith('get_system_theme_preference');
+        await expect(resolveSystemThemeCommandPreference()).resolves.toBe('dark');
+        expect(invoke).toHaveBeenCalledWith('get_system_theme_preference', undefined);
     });
 
     it('reports command errors and falls back to no preference', async () => {
         const error = new Error('command failed');
         const onError = vi.fn();
+        enableNativeInvoke(async () => {
+            throw error;
+        });
 
-        await expect(
-            resolveSystemThemeCommandPreference(
-                async () => ({
-                    invoke: vi.fn(async () => {
-                        throw error;
-                    }),
-                }),
-                onError,
-            ),
-        ).resolves.toBeNull();
+        await expect(resolveSystemThemeCommandPreference(onError)).resolves.toBeNull();
         expect(onError).toHaveBeenCalledWith('resolveSystem', error);
+    });
+
+    it('reports the absence of a desktop runtime and falls back to no preference', async () => {
+        const onError = vi.fn();
+
+        await expect(resolveSystemThemeCommandPreference(onError)).resolves.toBeNull();
+        expect(onError).toHaveBeenCalledWith('resolveSystem', expect.any(Error));
     });
 });
 
@@ -212,6 +229,7 @@ describe('watchSystemThemeCommandPreference', () => {
     });
 
     afterEach(() => {
+        disableNativeInvoke();
         vi.useRealTimers();
         vi.restoreAllMocks();
     });
@@ -220,16 +238,12 @@ describe('watchSystemThemeCommandPreference', () => {
         const themes = ['dark', 'dark', 'light'];
         const invoke = vi.fn(async () => themes.shift() ?? 'light');
         const onChange = vi.fn();
+        enableNativeInvoke(invoke);
 
-        const stopWatching = watchSystemThemeCommandPreference(
-            async () => ({ invoke }),
-            onChange,
-            undefined,
-            1000,
-        );
+        const stopWatching = watchSystemThemeCommandPreference(onChange, undefined, 1000);
         await flushMicrotasks();
 
-        expect(invoke).toHaveBeenCalledWith('get_system_theme_preference');
+        expect(invoke).toHaveBeenCalledWith('get_system_theme_preference', undefined);
         expect(onChange).toHaveBeenCalledWith('dark');
 
         await vi.advanceTimersByTimeAsync(1000);
@@ -243,21 +257,22 @@ describe('watchSystemThemeCommandPreference', () => {
         expect(invoke).toHaveBeenCalledTimes(3);
     });
 
-    it('reports command load failures as watch errors', async () => {
-        const error = new Error('missing invoke');
+    it('reports poll failures without tearing the poll down', async () => {
+        const error = new Error('command failed');
         const onError = vi.fn();
+        const invoke = vi.fn(async () => {
+            throw error;
+        });
+        enableNativeInvoke(invoke);
 
-        watchSystemThemeCommandPreference(
-            async () => {
-                throw error;
-            },
-            vi.fn(),
-            onError,
-            1000,
-        );
+        const stopWatching = watchSystemThemeCommandPreference(vi.fn(), onError, 1000);
         await flushMicrotasks();
 
-        expect(onError).toHaveBeenCalledWith('watch', error);
+        expect(onError).toHaveBeenCalledWith('resolveSystem', error);
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(invoke).toHaveBeenCalledTimes(2);
+        stopWatching();
     });
 });
 

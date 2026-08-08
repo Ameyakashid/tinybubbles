@@ -7,6 +7,7 @@ import './index.css';
 import { type AppData, consoleLogger, setLogger, setStorageAdapter, SQLITE_SCHEMA_VERSION } from '@mindwtr/core';
 import { LanguageProvider } from './contexts/language-context';
 import { isTauriRuntime } from './lib/runtime';
+import { invokeNative } from './lib/tauri-invoke';
 import { reportError } from './lib/report-error';
 import { webStorage } from './lib/storage-adapter-web';
 import { isDiagnosticsEnabled, logError, logInfo, logWarn, setupGlobalErrorLogging } from './lib/app-log';
@@ -87,8 +88,7 @@ const getLoggingReason = (loggingEnabled: boolean): string => {
 const getStartupLoggingEnabled = async (): Promise<boolean> => {
     if (isTauriRuntime()) {
         try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            const data = await invoke<AppData>('get_data');
+            const data = await invokeNative<AppData>('get_data');
             return data?.settings?.diagnostics?.loggingEnabled === true;
         } catch {
             return false;
@@ -136,7 +136,6 @@ const savedTheme = coerceDesktopThemeMode(localStorage.getItem(THEME_STORAGE_KEY
 applyThemeMode(savedTheme);
 if ((savedTheme ?? 'system') === 'system' && isTauriRuntime()) {
     void resolveSystemThemeCommandPreference(
-        () => import('@tauri-apps/api/core'),
         (step, error) => void logError(error, { scope: 'theme', step: `startup-command:${step}` }),
     ).then((theme) => {
         if (theme) applyThemeMode('system', theme);
@@ -233,11 +232,10 @@ function installFileDropNavigationGuard() {
 async function signalUiReady() {
     if (!isTauriRuntime()) return;
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
         await new Promise<void>((resolve) => {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });
-        await invoke('notify_ui_ready');
+        await invokeNative('notify_ui_ready');
     } catch (error) {
         void logWarn('Failed to signal UI ready', {
             scope: 'window',
