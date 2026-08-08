@@ -153,6 +153,23 @@ const saveStoredPomodoroSnapshot = (snapshot: PomodoroSnapshot) => {
     }
 };
 
+// The clock ticks once a second for the whole session now that it runs app-wide
+// (#528), and each tick moves nothing but remainingSeconds and updatedAtMs. Both
+// are read back as a pair — reconciliation replays `now - updatedAtMs` onto the
+// stored remainingSeconds — so an older pair restores to exactly the same clock
+// as the current one, and the synchronous localStorage write can be skipped.
+// Everything else (pause, phase change, a credited session, a task link, new
+// durations) still persists immediately.
+const isCountdownTickOnly = (prev: PomodoroSnapshot, next: PomodoroSnapshot): boolean => (
+    prev.timerState.isRunning
+    && next.timerState.isRunning
+    && prev.timerState.phase === next.timerState.phase
+    && prev.timerState.completedFocusSessions === next.timerState.completedFocusSessions
+    && prev.durations === next.durations
+    && prev.selectedTaskId === next.selectedTaskId
+    && prev.sessionHistory === next.sessionHistory
+);
+
 const readStoredCollapsed = (): boolean => {
     if (typeof window === 'undefined') return false;
     try {
@@ -222,7 +239,7 @@ export const usePomodoroStore = createWithEqualityFn<PomodoroStoreState>((set, g
         const prev = get().snapshot;
         const next = updater(prev);
         creditCompletedFocusSessions(prev, next);
-        saveStoredPomodoroSnapshot(next);
+        if (!isCountdownTickOnly(prev, next)) saveStoredPomodoroSnapshot(next);
         set({ snapshot: next });
     },
     setPomodoroCollapsed: (collapsed) => {

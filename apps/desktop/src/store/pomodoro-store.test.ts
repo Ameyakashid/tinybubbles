@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTaskStore, type Task } from '@mindwtr/core';
 
 import {
     DESKTOP_POMODORO_COLLAPSED_STORAGE_KEY,
     DESKTOP_POMODORO_SESSION_STORAGE_KEY,
+    reconcilePomodoroSnapshot,
     usePomodoroStore,
 } from './pomodoro-store';
 
@@ -41,11 +42,23 @@ const seedRunningSession = (options: {
     }));
 };
 
+let writeCount = 0;
+
 describe('pomodoro store', () => {
     beforeEach(() => {
         window.localStorage.clear();
+        writeCount = 0;
+        const originalSetItem = window.localStorage.setItem.bind(window.localStorage);
+        vi.spyOn(window.localStorage, 'setItem').mockImplementation((key: string, value: string) => {
+            if (key === DESKTOP_POMODORO_SESSION_STORAGE_KEY) writeCount += 1;
+            originalSetItem(key, value);
+        });
         useTaskStore.setState({ tasks: [task()], _allTasks: [task()] } as never);
         usePomodoroStore.setState({ hasHydrated: false, collapsed: false });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     it('credits a focus session completed while the app was closed to the linked task', () => {
@@ -118,6 +131,33 @@ describe('pomodoro store', () => {
         expect(snapshot.selectedTaskId).toBe('task-1');
         expect(snapshot.timerState.isRunning).toBe(true);
         expect(snapshot.durations.focusMinutes).toBe(25);
+    });
+
+    it('skips the storage write for a plain countdown tick but restores the same clock', () => {
+        seedRunningSession({ selectedTaskId: 'task-1', focusMinutes: 25, remainingSeconds: 300, updatedAtMs: Date.now() });
+        usePomodoroStore.getState().hydratePomodoro({});
+        const writesAfterHydrate = writeCount;
+        const hydratedAtMs = usePomodoroStore.getState().snapshot.updatedAtMs;
+
+        // Ten seconds of ticking, once per second.
+        for (let second = 1; second <= 10; second += 1) {
+            usePomodoroStore.getState().commitPomodoro((prev) => reconcilePomodoroSnapshot(prev, hydratedAtMs + second * 1000, {}));
+        }
+        expect(usePomodoroStore.getState().snapshot.timerState.remainingSeconds).toBe(290);
+        expect(writeCount).toBe(writesAfterHydrate);
+
+        // The stale stored pair still reconstructs the live clock exactly.
+        usePomodoroStore.setState({ hasHydrated: false });
+        const stored = JSON.parse(window.localStorage.getItem(DESKTOP_POMODORO_SESSION_STORAGE_KEY) ?? '{}');
+        const elapsed = Math.floor((hydratedAtMs + 10_000 - stored.updatedAtMs) / 1000);
+        expect(stored.timerState.remainingSeconds - elapsed).toBe(290);
+
+        // Pausing is a state transition, so it persists immediately.
+        usePomodoroStore.getState().commitPomodoro((prev) => ({
+            ...prev,
+            timerState: { ...prev.timerState, isRunning: false },
+        }));
+        expect(writeCount).toBe(writesAfterHydrate + 1);
     });
 
     it('persists the collapsed preference to its own local-storage key', () => {
