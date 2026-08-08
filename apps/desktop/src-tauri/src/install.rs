@@ -19,6 +19,7 @@ fn is_windowsapps_mindwtr_path(path: &str) -> bool {
     (path.contains("\\windowsapps\\") || path.contains("/windowsapps/")) && path.contains("mindwtr")
 }
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub(crate) fn is_windows_store_install() -> bool {
     #[cfg(target_os = "windows")]
     {
