@@ -8,6 +8,7 @@
 import { CLOUDKIT_ATTACHMENT_RECORD_TYPE, type AppData } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
 import { logInfo, logWarn, logError } from './app-log';
+import { invokeNative } from './tauri-invoke';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,11 +56,6 @@ const CLOUDKIT_ZONE_CREATED_KEY = '@mindwtr_cloudkit_zone_created';
 // Tauri invoke helper
 // ---------------------------------------------------------------------------
 
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    const mod = await import('@tauri-apps/api/core');
-    return mod.invoke<T>(command as never, args as never);
-}
-
 // ---------------------------------------------------------------------------
 // Platform detection
 // ---------------------------------------------------------------------------
@@ -81,7 +77,7 @@ export const isCloudKitAvailable = (): boolean => {
 export const getCloudKitAccountStatus = async (): Promise<AccountStatus> => {
     if (!isCloudKitAvailable()) return 'unsupported';
     try {
-        return (await tauriInvoke<string>('cloudkit_account_status')) as AccountStatus;
+        return (await invokeNative<string>('cloudkit_account_status')) as AccountStatus;
     } catch {
         return 'unknown';
     }
@@ -98,14 +94,14 @@ export const ensureCloudKitReady = async (): Promise<void> => {
 
     const zoneCreated = localStorage.getItem(CLOUDKIT_ZONE_CREATED_KEY);
     if (!zoneCreated) {
-        await tauriInvoke('cloudkit_ensure_zone');
+        await invokeNative('cloudkit_ensure_zone');
         localStorage.setItem(CLOUDKIT_ZONE_CREATED_KEY, '1');
         void logInfo('CloudKit zone created', { scope: 'cloudkit' });
     }
 
     try {
-        await tauriInvoke('cloudkit_ensure_subscription');
-        await tauriInvoke('cloudkit_register_for_notifications');
+        await invokeNative('cloudkit_ensure_subscription');
+        await invokeNative('cloudkit_register_for_notifications');
     } catch (error) {
         // Subscription failures are non-fatal — timer-based sync still works
         void logWarn('CloudKit subscription setup failed (non-fatal)', {
@@ -127,7 +123,7 @@ export const readRemoteCloudKit = async (): Promise<AppData | null> => {
 
         // Try incremental fetch first
         if (changeToken) {
-            const result = await tauriInvoke<ChangeResult>('cloudkit_fetch_changes', {
+            const result = await invokeNative<ChangeResult>('cloudkit_fetch_changes', {
                 changeToken,
             });
 
@@ -184,7 +180,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
 
         if (allTasks.length > 0) {
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.task,
                     recordsJson: JSON.stringify(allTasks),
                 }),
@@ -192,7 +188,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
         }
         if (allProjects.length > 0) {
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.project,
                     recordsJson: JSON.stringify(allProjects),
                 }),
@@ -200,7 +196,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
         }
         if (allSections.length > 0) {
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.section,
                     recordsJson: JSON.stringify(allSections),
                 }),
@@ -208,7 +204,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
         }
         if (allAreas.length > 0) {
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.area,
                     recordsJson: JSON.stringify(allAreas),
                 }),
@@ -216,7 +212,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
         }
         if (allPeople.length > 0) {
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.person,
                     recordsJson: JSON.stringify(allPeople),
                 }),
@@ -233,7 +229,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
                 },
             ];
             savePromises.push(
-                tauriInvoke('cloudkit_save_records', {
+                invokeNative('cloudkit_save_records', {
                     recordType: RECORD_TYPES.settings,
                     recordsJson: JSON.stringify(settingsRecord),
                 }),
@@ -255,7 +251,7 @@ export const writeRemoteCloudKit = async (data: AppData): Promise<void> => {
 
         // Advance change token only if no conflicts
         if (allConflicts.length === 0) {
-            const changeResult = await tauriInvoke<ChangeResult>('cloudkit_fetch_changes', {
+            const changeResult = await invokeNative<ChangeResult>('cloudkit_fetch_changes', {
                 changeToken: localStorage.getItem(CLOUDKIT_CHANGE_TOKEN_KEY) ?? null,
             });
             if (changeResult.changeToken) {
@@ -286,7 +282,7 @@ export const saveCloudKitAttachmentAsset = async (
     metadata: CloudKitAttachmentMetadata,
 ): Promise<CloudKitAttachmentMetadata> => {
     if (!isCloudKitAvailable()) throw new Error('CloudKit is not available on this platform');
-    return await tauriInvoke<CloudKitAttachmentMetadata>('cloudkit_save_attachment_asset', {
+    return await invokeNative<CloudKitAttachmentMetadata>('cloudkit_save_attachment_asset', {
         recordName,
         filePath,
         metadataJson: JSON.stringify(metadata),
@@ -298,7 +294,7 @@ export const fetchCloudKitAttachmentAsset = async (
     targetPath: string,
 ): Promise<CloudKitAttachmentMetadata> => {
     if (!isCloudKitAvailable()) throw new Error('CloudKit is not available on this platform');
-    return await tauriInvoke<CloudKitAttachmentMetadata>('cloudkit_fetch_attachment_asset', {
+    return await invokeNative<CloudKitAttachmentMetadata>('cloudkit_fetch_attachment_asset', {
         recordName,
         targetPath,
     });
@@ -307,7 +303,7 @@ export const fetchCloudKitAttachmentAsset = async (
 export const deleteCloudKitAttachmentAssets = async (recordNames: string[]): Promise<void> => {
     if (!isCloudKitAvailable()) return;
     if (recordNames.length === 0) return;
-    await tauriInvoke<boolean>('cloudkit_delete_records', {
+    await invokeNative<boolean>('cloudkit_delete_records', {
         recordType: CLOUDKIT_ATTACHMENT_RECORD_TYPE,
         recordIds: recordNames,
     });
@@ -345,7 +341,7 @@ export const seedCloudKitFromLocal = async (data: AppData): Promise<void> => {
 export const consumePendingRemoteChange = async (): Promise<boolean> => {
     if (!isCloudKitAvailable()) return false;
     try {
-        return await tauriInvoke<boolean>('cloudkit_consume_pending_remote_change');
+        return await invokeNative<boolean>('cloudkit_consume_pending_remote_change');
     } catch {
         return false;
     }
@@ -357,12 +353,12 @@ export const consumePendingRemoteChange = async (): Promise<boolean> => {
 
 async function fullFetch(): Promise<AppData> {
     const [tasks, projects, sections, areas, people, settingsRecords] = await Promise.all([
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.task }),
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.project }),
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.section }),
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.area }),
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.person }),
-        tauriInvoke<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', {
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.task }),
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.project }),
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.section }),
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.area }),
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', { recordType: RECORD_TYPES.person }),
+        invokeNative<Array<Record<string, unknown>>>('cloudkit_fetch_all_records', {
             recordType: RECORD_TYPES.settings,
         }),
     ]);
@@ -380,7 +376,7 @@ async function fullFetch(): Promise<AppData> {
     const changeToken = localStorage.getItem(CLOUDKIT_CHANGE_TOKEN_KEY);
     if (!changeToken) {
         try {
-            const result = await tauriInvoke<ChangeResult>('cloudkit_fetch_changes', {
+            const result = await invokeNative<ChangeResult>('cloudkit_fetch_changes', {
                 changeToken: null,
             });
             if (result.changeToken) {
@@ -408,7 +404,7 @@ async function deletePurgedRecords(data: AppData): Promise<void> {
     const deletePromises: Promise<boolean>[] = [];
     if (purgedTaskIDs.length > 0) {
         deletePromises.push(
-            tauriInvoke('cloudkit_delete_records', {
+            invokeNative('cloudkit_delete_records', {
                 recordType: RECORD_TYPES.task,
                 recordIds: purgedTaskIDs,
             }),
@@ -416,7 +412,7 @@ async function deletePurgedRecords(data: AppData): Promise<void> {
     }
     if (purgedProjectIDs.length > 0) {
         deletePromises.push(
-            tauriInvoke('cloudkit_delete_records', {
+            invokeNative('cloudkit_delete_records', {
                 recordType: RECORD_TYPES.project,
                 recordIds: purgedProjectIDs,
             }),

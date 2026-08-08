@@ -1,4 +1,4 @@
-import { isTauriRuntime } from './runtime';
+import { invokeNativeOr } from './tauri-invoke';
 
 export const DEFAULT_LOCAL_API_PORT = 3456;
 
@@ -20,17 +20,8 @@ const fallbackStatus = (): LocalApiServerStatus => ({
     error: null,
 });
 
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    if (!isTauriRuntime()) {
-        throw new Error('Tauri runtime is unavailable.');
-    }
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<T>(command, args);
-}
-
 export async function getLocalApiServerStatus(): Promise<LocalApiServerStatus> {
-    if (!isTauriRuntime()) return fallbackStatus();
-    return tauriInvoke<LocalApiServerStatus>('get_local_api_server_status');
+    return invokeNativeOr(fallbackStatus(), 'get_local_api_server_status');
 }
 
 export async function setLocalApiServerConfig({
@@ -40,8 +31,7 @@ export async function setLocalApiServerConfig({
     enabled: boolean;
     port: number;
 }): Promise<LocalApiServerStatus> {
-    if (!isTauriRuntime()) return fallbackStatus();
-    return tauriInvoke<LocalApiServerStatus>('set_local_api_server_config', {
+    return invokeNativeOr(fallbackStatus(), 'set_local_api_server_config', {
         enabled,
         port,
     });

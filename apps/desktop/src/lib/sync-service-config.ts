@@ -20,7 +20,7 @@ type ConfigDeps = {
     isTauriRuntimeEnv: () => boolean;
     maybeMigrateLegacyLocalStorageToConfig: () => Promise<void>;
     reportError: (message: string, error: unknown) => void;
-    tauriInvoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+    invokeNative: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 };
 
 type ConfigWriteDeps = ConfigDeps & {
@@ -137,7 +137,7 @@ export async function readSyncBackend(deps: ConfigDeps): Promise<SyncBackend> {
     if (!deps.isTauriRuntimeEnv()) return getSyncBackendLocal();
     await deps.maybeMigrateLegacyLocalStorageToConfig();
     try {
-        const backend = await deps.tauriInvoke<string>('get_sync_backend');
+        const backend = await deps.invokeNative<string>('get_sync_backend');
         return normalizeSyncBackend(backend);
     } catch (error) {
         deps.reportError('Failed to get sync backend', error);
@@ -151,7 +151,7 @@ export async function writeSyncBackend(backend: SyncBackend, deps: ConfigWriteDe
         return;
     }
     try {
-        await deps.tauriInvoke('set_sync_backend', { backend });
+        await deps.invokeNative('set_sync_backend', { backend });
         await deps.startFileWatcher();
     } catch (error) {
         deps.reportError('Failed to set sync backend', error);
@@ -166,7 +166,7 @@ export async function readWebDavConfig(
     if (!deps.isTauriRuntimeEnv()) return getWebDavConfigLocal();
     await deps.maybeMigrateLegacyLocalStorageToConfig();
     try {
-        return await deps.tauriInvoke<WebDavConfig>('get_webdav_config');
+        return await deps.invokeNative<WebDavConfig>('get_webdav_config');
     } catch (error) {
         if (!options?.silent) {
             deps.reportError('Failed to get WebDAV config', error);
@@ -184,7 +184,7 @@ export async function writeWebDavConfig(
         return;
     }
     try {
-        await deps.tauriInvoke('set_webdav_config', {
+        await deps.invokeNative('set_webdav_config', {
             url: config.url,
             username: config.username || '',
             password: config.password || '',
@@ -205,7 +205,7 @@ export async function readCloudConfig(
     if (!deps.isTauriRuntimeEnv()) return getCloudConfigLocal();
     await deps.maybeMigrateLegacyLocalStorageToConfig();
     try {
-        return await deps.tauriInvoke<CloudConfig>('get_cloud_config');
+        return await deps.invokeNative<CloudConfig>('get_cloud_config');
     } catch (error) {
         if (!options?.silent) {
             deps.reportError('Failed to get Self-Hosted config', error);
@@ -223,7 +223,7 @@ export async function writeCloudConfig(
         return;
     }
     try {
-        await deps.tauriInvoke('set_cloud_config', {
+        await deps.invokeNative('set_cloud_config', {
             url: config.url,
             token: config.token || '',
             allowInsecureHttp: config.allowInsecureHttp === true,
@@ -238,7 +238,7 @@ export async function readCloudProvider(deps: ConfigDeps): Promise<CloudProvider
     if (!deps.isTauriRuntimeEnv()) return getCloudProviderLocal();
     await deps.maybeMigrateLegacyLocalStorageToConfig();
     try {
-        const provider = await deps.tauriInvoke<string>('get_sync_cloud_provider');
+        const provider = await deps.invokeNative<string>('get_sync_cloud_provider');
         return parsePersistedCloudProvider(provider);
     } catch (error) {
         deps.reportError('Failed to get cloud sync provider', error);
@@ -254,9 +254,9 @@ export async function writeCloudProvider(provider: CloudProvider, deps: ConfigDe
     }
     await deps.maybeMigrateLegacyLocalStorageToConfig();
     try {
-        await deps.tauriInvoke('set_sync_cloud_provider', { provider: normalizedProvider });
+        await deps.invokeNative('set_sync_cloud_provider', { provider: normalizedProvider });
         const persistedProvider = parsePersistedCloudProvider(
-            await deps.tauriInvoke<string>('get_sync_cloud_provider'),
+            await deps.invokeNative<string>('get_sync_cloud_provider'),
         );
         if (persistedProvider !== normalizedProvider) {
             throw new Error('Cloud sync provider did not persist correctly');
@@ -281,7 +281,7 @@ export async function writeDropboxAppKey(value: string): Promise<void> {
 export async function readSyncPath(deps: ConfigDeps): Promise<string> {
     if (!deps.isTauriRuntimeEnv()) return '';
     try {
-        return await deps.tauriInvoke<string>('get_sync_path');
+        return await deps.invokeNative<string>('get_sync_path');
     } catch (error) {
         deps.reportError('Failed to get sync path', error);
         return '';
@@ -296,7 +296,7 @@ export async function writeSyncPath(
         return { success: false, path: '', error: 'Desktop runtime is required for file sync.' };
     }
     try {
-        const result = await deps.tauriInvoke<{ success: boolean; path: string }>('set_sync_path', { syncPath: path });
+        const result = await deps.invokeNative<{ success: boolean; path: string }>('set_sync_path', { syncPath: path });
         if (result?.success) {
             await deps.startFileWatcher();
         }
@@ -311,7 +311,7 @@ export async function writeSyncPath(
 export async function clearSyncPath(deps: ConfigWriteDeps): Promise<void> {
     if (!deps.isTauriRuntimeEnv()) return;
     try {
-        await deps.tauriInvoke('clear_sync_path');
+        await deps.invokeNative('clear_sync_path');
         await deps.startFileWatcher();
     } catch (error) {
         deps.reportError('Failed to clear sync path', error);

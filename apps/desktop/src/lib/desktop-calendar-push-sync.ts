@@ -29,6 +29,7 @@ import {
 
 import { logInfo, logWarn } from './app-log';
 import { isTauriRuntime } from './runtime';
+import { invokeNative } from './tauri-invoke';
 import {
     createSystemCalendarEventResult,
     deleteSystemCalendarEventResult,
@@ -77,11 +78,6 @@ type DesktopCalendarPushDependencies = {
     upsertSyncEntry: (entry: CalendarSyncEntry) => Promise<void>;
     deleteSyncEntry: (taskId: string, platform: string) => Promise<void>;
 };
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    const mod = await import('@tauri-apps/api/core');
-    return mod.invoke<T>(command as any, args as any);
-}
 
 const readLocalStorage = (key: string): string | null => {
     if (typeof localStorage === 'undefined') return null;
@@ -146,19 +142,19 @@ const removeDesktopCalendarPushManagedCalendarId = async (): Promise<void> => {
 };
 
 const getCalendarSyncEntry = async (taskId: string, platform: string): Promise<CalendarSyncEntry | null> => (
-    tauriInvoke<CalendarSyncEntry | null>('get_calendar_sync_entry', { taskId, platform })
+    invokeNative<CalendarSyncEntry | null>('get_calendar_sync_entry', { taskId, platform })
 );
 
 const upsertCalendarSyncEntry = async (entry: CalendarSyncEntry): Promise<void> => {
-    await tauriInvoke('upsert_calendar_sync_entry', { entry });
+    await invokeNative('upsert_calendar_sync_entry', { entry });
 };
 
 const deleteCalendarSyncEntry = async (taskId: string, platform: string): Promise<void> => {
-    await tauriInvoke('delete_calendar_sync_entry', { taskId, platform });
+    await invokeNative('delete_calendar_sync_entry', { taskId, platform });
 };
 
 const getAllCalendarSyncEntries = async (platform: string): Promise<CalendarSyncEntry[]> => (
-    tauriInvoke<CalendarSyncEntry[]>('get_all_calendar_sync_entries', { platform })
+    invokeNative<CalendarSyncEntry[]>('get_all_calendar_sync_entries', { platform })
 );
 
 const defaultDependencies: DesktopCalendarPushDependencies = {

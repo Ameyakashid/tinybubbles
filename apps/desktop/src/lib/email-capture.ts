@@ -1,6 +1,6 @@
 import type { Task } from '@mindwtr/core';
 
-import { isTauriRuntime } from './runtime';
+import { invokeNative, invokeNativeOr } from './tauri-invoke';
 
 export const DEFAULT_EMAIL_CAPTURE_PORT = 993;
 export const DEFAULT_EMAIL_CAPTURE_FOLDER = 'Mindwtr';
@@ -62,24 +62,15 @@ const defaultEmailCaptureConfig = (): EmailCaptureConfig => ({
     hasPassword: false,
 });
 
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    if (!isTauriRuntime()) {
-        throw new Error('Tauri runtime is unavailable.');
-    }
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<T>(command, args);
-}
-
 export async function getEmailCaptureConfig(): Promise<EmailCaptureConfig> {
-    if (!isTauriRuntime()) return defaultEmailCaptureConfig();
-    return tauriInvoke<EmailCaptureConfig>('get_email_capture_config');
+    return invokeNativeOr(defaultEmailCaptureConfig(), 'get_email_capture_config');
 }
 
 export async function setEmailCaptureConfig(
     config: Omit<EmailCaptureConfig, 'hasPassword'>,
     password?: string,
 ): Promise<EmailCaptureConfig> {
-    const result = await tauriInvoke<EmailCaptureConfig>('set_email_capture_config', {
+    const result = await invokeNative<EmailCaptureConfig>('set_email_capture_config', {
         config,
         password: password?.trim() ? password.trim() : undefined,
     });
@@ -192,9 +183,9 @@ export const createEmailCaptureController = (
     options: EmailCaptureControllerOptions,
 ): EmailCaptureController => {
     const getConfig = options.getConfig ?? getEmailCaptureConfig;
-    const poll = options.poll ?? (() => tauriInvoke<EmailCapturePollResult>('email_capture_poll'));
+    const poll = options.poll ?? (() => invokeNative<EmailCapturePollResult>('email_capture_poll'));
     const commit = options.commit ?? ((args: { uidValidity: number; lastSeenUid: number; messageIds: string[] }) =>
-        tauriInvoke<void>('email_capture_commit', args));
+        invokeNative<void>('email_capture_commit', args));
     const now = options.now ?? (() => new Date());
     const setTimer = options.setTimer ?? setTimeout;
     const clearTimer = options.clearTimer ?? clearTimeout;

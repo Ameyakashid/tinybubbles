@@ -59,6 +59,7 @@ import {
 } from '@mindwtr/core';
 import { isTauriRuntime } from './runtime';
 import { getTauriHttpFetch } from './tauri-http';
+import { invokeNative } from './tauri-invoke';
 import { reportError } from './report-error';
 import { logInfo, logSyncError, logWarn, sanitizeLogMessage } from './app-log';
 import { useUiStore } from '../store/ui-store';
@@ -199,11 +200,6 @@ type SyncServiceDependencies = {
     writeRemoteCloudKit: typeof writeRemoteCloudKit;
 };
 
-const defaultInvoke = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
-    const mod = await import('@tauri-apps/api/core');
-    return mod.invoke<T>(command as any, args as any);
-};
-
 const defaultGetTauriFetch = async (): Promise<typeof fetch | undefined> => {
     if (!syncServiceDependencies.isTauriRuntime()) return undefined;
     try {
@@ -234,7 +230,7 @@ const applySyncedDataToStore = (data: AppData): void => {
 
 const defaultSyncServiceDependencies: SyncServiceDependencies = {
     isTauriRuntime,
-    invoke: defaultInvoke,
+    invoke: invokeNative,
     getTauriFetch: defaultGetTauriFetch,
     getStoreState: useTaskStore.getState,
     applySyncedDataToStore,
@@ -473,7 +469,7 @@ let lastObservedPersistedDataForSync: AppData | null = null;
 const readLocalDataForSync = async (): Promise<AppData> => {
     if (isTauriRuntimeEnv()) {
         try {
-            const persisted = await tauriInvoke<AppData>('get_data');
+            const persisted = await invokeSyncNative<AppData>('get_data');
             lastObservedPersistedDataForSync = persisted;
             return mergeLocalSyncStatus(normalizeAppData(persisted));
         } catch (error) {
@@ -497,7 +493,8 @@ const readLocalDataForSync = async (): Promise<AppData> => {
     });
 };
 
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+/** Native command call routed through the sync service's injectable transport. */
+async function invokeSyncNative<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     return syncServiceDependencies.invoke<T>(command, args);
 }
 
@@ -521,7 +518,7 @@ async function persistLocalDataForSync(
     const args: Record<string, unknown> = { data };
     if (baselineEntities) args.baselineEntities = baselineEntities;
     if (options.mode) args.mode = options.mode;
-    const canonical = await tauriInvoke<AppData>('save_data', args);
+    const canonical = await invokeSyncNative<AppData>('save_data', args);
     // The sync store receives this target. Do not make canonical-only,
     // concurrently added rows eligible for omission before a persisted read.
     lastObservedPersistedDataForSync = data;
@@ -569,7 +566,7 @@ async function getDropboxAccessTokenDirect(
     if (!isTauriRuntimeEnv()) {
         throw new Error('Dropbox sync is only available in the desktop app.');
     }
-    return tauriInvoke<string>('get_dropbox_access_token', {
+    return invokeSyncNative<string>('get_dropbox_access_token', {
         clientId: normalized,
         credentialHandle: options?.credentialHandle?.trim() || undefined,
         forceRefresh: options?.forceRefresh === true,
@@ -580,7 +577,7 @@ async function isDropboxConnectedDirect(clientId: string): Promise<boolean> {
     const normalized = clientId.trim();
     if (!normalized || !isTauriRuntimeEnv()) return false;
     try {
-        return await tauriInvoke<boolean>('is_dropbox_connected', { clientId: normalized });
+        return await invokeSyncNative<boolean>('is_dropbox_connected', { clientId: normalized });
     } catch (error) {
         syncServiceDependencies.reportError('Failed to check Dropbox connection status', error);
         return false;
@@ -640,7 +637,7 @@ async function resolveWebdavPassword(config: WebDavConfig): Promise<string> {
     if (config.hasPassword === false) return '';
     if (!isTauriRuntimeEnv()) return '';
     try {
-        return await tauriInvoke<string>('get_webdav_password');
+        return await invokeSyncNative<string>('get_webdav_password');
     } catch (error) {
         logSyncWarning('Failed to load WebDAV password', error);
         return '';
@@ -679,7 +676,7 @@ const getSyncConfigDeps = () => ({
     maybeMigrateLegacyLocalStorageToConfig: () => SyncService.maybeMigrateLegacyLocalStorageToConfig(),
     reportError: syncServiceDependencies.reportError,
     startFileWatcher: () => SyncService.startFileWatcher(),
-    tauriInvoke,
+    invokeNative: invokeSyncNative,
 });
 
 const writeSyncBackendDirect = (backend: SyncBackend): Promise<void> => (
@@ -693,7 +690,7 @@ const writeCloudProviderDirect = (provider: CloudProvider): Promise<void> => (
 );
 const recoverDropboxCredentialsBeforeConfigurationDirect = async (): Promise<void> => {
     if (!isTauriRuntimeEnv()) return;
-    const settled = await tauriInvoke<boolean>('recover_dropbox_credentials_before_sync_configuration');
+    const settled = await invokeSyncNative<boolean>('recover_dropbox_credentials_before_sync_configuration');
     if (settled !== true) {
         throw new Error('Dropbox credential recovery did not settle');
     }
@@ -1184,17 +1181,17 @@ export class SyncService {
             await recoverDropboxCredentialsBeforeConfigurationDirect();
 
             const [currentBackend, currentWebdav, currentCloud, currentCloudProviderState] = await Promise.all([
-                tauriInvoke<string>('get_sync_backend'),
-                tauriInvoke<WebDavConfig>('get_webdav_config'),
-                tauriInvoke<CloudConfig>('get_cloud_config'),
+                invokeSyncNative<string>('get_sync_backend'),
+                invokeSyncNative<WebDavConfig>('get_webdav_config'),
+                invokeSyncNative<CloudConfig>('get_cloud_config'),
                 rawLegacyCloudProvider !== null
-                    ? tauriInvoke<{ provider: string; authority: string }>('get_sync_cloud_provider_state')
+                    ? invokeSyncNative<{ provider: string; authority: string }>('get_sync_cloud_provider_state')
                     : Promise.resolve<{ provider: string; authority: string } | null>(null),
             ]);
 
             if (hasLegacyWebdav && !currentWebdav.url) {
-                await tauriInvoke('set_webdav_config', legacyWebdav);
-                const persistedWebdav = await tauriInvoke<WebDavConfig>('get_webdav_config');
+                await invokeSyncNative('set_webdav_config', legacyWebdav);
+                const persistedWebdav = await invokeSyncNative<WebDavConfig>('get_webdav_config');
                 if (
                     persistedWebdav.url !== legacyWebdav.url
                     || persistedWebdav.username !== legacyWebdav.username
@@ -1207,12 +1204,12 @@ export class SyncService {
             }
 
             if (hasLegacyCloud && !currentCloud.url && !currentCloud.token) {
-                await tauriInvoke('set_cloud_config', {
+                await invokeSyncNative('set_cloud_config', {
                     url: legacyCloud.url,
                     token: legacyCloud.token,
                     allowInsecureHttp: legacyCloud.allowInsecureHttp === true,
                 });
-                const persistedCloud = await tauriInvoke<CloudConfig>('get_cloud_config');
+                const persistedCloud = await invokeSyncNative<CloudConfig>('get_cloud_config');
                 if (
                     persistedCloud.url !== legacyCloud.url
                     || persistedCloud.token !== legacyCloud.token
@@ -1235,8 +1232,8 @@ export class SyncService {
                     throw new Error('Invalid persisted cloud provider state');
                 }
                 if (legacyCloudProvider && currentCloudProviderState.authority === 'uninitialized') {
-                    await tauriInvoke('set_sync_cloud_provider', { provider: legacyCloudProvider });
-                    const persistedState = await tauriInvoke<{ provider: string; authority: string }>(
+                    await invokeSyncNative('set_sync_cloud_provider', { provider: legacyCloudProvider });
+                    const persistedState = await invokeSyncNative<{ provider: string; authority: string }>(
                         'get_sync_cloud_provider_state',
                     );
                     if (
@@ -1249,9 +1246,9 @@ export class SyncService {
             }
 
             if (hasLegacyBackend && normalizeSyncBackend(currentBackend) === 'file') {
-                await tauriInvoke('set_sync_backend', { backend: legacyBackend });
+                await invokeSyncNative('set_sync_backend', { backend: legacyBackend });
                 const persistedBackend = normalizeSyncBackend(
-                    await tauriInvoke<string>('get_sync_backend'),
+                    await invokeSyncNative<string>('get_sync_backend'),
                 );
                 if (persistedBackend !== legacyBackend) {
                     throw new Error('Legacy sync backend did not persist correctly');
@@ -1296,7 +1293,7 @@ export class SyncService {
     ): Promise<PersistedDesktopSyncConfiguration> {
         if (isTauriRuntimeEnv()) {
             await SyncService.maybeMigrateLegacyLocalStorageToConfig();
-            return tauriInvoke<PersistedDesktopSyncConfiguration>(
+            return invokeSyncNative<PersistedDesktopSyncConfiguration>(
                 'get_sync_configuration_snapshot',
                 {
                     requireWebdavPassword: requirements.requireWebdavPassword === true,
@@ -1507,7 +1504,7 @@ export class SyncService {
     static async getDropboxRedirectUri(): Promise<string> {
         if (!isTauriRuntimeEnv()) return DROPBOX_REDIRECT_URI_FALLBACK;
         try {
-            return await tauriInvoke<string>('get_dropbox_redirect_uri');
+            return await invokeSyncNative<string>('get_dropbox_redirect_uri');
         } catch {
             return DROPBOX_REDIRECT_URI_FALLBACK;
         }
@@ -1533,7 +1530,7 @@ export class SyncService {
             // after reload. Native recovery must settle any prior promotion
             // journal before a new OAuth candidate is allowed to mutate it.
             await SyncService.recoverDropboxCredentialsBeforeConfigurationMutation();
-            const credentialHandle = await tauriInvoke<string>('connect_dropbox', { clientId: normalized });
+            const credentialHandle = await invokeSyncNative<string>('connect_dropbox', { clientId: normalized });
             SyncService.rememberPendingDropboxCredentialHandleForSession(credentialHandle);
             return credentialHandle;
         });
@@ -1568,7 +1565,7 @@ export class SyncService {
                 clearLocalSyncStatus();
                 clearAttachmentSyncState();
             }
-            await tauriInvoke('disconnect_dropbox', { clientId: normalized });
+            await invokeSyncNative('disconnect_dropbox', { clientId: normalized });
             if (pendingCredentialHandle) {
                 SyncService.forgetPendingDropboxCredentialHandleForSession(pendingCredentialHandle);
             }
@@ -1590,7 +1587,7 @@ export class SyncService {
         if (!isTauriRuntimeEnv()) {
             throw new Error('Dropbox sync is only available in the desktop app.');
         }
-        await tauriInvoke(command, {
+        await invokeSyncNative(command, {
             clientId,
             credentialHandle: normalizedHandle,
         });
@@ -1785,7 +1782,7 @@ export class SyncService {
             setStep('snapshot');
             await yieldToRenderer();
             try {
-                await tauriInvoke<string>('create_data_snapshot');
+                await invokeSyncNative<string>('create_data_snapshot');
             } catch (error) {
                 logSyncWarning('Failed to create pre-sync snapshot', error);
             }
@@ -1883,7 +1880,7 @@ export class SyncService {
                 };
                 if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
                     return logMissingRemote(await withRetry(
-                        () => tauriInvoke<AppData>('webdav_get_json'),
+                        () => invokeSyncNative<AppData>('webdav_get_json'),
                         WEBDAV_READ_RETRY_OPTIONS,
                     ));
                 }
@@ -1902,7 +1899,7 @@ export class SyncService {
             },
             webdavPut: async (sanitized) => {
                 if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
-                    return tauriInvoke<RemoteJsonWriteResult | boolean>('webdav_put_json', { data: sanitized });
+                    return invokeSyncNative<RemoteJsonWriteResult | boolean>('webdav_put_json', { data: sanitized });
                 }
                 const config = context.webdavConfig ?? await SyncService.getWebDavConfig();
                 const normalizedUrl = normalizeWebdavUrl(config.url);
@@ -1930,7 +1927,7 @@ export class SyncService {
             },
             cloudGet: async () => {
                 if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
-                    return tauriInvoke<AppData | null>('cloud_get_json');
+                    return invokeSyncNative<AppData | null>('cloud_get_json');
                 }
                 const fetcher = await createFetchWithAbortForContext(context);
                 return cloudGetJson<AppData>(ctx.syncUrl!, {
@@ -1944,7 +1941,7 @@ export class SyncService {
                 const normalizedUrl = normalizeCloudUrl(config.url);
                 ctx.syncUrl = normalizedUrl;
                 if (isTauriRuntimeEnv() && !context.usesConfigOverride) {
-                    return tauriInvoke<CloudJsonWriteResult | boolean>('cloud_put_json', { data: sanitized });
+                    return invokeSyncNative<CloudJsonWriteResult | boolean>('cloud_put_json', { data: sanitized });
                 }
                 const fetcher = await createFetchWithAbortForContext(context);
                 return cloudPutJson(normalizedUrl, sanitized, {
@@ -1965,13 +1962,13 @@ export class SyncService {
                 if (!isTauriRuntimeEnv()) {
                     throw new Error('File sync is not available in the web app.');
                 }
-                return tauriInvoke<AppData>('read_sync_file', context.usesConfigOverride
+                return invokeSyncNative<AppData>('read_sync_file', context.usesConfigOverride
                     ? { path: context.syncPath }
                     : undefined);
             },
             fileWrite: async (sanitized) => {
                 await SyncService.markSyncWrite(sanitized);
-                await tauriInvoke('write_sync_file', {
+                await invokeSyncNative('write_sync_file', {
                     data: sanitized,
                     ...(context.usesConfigOverride ? { path: context.syncPath } : {}),
                 });
@@ -2094,7 +2091,7 @@ export class SyncService {
                 const sanitized = sanitizeAppDataForRemote(localData);
                 await SyncService.markSyncWrite(sanitized);
                 try {
-                    await tauriInvoke('write_sync_file', { data: sanitized });
+                    await invokeSyncNative('write_sync_file', { data: sanitized });
                     return await SyncService.performSync();
                 } catch (error) {
                     SyncService.finalizeSyncWriteIgnoreWindow();
@@ -2103,7 +2100,7 @@ export class SyncService {
             }
 
             await syncServiceDependencies.flushPendingSave();
-            const externalData = normalizeAppData(await tauriInvoke<AppData>('read_sync_file'));
+            const externalData = normalizeAppData(await invokeSyncNative<AppData>('read_sync_file'));
             await persistLocalDataForSync(externalData, { mode: 'exact' });
             await getStoreState().fetchData({ silent: true });
             const now = new Date().toISOString();
@@ -2141,7 +2138,7 @@ export class SyncService {
         if (!hasSyncFile) return;
 
         try {
-            const syncData = await tauriInvoke<AppData>('read_sync_file');
+            const syncData = await invokeSyncNative<AppData>('read_sync_file');
             const normalized = normalizeAppData(syncData);
             const hash = await hashString(toStableJson(normalized));
             if (hash === SyncService.lastWrittenHash) {
@@ -2279,7 +2276,7 @@ export class SyncService {
                 });
             };
             const backend = await SyncService.getSyncBackend();
-            const data = await tauriInvoke<AppData>('get_data');
+            const data = await invokeSyncNative<AppData>('get_data');
             ensureLocalSnapshotFresh();
             const cleaned = await cleanupOrphanedAttachments(
                 data,
@@ -2296,7 +2293,7 @@ export class SyncService {
     static async listDataSnapshots(): Promise<string[]> {
         if (!isTauriRuntimeEnv()) return [];
         try {
-            return await tauriInvoke<string[]>('list_data_snapshots');
+            return await invokeSyncNative<string[]>('list_data_snapshots');
         } catch (error) {
             syncServiceDependencies.reportError('Failed to list snapshots', error);
             return [];
@@ -2306,7 +2303,7 @@ export class SyncService {
     static async createDataSnapshot(): Promise<string | null> {
         if (!isTauriRuntimeEnv()) return null;
         try {
-            return await tauriInvoke<string>('create_data_snapshot');
+            return await invokeSyncNative<string>('create_data_snapshot');
         } catch (error) {
             syncServiceDependencies.reportError('Failed to create snapshot', error);
             return null;
@@ -2320,10 +2317,10 @@ export class SyncService {
                 operation: 'restoreDataSnapshot',
                 flushPendingSave: syncServiceDependencies.flushPendingSave,
                 getCurrentChangeAt: () => getStoreState().lastDataChangeAt,
-                readCurrentData: () => tauriInvoke<AppData>('get_data'),
+                readCurrentData: () => invokeSyncNative<AppData>('get_data'),
                 apply: (data) => ({ data, result: null }),
                 persistData: async () => {
-                    await tauriInvoke<boolean>('restore_data_snapshot', { snapshotFileName });
+                    await invokeSyncNative<boolean>('restore_data_snapshot', { snapshotFileName });
                 },
                 refreshData: () => getStoreState().fetchData({ silent: true }),
             }));

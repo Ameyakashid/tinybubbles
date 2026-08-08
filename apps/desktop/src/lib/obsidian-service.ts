@@ -1,6 +1,7 @@
 import type { ObsidianSourceRef } from '@mindwtr/core';
 import { getDesktopTimerHost, isTauriRuntime } from './runtime';
 import { reportError } from './report-error';
+import { invokeNative } from './tauri-invoke';
 import { logWarn } from './app-log';
 import {
     deriveVaultName,
@@ -29,11 +30,6 @@ type ObsidianWatcherHandlers = {
     onFilesChanged: (payload: ObsidianFilesChangedPayload) => void | Promise<void>;
     onError: (message: string) => void | Promise<void>;
 };
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-    const mod = await import('@tauri-apps/api/core');
-    return mod.invoke<T>(command as never, args as never);
-}
 
 const safeJsonParse = <T>(raw: string | null, fallback: T): T => {
     if (!raw) return fallback;
@@ -95,7 +91,7 @@ export class ObsidianService {
         const trimmed = String(vaultPath || '').trim();
         if (!trimmed || !isTauriRuntime()) return;
         try {
-            await tauriInvoke<boolean>('expand_obsidian_vault_scope', { vaultPath: trimmed });
+            await invokeNative<boolean>('expand_obsidian_vault_scope', { vaultPath: trimmed });
         } catch (error) {
             void logWarn('Failed to expand Obsidian vault filesystem scope', {
                 scope: 'obsidian',
@@ -128,7 +124,7 @@ export class ObsidianService {
         }
 
         try {
-            return normalizeObsidianConfig(await tauriInvoke<Partial<ObsidianConfig>>('get_obsidian_config'));
+            return normalizeObsidianConfig(await invokeNative<Partial<ObsidianConfig>>('get_obsidian_config'));
         } catch (error) {
             reportError('Failed to read Obsidian config', error);
             return readStoredConfig();
@@ -143,7 +139,7 @@ export class ObsidianService {
         }
 
         try {
-            const saved = await tauriInvoke<Partial<ObsidianConfig>>('set_obsidian_config', { config: normalized });
+            const saved = await invokeNative<Partial<ObsidianConfig>>('set_obsidian_config', { config: normalized });
             return normalizeObsidianConfig(saved);
         } catch (error) {
             reportError('Failed to save Obsidian config', error);
@@ -168,7 +164,7 @@ export class ObsidianService {
         if (!trimmed) return null;
         if (!isTauriRuntime()) return null;
         try {
-            return await tauriInvoke<boolean>('check_obsidian_vault_marker', { vaultPath: trimmed });
+            return await invokeNative<boolean>('check_obsidian_vault_marker', { vaultPath: trimmed });
         } catch (error) {
             void logWarn('Failed to check Obsidian vault marker', {
                 scope: 'obsidian',
@@ -278,7 +274,7 @@ export class ObsidianService {
         );
 
         try {
-            await tauriInvoke('start_obsidian_watcher', { vaultPath });
+            await invokeNative('start_obsidian_watcher', { vaultPath });
             ObsidianService.watcherVaultPath = vaultPath;
             ObsidianService.watcherStop = () => {
                 unlistenChanged();
@@ -311,7 +307,7 @@ export class ObsidianService {
 
         if (!isTauriRuntime()) return;
         try {
-            await tauriInvoke('stop_obsidian_watcher');
+            await invokeNative('stop_obsidian_watcher');
         } catch (error) {
             void logWarn('Failed to stop Obsidian watcher', {
                 scope: 'obsidian',
@@ -350,7 +346,7 @@ export class ObsidianService {
         if (!isTauriRuntime()) {
             throw new Error('Obsidian write-back is only available on desktop.');
         }
-        await tauriInvoke('obsidian_toggle_task', task);
+        await invokeNative('obsidian_toggle_task', task);
     }
 
     static async toggleTaskNotesTask(task: {
@@ -361,7 +357,7 @@ export class ObsidianService {
         if (!isTauriRuntime()) {
             throw new Error('Obsidian write-back is only available on desktop.');
         }
-        await tauriInvoke('obsidian_toggle_tasknotes', task);
+        await invokeNative('obsidian_toggle_tasknotes', task);
     }
 
     static async createTask(task: {
@@ -372,7 +368,7 @@ export class ObsidianService {
         if (!isTauriRuntime()) {
             throw new Error('Obsidian task creation is only available on desktop.');
         }
-        await tauriInvoke('obsidian_create_task', task);
+        await invokeNative('obsidian_create_task', task);
     }
 
     static async createTaskNotesTask(task: {
@@ -383,7 +379,7 @@ export class ObsidianService {
         if (!isTauriRuntime()) {
             throw new Error('Obsidian task creation is only available on desktop.');
         }
-        return tauriInvoke<string>('obsidian_create_tasknotes', task);
+        return invokeNative<string>('obsidian_create_tasknotes', task);
     }
 }
 
