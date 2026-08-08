@@ -120,6 +120,12 @@ bun mobile:ios
 - `scripts/`: release and utility scripts
 - `docs/`: markdown docs used by the project
 
+Desktop code must not import `invoke` from `@tauri-apps/api/core` directly. Call
+`invokeNative` (rejects when there is no Tauri runtime) or `invokeNativeOr(fallback, ...)`
+(resolves to the fallback) from `apps/desktop/src/lib/tauri-invoke.ts`, so each call site
+states what it should do in the browser dev build. A ratchet test in
+`tauri-invoke.test.ts` fails CI on a raw import.
+
 ## Testing and quality checks
 
 Before pushing, run the baseline local verification gate:
