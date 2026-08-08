@@ -19,7 +19,7 @@ import {
     resolveFocusStarAction,
     parseQuickAddDateCommands,
     parseProjectNextActionInput,
-    isNaturalLanguageDatesEnabled,
+    buildQuickAddParseOptions,
     getPersonOptionNames,
     normalizeTimeSpentMinutes,
     useTaskStore,
@@ -783,20 +783,12 @@ export const TaskItem = memo(function TaskItem({
         // friends work from this prompt too (#859). Read lazily: this row
         // component must not subscribe to the whole store.
         const state = useTaskStore.getState();
-        const derived = state.getDerivedState();
         const { title, props } = parseProjectNextActionInput(rawTitle, {
             projectId: projectNextActionPrompt.projectId,
             sectionId: projectNextActionPrompt.sectionId,
             projects: state.projects,
             areas: state.areas,
-            parseOptions: {
-                knownContexts: derived.allContexts,
-                knownTags: derived.allTags,
-                knownPeople: getPersonOptionNames(state.people, state.tasks),
-                defaultScheduleTime: normalizeClockTimeInput(state.settings.gtd?.defaultScheduleTime) || undefined,
-                preserveText: state.settings.quickAddAutoClean !== true,
-                naturalLanguageDates: isNaturalLanguageDatesEnabled(state.settings),
-            },
+            parseOptions: buildQuickAddParseOptions(state.settings, state),
         });
         void addTask(title, props)
             .then((result) => {

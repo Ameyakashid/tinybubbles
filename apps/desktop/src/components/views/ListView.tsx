@@ -2,6 +2,7 @@ import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, us
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, Folder, HelpCircle } from 'lucide-react';
 import { buildProjectOrderMap,
+    buildQuickAddParseOptions,
     compareTasksByProjectThenOrder,
     createTaskFilterPredicate,
     DEFAULT_AREA_COLOR,
@@ -10,10 +11,8 @@ import { buildProjectOrderMap,
     getTaskMetadataFilterVisibility,
     getWaitingPerson,
     hasActiveFilterCriteria,
-    isNaturalLanguageDatesEnabled,
     isTaskInActiveProject,
     parseQuickAdd,
-    normalizeClockTimeInput,
     getDefaultTaskAreaMode,
     getPersonOptionNames,
     resolveDefaultNewTaskAreaId,
@@ -283,15 +282,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         [people, tasks],
     );
     const quickAddParseOptions = useMemo(
-        () => ({
-            knownContexts: allContexts,
-            knownTags: allTags,
-            knownPeople: personOptionNames,
-            defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-            preserveText: settings.quickAddAutoClean !== true,
-            naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-        }),
-        [allContexts, allTags, personOptionNames, settings.gtd?.defaultScheduleTime, settings.quickAddAutoClean, settings.gtd?.naturalLanguageDates],
+        () => buildQuickAddParseOptions(settings, { tasks, people }),
+        [people, tasks, settings],
     );
 
     const {
