@@ -28,7 +28,6 @@ export default function ReferenceScreen() {
         showHeader={false}
         emptyText={emptyText}
         emptyHint={emptyHint}
-        allowAdd={false}
         showTimeEstimateFilters={false}
         groupBy={groupBy}
         onChangeGroupBy={setGroupBy}

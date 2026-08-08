@@ -183,7 +183,6 @@ interface TaskListChromeProps {
 
 /** Which interactions this instance is allowed to offer at all. */
 interface TaskListCapabilityProps {
-  allowAdd?: boolean;
   defaultEditTab?: 'task' | 'view';
   enableBulkActions?: boolean;
   enableInboxBulkOrganize?: boolean;

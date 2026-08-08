@@ -626,9 +626,6 @@ describe('ProjectDetailModal task sorting', () => {
             tree = create(<ProjectDetailModal {...createProjectDetailModalProps({ onOpenQuickAdd })} />);
         });
 
-        expect(taskListPropsSpy).toHaveBeenCalled();
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].allowAdd).toBe(false);
-
         act(() => {
             tree.root.findByProps({ testID: 'project-add-task-button' }).props.onPress();
         });

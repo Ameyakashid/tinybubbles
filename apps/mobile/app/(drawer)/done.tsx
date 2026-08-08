@@ -57,7 +57,6 @@ export default function DoneScreen() {
         showHeader={false}
         emptyText={emptyText}
         emptyHint={emptyHint}
-        allowAdd={false}
         showTimeEstimateFilters={false}
         groupBy={viewState.groupBy}
         onChangeGroupBy={(groupBy) => updateViewState({ groupBy: groupBy as DoneListViewState['groupBy'] })}

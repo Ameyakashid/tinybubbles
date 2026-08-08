@@ -98,9 +98,6 @@ export function ProjectTaskList({
             title={project.title}
             taskSource={tasks}
             project={projectOptions}
-            // Capture runs through the workspace's own quick-add sheet, not an
-            // inline composer, so the list never offers one.
-            allowAdd={false}
             enableBulkActions
             bulkBarPlacement="external"
             onBulkBarPropsChange={onBulkBarPropsChange}

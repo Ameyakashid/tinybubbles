@@ -380,7 +380,6 @@ describe('TaskList', () => {
       await act(async () => {
         tree = create(
           <TaskList
-            allowAdd
             project={{ id: project.id }}
             showHeader={false}
             statusFilter="all"
@@ -414,7 +413,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd
           groupBy="tag"
           onChangeGroupBy={onChangeGroupBy}
           showHeader={false}
@@ -443,7 +441,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           groupBy="tag"
           onChangeGroupBy={vi.fn()}
           showHeader={false}
@@ -488,7 +485,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           bulkBarPlacement="external"
           onBulkBarPropsChange={onBulkBarPropsChange}
           project={{ id: project.id, enableBulkOrganize: true }}
@@ -532,7 +528,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           showHeader={false}
           statusFilter="inbox"
           taskSource={[]}
@@ -555,7 +550,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd
           project={{ id: project.id }}
           showHeader={false}
           statusFilter="all"
@@ -571,7 +565,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree.update(
         <TaskList
-          allowAdd
           project={{ id: project.id }}
           showHeader={false}
           statusFilter="all"
@@ -633,7 +626,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           showHeader={false}
           statusFilter="next"
           taskSource={[visibleTask]}
@@ -665,7 +657,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           showHeader={false}
           statusFilter="next"
           taskSource={[visibleTask]}
@@ -708,7 +699,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           showHeader={false}
           statusFilter="next"
           taskSource={[visibleTask]}
@@ -732,7 +722,6 @@ describe('TaskList', () => {
   // back the props it already had, or the boundary cannot hold.
   it('leaves untouched rows their existing props after one task changes (#766)', async () => {
     const listProps = (taskSource: Task[]) => ({
-      allowAdd: false,
       showHeader: false,
       statusFilter: 'next' as const,
       taskSource,
@@ -792,7 +781,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
@@ -843,7 +831,6 @@ describe('TaskList', () => {
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd={false}
           project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
