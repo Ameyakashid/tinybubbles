@@ -1,35 +1,22 @@
 import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { View, FlatList, Text, TextInput, RefreshControl, Modal, Pressable, TouchableOpacity, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { View, FlatList, Text, RefreshControl, Modal, Pressable, TouchableOpacity, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical } from 'lucide-react-native';
 import DraggableFlatList, { type DragEndParams, type RenderItemParams } from 'react-native-draggable-flatlist';
 import {
-  executeCaptureTransaction,
-  canStarNewCapture,
   useTaskStore,
   Task,
   TaskStatus,
   sortTasksBy,
   splitCompletedTasks,
   sortDoneTasksForListView,
-  isNaturalLanguageDatesEnabled,
-  parseQuickAdd,
-  formatFocusTaskLimitText,
-  getDefaultTaskAreaMode,
-  normalizeClockTimeInput,
-  resolveDefaultNewTaskAreaId,
-  getQuickAddProjectInitialProps,
   getUsedTaskTokens,
-  createAIProvider,
-  type AIProviderId,
   type TaskSortBy,
   type ProjectSequenceTaskCue,
-  DEFAULT_PROJECT_COLOR,
   getTranslationsSync,
   shallow,
   normalizeFocusTaskLimit,
   tFallback,
-  isSelectableProjectForTaskAssignment,
   isTaskInActiveProject,
   getTaskMetadataFilterVisibility,
 } from '@mindwtr/core';
@@ -57,8 +44,6 @@ import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
 import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
-import { showInvalidDateCommandToast } from '@/lib/quick-add-toast';
-import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../lib/ai-config';
 import { logError } from '../lib/app-log';
 import {
   beginMobilePerformanceDiagnostic,
@@ -78,9 +63,6 @@ import {
   TaskListHeader,
   type TaskListActiveFilterChip,
 } from './task-list/TaskListHeader';
-import {
-  TaskListQuickAdd,
-} from './task-list/TaskListQuickAdd';
 import {
   TaskListSortModal,
 } from './task-list/TaskListSortModal';
@@ -124,10 +106,6 @@ const PROJECT_REORDER_ANIMATION_CONFIG = {
 } as const;
 const SLOW_TASK_LIST_DERIVE_MS = 250;
 const SLOW_TASK_LIST_COMMIT_MS = 500;
-
-type AddTaskOptions = {
-  openAfterCreate?: boolean;
-};
 
 export type TaskListGroupBy = TaskGroupBy;
 
@@ -228,7 +206,6 @@ function TaskListComponent({
   taskSource,
   showHeader = true,
   showTimeEstimateFilters: showTimeEstimateFiltersProp = true,
-  allowAdd = true,
   enableBulkActions = true,
   enableInboxBulkOrganize = false,
   bulkBarPlacement = 'inline',
@@ -266,7 +243,6 @@ function TaskListComponent({
     enableReorder: enableProjectReorder = false,
     reorderMode: projectReorderModeProp,
     onReorderModeChange: onProjectReorderModeChange,
-    onQuickAddInputFocus,
   } = project ?? NO_PROJECT_OPTIONS;
   const taskListRenderStartedAt = Date.now();
   const rowRenderCountAtRenderStart = readTaskRowRenderCount();
@@ -280,7 +256,6 @@ function TaskListComponent({
     sections,
     areas,
     addTask,
-    addProject,
     allVisibleTasks,
     updateTask,
     deleteTask,
@@ -305,7 +280,6 @@ function TaskListComponent({
     sections: state.sections,
     areas: state.areas,
     addTask: state.addTask,
-    addProject: state.addProject,
     updateTask: state.updateTask,
     deleteTask: state.deleteTask,
     restoreTask: state.restoreTask,
@@ -320,14 +294,6 @@ function TaskListComponent({
     setHighlightTask: state.setHighlightTask,
     getDerivedState: state.getDerivedState,
   }), shallow);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [quickAddFocus, setQuickAddFocus] = useState(false);
-  const [aiKey, setAiKey] = useState('');
-  const [copilotSuggestion, setCopilotSuggestion] = useState<{ context?: string; timeEstimate?: Task['timeEstimate']; tags?: string[] } | null>(null);
-  const [copilotApplied, setCopilotApplied] = useState(false);
-  const [copilotContext, setCopilotContext] = useState<string | undefined>(undefined);
-  const [copilotTags, setCopilotTags] = useState<string[]>([]);
-  const [copilotThinking, setCopilotThinking] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [sortModalVisible, setSortModalVisible] = useState(false);
@@ -336,19 +302,12 @@ function TaskListComponent({
   const [bulkOrganizeVisible, setBulkOrganizeVisible] = useState(false);
   const [internalProjectReorderMode, setInternalProjectReorderMode] = useState(false);
   const [completedTasksCollapsed, setCompletedTasksCollapsed] = useState(true);
-  const [inputSelection, setInputSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
-  const [typeaheadOpen, setTypeaheadOpen] = useState(false);
-  const [typeaheadIndex, setTypeaheadIndex] = useState(0);
-  const newTaskTitleRef = useRef(newTaskTitle);
-  const inputSelectionRef = useRef(inputSelection);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReducedMotion();
   // Tracks the highlightTaskId we already scrolled to, so an id is centred once
   // (when it first appears in the rendered data) rather than re-scrolling on
   // every unrelated list re-render during its ~3.5s highlight window (#916).
   const scrolledHighlightIdRef = useRef<string | null>(null);
-  const copilotAbortRef = useRef<AbortController | null>(null);
-  const copilotRequestIdRef = useRef(0);
   const restoreActionLabel = getTranslationsSync(language)['trash.restoreToInbox']
     || getTranslationsSync('en')['trash.restoreToInbox']
     || 'Restore';
@@ -420,21 +379,8 @@ function TaskListComponent({
   const canUseProjectReorder = Boolean(enableProjectReorder && projectId && sortBy === 'default');
   const shouldGroupCompletedTasks = Boolean(groupCompletedTasksLast && projectId && statusFilter === 'all');
   const projectReorderMode = projectReorderModeProp ?? internalProjectReorderMode;
-  const quickAddInputRef = useRef<TextInput | null>(null);
-  // Inline quick-add only inside a project view. The Inbox intentionally has no
-  // in-page composer on mobile: capture goes through the bottom-bar + button.
-  const quickAddAvailable = allowAdd && !projectReorderMode && Boolean(projectId);
-  const aiEnabled = settings?.ai?.enabled === true;
-  const quickAddCopilotEnabled = quickAddAvailable && aiEnabled;
   const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
   const focusedCount = getDerivedState().focusedCount;
-  const canQuickAddFocus = quickAddFocus || canStarNewCapture({ focusedCount, focusTaskLimit });
-  const quickAddFocusDisabledReason = formatFocusTaskLimitText(
-    tFallback(t, 'agenda.maxFocusItems', 'Max {{count}} focus items.'),
-    focusTaskLimit,
-  );
-  const aiProvider = (settings?.ai?.provider ?? 'openai') as AIProviderId;
-  const keyRequired = isAIKeyRequired(settings);
   const prioritiesEnabled = settings?.features?.priorities !== false;
   const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
   const timeSpentEnabled = settings?.features?.pomodoro === true
@@ -468,12 +414,7 @@ function TaskListComponent({
   const canBulkOrganizeProject = enableProjectBulkOrganize && Boolean(projectId);
   const canBulkOrganizeSelection = canBulkOrganizeInbox || canBulkOrganizeProject;
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-  const { areaById, resolvedAreaFilter, selectedAreaIdForNewTasks } = useMobileAreaFilter();
-  const defaultAreaMode = getDefaultTaskAreaMode(settings);
-  const defaultNewTaskAreaId = resolveDefaultNewTaskAreaId(settings, areas);
-  const quickAddNewTaskAreaId = defaultAreaMode === 'active'
-    ? selectedAreaIdForNewTasks ?? undefined
-    : defaultNewTaskAreaId;
+  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
 
   // Track the last-seen signal so a remount (e.g. toggling reorder mode swaps the
   // scroll container component type) doesn't re-open the sheet from a stale value.
@@ -484,18 +425,6 @@ function TaskListComponent({
     if (externalFilterOpenSignal <= 0) return;
     setFiltersVisible(true);
   }, [externalFilterOpenSignal]);
-
-  const refocusQuickAddInput = useCallback(() => {
-    if (!quickAddAvailable) return;
-    const focusInput = () => {
-      quickAddInputRef.current?.focus();
-    };
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(focusInput);
-    } else {
-      setTimeout(focusInput, 0);
-    }
-  }, [quickAddAvailable]);
 
   const lastProjectIdRef = useRef(projectId);
   const setProjectReorderMode = useCallback((active: boolean) => {
@@ -955,9 +884,9 @@ function TaskListComponent({
   );
 
   // Scroll a highlighted task into view once it is actually present in the
-  // rendered row model. Driven by the shared highlightTaskId so both this list's
-  // own composer (handleAddTask) and the project-preset quick-capture sheet
-  // flash + scroll, without stacking scrolls: each id centres once (see
+  // rendered row model. Driven by the shared highlightTaskId, so a task captured
+  // through the quick-capture sheet flashes and scrolls here without stacking
+  // scrolls: each id centres once (see
   // scrolledHighlightIdRef). Normal mode only — reorder swaps in a different
   // list. A task filtered out of this view never enters listItems, so nothing
   // scrolls (#916).
@@ -1029,15 +958,6 @@ function TaskListComponent({
     });
   }, [projectId, projectSectionIds, reorderSections, showToast, t]);
 
-  const contextOptions = useMemo(() => {
-    if (!quickAddAvailable) return [];
-    return getUsedTaskTokens(tasks, (task) => task.contexts, { prefix: '@' });
-  }, [quickAddAvailable, tasks]);
-  const tagOptions = useMemo(() => {
-    if (!quickAddCopilotEnabled) return [];
-    return getUsedTaskTokens(tasks, (task) => task.tags, { prefix: '#' });
-  }, [quickAddCopilotEnabled, tasks]);
-
   const bulkMoveStatusOptions = useMemo(
     () => getBulkMoveStatusOptions(statusFilter),
     [statusFilter],
@@ -1097,145 +1017,6 @@ function TaskListComponent({
     bulkBarProps && (bulkBarPlacement !== 'external' || !onBulkBarPropsChange),
   );
 
-  type TriggerType = 'project' | 'context';
-  type TriggerState = { type: TriggerType; start: number; end: number; query: string };
-  type Option =
-    | { kind: 'create'; label: string; value: string }
-    | { kind: 'project'; label: string; value: string }
-    | { kind: 'context'; label: string; value: string };
-
-  const getTrigger = useCallback((text: string, caret: number): TriggerState | null => {
-    if (caret < 0) return null;
-    const before = text.slice(0, caret);
-    const lastSpace = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\n'), before.lastIndexOf('\t'));
-    const start = lastSpace + 1;
-    const token = before.slice(start);
-    if (!token.startsWith('+') && !token.startsWith('@')) return null;
-    return {
-      type: token.startsWith('+') ? 'project' : 'context',
-      start,
-      end: caret,
-      query: token.slice(1),
-    };
-  }, []);
-
-  const trigger = useMemo(() => {
-    return getTrigger(newTaskTitle, inputSelection.start ?? newTaskTitle.length);
-  }, [getTrigger, inputSelection.start, newTaskTitle]);
-
-  const typeaheadOptions = useMemo<Option[]>(() => {
-    if (!quickAddAvailable || !trigger) return [];
-    const query = trigger.query.trim().toLowerCase();
-    if (trigger.type === 'project') {
-      const matches = projects
-        .filter(isSelectableProjectForTaskAssignment)
-        .filter((project) => project.title.toLowerCase().includes(query));
-      const hasExact = query.length > 0 && projects.some((project) => project.title.toLowerCase() === query);
-      const result: Option[] = [];
-      if (!hasExact && query.length > 0) {
-        const title = trigger.query.trim();
-        result.push({
-          kind: 'create' as const,
-          label: `${tFallback(t, 'projects.create', 'Create')} "${title}"`,
-          value: title,
-        });
-      }
-      result.push(
-        ...matches.map((project) => ({
-          kind: 'project' as const,
-          label: project.title,
-          value: project.title,
-        }))
-      );
-      return result;
-    }
-    const matches = contextOptions.filter((context) => {
-      const raw = context.startsWith('@') || context.startsWith('#') ? context.slice(1) : context;
-      return raw.toLowerCase().includes(query);
-    });
-    return matches.map((context) => ({
-      kind: 'context' as const,
-      label: context,
-      value: context,
-    }));
-  }, [contextOptions, projects, quickAddAvailable, t, trigger]);
-
-  useEffect(() => {
-    if (!trigger || typeaheadOptions.length === 0) {
-      setTypeaheadOpen(false);
-      return;
-    }
-    setTypeaheadOpen(true);
-  }, [trigger, typeaheadOptions.length]);
-
-  useEffect(() => {
-    if (!quickAddCopilotEnabled) {
-      setAiKey('');
-      return;
-    }
-    loadAIKey(aiProvider).then(setAiKey).catch((error) => {
-      void logError(error, { scope: 'ai', extra: { message: 'Failed to load AI key' } });
-      showToast({
-        title: t('ai.errorTitle'),
-        message: t('ai.disabledBody'),
-        tone: 'warning',
-        durationMs: 4200,
-      });
-    });
-  }, [aiProvider, quickAddCopilotEnabled, showToast, t]);
-
-  useEffect(() => {
-    if (!quickAddCopilotEnabled || (keyRequired && !aiKey)) {
-      setCopilotSuggestion(null);
-      setCopilotThinking(false);
-      return;
-    }
-    const title = newTaskTitle.trim();
-    if (title.length < 4) {
-      setCopilotSuggestion(null);
-      setCopilotThinking(false);
-      return;
-    }
-    let cancelled = false;
-    const handle = setTimeout(async () => {
-      const requestId = copilotRequestIdRef.current + 1;
-      copilotRequestIdRef.current = requestId;
-      setCopilotThinking(true);
-      try {
-        if (copilotAbortRef.current) copilotAbortRef.current.abort();
-        const abortController = typeof AbortController === 'function' ? new AbortController() : null;
-        copilotAbortRef.current = abortController;
-        const provider = createAIProvider(buildCopilotConfig(settings, aiKey));
-        const suggestion = await provider.predictMetadata(
-          { title, contexts: contextOptions, tags: tagOptions },
-          abortController ? { signal: abortController.signal } : undefined
-        );
-        if (cancelled) return;
-        if (!suggestion.context && (!timeEstimatesEnabled || !suggestion.timeEstimate) && !suggestion.tags?.length) {
-          setCopilotSuggestion(null);
-        } else {
-          setCopilotSuggestion(suggestion);
-        }
-      } catch {
-        if (!cancelled) {
-          setCopilotSuggestion(null);
-        }
-      } finally {
-        if (!cancelled && copilotRequestIdRef.current === requestId) {
-          setCopilotThinking(false);
-        }
-      }
-    }, 800);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-      if (copilotAbortRef.current) {
-        copilotAbortRef.current.abort();
-        copilotAbortRef.current = null;
-      }
-    };
-  }, [aiKey, aiProvider, contextOptions, keyRequired, newTaskTitle, quickAddCopilotEnabled, settings, statusFilter, tagOptions, timeEstimatesEnabled]);
-
   useEffect(() => {
     if (!highlightTaskId) return;
     if (highlightTimerRef.current) {
@@ -1250,114 +1031,6 @@ function TaskListComponent({
       }
     };
   }, [highlightTaskId, setHighlightTask]);
-
-  const handleAddTask = async (options: AddTaskOptions = {}) => {
-    if (!newTaskTitle.trim()) return;
-
-    const defaultStatus: TaskStatus = 'inbox';
-
-    const parsed = parseQuickAdd(newTaskTitle, projects, new Date(), areas, {
-      defaultScheduleTime: normalizeClockTimeInput(settings.gtd?.defaultScheduleTime) || undefined,
-      preserveText: settings.quickAddAutoClean !== true,
-      naturalLanguageDates: isNaturalLanguageDatesEnabled(settings),
-    });
-    const result = await executeCaptureTransaction({
-      parsed,
-      rawInput: newTaskTitle,
-      projects,
-      initialProps: { projectId: projectId ?? undefined, status: defaultStatus },
-      selectedAreaId: quickAddNewTaskAreaId,
-      starNewTask: quickAddFocus && canQuickAddFocus,
-    }, { addProject, addTask }, {
-      transformProps: (props) => {
-        const taskProps = { ...props };
-        if (copilotContext) {
-          taskProps.contexts = Array.from(new Set([...(taskProps.contexts ?? []), copilotContext]));
-        }
-        if (copilotTags.length) {
-          taskProps.tags = Array.from(new Set([...(taskProps.tags ?? []), ...copilotTags]));
-        }
-        return taskProps;
-      },
-    });
-    if (!result.success) {
-      // Invalid date commands surface from core's typed reason rather than a
-      // pre-check: prepareCaptureTask already rejects them.
-      if (result.reason === 'invalid-date-command') {
-        showInvalidDateCommandToast(showToast, t, result.invalidDateCommands);
-      }
-      return;
-    }
-    const createdTaskId = result.createdTaskId;
-    newTaskTitleRef.current = '';
-    inputSelectionRef.current = { start: 0, end: 0 };
-    setNewTaskTitle('');
-    setInputSelection({ start: 0, end: 0 });
-    setTypeaheadOpen(false);
-    setCopilotSuggestion(null);
-    setCopilotApplied(false);
-    setCopilotContext(undefined);
-    setCopilotTags([]);
-    setQuickAddFocus(false);
-
-    if (options.openAfterCreate && createdTaskId) {
-      const createdTask = useTaskStore.getState()._allTasks.find((task) => task.id === createdTaskId && !task.deletedAt);
-      if (createdTask) {
-        setHighlightTask(createdTaskId);
-        setEditingTask(createdTask);
-        setIsModalVisible(true);
-      }
-      return;
-    }
-
-    if (createdTaskId) {
-      // Flash the new row and scroll it into view (the highlightTaskId effect
-      // above centres it) so a task added far down a sorted project list is not
-      // lost. Focus returns to the input (below) so batch entry is
-      // uninterrupted (#916).
-      setHighlightTask(createdTaskId);
-    }
-
-    refocusQuickAddInput();
-  };
-
-  const applyTypeaheadOption = useCallback(async (option: Option) => {
-    const currentTitle = newTaskTitleRef.current;
-    const currentSelection = inputSelectionRef.current;
-    const activeTrigger = getTrigger(currentTitle, currentSelection.start ?? currentTitle.length) ?? trigger;
-    if (!activeTrigger) return;
-    const expectedTriggerType = option.kind === 'create' ? 'project' : option.kind;
-    if (activeTrigger.type !== expectedTriggerType) return;
-
-    let tokenValue = option.value;
-    if (option.kind === 'create') {
-      const title = option.value.trim();
-      if (title) {
-        await addProject(
-          title,
-          DEFAULT_PROJECT_COLOR,
-          getQuickAddProjectInitialProps({}, defaultNewTaskAreaId)
-        );
-      }
-    }
-    if (activeTrigger.type === 'project') {
-      tokenValue = `+${tokenValue}`;
-    } else {
-      tokenValue = tokenValue.startsWith('@') ? tokenValue : `@${tokenValue}`;
-    }
-    const before = currentTitle.slice(0, activeTrigger.start);
-    const after = currentTitle.slice(activeTrigger.end);
-    const needsSpace = after.length > 0 && !/^\s/.test(after);
-    const nextValue = `${before}${tokenValue}${needsSpace ? ' ' : ''}${after}`;
-    newTaskTitleRef.current = nextValue;
-    setNewTaskTitle(nextValue);
-    const caret = before.length + tokenValue.length + (needsSpace ? 1 : 0);
-    const nextSelection = { start: caret, end: caret };
-    inputSelectionRef.current = nextSelection;
-    setInputSelection(nextSelection);
-    setTypeaheadOpen(false);
-    setTypeaheadIndex(0);
-  }, [addProject, defaultNewTaskAreaId, getTrigger, trigger]);
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -1659,21 +1332,6 @@ function TaskListComponent({
     return renderProjectReorderTaskRow(item.task, drag, isActive);
   }, [renderProjectReorderHeader, renderProjectReorderTaskRow]);
 
-  const projectReorderToggle = canUseProjectReorder && hasProjectReorderItems && !projectReorderMode ? (
-    <TouchableOpacity
-      accessibilityLabel={tFallback(t, 'projects.reorderTasks', 'Order')}
-      accessibilityRole="button"
-      onPress={handleToggleProjectReorderMode}
-      style={[
-        styles.projectReorderIconButton,
-        { backgroundColor: themeColors.filterBg, borderColor: themeColors.border },
-      ]}
-      testID="project-task-reorder-toggle"
-    >
-      <GripVertical size={20} color={themeColors.secondaryText} />
-    </TouchableOpacity>
-  ) : null;
-
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       <TaskListHeader
@@ -1745,58 +1403,6 @@ function TaskListComponent({
             </Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      {quickAddAvailable && (
-        <TaskListQuickAdd
-          aiEnabled={aiEnabled}
-          applyTypeaheadOption={applyTypeaheadOption}
-          copilotApplied={copilotApplied}
-          copilotContext={copilotContext}
-          copilotSuggestion={copilotSuggestion}
-          copilotTags={copilotTags}
-          copilotThinking={copilotThinking}
-          handleAddAndEditTask={projectId ? () => handleAddTask({ openAfterCreate: true }) : undefined}
-          handleAddTask={handleAddTask}
-          focusNewTask={quickAddFocus}
-          canFocusNewTask={canQuickAddFocus}
-          focusNewTaskDisabledReason={quickAddFocusDisabledReason}
-          inputRef={quickAddInputRef}
-          newTaskTitle={newTaskTitle}
-          onApplyCopilot={() => {
-            setCopilotContext(copilotSuggestion?.context);
-            setCopilotTags(copilotSuggestion?.tags ?? []);
-            setCopilotApplied(true);
-          }}
-          onChangeText={(text) => {
-            newTaskTitleRef.current = text;
-            setNewTaskTitle(text);
-            const nextSelection = { start: text.length, end: text.length };
-            inputSelectionRef.current = nextSelection;
-            setInputSelection(nextSelection);
-            setCopilotApplied(false);
-            setCopilotContext(undefined);
-            setCopilotTags([]);
-          }}
-          onInputFocus={onQuickAddInputFocus}
-          onSelectionChange={(selection) => {
-            inputSelectionRef.current = selection;
-            setInputSelection(selection);
-            const currentTitle = newTaskTitleRef.current;
-            setTypeaheadOpen(Boolean(getTrigger(currentTitle, selection.start ?? currentTitle.length)));
-          }}
-          onToggleFocusNewTask={() => setQuickAddFocus((current) => !current)}
-          projectId={projectId}
-          setTypeaheadIndex={setTypeaheadIndex}
-          t={t}
-          themeColors={themeColors}
-          title={title}
-          trailingAccessory={projectReorderToggle}
-          trigger={trigger}
-          typeaheadIndex={typeaheadIndex}
-          typeaheadOpen={typeaheadOpen}
-          typeaheadOptions={typeaheadOptions}
-        />
       )}
 
       {projectReorderMode && canUseProjectReorder ? (

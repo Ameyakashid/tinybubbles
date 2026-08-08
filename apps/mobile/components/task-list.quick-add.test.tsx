@@ -4,15 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppSettings, Area, Project, Task } from '@mindwtr/core';
 
 const addTaskMock = vi.hoisted(() => vi.fn());
-const addProjectMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
 const setHighlightTaskMock = vi.hoisted(() => vi.fn());
-const quickAddPropsSpy = vi.hoisted(() => vi.fn());
-const quickAddFocusMock = vi.hoisted(() => vi.fn());
-const selectedAreaIdForNewTasksMock = vi.hoisted(() => ({ current: undefined as string | null | undefined }));
 const taskEditModalPropsSpy = vi.hoisted(() => vi.fn());
 const bulkOrganizeModalPropsSpy = vi.hoisted(() => vi.fn());
-const parseQuickAddMock = vi.hoisted(() => vi.fn());
 const taskListHeaderPropsSpy = vi.hoisted(() => vi.fn());
 const flatListPropsSpy = vi.hoisted(() => vi.fn());
 const flatListScrollToIndexMock = vi.hoisted(() => vi.fn());
@@ -77,7 +72,6 @@ const storeState = vi.hoisted(() => ({
   sections: [],
   areas: [] as Area[],
   addTask: addTaskMock,
-  addProject: addProjectMock,
   updateTask: updateTaskMock,
   deleteTask: vi.fn(),
   restoreTask: vi.fn(),
@@ -124,6 +118,7 @@ vi.mock('react-native', () => ({
   ScrollView: ({ children, ...props }: any) => React.createElement('ScrollView', props, children),
   StyleSheet: { create: (styles: unknown) => styles },
   Text: ({ children, ...props }: any) => React.createElement('Text', props, children),
+  // TokenPickerModal's search field.
   TextInput: () => React.createElement('TextInput'),
   TouchableOpacity: ({ children, onPress, ...props }: any) => React.createElement('TouchableOpacity', { ...props, onPress }, children),
   View: ({ children, ...props }: any) => React.createElement('View', props, children),
@@ -156,8 +151,6 @@ vi.mock('react-native-draggable-flatlist', () => ({
 vi.mock('@mindwtr/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   return mockCore(importOriginal as () => Promise<Record<string, unknown>>, () => storeState, {
-    createAIProvider: vi.fn(),
-    getQuickAddProjectInitialProps: vi.fn(() => ({})),
     getTranslationsSync: vi.fn(() => ({ 'trash.restoreToInbox': 'Restore' })),
     getTaskMetadataFilterVisibility: vi.fn(() => ({
       showEnergy: true,
@@ -167,10 +160,8 @@ vi.mock('@mindwtr/core', async (importOriginal) => {
     })),
     getUsedTaskTokens: vi.fn(() => []),
     hasActiveFilterCriteria: vi.fn(() => false),
-    isSelectableProjectForTaskAssignment: (item: Project) => item.status === 'active' && !item.deletedAt,
     isTaskInActiveProject: vi.fn(() => true),
     matchesTask: vi.fn(() => true),
-    parseQuickAdd: parseQuickAddMock,
     parseSearchQuery: vi.fn(() => ({ filters: [], text: '' })),
     sortTasksBy: (tasks: Task[]) => tasks,
     splitCompletedTasks: (tasks: Task[]) => ({ activeTasks: tasks, completedTasks: [] }),
@@ -254,7 +245,6 @@ vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
     areaById: new Map(),
     resolvedAreaFilter: { included: [], excluded: [] },
-    selectedAreaIdForNewTasks: selectedAreaIdForNewTasksMock.current,
   }),
 }));
 
@@ -278,12 +268,6 @@ vi.mock('@/hooks/use-manual-pull-sync', () => ({
 vi.mock('@/lib/task-meta-navigation', () => ({
   openContextsScreen: vi.fn(),
   openProjectScreen: vi.fn(),
-}));
-
-vi.mock('../lib/ai-config', () => ({
-  buildCopilotConfig: vi.fn(),
-  isAIKeyRequired: vi.fn(() => false),
-  loadAIKey: vi.fn(() => Promise.resolve('')),
 }));
 
 vi.mock('../lib/app-log', () => ({
@@ -347,21 +331,6 @@ vi.mock('./task-list/TaskListHeader', () => ({
   },
 }));
 
-vi.mock('./task-list/TaskListQuickAdd', () => ({
-  TaskListQuickAdd: (props: any) => {
-    quickAddPropsSpy(props);
-    React.useEffect(() => {
-      if (props.inputRef) {
-        props.inputRef.current = { focus: quickAddFocusMock };
-      }
-      return () => {
-        if (props.inputRef) props.inputRef.current = null;
-      };
-    }, [props.inputRef]);
-    return React.createElement('TaskListQuickAdd', props);
-  },
-}));
-
 vi.mock('./task-list/TaskListSortModal', () => ({
   TaskListSortModal: () => null,
 }));
@@ -372,10 +341,9 @@ vi.mock('./task-list/TaskListTagModal', () => ({
 
 import { TaskList } from './task-list';
 
-const latestQuickAddProps = () => quickAddPropsSpy.mock.calls.at(-1)?.[0];
 const latestHeaderProps = () => taskListHeaderPropsSpy.mock.calls.at(-1)?.[0];
 
-describe('TaskList project quick add', () => {
+describe('TaskList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetTaskListSelectionState();
@@ -388,14 +356,7 @@ describe('TaskList project quick add', () => {
       appearance: {},
       features: {},
     };
-    selectedAreaIdForNewTasksMock.current = undefined;
-    addTaskMock.mockResolvedValue({ success: true, id: 'created-task' });
-    // The real store action sets highlightTaskId; mirror that so the scroll
-    // effect (keyed off the shared highlightTaskId) can react.
-    setHighlightTaskMock.mockImplementation((id: string | null) => {
-      storeState.highlightTaskId = id;
-    });
-    parseQuickAddMock.mockImplementation((input: string) => ({ title: input, props: {} }));
+    // Entering project reorder mode schedules its entry scroll on a frame.
     vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void) => {
       callback(0);
       return 1;
@@ -404,49 +365,6 @@ describe('TaskList project quick add', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  const renderProjectList = () => create(
-    <TaskList
-      allowAdd
-      project={{ id: project.id }}
-      showHeader={false}
-      statusFilter="all"
-      taskSource={[]}
-      title={project.title}
-    />,
-  );
-
-  const renderInboxList = () => create(
-    <TaskList
-      allowAdd
-      showHeader={false}
-      statusFilter="inbox"
-      taskSource={[]}
-      title="Inbox"
-    />,
-  );
-
-  it("does not show standalone quick-add outside a project", async () => {
-    let tree!: ReturnType<typeof create>;
-
-    await act(async () => {
-      tree = create(
-        <TaskList
-          allowAdd
-          showHeader={false}
-          statusFilter="next"
-          taskSource={[]}
-          title="Next"
-        />,
-      );
-    });
-
-    expect(quickAddPropsSpy).not.toHaveBeenCalled();
-
-    act(() => {
-      tree.unmount();
-    });
   });
 
   it('shows a References pile below the project list, including tag-matched references (#1000)', async () => {
@@ -631,111 +549,6 @@ describe('TaskList project quick add', () => {
     });
   });
 
-  it('does not show an in-page composer on the Inbox; capture uses the bottom-bar button', async () => {
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = renderInboxList();
-    });
-
-    expect(quickAddPropsSpy).not.toHaveBeenCalled();
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
-  it('plain add clears the composer and refocuses it for the next capture', async () => {
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = renderProjectList();
-    });
-
-    await act(async () => {
-      latestQuickAddProps().onChangeText('Draft launch checklist');
-    });
-
-    await act(async () => {
-      await latestQuickAddProps().handleAddTask();
-    });
-
-    expect(addTaskMock).toHaveBeenCalledWith('Draft launch checklist', expect.objectContaining({
-      projectId: project.id,
-      status: 'inbox',
-    }));
-    expect(latestQuickAddProps().newTaskTitle).toBe('');
-    expect(quickAddFocusMock).toHaveBeenCalledTimes(1);
-    expect(taskEditModalPropsSpy.mock.calls.some(([props]) => props.visible === true)).toBe(false);
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
-  it('passes isFocusedToday when the quick-add focus toggle is enabled', async () => {
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = renderProjectList();
-    });
-
-    await act(async () => {
-      latestQuickAddProps().onToggleFocusNewTask();
-      latestQuickAddProps().onChangeText('Focus launch checklist');
-    });
-
-    await act(async () => {
-      await latestQuickAddProps().handleAddTask();
-    });
-
-    expect(addTaskMock).toHaveBeenCalledWith('Focus launch checklist', expect.objectContaining({
-      isFocusedToday: true,
-      projectId: project.id,
-      status: 'inbox',
-    }));
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
-  it('flashes and scrolls a freshly inline-added row into view (#916)', async () => {
-    const createdTask = makeTask('created-task', 'Draft launch checklist', { status: 'inbox' });
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = create(
-        <TaskList
-          allowAdd
-          project={{ id: project.id }}
-          showHeader={false}
-          statusFilter="all"
-          taskSource={[createdTask]}
-          title={project.title}
-        />,
-      );
-    });
-
-    await act(async () => {
-      latestQuickAddProps().onChangeText('Draft launch checklist');
-    });
-    await act(async () => {
-      await latestQuickAddProps().handleAddTask();
-    });
-
-    expect(setHighlightTaskMock).toHaveBeenCalledWith('created-task');
-    expect(flatListScrollToIndexMock).toHaveBeenCalledWith(expect.objectContaining({ index: 0 }));
-
-    // Variable row heights mean an unmeasured target throws; the fallback jumps
-    // to an estimated offset (index * averageItemLength) before retrying.
-    const flatListProps = flatListPropsSpy.mock.calls.at(-1)?.[0];
-    act(() => {
-      flatListProps.onScrollToIndexFailed({ index: 4, averageItemLength: 90 });
-    });
-    expect(flatListScrollToOffsetMock).toHaveBeenCalledWith({ offset: 360, animated: false });
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
   it('scrolls to a row flagged via the shared highlightTaskId, e.g. quick-capture (#916)', async () => {
     const captured = makeTask('capture-task', 'Captured into project', { status: 'inbox' });
     let tree!: ReturnType<typeof create>;
@@ -770,18 +583,26 @@ describe('TaskList project quick add', () => {
 
     expect(flatListScrollToIndexMock).toHaveBeenCalledWith(expect.objectContaining({ index: 0 }));
 
+    // Variable row heights mean an unmeasured target throws; the fallback jumps
+    // to an estimated offset (index * averageItemLength) before retrying.
+    const flatListProps = flatListPropsSpy.mock.calls.at(-1)?.[0];
+    act(() => {
+      flatListProps.onScrollToIndexFailed({ index: 4, averageItemLength: 90 });
+    });
+    expect(flatListScrollToOffsetMock).toHaveBeenCalledWith({ offset: 360, animated: false });
+
     act(() => {
       tree.unmount();
     });
   });
 
-  it('does not scroll the add row while project reorder mode is active (#916)', async () => {
+  it('does not scroll a highlighted row while project reorder mode is active (#916)', async () => {
     const existing = makeTask('task-1', 'Existing task', { status: 'inbox' });
+    storeState.highlightTaskId = existing.id;
     let tree!: ReturnType<typeof create>;
     await act(async () => {
       tree = create(
         <TaskList
-          allowAdd
           project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
@@ -791,48 +612,10 @@ describe('TaskList project quick add', () => {
       );
     });
 
-    // Reorder mode swaps in the draggable list and hides the inline composer, so
-    // the add-scroll effect has no add to react to and never touches the list.
-    expect(quickAddPropsSpy).not.toHaveBeenCalled();
+    // Reorder mode swaps in the draggable list, so the highlight-scroll effect
+    // has no FlatList to drive and must leave the drag list alone.
     expect(flatListScrollToIndexMock).not.toHaveBeenCalled();
     expect(tree.root.findAll((node) => String(node.type) === 'DraggableFlatList').length).toBeGreaterThan(0);
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
-  it('add-and-edit opens the created task without bypassing the shared add path', async () => {
-    addTaskMock.mockImplementation(async (title: string, props: Partial<Task>) => {
-      const created = makeTask('created-task', title, props);
-      storeState.tasks = [created];
-      storeState._allTasks = [created];
-      return { success: true, id: created.id };
-    });
-
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = renderProjectList();
-    });
-
-    await act(async () => {
-      latestQuickAddProps().onChangeText('Add launch brief');
-    });
-
-    await act(async () => {
-      await latestQuickAddProps().handleAddAndEditTask();
-    });
-
-    expect(addTaskMock).toHaveBeenCalledWith('Add launch brief', expect.objectContaining({
-      projectId: project.id,
-      status: 'inbox',
-    }));
-    expect(setHighlightTaskMock).toHaveBeenCalledWith('created-task');
-    expect(taskEditModalPropsSpy.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({
-      visible: true,
-      task: expect.objectContaining({ id: 'created-task' }),
-    }));
-    expect(latestQuickAddProps().newTaskTitle).toBe('');
 
     act(() => {
       tree.unmount();
@@ -867,26 +650,6 @@ describe('TaskList project quick add', () => {
 
     expect(updateTaskMock).toHaveBeenCalledWith('task-save', { title: 'Review launch notes v2' });
     expect(saveResult).toEqual({ success: false, error: 'Task is deleted' });
-
-    act(() => {
-      tree.unmount();
-    });
-  });
-
-  it('applies typeahead suggestions using the latest quick-add text and selection', async () => {
-    let tree!: ReturnType<typeof create>;
-    await act(async () => {
-      tree = renderProjectList();
-    });
-
-    await act(async () => {
-      const quickAdd = latestQuickAddProps();
-      quickAdd.onChangeText('+La today');
-      quickAdd.onSelectionChange({ start: '+La'.length, end: '+La'.length });
-      await quickAdd.applyTypeaheadOption({ kind: 'project', label: 'Launch', value: 'Launch' });
-    });
-
-    expect(latestQuickAddProps().newTaskTitle).toBe('+Launch today');
 
     act(() => {
       tree.unmount();
