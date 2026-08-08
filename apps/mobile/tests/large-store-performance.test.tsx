@@ -309,8 +309,13 @@ vi.mock('../components/task-edit/TaskEditFormTab', () => ({
   }),
 }));
 
+// Production wraps the row in React.memo(_, areRowPropsEqual) (#766), and that
+// comparator is exactly React's default: same key count, every prop compared by
+// Object.is. A bare function stub would switch the boundary off and measure an
+// app that re-renders far more than the real one — the same trap the theme-mock
+// note above describes. Keep the memo; do not unwrap it.
 vi.mock('../components/swipeable-task-item', () => ({
-  SwipeableTaskItem: (props: Record<string, unknown>) => React.createElement('SwipeableTaskItem', props),
+  SwipeableTaskItem: React.memo((props: Record<string, unknown>) => React.createElement('SwipeableTaskItem', props)),
 }));
 
 vi.mock('../components/pomodoro-panel', () => ({
