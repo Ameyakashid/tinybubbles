@@ -86,11 +86,23 @@ const FALLBACK: ThemeTokens = {
   isDark: false,
 };
 
+// These four fields are the whole input: everything below is derived from them
+// plus module constants, so the same key always yields the same tokens.
+const themeCacheKey = (theme: ResolvableTheme) =>
+  `${theme.isDark}|${theme.themeStyle}|${theme.themePreset}|${theme.themeMode}`;
+
+// One entry is enough — the theme is app-wide, so every caller in a render pass
+// asks for the same one. Callers hand `tokens.colors` straight to memoized rows
+// as `tc`, and a fresh object per call would defeat that comparison (#766).
+let cached: { key: string; tokens: ThemeTokens } | null = null;
+
 export function resolveThemeTokens(theme?: ResolvableTheme | null): ThemeTokens {
   if (!theme) return FALLBACK;
+  const key = themeCacheKey(theme);
+  if (cached?.key === key) return cached.tokens;
   const isMaterial = theme.themeStyle === 'material3';
   const roles = isMaterial ? m3RolesFor(theme) : null;
-  return {
+  const tokens: ThemeTokens = {
     colors: resolveGenericColors(theme),
     roles,
     type: M3Typography,
@@ -100,6 +112,8 @@ export function resolveThemeTokens(theme?: ResolvableTheme | null): ThemeTokens 
     isMaterial,
     isDark: theme.isDark,
   };
+  cached = { key, tokens };
+  return tokens;
 }
 
 export function useThemeTokens(): ThemeTokens {

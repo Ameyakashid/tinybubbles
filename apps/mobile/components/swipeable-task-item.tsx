@@ -156,26 +156,17 @@ let taskRowRenderCount = 0;
 
 export const readTaskRowRenderCount = (): number => taskRowRenderCount;
 
-// Compared field by field rather than with core's `shallow`: that one is
-// stubbed out in several suites, which would quietly turn the boundary below
-// off under test.
-function themeColorsEqual(a: ThemeColors, b: ThemeColors): boolean {
-    if (a === b) return true;
-    const keys = Object.keys(a) as (keyof ThemeColors)[];
-    return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
-}
-
 // The memo boundary for a single row (#766). Any store change re-renders the
 // list, but a row re-renders only when the task object it draws — or one of the
-// flags it draws — actually changed. `tc` gets a field comparison because
-// useThemeColors() builds a fresh object on every call; every other prop is
-// compared by identity, which is why per-row callbacks belong in `actions`.
+// flags it draws — actually changed. Every prop is compared by identity, which
+// is why per-row callbacks belong in `actions`. `tc` included: resolveThemeTokens
+// hands out one object per distinct theme, so it only changes when the theme does.
+// Not core's `shallow`: that one is stubbed out in several suites, which would
+// quietly turn the boundary off under test.
 function areRowPropsEqual(prev: SwipeableTaskItemProps, next: SwipeableTaskItemProps): boolean {
     const keys = Object.keys(prev) as (keyof SwipeableTaskItemProps)[];
     if (keys.length !== Object.keys(next).length) return false;
-    return keys.every((key) => (key === 'tc'
-        ? themeColorsEqual(prev.tc, next.tc)
-        : Object.is(prev[key], next[key])));
+    return keys.every((key) => Object.is(prev[key], next[key]));
 }
 
 function SwipeableTaskItemRow(props: SwipeableTaskItemProps) {

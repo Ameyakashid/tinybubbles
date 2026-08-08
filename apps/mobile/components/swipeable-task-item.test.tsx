@@ -2001,22 +2001,22 @@ it('can keep the focus star without adding a redundant focus outline', () => {
   });
 
   // The #766 boundary itself: a list re-render must not re-render rows whose
-  // task did not change. Guarded with the real render counter, and with a fresh
-  // `tc` object per render because that is what useThemeColors() hands callers.
+  // task did not change. Guarded with the real render counter. `tc` is one
+  // shared object because that is what resolveThemeTokens now hands callers.
   it('re-renders only the row whose task changed', () => {
     const actions: TaskRowActions = {
       edit: vi.fn(),
       changeStatus: vi.fn(),
       remove: vi.fn(),
     };
-    const makeThemeColors = () => ({
+    const themeColors = {
       taskItemBg: '#111111',
       border: '#222222',
       text: '#ffffff',
       secondaryText: '#999999',
       tint: '#3b82f6',
       warning: '#f59e0b',
-    } as any);
+    } as any;
     const taskA = {
       id: 'task-a',
       title: 'Task A',
@@ -2033,7 +2033,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
             key={task.id}
             task={task}
             isDark={false}
-            tc={makeThemeColors()}
+            tc={themeColors}
             actions={actions}
             statusBadgeAsIcon
           />
