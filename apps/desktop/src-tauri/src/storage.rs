@@ -9,6 +9,248 @@ const PORTABLE_WEBVIEW_DIR_NAME: &str = "webview";
 const SEARCH_RESULT_LIMIT: usize = 200;
 const SEARCH_RESULT_QUERY_LIMIT: i64 = (SEARCH_RESULT_LIMIT as i64) + 1;
 const ORPHAN_SECTION_TOMBSTONES_TABLE: &str = "orphan_section_tombstones";
+const SNAPSHOT_DIR_NAME: &str = "snapshots";
+const SNAPSHOT_RETENTION_MAX_COUNT: usize = 5;
+const SNAPSHOT_RETENTION_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
+const SNAPSHOT_RETENTION_RECENT_COUNT: usize = 2;
+const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
+const STORAGE_RETRY_ATTEMPTS: usize = 4;
+const STORAGE_RETRY_BASE_DELAY_MS: u64 = 120;
+
+const SQLITE_SCHEMA: &str = r#"
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
+PRAGMA temp_store = MEMORY;
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority TEXT,
+  energyLevel TEXT,
+  assignedTo TEXT,
+  taskMode TEXT,
+  startTime TEXT,
+  relativeStartOffset TEXT,
+  dueDate TEXT,
+  recurrence TEXT,
+  showFutureRecurrence INTEGER,
+  pushCount INTEGER,
+  tags TEXT,
+  contexts TEXT,
+  checklist TEXT,
+  description TEXT,
+  textDirection TEXT,
+  attachments TEXT,
+  location TEXT,
+  projectId TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  sectionId TEXT REFERENCES sections(id) ON DELETE SET NULL,
+  areaId TEXT REFERENCES areas(id) ON DELETE SET NULL,
+  orderNum INTEGER,
+  boardOrder INTEGER,
+  focusOrder INTEGER,
+  isFocusedToday INTEGER,
+  timeEstimate TEXT,
+  timeSpentMinutes INTEGER,
+  suppressMindwtrReminders INTEGER,
+  repeatReminderMinutes INTEGER,
+  reviewAt TEXT,
+  completedAt TEXT,
+  statusBeforeProjectArchive TEXT,
+  completedAtBeforeProjectArchive TEXT,
+  isFocusedTodayBeforeProjectArchive INTEGER,
+  projectArchivedAt TEXT,
+  rev INTEGER,
+  revBy TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  deletedAt TEXT,
+  purgedAt TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(projectId);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updatedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at ON tasks(deletedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(dueDate);
+CREATE INDEX IF NOT EXISTS idx_tasks_start_time ON tasks(startTime);
+CREATE INDEX IF NOT EXISTS idx_tasks_review_at ON tasks(reviewAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(createdAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_deleted_at ON tasks(status, deletedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_status_deleted_at ON tasks(projectId, status, deletedAt);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  color TEXT NOT NULL,
+  orderNum INTEGER,
+  tagIds TEXT,
+  isSequential INTEGER,
+  sequentialScope TEXT,
+  taskSortBy TEXT,
+  isFocused INTEGER,
+  supportNotes TEXT,
+  attachments TEXT,
+  dueDate TEXT,
+  reviewAt TEXT,
+  areaId TEXT REFERENCES areas(id) ON DELETE SET NULL,
+  areaTitle TEXT,
+  rev INTEGER,
+  revBy TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  deletedAt TEXT,
+  purgedAt TEXT
+);
+
+CREATE TABLE IF NOT EXISTS areas (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT,
+  icon TEXT,
+  orderNum INTEGER NOT NULL,
+  deletedAt TEXT,
+  deletedAtBeforeProjectArchive TEXT,
+  projectArchivedAt TEXT,
+  rev INTEGER,
+  revBy TEXT,
+  createdAt TEXT,
+  updatedAt TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sections (
+  id TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  orderNum INTEGER,
+  isCollapsed INTEGER,
+  rev INTEGER,
+  revBy TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  deletedAt TEXT,
+  deletedAtBeforeProjectArchive TEXT,
+  projectArchivedAt TEXT
+);
+
+CREATE TABLE IF NOT EXISTS people (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  note TEXT,
+  referenceLink TEXT,
+  rev INTEGER,
+  revBy TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  deletedAt TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_people_updated_at ON people(updatedAt);
+CREATE INDEX IF NOT EXISTS idx_people_deleted_at ON people(deletedAt);
+CREATE INDEX IF NOT EXISTS idx_people_updatedAt_rev ON people(updatedAt, rev);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  data TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calendar_sync (
+  task_id TEXT NOT NULL,
+  calendar_event_id TEXT NOT NULL,
+  calendar_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  last_synced_at TEXT NOT NULL,
+  PRIMARY KEY (task_id, platform)
+);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY
+);
+
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
+  id UNINDEXED,
+  title,
+  description,
+  tags,
+  contexts,
+  checklist,
+  location,
+  content=''
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
+  id UNINDEXED,
+  title,
+  supportNotes,
+  tagIds,
+  areaTitle,
+  content=''
+);
+
+CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
+  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
+  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
+END;
+
+CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
+  INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
+  INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
+  VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
+END;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_projectId ON tasks(projectId);
+CREATE INDEX IF NOT EXISTS idx_tasks_deletedAt ON tasks(deletedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_dueDate ON tasks(dueDate);
+CREATE INDEX IF NOT EXISTS idx_tasks_startTime ON tasks(startTime);
+CREATE INDEX IF NOT EXISTS idx_tasks_reviewAt ON tasks(reviewAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_createdAt ON tasks(createdAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_updatedAt ON tasks(updatedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_deletedAt ON tasks(status, deletedAt);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_status_deletedAt ON tasks(projectId, status, deletedAt);
+CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_areaId ON projects(areaId);
+"#;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TaskQueryOptions {
+    status: Option<String>,
+    project_id: Option<String>,
+    exclude_statuses: Option<Vec<String>>,
+    include_deleted: Option<bool>,
+    include_archived: Option<bool>,
+    is_focused_today: Option<bool>,
+}
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StorageMode {
