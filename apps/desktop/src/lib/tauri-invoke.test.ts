@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readdirSync, readFileSync } from 'fs';
+import { join, relative, resolve } from 'path';
 
 const invokeMock = vi.hoisted(() => vi.fn(async () => {
     throw new Error('no ipc');
@@ -76,6 +78,69 @@ describe('invokeNativeOr', () => {
         }) as never);
         await expect(invokeNativeOr('fallback', 'get_thing')).rejects.toThrow('boom');
     });
+});
+
+// Ten hand-rolled `tauriInvoke` copies existed before this seam, in three
+// different off-Tauri shapes (throw / return a default / swallow), because
+// nothing stopped the eleventh from being written. This is that stop.
+const DESKTOP_SRC = resolve(import.meta.dirname, '..');
+const CORE_MODULE_SPECIFIER = '@tauri-apps/api/core';
+const SEAM_FILE = 'lib/tauri-invoke.ts';
+const EXCLUDED_DIR_NAMES = new Set(['node_modules', 'coverage', 'dist']);
+// Each entry needs a reason and a way out. Converting one of these? Delete its
+// line — a stale exclusion is not an error, but it is dead weight.
+const EXCLUDED_FILES = new Map<string, string>([
+    // `lib/theme.ts` takes the core module as an injected loader, so its three
+    // callers hold the raw import. Give it invokeNativeOr and all three drop.
+    ['App.tsx', 'passes () => import(core) into resolveSystemThemeCommandPreference'],
+    ['main.tsx', 'passes () => import(core) into resolveSystemThemeCommandPreference'],
+    [
+        'components/views/settings/useSettingsMainPage.ts',
+        'passes () => import(core) into resolveSystemThemeCommandPreference',
+    ],
+    // convertFileSrc rewrites a path into a webview URL. It is not an IPC call,
+    // so the invoke seam has nothing to offer it.
+    ['components/Task/task-item-attachment-utils.ts', 'imports convertFileSrc, not invoke'],
+]);
+
+function collectSourcePaths(): string[] {
+    const paths: string[] = [];
+    const walk = (dir: string) => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            if (EXCLUDED_DIR_NAMES.has(entry.name)) continue;
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) {
+                walk(full);
+                continue;
+            }
+            if (!/\.tsx?$/.test(entry.name)) continue;
+            // Tests mock the module by specifier; that is the point of a seam,
+            // not a bypass of it.
+            if (/\.test\.tsx?$/.test(entry.name)) continue;
+            paths.push(full);
+        }
+    };
+    walk(DESKTOP_SRC);
+    return paths;
+}
+
+describe('tauri invoke seam ratchet', () => {
+    it('keeps @tauri-apps/api/core out of every desktop source file but the seam', () => {
+        const offenders = collectSourcePaths()
+            .filter((path) => readFileSync(path, 'utf8').includes(CORE_MODULE_SPECIFIER))
+            .map((path) => relative(DESKTOP_SRC, path))
+            .filter((rel) => rel !== SEAM_FILE && !EXCLUDED_FILES.has(rel));
+
+        expect(
+            offenders,
+            `${offenders.join(', ')} imports ${CORE_MODULE_SPECIFIER} directly. Call invokeNative`
+            + ' (rejects off Tauri) or invokeNativeOr(fallback, ...) (resolves to the fallback) from'
+            + ` src/${SEAM_FILE} instead — whichever matches what the call site should do when there`
+            + ' is no desktop runtime. Adding an exclusion here re-splits that decision across files.',
+        ).toEqual([]);
+        // Walking every desktop source file runs well under a second locally and
+        // has still blown vitest's 5s default on loaded CI runners.
+    }, 60_000);
 });
 
 describe('setNativeInvokeTransport', () => {
