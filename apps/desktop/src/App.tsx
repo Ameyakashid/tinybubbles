@@ -58,6 +58,7 @@ import type { ExternalSyncChange, ExternalSyncChangeResolution } from './lib/syn
 import { migratePortableAttachments } from './lib/portable-migration';
 import * as LocalDataWatcher from './lib/local-data-watcher';
 import { getInstallSourceOrFallback, isFlatpakRuntime, isTauriRuntime } from './lib/runtime';
+import { useDesktopShellSync } from './lib/desktop-shell-sync';
 import { reportError as reportAppError } from './lib/report-error';
 import { syncNativeProxyUrl } from './lib/tauri-http';
 import { persistLastView, readRestorableLastView } from './lib/session-restore';
@@ -1121,54 +1122,7 @@ function App() {
         };
     }, [isObsidianEnabled, obsidianVaultPath, startObsidianWatcher, stopObsidianWatcher]);
 
-    useEffect(() => {
-        if (!isTauriRuntime()) return;
-        if (showTray === undefined) return;
-        let cancelled = false;
-        import('@tauri-apps/api/core')
-            .then(async ({ invoke }) => {
-                if (cancelled) return;
-                await invoke('set_tray_visible', { visible: showTray !== false });
-            })
-            .catch((error) => void logError(error, { scope: 'tray', step: 'setVisible' }));
-        return () => {
-            cancelled = true;
-        };
-    }, [showTray]);
-
-    // Hovering the tray icon showed an empty rectangle because no tooltip was
-    // ever set. Fill it with today's Focus so the list can be glanced at without
-    // opening the window (#935). Linux ignores this natively — Tauri does not
-    // support tray tooltips there — so the command is a no-op on that platform.
-    useEffect(() => {
-        if (!isTauriRuntime()) return;
-        if (showTray === false) return;
-        let cancelled = false;
-        import('@tauri-apps/api/core')
-            .then(async ({ invoke }) => {
-                if (cancelled) return;
-                await invoke('set_tray_tooltip', { tooltip: trayTooltip });
-            })
-            .catch((error) => void logError(error, { scope: 'tray', step: 'setTooltip' }));
-        return () => {
-            cancelled = true;
-        };
-    }, [showTray, trayTooltip]);
-
-    useEffect(() => {
-        if (!isTauriRuntime()) return;
-        const hideFromDock = closeBehavior === 'tray' && showTray !== false;
-        let cancelled = false;
-        import('@tauri-apps/api/core')
-            .then(async ({ invoke }) => {
-                if (cancelled) return;
-                await invoke('set_macos_activation_policy', { accessory: hideFromDock });
-            })
-            .catch((error) => void logError(error, { scope: 'window', step: 'setActivationPolicy' }));
-        return () => {
-            cancelled = true;
-        };
-    }, [closeBehavior, showTray]);
+    useDesktopShellSync({ showTray, trayTooltip, closeBehavior });
 
     useEffect(() => {
         if (import.meta.env.MODE === 'test' || import.meta.env.VITEST || process.env.NODE_ENV === 'test') return;

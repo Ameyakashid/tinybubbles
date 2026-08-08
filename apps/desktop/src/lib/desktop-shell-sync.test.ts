@@ -1,0 +1,131 @@
+import { renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const logErrorMock = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('./app-log', () => ({ logError: logErrorMock }));
+
+import { useDesktopShellSync, type DesktopShellSyncOptions } from './desktop-shell-sync';
+import { setNativeInvokeTransport } from './tauri-invoke';
+
+const invoked: Array<[string, Record<string, unknown> | undefined]> = [];
+let transportResult: () => Promise<unknown> = async () => undefined;
+
+const enableTauri = () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+};
+
+beforeEach(() => {
+    invoked.length = 0;
+    logErrorMock.mockClear();
+    transportResult = async () => undefined;
+    setNativeInvokeTransport(((command: string, args?: Record<string, unknown>) => {
+        invoked.push([command, args]);
+        return transportResult();
+    }) as never);
+});
+
+afterEach(() => {
+    setNativeInvokeTransport(null);
+    delete (window as any).__TAURI_INTERNALS__;
+});
+
+const options: DesktopShellSyncOptions = { showTray: true, trayTooltip: 'Mindwtr', closeBehavior: 'tray' };
+
+describe('useDesktopShellSync', () => {
+    it('invokes nothing off Tauri', () => {
+        renderHook(() => useDesktopShellSync(options));
+        expect(invoked).toEqual([]);
+    });
+
+    it('sets the tray icon before its tooltip, then the dock policy', () => {
+        enableTauri();
+        renderHook(() => useDesktopShellSync(options));
+        expect(invoked).toEqual([
+            ['set_tray_visible', { visible: true }],
+            ['set_tray_tooltip', { tooltip: 'Mindwtr' }],
+            ['set_macos_activation_policy', { accessory: true }],
+        ]);
+    });
+
+    it('leaves the tray alone until settings hydrate', () => {
+        enableTauri();
+        renderHook(() => useDesktopShellSync({ ...options, showTray: undefined }));
+        expect(invoked.map(([command]) => command)).toEqual([
+            // No visibility command without a setting, but an unhydrated tray is
+            // still shown, so its tooltip and the dock policy still apply.
+            'set_tray_tooltip',
+            'set_macos_activation_policy',
+        ]);
+    });
+
+    it('skips the tooltip when the tray is hidden and keeps the dock icon', () => {
+        enableTauri();
+        renderHook(() => useDesktopShellSync({ ...options, showTray: false }));
+        expect(invoked).toEqual([
+            ['set_tray_visible', { visible: false }],
+            ['set_macos_activation_policy', { accessory: false }],
+        ]);
+    });
+
+    it('keeps the dock icon when closing quits', () => {
+        enableTauri();
+        renderHook(() => useDesktopShellSync({ ...options, closeBehavior: 'quit' }));
+        expect(invoked).toContainEqual(['set_macos_activation_policy', { accessory: false }]);
+    });
+
+    it('re-sends only the command whose input changed', () => {
+        enableTauri();
+        const { rerender } = renderHook((props: typeof options) => useDesktopShellSync(props), {
+            initialProps: options,
+        });
+        invoked.length = 0;
+
+        rerender({ ...options, trayTooltip: 'Mindwtr — 2 focused' });
+
+        expect(invoked).toEqual([['set_tray_tooltip', { tooltip: 'Mindwtr — 2 focused' }]]);
+    });
+
+    it('issues each command once per unchanged render', () => {
+        enableTauri();
+        const { rerender } = renderHook((props: typeof options) => useDesktopShellSync(props), {
+            initialProps: options,
+        });
+        invoked.length = 0;
+
+        rerender(options);
+
+        expect(invoked).toEqual([]);
+    });
+
+    it('logs a failure under its own scope and step', async () => {
+        enableTauri();
+        transportResult = async () => {
+            throw new Error('no tray');
+        };
+
+        renderHook(() => useDesktopShellSync(options));
+        await vi.waitFor(() => expect(logErrorMock).toHaveBeenCalledTimes(3));
+
+        expect(logErrorMock.mock.calls.map((call) => (call as unknown as [unknown, object])[1])).toEqual([
+            { scope: 'tray', step: 'setVisible' },
+            { scope: 'tray', step: 'setTooltip' },
+            { scope: 'window', step: 'setActivationPolicy' },
+        ]);
+    });
+
+    it('does not log a failure that settles after unmount', async () => {
+        enableTauri();
+        const rejects: Array<(error: Error) => void> = [];
+        transportResult = () => new Promise((_resolve, rejectPromise) => {
+            rejects.push(rejectPromise);
+        });
+
+        const { unmount } = renderHook(() => useDesktopShellSync(options));
+        expect(rejects).toHaveLength(3);
+        unmount();
+        for (const reject of rejects) reject(new Error('too late'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(logErrorMock).not.toHaveBeenCalled();
+    });
+});
