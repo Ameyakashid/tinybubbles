@@ -155,8 +155,11 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
         if (!isTauriRuntime()) {
             throw new Error('Local calendar files require the desktop app.');
         }
-        const mod: any = await import('@tauri-apps/plugin-fs');
-        return await mod.readTextFile(url);
+        // Read through our own command, not the fs plugin: the plugin's scope
+        // check canonicalizes first, which fails outright on virtual volumes
+        // such as rclone/WinFSP mounts.
+        const mod: any = await import('@tauri-apps/api/core');
+        return await mod.invoke('read_external_calendar_file', { url });
     }
 
     if (isTauriRuntime()) {

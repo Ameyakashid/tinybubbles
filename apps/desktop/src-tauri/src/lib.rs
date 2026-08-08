@@ -69,12 +69,12 @@ use audio::{
 };
 use autostart::{get_launch_at_startup_enabled, set_launch_at_startup_enabled};
 use config::{
-    check_obsidian_vault_marker, expand_external_calendar_file_scopes, expand_obsidian_vault_scope,
-    get_ai_key, get_cloud_config, get_external_calendars, get_obsidian_config, get_sync_backend,
-    get_sync_cloud_provider, get_sync_cloud_provider_state, get_sync_configuration_snapshot,
-    get_webdav_config, get_webdav_password, list_obsidian_vaults, set_ai_key, set_cloud_config,
-    set_external_calendars, set_network_proxy, set_obsidian_config, set_sync_backend,
-    set_sync_cloud_provider, set_webdav_config,
+    check_obsidian_vault_marker, expand_obsidian_vault_scope, get_ai_key, get_cloud_config,
+    get_external_calendars, get_obsidian_config, get_sync_backend, get_sync_cloud_provider,
+    get_sync_cloud_provider_state, get_sync_configuration_snapshot, get_webdav_config,
+    get_webdav_password, list_obsidian_vaults, read_external_calendar_file, set_ai_key,
+    set_cloud_config, set_external_calendars, set_network_proxy, set_obsidian_config,
+    set_sync_backend, set_sync_cloud_provider, set_webdav_config,
 };
 use email_capture::{
     email_capture_commit, email_capture_poll, get_email_capture_config, set_email_capture_config,
@@ -1628,11 +1628,6 @@ pub fn run() {
                         }
                     }
                 }
-
-                expand_external_calendar_file_scopes(
-                    &app.handle(),
-                    config.external_calendars.as_deref(),
-                );
             }
 
             let diagnostics_enabled = diagnostics_enabled();
@@ -1852,6 +1847,7 @@ pub fn run() {
             disconnect_dropbox,
             get_external_calendars,
             set_external_calendars,
+            read_external_calendar_file,
             get_macos_calendar_permission_status,
             request_macos_calendar_permission,
             get_macos_calendar_events,

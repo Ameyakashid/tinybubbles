@@ -9,7 +9,7 @@ import {
 const getCalendarsMock = vi.hoisted(() => vi.fn());
 const fetchSystemCalendarEventsMock = vi.hoisted(() => vi.fn());
 const isTauriRuntimeMock = vi.hoisted(() => vi.fn(() => false));
-const readTextFileMock = vi.hoisted(() => vi.fn());
+const invokeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./external-calendar-service', () => ({
     ExternalCalendarService: {
@@ -21,8 +21,8 @@ vi.mock('./runtime', () => ({
     isTauriRuntime: isTauriRuntimeMock,
 }));
 
-vi.mock('@tauri-apps/plugin-fs', () => ({
-    readTextFile: readTextFileMock,
+vi.mock('@tauri-apps/api/core', () => ({
+    invoke: invokeMock,
 }));
 
 vi.mock('./system-calendar', () => ({
@@ -78,7 +78,7 @@ describe('external calendar events', () => {
         vi.clearAllMocks();
         __externalCalendarEventsTestUtils.clearCache();
         isTauriRuntimeMock.mockReturnValue(false);
-        readTextFileMock.mockReset();
+        invokeMock.mockReset();
         getCalendarsMock.mockResolvedValue([]);
         fetchSystemCalendarEventsMock.mockResolvedValue({
             permission: 'unsupported',
@@ -194,9 +194,9 @@ describe('external calendar events', () => {
         expect(result.events[0].start.slice(0, 10)).toBe('2026-01-01');
     });
 
-    it('loads local ICS calendar files through the desktop filesystem API', async () => {
+    it('loads local ICS calendar files through the desktop calendar read command', async () => {
         isTauriRuntimeMock.mockReturnValue(true);
-        readTextFileMock.mockResolvedValue(workIcs);
+        invokeMock.mockResolvedValue(workIcs);
         getCalendarsMock.mockResolvedValue([
             { id: 'local-work', name: 'Local Work', url: 'file:///home/user/agenda.ics', enabled: true },
         ]);
@@ -206,7 +206,9 @@ describe('external calendar events', () => {
             new Date('2026-04-27T00:00:00.000Z'),
         );
 
-        expect(readTextFileMock).toHaveBeenCalledWith('file:///home/user/agenda.ics');
+        expect(invokeMock).toHaveBeenCalledWith('read_external_calendar_file', {
+            url: 'file:///home/user/agenda.ics',
+        });
         expect(fetch).not.toHaveBeenCalled();
         expect(result.warnings).toEqual([]);
         expect(result.events.map((event) => event.title)).toEqual(['Team Meeting']);

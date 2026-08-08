@@ -90,29 +90,19 @@ fn is_valid_calendar_url(raw: &str) -> bool {
         || calendar_file_url_to_path(trimmed).is_some()
 }
 
-pub(crate) fn expand_external_calendar_file_scopes(app: &tauri::AppHandle, raw: Option<&str>) {
-    let Some(raw) = raw else {
-        return;
-    };
-    let Ok(calendars) = serde_json::from_str::<Vec<ExternalCalendarSubscription>>(raw) else {
-        return;
-    };
-    for calendar in calendars {
-        let Some(path) = calendar_file_url_to_path(&calendar.url) else {
-            continue;
-        };
-        if let Err(error) = app.fs_scope().allow_file(&path) {
-            log::warn!(
-                "Failed to expand Tauri fs scope for calendar file {:?}: {error}",
-                path
-            );
-        } else {
-            log::info!(
-                "Expanded Tauri fs scope to include calendar file {:?}",
-                path
-            );
-        }
+/// Resolves a calendar URL to a path only when it is one of the stored
+/// subscriptions, so the webview cannot turn the read command into an
+/// arbitrary-file-read primitive.
+fn configured_calendar_file_path(raw: Option<&str>, url: &str) -> Option<PathBuf> {
+    let trimmed = url.trim();
+    let calendars = serde_json::from_str::<Vec<ExternalCalendarSubscription>>(raw?).ok()?;
+    if !calendars
+        .iter()
+        .any(|calendar| calendar.url.trim() == trimmed)
+    {
+        return None;
     }
+    calendar_file_url_to_path(trimmed)
 }
 
 pub(crate) fn parse_toml_string_value(raw: &str) -> Option<String> {
@@ -1720,8 +1710,23 @@ pub(crate) fn set_external_calendars(
 
     config.external_calendars = Some(serde_json::to_string(&sanitized).map_err(|e| e.to_string())?);
     write_config_files(&config_path, &get_secrets_path(&app), &config)?;
-    expand_external_calendar_file_scopes(&app, config.external_calendars.as_deref());
     Ok(true)
+}
+
+/// Local `.ics` subscriptions are read here rather than through the Tauri fs
+/// plugin: its scope check canonicalizes the path first, and canonicalize is
+/// unimplemented on the virtual volumes (rclone/WinFSP mounts) these files
+/// often live on, so the read could never be allowed. No path resolution of
+/// any kind happens below.
+#[tauri::command(async)]
+pub(crate) fn read_external_calendar_file(
+    app: tauri::AppHandle,
+    url: String,
+) -> Result<String, String> {
+    let config = read_config(&app);
+    let path = configured_calendar_file_path(config.external_calendars.as_deref(), &url)
+        .ok_or_else(|| format!("Not a subscribed calendar file: {}", url.trim()))?;
+    fs::read_to_string(&path).map_err(|error| format!("Failed to read {}: {error}", path.display()))
 }
 
 #[cfg(test)]
@@ -1759,6 +1764,24 @@ mod tests {
         assert!(is_valid_calendar_url(
             "file:///C:/Users/demo/My%20Calendar.ICS"
         ));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn reads_only_subscribed_calendar_files() {
+        let raw = r#"[{"id":"a","name":"Work","url":"file:///tmp/agenda.ics","enabled":true,"color":null}]"#;
+        assert_eq!(
+            configured_calendar_file_path(Some(raw), " file:///tmp/agenda.ics "),
+            Some(PathBuf::from("/tmp/agenda.ics"))
+        );
+        assert_eq!(
+            configured_calendar_file_path(Some(raw), "file:///etc/shadow.ics"),
+            None
+        );
+        assert_eq!(
+            configured_calendar_file_path(None, "file:///tmp/agenda.ics"),
+            None
+        );
     }
 
     #[test]
