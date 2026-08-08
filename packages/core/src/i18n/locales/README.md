@@ -11,6 +11,10 @@ English and Chinese are the only standalone dictionaries today. For languages us
 
 Each locale carries a `translatedKeyFloor` in `i18n-locales.ts`, and CI enforces it. It is an absolute **number of keys**, not a percentage: deleting a translation always fails the gate, and adding a new English string never does. Raise a floor when real translation work lands; never lower it. A floor of `'all'` means every key in `en.ts` has to be translated — `zh` and `zh-Hant` carry it because they are full dictionaries, and `fa` and `sv` carry it because they are maintained at full parity even though they load as override dictionaries.
 
+## What an untranslated string shows
+
+A key a locale has not translated renders as the English copy, not as anything machine-derived. `resolveI18nText` in `packages/core/src/i18n/index.ts` is the one home for that policy, and its miss order is: an explicit fallback the caller passed, then the English string, then the raw key so a genuinely missing key stays visible. So an incomplete locale reads as clean mixed-language UI, and adding a translation is always an improvement over the English it replaces.
+
 ## When a translation matches English
 
 Some translated UI strings are intentionally identical to English, for example short labels like `Auto` or `Compact`, product names, protocol names, and command tokens. If a translator has reviewed the string and the target-language UI should match English, keep the entry in the locale override file. Coverage counts reviewed override keys, not only strings that visually differ from English.
