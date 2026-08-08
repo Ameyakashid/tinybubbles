@@ -184,7 +184,6 @@ interface TaskListChromeProps {
 /** Which interactions this instance is allowed to offer at all. */
 interface TaskListCapabilityProps {
   allowAdd?: boolean;
-  enableCopilot?: boolean;
   defaultEditTab?: 'task' | 'view';
   onQuickAddInputFocus?: (targetInput?: number | string) => void;
   enableBulkActions?: boolean;
@@ -226,7 +225,6 @@ function TaskListComponent({
   primaryActionRow,
   showFilterButton = true,
   onFilterStateChange,
-  enableCopilot = true,
   defaultEditTab,
   contentPaddingBottom,
   enableProjectReorder = false,
@@ -443,7 +441,7 @@ function TaskListComponent({
   // in-page composer on mobile: capture goes through the bottom-bar + button.
   const quickAddAvailable = allowAdd && !projectReorderMode && Boolean(projectId);
   const aiEnabled = settings?.ai?.enabled === true;
-  const quickAddCopilotEnabled = quickAddAvailable && enableCopilot && aiEnabled;
+  const quickAddCopilotEnabled = quickAddAvailable && aiEnabled;
   const focusTaskLimit = normalizeFocusTaskLimit(settings?.gtd?.focusTaskLimit);
   const focusedCount = getDerivedState().focusedCount;
   const canQuickAddFocus = quickAddFocus || canStarNewCapture({ focusedCount, focusTaskLimit });
@@ -1777,7 +1775,7 @@ function TaskListComponent({
           copilotSuggestion={copilotSuggestion}
           copilotTags={copilotTags}
           copilotThinking={copilotThinking}
-          enableCopilot={enableCopilot}
+          enableCopilot
           handleAddAndEditTask={projectId ? () => handleAddTask({ openAfterCreate: true }) : undefined}
           handleAddTask={handleAddTask}
           focusNewTask={quickAddFocus}
