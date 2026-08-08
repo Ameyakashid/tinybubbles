@@ -999,16 +999,14 @@ export function CalendarView() {
 
         <View style={styles.daySwipeArea} {...dayNavigationResponder.panHandlers}>
           <Animated.View style={[styles.calendarNavigationContent, calendarNavigationSwipeStyle]}>
-            <ScrollView
-              ref={timelineScrollRef}
-              style={styles.dayScroll}
-              contentContainerStyle={styles.dayScrollContent}
-              onScroll={handleTimelineScroll}
-              scrollEventThrottle={16}
-            >
+            {/* Pinned above the timeline, like the week view's all-day row. Inside
+                the timeline ScrollView it scrolled out of sight the moment the
+                view auto-scrolled to the current time, so all-day items looked
+                missing on today. */}
             {allDayItems.length > 0 && (
-              <View style={[styles.allDayCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
+              <View style={[styles.allDayCard, styles.allDayPinned, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
                 <Text style={[styles.sectionLabel, { color: tc.secondaryText }]}>{t('calendar.allDay')}</Text>
+                <ScrollView style={styles.allDayList}>
                 {allDayItems.slice(0, 12).map((item) => {
                   const task = item.kind === 'event' ? null : item.task;
                   const projected = task ? isProjectedRecurringTask(task) : false;
@@ -1030,9 +1028,17 @@ export function CalendarView() {
                     </Pressable>
                   );
                 })}
+                </ScrollView>
               </View>
             )}
 
+            <ScrollView
+              ref={timelineScrollRef}
+              style={styles.dayScroll}
+              contentContainerStyle={styles.dayScrollContent}
+              onScroll={handleTimelineScroll}
+              scrollEventThrottle={16}
+            >
             <View
               onLayout={handleTimelineContentLayout}
               style={[styles.timelineCard, { backgroundColor: tc.cardBg, borderColor: tc.border }]}

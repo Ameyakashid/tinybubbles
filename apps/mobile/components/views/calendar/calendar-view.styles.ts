@@ -391,6 +391,14 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
+  allDayPinned: {
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  // Bounded so a day full of all-day items cannot crowd out the timeline.
+  allDayList: {
+    maxHeight: 132,
+  },
   sectionLabel: {
     fontSize: 12,
     fontWeight: '800',
