@@ -31,11 +31,10 @@ import { StoreTaskItem } from './list/StoreTaskItem';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
 import {
-    buildGroupedVirtualRows,
-    flattenVisibleGroupTasks,
     GroupedTaskSectionHeader,
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
+import { useCollapsedGroupsViewState, useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
@@ -45,14 +44,10 @@ import {
 } from './list/list-filter-controls';
 import {
     DONE_AXES,
-    emptyCollapsedGroups,
     groupTasks,
-    sanitizeCollapsedGroups,
-    type CollapsedGroups,
     type DoneGroupBy,
     type TaskGroup,
 } from './list/next-grouping';
-import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
@@ -111,28 +106,8 @@ const ArchiveProjectRow = memo(function ArchiveProjectRow({
 
 type ArchiveSegment = 'tasks' | 'projects';
 
-// Same shape ListView uses, device-local: the collapsed set per axis (#963).
+// Archive keeps its own collapse key, as every list does (#963).
 const ARCHIVE_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:archive:v1';
-type ArchiveGroupCollapseKey = Exclude<DoneGroupBy, 'none'>;
-type ArchivePersistedViewState = {
-    collapsedGroups: CollapsedGroups<DoneGroupBy>;
-};
-const DEFAULT_ARCHIVE_VIEW_STATE: ArchivePersistedViewState = {
-    collapsedGroups: emptyCollapsedGroups(DONE_AXES),
-};
-
-function sanitizeArchiveViewState(value: unknown, fallback: ArchivePersistedViewState): ArchivePersistedViewState {
-    const parsed = value && typeof value === 'object' && !Array.isArray(value)
-        ? value as Partial<ArchivePersistedViewState>
-        : {};
-    return {
-        collapsedGroups: sanitizeCollapsedGroups(DONE_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
-    };
-}
-
-function getArchiveDomIdSegment(value: string): string {
-    return value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'group';
-}
 
 // App-wide flash duration for the shared highlight (#916).
 const HIGHLIGHT_FLASH_MS = 4000;
@@ -172,10 +147,9 @@ export function ArchiveView() {
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const [segment, setSegment] = useState<ArchiveSegment>('tasks');
     const [searchQuery, setSearchQuery] = useState('');
-    const [archiveViewState, setArchiveViewState] = usePersistedViewState(
+    const { collapsedGroups, setCollapsedGroups } = useCollapsedGroupsViewState(
         ARCHIVE_VIEW_STATE_STORAGE_KEY,
-        DEFAULT_ARCHIVE_VIEW_STATE,
-        sanitizeArchiveViewState,
+        DONE_AXES,
     );
     const listScrollRef = useRef<HTMLDivElement>(null);
     const scrolledHighlightIdRef = useRef<string | null>(null);
@@ -281,47 +255,23 @@ export function ArchiveView() {
         () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t, theme: settings?.theme }) : []),
         [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, settings?.theme, t]
     );
-    const activeCollapseKey: ArchiveGroupCollapseKey | null = isGrouping
-        ? archivedGroupBy as ArchiveGroupCollapseKey
-        : null;
-    const collapsedGroupIds = useMemo(() => {
-        if (!activeCollapseKey) return new Set<string>();
-        return new Set(archiveViewState.collapsedGroups[activeCollapseKey] ?? []);
-    }, [activeCollapseKey, archiveViewState.collapsedGroups]);
-    const getSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
-        `archived-group-${getArchiveDomIdSegment(archivedGroupBy)}-${groupIndex}-${getArchiveDomIdSegment(group.id)}`
-    ), [archivedGroupBy]);
-    const toggleGroup = useCallback((groupId: string) => {
-        if (!activeCollapseKey) return;
-        setArchiveViewState((current) => {
-            const nextIds = new Set(current.collapsedGroups[activeCollapseKey] ?? []);
-            if (nextIds.has(groupId)) {
-                nextIds.delete(groupId);
-            } else {
-                nextIds.add(groupId);
-            }
-            return {
-                collapsedGroups: {
-                    ...current.collapsedGroups,
-                    [activeCollapseKey]: Array.from(nextIds),
-                },
-            };
-        });
-    }, [activeCollapseKey, setArchiveViewState]);
-    const groupedVirtualRows = useMemo(
-        () => buildGroupedVirtualRows(groupedTasks, collapsedGroupIds, isGrouping ? getSectionDomId : undefined),
-        [collapsedGroupIds, getSectionDomId, groupedTasks, isGrouping]
-    );
-    // Grouped rows render in section order, so keyboard navigation and
-    // "select all" have to walk that order rather than the flat sorted one.
-    // A collapsed group contributes no rows, so it must not contribute
-    // selectable tasks either.
-    const orderedTasks = useMemo(
-        () => (isGrouping
-            ? flattenVisibleGroupTasks(groupedTasks, collapsedGroupIds)
-            : archivedTasks),
-        [archivedTasks, collapsedGroupIds, groupedTasks, isGrouping]
-    );
+    const {
+        collapsedGroupIds,
+        getSectionDomId,
+        toggleGroup,
+        virtualRows: groupedVirtualRows,
+        // Grouped rows render in section order, so keyboard navigation and
+        // "select all" have to walk that order rather than the flat sorted one.
+        // A collapsed group contributes no rows, so it contributes no tasks.
+        visibleTasks: orderedTasks,
+    } = useTaskGroupCollapse({
+        axis: archivedGroupBy,
+        groups: groupedTasks,
+        tasks: archivedTasks,
+        idPrefix: 'archived-group',
+        collapsedGroups,
+        setCollapsedGroups,
+    });
     const archivedTaskIds = useMemo(() => orderedTasks.map((task) => task.id), [orderedTasks]);
     const {
         allVisibleTasksSelected: allVisibleSelected,

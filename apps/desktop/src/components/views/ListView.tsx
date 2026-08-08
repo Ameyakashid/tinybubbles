@@ -46,7 +46,6 @@ import { useUiStore } from '../../store/ui-store';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useListViewOptimizations } from '../../hooks/useListViewOptimizations';
-import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { reportError } from '../../lib/report-error';
 import { nextDensityMode } from '../../lib/density';
@@ -56,13 +55,10 @@ import { sortDoneTasksForListView } from './list/done-sort';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
     DONE_AXES,
-    emptyCollapsedGroups,
     FOCUS_AXES,
     groupTasks,
     LIST_AXES,
     REFERENCE_AXES,
-    sanitizeCollapsedGroups,
-    type CollapsedGroups,
     type DoneGroupBy,
     type NextGroupBy,
     type ReferenceGroupBy,
@@ -70,11 +66,10 @@ import {
     type TaskListGroupBy,
 } from './list/next-grouping';
 import {
-    buildGroupedVirtualRows,
-    flattenVisibleGroupTasks,
     GroupedTaskSectionHeader,
     GroupedTaskSections,
 } from './list/GroupedTaskSections';
+import { useCollapsedGroupsViewState, useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import {
     PRIORITY_FILTER_OPTIONS,
     TIME_ESTIMATE_FILTER_OPTIONS,
@@ -106,32 +101,12 @@ const NEXT_WARNING_THRESHOLD = 15;
 const getListViewStateStorageKey = (statusFilter: string) => (
     statusFilter === 'reference' ? 'mindwtr:view:reference:v1' : `mindwtr:view:list:${statusFilter}:v1`
 );
-type ListGroupCollapseKey = Exclude<TaskListGroupBy, 'none'>;
-type ListPersistedViewState = {
-    collapsedGroups: CollapsedGroups<TaskListGroupBy>;
-};
-const DEFAULT_LIST_VIEW_STATE: ListPersistedViewState = {
-    collapsedGroups: emptyCollapsedGroups(LIST_AXES),
-};
 type ShowToast = (
     message: string,
     tone?: 'success' | 'error' | 'info',
     durationMs?: number,
     action?: { label: string; onClick: () => void }
 ) => void;
-
-function sanitizeListViewState(value: unknown, fallback: ListPersistedViewState): ListPersistedViewState {
-    const parsed = value && typeof value === 'object' && !Array.isArray(value)
-        ? value as Partial<ListPersistedViewState>
-        : {};
-    return {
-        collapsedGroups: sanitizeCollapsedGroups(LIST_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
-    };
-}
-
-function getListDomIdSegment(value: string): string {
-    return value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'group';
-}
 
 export function reportArchivedTaskQueryFailure(error: unknown, showToast: ShowToast): void {
     reportError('Failed to load archived tasks', error);
@@ -235,10 +210,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const [searchQuery, setSearchQuery] = useState('');
     const addInputRef = useRef<HTMLInputElement>(null);
     const listScrollRef = useRef<HTMLDivElement>(null);
-    const [listViewState, setListViewState] = usePersistedViewState(
+    const { collapsedGroups, setCollapsedGroups } = useCollapsedGroupsViewState(
         getListViewStateStorageKey(statusFilter),
-        DEFAULT_LIST_VIEW_STATE,
-        sanitizeListViewState,
+        LIST_AXES,
     );
     const prioritiesEnabled = settings?.features?.priorities !== false;
     const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
@@ -563,21 +537,22 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             ? groupTasks(activeGroupBy, { tasks: filteredTasks, areas, projectMap, t, theme: settings?.theme })
             : [] as TaskGroup[]
     ), [activeGroupBy, areas, completedGroupingDayKey, filteredTasks, isListGrouping, projectMap, settings?.theme, t]);
-    const activeCollapseKey: ListGroupCollapseKey | null = isListGrouping
-        ? activeGroupBy as ListGroupCollapseKey
-        : null;
-    const collapsedGroupIds = useMemo(() => {
-        if (!activeCollapseKey) return new Set<string>();
-        return new Set(listViewState.collapsedGroups[activeCollapseKey] ?? []);
-    }, [activeCollapseKey, listViewState.collapsedGroups]);
-    const getSectionDomId = useCallback((group: TaskGroup, groupIndex: number) => (
-        `${statusFilter}-group-${getListDomIdSegment(activeGroupBy)}-${groupIndex}-${getListDomIdSegment(group.id)}`
-    ), [activeGroupBy, statusFilter]);
-    const groupedVirtualRows = useMemo(() => buildGroupedVirtualRows(
-        groupedTasks,
+    const {
         collapsedGroupIds,
-        isListGrouping ? getSectionDomId : undefined,
-    ), [collapsedGroupIds, getSectionDomId, groupedTasks, isListGrouping]);
+        getSectionDomId,
+        toggleGroup,
+        virtualRows: groupedVirtualRows,
+        // What the keyboard, "Select all" and the selection indices walk.
+        // Grouping reorders rows, and a collapsed group renders none (#963).
+        visibleTasks,
+    } = useTaskGroupCollapse({
+        axis: activeGroupBy,
+        groups: groupedTasks,
+        tasks: filteredTasks,
+        idPrefix: `${statusFilter}-group`,
+        collapsedGroups,
+        setCollapsedGroups,
+    });
     const firstGroupedRowIndexByTaskId = useMemo(() => {
         const indices = new Map<string, number>();
         groupedVirtualRows.forEach((row, index) => {
@@ -587,32 +562,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         });
         return indices;
     }, [groupedVirtualRows]);
-    const toggleGroup = useCallback((groupId: string) => {
-        if (!activeCollapseKey) return;
-        setListViewState((current) => {
-            const currentIds = current.collapsedGroups[activeCollapseKey] ?? [];
-            const nextIds = new Set(currentIds);
-            if (nextIds.has(groupId)) {
-                nextIds.delete(groupId);
-            } else {
-                nextIds.add(groupId);
-            }
-            return {
-                collapsedGroups: {
-                    ...current.collapsedGroups,
-                    [activeCollapseKey]: Array.from(nextIds),
-                },
-            };
-        });
-    }, [activeCollapseKey, setListViewState]);
-    // What the keyboard, "Select all" and the selection indices walk. Grouping
-    // reorders rows, and a collapsed group renders none — acting on rows the
-    // list is not showing would be worse than not folding them at all (#963).
-    const visibleTasks = useMemo(() => (
-        isListGrouping
-            ? flattenVisibleGroupTasks(groupedTasks, collapsedGroupIds)
-            : filteredTasks
-    ), [collapsedGroupIds, filteredTasks, groupedTasks, isListGrouping]);
     const taskIndexById = useMemo(() => {
         const map = new Map<string, number>();
         visibleTasks.forEach((task, index) => map.set(task.id, index));

@@ -33,6 +33,7 @@ import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaS
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { GroupedTaskSectionHeader } from './list/GroupedTaskSections';
+import { useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import { LIST_END_GAP } from './list/list-toolbar';
 import { useTaskListScope } from './list/task-list-scope';
 import {
@@ -56,7 +57,9 @@ const DEFAULT_FOCUS_SORT_BY: SortField = 'default';
 const FOCUS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:focus:v1';
 
 type FocusSectionKey = 'schedule' | 'nextActions' | 'reviewDue';
-type FocusGroupCollapseKey = Exclude<NextGroupBy, 'none'>;
+type SetFocusCollapsedGroups = (
+    updater: (current: CollapsedGroups<NextGroupBy>) => CollapsedGroups<NextGroupBy>,
+) => void;
 
 type FocusPersistedViewState = {
     expandedSections: Record<FocusSectionKey, boolean>;
@@ -91,14 +94,6 @@ function sanitizeFocusViewState(value: unknown, fallback: FocusPersistedViewStat
 
 function normalizeAgendaGroupBy(value: unknown): NextGroupBy {
     return sanitizeAxis(FOCUS_AXES, value, 'none');
-}
-
-function getFocusGroupCollapseKey(value: NextGroupBy): FocusGroupCollapseKey | null {
-    return value === 'none' ? null : value;
-}
-
-function getDomIdSegment(value: string): string {
-    return value.trim().replace(/[^a-zA-Z0-9_-]+/g, '-') || 'group';
 }
 
 function getAgendaScrollElement(containerElement: HTMLDivElement | null): HTMLElement | null {
@@ -754,10 +749,25 @@ export function AgendaView() {
     const nextActionGroups = useMemo(() => (
         groupTasks(effectiveNextGroupBy, { tasks: sections.nextActions, areas, projectMap, t, theme: settings?.theme })
     ), [areas, effectiveNextGroupBy, projectMap, sections.nextActions, settings?.theme, t]);
-    const activeGroupCollapseKey = getFocusGroupCollapseKey(effectiveNextGroupBy);
-    const collapsedNextActionGroupIds = useMemo(() => new Set(
-        activeGroupCollapseKey ? persistedViewState.collapsedGroups[activeGroupCollapseKey] ?? [] : []
-    ), [activeGroupCollapseKey, persistedViewState.collapsedGroups]);
+    const setCollapsedGroups = useCallback<SetFocusCollapsedGroups>((updater) => {
+        setPersistedViewState((current) => ({
+            ...current,
+            collapsedGroups: updater(current.collapsedGroups),
+        }));
+    }, [setPersistedViewState]);
+    const {
+        collapsedGroupIds: collapsedNextActionGroupIds,
+        getSectionDomId: getNextActionSectionDomId,
+        toggleGroup: toggleNextActionGroup,
+        visibleTasks: visibleNextActions,
+    } = useTaskGroupCollapse({
+        axis: effectiveNextGroupBy,
+        groups: nextActionGroups,
+        tasks: sections.nextActions,
+        idPrefix: 'agenda-next-group',
+        collapsedGroups: persistedViewState.collapsedGroups,
+        setCollapsedGroups,
+    });
     const getProjectDeadlineLabel = useCallback((taskId: string) => (
         getProjectDeadlineBoostLabel(sections.projectDeadlineBoosts.get(taskId), resolveText)
     ), [resolveText, sections.projectDeadlineBoosts]);
@@ -783,26 +793,16 @@ export function AgendaView() {
         if (top3Only) return [...focusedTasks, ...top3Tasks];
         const visible = [...focusedTasks];
         if (expandedSections.schedule) visible.push(...sections.schedule);
-        if (expandedSections.nextActions) {
-            if (effectiveNextGroupBy === 'none') {
-                visible.push(...sections.nextActions);
-            } else {
-                nextActionGroups.forEach((group) => {
-                    if (!collapsedNextActionGroupIds.has(group.id)) visible.push(...group.tasks);
-                });
-            }
-        }
+        if (expandedSections.nextActions) visible.push(...visibleNextActions);
         if (expandedSections.reviewDue) visible.push(...sections.reviewDue);
         return visible;
     }, [
-        collapsedNextActionGroupIds,
-        effectiveNextGroupBy,
         expandedSections,
         focusedTasks,
-        nextActionGroups,
         sections,
         top3Only,
         top3Tasks,
+        visibleNextActions,
     ]);
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
@@ -856,24 +856,6 @@ export function AgendaView() {
             },
         }));
     }, [setPersistedViewState]);
-    const toggleNextActionGroup = useCallback((groupId: string) => {
-        const collapseKey = getFocusGroupCollapseKey(effectiveNextGroupBy);
-        if (!collapseKey) return;
-        setPersistedViewState((current) => {
-            const currentIds = current.collapsedGroups[collapseKey] ?? [];
-            const nextIds = currentIds.includes(groupId)
-                ? currentIds.filter((id) => id !== groupId)
-                : [...currentIds, groupId];
-            return {
-                ...current,
-                collapsedGroups: {
-                    ...current.collapsedGroups,
-                    [collapseKey]: nextIds,
-                },
-            };
-        });
-    }, [effectiveNextGroupBy, setPersistedViewState]);
-
     const nextActionsCount = sections.nextActions.length;
     const hasAgendaContent = focusedTasks.length > 0
         || sections.schedule.length > 0
@@ -1224,7 +1206,7 @@ export function AgendaView() {
                                     <div className="space-y-2">
                                         {nextActionGroups.map((group, index) => {
                                             const collapsed = collapsedNextActionGroupIds.has(group.id);
-                                            const controlsId = `agenda-next-group-${getDomIdSegment(effectiveNextGroupBy)}-${index}-${getDomIdSegment(group.id)}`;
+                                            const controlsId = getNextActionSectionDomId(group, index);
                                             return (
                                                 <div key={group.id} className="overflow-hidden rounded-lg border border-border/50 bg-card/40">
                                                     <GroupedTaskSectionHeader
