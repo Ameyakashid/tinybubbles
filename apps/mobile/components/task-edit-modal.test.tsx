@@ -53,8 +53,10 @@ vi.mock('../contexts/toast-context', () => ({
   ToastViewport: () => null,
 }));
 
-vi.mock('@/hooks/use-theme-colors', () => ({
-  useThemeColors: () => ({
+vi.mock('@/hooks/use-theme-colors', () => {
+  // One object, like the real hook: resolveThemeTokens caches its result, so a
+  // fresh literal per call would fake instability the app never sees (#766).
+  const themeColors = {
     bg: '#000',
     cardBg: '#111',
     taskItemBg: '#111',
@@ -71,8 +73,9 @@ vi.mock('@/hooks/use-theme-colors', () => ({
     danger: '#ef4444',
     success: '#10b981',
     warning: '#f59e0b',
-  }),
-}));
+  };
+  return { useThemeColors: () => themeColors };
+});
 
 vi.mock('../lib/ai-config', () => ({
   loadAIKey: vi.fn().mockResolvedValue(''),

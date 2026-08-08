@@ -129,19 +129,9 @@ function TaskEditModalInner({
         };
     }, shallow);
     const { t, language } = useLanguage();
-    // useThemeColors returns a fresh object per render; rebuild from the color values so
-    // tc keeps a stable identity until an actual color changes (ThemeColors is exactly these fields).
-    const {
-        bg, border, cardBg, danger, filterBg, icon, inputBg, onTint,
-        secondaryText, success, tabIconDefault, tabIconSelected, taskItemBg, text, tint, warning,
-    } = useThemeColors();
-    const tc = useMemo(() => ({
-        bg, border, cardBg, danger, filterBg, icon, inputBg, onTint,
-        secondaryText, success, tabIconDefault, tabIconSelected, taskItemBg, text, tint, warning,
-    }), [
-        bg, border, cardBg, danger, filterBg, icon, inputBg, onTint,
-        secondaryText, success, tabIconDefault, tabIconSelected, taskItemBg, text, tint, warning,
-    ]);
+    // Already identity-stable: resolveThemeTokens caches its result on the theme,
+    // so this only changes when a colour actually does (#766).
+    const tc = useThemeColors();
     const prioritiesEnabled = settings.features?.priorities !== false;
     const timeEstimatesEnabled = settings.features?.timeEstimates !== false;
     const timeSpentEnabled = settings.features?.pomodoro === true && settings.gtd?.pomodoro?.linkTask === true;
