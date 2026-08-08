@@ -88,16 +88,9 @@ const CORE_MODULE_SPECIFIER = '@tauri-apps/api/core';
 const SEAM_FILE = 'lib/tauri-invoke.ts';
 const EXCLUDED_DIR_NAMES = new Set(['node_modules', 'coverage', 'dist']);
 // Each entry needs a reason and a way out. Converting one of these? Delete its
-// line — a stale exclusion is not an error, but it is dead weight.
+// line — the stale-exclusion test below fails until you do, because a list that
+// only ever grows quietly re-permits the thing the ratchet exists to prevent.
 const EXCLUDED_FILES = new Map<string, string>([
-    // `lib/theme.ts` takes the core module as an injected loader, so its three
-    // callers hold the raw import. Give it invokeNativeOr and all three drop.
-    ['App.tsx', 'passes () => import(core) into resolveSystemThemeCommandPreference'],
-    ['main.tsx', 'passes () => import(core) into resolveSystemThemeCommandPreference'],
-    [
-        'components/views/settings/useSettingsMainPage.ts',
-        'passes () => import(core) into resolveSystemThemeCommandPreference',
-    ],
     // convertFileSrc rewrites a path into a webview URL. It is not an IPC call,
     // so the invoke seam has nothing to offer it.
     ['components/Task/task-item-attachment-utils.ts', 'imports convertFileSrc, not invoke'],
@@ -124,11 +117,19 @@ function collectSourcePaths(): string[] {
     return paths;
 }
 
+// Walking every desktop source file runs well under a second locally and has
+// still blown vitest's 5s default on loaded CI runners, so both tests below
+// share one walk.
+let coreImporters: Set<string> | null = null;
+const filesImportingCore = (): Set<string> => (coreImporters ??= new Set(
+    collectSourcePaths()
+        .filter((path) => readFileSync(path, 'utf8').includes(CORE_MODULE_SPECIFIER))
+        .map((path) => relative(DESKTOP_SRC, path)),
+));
+
 describe('tauri invoke seam ratchet', () => {
     it('keeps @tauri-apps/api/core out of every desktop source file but the seam', () => {
-        const offenders = collectSourcePaths()
-            .filter((path) => readFileSync(path, 'utf8').includes(CORE_MODULE_SPECIFIER))
-            .map((path) => relative(DESKTOP_SRC, path))
+        const offenders = [...filesImportingCore()]
             .filter((rel) => rel !== SEAM_FILE && !EXCLUDED_FILES.has(rel));
 
         expect(
@@ -138,8 +139,18 @@ describe('tauri invoke seam ratchet', () => {
             + ` src/${SEAM_FILE} instead — whichever matches what the call site should do when there`
             + ' is no desktop runtime. Adding an exclusion here re-splits that decision across files.',
         ).toEqual([]);
-        // Walking every desktop source file runs well under a second locally and
-        // has still blown vitest's 5s default on loaded CI runners.
+    }, 60_000);
+
+    it('carries no exclusion for a file that has already dropped the raw import', () => {
+        const importers = filesImportingCore();
+        const stale = [...EXCLUDED_FILES.keys()].filter((rel) => !importers.has(rel));
+
+        expect(
+            stale,
+            `${stale.join(', ')} no longer imports ${CORE_MODULE_SPECIFIER}, so its EXCLUDED_FILES`
+            + ' entry is stale. Delete the entry — left in place it silently re-permits a raw import'
+            + ' in a file the ratchet would otherwise catch.',
+        ).toEqual([]);
     }, 60_000);
 });
 
