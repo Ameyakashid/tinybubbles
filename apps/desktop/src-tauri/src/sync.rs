@@ -3564,6 +3564,14 @@ mod tests {
         for (source, commands) in sources {
             for command in commands {
                 let declaration = format!("fn {command}(");
+                // `find` takes the FIRST match, so a second declaration (a test
+                // helper, a renamed sibling) would let this check silently read
+                // the wrong attribute and pass on a command it never inspected.
+                assert_eq!(
+                    source.matches(&declaration).count(),
+                    1,
+                    "{command} must be declared exactly once for this check to mean anything"
+                );
                 let offset = source
                     .find(&declaration)
                     .unwrap_or_else(|| panic!("{command} not found"));
