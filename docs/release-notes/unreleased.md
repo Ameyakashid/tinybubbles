@@ -8,7 +8,7 @@ _None yet._
 
 ## Full Change List
 
-- All platforms: app startup no longer builds all 20 language dictionaries before the first screen — only the handful of getting-started strings the first-run seed needs are loaded up front. Most noticeable on mobile cold starts.
+- All platforms: the app reaches its first screen faster from a cold start, most noticeably on mobile — startup no longer builds all 20 language dictionaries before drawing anything, and loads only the handful of getting-started strings the first-run seed needs.
 - Desktop: pressing Enter in the context menu's Start Date, Due Date, Review Date, Area, and Contexts panels now saves the value and closes the dialog, matching the task editor. (#992)
 - Mobile: adding a task from a project opened via the Projects tab returns to that project again instead of dropping back to the projects list. (#766)
 - Desktop: Windows sync verifies TLS through the Windows certificate engine again, so setups behind corporate TLS interception (for example Zscaler) sync like they did before 1.1.6. macOS and Linux keep the 1.1.6 TLS 1.3 support. (#663)
