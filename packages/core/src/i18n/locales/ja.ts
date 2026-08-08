@@ -350,6 +350,7 @@ export const jaOverrides: Record<string, string> = {
         'recurrence.showFutureInCalendarHint': '計画用のプレビューのみです。実際の次のタスクは、このタスクを完了したときに作成されます。',
         'inbox.title': '受信箱',
         'inbox.processButton': '受信箱を処理する',
+        'inbox.projectHint': '複数の行動が必要なものですか？処理中に「はい、プロジェクトにしましょう」を選び、成果とその最初の次の行動に名前を付けましょう。',
         'inbox.addPlaceholder': 'タスクを受信箱に追加...',
         'inbox.empty': '受信トレイにタスクがありません',
         'inbox.emptyAddHint': '受信トレイはクリアです。 +をタップしてキャプチャします。',

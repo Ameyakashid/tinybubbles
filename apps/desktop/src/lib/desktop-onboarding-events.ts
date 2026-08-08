@@ -5,6 +5,13 @@ const DESKTOP_ONBOARDING_HANDOFF_HINT_KEY_PREFIX = 'mindwtr:desktop:onboarding-h
 
 export type DesktopOnboardingHandoffPage = 'sync' | 'data';
 
+/**
+ * Dismissible onboarding hints, keyed by where they appear. The settings pages
+ * are handoff targets from the first-run modal; 'inbox-project' is the Inbox
+ * tip that points at the multi-step decision inside Process Inbox (#592).
+ */
+export type DesktopOnboardingHint = DesktopOnboardingHandoffPage | 'inbox-project';
+
 type DesktopFirstRunOnboardingState = {
     hasHydratedSettings: boolean;
     isLoading: boolean;
@@ -42,23 +49,31 @@ export function subscribeDesktopOnboardingEvent(handler: () => void): () => void
     return () => window.removeEventListener(MINDWTR_DESKTOP_ONBOARDING_EVENT, listener);
 }
 
-function getDesktopOnboardingHandoffHintKey(page: DesktopOnboardingHandoffPage): string {
-    return `${DESKTOP_ONBOARDING_HANDOFF_HINT_KEY_PREFIX}${page}`;
+function getDesktopOnboardingHintKey(hint: DesktopOnboardingHint): string {
+    return `${DESKTOP_ONBOARDING_HANDOFF_HINT_KEY_PREFIX}${hint}`;
 }
 
-export function isDesktopOnboardingHandoffHintDismissed(page: DesktopOnboardingHandoffPage): boolean {
+export function isDesktopOnboardingHintDismissed(hint: DesktopOnboardingHint): boolean {
     if (typeof window === 'undefined') return false;
     try {
-        return window.localStorage.getItem(getDesktopOnboardingHandoffHintKey(page)) === 'dismissed';
+        return window.localStorage.getItem(getDesktopOnboardingHintKey(hint)) === 'dismissed';
     } catch {
         return false;
     }
 }
 
-export function dismissDesktopOnboardingHandoffHint(page: DesktopOnboardingHandoffPage): void {
+/**
+ * The Inbox tip retires itself once the user has a project: by then they have
+ * found the multi-step decision, and a hint that keeps showing is nagging.
+ */
+export function shouldShowInboxProjectHint(dismissed: boolean, projectCount: number): boolean {
+    return !dismissed && projectCount === 0;
+}
+
+export function dismissDesktopOnboardingHint(hint: DesktopOnboardingHint): void {
     if (typeof window === 'undefined') return;
     try {
-        window.localStorage.setItem(getDesktopOnboardingHandoffHintKey(page), 'dismissed');
+        window.localStorage.setItem(getDesktopOnboardingHintKey(hint), 'dismissed');
     } catch {
         // Onboarding hints are convenience UI; storage failures should not block the settings page.
     }

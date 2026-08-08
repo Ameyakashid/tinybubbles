@@ -454,6 +454,7 @@ export const csOverrides: Record<string, string> = {
         'recurrence.showFutureInCalendarHint': 'Pouze plánovací náhled; další úkol se vytvoří až po dokončení tohoto.',
         'inbox.title': 'Schránka',
         'inbox.processButton': 'Zpracovat schránku',
+        'inbox.projectHint': 'Něco, co vyžaduje více než jednu akci? Při zpracování zvolte „Ano, udělat z toho projekt“ a pojmenujte výsledek i jeho první další akci.',
         'inbox.addPlaceholder': 'Přidat úkol do schránky…',
         'inbox.empty': 'Ve schránce nejsou žádné úkoly',
         'inbox.emptyAddHint': 'Zachyťte sem cokoli, co máte v hlavě — organizovat můžete později.',

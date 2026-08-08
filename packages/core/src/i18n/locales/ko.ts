@@ -475,6 +475,7 @@ export const koOverrides: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': '수집함',
         'inbox.processButton': '수집함 처리',
+        'inbox.projectHint': '여러 단계가 필요한 항목인가요? 처리하는 중에 「예, 프로젝트로 변환합니다」를 선택해 결과와 첫 번째 다음 행동의 이름을 정하세요.',
         'inbox.addPlaceholder': '수집함에 할 일 추가...',
         'inbox.empty': '수집함에 할 일 없음',
         'inbox.emptyAddHint': '지금은 할 일이 없어요. 떠오르는 것을 여기에 적어 두세요.',

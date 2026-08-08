@@ -411,6 +411,7 @@ export const svOverrides: Record<string, string> = {
 
         'inbox.title': 'Inkorg',
         'inbox.processButton': 'Bearbeta inkorgen',
+        'inbox.projectHint': 'Något som kräver mer än en handling? Välj ”Ja, gör det till ett projekt” när du bearbetar, så namnger du resultatet och dess första nästa handling.',
         'inbox.addPlaceholder': 'Lägg till uppgift i inkorgen...',
         'inbox.empty': 'Inga uppgifter i inkorgen',
         'inbox.emptyAddHint': 'Fånga upp allt du tänker på här — organisera det senare.',

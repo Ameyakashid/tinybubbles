@@ -1,6 +1,12 @@
-import { Play } from 'lucide-react';
+import { useState } from 'react';
+import { Lightbulb, Play, X } from 'lucide-react';
 import type { AppData, Area, Project, StoreActionResult, Task } from '@mindwtr/core';
 
+import {
+    dismissDesktopOnboardingHint,
+    isDesktopOnboardingHintDismissed,
+    shouldShowInboxProjectHint,
+} from '../../lib/desktop-onboarding-events';
 import { InboxProcessingQuickPanel } from '../InboxProcessingQuickPanel';
 import { InboxProcessingWizard } from '../InboxProcessingWizard';
 import { MindSweepLauncher, MindSweepTrigger } from '../MindSweepModal';
@@ -41,6 +47,14 @@ export function InboxProcessor({
     setIsProcessing,
     onOpenMindSweep,
 }: InboxProcessorProps) {
+    // Points at the step new users miss: the capture that needs several actions
+    // becomes a project inside Process Inbox. Retires itself once they have a
+    // project, so it never nags anyone who already knows (#592).
+    const [projectHintDismissed, setProjectHintDismissed] = useState(
+        () => isDesktopOnboardingHintDismissed('inbox-project')
+    );
+    const showProjectHint = shouldShowInboxProjectHint(projectHintDismissed, projects.length);
+
     const {
         inboxCount,
         quickPanelProps,
@@ -67,6 +81,24 @@ export function InboxProcessor({
 
     return (
         <>
+            {showStartButton && showProjectHint && (
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <p className="flex-1">{t('inbox.projectHint')}</p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            dismissDesktopOnboardingHint('inbox-project');
+                            setProjectHintDismissed(true);
+                        }}
+                        className="shrink-0 rounded p-0.5 hover:bg-muted hover:text-foreground"
+                        aria-label={t('common.dismiss')}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            )}
+
             {showStartButton && (
                 <div className="flex flex-wrap items-stretch gap-2">
                     <button

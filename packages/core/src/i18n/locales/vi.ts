@@ -465,6 +465,7 @@ export const viOverrides: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': 'Hộp thư đến',
         'inbox.processButton': 'Xử lý hộp thư đến',
+        'inbox.projectHint': 'Việc cần nhiều hơn một hành động? Khi xử lý, hãy chọn “Có, tạo thành dự án” để đặt tên cho kết quả và hành động kế tiếp đầu tiên của nó.',
         'inbox.addPlaceholder': 'Thêm nhiệm vụ vào hộp thư đến...',
         'inbox.empty': 'Không có nhiệm vụ trong hộp thư đến',
         'inbox.emptyAddHint': 'Ghi lại mọi thứ trong đầu bạn ở đây — sắp xếp sau.',

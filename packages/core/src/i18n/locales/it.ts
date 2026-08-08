@@ -403,6 +403,7 @@ export const itOverrides: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': 'Entrata',
         'inbox.processButton': 'Elabora Entrata',
+        'inbox.projectHint': 'Qualcosa che richiede più di un’azione? Durante l’elaborazione scegli «Sì, trasformalo in progetto» per dare un nome all’esito e alla sua prima azione successiva.',
         'inbox.addPlaceholder': 'Aggiungi attività all\'Entrata...',
         'inbox.empty': 'Nessuna attività nell\'Entrata',
         'inbox.emptyAddHint': 'Cattura qui qualunque cosa ti passi per la mente — organizzerai dopo.',

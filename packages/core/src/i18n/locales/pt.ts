@@ -357,6 +357,7 @@ export const ptOverrides: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': 'Caixa de entrada',
         'inbox.processButton': 'Processar Caixa de entrada',
+        'inbox.projectHint': 'Algo que exige mais de uma ação? Ao processar, escolha «Sim, faça disso um projeto» para nomear o resultado e a sua primeira próxima ação.',
         'inbox.addPlaceholder': 'Adicionar tarefa à Caixa de entrada...',
         'inbox.empty': 'Nenhuma tarefa na caixa de entrada',
         'inbox.emptyAddHint': 'A caixa de entrada está limpa. Toque em + para capturar.',

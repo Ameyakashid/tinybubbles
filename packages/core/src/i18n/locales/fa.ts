@@ -411,6 +411,7 @@ export const faOverrides: Record<string, string> = {
 
         'inbox.title': 'صندوق ورودی',
         'inbox.processButton': 'پردازش صندوق ورودی',
+        'inbox.projectHint': 'کاری که بیش از یک اقدام لازم دارد؟ هنگام پردازش «بله، آن را پروژه کن» را انتخاب کنید تا نتیجه و نخستین اقدام بعدی آن را نام‌گذاری کنید.',
         'inbox.addPlaceholder': 'افزودن کار به صندوق ورودی...',
         'inbox.empty': 'کاری در صندوق ورودی نیست',
         'inbox.emptyAddHint': 'هر چیزی که در ذهن دارید را اینجا ثبت کنید — بعداً سازمان‌دهی کنید.',

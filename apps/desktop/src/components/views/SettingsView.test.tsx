@@ -150,7 +150,7 @@ vi.mock('./settings/useCalendarSettings', () => ({
 }));
 
 import { SettingsView } from './SettingsView';
-import { isDesktopOnboardingHandoffHintDismissed } from '../../lib/desktop-onboarding-events';
+import { isDesktopOnboardingHintDismissed } from '../../lib/desktop-onboarding-events';
 
 describe('SettingsView', () => {
     beforeEach(async () => {
@@ -281,7 +281,7 @@ describe('SettingsView', () => {
         fireEvent.click(getByLabelText('Dismiss onboarding hint'));
 
         expect(queryByText('Recommended sync path')).not.toBeInTheDocument();
-        expect(isDesktopOnboardingHandoffHintDismissed('sync')).toBe(true);
-        expect(isDesktopOnboardingHandoffHintDismissed('data')).toBe(false);
+        expect(isDesktopOnboardingHintDismissed('sync')).toBe(true);
+        expect(isDesktopOnboardingHintDismissed('data')).toBe(false);
     });
 });

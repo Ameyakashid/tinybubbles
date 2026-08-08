@@ -356,6 +356,7 @@ export const arOverrides: Record<string, string> = {
         'recurrence.afterCompletionShort': 'بعد الانتهاء',
         'inbox.title': 'البريد الوارد',
         'inbox.processButton': 'علبة الوارد للعملية',
+        'inbox.projectHint': 'هل يتطلب الأمر أكثر من إجراء واحد؟ أثناء المعالجة اختر «نعم اجعله مشروعا» لتسمية النتيجة وأول إجراء تالٍ لها.',
         'inbox.addPlaceholder': 'إضافة مهمة إلى البريد الوارد...',
         'inbox.empty': 'لا توجد مهام في البريد الوارد',
         'inbox.emptyAddHint': 'البريد الوارد واضح. اضغط على + للالتقاط.',

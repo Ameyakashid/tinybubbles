@@ -75,8 +75,8 @@ import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { usePerformanceMonitor } from "../../hooks/usePerformanceMonitor";
 import { checkBudget } from "../../config/performanceBudgets";
 import {
-  dismissDesktopOnboardingHandoffHint,
-  isDesktopOnboardingHandoffHintDismissed,
+  dismissDesktopOnboardingHint,
+  isDesktopOnboardingHintDismissed,
   type DesktopOnboardingHandoffPage,
 } from "../../lib/desktop-onboarding-events";
 import type { FeedbackSubmitInput } from "./settings/SettingsFeedbackModal";
@@ -213,7 +213,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
   >(() => {
     const dismissed = new Set<SettingsOnboardingHintPage>();
     (["sync", "data"] as SettingsOnboardingHintPage[]).forEach((hintPage) => {
-      if (isDesktopOnboardingHandoffHintDismissed(hintPage)) {
+      if (isDesktopOnboardingHintDismissed(hintPage)) {
         dismissed.add(hintPage);
       }
     });
@@ -465,7 +465,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
   }, [activeOnboardingHintPage]);
   const dismissOnboardingHint = useCallback(() => {
     if (!activeOnboardingHintPage) return;
-    dismissDesktopOnboardingHandoffHint(activeOnboardingHintPage);
+    dismissDesktopOnboardingHint(activeOnboardingHintPage);
     setDismissedOnboardingHintPages((current) => {
       if (current.has(activeOnboardingHintPage)) return current;
       const next = new Set(current);

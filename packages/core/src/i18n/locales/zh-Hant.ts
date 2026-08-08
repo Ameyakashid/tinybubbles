@@ -417,6 +417,7 @@ export const zhHant: Record<string, string> = {
         'recurrence.showFutureInCalendarHint': '僅用於規劃預覽；完成目前任務後才會建立真正的下一個任務。',
         'inbox.title': '收集箱',
         'inbox.processButton': '處理收集箱',
+        'inbox.projectHint': '有些事需要不止一個行動？處理時選擇「是，設爲項目」，爲這個結果和它的第一個下一步行動命名。',
         'inbox.addPlaceholder': '添加任務到收集箱...',
         'inbox.empty': '收集箱中沒有任務',
         'inbox.emptyAddHint': '收集箱已清空，點擊 + 記錄。',

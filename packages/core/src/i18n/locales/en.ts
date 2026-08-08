@@ -425,6 +425,7 @@ export const en: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': 'Inbox',
         'inbox.processButton': 'Process Inbox',
+        'inbox.projectHint': 'Something that takes more than one action? While processing, choose “Yes, make it a project” to name the outcome and its first next action.',
         'inbox.addPlaceholder': 'Add task to inbox...',
         'inbox.empty': 'No tasks in inbox',
         'inbox.emptyAddHint': 'Capture anything on your mind here — organize later.',

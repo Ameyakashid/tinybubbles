@@ -332,6 +332,7 @@ export const esOverrides: Record<string, string> = {
         'recurrence.afterCompletionShort': 'tras completar',
         'inbox.title': 'Bandeja',
         'inbox.processButton': 'Procesar bandeja',
+        'inbox.projectHint': '¿Algo que requiere más de una acción? Al procesarlo, elige «Sí, convertir en proyecto» para nombrar el resultado y su primera siguiente acción.',
         'inbox.addPlaceholder': 'Capturar...',
         'inbox.empty': 'No hay capturas en la bandeja de entrada',
         'inbox.emptyAddHint': 'Bandeja de entrada is clear. Tap + to capture.',

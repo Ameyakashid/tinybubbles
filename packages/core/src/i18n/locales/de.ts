@@ -381,6 +381,7 @@ export const deOverrides: Record<string, string> = {
         // Inbox (Mobile)
         'inbox.title': 'Posteingang',
         'inbox.processButton': 'Posteingang verarbeiten',
+        'inbox.projectHint': 'Etwas, das mehrere Handlungen erfordert? Wählen Sie beim Verarbeiten „Ja, erstelle ein Projekt“, um das Ergebnis und dessen erste nächste Aktion zu benennen.',
         'inbox.addPlaceholder': 'Eine Aufgabe zum Posteingang hinzufügen ...',
         'inbox.empty': 'Keine Aufgaben im Posteingang',
         'inbox.emptyAddHint': 'Posteingang ist leer. Tippe auf +, um Elemente hinzuzufügen.',

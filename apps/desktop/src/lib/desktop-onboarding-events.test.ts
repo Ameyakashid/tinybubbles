@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-    dismissDesktopOnboardingHandoffHint,
-    isDesktopOnboardingHandoffHintDismissed,
+    dismissDesktopOnboardingHint,
+    isDesktopOnboardingHintDismissed,
+    shouldShowInboxProjectHint,
     shouldOpenDesktopFirstRunOnboarding,
 } from './desktop-onboarding-events';
 
@@ -49,12 +50,25 @@ describe('desktop onboarding events', () => {
     });
 
     it('stores onboarding handoff hint dismissals per page in local storage', () => {
-        expect(isDesktopOnboardingHandoffHintDismissed('sync')).toBe(false);
-        expect(isDesktopOnboardingHandoffHintDismissed('data')).toBe(false);
+        expect(isDesktopOnboardingHintDismissed('sync')).toBe(false);
+        expect(isDesktopOnboardingHintDismissed('data')).toBe(false);
 
-        dismissDesktopOnboardingHandoffHint('sync');
+        dismissDesktopOnboardingHint('sync');
 
-        expect(isDesktopOnboardingHandoffHintDismissed('sync')).toBe(true);
-        expect(isDesktopOnboardingHandoffHintDismissed('data')).toBe(false);
+        expect(isDesktopOnboardingHintDismissed('sync')).toBe(true);
+        expect(isDesktopOnboardingHintDismissed('data')).toBe(false);
+    });
+
+    it('keeps the inbox project hint dismissal separate from the settings handoff hints', () => {
+        dismissDesktopOnboardingHint('inbox-project');
+
+        expect(isDesktopOnboardingHintDismissed('inbox-project')).toBe(true);
+        expect(isDesktopOnboardingHintDismissed('sync')).toBe(false);
+    });
+
+    it('shows the inbox project hint only until it is dismissed or a project exists', () => {
+        expect(shouldShowInboxProjectHint(false, 0)).toBe(true);
+        expect(shouldShowInboxProjectHint(true, 0)).toBe(false);
+        expect(shouldShowInboxProjectHint(false, 1)).toBe(false);
     });
 });
