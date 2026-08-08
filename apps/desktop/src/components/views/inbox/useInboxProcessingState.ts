@@ -6,7 +6,6 @@ import {
     getRecentTaskTokens,
     filterProjectsBySelectedArea,
     getProjectChoiceState,
-    isTaskInActiveProject,
     normalizeClockTimeInput,
     openProcessInboxTask,
     selectProcessInboxCandidates,
@@ -30,7 +29,7 @@ import type {
 import type { InboxProcessingScheduleFieldKey, InboxProcessingScheduleFieldsControls } from '../../InboxProcessingScheduleFields';
 import type { ProcessingStep } from '../../InboxProcessingWizard';
 import { DEFAULT_TASK_EDITOR_HIDDEN } from '../../Task/task-item-helpers';
-import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea, resolveAreaFilterSelection } from '@mindwtr/core';
 import {
     getDateFieldDraft,
     mergeSuggestedTokens,
@@ -189,9 +188,9 @@ export function useInboxProcessingState({
         () => resolveAreaFilterSelection(settings?.filters, areas),
         [settings?.filters, areas],
     );
-    const matchesAreaFilter = useCallback(
-        (task: Task) => taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById),
-        [resolvedAreaFilter, projectMap, areaById],
+    const areaVisibility = useMemo(
+        () => ({ areaById, projectById: projectMap, resolvedAreaFilter }),
+        [areaById, projectMap, resolvedAreaFilter],
     );
     const processingStep = processingSession.currentStep ?? 'actionable';
     const stepHistory = processingSession.stepHistory;
@@ -213,11 +212,8 @@ export function useInboxProcessingState({
     );
 
     const eligibleInboxTasks = useMemo(
-        () => selectProcessInboxCandidates(tasks, (task) => (
-            isTaskInActiveProject(task, projectMap)
-            && matchesAreaFilter(task)
-        )),
-        [matchesAreaFilter, projectMap, tasks],
+        () => selectProcessInboxCandidates(tasks, (task) => isTaskVisibleInArea(task, areaVisibility)),
+        [areaVisibility, tasks],
     );
     const processingTask = useMemo(
         () => eligibleInboxTasks.find((task) => task.id === processingSession.currentTaskId) ?? null,

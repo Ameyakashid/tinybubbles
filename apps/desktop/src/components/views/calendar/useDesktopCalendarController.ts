@@ -17,7 +17,7 @@ import {
     getWeekStartsOnIndex,
     findFreeSlotForDay as findCalendarFreeSlotForDay,
     isSlotFreeForDay as isCalendarSlotFreeForDay,
-    isTaskInActiveProject,
+    isTaskVisibleInArea,
     isTaskInCalendarHistoryProject,
     isProjectedRecurringTask,
     hasTimeComponent,
@@ -184,18 +184,23 @@ export function useDesktopCalendarController() {
     // The project/area half of calendar visibility, split out because the
     // completed look-back (#955) obeys it too and must not inherit the status
     // rule that hides done and archived tasks from the schedulable buckets.
+    // The derived `projectMap` on purpose: it carries tombstones, so a task
+    // under a just-deleted project is hidden rather than treated as loose.
+    const visibility = useMemo(
+        () => ({ areaById, projectById: projectMap, resolvedAreaFilter }),
+        [areaById, projectMap, resolvedAreaFilter],
+    );
+
     const isCalendarTaskInScope = useCallback((task: Task) => {
         if (!isTaskInCalendarHistoryProject(task, projectMap)) return false;
         if (normalizedViewFilterQuery && !task.title.toLowerCase().includes(normalizedViewFilterQuery)) return false;
         return taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById);
     }, [projectMap, resolvedAreaFilter, areaById, normalizedViewFilterQuery]);
 
-    const isSchedulableTask = useCallback((task: Task) => {
-        if (!isSchedulableCalendarTask(task)) return false;
-        if (!isTaskInActiveProject(task, projectMap)) return false;
-        if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)) return false;
-        return true;
-    }, [projectMap, resolvedAreaFilter, areaById]);
+    const isSchedulableTask = useCallback(
+        (task: Task) => isSchedulableCalendarTask(task) && isTaskVisibleInArea(task, visibility),
+        [visibility],
+    );
 
     const isCalendarTaskVisible = useCallback((task: Task) => {
         if (!isSchedulableTask(task)) return false;

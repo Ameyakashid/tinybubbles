@@ -48,7 +48,8 @@ import { useListViewOptimizations } from '../../hooks/useListViewOptimizations';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { reportError } from '../../lib/report-error';
 import { nextDensityMode } from '../../lib/density';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, isTaskVisibleInArea, projectMatchesAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { sortDoneTasksForListView } from './list/done-sort';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
@@ -163,10 +164,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         density === 'condensed' ? 'condensed' : density === 'compact' ? 'compact' : 'comfortable';
     // Memoized: the resolved selection is an object, and a fresh identity on
     // every render would invalidate every list memo downstream.
-    const resolvedAreaFilter = useMemo(
-        () => resolveAreaFilterSelection(settings?.filters, areas),
-        [settings?.filters, areas],
-    );
+    const { areaById, projectById: metadataProjectMap, resolvedAreaFilter } = useAreaVisibility();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [quickAddSyntaxOpen, setQuickAddSyntaxOpen] = useState(false);
     const [mindSweepOpen, setMindSweepOpen] = useState(false);
@@ -216,18 +214,16 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const readOnly = statusFilter === 'done';
     const showViewFilterInput = statusFilter !== 'inbox';
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    const metadataProjectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-    const metadataAreaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
     const listFilterableTasks = useMemo(() => {
         const allowDeferredProjectTasks = statusFilter === 'done' || statusFilter === 'archived';
         return baseTasks.filter((task) => {
             if (task.deletedAt) return false;
             if (statusFilter !== 'all' && task.status !== statusFilter) return false;
             if (!allowDeferredProjectTasks && !isTaskInActiveProject(task, metadataProjectMap)) return false;
-            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, metadataProjectMap, metadataAreaById)) return false;
+            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, metadataProjectMap, areaById)) return false;
             return true;
         });
-    }, [baseTasks, metadataAreaById, metadataProjectMap, resolvedAreaFilter, statusFilter]);
+    }, [baseTasks, areaById, metadataProjectMap, resolvedAreaFilter, statusFilter]);
     const metadataFilterVisibility = useMemo(() => getTaskMetadataFilterVisibility(listFilterableTasks, {
         prioritiesEnabled,
         timeEstimatesEnabled,
@@ -360,21 +356,25 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         setSearchQuery('');
     }, [statusFilter]);
 
-    const areaById = useMemo(() => new Map(areas.map((area) => [area.id, area])), [areas]);
+    // The derived `projectMap` on purpose, not the hook's: it carries
+    // tombstones, so a task under a just-deleted project stays hidden.
+    const waitingVisibility = useMemo(
+        () => ({ areaById, projectById: projectMap, resolvedAreaFilter }),
+        [areaById, projectMap, resolvedAreaFilter],
+    );
     const waitingPeople = useMemo(() => {
         if (statusFilter !== 'waiting') return [];
         const people = new Map<string, string>();
         for (const task of baseTasks) {
-            if (task.deletedAt || task.status !== 'waiting') continue;
-            if (!isTaskInActiveProject(task, projectMap)) continue;
-            if (!taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectMap, areaById)) continue;
+            if (task.status !== 'waiting') continue;
+            if (!isTaskVisibleInArea(task, waitingVisibility)) continue;
             const person = getWaitingPerson(task);
             if (!person) continue;
             const key = person.toLowerCase();
             if (!people.has(key)) people.set(key, person);
         }
         return [...people.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    }, [areaById, baseTasks, projectMap, resolvedAreaFilter, statusFilter]);
+    }, [baseTasks, statusFilter, waitingVisibility]);
 
     useEffect(() => {
         if (statusFilter !== 'waiting' && selectedWaitingPerson) {
