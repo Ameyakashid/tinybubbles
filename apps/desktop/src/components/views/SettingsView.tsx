@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_ANTHROPIC_THINKING_BUDGET,
-  getEnglishI18nValue,
   translateWithFallback,
   LOCALES,
   submitFeedbackSubmission,
@@ -45,11 +44,7 @@ import {
   markSettingsOpenTrace,
   wrapSettingsOpenImport,
 } from "../../lib/settings-open-diagnostics";
-import {
-  labelKeyOverrides,
-  SETTINGS_LABEL_KEYS,
-  type SettingsLabels,
-} from "./settings/labels";
+import { buildSettingsLabels } from "./settings/labels";
 import {
   buildDesktopSettingsSearchResults,
   clearSettingsRowHighlight,
@@ -279,15 +274,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     return translateWithFallback(translate, "common.cancel", "Cancel");
   }, [translate]);
 
-  const t = useMemo(() => {
-    const result = {} as SettingsLabels;
-    SETTINGS_LABEL_KEYS.forEach((key) => {
-      const i18nKey = labelKeyOverrides[key] ?? `settings.${key}`;
-      const englishFallback = getEnglishI18nValue(i18nKey) ?? key;
-      result[key] = translateWithFallback(translate, i18nKey, englishFallback);
-    });
-    return result;
-  }, [language, translate]);
+  const t = useMemo(() => buildSettingsLabels(translate), [language, translate]);
 
   const searchResults = useMemo(
     () => buildDesktopSettingsSearchResults((key) => translateWithFallback(translate, key, "")),

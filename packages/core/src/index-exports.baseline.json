@@ -649,6 +649,7 @@
     "resolveDropboxPath",
     "resolveFocusStarAction",
     "resolveGeminiModel",
+    "resolveI18nText",
     "resolveLanguageFromLocale",
     "resolveProcessInboxWorkflowEvent",
     "resolveRelativeStartUpdates",

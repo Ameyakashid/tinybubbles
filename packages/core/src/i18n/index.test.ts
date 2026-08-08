@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatI18nTemplate, getEnglishI18nValue, getI18nKeyForEnglishText } from './index';
+import { formatI18nTemplate, getEnglishI18nValue, getI18nKeyForEnglishText, resolveI18nText } from './index';
 
 describe('formatI18nTemplate', () => {
     it('replaces repeated named placeholders wherever translators place them', () => {
@@ -27,5 +27,38 @@ describe('getEnglishI18nValue', () => {
     it('returns English copy for a locale key', () => {
         expect(getEnglishI18nValue('settings.featurePomodoro')).toBe('Pomodoro timer');
         expect(getEnglishI18nValue('settings.missing')).toBeUndefined();
+    });
+});
+
+describe('resolveI18nText', () => {
+    // Both platforms' `t` returns the key itself when the locale has no entry.
+    const miss = (key: string) => key;
+
+    it('returns the translation when the locale has one', () => {
+        const t = (key: string) => (key === 'settings.featurePomodoro' ? 'Pomodoro-Timer' : key);
+        expect(resolveI18nText(t, 'settings.featurePomodoro')).toBe('Pomodoro-Timer');
+    });
+
+    it('prefers an explicit fallback over the English copy on a miss', () => {
+        expect(resolveI18nText(miss, 'settings.featurePomodoro', { fallback: 'Timer' })).toBe('Timer');
+    });
+
+    it('falls back to the English copy, untouched, when no fallback is given', () => {
+        expect(resolveI18nText(miss, 'settings.featurePomodoro')).toBe('Pomodoro timer');
+    });
+
+    it('returns the key itself when neither the locale nor en.ts knows it', () => {
+        expect(resolveI18nText(miss, 'settings.missing')).toBe('settings.missing');
+    });
+
+    it('treats an empty translation as a miss', () => {
+        expect(resolveI18nText(() => '', 'settings.featurePomodoro')).toBe('Pomodoro timer');
+    });
+
+    it('fills template values in both the translation and the fallback', () => {
+        const t = (key: string) => (key === 'bulk.applied' ? '{{count}} ausgewählt' : key);
+        expect(resolveI18nText(t, 'bulk.applied', { values: { count: 3 } })).toBe('3 ausgewählt');
+        expect(resolveI18nText(miss, 'bulk.applied', { fallback: '{{count}} selected', values: { count: 3 } }))
+            .toBe('3 selected');
     });
 });

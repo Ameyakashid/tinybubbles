@@ -1,4 +1,4 @@
-import { getEnglishI18nValue } from '@mindwtr/core';
+import { resolveI18nText, type TranslateFn } from '@mindwtr/core';
 
 // The keys settings pages read through the `t` prop. Every key resolves to a
 // `settings.<key>` string in packages/core/src/i18n (or an explicit override
@@ -647,17 +647,25 @@ export const labelKeyOverrides: Partial<Record<keyof SettingsLabels, string>> = 
     taskEditorSectionDetails: 'taskEdit.details',
 } as const;
 
-// English settings labels, resolved from core's i18n locale, keyed the same
-// way SettingsView builds its `t` prop. Used by settings page tests that need
-// a real (not mocked) SettingsLabels object; components should get `t` from
-// SettingsView instead.
-export function getEnglishSettingsLabels(): SettingsLabels {
+// The `t` prop every settings page reads. One loop, so SettingsView and the
+// English-only variant below cannot drift apart on either the key mapping or
+// what happens when a locale is missing the key.
+export function buildSettingsLabels(translate: TranslateFn): SettingsLabels {
     const result = {} as SettingsLabels;
     SETTINGS_LABEL_KEYS.forEach((key) => {
-        const i18nKey = labelKeyOverrides[key] ?? `settings.${key}`;
-        result[key] = getEnglishI18nValue(i18nKey) ?? key;
+        // No explicit fallback: resolveI18nText already falls through to the
+        // English copy and then to the key itself.
+        result[key] = resolveI18nText(translate, labelKeyOverrides[key] ?? `settings.${key}`);
     });
     return result;
+}
+
+// English settings labels. Used by settings page tests that need a real (not
+// mocked) SettingsLabels object; components should get `t` from SettingsView
+// instead. `t` returns the key on a miss, so an identity translate misses
+// every key and resolveI18nText falls through to the English copy.
+export function getEnglishSettingsLabels(): SettingsLabels {
+    return buildSettingsLabels((key) => key);
 }
 
 // The settings search index itself lives in core

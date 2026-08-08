@@ -113,6 +113,43 @@ describe('i18n fallback idiom ratchet', () => {
         // vitest's 5s default.
     }, 60_000);
 
+    it('keeps app-local "what do I show on a miss" policies out of apps/desktop and apps/mobile source', () => {
+        // A function that reaches for both `t()` and `getEnglishI18nValue()` is
+        // re-deciding what to render when a locale lacks a key. That policy has one
+        // home, core's resolveI18nText(). Five hand-written copies existed before
+        // i18n-resolve-20260808, in three different shapes, and one of them
+        // (settings.hooks.ts) word-swapped the English text into nonsense for two
+        // years because no core i18n test could reach an app-level hook.
+        const violations: string[] = [];
+        for (const { path, sourceFile } of collectSourceFiles()) {
+            const visit = (node: ts.Node) => {
+                if (ts.isFunctionLike(node) && node.body) {
+                    let readsEnglish = false;
+                    let readsT = false;
+                    const scan = (inner: ts.Node) => {
+                        if (ts.isCallExpression(inner) && ts.isIdentifier(inner.expression)) {
+                            if (inner.expression.escapedText === 'getEnglishI18nValue') readsEnglish = true;
+                            if (asTCall(inner)) readsT = true;
+                        }
+                        ts.forEachChild(inner, scan);
+                    };
+                    scan(node.body);
+                    if (readsEnglish && readsT) {
+                        const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+                        violations.push(`${path}:${line + 1}`);
+                    }
+                }
+                ts.forEachChild(node, visit);
+            };
+            visit(sourceFile);
+        }
+
+        // Nested functions make the innermost offender report as several enclosing
+        // ones too; the innermost line is the one to fix.
+        expect(violations).toEqual([]);
+        // Same slow-runner allowance as the idiom scan above.
+    }, 60_000);
+
     it('keeps every statically-referenced i18n key present in en.ts', () => {
         // Static analysis boundary: only literal-string keys are checkable this way.
         // A dynamic key built from a runtime value (e.g. t(`status.${task.status}`) or

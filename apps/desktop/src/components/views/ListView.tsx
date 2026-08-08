@@ -22,7 +22,7 @@ import { buildProjectOrderMap,
     sortTasksBy,
     TaskPriority,
     TimeEstimate,
-    translateWithFallback as translateTextWithFallback,
+    resolveI18nText,
     useTaskStore, tFallback, } from '@mindwtr/core';
 import type { FilterCriteria, Task, TaskStatus } from '@mindwtr/core';
 import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
@@ -210,8 +210,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         setListFilters,
     } = useListFilterControls();
     const showToast = useUiStore((state) => state.showToast);
-    const translateWithFallback = useCallback((key: string, fallback: string) => {
-        return translateTextWithFallback(t, key, fallback);
+    const resolveText = useCallback((key: string, fallback: string) => {
+        return resolveI18nText(t, key, { fallback });
     }, [t]);
     const showListDetails = useUiStore((state) => state.listOptions.showDetails);
     const nextGroupBy = useUiStore((state) => state.listOptions.nextGroupBy);
@@ -538,9 +538,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
             return sortTasksBy(filtered, deferredFilterInputs.sortBy);
         });
     }, [deferredFilterInputs, nextVisibilityDayKey, nextVisibilityTick, normalizedSearchQuery, showViewFilterInput]);
-    const resolveText = useCallback((key: string, fallback: string) => {
-        return translateTextWithFallback(t, key, fallback);
-    }, [t]);
     const activeNextGroupBy: NextGroupBy = statusFilter !== 'reference' && statusFilter !== 'done' ? nextGroupBy : 'none';
     const activeReferenceGroupBy: ReferenceGroupBy = statusFilter === 'reference' ? (referenceGroupBy ?? 'area') : 'none';
     const activeDoneGroupBy: DoneGroupBy = statusFilter === 'done' ? (doneGroupBy ?? 'none') : 'none';
@@ -755,10 +752,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         await organizeSelectedTasks(input, {
             afterSuccess: () => {
             setBulkOrganizeOpen(false);
-            const message = translateWithFallback(
-                'bulk.organizeApplied',
-                '{{count}} selected tasks organized',
-            ).replace('{{count}}', String(selectedCount));
+            const message = resolveI18nText(t, 'bulk.organizeApplied', {
+                fallback: '{{count}} selected tasks organized',
+                values: { count: selectedCount },
+            });
             showToast(message, 'success');
             },
         });
@@ -766,7 +763,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
         organizeSelectedTasks,
         selectedIdsArray,
         showToast,
-        translateWithFallback,
+        t,
     ]);
 
     const handleAddTask = async (e: React.FormEvent) => {

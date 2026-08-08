@@ -16,7 +16,6 @@ import {
   buildCalendarEventTaskDraft,
   expandCalendarRecurringTaskSetInRange,
   formatCalendarTimeInputValue,
-  formatI18nTemplate,
   getCalendarPlanningCandidates,
   getCalendarMonthIndex,
   getShortWeekdayLabels,
@@ -24,7 +23,8 @@ import {
   resolveCalendarSystemSetting,
   resolveDateLocaleTag,
   findFreeSlotForDay as findCalendarFreeSlotForDay,
-  getEnglishI18nValue,
+  resolveI18nText,
+  type I18nTemplateValues,
   getWeekStartsOnIndex,
   isSlotFreeForDay as isCalendarSlotFreeForDay,
   isProjectedRecurringTask,
@@ -195,13 +195,7 @@ export function useCalendarViewController() {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
-  const tr = (key: string, values?: Record<string, string | number | boolean | null | undefined>) => {
-    const translated = t(key);
-    const template = translated && translated !== key
-      ? translated
-      : getEnglishI18nValue(key) ?? key;
-    return values ? formatI18nTemplate(template, values) : template;
-  };
+  const tr = (key: string, values?: I18nTemplateValues) => resolveI18nText(t, key, { values });
 
   const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
   const prioritiesEnabled = settings?.features?.priorities !== false;
