@@ -380,7 +380,7 @@ export const deOverrides: Record<string, string> = {
         
         // Inbox (Mobile)
         'inbox.title': 'Posteingang',
-        'inbox.processButton': 'Posteingang verabeiten',
+        'inbox.processButton': 'Posteingang verarbeiten',
         'inbox.addPlaceholder': 'Eine Aufgabe zum Posteingang hinzufügen ...',
         'inbox.empty': 'Keine Aufgaben im Posteingang',
         'inbox.emptyAddHint': 'Posteingang ist leer. Tippe auf +, um Elemente hinzuzufügen.',
@@ -667,7 +667,7 @@ export const deOverrides: Record<string, string> = {
         
         // Processing
         'process.title': 'Element verarbeiten',
-        'process.refineTitle': 'Die Aufgabe präzisiseren',
+        'process.refineTitle': 'Die Aufgabe präzisieren',
         'process.refineDesc': 'Klären Sie es ab, bevor Sie entscheiden, was Sie damit tun wollen.',
         'process.refineNext': 'Nächste',
         'process.refineDelete': 'Löschen',
@@ -720,7 +720,7 @@ export const deOverrides: Record<string, string> = {
         'process.addContext': 'Hinzufügen',
         'process.newContextPlaceholder': 'Neuer Kontext ...',
         'process.remaining': 'Elemente verbleiben',
-        'process.btn': 'Posteingang verabeiten',
+        'process.btn': 'Posteingang verarbeiten',
         'process.modeGuided': 'Geführt',
         'process.modeQuick': 'Schnell',
         'process.quickDesc': 'Überprüfen Sie die Details, wählen Sie das Ergebnis und wechseln Sie direkt zum nächsten Element.',
