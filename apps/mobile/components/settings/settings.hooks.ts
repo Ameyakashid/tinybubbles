@@ -12,7 +12,7 @@ export function useSettingsLocalization() {
     const isChineseLanguage = language === 'zh' || language === 'zh-Hant';
     const tr = useMemo(
         () => (key: string, values?: I18nTemplateValues) => resolveI18nText(t, key, { values }),
-        [language, t],
+        [t],
     );
 
     return {
