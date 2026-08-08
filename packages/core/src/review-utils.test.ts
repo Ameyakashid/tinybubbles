@@ -218,6 +218,11 @@ describe('getDailyReviewBuckets', () => {
         expect(buckets.focusCandidates.map((task) => task.id)).toEqual(['next-later-today']);
     });
 
+    // Both branches are pinned on purpose. The default — spanning every area —
+    // is the product decision (a review sweeps the whole system; the area filter
+    // is a browsing device), so it must not drift into honouring the app-wide
+    // filter just because every other list does. The opt-in branch keeps the
+    // seam honest so it still works the day something wants to use it.
     it('spans every area by default and narrows only when given an area filter', () => {
         const project = createProject({ id: 'project-work', areaId: 'area-work' });
         const workTask = createTask({ id: 'inbox-work', status: 'inbox', projectId: project.id });

@@ -180,10 +180,11 @@ export type ReviewBucketOptions = {
     showFutureStarts?: boolean;
     sortBy?: TaskSortBy;
     /**
-     * Narrow the review to the caller's area filter. Omitted means every area,
-     * which is what both platforms have always done: a Daily Review spans the
-     * whole system rather than whatever slice a list view is currently showing.
-     * Pass this only if that is deliberately being changed.
+     * Opt-in area narrowing, read by `getDailyReviewBuckets` only —
+     * `getWeeklyReviewBuckets` ignores it. Currently unused: no caller passes
+     * it, so every review spans every area; see `getDailyReviewBuckets` for
+     * why. Kept as the seam so scoping a review is a one-argument change at the
+     * call site rather than a rewrite of the predicate.
      */
     areaVisibility?: Pick<AreaVisibilityContext, 'areaById' | 'resolvedAreaFilter'>;
 };
@@ -204,6 +205,15 @@ export type DailyReviewBuckets = {
 /**
  * Daily Review's per-step task lists. `done` is excluded once, at the base —
  * every bucket below is a further filter of that same active set.
+ *
+ * A review deliberately ignores the app-wide area filter and sweeps the whole
+ * system. The point of the review is to find what you have not looked at, and
+ * an area filter is a browsing device — a way to narrow what you are reading
+ * right now — not a statement about which commitments still count. Honouring it
+ * here would let an inbox item quietly sit unreviewed for as long as its area
+ * stayed filtered out, which is the exact failure the review exists to prevent.
+ * `opts.areaVisibility` is the seam if this is ever revisited; nothing passes it
+ * today.
  */
 export function getDailyReviewBuckets(
     tasks: Task[],
