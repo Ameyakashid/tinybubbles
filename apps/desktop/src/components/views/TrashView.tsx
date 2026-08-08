@@ -1,6 +1,14 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { buildTrashTimeline, shallow, useTaskStore, safeFormatDate, tFallback } from '@mindwtr/core';
+import {
+    buildTrashTimeline,
+    projectMatchesAreaFilterSelection,
+    safeFormatDate,
+    shallow,
+    taskMatchesAreaFilterSelection,
+    tFallback,
+    useTaskStore,
+} from '@mindwtr/core';
 import type { Project, Task } from '@mindwtr/core';
 import { Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
@@ -11,6 +19,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { createTaskListScope } from './list/task-list-scope';
 import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 
 export function TrashView() {
     const perf = usePerformanceMonitor('TrashView');
@@ -42,6 +51,7 @@ export function TrashView() {
     );
     const { t } = useLanguage();
     const { requestConfirmation, confirmModal } = useConfirmDialog();
+    const { areaById, projectById, resolvedAreaFilter } = useAreaVisibility();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -55,19 +65,30 @@ export function TrashView() {
         return () => window.clearTimeout(timer);
     }, [perf.enabled]);
 
+    // The area filter applies here as it does everywhere else, and as it does
+    // on mobile's Trash. `isTaskVisibleInArea` cannot be used: it hides deleted
+    // tasks, which are the only ones Trash shows.
     const trashedTasks = useMemo(() => {
-        const filtered = _allTasks.filter((task) => task.deletedAt && !task.purgedAt);
+        const filtered = _allTasks.filter((task) => (
+            task.deletedAt
+            && !task.purgedAt
+            && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
+        ));
         if (!searchQuery) return filtered;
         const query = searchQuery.toLowerCase();
         return filtered.filter((task) => task.title.toLowerCase().includes(query));
-    }, [_allTasks, searchQuery]);
+    }, [_allTasks, areaById, projectById, resolvedAreaFilter, searchQuery]);
 
     const trashedProjects = useMemo(() => {
-        const filtered = _allProjects.filter((project) => project.deletedAt && !project.purgedAt);
+        const filtered = _allProjects.filter((project) => (
+            project.deletedAt
+            && !project.purgedAt
+            && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
+        ));
         if (!searchQuery) return filtered;
         const query = searchQuery.toLowerCase();
         return filtered.filter((project) => project.title.toLowerCase().includes(query));
-    }, [_allProjects, searchQuery]);
+    }, [_allProjects, areaById, resolvedAreaFilter, searchQuery]);
 
     const trashItems = useMemo(
         () => buildTrashTimeline(trashedTasks, trashedProjects),

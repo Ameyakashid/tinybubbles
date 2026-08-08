@@ -6,10 +6,12 @@ import {
     formatTimeEstimateLabel,
     getTaskMetadataFilterVisibility,
     hasActiveFilterCriteria,
+    projectMatchesAreaFilterSelection,
     safeFormatDate,
     shallow,
     sortDoneTasksForListView,
     sortTasksBy,
+    taskMatchesAreaFilterSelection,
     tFallback,
     useTaskStore,
 } from '@mindwtr/core';
@@ -49,6 +51,7 @@ import { useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
 import { useLocalDayKey } from '../../hooks/useLocalDayKey';
+import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { resolveDoneTaskSortBy } from '../../lib/task-list-sort';
 
 type ArchiveProjectRowProps = {
@@ -171,6 +174,7 @@ export function ArchiveView() {
     // default rather than the global task sort, which orders by due date and
     // priority — neither of which means anything once a task is finished.
     const sortBy = resolveDoneTaskSortBy(settings?.taskSortBy, archivedSortBy);
+    const { areaById, projectById, resolvedAreaFilter } = useAreaVisibility();
 
     useEffect(() => {
         if (!perf.enabled) return;
@@ -183,9 +187,17 @@ export function ArchiveView() {
     // Everything in the archive, before the toolbar narrows it. The filter
     // chips, their counts and the priority/estimate section visibility all read
     // this, so a selection never hides the control that would undo it.
+    //
+    // The area filter applies here as it does on every other list and on
+    // mobile's Archive — but `isTaskVisibleInArea` does not fit: archived work
+    // usually sits in archived projects, which that predicate parks.
     const archivedBaseTasks = useMemo(
-        () => _allTasks.filter((task) => task.status === 'archived' && !task.deletedAt),
-        [_allTasks]
+        () => _allTasks.filter((task) => (
+            task.status === 'archived'
+            && !task.deletedAt
+            && taskMatchesAreaFilterSelection(task, resolvedAreaFilter, projectById, areaById)
+        )),
+        [_allTasks, areaById, projectById, resolvedAreaFilter]
     );
 
     const prioritiesEnabled = settings?.features?.priorities !== false;
@@ -239,18 +251,20 @@ export function ArchiveView() {
 
     const archivedProjects = useMemo(() => {
         const filtered = projects
-            .filter((project) => project.status === 'archived')
+            .filter((project) => (
+                project.status === 'archived'
+                && projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)
+            ))
             .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
         if (!searchQuery) return filtered;
         const query = searchQuery.toLowerCase();
         return filtered.filter((project) => project.title.toLowerCase().includes(query));
-    }, [projects, searchQuery]);
-    const projectMap = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+    }, [areaById, projects, resolvedAreaFilter, searchQuery]);
     const isGrouping = archivedGroupBy !== 'none';
     const localDayKey = useLocalDayKey(archivedGroupBy === 'completedDate');
     const groupedTasks = useMemo<TaskGroup[]>(
-        () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap, t, theme: settings?.theme }) : []),
-        [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectMap, settings?.theme, t]
+        () => (isGrouping ? groupTasks(archivedGroupBy, { tasks: archivedTasks, areas, projectMap: projectById, t, theme: settings?.theme }) : []),
+        [archivedGroupBy, archivedTasks, areas, isGrouping, localDayKey, projectById, settings?.theme, t]
     );
     const {
         collapsedGroupIds,

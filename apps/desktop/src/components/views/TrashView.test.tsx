@@ -57,6 +57,34 @@ describe('TrashView', () => {
         expect(taskTitle.compareDocumentPosition(projectTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    // The area filter is app-wide, and mobile's Trash has always honoured it.
+    it('honours the app-wide area filter', () => {
+        const workTask: Task = { ...recentTask, id: 'work-task', title: 'Work deleted task', areaId: 'area-work' };
+        const workProject: Project = { ...olderProject, id: 'work-project', title: 'Work deleted project', areaId: 'area-work' };
+        useTaskStore.setState({
+            // `_allAreas` on purpose: the store derives the visible `areas`
+            // list from it, and a bare `areas` write is dropped.
+            _allAreas: [
+                { id: 'area-work', name: 'Work', order: 0, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+            ],
+            _allTasks: [recentTask, workTask],
+            _tasksById: new Map([[recentTask.id, recentTask], [workTask.id, workTask]]),
+            _allProjects: [olderProject, workProject],
+            settings: { filters: { excludedAreaIds: ['area-work'] } },
+        });
+
+        render(
+            <LanguageProvider>
+                <TrashView />
+            </LanguageProvider>
+        );
+
+        expect(screen.getByText(recentTask.title)).toBeInTheDocument();
+        expect(screen.getByText(olderProject.title)).toBeInTheDocument();
+        expect(screen.queryByText('Work deleted task')).not.toBeInTheDocument();
+        expect(screen.queryByText('Work deleted project')).not.toBeInTheDocument();
+    });
+
     it('bulk restores selected trashed tasks and projects', async () => {
         render(
             <LanguageProvider>

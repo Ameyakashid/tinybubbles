@@ -201,6 +201,40 @@ describe('ArchiveView', () => {
         expect(screen.getByText('Archived project')).toBeInTheDocument();
     });
 
+    // The area filter is app-wide, and mobile's Archive has always honoured it.
+    // Desktop's Archive read status alone, so excluding Work still showed Work.
+    it('honours the app-wide area filter for archived tasks and projects', () => {
+        const homeTask: Task = { ...archivedTask, id: 'task-2', title: 'Home archived task', areaId: 'area-home' };
+        const workTask: Task = { ...archivedTask, id: 'task-3', title: 'Work archived task', areaId: 'area-work' };
+        const workProject: Project = { ...archivedProject, id: 'project-2', title: 'Work archived project', areaId: 'area-work' };
+        useTaskStore.setState({
+            // `_allAreas` on purpose: the store derives the visible `areas`
+            // list from it, and a bare `areas` write is dropped.
+            _allAreas: [
+                { id: 'area-home', name: 'Home', order: 0, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+                { id: 'area-work', name: 'Work', order: 1, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+            ],
+            _allTasks: [homeTask, workTask],
+            _tasksById: new Map([[homeTask.id, homeTask], [workTask.id, workTask]]),
+            projects: [archivedProject, workProject],
+            _allProjects: [archivedProject, workProject],
+            settings: { filters: { excludedAreaIds: ['area-work'] } },
+        });
+
+        render(
+            <LanguageProvider>
+                <ArchiveView />
+            </LanguageProvider>
+        );
+
+        expect(screen.getByText('Home archived task')).toBeInTheDocument();
+        expect(screen.queryByText('Work archived task')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+        expect(screen.getByText('Archived project')).toBeInTheDocument();
+        expect(screen.queryByText('Work archived project')).not.toBeInTheDocument();
+    });
+
     it('shows the projects empty state when there are no archived projects', () => {
         render(
             <LanguageProvider>
