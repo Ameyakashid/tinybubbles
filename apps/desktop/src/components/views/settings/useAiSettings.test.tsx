@@ -78,6 +78,9 @@ const settingsWithSpeech = (speechToText: NonNullable<NonNullable<AppData['setti
 describe('useAiSettings speech provider changes', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // The model downloads go through the shared native-invoke adapter, which
+        // refuses outside the desktop shell.
+        (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
         fsMocks.exists.mockResolvedValue(false);
         fsMocks.mkdir.mockResolvedValue(undefined);
         fsMocks.remove.mockResolvedValue(undefined);
@@ -88,6 +91,10 @@ describe('useAiSettings speech provider changes', () => {
         tauriCoreMocks.invoke.mockResolvedValue(null);
         eventMocks.listen.mockResolvedValue(vi.fn());
         coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+        delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     });
 
     it('loads provider keys only after the AI page becomes active', async () => {

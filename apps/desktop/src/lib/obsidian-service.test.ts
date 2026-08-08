@@ -215,7 +215,7 @@ describe('obsidian-service helpers', () => {
 
         expect(unlistenChanged).toHaveBeenCalledTimes(1);
         expect(unlistenError).toHaveBeenCalledTimes(1);
-        expect(invokeMock).toHaveBeenLastCalledWith('stop_obsidian_watcher', undefined);
+        expect(invokeMock).toHaveBeenLastCalledWith('stop_obsidian_watcher');
     });
 
     it('invokes the desktop write commands for inline and tasknotes flows', async () => {

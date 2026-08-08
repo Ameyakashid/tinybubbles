@@ -10,6 +10,7 @@ import { logWarn } from '../lib/app-log';
 import { useUiStore } from '../store/ui-store';
 import { saveStoredFullscreen } from '../lib/window-state';
 import {
+    applyGlobalQuickAddShortcut,
     type GlobalQuickAddShortcutSetting,
     matchesGlobalQuickAddShortcut,
     normalizeGlobalQuickAddShortcut,
@@ -66,11 +67,6 @@ interface KeybindingContextType {
     registerTaskListScope: (scope: TaskListScope | null) => void;
     openHelp: () => void;
 }
-
-type GlobalQuickAddShortcutApplyResult = {
-    shortcut?: string | null;
-    warning?: string | null;
-};
 
 const KeybindingContext = createContext<KeybindingContextType | undefined>(undefined);
 
@@ -897,10 +893,7 @@ export function KeybindingProvider({
     useEffect(() => {
         if (isTest || !isTauriRuntime() || !isStoreHydrated) return;
         let cancelled = false;
-        import('@tauri-apps/api/core')
-            .then(({ invoke }) =>
-                invoke<GlobalQuickAddShortcutApplyResult>('set_global_quick_add_shortcut', { shortcut: quickAddShortcut })
-            )
+        applyGlobalQuickAddShortcut(quickAddShortcut)
             .then((result) => {
                 if (cancelled) return;
                 const appliedShortcut = normalizeGlobalQuickAddShortcut(result?.shortcut, {

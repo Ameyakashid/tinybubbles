@@ -73,7 +73,7 @@ use email_capture::{
 };
 use install::{
     check_microsoft_store_update, diagnostics_enabled, get_install_source, get_linux_distro,
-    is_flatpak, is_niri_session, is_windows_store_install,
+    is_flatpak, is_niri_session,
 };
 use linux_calendar::{
     create_linux_calendar_event, delete_linux_calendar_event, ensure_linux_mindwtr_calendar,
@@ -103,7 +103,7 @@ use platform::{
 };
 use storage::{
     create_data_snapshot, delete_calendar_sync_entry, get_all_calendar_sync_entries,
-    get_calendar_sync_entry, get_config_path_cmd, get_config_path_for_startup, get_data,
+    get_calendar_sync_entry, get_config_path_for_startup, get_data,
     get_data_path_cmd, get_db_path_cmd, list_data_snapshots, query_tasks, read_data_json,
     restore_data_snapshot, save_data, save_task, search_fts, upsert_calendar_sync_entry,
 };
@@ -1504,7 +1504,6 @@ pub fn run() {
             search_fts,
             get_data_path_cmd,
             get_db_path_cmd,
-            get_config_path_cmd,
             acknowledge_close_request,
             get_ai_key,
             set_ai_key,
@@ -1605,7 +1604,6 @@ pub fn run() {
             get_system_theme_preference,
             set_global_quick_add_shortcut,
             hide_quick_add_window,
-            is_windows_store_install,
             get_install_source,
             get_launch_at_startup_enabled,
             set_launch_at_startup_enabled,

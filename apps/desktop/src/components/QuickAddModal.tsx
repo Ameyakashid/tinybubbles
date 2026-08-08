@@ -54,6 +54,7 @@ import {
     shouldHandleQuickAddNativeEvent,
 } from '../lib/quick-add-native-event';
 import { QUICK_ADD_MAIN_WINDOW_LABEL, QUICK_ADD_SAVED_EVENT } from '../lib/quick-add-saved-event';
+import { consumeQuickAddPending, hideQuickAddWindow } from '../lib/quick-add-window';
 import { TaskInput } from './Task/TaskInput';
 import { AreaSelector } from './ui/AreaSelector';
 import { QuickAddSyntaxHint } from './ui/QuickAddSyntaxHint';
@@ -326,25 +327,21 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         const openFromTauri = async () => {
             await openQuickAdd();
             try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                await invoke<boolean>('consume_quick_add_pending', { target: nativeTarget });
+                await consumeQuickAddPending(nativeTarget);
             } catch (e) {
                 reportError('Failed to open quick add', e);
             }
         };
 
         const setup = async () => {
-            const [{ listen }, { invoke }] = await Promise.all([
-                import('@tauri-apps/api/event'),
-                import('@tauri-apps/api/core'),
-            ]);
+            const { listen } = await import('@tauri-apps/api/event');
 
             unlisten = await listen('quick-add', (event) => {
                 if (!shouldHandleQuickAddNativeEvent(event.payload, nativeTarget)) return;
                 openFromTauri().catch((error) => reportError('Failed to open quick add', error));
             });
 
-            const pending = await invoke<boolean>('consume_quick_add_pending', { target: nativeTarget });
+            const pending = await consumeQuickAddPending(nativeTarget);
             if (pending) {
                 await openQuickAdd();
             }
@@ -428,8 +425,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
 
     const hideStandaloneWindow = useCallback(() => {
         if (!standaloneWindow || !isTauriRuntime()) return;
-        import('@tauri-apps/api/core')
-            .then(({ invoke }) => invoke('hide_quick_add_window'))
+        hideQuickAddWindow()
             .catch((error) => reportError('Failed to hide quick add window', error));
     }, [standaloneWindow]);
 

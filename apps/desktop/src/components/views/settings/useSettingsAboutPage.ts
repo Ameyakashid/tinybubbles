@@ -20,11 +20,12 @@ import {
     resolveLinuxFlavor,
     resolvePreferredDownloadUrl,
     resolveRecommendedDownload,
-    type LinuxDistroInfo,
 } from './update-platform';
 import {
     getInstallSourceOrFallback,
+    getLinuxDistro,
     isTauriRuntime,
+    type LinuxDistroInfo,
 } from '../../../lib/runtime';
 import { isAutoUpdateCheckAllowed } from '../../../lib/desktop-update-targets';
 import { reportError } from '../../../lib/report-error';
@@ -142,10 +143,7 @@ export function useSettingsAboutPage({
                 })
                 .catch((error) => reportError('Failed to read app version', error));
 
-            measureSettingsOpenStep('linux-distro', async () => {
-                const { invoke } = await import('@tauri-apps/api/core');
-                return await invoke<LinuxDistroInfo | null>('get_linux_distro');
-            })
+            measureSettingsOpenStep('linux-distro', () => getLinuxDistro())
                 .then((distro) => {
                     if (cancelled) return;
                     setLinuxDistro(distro);

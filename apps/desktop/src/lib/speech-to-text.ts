@@ -13,6 +13,7 @@ import {
 import { loadAIKey } from './ai-config';
 import { isTauriRuntime } from './runtime';
 import { logWarn } from './app-log';
+import { invokeNative } from './tauri-invoke';
 import { DEFAULT_PARAKEET_MODEL, DEFAULT_WHISPER_MODEL } from './speech-models';
 
 export type SpeechToTextResult = SpeechToTaskResult;
@@ -161,6 +162,16 @@ const transcribeParakeet = async (audio: AudioInput, config: SpeechToTextConfig)
     });
     return normalizeLocalAsrTranscript(text);
 };
+
+/** Downloads a Whisper model and resolves to its on-disk path. */
+export const downloadWhisperModel = (model: string): Promise<string> => (
+    invokeNative<string>('download_whisper_model', { model })
+);
+
+/** Downloads a Parakeet model directory and resolves to its on-disk path. */
+export const downloadParakeetModel = (model: string): Promise<string> => (
+    invokeNative<string>('download_parakeet_model', { model })
+);
 
 export async function processAudioCapture(
     audio: AudioInput,

@@ -17,6 +17,7 @@ import { getManagedPath } from '../../../lib/managed-paths';
 import { loadAIKey, saveAIKey } from '../../../lib/ai-config';
 import { reportError } from '../../../lib/report-error';
 import { logWarn } from '../../../lib/app-log';
+import { downloadParakeetModel, downloadWhisperModel } from '../../../lib/speech-to-text';
 import { markSettingsOpenTrace, measureSettingsOpenStep } from '../../../lib/settings-open-diagnostics';
 import { useUiStore } from '../../../store/ui-store';
 import {
@@ -457,8 +458,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
         setSpeechDownloadState('downloading');
         try {
             if (speechProvider === 'parakeet') {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const resolved = await invoke<string>('download_parakeet_model', { model: speechModel });
+                const resolved = await downloadParakeetModel(speechModel);
                 setSpeechOfflinePath(resolved);
                 setSpeechOfflineSize(selectedLocalSpeechModelSize);
                 setSpeechOfflineReadyState(true);
@@ -471,8 +471,7 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
 
             const entry = WHISPER_MODELS.find((model) => model.id === speechModel);
             if (!entry) return;
-            const { invoke } = await import('@tauri-apps/api/core');
-            const resolved = await invoke<string>('download_whisper_model', { model: entry.id });
+            const resolved = await downloadWhisperModel(entry.id);
             const fileSize = resolved ? await size(resolved).catch(() => selectedLocalSpeechModelSize) : null;
             setSpeechOfflineSize(fileSize);
             setSpeechOfflinePath(resolved);

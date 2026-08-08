@@ -1,3 +1,5 @@
+import { invokeNative } from './tauri-invoke';
+
 export const GLOBAL_QUICK_ADD_SHORTCUT_DISABLED = 'disabled';
 export const GLOBAL_QUICK_ADD_SHORTCUT_DEFAULT = 'Control+Alt+M';
 export const GLOBAL_QUICK_ADD_SHORTCUT_ALTERNATE_N = 'Control+Alt+N';
@@ -118,6 +120,22 @@ export function formatGlobalQuickAddShortcutForDisplay(
     }
     return isMac ? 'Ctrl+Option+M' : 'Ctrl+Alt+M';
 }
+
+/** Mirrors the Rust reply to `set_global_quick_add_shortcut`. */
+export type GlobalQuickAddShortcutApplyResult = {
+    shortcut?: string | null;
+    warning?: string | null;
+};
+
+/**
+ * Registers the OS-level hotkey. The reply carries what actually got
+ * registered, which can differ from the request when the combo is taken.
+ */
+export const applyGlobalQuickAddShortcut = (
+    shortcut: GlobalQuickAddShortcutSetting,
+): Promise<GlobalQuickAddShortcutApplyResult> => (
+    invokeNative<GlobalQuickAddShortcutApplyResult>('set_global_quick_add_shortcut', { shortcut })
+);
 
 export function matchesGlobalQuickAddShortcut(
     event: KeyboardEvent,

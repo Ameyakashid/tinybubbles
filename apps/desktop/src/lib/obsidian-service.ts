@@ -1,7 +1,7 @@
 import type { ObsidianSourceRef } from '@mindwtr/core';
 import { getDesktopTimerHost, isTauriRuntime } from './runtime';
 import { reportError } from './report-error';
-import { invokeNative } from './tauri-invoke';
+import { invokeNative, invokeNativeOr } from './tauri-invoke';
 import { logWarn } from './app-log';
 import {
     deriveVaultName,
@@ -20,6 +20,12 @@ const FORBIDDEN_PATH_RETRY_DELAYS_MS = [75, 250, 500];
 export type ObsidianFilesChangedPayload = {
     changed: string[];
     deleted: string[];
+};
+
+/** Mirrors the Rust `DetectedObsidianVault` returned by `list_obsidian_vaults`. */
+export type DetectedObsidianVault = {
+    name: string;
+    path: string;
 };
 
 type ObsidianWatcherErrorPayload = {
@@ -80,6 +86,19 @@ export const buildObsidianUri = (source: ObsidianSourceRef): string => {
     const vault = encodeURIComponent(source.vaultName || deriveVaultName(source.vaultPath));
     const file = encodeURIComponent(source.relativeFilePath.replace(/\.md$/i, ''));
     return `obsidian://open?vault=${vault}&file=${file}`;
+};
+
+/**
+ * Vaults Obsidian has registered on this machine. Empty off-Tauri or when the
+ * registry cannot be read — the caller offers filesystem browsing either way.
+ */
+export const listDetectedObsidianVaults = async (): Promise<DetectedObsidianVault[]> => {
+    try {
+        const vaults = await invokeNativeOr<DetectedObsidianVault[]>([], 'list_obsidian_vaults');
+        return Array.isArray(vaults) ? vaults : [];
+    } catch {
+        return [];
+    }
 };
 
 export class ObsidianService {

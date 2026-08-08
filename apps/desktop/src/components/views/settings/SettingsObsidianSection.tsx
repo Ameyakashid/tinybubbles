@@ -4,13 +4,9 @@ import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
 import { Switch } from '../../ui/Switch';
 import { SettingField, SettingRow } from './SettingRow';
+import { listDetectedObsidianVaults, type DetectedObsidianVault } from '../../../lib/obsidian-service';
 
 const OBSIDIAN_INTEGRATION_GUIDE_URL = 'https://docs.mindwtr.app/power-users/obsidian';
-
-type DetectedObsidianVault = {
-    name: string;
-    path: string;
-};
 
 type Labels = {
     obsidianVault: string;
@@ -115,15 +111,9 @@ export function SettingsObsidianSection({
         // one-click instead of making everyone browse the filesystem.
         if (!open || !isTauri) return;
         let cancelled = false;
-        (async () => {
-            try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                const vaults = await invoke<DetectedObsidianVault[]>('list_obsidian_vaults');
-                if (!cancelled) setDetectedVaults(Array.isArray(vaults) ? vaults : []);
-            } catch {
-                if (!cancelled) setDetectedVaults([]);
-            }
-        })();
+        void listDetectedObsidianVaults().then((vaults) => {
+            if (!cancelled) setDetectedVaults(vaults);
+        });
         return () => {
             cancelled = true;
         };

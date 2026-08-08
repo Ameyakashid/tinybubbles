@@ -60,7 +60,7 @@ describe('Linux system calendar adapter', () => {
             end: '2026-07-21T14:00:00.000Z',
             allDay: false,
         });
-        expect(invoke).toHaveBeenCalledWith('get_linux_writable_calendars', undefined);
+        expect(invoke).toHaveBeenCalledWith('get_linux_writable_calendars');
         expect(invoke).toHaveBeenCalledWith('create_linux_calendar_event', expect.any(Object));
     });
 });

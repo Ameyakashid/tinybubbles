@@ -4478,11 +4478,6 @@ pub(crate) fn get_db_path_cmd(app: tauri::AppHandle) -> String {
     get_db_path(&app).to_string_lossy().to_string()
 }
 
-#[tauri::command]
-pub(crate) fn get_config_path_cmd(app: tauri::AppHandle) -> String {
-    get_config_path(&app).to_string_lossy().to_string()
-}
-
 fn sanitize_json_text(raw: &str) -> String {
     // Strip BOM and trailing NULs (can occur with partial writes / filesystem quirks).
     let mut text = raw.trim_start_matches('\u{FEFF}').trim_end().to_string();

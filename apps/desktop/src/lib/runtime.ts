@@ -49,3 +49,13 @@ export async function getInstallSourceOrFallback(fallback = 'unknown'): Promise<
     const { invoke } = await import('@tauri-apps/api/core');
     return resolveWithTimeout(invoke<string>('get_install_source'), fallback, INSTALL_SOURCE_TIMEOUT_MS);
 }
+
+/** Mirrors the Rust `LinuxDistroInfo` returned by `get_linux_distro`. */
+export type LinuxDistroInfo = { id?: string; id_like?: string[] };
+
+/** The host Linux distribution, or null off Linux and outside the desktop app. */
+export async function getLinuxDistro(): Promise<LinuxDistroInfo | null> {
+    // Imported lazily: tauri-invoke guards on isTauriRuntime from this module.
+    const { invokeNativeOr } = await import('./tauri-invoke');
+    return invokeNativeOr<LinuxDistroInfo | null>(null, 'get_linux_distro');
+}

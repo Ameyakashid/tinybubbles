@@ -19,7 +19,6 @@ fn is_windowsapps_mindwtr_path(path: &str) -> bool {
     (path.contains("\\windowsapps\\") || path.contains("/windowsapps/")) && path.contains("mindwtr")
 }
 
-#[tauri::command]
 pub(crate) fn is_windows_store_install() -> bool {
     #[cfg(target_os = "windows")]
     {
