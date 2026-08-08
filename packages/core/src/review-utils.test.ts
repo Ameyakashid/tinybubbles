@@ -218,6 +218,22 @@ describe('getDailyReviewBuckets', () => {
         expect(buckets.focusCandidates.map((task) => task.id)).toEqual(['next-later-today']);
     });
 
+    it('spans every area by default and narrows only when given an area filter', () => {
+        const project = createProject({ id: 'project-work', areaId: 'area-work' });
+        const workTask = createTask({ id: 'inbox-work', status: 'inbox', projectId: project.id });
+        const looseTask = createTask({ id: 'inbox-loose', status: 'inbox' });
+        const tasks = [workTask, looseTask];
+
+        expect(getDailyReviewBuckets(tasks, [project], { now: dailyNow }).inbox.map((task) => task.id))
+            .toEqual(['inbox-work', 'inbox-loose']);
+
+        const narrowed = getDailyReviewBuckets(tasks, [project], {
+            now: dailyNow,
+            areaVisibility: { resolvedAreaFilter: { included: ['area-work'], excluded: [] } },
+        });
+        expect(narrowed.inbox.map((task) => task.id)).toEqual(['inbox-work']);
+    });
+
     it('defers a next task starting tomorrow out of the focus candidates', () => {
         const tomorrow = createTask({
             id: 'next-tomorrow',

@@ -4,6 +4,7 @@ import type { ReviewSnapshotItem } from './ai/types';
 import type { ExternalCalendarEvent } from './ics';
 import type { Project, Task, TaskSortBy } from './types';
 import { hasTimeComponent, isDueForReview, safeParseDate, safeParseDueDate } from './date';
+import { isTaskVisibleInArea, type AreaVisibilityContext } from './area-filter';
 import { filterProjectsNeedingNextAction, isTaskInActiveProject } from './project-utils';
 import { getSequentialFirstTaskIds, shouldShowTaskForStart, sortTasksBy } from './task-utils';
 import { isTaskActionable } from './task-status';
@@ -178,6 +179,13 @@ export type ReviewBucketOptions = {
     now?: Date;
     showFutureStarts?: boolean;
     sortBy?: TaskSortBy;
+    /**
+     * Narrow the review to the caller's area filter. Omitted means every area,
+     * which is what both platforms have always done: a Daily Review spans the
+     * whole system rather than whatever slice a list view is currently showing.
+     * Pass this only if that is deliberately being changed.
+     */
+    areaVisibility?: Pick<AreaVisibilityContext, 'areaById' | 'resolvedAreaFilter'>;
 };
 
 function isSameLocalDay(a: Date, b: Date): boolean {
@@ -205,12 +213,17 @@ export function getDailyReviewBuckets(
     const now = opts.now ?? new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const projectMap = new Map(projects.map((project) => [project.id, project]));
+    const visibility: AreaVisibilityContext = {
+        areaById: opts.areaVisibility?.areaById,
+        projectById: projectMap,
+        // No selection means no area filtering — see `areaVisibility` above.
+        resolvedAreaFilter: opts.areaVisibility?.resolvedAreaFilter ?? { included: [], excluded: [] },
+    };
 
     const activeTasks = tasks.filter((task) => (
-        !task.deletedAt
+        isTaskVisibleInArea(task, visibility)
         && task.status !== 'reference'
         && task.status !== 'done'
-        && isTaskInActiveProject(task, projectMap)
     ));
 
     const sequentialProjectIds = new Set(
