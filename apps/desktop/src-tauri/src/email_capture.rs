@@ -206,6 +206,18 @@ fn email_capture_state_path(app: &tauri::AppHandle) -> PathBuf {
     get_data_dir(app).join(EMAIL_CAPTURE_STATE_FILE_NAME)
 }
 
+// The state file is a read-modify-write watermark. Its writers used to be plain
+// `#[tauri::command]`s that the main thread serialized for free; now that they
+// run off the UI thread, a settings save landing between a commit's read and
+// its write would drop the advanced watermark and re-import the same mail.
+static EMAIL_CAPTURE_STATE_MUTEX: Mutex<()> = Mutex::new(());
+
+fn lock_email_capture_state() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    EMAIL_CAPTURE_STATE_MUTEX
+        .lock()
+        .map_err(|_| "Email capture state lock is unavailable".to_string())
+}
+
 fn read_email_capture_state(app: &tauri::AppHandle) -> EmailCaptureState {
     let path = email_capture_state_path(app);
     let Ok(content) = fs::read_to_string(&path) else {
@@ -460,12 +472,16 @@ pub(crate) fn get_email_capture_config(app: tauri::AppHandle) -> Result<Value, S
     email_capture_status(&payload, has_password)
 }
 
-#[tauri::command]
+// Off the UI thread: enabling capture validates the account with a real
+// DNS + TCP + TLS + LOGIN round trip, which blocks for the connect timeout
+// against an unreachable host.
+#[tauri::command(async)]
 pub(crate) fn set_email_capture_config(
     app: tauri::AppHandle,
     config: Value,
     password: Option<String>,
 ) -> Result<Value, EmailCaptureError> {
+    let _state_guard = lock_email_capture_state().map_err(EmailCaptureError::other)?;
     let payload = serde_json::from_value::<EmailCaptureConfigPayload>(config)
         .map(normalize_email_capture_payload)
         .map_err(|error| EmailCaptureError::config(format!("Invalid email settings: {error}")))?;
@@ -565,7 +581,12 @@ pub(crate) fn set_email_capture_config(
     email_capture_status(&payload, has_password).map_err(EmailCaptureError::other)
 }
 
-#[tauri::command]
+// Off the UI thread: this opens an IMAP session (DNS + TCP + TLS + LOGIN) and
+// then EXAMINE + FETCH on a five-minute timer, up to ten rounds back to back.
+// A plain `#[tauri::command]` runs that on the main thread and freezes the
+// window for the whole round trip — and until the socket times out when the
+// host is unreachable.
+#[tauri::command(async)]
 pub(crate) fn email_capture_poll(
     app: tauri::AppHandle,
 ) -> Result<EmailCapturePollResult, EmailCaptureError> {
@@ -642,13 +663,16 @@ fn poll_mailbox(
     })
 }
 
-#[tauri::command]
+// Off the UI thread for the same reason as `email_capture_poll`; the state
+// lock keeps its read-modify-write atomic against a concurrent settings save.
+#[tauri::command(async)]
 pub(crate) fn email_capture_commit(
     app: tauri::AppHandle,
     uid_validity: u32,
     last_seen_uid: u32,
     message_ids: Vec<String>,
 ) -> Result<(), String> {
+    let _state_guard = lock_email_capture_state()?;
     let app_config = read_config(&app);
     let payload = read_email_capture_payload(&app_config);
     let state = scope_email_capture_state(

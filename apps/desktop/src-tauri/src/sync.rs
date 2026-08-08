@@ -3530,23 +3530,40 @@ mod tests {
     }
 
     #[test]
-    fn sync_folder_commands_never_run_on_the_ui_thread() {
+    fn blocking_io_commands_never_run_on_the_ui_thread() {
         // A plain `#[tauri::command]` on a blocking fn runs on the main thread,
         // so a slow sync mount freezes the whole window until the I/O returns.
-        let source = include_str!("sync.rs");
-        for command in ["set_sync_path", "read_sync_file", "write_sync_file"] {
-            let declaration = format!("fn {command}(");
-            let offset = source
-                .find(&declaration)
-                .unwrap_or_else(|| panic!("{command} not found"));
-            let attribute = source[..offset]
-                .rsplit_once("#[tauri::command")
-                .expect("command attribute")
-                .1;
-            assert!(
-                attribute.starts_with("(async)"),
-                "{command} must be #[tauri::command(async)] so sync I/O stays off the UI thread"
-            );
+        // Email capture is the same class, on a five-minute timer: an IMAP
+        // round trip would otherwise block the UI for the life of the socket.
+        let sources: [(&str, &[&str]); 2] = [
+            (
+                include_str!("sync.rs"),
+                &["set_sync_path", "read_sync_file", "write_sync_file"],
+            ),
+            (
+                include_str!("email_capture.rs"),
+                &[
+                    "set_email_capture_config",
+                    "email_capture_poll",
+                    "email_capture_commit",
+                ],
+            ),
+        ];
+        for (source, commands) in sources {
+            for command in commands {
+                let declaration = format!("fn {command}(");
+                let offset = source
+                    .find(&declaration)
+                    .unwrap_or_else(|| panic!("{command} not found"));
+                let attribute = source[..offset]
+                    .rsplit_once("#[tauri::command")
+                    .expect("command attribute")
+                    .1;
+                assert!(
+                    attribute.starts_with("(async)"),
+                    "{command} must be #[tauri::command(async)] so blocking I/O stays off the UI thread"
+                );
+            }
         }
     }
 
