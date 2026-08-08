@@ -45,7 +45,7 @@ import { MarkdownFormatToolbar } from '../../components/markdown-format-toolbar'
 import { MarkdownReferenceAutocomplete } from '../../components/markdown-reference-autocomplete';
 import { MarkdownText } from '../../components/markdown-text';
 import { ThemedAlertHost } from '../../components/themed-alert';
-import { TaskList } from '../../components/task-list';
+import { ProjectTaskList, getProjectDetailTaskListOptions } from './ProjectTaskList';
 import { TaskListBulkBar, type TaskListBulkBarProps } from '../task-list/TaskListBulkBar';
 import { TaskListSortModal } from '../task-list/TaskListSortModal';
 import { AttachmentProgressIndicator } from '../../components/AttachmentProgressIndicator';
@@ -1516,36 +1516,23 @@ export function ProjectDetailModal({
                                 {projectTaskReorderMode ? projectDetailListHeader : null}
 
                                 <View style={styles.projectReorderListFill}>
-                                    <TaskList
-                                        statusFilter="all"
-                                        title={selectedProject.title}
-                                        showHeader={false}
-                                        showFilterButton={false}
-                                        onFilterStateChange={handleProjectFilterStateChange}
-                                        showTimeEstimateFilters={false}
-                                        projectId={selectedProject.id}
-                                        taskSource={selectedProjectTasks}
-                                        allowAdd={false}
-                                        bulkBarPlacement="external"
+                                    <ProjectTaskList
+                                        project={selectedProject}
+                                        tasks={selectedProjectTasks}
+                                        showCompletedTasks={showCompletedTasks}
+                                        sortBy={projectTaskSortBy}
+                                        getTaskSequenceCue={getTaskSequenceCue}
+                                        sequenceCueLabels={sequenceCueLabels}
+                                        reorderMode={projectTaskReorderMode}
+                                        onReorderModeChange={setProjectTaskReorderMode}
                                         listHeaderComponent={projectTaskReorderMode ? null : projectDetailListHeader}
                                         listRef={projectDetailListRef}
                                         onListScroll={handleProjectListScroll}
                                         contentPaddingBottom={projectDetailKeyboardBottomInset > 0 ? projectDetailKeyboardBottomInset + 12 : 12}
-                                        enableBulkActions
-                                        enableProjectBulkOrganize={taskListOptions.allowAdd}
                                         onBulkBarPropsChange={handleProjectBulkBarPropsChange}
-                                        externalFilterOpenSignal={projectTaskFilterOpenSignal}
-                                        showSort={false}
-                                        enableProjectReorder={taskListOptions.enableProjectReorder}
-                                        projectSortBy={projectTaskSortBy}
-                                        includeArchived={taskListOptions.includeArchived}
-                                        includeDone={taskListOptions.includeDone}
-                                        groupCompletedTasksLast={taskListOptions.groupCompletedTasksLast}
-                                        getTaskSequenceCue={getTaskSequenceCue}
-                                        sequenceCueLabels={sequenceCueLabels}
+                                        filterOpenSignal={projectTaskFilterOpenSignal}
+                                        onFilterStateChange={handleProjectFilterStateChange}
                                         onQuickAddInputFocus={scrollProjectInputIntoView}
-                                        projectReorderMode={projectTaskReorderMode}
-                                        onProjectReorderModeChange={setProjectTaskReorderMode}
                                     />
                                 </View>
                                 </ProjectDetailScrollFrame>
@@ -1686,15 +1673,4 @@ export function getProjectDetailModalSafeAreaEdges(presentationStyle: ProjectDet
     return presentationStyle === 'fullScreen'
         ? ['top', 'left', 'right', 'bottom'] as const
         : ['left', 'right', 'bottom'] as const;
-}
-
-export function getProjectDetailTaskListOptions(selectedProject: Project | null, showCompletedTasks = false) {
-    const isArchived = selectedProject?.status === 'archived';
-    return {
-        allowAdd: !isArchived,
-        enableProjectReorder: !isArchived,
-        includeArchived: isArchived,
-        includeDone: isArchived || showCompletedTasks,
-        groupCompletedTasksLast: !isArchived && showCompletedTasks && !selectedProject?.isSequential,
-    };
 }

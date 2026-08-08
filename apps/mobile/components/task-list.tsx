@@ -136,22 +136,44 @@ const PROJECT_COMPLETED_SECTION_ID = 'project-completed-tasks';
 /** The project References pile below the task list, matching desktop's ProjectWorkspace (#1000). */
 const PROJECT_REFERENCE_SECTION_ID = 'project-reference-tasks';
 
+/**
+ * The project workspace mode, in one prop. None of it means anything to the
+ * three status screens, so it stays behind a single seam instead of widening
+ * the interface they read — see ProjectTaskList, its only author.
+ */
+export interface TaskListProjectOptions {
+  /** Scopes the list to one project; also switches on the project-only chrome. */
+  id: string;
+  sortBy?: TaskSortBy;
+  includeArchived?: boolean;
+  includeDone?: boolean;
+  groupCompletedTasksLast?: boolean;
+  getTaskSequenceCue?: (task: Task) => ProjectSequenceTaskCue | undefined;
+  sequenceCueLabels?: Record<ProjectSequenceTaskCue, string>;
+  enableBulkOrganize?: boolean;
+  enableReorder?: boolean;
+  reorderMode?: boolean;
+  onReorderModeChange?: (active: boolean) => void;
+  onQuickAddInputFocus?: (targetInput?: number | string) => void;
+}
+
+const NO_PROJECT_OPTIONS: Partial<TaskListProjectOptions> = {};
+
 /** What the list shows: which tasks, in what order, grouped how. */
 interface TaskListContentProps {
   statusFilter: TaskStatus | 'all';
   title: string;
+  /**
+   * Render this pool instead of the store's own. The project workspace scopes
+   * the list this way; the reference pile below still reads the full visible
+   * pool, because a tag-matched reference can live in another project (#1000).
+   */
   taskSource?: Task[];
-  projectId?: string;
-  includeArchived?: boolean;
-  includeDone?: boolean;
-  groupCompletedTasksLast?: boolean;
-  projectSortBy?: TaskSortBy;
   viewSortBy?: TaskSortBy;
   onChangeViewSortBy?: (value: TaskSortBy) => void;
   groupBy?: TaskListGroupBy;
   onChangeGroupBy?: (value: TaskListGroupBy) => void;
-  getTaskSequenceCue?: (task: Task) => ProjectSequenceTaskCue | undefined;
-  sequenceCueLabels?: Record<ProjectSequenceTaskCue, string>;
+  project?: TaskListProjectOptions;
 }
 
 /** The scroll container itself: which render path, its padding, refs and scroll events. */
@@ -185,21 +207,17 @@ interface TaskListChromeProps {
 interface TaskListCapabilityProps {
   allowAdd?: boolean;
   defaultEditTab?: 'task' | 'view';
-  onQuickAddInputFocus?: (targetInput?: number | string) => void;
   enableBulkActions?: boolean;
   enableInboxBulkOrganize?: boolean;
-  enableProjectBulkOrganize?: boolean;
   bulkBarPlacement?: 'inline' | 'external';
   onBulkBarPropsChange?: (props: TaskListBulkBarProps | null) => void;
-  enableProjectReorder?: boolean;
-  projectReorderMode?: boolean;
-  onProjectReorderModeChange?: (active: boolean) => void;
 }
 
 // Flat on the wire on purpose: TaskList is React.memo'd and sits on the app's
 // hottest render path (#766), so nesting these groups into object props would
-// break memoisation on every parent render unless all four call sites memoised
-// them by hand.
+// break memoisation on every parent render unless every call site memoised them
+// by hand. `project` is the one exception, and it earns it: ProjectTaskList is
+// its only author and memoises it there, once.
 export interface TaskListProps
   extends TaskListContentProps, TaskListScrollProps, TaskListChromeProps, TaskListCapabilityProps {}
 
@@ -210,10 +228,8 @@ function TaskListComponent({
   showHeader = true,
   showTimeEstimateFilters: showTimeEstimateFiltersProp = true,
   allowAdd = true,
-  projectId,
   enableBulkActions = true,
   enableInboxBulkOrganize = false,
-  enableProjectBulkOrganize = false,
   bulkBarPlacement = 'inline',
   onBulkBarPropsChange,
   showSort = true,
@@ -227,25 +243,30 @@ function TaskListComponent({
   onFilterStateChange,
   defaultEditTab,
   contentPaddingBottom,
-  enableProjectReorder = false,
   externalFilterOpenSignal = 0,
-  projectSortBy,
   viewSortBy,
   onChangeViewSortBy,
-  onQuickAddInputFocus,
-  projectReorderMode: projectReorderModeProp,
-  onProjectReorderModeChange,
-  includeArchived = false,
-  includeDone = true,
-  groupCompletedTasksLast = false,
   groupBy,
   onChangeGroupBy,
-  getTaskSequenceCue,
-  sequenceCueLabels,
   listHeaderComponent,
   listRef,
   onListScroll,
+  project,
 }: TaskListProps) {
+  const {
+    id: projectId,
+    sortBy: projectSortBy,
+    includeArchived = false,
+    includeDone = true,
+    groupCompletedTasksLast = false,
+    getTaskSequenceCue,
+    sequenceCueLabels,
+    enableBulkOrganize: enableProjectBulkOrganize = false,
+    enableReorder: enableProjectReorder = false,
+    reorderMode: projectReorderModeProp,
+    onReorderModeChange: onProjectReorderModeChange,
+    onQuickAddInputFocus,
+  } = project ?? NO_PROJECT_OPTIONS;
   const taskListRenderStartedAt = Date.now();
   const rowRenderCountAtRenderStart = readTaskRowRenderCount();
   const { isDark } = useTheme();

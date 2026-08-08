@@ -201,7 +201,8 @@ vi.mock('../../components/AttachmentProgressIndicator', () => ({
 }));
 
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { ProjectDetailModal, getProjectDetailModalSafeAreaEdges, getProjectDetailTaskListOptions } from './ProjectDetailModal';
+import { ProjectDetailModal, getProjectDetailModalSafeAreaEdges } from './ProjectDetailModal';
+import { getProjectDetailTaskListOptions } from './ProjectTaskList';
 
 const project = (status: Project['status']): Project => ({
     id: 'project-1',
@@ -661,7 +662,7 @@ describe('ProjectDetailModal task sorting', () => {
         });
 
         expect(taskListPropsSpy).toHaveBeenCalled();
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].projectSortBy).toBe('default');
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].project.sortBy).toBe('default');
         expect(taskListPropsSpy.mock.calls.at(-1)?.[0].taskSource).toBe(selectedProjectTasks);
         expect(taskListPropsSpy.mock.calls.at(-1)?.[0].showFilterButton).toBe(false);
 
@@ -730,7 +731,7 @@ describe('ProjectDetailModal task sorting', () => {
 
         expect(onOpenQuickAdd).toHaveBeenCalledWith(expect.objectContaining({ id: 'project-1' }));
         expect(onTaskSortByChange).toHaveBeenCalledWith('due');
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].includeDone).toBe(true);
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].project.includeDone).toBe(true);
         expect(tree.root.findByProps({ testID: 'project-task-view-options-button' }).props.accessibilityState).toEqual({
             expanded: false,
             selected: true,
@@ -763,7 +764,7 @@ describe('ProjectDetailModal task sorting', () => {
         const visibleToggle = findOptionButton(tree.root, 'project-view-completed-option');
         expect(visibleToggle.props.accessibilityState).toEqual({ selected: true });
         expect(visibleToggle.findByProps({ name: 'eye-outline' }).props.name).toBe('eye-outline');
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].includeDone).toBe(true);
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].project.includeDone).toBe(true);
     });
 
     it('pins project bulk selection actions above the scrolling task list', () => {
@@ -776,7 +777,7 @@ describe('ProjectDetailModal task sorting', () => {
 
         const taskListProps = taskListPropsSpy.mock.calls.at(-1)?.[0];
         expect(taskListProps.bulkBarPlacement).toBe('external');
-        expect(taskListProps.enableProjectBulkOrganize).toBe(true);
+        expect(taskListProps.project.enableBulkOrganize).toBe(true);
         expect(typeof taskListProps.onBulkBarPropsChange).toBe('function');
 
         act(() => {
@@ -887,14 +888,14 @@ describe('ProjectDetailModal project task scrolling', () => {
         });
 
         act(() => {
-            taskListPropsSpy.mock.calls.at(-1)?.[0].onProjectReorderModeChange(true);
+            taskListPropsSpy.mock.calls.at(-1)?.[0].project.onReorderModeChange(true);
         });
 
-        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].projectReorderMode).toBe(true);
+        expect(taskListPropsSpy.mock.calls.at(-1)?.[0].project.reorderMode).toBe(true);
         mockScrollToOffset.mockClear();
 
         act(() => {
-            taskListPropsSpy.mock.calls.at(-1)?.[0].onProjectReorderModeChange(false);
+            taskListPropsSpy.mock.calls.at(-1)?.[0].project.onReorderModeChange(false);
         });
 
         expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 480, animated: false });
@@ -947,7 +948,7 @@ describe('ProjectDetailModal keyboard handling', () => {
 
         expect(tree.root.findByType(KeyboardAvoidingView).props.behavior).toBe('height');
         expect(taskListPropsSpy).toHaveBeenCalled();
-        expect(typeof taskListPropsSpy.mock.calls.at(-1)?.[0].onQuickAddInputFocus).toBe('function');
+        expect(typeof taskListPropsSpy.mock.calls.at(-1)?.[0].project.onQuickAddInputFocus).toBe('function');
     });
 
     it('adds Android keyboard bottom space so project quick-add can scroll above the keyboard', () => {
@@ -1009,7 +1010,7 @@ describe('ProjectDetailModal keyboard handling', () => {
 
         act(() => {
             taskListPropsSpy.mock.calls.at(-1)?.[0].onListScroll({ nativeEvent: { contentOffset: { y: 360 } } });
-            taskListPropsSpy.mock.calls.at(-1)?.[0].onQuickAddInputFocus(42);
+            taskListPropsSpy.mock.calls.at(-1)?.[0].project.onQuickAddInputFocus(42);
         });
 
         expect(mockScrollToOffset).not.toHaveBeenCalled();

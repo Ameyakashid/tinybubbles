@@ -406,7 +406,7 @@ describe('TaskList project quick add', () => {
   const renderProjectList = () => create(
     <TaskList
       allowAdd
-      projectId={project.id}
+      project={{ id: project.id }}
       showHeader={false}
       statusFilter="all"
       taskSource={[]}
@@ -460,7 +460,7 @@ describe('TaskList project quick add', () => {
         tree = create(
           <TaskList
             allowAdd
-            projectId={project.id}
+            project={{ id: project.id }}
             showHeader={false}
             statusFilter="all"
             taskSource={[active, ownReference]}
@@ -569,9 +569,8 @@ describe('TaskList project quick add', () => {
         <TaskList
           allowAdd={false}
           bulkBarPlacement="external"
-          enableProjectBulkOrganize
           onBulkBarPropsChange={onBulkBarPropsChange}
-          projectId={project.id}
+          project={{ id: project.id, enableBulkOrganize: true }}
           showHeader={false}
           statusFilter="all"
           taskSource={[]}
@@ -702,7 +701,7 @@ describe('TaskList project quick add', () => {
       tree = create(
         <TaskList
           allowAdd
-          projectId={project.id}
+          project={{ id: project.id }}
           showHeader={false}
           statusFilter="all"
           taskSource={[createdTask]}
@@ -741,7 +740,7 @@ describe('TaskList project quick add', () => {
       tree = create(
         <TaskList
           allowAdd
-          projectId={project.id}
+          project={{ id: project.id }}
           showHeader={false}
           statusFilter="all"
           taskSource={[captured]}
@@ -757,7 +756,7 @@ describe('TaskList project quick add', () => {
       tree.update(
         <TaskList
           allowAdd
-          projectId={project.id}
+          project={{ id: project.id }}
           showHeader={false}
           statusFilter="all"
           taskSource={[captured]}
@@ -780,9 +779,7 @@ describe('TaskList project quick add', () => {
       tree = create(
         <TaskList
           allowAdd
-          enableProjectReorder
-          projectReorderMode
-          projectId={project.id}
+          project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
           taskSource={[existing]}
@@ -1030,9 +1027,7 @@ describe('TaskList project quick add', () => {
       tree = create(
         <TaskList
           allowAdd={false}
-          enableProjectReorder
-          projectId={project.id}
-          projectReorderMode
+          project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
           taskSource={longTaskList}
@@ -1083,9 +1078,7 @@ describe('TaskList project quick add', () => {
       tree = create(
         <TaskList
           allowAdd={false}
-          enableProjectReorder
-          projectId={project.id}
-          projectReorderMode
+          project={{ id: project.id, enableReorder: true, reorderMode: true }}
           showHeader={false}
           statusFilter="all"
           taskSource={longTaskList}
