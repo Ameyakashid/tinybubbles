@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, tFallback } from '@mindwtr/core';
-import { SwipeableTaskItem } from '@/components/swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { useLanguage } from '@/contexts/language-context';
@@ -96,22 +96,30 @@ export default function SavedSearchScreen() {
     return hasAnySavedSearches ? t('search.noResults') : t('search.noSavedSearches');
   })();
 
-  const renderTask = ({ item }: { item: Task }) => (
+  // One actions object for every row, reading the current store handlers from a
+  // ref, so a result-list re-render leaves untouched rows alone (#766).
+  const rowSourcesRef = useRef({ updateTask, deleteTask });
+  rowSourcesRef.current = { updateTask, deleteTask };
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: (task) => {
+      setEditingTask(task);
+      setIsModalVisible(true);
+    },
+    changeStatus: (task, status) => rowSourcesRef.current.updateTask(task.id, { status: status as TaskStatus }),
+    remove: (task) => rowSourcesRef.current.deleteTask(task.id),
+  }), []);
+
+  const renderTask = useCallback(({ item }: { item: Task }) => (
     <SwipeableTaskItem
       task={item}
       isDark={isDark}
       tc={tc}
-      onPress={() => {
-        setEditingTask(item);
-        setIsModalVisible(true);
-      }}
-      onStatusChange={(status) => updateTask(item.id, { status: status as TaskStatus })}
-      onDelete={() => deleteTask(item.id)}
+      actions={rowActions}
       onProjectPress={openProjectScreen}
       onContextPress={openContextsScreen}
       onTagPress={openContextsScreen}
     />
-  );
+  ), [isDark, rowActions, tc]);
 
   return (
     <View style={[styles.container, { backgroundColor: tc.bg }]}>

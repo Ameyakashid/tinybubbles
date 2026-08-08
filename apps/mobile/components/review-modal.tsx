@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatI18nTemplate, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
@@ -25,7 +25,7 @@ import { useLanguage } from '../contexts/language-context';
 import { ToastViewport } from '../contexts/toast-context';
 import { AppPressable } from './app-pressable';
 import { CompactText } from './compact-text';
-import { SwipeableTaskItem } from './swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from './swipeable-task-item';
 import { TaskEditModal } from './task-edit-modal';
 import { InboxProcessingModal } from './inbox-processing-modal';
 import { MindSweepModalContent } from './mind-sweep-modal-content';
@@ -119,6 +119,17 @@ export function ReviewModal({ visible, onClose }: ReviewModalProps) {
     const closeLabel = t('common.close');
     const closeText = closeLabel && closeLabel !== 'common.close' ? closeLabel : 'Close';
     const onFilled = filledButton.textColor ?? tc.onTint;
+
+    // Every step's rows share one actions object so stepping through the review
+    // does not hand each row a fresh set of arrows (#766). The handlers come
+    // from the controller, so they are read through a ref rather than closed over.
+    const rowSourcesRef = useRef({ handleTaskPress, handleStatusChange, handleDelete });
+    rowSourcesRef.current = { handleTaskPress, handleStatusChange, handleDelete };
+    const rowActions = useMemo<TaskRowActions>(() => ({
+        edit: (task) => rowSourcesRef.current.handleTaskPress(task),
+        changeStatus: (task, status) => rowSourcesRef.current.handleStatusChange(task.id, status),
+        remove: (task) => rowSourcesRef.current.handleDelete(task.id),
+    }), []);
 
     useEffect(() => {
         if (!visible && showInboxProcessing) {
@@ -237,9 +248,7 @@ export function ReviewModal({ visible, onClose }: ReviewModalProps) {
                     task={task}
                     isDark={isDark}
                     tc={tc}
-                    onPress={() => handleTaskPress(task)}
-                    onStatusChange={(status) => handleStatusChange(task.id, status)}
-                    onDelete={() => handleDelete(task.id)}
+                    actions={rowActions}
                 />
             )}
             keyExtractor={(task) => task.id}
@@ -279,9 +288,7 @@ export function ReviewModal({ visible, onClose }: ReviewModalProps) {
                         task={task}
                         isDark={isDark}
                         tc={tc}
-                        onPress={() => handleTaskPress(task)}
-                        onStatusChange={(status) => handleStatusChange(task.id, status)}
-                        onDelete={() => handleDelete(task.id)}
+                        actions={rowActions}
                     />
                 ))}
             </View>
@@ -487,9 +494,7 @@ export function ReviewModal({ visible, onClose }: ReviewModalProps) {
                                     task={task}
                                     isDark={isDark}
                                     tc={tc}
-                                    onPress={() => handleTaskPress(task)}
-                                    onStatusChange={(status) => handleStatusChange(task.id, status)}
-                                    onDelete={() => handleDelete(task.id)}
+                                    actions={rowActions}
                                 />
                             ))}
                             {staleProjectItems.map((item) => (
@@ -733,9 +738,7 @@ export function ReviewModal({ visible, onClose }: ReviewModalProps) {
                                                             task={task}
                                                             isDark={isDark}
                                                             tc={tc}
-                                                            onPress={() => handleTaskPress(task)}
-                                                            onStatusChange={(status) => handleStatusChange(task.id, status)}
-                                                            onDelete={() => handleDelete(task.id)}
+                                                            actions={rowActions}
                                                         />
                                                     ))}
                                                 </View>

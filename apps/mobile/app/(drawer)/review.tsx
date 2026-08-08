@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, View, Text, FlatList, Pressable, StyleSheet, TouchableOpacity, Modal, TextInput, Share } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -23,7 +23,7 @@ import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp } from 'lucide-reac
 import { logError } from '../../lib/app-log';
 
 import { TaskEditModal } from '@/components/task-edit-modal';
-import { SwipeableTaskItem } from '@/components/swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
 import { buildReviewTaskGroups, getReviewOverviewTasks } from '@/components/review/review-task-groups';
 import { TaskListBulkOrganizeModal } from '@/components/task-list/TaskListBulkOrganizeModal';
 import { TokenPickerModal } from '@/components/token-picker-modal';
@@ -261,22 +261,35 @@ export default function ReviewScreen() {
     });
   }, []);
 
+  // One actions object for every row on the screen, reading the current store
+  // handlers from a ref, so re-rendering the review list does not hand each row
+  // a fresh set of arrows (#766).
+  const rowSourcesRef = useRef({ updateTask, deleteTask, toggleMultiSelect });
+  rowSourcesRef.current = { updateTask, deleteTask, toggleMultiSelect };
+  const openTaskEditor = useCallback((task: Task) => {
+    setEditingTask(task);
+    setIsModalVisible(true);
+  }, []);
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: openTaskEditor,
+    changeStatus: (task, status) => rowSourcesRef.current.updateTask(task.id, { status: status as TaskStatus }),
+    remove: (task) => rowSourcesRef.current.deleteTask(task.id),
+    toggleSelect: (task) => rowSourcesRef.current.toggleMultiSelect(task.id),
+  }), [openTaskEditor]);
+  const handleRowLongPress = useCallback((task: Task) => {
+    rowSourcesRef.current.toggleMultiSelect(task.id);
+  }, []);
+
   const renderReviewTaskItem = (task: Task) => (
     <SwipeableTaskItem
       key={task.id}
       task={task}
       isDark={isDark}
       tc={tc}
-      onPress={() => {
-        setEditingTask(task);
-        setIsModalVisible(true);
-      }}
+      actions={rowActions}
       selectionMode={selectionMode}
       isMultiSelected={multiSelectedIds.has(task.id)}
-      onToggleSelect={() => toggleMultiSelect(task.id)}
-      onLongPressAction={() => toggleMultiSelect(task.id)}
-      onStatusChange={(status) => updateTask(task.id, { status: status as TaskStatus })}
-      onDelete={() => deleteTask(task.id)}
+      onLongPressAction={handleRowLongPress}
       onProjectPress={openProjectScreen}
       onContextPress={openContextsScreen}
       onTagPress={openContextsScreen}

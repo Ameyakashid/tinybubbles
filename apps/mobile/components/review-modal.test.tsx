@@ -205,8 +205,9 @@ vi.mock('@/hooks/use-theme-tokens', () => ({
     useThemeTokens: () => ({ isMaterial: false, roles: null, shape: { large: 16 } }),
 }));
 
-vi.mock('@/hooks/use-theme-colors', () => ({
-    useThemeColors: () => ({
+vi.mock('@/hooks/use-theme-colors', () => {
+    // One object, like the real hook: rows compare `tc` by identity (#766).
+    const themeColors = {
         bg: '#0f172a',
         cardBg: '#111827',
         taskItemBg: '#111827',
@@ -223,8 +224,9 @@ vi.mock('@/hooks/use-theme-colors', () => ({
         danger: '#ef4444',
         success: '#10b981',
         warning: '#f59e0b',
-    }),
-}));
+    };
+    return { useThemeColors: () => themeColors };
+});
 
 vi.mock('@/lib/task-meta-navigation', () => ({
     openContextsScreen: vi.fn(),
@@ -381,7 +383,7 @@ describe('ReviewModal', () => {
         const rows = tree.root.findAll((node) => String(node.type) === 'SwipeableTaskItem');
         expect(rows.length).toBeGreaterThan(0);
         for (const row of rows) {
-            expect(typeof row.props.onPress).toBe('function');
+            expect(typeof row.props.actions.edit).toBe('function');
             expect(row.props.onContextPress).toBeUndefined();
             expect(row.props.onTagPress).toBeUndefined();
             expect(row.props.onProjectPress).toBeUndefined();
@@ -481,5 +483,36 @@ describe('ReviewModal', () => {
         expect(editModal.props.visible).toBe(true);
         expect(editModal.props.task?.id).toBe('new-task-1');
         expect(editModal.props.defaultTab).toBe('task');
+    });
+
+    // Rows carry the #766 memo boundary, which only holds while the modal hands
+    // untouched rows the same references back.
+    it('hands rows stable prop references across a re-render', async () => {
+        storeState.tasks = [
+            ...defaultTasks.map((task) => ({ ...task })),
+            { ...defaultTasks[0], id: 'inbox-2', title: 'Second inbox task' },
+        ];
+        const onClose = vi.fn();
+
+        let tree!: ReturnType<typeof create>;
+        await act(async () => {
+            tree = create(<ReviewModal visible onClose={onClose} />);
+        });
+
+        const rowProps = () => tree.root
+            .findAll((node) => (node.type as unknown) === 'SwipeableTaskItem')
+            .map((node) => node.props);
+        const before = rowProps();
+        expect(before).toHaveLength(2);
+        expect(before[0].actions).toBe(before[1].actions);
+
+        await act(async () => {
+            tree.update(<ReviewModal visible onClose={onClose} />);
+        });
+
+        const after = rowProps();
+        expect(after[1].task).toBe(before[1].task);
+        expect(after[1].actions).toBe(before[1].actions);
+        expect(after[1].tc).toBe(before[1].tc);
     });
 });

@@ -106,8 +106,9 @@ vi.mock('../contexts/language-context', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-theme-colors', () => ({
-  useThemeColors: () => ({
+vi.mock('@/hooks/use-theme-colors', () => {
+  // One object, like the real hook: rows compare `tc` by identity (#766).
+  const themeColors = {
     bg: '#ffffff',
     border: '#d1d5db',
     cardBg: '#ffffff',
@@ -119,8 +120,9 @@ vi.mock('@/hooks/use-theme-colors', () => ({
     taskItemBg: '#ffffff',
     text: '#0f172a',
     tint: '#2563eb',
-  }),
-}));
+  };
+  return { useThemeColors: () => themeColors };
+});
 
 vi.mock('@/hooks/use-mobile-area-filter', () => ({
   useMobileAreaFilter: () => ({
@@ -256,7 +258,7 @@ describe('ReviewScreen bulk organize', () => {
 
     const row = tree.root.findByType('SwipeableTaskItem' as unknown as React.ElementType);
     act(() => {
-      row.props.onLongPressAction();
+      row.props.onLongPressAction(row.props.task);
     });
 
     pressButtonWithText(tree, 'Organize');
@@ -278,5 +280,39 @@ describe('ReviewScreen bulk organize', () => {
         }),
       },
     ]);
+  });
+
+  // Rows carry the #766 memo boundary, which only holds while the screen hands
+  // untouched rows the same references back.
+  it('hands rows stable prop references across a re-render', async () => {
+    mocks.storeState.tasks = [
+      makeTask('task-1', 'Loose next action'),
+      makeTask('task-2', 'Second loose action'),
+    ];
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ReviewScreen />);
+    });
+    pressButtonWithLabel(tree, 'Expand areas');
+    pressButtonWithLabel(tree, 'Expand projects');
+
+    const rowProps = () => tree.root
+      .findAll((node) => (node.type as unknown) === 'SwipeableTaskItem')
+      .map((node) => node.props);
+    const before = rowProps();
+    expect(before).toHaveLength(2);
+    expect(before[0].actions).toBe(before[1].actions);
+    expect(before[0].onLongPressAction).toBe(before[1].onLongPressAction);
+
+    await act(async () => {
+      tree.update(<ReviewScreen />);
+    });
+
+    const after = rowProps();
+    expect(after[1].task).toBe(before[1].task);
+    expect(after[1].actions).toBe(before[1].actions);
+    expect(after[1].tc).toBe(before[1].tc);
+    expect(after[1].onLongPressAction).toBe(before[1].onLongPressAction);
   });
 });

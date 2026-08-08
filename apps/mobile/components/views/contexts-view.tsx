@@ -23,7 +23,7 @@ import {
   type Task,
   type TaskStatus,
 } from '@mindwtr/core';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
@@ -36,7 +36,7 @@ import { useToast } from '@/contexts/toast-context';
 import { TaskEditModal } from '../task-edit-modal';
 import { TokenPickerModal } from '../token-picker-modal';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SwipeableTaskItem } from '../swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from '../swipeable-task-item';
 import { Tag, CheckCircle2 } from 'lucide-react-native';
 import {
   buildContextsViewFilterSections,
@@ -196,6 +196,19 @@ export function ContextsView() {
   const handleSaveTask = (taskId: string, updates: Partial<Task>) => {
     return updateTask(taskId, updates);
   };
+
+  // The row handlers are re-created on every render of this screen, so rows
+  // reach them through one object that never changes identity and reads the
+  // latest values from a ref (#766).
+  const rowSourcesRef = useRef({ handleStatusChange, handleDelete, toggleMultiSelect });
+  rowSourcesRef.current = { handleStatusChange, handleDelete, toggleMultiSelect };
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: (task) => setEditingTask(task),
+    changeStatus: (task, status) => rowSourcesRef.current.handleStatusChange(task.id, status),
+    remove: (task) => rowSourcesRef.current.handleDelete(task.id),
+    toggleSelect: (task) => rowSourcesRef.current.toggleMultiSelect(task.id),
+  }), []);
+  const focusToken = useCallback((token: string) => setSelectedContexts([token]), []);
 
   useEffect(() => {
     setMultiSelectedIds((prev) => {
@@ -542,15 +555,12 @@ export function ContextsView() {
                 task={task}
                 isDark={isDark}
                 tc={tc}
-                onPress={() => setEditingTask(task)}
+                actions={rowActions}
                 selectionMode={selectionMode}
                 isMultiSelected={multiSelectedIds.has(task.id)}
-                onToggleSelect={() => toggleMultiSelect(task.id)}
-                onStatusChange={(status) => handleStatusChange(task.id, status)}
-                onDelete={() => handleDelete(task.id)}
                 onProjectPress={openProjectScreen}
-                onContextPress={(context) => setSelectedContexts([context])}
-                onTagPress={(tag) => setSelectedContexts([tag])}
+                onContextPress={focusToken}
+                onTagPress={focusToken}
               />
             )}
             keyExtractor={(task) => task.id}
