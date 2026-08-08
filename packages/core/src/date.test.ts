@@ -188,7 +188,10 @@ describe('date utils', () => {
         configureDateFormatting({ language: 'pt', dateFormat: 'dmy', timeFormat: 'system' });
         // ptBR: "8 ago 2026". European pt would be "8 de ago. de 2026".
         expect(safeFormatDate('2026-08-08', 'PP')).toBe('8 ago 2026');
-        // ptBR drops the accent European Portuguese keeps.
+        // ptBR drops the accent European Portuguese keeps. This pins the locale's
+        // identity, not a rendered string: the app formats weekdays with 'EEEE'
+        // (full name, accented in both) and takes short labels from CLDR, so
+        // 'EEEEEE' never reaches a screen.
         expect(safeFormatDate('2026-08-08', 'EEEEEE')).toBe('sab');
 
         configureDateFormatting({ language: 'en', dateFormat: 'system', timeFormat: 'system', systemLocale: 'en-US' });
