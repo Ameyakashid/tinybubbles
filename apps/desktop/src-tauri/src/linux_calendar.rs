@@ -1,7 +1,24 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
-    ExternalCalendarSubscription, LinuxCalendarIcsSource, LinuxCalendarReadResult,
-    MacOsCalendarEventPayload, MacOsCalendarEventWriteResult, MacOsCalendarPushTarget,
+    ExternalCalendarSubscription, MacOsCalendarEventPayload, MacOsCalendarEventWriteResult,
+    MacOsCalendarPushTarget,
 };
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LinuxCalendarIcsSource {
+    source_id: String,
+    ics: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LinuxCalendarReadResult {
+    permission: String,
+    calendars: Vec<ExternalCalendarSubscription>,
+    ics_sources: Vec<LinuxCalendarIcsSource>,
+}
 
 #[tauri::command]
 pub(crate) async fn get_linux_calendar_permission_status() -> Result<String, String> {

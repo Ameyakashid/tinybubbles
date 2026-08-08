@@ -494,21 +494,6 @@ struct MacOsCalendarEventPayload {
     location: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct LinuxCalendarIcsSource {
-    source_id: String,
-    ics: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct LinuxCalendarReadResult {
-    permission: String,
-    calendars: Vec<ExternalCalendarSubscription>,
-    ics_sources: Vec<LinuxCalendarIcsSource>,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 struct MacOsCalendarEventWriteResult {
