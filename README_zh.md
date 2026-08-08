@@ -225,7 +225,7 @@ Mindwtr 适合想在一个应用里用上完整 GTD 方法、并且数据完全�
 - iOS：App Store 或 TestFlight 测试版。
 - Web / 自托管：[云端部署](https://docs.mindwtr.app/data-sync/cloud-deployment)或 [Docker 指南](docker/README.md)。
 
-Windows 版本：代码签名由 [SignPath.io](https://signpath.io/) 免费提供，证书由 [SignPath Foundation](https://signpath.org/) 颁发 —— 申请审核中。详见[代码签名政策](https://mindwtr.app/signing)。
+Windows 版本：代码签名由 [SignPath.io](https://signpath.io/) 免费提供，证书由 [SignPath Foundation](https://signpath.org/) 颁发 —— 申请已通过，证书待签发。详见[代码签名政策](https://mindwtr.app/signing)。
 
 <details>
 <summary>包管理器快速命令</summary>

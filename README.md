@@ -231,7 +231,7 @@ Quick options:
 - iOS: App Store or TestFlight beta.
 - Web / self-hosted: [Cloud Deployment](https://docs.mindwtr.app/data-sync/cloud-deployment) or the [Docker guide](docker/README.md).
 
-Windows builds: free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) — application pending. See the [code signing policy](https://mindwtr.app/signing).
+Windows builds: free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) — application approved, certificate pending issuance. See the [code signing policy](https://mindwtr.app/signing).
 
 <details>
 <summary>Package manager quick commands</summary>
