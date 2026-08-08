@@ -28,32 +28,45 @@ type LocaleDescriptorCommon = {
 // Below it, Latin text in a value is almost always an untranslated leftover. At or above it
 // the locale is essentially complete and the English still in it is deliberate — brand names,
 // protocols, search operators, file extensions — so the check only yields false positives.
-// Compared against coverageFloor (the ratcheted commitment) rather than measured coverage, so
-// a locale can't fall back under the check the moment en.ts grows.
+// Compared against translatedKeyFloor (the ratcheted commitment) rather than measured
+// coverage, so a locale can't fall back under the check the moment en.ts grows.
 export const MIXED_ENGLISH_COVERAGE_CEILING = 90;
 
+// The translation commitment a locale is held to. Either the minimum NUMBER of English keys
+// it must translate — ratcheted against silent regression, only ever raised as real
+// translation work lands, never lowered — or 'all', meaning every key in en.ts, so a new
+// English string has to be translated rather than merely counted around.
+//
+// It was a percentage of Object.keys(en).length until 2026-08-08, and a percentage is not a
+// ratchet: adding an English string shrinks every locale's percentage with no locale
+// regressing, and the recorded remedy was to lower the floor. This comment used to document
+// re-pinning de 67->66, it 72->71, vi 99->98 for exactly that, and 8 more locales the batch
+// before. en.ts grew ~480 lines in six weeks and 16 of 19 locales had under 45 keys of
+// slack, so the gate broke on non-regressions roughly every other week — and each lowering
+// opened headroom for a real regression to hide in. A count is strictly stronger: deleting a
+// translation always fails it, whereas under percentages a simultaneously-growing en.ts
+// could mask a deletion. 'all' carries the locales whose old floor was literally 100.
+export type TranslationCommitment = number | 'all';
+
 export type LocaleDescriptor =
-    // A complete, standalone translation dictionary, checked for 100% key parity with
-    // English. No coverage floor: it's expected to have every key, not a percentage of them.
-    | (LocaleDescriptorCommon & { mode: 'full'; coverageFloor: null })
+    // A complete, standalone translation dictionary (not merged onto the English base at
+    // load time), so it is always an 'all' commitment.
+    | (LocaleDescriptorCommon & { mode: 'full'; translatedKeyFloor: 'all' })
     // A partial dictionary merged onto the English base at load time; missing keys fall back
-    // to English. coverageFloor is the minimum percentage of English keys this locale must
-    // translate, ratcheted against silent regression — never lowered to match a regression,
-    // only raised as real translation work lands, or re-pinned (down or up) when a real,
-    // deliberate change to englishKeyCount shifts every locale's percentage denominator. The
-    // 2026-07-24 settings-i18n migration moved 162 desktop-only settings strings into en.ts,
-    // growing englishKeyCount from 1957 to 2119; every partial locale's numerator was
-    // unchanged, so each floor below was re-pinned to that new denominator. cs and vi are
-    // deliberately near-full-parity partial locales and were backfilled instead of relaxed,
-    // so their floors stayed at 99 through that migration. The same-day core-schema-finish
-    // batch then added 4 new `units.*` keys to en.ts (2119 -> 2123) without touching any
-    // locale file but en/zh-Hans/zh-Hant (out of that batch's scope) — de, it, and vi's
-    // measured coverage dipped fractionally below their prior floor purely from that
-    // denominator growth (no translation regressed), so de/it/vi are re-pinned once more
-    // (67->66, 72->71, 99->98) to the new measurement; vi's numerator is still unchanged and
-    // still near-full-parity, its floor just no longer rounds up to 99 with 4 more English
-    // keys outstanding.
-    | (LocaleDescriptorCommon & { mode: 'overrides'; coverageFloor: number });
+    // to English. Usually a count, but fa and sv are maintained at full parity and are held
+    // to it — 'mode' is about how the dictionary loads, the floor is about what we promise.
+    | (LocaleDescriptorCommon & { mode: 'overrides'; translatedKeyFloor: TranslationCommitment });
+
+// Whether a locale is still checked for mixed-in English fragments (see
+// MIXED_ENGLISH_COVERAGE_CEILING). The one home for that derivation: locale-parity.test.ts
+// and scripts/i18n-locale-parity.ts both read it, and the script used to hand-keep the
+// resulting locale list. englishKeyCount is passed in so this table stays free of an import
+// of en.ts.
+export function isMixedEnglishChecked(descriptor: LocaleDescriptor, englishKeyCount: number): boolean {
+    if (descriptor.mode !== 'overrides' || !descriptor.nonLatin) return false;
+    if (descriptor.translatedKeyFloor === 'all') return false;
+    return (descriptor.translatedKeyFloor / englishKeyCount) * 100 < MIXED_ENGLISH_COVERAGE_CEILING;
+}
 
 export const LOCALES = {
     vi: {
@@ -63,7 +76,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Tiếng Việt',
         nonLatin: false,
-        coverageFloor: 98,
+        translatedKeyFloor: 2202,
     },
     zh: {
         loadSync: () => require('./locales/zh-Hans') as typeof import('./locales/zh-Hans'),
@@ -72,7 +85,7 @@ export const LOCALES = {
         mode: 'full',
         native: '中文（简体）',
         nonLatin: true,
-        coverageFloor: null,
+        translatedKeyFloor: 'all',
     },
     'zh-Hant': {
         loadSync: () => require('./locales/zh-Hant') as typeof import('./locales/zh-Hant'),
@@ -81,7 +94,7 @@ export const LOCALES = {
         mode: 'full',
         native: '中文（繁體）',
         nonLatin: true,
-        coverageFloor: null,
+        translatedKeyFloor: 'all',
     },
     es: {
         loadSync: () => require('./locales/es') as typeof import('./locales/es'),
@@ -90,9 +103,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Español',
         nonLatin: false,
-        // Re-pinned 62->60 (i18n-fallback-20260730-12): 71 new en.ts keys grew the
-        // denominator; es's numerator (translated count) is unchanged.
-        coverageFloor: 60,
+        translatedKeyFloor: 1363,
     },
     hi: {
         loadSync: () => require('./locales/hi') as typeof import('./locales/hi'),
@@ -101,8 +112,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'हिन्दी',
         nonLatin: true,
-        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 62,
+        translatedKeyFloor: 1419,
     },
     ar: {
         loadSync: () => require('./locales/ar') as typeof import('./locales/ar'),
@@ -111,8 +121,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'العربية',
         nonLatin: true,
-        // Re-pinned 66->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 64,
+        translatedKeyFloor: 1446,
     },
     de: {
         loadSync: () => require('./locales/de') as typeof import('./locales/de'),
@@ -121,8 +130,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Deutsch',
         nonLatin: false,
-        // Re-pinned 66->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 64,
+        translatedKeyFloor: 1457,
     },
     ru: {
         loadSync: () => require('./locales/ru') as typeof import('./locales/ru'),
@@ -131,8 +139,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Русский',
         nonLatin: true,
-        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 62,
+        translatedKeyFloor: 1419,
     },
     ja: {
         loadSync: () => require('./locales/ja') as typeof import('./locales/ja'),
@@ -141,8 +148,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: '日本語',
         nonLatin: true,
-        // Re-pinned 65->62 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 62,
+        translatedKeyFloor: 1419,
     },
     fr: {
         loadSync: () => require('./locales/fr') as typeof import('./locales/fr'),
@@ -151,7 +157,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Français',
         nonLatin: false,
-        coverageFloor: 70,
+        translatedKeyFloor: 1950,
     },
     pt: {
         loadSync: () => require('./locales/pt') as typeof import('./locales/pt'),
@@ -160,8 +166,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Português',
         nonLatin: false,
-        // Re-pinned 67->64 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 64,
+        translatedKeyFloor: 1463,
     },
     pl: {
         loadSync: () => require('./locales/pl') as typeof import('./locales/pl'),
@@ -170,8 +175,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Polski',
         nonLatin: false,
-        // Re-pinned 66->63 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 63,
+        translatedKeyFloor: 1442,
     },
     cs: {
         loadSync: () => require('./locales/cs') as typeof import('./locales/cs'),
@@ -180,7 +184,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Čeština',
         nonLatin: false,
-        coverageFloor: 99,
+        translatedKeyFloor: 2222,
     },
     ko: {
         loadSync: () => require('./locales/ko') as typeof import('./locales/ko'),
@@ -191,7 +195,7 @@ export const LOCALES = {
         nonLatin: true,
         // Rewritten end to end by a native speaker in #934 (64 -> ~100%), replacing a machine
         // translation that rendered brand names as common nouns ('Gemini' as the constellation).
-        coverageFloor: 98,
+        translatedKeyFloor: 2224,
     },
     it: {
         loadSync: () => require('./locales/it') as typeof import('./locales/it'),
@@ -200,8 +204,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Italiano',
         nonLatin: false,
-        // Re-pinned 71->69 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 69,
+        translatedKeyFloor: 1559,
     },
     tr: {
         loadSync: () => require('./locales/tr') as typeof import('./locales/tr'),
@@ -210,8 +213,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Türkçe',
         nonLatin: false,
-        // Re-pinned 67->65 (i18n-fallback-20260730-12): denominator growth only, see es above.
-        coverageFloor: 65,
+        translatedKeyFloor: 1465,
     },
     nl: {
         loadSync: () => require('./locales/nl') as typeof import('./locales/nl'),
@@ -220,7 +222,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Nederlands',
         nonLatin: false,
-        coverageFloor: 22,
+        translatedKeyFloor: 554,
     },
     fa: {
         loadSync: () => require('./locales/fa') as typeof import('./locales/fa'),
@@ -229,10 +231,9 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'فارسی',
         nonLatin: true,
-        // Full key parity measured at add time (2227/2227 = 100%); mode stays
-        // 'overrides' (not 'full') to mirror ar's shape per the add-persian
-        // handoff, but the floor reflects the real, complete translation.
-        coverageFloor: 100,
+        // Complete translation. mode stays 'overrides' (not 'full') to mirror ar's shape
+        // per the add-persian handoff; the commitment is full parity either way.
+        translatedKeyFloor: 'all',
     },
     sv: {
         loadSync: () => require('./locales/sv') as typeof import('./locales/sv'),
@@ -241,9 +242,9 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Svenska',
         nonLatin: false,
-        // Full key parity measured at add time (2227/2227 = 100%); mode stays
-        // 'overrides' (not 'full') to mirror fa/ar's shape.
-        coverageFloor: 100,
+        // Complete translation. mode stays 'overrides' (not 'full') to mirror fa/ar's shape;
+        // the commitment is full parity either way.
+        translatedKeyFloor: 'all',
     },
 } as const satisfies Record<string, LocaleDescriptor>;
 

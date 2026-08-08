@@ -462,6 +462,7 @@
     "isMarkdownEditorAssistEnabled",
     "isMindwtrMirrorCalendar",
     "isMindwtrMirrorEvent",
+    "isMixedEnglishChecked",
     "isNaturalLanguageDatesEnabled",
     "isNonEmptyString",
     "isObjectRecord",

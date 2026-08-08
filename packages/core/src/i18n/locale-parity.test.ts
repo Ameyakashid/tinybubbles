@@ -20,10 +20,10 @@ import { viOverrides } from './locales/vi';
 import { zhHans } from './locales/zh-Hans';
 import { zhHant } from './locales/zh-Hant';
 import { allowedEnglishMirrorKeysByLocale, hasTranslatableEnglishText, isAllowedEnglishMirrorKey } from './locale-quality';
-import { LOCALES, MIXED_ENGLISH_COVERAGE_CEILING, type Locale } from './i18n-locales';
+import { LOCALES, isMixedEnglishChecked, type Locale } from './i18n-locales';
 
 // The one hand-kept binding left in this file: LOCALES (i18n-locales.ts) describes each
-// locale's mode/coverageFloor/nonLatin, but the concrete translation object still has to come
+// locale's mode/translatedKeyFloor/nonLatin, but the concrete translation object still has to come
 // from a real static import — there's no way to turn a string key into an imported binding
 // without one. Every other roster this file used to hand-keep (fullParityLocales,
 // overrideLocales, nonLatinOverrideLocales, overrideLocaleCoverageFloors, shippedLocales) was
@@ -35,12 +35,13 @@ const translationsByLocale: Record<Locale, Record<string, string>> = {
     pl: plOverrides, pt: ptOverrides, ru: ruOverrides, sv: svOverrides, tr: trOverrides, vi: viOverrides,
 };
 
+const englishKeyCount = Object.keys(en).length;
 const locales = Object.entries(LOCALES) as Array<[Locale, (typeof LOCALES)[Locale]]>;
-const fullParityLocales = locales.filter(([, descriptor]) => descriptor.mode === 'full');
-const overrideLocales = locales.filter(([, descriptor]) => descriptor.mode === 'overrides');
-const nonLatinOverrideLocales = overrideLocales.filter(([, descriptor]) => (
-    descriptor.nonLatin && descriptor.coverageFloor < MIXED_ENGLISH_COVERAGE_CEILING
-));
+// Full parity is the 'all' commitment, not the load mode: fa and sv load as 'overrides' but
+// are maintained at every key (see i18n-locales.ts).
+const fullParityLocales = locales.filter(([, descriptor]) => descriptor.translatedKeyFloor === 'all');
+const countFloorLocales = locales.filter(([, descriptor]) => typeof descriptor.translatedKeyFloor === 'number');
+const nonLatinOverrideLocales = locales.filter(([, descriptor]) => isMixedEnglishChecked(descriptor, englishKeyCount));
 
 describe('locale parity', () => {
     it.each(fullParityLocales)('keeps %s in full key parity with English', (lang) => {
@@ -49,10 +50,15 @@ describe('locale parity', () => {
         expect(missing).toEqual([]);
     });
 
-    it.each(overrideLocales)('keeps %s override coverage from silently regressing', (lang, descriptor) => {
-        const englishKeyCount = Object.keys(en).length;
-        const coverage = (Object.keys(translationsByLocale[lang]).length / englishKeyCount) * 100;
-        expect(coverage).toBeGreaterThanOrEqual(descriptor.coverageFloor);
+    it.each(countFloorLocales)('keeps %s translated-key count from silently regressing', (lang, descriptor) => {
+        const translatedKeys = Object.keys(translationsByLocale[lang]).length;
+        const coverage = ((translatedKeys / englishKeyCount) * 100).toFixed(1);
+        // The floor is a count, not a percentage, so growing en.ts can never fail this — only
+        // deleting a translation can. The percentage is still worth seeing, so report it here.
+        expect(
+            translatedKeys,
+            `${lang} translates ${translatedKeys} of ${englishKeyCount} English keys (${coverage}%); floor is ${descriptor.translatedKeyFloor}. Raise the floor in i18n-locales.ts when translations land; never lower it.`,
+        ).toBeGreaterThanOrEqual(descriptor.translatedKeyFloor as number);
     });
 
     it.each(locales)('keeps promoted task action labels translated in %s', (lang) => {
