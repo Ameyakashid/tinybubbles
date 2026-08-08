@@ -177,14 +177,13 @@ describe('date utils', () => {
         configureDateFormatting({ language: 'en', dateFormat: 'system', timeFormat: 'system', systemLocale: 'en-US' });
     });
 
-    // date.ts maps `pt` two different ways: DATE_LOCALE_BY_LANGUAGE gives date-fns the
-    // BRAZILIAN locale (ptBR), LOCALE_TAG_BY_LANGUAGE gives Intl the EUROPEAN tag (pt-PT).
-    // That is a real, user-visible split, not a typo to quietly unify — a Portuguese user
-    // sees Brazilian abbreviations from every date-fns format and European ones from every
-    // Intl format. Pinned here so whichever way it is eventually resolved is a deliberate
-    // product decision with a failing test to change, not a silent drift.
-    it('keeps Portuguese on Brazilian date-fns output and European Intl output', () => {
-        expect(resolveDateLocaleTag({ language: 'pt', dateFormat: 'dmy' })).toBe('pt-PT');
+    // Portuguese resolves to BRAZILIAN conventions in both formatting paths:
+    // DATE_LOCALE_BY_LANGUAGE gives date-fns `ptBR`, LOCALE_TAG_BY_LANGUAGE gives Intl
+    // `pt-BR`. That is a deliberate product choice, not an oversight to "fix" back to
+    // pt-PT — the two paths render into the same screens, so they must agree, and
+    // Brazilian serves by far the larger share of Portuguese speakers.
+    it('keeps Portuguese on Brazilian conventions in both formatting paths', () => {
+        expect(resolveDateLocaleTag({ language: 'pt', dateFormat: 'dmy' })).toBe('pt-BR');
 
         configureDateFormatting({ language: 'pt', dateFormat: 'dmy', timeFormat: 'system' });
         // ptBR: "8 ago 2026". European pt would be "8 de ago. de 2026".

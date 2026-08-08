@@ -77,7 +77,10 @@ const LOCALE_TAG_BY_LANGUAGE: Record<Language, string> = {
     ru: 'ru-RU',
     ja: 'ja-JP',
     fr: 'fr-FR',
-    pt: 'pt-PT',
+    // Brazilian, to match the date-fns locale above. Portuguese has one entry in
+    // the language list, so both formatting paths have to pick the same regional
+    // conventions or the same screen shows "sab" (date-fns) next to "sáb" (Intl).
+    pt: 'pt-BR',
     pl: 'pl-PL',
     cs: 'cs-CZ',
     fa: 'fa-IR',
