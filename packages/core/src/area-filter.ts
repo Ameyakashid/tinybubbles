@@ -17,7 +17,7 @@ export interface AreaFilterSelection {
     excluded: string[];
 }
 
-export function resolveAreaFilter(value: string | undefined, areas: Area[]): AreaFilterValue {
+function resolveAreaFilter(value: string | undefined, areas: Area[]): AreaFilterValue {
     if (!value || value === AREA_FILTER_ALL || value === AREA_FILTER_NONE) {
         return value ?? AREA_FILTER_ALL;
     }
@@ -116,29 +116,6 @@ const areaIdMatchesSelection = (areaId: string | undefined, selection: AreaFilte
     if (selection.excluded.includes(key)) return false;
     return selection.included.length === 0 || selection.included.includes(key);
 };
-
-export function projectMatchesAreaFilter(
-    project: Project,
-    filter: AreaFilterValue,
-    areaById?: Map<string, Area>,
-): boolean {
-    if (filter === AREA_FILTER_ALL) return true;
-    const effectiveAreaId = normalizeAreaId(project.areaId, areaById);
-    if (filter === AREA_FILTER_NONE) return !effectiveAreaId;
-    return effectiveAreaId === filter;
-}
-
-export function taskMatchesAreaFilter(
-    task: Task,
-    filter: AreaFilterValue,
-    projectMap: Map<string, Project>,
-    areaById?: Map<string, Area>,
-): boolean {
-    if (filter === AREA_FILTER_ALL) return true;
-    const taskAreaId = normalizeAreaId(getTaskAreaId(task, projectMap), areaById);
-    if (filter === AREA_FILTER_NONE) return !taskAreaId;
-    return taskAreaId === filter;
-}
 
 export function projectMatchesAreaFilterSelection(
     project: Project,

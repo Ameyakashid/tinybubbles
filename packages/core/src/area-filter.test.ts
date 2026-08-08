@@ -8,12 +8,9 @@ import {
     areaFilterSelectionToValue,
     cycleAreaFilterSelection,
     isAreaFilterSelectionActive,
-    projectMatchesAreaFilter,
     projectMatchesAreaFilterSelection,
-    resolveAreaFilter,
     resolveAreaFilterSelection,
     isTaskVisibleInArea,
-    taskMatchesAreaFilter,
     taskMatchesAreaFilterSelection,
 } from './area-filter';
 
@@ -47,34 +44,6 @@ const baseTask: Task = {
     updatedAt: '2026-03-16T00:00:00.000Z',
 };
 
-describe('area filter utils', () => {
-    it('resolves missing, deleted, and stale area filters to all areas', () => {
-        expect(resolveAreaFilter(undefined, [workArea])).toBe(AREA_FILTER_ALL);
-        expect(resolveAreaFilter('missing-area', [workArea])).toBe(AREA_FILTER_ALL);
-        expect(resolveAreaFilter(workArea.id, [workArea])).toBe(workArea.id);
-        expect(resolveAreaFilter(workArea.id, [{ ...workArea, deletedAt: '2026-03-17T00:00:00.000Z' }])).toBe(AREA_FILTER_ALL);
-    });
-
-    it('matches projects against all, none, and explicit areas', () => {
-        const areaById = new Map([[workArea.id, workArea]]);
-
-        expect(projectMatchesAreaFilter(project, AREA_FILTER_ALL, areaById)).toBe(true);
-        expect(projectMatchesAreaFilter(project, workArea.id, areaById)).toBe(true);
-        expect(projectMatchesAreaFilter(project, AREA_FILTER_NONE, areaById)).toBe(false);
-        expect(projectMatchesAreaFilter({ ...project, areaId: undefined }, AREA_FILTER_NONE, areaById)).toBe(true);
-    });
-
-    it('matches tasks using the project area when present', () => {
-        const projectById = new Map([[project.id, project]]);
-        const areaById = new Map([[workArea.id, workArea]]);
-
-        expect(taskMatchesAreaFilter({ ...baseTask, projectId: project.id }, AREA_FILTER_ALL, projectById, areaById)).toBe(true);
-        expect(taskMatchesAreaFilter({ ...baseTask, projectId: project.id }, workArea.id, projectById, areaById)).toBe(true);
-        expect(taskMatchesAreaFilter({ ...baseTask, projectId: project.id }, AREA_FILTER_NONE, projectById, areaById)).toBe(false);
-        expect(taskMatchesAreaFilter({ ...baseTask }, AREA_FILTER_NONE, projectById, areaById)).toBe(true);
-    });
-});
-
 const homeArea: Area = { ...workArea, id: 'area-home', name: 'Home' };
 const deletedArea: Area = { ...workArea, id: 'area-old', name: 'Old', deletedAt: '2026-03-17T00:00:00.000Z' };
 const allAreas = [workArea, homeArea, deletedArea];
@@ -86,6 +55,7 @@ describe('area filter selection', () => {
         expect(resolveAreaFilterSelection(AREA_FILTER_NONE, allAreas)).toEqual({ included: [AREA_FILTER_NONE], excluded: [] });
         expect(resolveAreaFilterSelection(workArea.id, allAreas)).toEqual({ included: [workArea.id], excluded: [] });
         expect(resolveAreaFilterSelection('missing-area', allAreas)).toEqual({ included: [], excluded: [] });
+        expect(resolveAreaFilterSelection(deletedArea.id, allAreas)).toEqual({ included: [], excluded: [] });
         expect(resolveAreaFilterSelection({ areaId: workArea.id }, allAreas)).toEqual({ included: [workArea.id], excluded: [] });
     });
 
