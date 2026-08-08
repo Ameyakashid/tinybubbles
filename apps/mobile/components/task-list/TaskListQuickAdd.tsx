@@ -30,7 +30,6 @@ type TaskListQuickAddProps = {
   copilotSuggestion: { context?: string; tags?: string[] } | null;
   copilotTags: string[];
   copilotThinking: boolean;
-  enableCopilot: boolean;
   handleAddAndEditTask?: () => void | Promise<void>;
   handleAddTask: () => void | Promise<void>;
   focusNewTask: boolean;
@@ -63,7 +62,6 @@ export function TaskListQuickAdd({
   copilotSuggestion,
   copilotTags,
   copilotThinking,
-  enableCopilot,
   handleAddAndEditTask,
   handleAddTask,
   focusNewTask,
@@ -211,7 +209,7 @@ export function TaskListQuickAdd({
           ))}
         </View>
       )}
-      {enableCopilot && aiEnabled && copilotSuggestion && !copilotApplied && (
+      {aiEnabled && copilotSuggestion && !copilotApplied && (
         <TouchableOpacity
           style={[styles.copilotPill, { borderColor: themeColors.border, backgroundColor: themeColors.inputBg }]}
           onPress={onApplyCopilot}
@@ -233,7 +231,7 @@ export function TaskListQuickAdd({
           </View>
         </TouchableOpacity>
       )}
-      {enableCopilot && aiEnabled && copilotThinking && !copilotSuggestion && !copilotApplied && (
+      {aiEnabled && copilotThinking && !copilotSuggestion && !copilotApplied && (
         <View style={[styles.copilotPill, styles.copilotLoadingRow, { borderColor: themeColors.border, backgroundColor: themeColors.inputBg }]}>
           <ActivityIndicator size="small" color={themeColors.tint} />
           <View style={styles.copilotContent}>
@@ -243,7 +241,7 @@ export function TaskListQuickAdd({
           </View>
         </View>
       )}
-      {enableCopilot && aiEnabled && copilotApplied && (
+      {aiEnabled && copilotApplied && (
         <View style={[styles.copilotPill, { borderColor: themeColors.border, backgroundColor: themeColors.inputBg }]}>
           <View style={[styles.copilotIcon, { backgroundColor: themeColors.tint }]}>
             <CheckCircle2 size={14} color={themeColors.onTint} strokeWidth={2.2} />

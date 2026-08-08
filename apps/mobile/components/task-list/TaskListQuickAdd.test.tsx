@@ -63,7 +63,6 @@ const getQuickAddProps = (overrides: Partial<React.ComponentProps<typeof TaskLis
     copilotSuggestion: null,
     copilotTags: [],
     copilotThinking: false,
-    enableCopilot: true,
     canFocusNewTask: true,
     focusNewTask: false,
     handleAddTask: vi.fn(),

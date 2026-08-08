@@ -1756,7 +1756,6 @@ function TaskListComponent({
           copilotSuggestion={copilotSuggestion}
           copilotTags={copilotTags}
           copilotThinking={copilotThinking}
-          enableCopilot
           handleAddAndEditTask={projectId ? () => handleAddTask({ openAfterCreate: true }) : undefined}
           handleAddTask={handleAddTask}
           focusNewTask={quickAddFocus}
