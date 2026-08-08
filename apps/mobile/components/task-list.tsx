@@ -38,13 +38,18 @@ import { TaskEditModal } from './task-edit-modal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CompactText } from './compact-text';
 import { ListEmptyState } from './list-empty-state';
-import { SwipeableTaskItem, readTaskRowRenderCount, type SwipeableTaskItemRowContext } from './swipeable-task-item';
+import {
+  SwipeableTaskItem,
+  readTaskRowRenderCount,
+  type SwipeableTaskItemRowContext,
+  type TaskRowActions,
+} from './swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS, shouldRemoveClippedSubviews } from './task-list-windowing';
 import { useTheme } from '../contexts/theme-context';
 import { useLanguage } from '../contexts/language-context';
 
 import { buildTaskGroupSections, getTaskGroupByLabel, type TaskGroupBy } from '@/lib/task-group-sections';
-import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useToast } from '@/contexts/toast-context';
@@ -198,81 +203,6 @@ interface TaskListCapabilityProps {
 // them by hand.
 export interface TaskListProps
   extends TaskListContentProps, TaskListScrollProps, TaskListChromeProps, TaskListCapabilityProps {}
-
-/** Everything a row can mutate, on one object that never changes identity. */
-type TaskRowActions = {
-  edit: (task: Task) => void;
-  changeStatus: (taskId: string, status: TaskStatus) => void | Promise<unknown>;
-  remove: (taskId: string) => void | Promise<unknown>;
-  toggleSelect: (taskId: string) => void;
-};
-
-interface MemoizedTaskRowProps {
-  task: Task;
-  tc: ThemeColors;
-  isDark: boolean;
-  actions: TaskRowActions;
-  rowContext: SwipeableTaskItemRowContext;
-  selectionEnabled: boolean;
-  selectionMode: boolean;
-  isMultiSelected: boolean;
-  isHighlighted: boolean;
-  statusBadgeAsIcon: boolean;
-  hideChecklistProgress: boolean;
-  hideProjectMeta: boolean;
-  sequenceCue?: ProjectSequenceTaskCue;
-  sequenceLabel?: string;
-  onProjectPress?: (projectId: string) => void;
-}
-
-// The memo boundary for a single row (#766). Any store change re-renders the
-// list, but a row re-renders only when the task object it draws — or one of the
-// flags it draws — actually changed. The per-row callbacks are built in here,
-// from task.id and the stable `actions`, so their identity churn stays inside
-// the boundary instead of invalidating every mounted row.
-const MemoizedTaskRow = React.memo(function MemoizedTaskRow({
-  actions,
-  hideChecklistProgress,
-  hideProjectMeta,
-  isDark,
-  isHighlighted,
-  isMultiSelected,
-  onProjectPress,
-  rowContext,
-  selectionEnabled,
-  selectionMode,
-  sequenceCue,
-  sequenceLabel,
-  statusBadgeAsIcon,
-  task,
-  tc,
-}: MemoizedTaskRowProps) {
-  return (
-    <ErrorBoundary>
-      <SwipeableTaskItem
-        task={task}
-        isDark={isDark}
-        tc={tc}
-        onPress={() => actions.edit(task)}
-        selectionMode={selectionMode}
-        isMultiSelected={isMultiSelected}
-        onToggleSelect={selectionEnabled ? () => actions.toggleSelect(task.id) : undefined}
-        onStatusChange={(status) => actions.changeStatus(task.id, status)}
-        onDelete={() => actions.remove(task.id)}
-        isHighlighted={isHighlighted}
-        statusBadgeAsIcon={statusBadgeAsIcon}
-        hideChecklistProgress={hideChecklistProgress}
-        hideProjectMeta={hideProjectMeta}
-        sequenceCue={sequenceCue}
-        sequenceLabel={sequenceLabel}
-        rowContext={rowContext}
-        onProjectPress={onProjectPress}
-        onContextPress={openContextsScreen}
-        onTagPress={openContextsScreen}
-      />
-    </ErrorBoundary>
-  );
-});
 
 function TaskListComponent({
   statusFilter,
@@ -1517,35 +1447,40 @@ function TaskListComponent({
   };
   const rowActions = useMemo<TaskRowActions>(() => ({
     edit: (task) => rowActionSourcesRef.current.handleEditTask(task),
-    changeStatus: (taskId, status) => rowActionSourcesRef.current.handleTaskStatusChange(taskId, status),
-    remove: (taskId) => rowActionSourcesRef.current.deleteTask(taskId),
-    toggleSelect: (taskId) => {
-      const sources = rowActionSourcesRef.current;
-      sources.toggleMultiSelect(taskId, { visibleTaskIds: sources.orderedTaskIds });
-    },
-  }), []);
+    changeStatus: (task, status) => rowActionSourcesRef.current.handleTaskStatusChange(task.id, status),
+    remove: (task) => rowActionSourcesRef.current.deleteTask(task.id),
+    toggleSelect: enableBulkActions
+      ? (task) => {
+        const sources = rowActionSourcesRef.current;
+        sources.toggleMultiSelect(task.id, { visibleTaskIds: sources.orderedTaskIds });
+      }
+      : undefined,
+  }), [enableBulkActions]);
 
   const renderTask = useCallback(({ item }: { item: Task }) => {
     const sequenceCue = getTaskSequenceCue?.(item);
 
     return (
-      <MemoizedTaskRow
-        actions={rowActions}
-        hideChecklistProgress={hideChecklistProgressForList}
-        hideProjectMeta={Boolean(projectId)}
-        isDark={isDark}
-        isHighlighted={item.id === highlightTaskId}
-        isMultiSelected={enableBulkActions && multiSelectedIds.has(item.id)}
-        onProjectPress={projectId ? undefined : openProjectScreen}
-        rowContext={rowContext}
-        selectionEnabled={enableBulkActions}
-        selectionMode={enableBulkActions ? selectionMode : false}
-        sequenceCue={sequenceCue}
-        sequenceLabel={sequenceCue ? sequenceCueLabels?.[sequenceCue] : undefined}
-        statusBadgeAsIcon={statusBadgeAsIconForList}
-        task={item}
-        tc={themeColorsMemo}
-      />
+      <ErrorBoundary>
+        <SwipeableTaskItem
+          actions={rowActions}
+          hideChecklistProgress={hideChecklistProgressForList}
+          hideProjectMeta={Boolean(projectId)}
+          isDark={isDark}
+          isHighlighted={item.id === highlightTaskId}
+          isMultiSelected={enableBulkActions && multiSelectedIds.has(item.id)}
+          onProjectPress={projectId ? undefined : openProjectScreen}
+          onContextPress={openContextsScreen}
+          onTagPress={openContextsScreen}
+          rowContext={rowContext}
+          selectionMode={enableBulkActions ? selectionMode : false}
+          sequenceCue={sequenceCue}
+          sequenceLabel={sequenceCue ? sequenceCueLabels?.[sequenceCue] : undefined}
+          statusBadgeAsIcon={statusBadgeAsIconForList}
+          task={item}
+          tc={themeColorsMemo}
+        />
+      </ErrorBoundary>
     );
   }, [
     enableBulkActions,

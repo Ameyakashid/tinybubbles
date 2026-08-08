@@ -963,7 +963,11 @@ describe('TaskList project quick add', () => {
     });
   });
 
-  it('re-renders only the row whose task changed, not every mounted row (#766)', async () => {
+  // The memo boundary itself now lives in the row module and is pinned there,
+  // against the real component, in swipeable-task-item.test.tsx. What this list
+  // owes it is prop identity: after a single edit, every untouched row must get
+  // back the props it already had, or the boundary cannot hold.
+  it('leaves untouched rows their existing props after one task changes (#766)', async () => {
     const listProps = (taskSource: Task[]) => ({
       allowAdd: false,
       showHeader: false,
@@ -981,6 +985,12 @@ describe('TaskList project quick add', () => {
     });
     expect(new Set(rowRenderSpy.mock.calls.map(([id]) => id)).size).toBe(30);
 
+    const rowPropsById = () => new Map(
+      tree.root.findAllByType('SwipeableTaskItem' as never)
+        .map((node) => [node.props.task.id as string, node.props]),
+    );
+    const before = rowPropsById();
+
     // What a single task edit looks like from the list's side: a fresh tasks
     // array in which exactly one task object was replaced.
     const editedTasks = tasks.map((task, index) => (
@@ -988,15 +998,20 @@ describe('TaskList project quick add', () => {
     ));
     storeState.tasks = editedTasks;
     storeState._allTasks = editedTasks;
-    rowRenderSpy.mockClear();
 
     await act(async () => {
       tree.update(<TaskList {...listProps(editedTasks)} />);
     });
 
-    const rerenderedIds = rowRenderSpy.mock.calls.map(([id]) => id);
-    expect(new Set(rerenderedIds)).toEqual(new Set(['row-7']));
-    expect(rerenderedIds.length).toBeLessThan(5);
+    const after = rowPropsById();
+    expect(after.get('row-7')?.task.title).toBe('Task 7 (edited)');
+    const changed = [...after.entries()].filter(([id, props]) => (
+      props.task !== before.get(id)?.task
+      || props.actions !== before.get(id)?.actions
+      || props.tc !== before.get(id)?.tc
+      || props.rowContext !== before.get(id)?.rowContext
+    ));
+    expect(changed.map(([id]) => id)).toEqual(['row-7']);
 
     act(() => {
       tree.unmount();

@@ -241,4 +241,34 @@ describe('DailyReviewScreen', () => {
         expect(style.borderRadius).toBe(8);
         expect(style.borderWidth).toBeUndefined();
     });
+
+    // Rows here carry the #766 memo boundary too, so the review flow must hand
+    // every row the same action object rather than a fresh set of arrows.
+    it('hands rows one stable action object across re-renders', async () => {
+        storeState.tasks = [
+            makeTask({ id: 'due-1', title: 'Due one', dueDate: '2026-07-15' }),
+            makeTask({ id: 'due-2', title: 'Due two', dueDate: '2026-07-15' }),
+        ];
+        const onClose = vi.fn();
+
+        let tree!: ReturnType<typeof create>;
+        await act(async () => {
+            tree = create(<DailyReviewScreen onClose={onClose} />);
+            await Promise.resolve();
+        });
+
+        const rowProps = () => tree.root
+            .findAll((node) => (node.type as unknown) === 'SwipeableTaskItem')
+            .map((node) => node.props);
+        const before = rowProps();
+        expect(before).toHaveLength(2);
+        expect(before[0].actions).toBe(before[1].actions);
+
+        await act(async () => {
+            tree.update(<DailyReviewScreen onClose={onClose} />);
+            await Promise.resolve();
+        });
+
+        expect(rowProps()[1].actions).toBe(before[1].actions);
+    });
 });

@@ -28,7 +28,7 @@ import { ToastViewport } from '../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
-import { SwipeableTaskItem } from './swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from './swipeable-task-item';
 import { TaskEditModal } from './task-edit-modal';
 import { InboxProcessingModal } from './inbox-processing-modal';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -208,10 +208,18 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
         if (previousStepId) setCurrentStep(previousStepId);
     };
 
-    const openTask = (task: Task) => {
+    const openTask = useCallback((task: Task) => {
         setEditingTask(task);
         setIsTaskModalVisible(true);
-    };
+    }, []);
+
+    // One object for every row across every step, so re-rendering a step does
+    // not hand each row a fresh set of arrows (#766).
+    const rowActions = useMemo<TaskRowActions>(() => ({
+        edit: openTask,
+        changeStatus: (task, status) => updateTask(task.id, { status: status as TaskStatus }),
+        remove: (task) => deleteTask(task.id),
+    }), [deleteTask, openTask, updateTask]);
 
     const closeTask = () => {
         setIsTaskModalVisible(false);
@@ -265,9 +273,7 @@ function DailyReviewFlow({ onClose }: { onClose: () => void }) {
                         task={task}
                         isDark={isDark}
                         tc={tc}
-                        onPress={() => openTask(task)}
-                        onStatusChange={(status) => updateTask(task.id, { status: status as TaskStatus })}
-                        onDelete={() => deleteTask(task.id)}
+                        actions={rowActions}
                         showFocusToggle={options?.showFocusToggle}
                         hideStatusBadge={options?.hideStatusBadge}
                         footerContent={footerContent}

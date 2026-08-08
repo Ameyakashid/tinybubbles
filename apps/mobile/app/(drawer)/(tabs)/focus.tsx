@@ -56,13 +56,12 @@ import {
   shallow,
   type Project,
   type Task,
-  type TaskStatus,
   type FocusGroupBy,
   type SavedFilter,
   type SortField,
   type ProjectDeadlineBoost,
 } from '@mindwtr/core';
-import { SwipeableTaskItem } from '@/components/swipeable-task-item';
+import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
 import {
   getActionFailureMessage,
   getUnknownErrorMessage,
@@ -1158,6 +1157,14 @@ export default function FocusScreen() {
     setIsModalVisible(true);
   }, []);
 
+  // One object for every row, so a store write does not hand each row a fresh
+  // set of arrows and re-render the whole visible list (#766).
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: onEdit,
+    changeStatus: (task, status) => updateTask(task.id, { status }),
+    remove: (task) => deleteTask(task.id),
+  }), [deleteTask, onEdit, updateTask]);
+
   const onSaveTask = useCallback((taskId: string, updates: Partial<Task>) => {
     // Returned, not swallowed: the editor reports a failed save from this result.
     return updateTask(taskId, updates);
@@ -1276,10 +1283,12 @@ export default function FocusScreen() {
 
     const canMarkReviewed = section.type === 'reviewDue' && Boolean(item.task.reviewAt);
     const canDeferTask = !canMarkReviewed && !item.task.dueDate && (item.task.isFocusedToday === true || item.task.status === 'next');
+    // Passed by reference, not wrapped: both already take the task, and a fresh
+    // arrow here would defeat the row's memo boundary (#766).
     const longPressAction = canMarkReviewed
-      ? () => openReviewMenu(item.task)
+      ? openReviewMenu
       : canDeferTask
-        ? () => openDeferMenu(item.task)
+        ? openDeferMenu
         : undefined;
     const longPressActionLabel = canMarkReviewed
       ? resolveText('review.markReviewed', 'Mark reviewed')
@@ -1302,9 +1311,7 @@ export default function FocusScreen() {
           task={item.task}
           isDark={isDark}
           tc={tc}
-          onPress={() => onEdit(item.task)}
-          onStatusChange={(status) => updateTask(item.task.id, { status: status as TaskStatus })}
-          onDelete={() => deleteTask(item.task.id)}
+          actions={rowActions}
           isHighlighted={item.task.id === highlightTaskId}
           showFocusToggle
           showFocusHighlight={section.type !== 'focus'}

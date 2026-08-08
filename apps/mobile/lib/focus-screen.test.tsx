@@ -179,10 +179,12 @@ vi.mock('../contexts/theme-context', () => ({
   useTheme: () => ({ isDark: false }),
 }));
 
-vi.mock('../contexts/language-context', () => ({
-  useLanguage: () => ({
-    t: (key: string) =>
-      ({
+vi.mock('../contexts/language-context', () => {
+  // One stable `t`, as the real provider gives: its context value only changes
+  // when the language does, so a store write must not churn translator
+  // identity — several Focus callbacks memoise on it.
+  const t = (key: string) =>
+    ({
         'common.all': 'All',
         'agenda.todaysFocus': "Today's Focus",
         'focus.schedule': 'Today',
@@ -202,9 +204,9 @@ vi.mock('../contexts/language-context', () => ({
         'common.done': 'Done',
         'taskEdit.locationLabel': 'Location',
         'taskEdit.locationPlaceholder': 'e.g. Office',
-      }[key] ?? key),
-  }),
-}));
+      }[key] ?? key);
+  return { useLanguage: () => ({ t }) };
+});
 
 vi.mock('../contexts/toast-context', () => ({
   ToastViewport: () => null,
@@ -376,7 +378,7 @@ describe('FocusScreen', () => {
     expect(row).toBeTruthy();
 
     await act(async () => {
-      await row?.props.onStatusChange('done');
+      await row?.props.actions.changeStatus(row.props.task, 'done');
     });
     act(() => {
       tree.update(<FocusScreen />);
@@ -453,7 +455,7 @@ describe('FocusScreen', () => {
     expect(focusedRow?.props.onLongPressAction).toBeTypeOf('function');
 
     act(() => {
-      focusedRow?.props.onLongPressAction();
+      focusedRow?.props.onLongPressAction(focusedRow.props.task);
     });
 
     const buttons = alertSpy.mock.calls[0]?.[2] as Array<{ text?: string; onPress?: () => void }>;
@@ -505,7 +507,7 @@ describe('FocusScreen', () => {
     expect(row?.props.onLongPressAction).toBeTypeOf('function');
 
     act(() => {
-      row?.props.onLongPressAction();
+      row?.props.onLongPressAction(row.props.task);
     });
 
     const buttons = alertSpy.mock.calls[0]?.[2] as Array<{ text?: string; onPress?: () => void }>;
@@ -1059,7 +1061,7 @@ describe('FocusScreen', () => {
     expect(row?.props.onLongPressActionLabel).toBe('Mark reviewed');
 
     await act(async () => {
-      row?.props.onLongPressAction();
+      row?.props.onLongPressAction(row.props.task);
       await Promise.resolve();
     });
 
@@ -1103,7 +1105,7 @@ describe('FocusScreen', () => {
     const row = tree.root.findAllByType(SwipeableTaskItem).find((node) => node.props.task.id === 'waiting-review');
 
     await act(async () => {
-      row?.props.onLongPressAction();
+      row?.props.onLongPressAction(row.props.task);
       await Promise.resolve();
     });
 
@@ -2050,6 +2052,43 @@ describe('FocusScreen', () => {
       tree.root.findAllByType(SwipeableTaskItem).map((node) => node.props.task.id),
     ).toEqual(['focus-a']);
     expect(tree.root.findAllByProps({ testID: 'focus-reorder-toggle' })).toHaveLength(0);
+  });
+
+
+  // The Focus tab is the app's default route, so its rows carry the #766 memo
+  // boundary. That boundary only holds if the props Focus hands each row keep
+  // their identity across a store write — the row itself is mocked here, so
+  // this pins the caller side; the boundary itself is pinned in
+  // components/swipeable-task-item.test.tsx.
+  it('keeps row props stable for untouched tasks across a store write', () => {
+    storeState.tasks = [
+      makeTask('row-a', { title: 'Row A' }),
+      makeTask('row-b', { title: 'Row B' }),
+    ];
+
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<FocusScreen />);
+    });
+
+    const propsById = () => new Map(
+      tree.root.findAllByType(SwipeableTaskItem).map((node) => [node.props.task.id as string, node.props]),
+    );
+    const before = propsById();
+    expect(before.size).toBe(2);
+    expect(before.get('row-b')?.onLongPressAction).toBeTypeOf('function');
+
+    const [rowA, rowB] = storeState.tasks;
+    storeState.tasks = [{ ...rowA, title: 'Row A renamed' }, rowB];
+    act(() => {
+      tree.update(<FocusScreen />);
+    });
+
+    const after = propsById();
+    expect(after.get('row-a')?.task.title).toBe('Row A renamed');
+    expect(after.get('row-b')?.task).toBe(before.get('row-b')?.task);
+    expect(after.get('row-b')?.actions).toBe(before.get('row-b')?.actions);
+    expect(after.get('row-b')?.onLongPressAction).toBe(before.get('row-b')?.onLongPressAction);
   });
 
 });

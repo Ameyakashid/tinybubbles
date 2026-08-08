@@ -125,7 +125,7 @@ describe('TaskListView', () => {
     const renderer = renderView({ tasks: [makeTask('a')], onDeleteTask });
     const row = renderer.root.findByType('SwipeableTaskItem' as never);
 
-    expect(row.props.onDelete()).toBe(result);
+    expect(row.props.actions.remove(row.props.task)).toBe(result);
     expect(onDeleteTask).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 
@@ -142,9 +142,51 @@ describe('TaskListView', () => {
     expect(rows[1].props.isMultiSelected).toBe(false);
 
     act(() => {
-      rows[1].props.onToggleSelect();
+      rows[1].props.actions.toggleSelect(rows[1].props.task);
     });
     expect((selection as any).toggleMultiSelect).toHaveBeenCalledWith('b', { visibleTaskIds: ['a', 'b'] });
+  });
+
+  // The row memo boundary (#766) only holds if a selection change leaves the
+  // untouched rows' props alone. `visibleTaskIds` and the toggle callback used
+  // to be per-row props, so one checkbox tap invalidated every mounted row.
+  it('keeps the row action object stable when the selection changes', () => {
+    const tasks = [makeTask('a'), makeTask('b')];
+    const baseProps: TaskListViewProps = {
+      tasks,
+      isDark: false,
+      themeColors,
+      t: (key: string) => key,
+      onPressTask: vi.fn(),
+      onChangeTaskStatus: vi.fn(),
+      onDeleteTask: vi.fn(),
+      highlightTaskId: null,
+      selection: makeSelection({ selectionMode: true }),
+      bulkStatusOptions: ['next', 'someday'],
+    };
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(React.createElement(TaskListView, baseProps));
+    });
+    const rowB = () => renderer.root.findAllByType('SwipeableTaskItem' as never)[1];
+    const before = rowB().props;
+    expect(before.isMultiSelected).toBe(false);
+
+    // A checkbox tap: a replaced Set, fresh handler props, same task objects.
+    act(() => {
+      renderer.update(React.createElement(TaskListView, {
+        ...baseProps,
+        onPressTask: vi.fn(),
+        onChangeTaskStatus: vi.fn(),
+        onDeleteTask: vi.fn(),
+        selection: makeSelection({ selectionMode: true, multiSelectedIds: new Set(['a']) }),
+      }));
+    });
+
+    const after = rowB().props;
+    expect(after.task).toBe(before.task);
+    expect(after.actions).toBe(before.actions);
+    expect(after.isMultiSelected).toBe(false);
   });
 
   it('shows the bulk bar only in selection mode', () => {

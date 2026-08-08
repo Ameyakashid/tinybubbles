@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import renderer from 'react-test-renderer';
 import { Alert } from 'react-native';
 
-import { SwipeableTaskItem } from './swipeable-task-item';
+import { SwipeableTaskItem, readTaskRowRenderCount, type TaskRowActions } from './swipeable-task-item';
 
 const { addTask, updateTask, restoreTask, showToast, getChecklistProgress, getTaskAgeLabel, getTaskStaleness, safeFormatDate, safeParseDate, storeState } = vi.hoisted(() => ({
   addTask: vi.fn(),
@@ -1998,5 +1998,63 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       status: 'done',
     });
     vi.useRealTimers();
+  });
+
+  // The #766 boundary itself: a list re-render must not re-render rows whose
+  // task did not change. Guarded with the real render counter, and with a fresh
+  // `tc` object per render because that is what useThemeColors() hands callers.
+  it('re-renders only the row whose task changed', () => {
+    const actions: TaskRowActions = {
+      edit: vi.fn(),
+      changeStatus: vi.fn(),
+      remove: vi.fn(),
+    };
+    const makeThemeColors = () => ({
+      taskItemBg: '#111111',
+      border: '#222222',
+      text: '#ffffff',
+      secondaryText: '#999999',
+      tint: '#3b82f6',
+      warning: '#f59e0b',
+    } as any);
+    const taskA = {
+      id: 'task-a',
+      title: 'Task A',
+      status: 'next',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as any;
+    const taskB = { ...taskA, id: 'task-b', title: 'Task B' };
+
+    const List = ({ tasks }: { tasks: any[] }) => (
+      <>
+        {tasks.map((task) => (
+          <SwipeableTaskItem
+            key={task.id}
+            task={task}
+            isDark={false}
+            tc={makeThemeColors()}
+            actions={actions}
+            statusBadgeAsIcon
+          />
+        ))}
+      </>
+    );
+
+    let tree!: renderer.ReactTestRenderer;
+    renderer.act(() => {
+      tree = renderer.create(<List tasks={[taskA, taskB]} />);
+    });
+    const afterMount = readTaskRowRenderCount();
+    expect(afterMount).toBeGreaterThanOrEqual(2);
+
+    const renamedA = { ...taskA, title: 'Task A renamed' };
+    renderer.act(() => {
+      tree.update(<List tasks={[renamedA, taskB]} />);
+    });
+
+    // Exactly one: the renamed row re-rendered, the untouched one did not.
+    expect(readTaskRowRenderCount() - afterMount).toBe(1);
+    expect(hasText(tree, 'Task A renamed')).toBe(true);
   });
 });

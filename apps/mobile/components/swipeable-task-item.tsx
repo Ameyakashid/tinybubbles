@@ -35,15 +35,32 @@ import { CompactText } from '@/components/compact-text';
 import { useSwipeableChecklist } from './swipeable-task-item/useSwipeableChecklist';
 import { getActionFailureMessage, getUnknownErrorMessage, isActionFailure } from './store-action-result';
 
+/**
+ * Everything a row can mutate, on one object whose identity never changes
+ * (#766). Rows bind their own task into these, so a list can hand every row the
+ * same object instead of a fresh arrow per row per render — a fresh arrow is
+ * what defeats the memo boundary below.
+ */
+export type TaskRowActions = {
+    edit: (task: Task) => void;
+    changeStatus: (task: Task, status: TaskStatus) => void | Promise<unknown>;
+    remove: (task: Task) => void | Promise<unknown>;
+    /** Omitted by lists without multi-select. */
+    toggleSelect?: (task: Task) => void;
+};
+
 export interface SwipeableTaskItemProps {
     task: Task;
     isDark: boolean;
     /** Theme colors object from useThemeColors hook */
     tc: ThemeColors;
-    onPress: () => void;
-    onStatusChange: (status: TaskStatus) => void | Promise<unknown>;
-    onDelete: () => void | Promise<unknown>;
-    onLongPressAction?: () => void;
+    /** Preferred over the per-row `onPress`/`onStatusChange`/`onDelete` arrows. */
+    actions?: TaskRowActions;
+    onPress?: () => void;
+    onStatusChange?: (status: TaskStatus) => void | Promise<unknown>;
+    onDelete?: () => void | Promise<unknown>;
+    /** Receives the row's task so callers can pass one stable handler. */
+    onLongPressAction?: (task: Task) => void;
     onLongPressActionLabel?: string;
     /** Hide context tags (useful when viewing a specific context) */
     hideContexts?: boolean;
@@ -102,9 +119,34 @@ const TASK_SWIPE_FRICTION = 1.25;
 const TASK_SWIPE_OPEN_THRESHOLD = 72;
 const TASK_SWIPE_DRAG_OFFSET = 28;
 
-type SwipeableTaskItemInnerProps = Omit<SwipeableTaskItemProps, 'rowContext'> & {
+type ResolvedRowCallbacks = {
+    onPress: () => void;
+    onStatusChange: (status: TaskStatus) => void | Promise<unknown>;
+    onDelete: () => void | Promise<unknown>;
+    onToggleSelect?: () => void;
+};
+
+type SwipeableTaskItemResolvedProps =
+    Omit<SwipeableTaskItemProps, 'actions' | keyof ResolvedRowCallbacks> & ResolvedRowCallbacks;
+
+type SwipeableTaskItemInnerProps = Omit<SwipeableTaskItemResolvedProps, 'rowContext'> & {
     rowContext: SwipeableTaskItemRowContext;
 };
+
+const noop = () => {};
+
+/** Binds this row's task into the shared `actions`, inside the memo boundary. */
+function resolveRowCallbacks(props: SwipeableTaskItemProps): ResolvedRowCallbacks {
+    const { actions, task } = props;
+    const toggleSelect = actions?.toggleSelect;
+    return {
+        onPress: props.onPress ?? (actions ? () => actions.edit(task) : noop),
+        onStatusChange: props.onStatusChange
+            ?? (actions ? (status: TaskStatus) => actions.changeStatus(task, status) : noop),
+        onDelete: props.onDelete ?? (actions ? () => actions.remove(task) : noop),
+        onToggleSelect: props.onToggleSelect ?? (toggleSelect ? () => toggleSelect(task) : undefined),
+    };
+}
 
 // Renders of task rows, read by TaskList to report how many rows a commit
 // actually re-rendered (#766). Shared across lists on purpose: it is a diff
@@ -114,15 +156,41 @@ let taskRowRenderCount = 0;
 
 export const readTaskRowRenderCount = (): number => taskRowRenderCount;
 
-export function SwipeableTaskItem(props: SwipeableTaskItemProps) {
-    taskRowRenderCount += 1;
-    if (props.rowContext) {
-        return <SwipeableTaskItemInner {...props} rowContext={props.rowContext} />;
-    }
-    return <StoreBackedSwipeableTaskItem {...props} />;
+// Compared field by field rather than with core's `shallow`: that one is
+// stubbed out in several suites, which would quietly turn the boundary below
+// off under test.
+function themeColorsEqual(a: ThemeColors, b: ThemeColors): boolean {
+    if (a === b) return true;
+    const keys = Object.keys(a) as (keyof ThemeColors)[];
+    return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }
 
-function StoreBackedSwipeableTaskItem(props: SwipeableTaskItemProps) {
+// The memo boundary for a single row (#766). Any store change re-renders the
+// list, but a row re-renders only when the task object it draws — or one of the
+// flags it draws — actually changed. `tc` gets a field comparison because
+// useThemeColors() builds a fresh object on every call; every other prop is
+// compared by identity, which is why per-row callbacks belong in `actions`.
+function areRowPropsEqual(prev: SwipeableTaskItemProps, next: SwipeableTaskItemProps): boolean {
+    const keys = Object.keys(prev) as (keyof SwipeableTaskItemProps)[];
+    if (keys.length !== Object.keys(next).length) return false;
+    return keys.every((key) => (key === 'tc'
+        ? themeColorsEqual(prev.tc, next.tc)
+        : Object.is(prev[key], next[key])));
+}
+
+function SwipeableTaskItemRow(props: SwipeableTaskItemProps) {
+    taskRowRenderCount += 1;
+    const { actions: _actions, ...rest } = props;
+    const resolved: SwipeableTaskItemResolvedProps = { ...rest, ...resolveRowCallbacks(props) };
+    if (props.rowContext) {
+        return <SwipeableTaskItemInner {...resolved} rowContext={props.rowContext} />;
+    }
+    return <StoreBackedSwipeableTaskItem {...resolved} />;
+}
+
+export const SwipeableTaskItem = React.memo(SwipeableTaskItemRow, areRowPropsEqual);
+
+function StoreBackedSwipeableTaskItem(props: Omit<SwipeableTaskItemInnerProps, 'rowContext'>) {
     const rowContext = useTaskStore((state): SwipeableTaskItemRowContext => ({
         addTask: state.addTask,
         updateTask: state.updateTask,
@@ -567,7 +635,7 @@ function SwipeableTaskItemInner({
         ignorePressUntil.current = Date.now() + 500;
         // Note: onDragStart is handled by the drag handle directly, not here
         if (onLongPressAction) {
-            onLongPressAction();
+            onLongPressAction(task);
             return;
         }
         if (onToggleSelect) onToggleSelect();
@@ -605,7 +673,7 @@ function SwipeableTaskItemInner({
             return;
         }
         if (actionName === 'longPressAction' && onLongPressAction) {
-            onLongPressAction();
+            onLongPressAction(task);
             return;
         }
         if (actionName === 'delete') {

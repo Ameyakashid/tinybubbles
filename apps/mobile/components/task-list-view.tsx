@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { FlatList, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import type { Task, TaskStatus } from '@mindwtr/core';
 
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
-import { SwipeableTaskItem, type SwipeableTaskItemRowContext } from './swipeable-task-item';
+import { SwipeableTaskItem, type SwipeableTaskItemRowContext, type TaskRowActions } from './swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from './task-list-windowing';
 import { TaskListBulkBar } from './task-list/TaskListBulkBar';
 import { TaskListTagModal } from './task-list/TaskListTagModal';
@@ -97,17 +97,43 @@ export function TaskListView({
 
   const visibleTaskIds = useMemo(() => tasks.map((task) => task.id), [tasks]);
 
+  // The handlers arrive as props and the visible ids change with the data, so
+  // rows reach them through one object that never changes identity and reads
+  // the latest values from a ref (#766). A row that took `visibleTaskIds` as a
+  // prop would be invalidated by every list change; one that took a fresh
+  // toggle arrow would be invalidated by every render.
+  const rowActionSourcesRef = useRef({
+    onPressTask,
+    onChangeTaskStatus,
+    onDeleteTask,
+    toggleMultiSelect,
+    visibleTaskIds,
+  });
+  rowActionSourcesRef.current = {
+    onPressTask,
+    onChangeTaskStatus,
+    onDeleteTask,
+    toggleMultiSelect,
+    visibleTaskIds,
+  };
+  const rowActions = useMemo<TaskRowActions>(() => ({
+    edit: (task) => rowActionSourcesRef.current.onPressTask(task),
+    changeStatus: (task, status) => rowActionSourcesRef.current.onChangeTaskStatus(task, status),
+    remove: (task) => rowActionSourcesRef.current.onDeleteTask(task),
+    toggleSelect: (task) => {
+      const sources = rowActionSourcesRef.current;
+      sources.toggleMultiSelect(task.id, { visibleTaskIds: sources.visibleTaskIds });
+    },
+  }), []);
+
   const renderTask = useCallback(({ item: task }: { item: Task }) => (
     <SwipeableTaskItem
       task={task}
       isDark={isDark}
       tc={themeColors}
-      onPress={() => onPressTask(task)}
+      actions={rowActions}
       selectionMode={selectionMode}
       isMultiSelected={multiSelectedIds.has(task.id)}
-      onToggleSelect={() => toggleMultiSelect(task.id, { visibleTaskIds })}
-      onStatusChange={(status) => onChangeTaskStatus(task, status)}
-      onDelete={() => onDeleteTask(task)}
       isHighlighted={task.id === highlightTaskId}
       statusBadgeAsIcon
       rowContext={rowContext}
@@ -119,14 +145,10 @@ export function TaskListView({
     highlightTaskId,
     isDark,
     multiSelectedIds,
-    onChangeTaskStatus,
-    onDeleteTask,
-    onPressTask,
+    rowActions,
     rowContext,
     selectionMode,
     themeColors,
-    toggleMultiSelect,
-    visibleTaskIds,
   ]);
 
   return (
