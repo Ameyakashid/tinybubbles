@@ -50,7 +50,6 @@ import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { reportError } from '../../lib/report-error';
 import { nextDensityMode } from '../../lib/density';
 import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, projectMatchesAreaFilterSelection, resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
-import { cn } from '../../lib/utils';
 import { sortDoneTasksForListView } from './list/done-sort';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import {
@@ -65,10 +64,7 @@ import {
     type TaskGroup,
     type TaskListGroupBy,
 } from './list/next-grouping';
-import {
-    GroupedTaskSectionHeader,
-    GroupedTaskSections,
-} from './list/GroupedTaskSections';
+import { GroupedTaskList } from './list/GroupedTaskSections';
 import { useCollapsedGroupsViewState, useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import {
     PRIORITY_FILTER_OPTIONS,
@@ -629,8 +625,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 : `task:${row.group.id}:${row.task.id}`;
         },
     });
-    const virtualRows = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
-    const totalHeight = shouldVirtualize ? rowVirtualizer.getTotalSize() : 0;
     const {
         contextPromptMode,
         contextPromptOpen,
@@ -875,6 +869,35 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 };
         }
     })();
+    const renderListTask = useCallback((task: Task) => {
+        const index = taskIndexById.get(task.id) ?? 0;
+        return (
+            <StoreTaskItem
+                key={task.id}
+                taskId={task.id}
+                isSelected={index === selectedIndex}
+                index={index}
+                onSelectIndex={handleSelectIndex}
+                selectionMode={selectionMode}
+                isMultiSelected={multiSelectedIds.has(task.id)}
+                onToggleSelectId={toggleMultiSelect}
+                showQuickDone={showQuickDone}
+                readOnly={readOnly}
+                compactMetaEnabled={showListDetails}
+                showProjectBadgeInActions={false}
+            />
+        );
+    }, [
+        handleSelectIndex,
+        multiSelectedIds,
+        readOnly,
+        selectedIndex,
+        selectionMode,
+        showListDetails,
+        showQuickDone,
+        taskIndexById,
+        toggleMultiSelect,
+    ]);
     const handleToggleDetails = useCallback(() => {
         if (showListDetails) {
             collapseAllTaskDetails();
@@ -1204,140 +1227,22 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             : undefined}
                         t={t}
                     />
-                ) : shouldVirtualize ? (
-                    <div
-                        data-testid="virtualized-task-list"
-                        data-grouped={isListGrouping ? 'true' : 'false'}
-                        style={{ height: totalHeight, position: 'relative' }}
-                    >
-                        {virtualRows.map((virtualRow) => {
-                            const groupedRow = isListGrouping ? groupedVirtualRows[virtualRow.index] : undefined;
-                            if (groupedRow?.kind === 'header') {
-                                return (
-                                    <div
-                                        key={virtualRow.key}
-                                        ref={rowVirtualizer.measureElement}
-                                        data-index={virtualRow.index}
-                                        style={{
-                                            position: 'absolute',
-                                            top: 0,
-                                            left: 0,
-                                            width: '100%',
-                                            paddingTop: virtualRow.index > 0 ? 8 : 0,
-                                            transform: `translateY(${virtualRow.start}px)`,
-                                        }}
-                                    >
-                                        <GroupedTaskSectionHeader
-                                            group={groupedRow.group}
-                                            collapsed={groupedRow.collapsed}
-                                            controlsId={groupedRow.controlsId}
-                                            onToggleGroup={isListGrouping ? toggleGroup : undefined}
-                                            className={cn(
-                                                'border border-border/40 bg-card/30',
-                                                groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
-                                            )}
-                                        />
-                                    </div>
-                                );
-                            }
-                            const task = groupedRow?.kind === 'task'
-                                ? groupedRow.task
-                                : filteredTasks[virtualRow.index];
-                            if (!task) return null;
-                            const index = taskIndexById.get(task.id) ?? virtualRow.index;
-                            return (
-                                <div
-                                    key={virtualRow.key}
-                                    ref={rowVirtualizer.measureElement}
-                                    data-index={virtualRow.index}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        transform: `translateY(${virtualRow.start}px)`,
-                                    }}
-                                >
-                                    <div
-                                        id={groupedRow?.kind === 'task' && groupedRow.isFirst ? groupedRow.controlsId : undefined}
-                                        className={cn(
-                                            groupedRow?.kind === 'task'
-                                                ? [
-                                                    'border-x border-border/40 bg-card/30',
-                                                    !groupedRow.isLast && 'border-b border-border/30',
-                                                    groupedRow.isLast && 'rounded-b-md border-b border-border/40',
-                                                ]
-                                                : densityMode === 'condensed'
-                                                    ? 'pb-0.5'
-                                                    : densityMode === 'compact'
-                                                        ? 'pb-1'
-                                                        : 'pb-1.5',
-                                        )}
-                                    >
-                                        <StoreTaskItem
-                                            taskId={task.id}
-                                            isSelected={index === selectedIndex}
-                                            index={index}
-                                            onSelectIndex={handleSelectIndex}
-                                            selectionMode={selectionMode}
-                                            isMultiSelected={multiSelectedIds.has(task.id)}
-                                            onToggleSelectId={toggleMultiSelect}
-                                            showQuickDone={showQuickDone}
-                                            readOnly={readOnly}
-                                            compactMetaEnabled={showListDetails}
-                                            showProjectBadgeInActions={false}
-                                        />
-                                        {!groupedRow && <div className="mx-3 mt-1 h-px bg-border/30" />}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : isListGrouping ? (
-                    <GroupedTaskSections
-                        groups={groupedTasks}
-                        onToggleGroup={isListGrouping ? toggleGroup : undefined}
-                        collapsedGroupIds={collapsedGroupIds}
-                        getSectionDomId={getSectionDomId}
-                        renderTask={(task) => {
-                            const index = taskIndexById.get(task.id) ?? 0;
-                            return (
-                                <StoreTaskItem
-                                    key={task.id}
-                                    taskId={task.id}
-                                    isSelected={index === selectedIndex}
-                                    index={index}
-                                    onSelectIndex={handleSelectIndex}
-                                    selectionMode={selectionMode}
-                                    isMultiSelected={multiSelectedIds.has(task.id)}
-                                    onToggleSelectId={toggleMultiSelect}
-                                    showQuickDone={showQuickDone}
-                                    readOnly={readOnly}
-                                    compactMetaEnabled={showListDetails}
-                                    showProjectBadgeInActions={false}
-                                />
-                            );
-                        }}
-                    />
                 ) : (
-                    <div className="divide-y divide-border/30">
-                        {filteredTasks.map((task, index) => (
-                            <StoreTaskItem
-                                key={task.id}
-                                taskId={task.id}
-                                isSelected={index === selectedIndex}
-                                index={index}
-                                onSelectIndex={handleSelectIndex}
-                                selectionMode={selectionMode}
-                                isMultiSelected={multiSelectedIds.has(task.id)}
-                                onToggleSelectId={toggleMultiSelect}
-                                showQuickDone={showQuickDone}
-                                readOnly={readOnly}
-                                compactMetaEnabled={showListDetails}
-                                showProjectBadgeInActions={false}
-                            />
-                        ))}
-                    </div>
+                    <GroupedTaskList
+                        groups={groupedTasks}
+                        tasks={filteredTasks}
+                        virtualRows={isListGrouping ? groupedVirtualRows : null}
+                        virtualizer={shouldVirtualize ? rowVirtualizer : null}
+                        collapsedGroupIds={collapsedGroupIds}
+                        onToggleGroup={isListGrouping ? toggleGroup : undefined}
+                        getSectionDomId={getSectionDomId}
+                        flatRowClassName={densityMode === 'condensed'
+                            ? 'pb-0.5'
+                            : densityMode === 'compact'
+                                ? 'pb-1'
+                                : 'pb-1.5'}
+                        renderTask={renderListTask}
+                    />
                 )}
                 <div data-list-end className={LIST_END_GAP} aria-hidden="true" />
             </div>

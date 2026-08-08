@@ -30,10 +30,7 @@ import {
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { GroupBySelect } from './list/GroupBySelect';
-import {
-    GroupedTaskSectionHeader,
-    GroupedTaskSections,
-} from './list/GroupedTaskSections';
+import { GroupedTaskList } from './list/GroupedTaskSections';
 import { useCollapsedGroupsViewState, useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, SortBySelect, ToolbarButton, VIEW_FILTER_INPUT } from './list/list-toolbar';
@@ -319,7 +316,6 @@ export function ArchiveView() {
                 : `task:${row.group.id}:${row.task.id}`;
         },
     });
-    const virtualItems = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
 
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
     useTaskListScope({
@@ -711,90 +707,17 @@ export function ArchiveView() {
                         <p>{t('archived.noTasksFound')}</p>
                         <p className="text-xs mt-2">{t('archived.emptyHint')}</p>
                     </div>
-                ) : shouldVirtualize ? (
-                    <div
-                        data-testid="virtualized-task-list"
-                        data-grouped={isGrouping ? 'true' : 'false'}
-                        style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
-                    >
-                        {virtualItems.map((virtualRow) => {
-                            const groupedRow = isGrouping ? groupedVirtualRows[virtualRow.index] : undefined;
-                            if (groupedRow?.kind === 'header') {
-                                return (
-                                    <div
-                                        key={virtualRow.key}
-                                        ref={rowVirtualizer.measureElement}
-                                        data-index={virtualRow.index}
-                                        style={{
-                                            position: 'absolute',
-                                            top: 0,
-                                            left: 0,
-                                            width: '100%',
-                                            paddingTop: virtualRow.index > 0 ? 8 : 0,
-                                            transform: `translateY(${virtualRow.start}px)`,
-                                        }}
-                                    >
-                                        <GroupedTaskSectionHeader
-                                            group={groupedRow.group}
-                                            collapsed={groupedRow.collapsed}
-                                            controlsId={groupedRow.controlsId}
-                                            onToggleGroup={toggleGroup}
-                                            className={cn(
-                                                'border border-border/40 bg-card/30',
-                                                groupedRow.collapsed ? 'rounded-md' : 'rounded-t-md',
-                                            )}
-                                        />
-                                    </div>
-                                );
-                            }
-                            const task = groupedRow?.kind === 'task'
-                                ? groupedRow.task
-                                : archivedTasks[virtualRow.index];
-                            if (!task) return null;
-                            return (
-                                <div
-                                    key={virtualRow.key}
-                                    ref={rowVirtualizer.measureElement}
-                                    data-index={virtualRow.index}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        transform: `translateY(${virtualRow.start}px)`,
-                                    }}
-                                >
-                                    <div
-                                        id={groupedRow?.kind === 'task' && groupedRow.isFirst ? groupedRow.controlsId : undefined}
-                                        className={cn(
-                                            groupedRow?.kind === 'task'
-                                                ? [
-                                                    'border-x border-border/40 bg-card/30',
-                                                    !groupedRow.isLast && 'border-b border-border/30',
-                                                    groupedRow.isLast && 'rounded-b-md border-b border-border/40',
-                                                ]
-                                                : 'pb-1.5',
-                                        )}
-                                    >
-                                        {renderArchiveRow(task)}
-                                        {!groupedRow && <div className="mx-3 mt-1 h-px bg-border/30" />}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : isGrouping ? (
-                    <GroupedTaskSections
-                        groups={groupedTasks}
-                        renderTask={renderArchiveRow}
-                        onToggleGroup={toggleGroup}
-                        collapsedGroupIds={collapsedGroupIds}
-                        getSectionDomId={getSectionDomId}
-                    />
                 ) : (
-                    <div className="divide-y divide-border/30">
-                        {archivedTasks.map(renderArchiveRow)}
-                    </div>
+                    <GroupedTaskList
+                        groups={groupedTasks}
+                        tasks={archivedTasks}
+                        virtualRows={isGrouping ? groupedVirtualRows : null}
+                        virtualizer={shouldVirtualize ? rowVirtualizer : null}
+                        collapsedGroupIds={collapsedGroupIds}
+                        onToggleGroup={toggleGroup}
+                        getSectionDomId={getSectionDomId}
+                        renderTask={renderArchiveRow}
+                    />
                 )}
                 </div>
             </div>

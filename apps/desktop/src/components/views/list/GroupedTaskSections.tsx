@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Task } from '@mindwtr/core';
 import { cn } from '../../../lib/utils';
@@ -11,6 +12,18 @@ type GroupedTaskSectionsProps = {
     onToggleGroup?: (groupId: string) => void;
     collapsedGroupIds?: Set<string>;
     getSectionDomId?: (group: TaskGroup, index: number) => string | undefined;
+};
+
+type GroupedTaskListProps = GroupedTaskSectionsProps & {
+    renderTask: (task: Task, group?: TaskGroup) => ReactNode;
+    /** The flat order, rendered when the list is not grouped. */
+    tasks: Task[];
+    /** The header/task row model, null when the list is not grouped. */
+    virtualRows?: GroupedVirtualRow[] | null;
+    /** The virtualizer positioning the rows, null when every row is rendered. */
+    virtualizer?: Virtualizer<HTMLDivElement, Element> | null;
+    /** Gap under an ungrouped virtual row; density differs per view. */
+    flatRowClassName?: string;
 };
 
 export type GroupedVirtualRow =
@@ -142,6 +155,118 @@ export function GroupedTaskSectionHeader({
     );
 }
 
+// The section card, spelled once. Virtualized rows are positioned siblings
+// rather than children of one bordered box, so each has to carry the piece of
+// the card it sits on — and the two spellings have to agree, or a list changes
+// its look at the virtualization threshold.
+const SECTION_CARD = 'border-x border-border/40 bg-card/30';
+const SECTION_HEADER_CARD = 'border border-border/40 bg-card/30';
+
+/**
+ * A desktop task list, grouped or flat, virtualized or not. The three shapes
+ * share one card contract, so they live in one component: below the
+ * virtualization threshold a group is a bordered box with its rows inside;
+ * above it the rows are absolutely positioned siblings that each paint their
+ * slice of the same box.
+ */
+export function GroupedTaskList({
+    groups,
+    tasks,
+    renderTask,
+    virtualRows,
+    virtualizer,
+    collapsedGroupIds,
+    onToggleGroup,
+    getSectionDomId,
+    flatRowClassName = 'pb-1.5',
+}: GroupedTaskListProps) {
+    const isGrouping = Boolean(virtualRows);
+
+    if (virtualizer) {
+        return (
+            <div
+                data-testid="virtualized-task-list"
+                data-grouped={isGrouping ? 'true' : 'false'}
+                style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+            >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                    const row = virtualRows?.[virtualRow.index];
+                    const rowStyle = {
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                    } as const;
+                    if (row?.kind === 'header') {
+                        return (
+                            <div
+                                key={virtualRow.key}
+                                ref={virtualizer.measureElement}
+                                data-index={virtualRow.index}
+                                style={{ ...rowStyle, paddingTop: virtualRow.index > 0 ? 8 : 0 }}
+                            >
+                                <GroupedTaskSectionHeader
+                                    group={row.group}
+                                    collapsed={row.collapsed}
+                                    controlsId={row.controlsId}
+                                    onToggleGroup={onToggleGroup}
+                                    className={cn(
+                                        SECTION_HEADER_CARD,
+                                        row.collapsed ? 'rounded-md' : 'rounded-t-md',
+                                    )}
+                                />
+                            </div>
+                        );
+                    }
+                    const task = row?.kind === 'task' ? row.task : tasks[virtualRow.index];
+                    if (!task) return null;
+                    return (
+                        <div
+                            key={virtualRow.key}
+                            ref={virtualizer.measureElement}
+                            data-index={virtualRow.index}
+                            style={rowStyle}
+                        >
+                            <div
+                                id={row?.kind === 'task' && row.isFirst ? row.controlsId : undefined}
+                                className={cn(row?.kind === 'task'
+                                    ? [
+                                        SECTION_CARD,
+                                        !row.isLast && 'border-b border-border/30',
+                                        row.isLast && 'rounded-b-md border-b border-border/40',
+                                    ]
+                                    : flatRowClassName)}
+                            >
+                                {renderTask(task, row?.group)}
+                                {!row && <div className="mx-3 mt-1 h-px bg-border/30" />}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    if (isGrouping) {
+        return (
+            <GroupedTaskSections
+                groups={groups}
+                renderTask={renderTask}
+                onToggleGroup={onToggleGroup}
+                collapsedGroupIds={collapsedGroupIds}
+                getSectionDomId={getSectionDomId}
+            />
+        );
+    }
+
+    return (
+        <div className="divide-y divide-border/30">
+            {tasks.map((task) => renderTask(task))}
+        </div>
+    );
+}
+
 /**
  * The one grouped-list section renderer: header card with dot, title, and
  * count, then the group's tasks. The virtual row builder above preserves the
@@ -161,7 +286,7 @@ export function GroupedTaskSections({
                 const collapsed = collapsible && (collapsedGroupIds?.has(group.id) ?? false);
                 const controlsId = collapsible ? getSectionDomId?.(group, groupIndex) : undefined;
                 return (
-                    <div key={group.id} className="rounded-md border border-border/40 bg-card/30">
+                    <div key={group.id} className={cn('rounded-md', SECTION_HEADER_CARD)}>
                         <GroupedTaskSectionHeader
                             group={group}
                             collapsed={collapsed}
