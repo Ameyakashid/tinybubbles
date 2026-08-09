@@ -27,11 +27,13 @@ import {
 import {
     importDesktopDgtData,
     exportDesktopBackup,
+    importDesktopMindwtrCsvData,
     importDesktopOmniFocusData,
     importDesktopTickTickData,
     importDesktopTodoistData,
     inspectDesktopDgtImport,
     inspectDesktopBackup,
+    inspectDesktopMindwtrCsvImport,
     inspectDesktopOmniFocusImport,
     inspectDesktopTickTickImport,
     inspectDesktopTodoistImport,
@@ -1412,6 +1414,69 @@ export const useSyncSettings = ({
         }
     }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
+    const handleImportMindwtrCsv = useCallback(async () => {
+        addBreadcrumb('transfer:restore');
+        setTransferAction('import');
+        try {
+            const parseResult = await inspectDesktopMindwtrCsvImport();
+            if (!parseResult) return;
+            if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
+                showToast(parseResult.errors[0] || 'The selected file is not a supported Mindwtr CSV file.', 'error');
+                return;
+            }
+
+            const preview = parseResult.preview;
+            const projectLines = preview.projects
+                .slice(0, 4)
+                .map((project) => `- ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
+            if (preview.projects.length > 4) {
+                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+            }
+
+            const confirmed = await requestConfirmation({
+                title: 'Import Mindwtr CSV data?',
+                message: [
+                    `Import ${preview.taskCount} task(s) from ${preview.fileName}?`,
+                    preview.areaCount > 0 ? `${preview.areaCount} area(s) will be created from the Area column.` : null,
+                    preview.projectCount > 0 ? `${preview.projectCount} project(s) will be created from the Project column.` : null,
+                    preview.sectionCount > 0 ? `${preview.sectionCount} section(s) will be created from the Section column.` : null,
+                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} checklist item(s) will be preserved.` : null,
+                    preview.standaloneTaskCount > 0
+                        ? `${preview.standaloneTaskCount} task(s) will stay outside projects.`
+                        : null,
+                    ...(projectLines.length > 0 ? ['', ...projectLines] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                ].filter(Boolean).join('\n'),
+            });
+            if (!confirmed) return;
+
+            const { snapshotName, result } = await importDesktopMindwtrCsvData(parseResult.parsedData);
+            if (isTauri) {
+                setSnapshots(await SyncService.listDataSnapshots());
+            }
+            const details = [
+                formatText(
+                    'settings.importMindwtrCsvSummary',
+                    'Imported {{taskCount}} task(s), {{projectCount}} project(s), {{sectionCount}} section(s), and {{areaCount}} area(s).',
+                    {
+                        taskCount: result.importedTaskCount,
+                        projectCount: result.importedProjectCount,
+                        sectionCount: result.importedSectionCount,
+                        areaCount: result.importedAreaCount,
+                    },
+                ),
+                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
+                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+            ].filter(Boolean).join('\n');
+            showToast(details, 'success', 8000);
+        } catch (error) {
+            showToast(toErrorMessage(error, 'Failed to import Mindwtr CSV data.'), 'error');
+        } finally {
+            setTransferAction(null);
+        }
+    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+
     const syncPreferences = settings?.syncPreferences ?? {};
     const handleUpdateSyncPreferences = useCallback(
         (updates: Partial<SyncPreferences>) => {
@@ -1539,6 +1604,7 @@ export const useSyncSettings = ({
             onImportTickTick: handleImportTickTick,
             onImportDgt: handleImportDgt,
             onImportOmniFocus: handleImportOmniFocus,
+            onImportMindwtrCsv: handleImportMindwtrCsv,
         } satisfies SettingsDataTransferProps,
     };
 };

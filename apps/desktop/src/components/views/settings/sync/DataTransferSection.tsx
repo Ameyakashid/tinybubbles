@@ -12,6 +12,7 @@ type DataTransferSectionProps = Pick<
     | 'onImportTickTick'
     | 'onImportDgt'
     | 'onImportOmniFocus'
+    | 'onImportMindwtrCsv'
     | 'onAddGettingStartedContent'
 >;
 
@@ -50,6 +51,7 @@ function TransferActionButton({
 export function DataTransferSection({
     onExportBackup,
     onImportDgt,
+    onImportMindwtrCsv,
     onImportOmniFocus,
     onImportTickTick,
     onImportTodoist,
@@ -141,6 +143,14 @@ export function DataTransferSection({
                         description={t.importOmniFocusDesc}
                         statusText={transferAction === 'import' ? t.syncing : null}
                         onClick={() => void onImportOmniFocus()}
+                    />
+                    <TransferActionButton
+                        disabled={disabled}
+                        settingsKey="importMindwtrCsv"
+                        label={t.importMindwtrCsv}
+                        description={t.importMindwtrCsvDesc}
+                        statusText={transferAction === 'import' ? t.syncing : null}
+                        onClick={() => void onImportMindwtrCsv()}
                     />
                 </div>
             </div>

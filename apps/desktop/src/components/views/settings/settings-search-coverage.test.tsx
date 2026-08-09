@@ -240,6 +240,7 @@ const dataProps: Parameters<typeof SettingsDataPage>[0] = {
     onImportTickTick: noop,
     onImportDgt: noop,
     onImportOmniFocus: noop,
+    onImportMindwtrCsv: noop,
     onAddGettingStartedContent: noop,
     attachmentsLastCleanupDisplay: 'Never',
     pendingRemoteDeleteCount: 0,

@@ -21,6 +21,8 @@ const baseProps = {
         importDgtDesc: 'Import DGT GTD exports.',
         importOmniFocus: 'Import from OmniFocus',
         importOmniFocusDesc: 'Import OmniFocus exports.',
+        importMindwtrCsv: 'Import from Mindwtr CSV',
+        importMindwtrCsvDesc: 'Import a Mindwtr CSV file.',
         syncing: 'Working...',
     },
     transferAction: null,
@@ -31,6 +33,7 @@ const baseProps = {
     onImportTickTick: vi.fn(),
     onImportDgt: vi.fn(),
     onImportOmniFocus: vi.fn(),
+    onImportMindwtrCsv: vi.fn(),
     onAddGettingStartedContent: vi.fn(),
 } as unknown as ComponentProps<typeof DataTransferSection>;
 

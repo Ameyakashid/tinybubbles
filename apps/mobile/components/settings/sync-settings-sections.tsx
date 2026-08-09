@@ -117,6 +117,7 @@ type SyncBackupSectionProps = {
   backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
   handleBackup: () => void;
   handleImportDgt: () => void;
+  handleImportMindwtrCsv: () => void;
   handleImportOmniFocus: () => void;
   handleImportTickTick: () => void;
   handleImportTodoist: () => void;
@@ -133,6 +134,7 @@ export function SyncBackupSection({
   backupAction,
   handleBackup,
   handleImportDgt,
+  handleImportMindwtrCsv,
   handleImportOmniFocus,
   handleImportTickTick,
   handleImportTodoist,
@@ -229,6 +231,19 @@ export function SyncBackupSection({
             <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromOmnifocus')}</Text>
             <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
               {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
+            </Text>
+          </View>
+          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+          onPress={handleImportMindwtrCsv}
+          disabled={isSyncing || isBackupBusy}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromMindwtrCsv')}</Text>
+            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+              {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
             </Text>
           </View>
           {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}

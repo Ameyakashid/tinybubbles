@@ -123,6 +123,7 @@ export const SETTINGS_SEARCH_PAGE_KEYS: Record<SettingsSearchPageId, readonly Se
         { key: 'importTickTick', section: 'dataTransfer' },
         { key: 'importDgt', section: 'dataTransfer' },
         { key: 'importOmniFocus', section: 'dataTransfer' },
+        { key: 'importMindwtrCsv', section: 'dataTransfer' },
         'attachmentsCleanup',
         'diagnostics',
         { key: 'analyticsHeartbeat', section: 'diagnostics' },

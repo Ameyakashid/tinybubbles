@@ -7,6 +7,8 @@ import {
     dedupeStrings,
     decodeTextBytes,
     detectDelimiter,
+    formatLocalDate,
+    formatLocalDateTime,
     getCell,
     joinDescription,
     normalizeContextName,
@@ -264,14 +266,6 @@ const normalizeTags = (value: string): string[] =>
 
 const normalizeContexts = (value: string): string[] =>
     dedupeStrings(splitTokenList(value).map((context) => normalizeContextName(context)).filter(Boolean) as string[]);
-
-const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
-
-const formatLocalDate = (date: Date): string =>
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-
-const formatLocalDateTime = (date: Date): string =>
-    `${formatLocalDate(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
 
 const normalizeMappedDate = (value: string): { rawText?: string; value?: string } => {
     const trimmed = String(value || '').trim();

@@ -38,6 +38,10 @@ import {
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
 } from '@mindwtr/core/ticktick-import';
+import {
+    type MindwtrCsvImportExecutionResult,
+    type ParsedMindwtrCsvImportData,
+} from '@mindwtr/core/mindwtr-csv-import';
 
 import { logError, logInfo } from './app-log';
 import { mobileStorage } from './storage-adapter';
@@ -332,6 +336,15 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
             'application/octet-stream',
         ],
     },
+    'mindwtr-csv': {
+        mimeTypes: [
+            'text/csv',
+            'text/comma-separated-values',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+        ],
+    },
 };
 
 const pickImportDocument = (source: ImportPickerSourceId): Promise<TransferDocument | null> =>
@@ -353,6 +366,8 @@ export const pickDgtDocument = (): Promise<TransferDocument | null> => pickImpor
 
 export const pickOmniFocusDocument = (): Promise<TransferDocument | null> => pickImportDocument('omnifocus');
 
+export const pickMindwtrCsvDocument = (): Promise<TransferDocument | null> => pickImportDocument('mindwtr-csv');
+
 export const inspectTodoistDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['todoist']> =>
     inspectImportDocument('todoist', document);
 
@@ -364,6 +379,9 @@ export const inspectDgtDocument = (document: TransferDocument): Promise<ImportSo
 
 export const inspectOmniFocusDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['omnifocus']> =>
     inspectImportDocument('omnifocus', document);
+
+export const inspectMindwtrCsvDocument = (document: TransferDocument): Promise<ImportSourceParseResultMap['mindwtr-csv']> =>
+    inspectImportDocument('mindwtr-csv', document);
 
 // Mobile's snapshot writer never returns null (unlike desktop's Tauri-only snapshot), so the
 // shared `string | null` contract can be narrowed back for mobile's public result type.
@@ -404,6 +422,13 @@ export const importOmniFocusData = async (
     parsedData: ParsedOmniFocusImportData
 ): Promise<SnapshotApplyResult & { result: OmniFocusImportExecutionResult }> => {
     const { result, snapshotName } = await runImport('omnifocus', parsedData, mobileBoundaries, mobileLog);
+    return { snapshotName: snapshotName as string, result };
+};
+
+export const importMindwtrCsvData = async (
+    parsedData: ParsedMindwtrCsvImportData
+): Promise<SnapshotApplyResult & { result: MindwtrCsvImportExecutionResult }> => {
+    const { result, snapshotName } = await runImport('mindwtr-csv', parsedData, mobileBoundaries, mobileLog);
     return { snapshotName: snapshotName as string, result };
 };
 

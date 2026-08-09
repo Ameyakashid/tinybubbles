@@ -17,6 +17,8 @@ export type SettingsSyncLabels = {
     importDgtDesc: string;
     importOmniFocus: string;
     importOmniFocusDesc: string;
+    importMindwtrCsv: string;
+    importMindwtrCsvDesc: string;
     diagnostics: string;
     diagnosticsDesc: string;
     analyticsHeartbeat: string;
@@ -239,6 +241,7 @@ export type SettingsDataTransferProps = {
     onImportTickTick: () => Promise<void> | void;
     onImportDgt: () => Promise<void> | void;
     onImportOmniFocus: () => Promise<void> | void;
+    onImportMindwtrCsv: () => Promise<void> | void;
 };
 
 export type SettingsAttachmentsProps = {

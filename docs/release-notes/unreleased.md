@@ -8,6 +8,7 @@ _None yet._
 
 ## Full Change List
 
+- All platforms: Settings → Data can now import a generic "Mindwtr CSV" file (or ZIP of CSVs) — a documented spreadsheet format covering titles, descriptions, statuses, projects, sections, areas, contexts, tags, assignees, priorities, energy, start/due/review dates, completion, checklists, and manual order — so migrations from apps without a dedicated importer no longer lose structure. (#1011)
 - All platforms: the app reaches its first screen faster from a cold start, most noticeably on mobile — startup no longer builds all 20 language dictionaries before drawing anything, and loads only the handful of getting-started strings the first-run seed needs.
 - Desktop: pressing Enter in the context menu's Start Date, Due Date, Review Date, Area, and Contexts panels now saves the value and closes the dialog, matching the task editor. (#992)
 - Mobile: adding a task from a project opened via the Projects tab returns to that project again instead of dropping back to the projects list. (#766)

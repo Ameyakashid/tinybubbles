@@ -309,6 +309,8 @@ export const SETTINGS_LABEL_KEYS = [
     'importDgtDesc',
     'importOmniFocus',
     'importOmniFocusDesc',
+    'importMindwtrCsv',
+    'importMindwtrCsvDesc',
     'diagnostics',
     'diagnosticsDesc',
     'analyticsHeartbeat',

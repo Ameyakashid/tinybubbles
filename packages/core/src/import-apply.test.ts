@@ -166,4 +166,43 @@ describe('applyImport', () => {
         // No second, live "Launch" project was created alongside the tombstone.
         expect(second.data.projects.filter((project) => project.title === 'Launch' && !project.deletedAt)).toHaveLength(0);
     });
+
+    it('creates sections and the newer optional task fields, and dedupes the section on re-import', () => {
+        const parsed: ImportSource = {
+            areas: [],
+            projects: [{ name: 'Launch', order: 0, sourceKey: 'src-proj' }],
+            sections: [{ name: 'Backlog', order: 0, sourceKey: 'src-proj:backlog', projectSourceKey: 'src-proj' }],
+            tasks: [{
+                title: 'Plan release',
+                order: 0,
+                status: 'inbox',
+                sourceKey: 'src-task',
+                projectSourceKey: 'src-proj',
+                sectionSourceKey: 'src-proj:backlog',
+                assignedTo: 'Alex',
+                energyLevel: 'low',
+                location: 'Office',
+                reviewAt: '2026-07-01',
+            }],
+            warnings: [],
+        };
+
+        const first = applyImport(mockAppData([], [], []), parsed, { ...OPTS, now: '2026-06-17T12:00:00.000Z' });
+        expect(first.importedSectionCount).toBe(1);
+        const section = first.data.sections[0];
+        const task = first.data.tasks[0];
+        expect(task).toMatchObject({
+            sectionId: section.id,
+            assignedTo: 'Alex',
+            energyLevel: 'low',
+            location: 'Office',
+            reviewAt: '2026-07-01',
+        });
+
+        // Re-import: the section's id is already taken, so it must be deduped, not recreated —
+        // this is the branch a plain empty-Section fixture never exercises.
+        const second = applyImport(first.data, parsed, { ...OPTS, now: '2026-06-18T12:00:00.000Z' });
+        expect(second.importedSectionCount).toBe(0);
+        expect(second.data.sections).toHaveLength(1);
+    });
 });

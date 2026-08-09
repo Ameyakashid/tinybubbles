@@ -1,7 +1,9 @@
-// Shared "apply" step for third-party importers (OmniFocus, TickTick, DGT) that all parse into
-// the same area/project/task + sourceKey shape. Each importer keeps its own parser and maps its
-// Parsed*Data into ImportSource before calling applyImport; the only importer-specific behaviour
-// left after mapping is id minting (idFor) and, for TickTick, an inbox->next status promotion.
+// Shared "apply" step for third-party importers (OmniFocus, TickTick, DGT, Mindwtr CSV) that all
+// parse into the same area/project/(optional section)/task + sourceKey shape. Each importer keeps
+// its own parser and maps its Parsed*Data into ImportSource before calling applyImport; the only
+// importer-specific behaviour left after mapping is id minting (idFor) and, for TickTick, an
+// inbox->next status promotion. Sections are optional on ImportSource — only Mindwtr CSV supplies
+// them today; every other caller is unaffected.
 //
 // Todoist is intentionally NOT unified here: it has no areas, nests tasks/sections per project
 // instead of cross-referencing via sourceKey, and allocates task order differently (index-based,
@@ -12,7 +14,7 @@ import { safeParseDate } from './date';
 import { ensureDeviceId } from './store-helpers';
 import { nextRevision } from './sync-revision';
 import { isTaskFinished } from './task-status';
-import type { AppData, Area, ChecklistItem, Project, Task, TaskPriority, TaskStatus } from './types';
+import type { AppData, Area, ChecklistItem, Project, Section, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from './types';
 import { generateUUID as uuidv4 } from './uuid';
 
 export type ImportAreaSource = {
@@ -38,18 +40,32 @@ export type ImportProjectSource = {
     updatedAt?: string;
 };
 
+export type ImportSectionSource = {
+    createdAt?: string;
+    name: string;
+    order: number;
+    projectSourceKey: string;
+    sourceKey: string;
+    updatedAt?: string;
+};
+
 export type ImportTaskSource = {
     areaSourceKey?: string;
+    assignedTo?: string;
     checklist?: ChecklistItem[];
     completedAt?: string;
     contexts?: string[];
     createdAt?: string;
     description?: string;
     dueDate?: string;
+    energyLevel?: TaskEnergyLevel;
+    location?: string;
     order: number;
     priority?: TaskPriority;
     projectSourceKey?: string;
     recurrence?: Task['recurrence'];
+    reviewAt?: string;
+    sectionSourceKey?: string;
     sourceKey?: string;
     startTime?: string;
     status: TaskStatus;
@@ -61,6 +77,9 @@ export type ImportTaskSource = {
 export type ImportSource = {
     areas: ImportAreaSource[];
     projects: ImportProjectSource[];
+    // Optional: only the Mindwtr CSV importer creates sections today. Absent/empty is a no-op,
+    // so every other caller of applyImport is unaffected.
+    sections?: ImportSectionSource[];
     tasks: ImportTaskSource[];
     warnings: string[];
 };
@@ -70,6 +89,7 @@ export type ImportExecutionResult = {
     importedAreaCount: number;
     importedChecklistItemCount: number;
     importedProjectCount: number;
+    importedSectionCount: number;
     importedStandaloneTaskCount: number;
     importedTaskCount: number;
     warnings: string[];
@@ -180,13 +200,16 @@ export function applyImport(
     // re-import can neither duplicate a live entity nor resurrect one the user removed.
     const existingAreaById = new Map(nextData.areas.map((area) => [area.id, area]));
     const existingProjectById = new Map(nextData.projects.map((project) => [project.id, project]));
+    const existingSectionById = new Map(nextData.sections.map((section) => [section.id, section]));
     const existingTaskIds = new Set(nextData.tasks.map((task) => task.id));
 
     const areaIdBySourceKey = new Map<string, string>();
     const projectIdBySourceKey = new Map<string, string>();
+    const sectionIdBySourceKey = new Map<string, string>();
 
     let importedAreaCount = 0;
     let importedProjectCount = 0;
+    let importedSectionCount = 0;
     let importedTaskCount = 0;
     let importedChecklistItemCount = 0;
     let importedStandaloneTaskCount = 0;
@@ -260,6 +283,37 @@ export function applyImport(
         importedProjectCount += 1;
     });
 
+    // A section with no matching project (its project was deduped away against a tombstone, or
+    // never created) is dropped along with it — there is nothing to attach it to.
+    (parsed.sections ?? []).forEach((section) => {
+        const projectId = projectIdBySourceKey.get(section.projectSourceKey);
+        if (!projectId) return;
+        const sectionId = idFor('section', section.sourceKey);
+        const existingSection = existingSectionById.get(sectionId);
+        if (existingSection) {
+            if (!existingSection.deletedAt) sectionIdBySourceKey.set(section.sourceKey, existingSection.id);
+            return;
+        }
+        const siblingMaxOrder = nextData.sections
+            .filter((item) => !item.deletedAt && item.projectId === projectId)
+            .reduce((max, item) => Math.max(max, Number.isFinite(item.order) ? item.order : -1), -1);
+        const createdAt = resolveTimestamp(section.createdAt, nowIso);
+        const updatedAt = resolveTimestamp(section.updatedAt, createdAt);
+        const nextSection: Section = {
+            id: sectionId,
+            projectId,
+            title: section.name,
+            order: siblingMaxOrder + 1,
+            createdAt,
+            updatedAt,
+            rev: nextRevision(),
+            revBy: deviceState.deviceId,
+        };
+        nextData.sections.push(nextSection);
+        sectionIdBySourceKey.set(section.sourceKey, nextSection.id);
+        importedSectionCount += 1;
+    });
+
     const nextTaskOrderByBucket = new Map<string, number>();
     nextData.tasks.forEach((task) => {
         if (task.deletedAt) return;
@@ -290,6 +344,7 @@ export function applyImport(
         if (existingTaskIds.has(taskId)) return;
         const projectId = task.projectSourceKey ? projectIdBySourceKey.get(task.projectSourceKey) : undefined;
         const areaId = !projectId && task.areaSourceKey ? areaIdBySourceKey.get(task.areaSourceKey) : undefined;
+        const sectionId = task.sectionSourceKey ? sectionIdBySourceKey.get(task.sectionSourceKey) : undefined;
         const order = allocateTaskOrder(projectId, areaId);
         const checklist = task.checklist && task.checklist.length > 0
             ? task.checklist.map((item) => ({
@@ -310,12 +365,16 @@ export function applyImport(
             status,
             taskMode: checklist ? 'list' : 'task',
             priority: task.priority,
+            energyLevel: task.energyLevel,
+            assignedTo: task.assignedTo,
             contexts: task.contexts ?? [],
             tags: task.tags ?? [],
             checklist,
             description: task.description,
+            location: task.location,
             startTime: task.startTime,
             dueDate: task.dueDate,
+            reviewAt: task.reviewAt,
             recurrence: task.recurrence,
             completedAt,
             pushCount: 0,
@@ -326,6 +385,7 @@ export function applyImport(
             order,
             orderNum: order,
             ...(projectId ? { projectId } : {}),
+            ...(sectionId ? { sectionId } : {}),
             ...(areaId ? { areaId } : {}),
         };
         nextData.tasks.push(nextTask);
@@ -340,6 +400,7 @@ export function applyImport(
         importedAreaCount,
         importedChecklistItemCount,
         importedProjectCount,
+        importedSectionCount,
         importedStandaloneTaskCount,
         importedTaskCount,
         warnings,

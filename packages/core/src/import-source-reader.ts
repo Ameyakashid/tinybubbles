@@ -100,6 +100,18 @@ export const parseCsvRows = (text: string, delimiter: string): { hasUnclosedQuot
     };
 };
 
+// Local-time formatting shared by importers that preserve an offset-less datetime as-is instead
+// of normalizing it through UTC (OmniFocus, Mindwtr CSV) — pure format mechanics, which is what
+// this module exists to own (see header comment).
+export const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
+
+export const formatLocalDate = (date: Date): string =>
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+export const formatLocalDateTime = (date: Date): string => (
+    `${formatLocalDate(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
+);
+
 export const normalizeHeaderCell = (value: string): string => value.trim().toUpperCase();
 
 export const buildHeaderIndex = (headerRow: string[]): Map<string, number> => {

@@ -53,7 +53,7 @@ const reportedZhHantLabels = {
     taskEditorPresentationModal: '彈窗',
     taskEditorPresentationModalDesc: '在居中的彈窗中打開編輯器，適合專注編輯。',
     dataTransfer: '數據傳輸',
-    dataTransferDesc: '導出完整備份、從備份恢復本地數據，或導入 Todoist、DGT GTD 與 OmniFocus 導出文件。',
+    dataTransferDesc: '導出完整備份、從備份恢復本地數據，或導入 Todoist、DGT GTD、OmniFocus 與 Mindwtr CSV 導出文件。',
     exportBackupDesc: '將當前本地數據保存為 JSON 備份文件。',
     restoreBackup: '恢復備份',
     restoreBackupDesc: '從 Mindwtr 備份 JSON 文件替換本地數據。',

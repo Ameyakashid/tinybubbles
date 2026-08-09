@@ -421,6 +421,7 @@ function SyncSettingsView({
         handleBackup,
         handleClearLog,
         handleImportDgt,
+        handleImportMindwtrCsv,
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,
@@ -853,7 +854,7 @@ function SyncSettingsView({
                     <>
                         <SettingsGuideLink
                             title="Import setup guide"
-                            description="Supported Todoist, TickTick, DGT GTD, OmniFocus, Apple Reminders, and backup import paths."
+                            description="Supported Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Reminders, and backup import paths."
                             url={IMPORT_GUIDE_URL}
                             testID="import-guide-link"
                         />
@@ -862,6 +863,7 @@ function SyncSettingsView({
                             backupAction={backupAction}
                             handleBackup={() => void handleBackup()}
                             handleImportDgt={() => void handleImportDgt()}
+                            handleImportMindwtrCsv={() => void handleImportMindwtrCsv()}
                             handleImportOmniFocus={() => void handleImportOmniFocus()}
                             handleImportTickTick={() => void handleImportTickTick()}
                             handleImportTodoist={() => void handleImportTodoist()}

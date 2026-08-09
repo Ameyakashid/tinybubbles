@@ -6,9 +6,11 @@ import type {
     Area,
     BackupValidation,
     DgtImportParseResult,
+    MindwtrCsvImportParseResult,
     OmniFocusImportParseResult,
     ParsedOmniFocusImportData,
     ParsedDgtImportData,
+    ParsedMindwtrCsvImportData,
     Project,
     ParsedTodoistProject,
     ParsedTickTickImportData,
@@ -21,17 +23,20 @@ import type {
 import {
     exportCurrentDataBackup,
     importDgtData,
+    importMindwtrCsvData,
     importOmniFocusData,
     importTickTickData,
     importTodoistData,
     inspectBackupDocument,
     inspectDgtDocument,
+    inspectMindwtrCsvDocument,
     inspectOmniFocusDocument,
     inspectTickTickDocument,
     inspectTodoistDocument,
     mergeDataFromBackup,
     pickBackupDocument,
     pickDgtDocument,
+    pickMindwtrCsvDocument,
     pickOmniFocusDocument,
     pickTickTickDocument,
     pickTodoistDocument,
@@ -205,6 +210,36 @@ export function useSyncSettingsBackupActions({
                 ? tr('settings.backupMobile.tasksWillStayOutsideProjects', { taskCount: preview.standaloneTaskCount })
                 : null,
             tr('settings.backupMobile.importedTasksKeepOmnifocusNotesDatesTagsRecurrenceAndChecklist'),
+            ...(projectLines.length > 0 ? ['', ...projectLines] : []),
+            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+        ].filter(Boolean);
+        return details.join('\n');
+    }, [tr]);
+
+    const buildMindwtrCsvSummary = useCallback((preview: NonNullable<MindwtrCsvImportParseResult['preview']>) => {
+        const projectLines = preview.projects
+            .slice(0, 4)
+            .map((project) => `• ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
+        if (preview.projects.length > 4) {
+            projectLines.push(tr('settings.backupMobile.moreProjects', { projectCount: preview.projects.length - 4 }));
+        }
+        const details = [
+            tr('settings.backupMobile.importTasksFromFile', { taskCount: preview.taskCount, fileName: preview.fileName }),
+            preview.areaCount > 0
+                ? tr('settings.backupMobile.mindwtrCsvAreasWillBeCreated', { areaCount: preview.areaCount })
+                : null,
+            preview.projectCount > 0
+                ? tr('settings.backupMobile.projectsWillBeCreatedWhenNeeded', { projectCount: preview.projectCount })
+                : null,
+            preview.sectionCount > 0
+                ? tr('settings.backupMobile.mindwtrCsvSectionsWillBeCreated', { sectionCount: preview.sectionCount })
+                : null,
+            preview.checklistItemCount > 0
+                ? tr('settings.backupMobile.checklistItemsWillBePreserved', { checklistItemCount: preview.checklistItemCount })
+                : null,
+            preview.standaloneTaskCount > 0
+                ? tr('settings.backupMobile.tasksWillStayOutsideProjects', { taskCount: preview.standaloneTaskCount })
+                : null,
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
             ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
         ].filter(Boolean);
@@ -455,6 +490,38 @@ export function useSyncSettingsBackupActions({
         }
     }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
+    const confirmMindwtrCsvImport = useCallback(async (parsedData: ParsedMindwtrCsvImportData) => {
+        setBackupAction('import');
+        try {
+            const { snapshotName, result } = await importMindwtrCsvData(parsedData);
+            await refreshRecoverySnapshots();
+            const details = [
+                tr('settings.backupMobile.importedTaskProjectSectionAreaCounts', {
+                    taskCount: result.importedTaskCount,
+                    projectCount: result.importedProjectCount,
+                    sectionCount: result.importedSectionCount,
+                    areaCount: result.importedAreaCount,
+                }),
+                result.importedChecklistItemCount > 0
+                    ? tr('settings.backupMobile.checklistItemsPreserved', { checklistItemCount: result.importedChecklistItemCount })
+                    : null,
+                tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
+                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+            ].filter(Boolean);
+            showToast({
+                title: tr('settings.backupMobile.importComplete'),
+                message: details.join('\n'),
+                tone: 'success',
+                durationMs: 6200,
+            });
+        } catch (error) {
+            logSettingsError(error);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+        } finally {
+            setBackupAction(null);
+        }
+    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+
     const handleImportTodoist = useCallback(async () => {
         setBackupAction('import');
         try {
@@ -586,6 +653,39 @@ export function useSyncSettingsBackupActions({
         }
     }, [buildOmniFocusSummary, confirmOmniFocusImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
+    const handleImportMindwtrCsv = useCallback(async () => {
+        setBackupAction('import');
+        try {
+            const document = await pickMindwtrCsvDocument();
+            if (!document) return;
+            const parseResult = await inspectMindwtrCsvDocument(document);
+            if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
+                showSettingsWarning(
+                    tr('settings.backupMobile.importFailed'),
+                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile')
+                );
+                return;
+            }
+            const parsedData = parseResult.parsedData;
+            Alert.alert(
+                tr('settings.backupMobile.importMindwtrCsvData'),
+                buildMindwtrCsvSummary(parseResult.preview),
+                [
+                    { text: tr('common.cancel'), style: 'cancel' },
+                    {
+                        text: tr('settings.backupMobile.import'),
+                        onPress: () => void confirmMindwtrCsvImport(parsedData),
+                    },
+                ]
+            );
+        } catch (error) {
+            logSettingsError(error);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+        } finally {
+            setBackupAction(null);
+        }
+    }, [buildMindwtrCsvSummary, confirmMindwtrCsvImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+
     const handleRestoreRecoverySnapshot = useCallback(async (snapshotName: string) => {
         Alert.alert(
             tr('settings.backupMobile.restoreRecoverySnapshot'),
@@ -679,6 +779,7 @@ export function useSyncSettingsBackupActions({
         handleBackup,
         handleClearLog,
         handleImportDgt,
+        handleImportMindwtrCsv,
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,

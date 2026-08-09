@@ -16,6 +16,12 @@ import {
 import { addBreadcrumb } from './log-breadcrumbs';
 import type { ImportSourceInput } from './import-source-reader';
 import {
+    applyMindwtrCsvImport,
+    parseMindwtrCsvImportSource,
+    type MindwtrCsvImportParseResult,
+    type ParsedMindwtrCsvImportData,
+} from './mindwtr-csv-import';
+import {
     applyOmniFocusImport,
     parseOmniFocusImportSource,
     type OmniFocusImportParseResult,
@@ -37,7 +43,7 @@ import {
 } from './todoist-import';
 import type { AppData, Attachment } from './types';
 
-export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'omnifocus' | 'ticktick' | 'todoist';
+export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'mindwtr-csv' | 'omnifocus' | 'ticktick' | 'todoist';
 export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup' | 'backup-merge'>;
 
 export type ImportDescriptorInput = ImportSourceInput & {
@@ -49,6 +55,7 @@ export type ImportSourceParseResultMap = {
     backup: BackupValidation;
     'backup-merge': BackupValidation;
     dgt: DgtImportParseResult;
+    'mindwtr-csv': MindwtrCsvImportParseResult;
     omnifocus: OmniFocusImportParseResult;
     ticktick: TickTickImportParseResult;
     todoist: TodoistImportParseResult;
@@ -87,6 +94,7 @@ type ImportTypeMap = {
     todoist: { parsed: ParsedTodoistProject[]; result: ReturnType<typeof applyTodoistImport> };
     ticktick: { parsed: ParsedTickTickImportData; result: ReturnType<typeof applyTickTickImport> };
     dgt: { parsed: ParsedDgtImportData; result: ReturnType<typeof applyDgtImport> };
+    'mindwtr-csv': { parsed: ParsedMindwtrCsvImportData; result: ReturnType<typeof applyMindwtrCsvImport> };
     omnifocus: { parsed: ParsedOmniFocusImportData; result: ReturnType<typeof applyOmniFocusImport> };
 };
 
@@ -279,6 +287,25 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
             checklistItems: String(result.importedChecklistItemCount),
             tasks: String(result.importedTaskCount),
             projects: String(result.importedProjectCount),
+            standaloneTasks: String(result.importedStandaloneTaskCount),
+        }),
+    },
+    'mindwtr-csv': {
+        operation: 'importMindwtrCsv',
+        source: 'mindwtr-csv',
+        startLabel: 'Mindwtr CSV import started',
+        completeLabel: 'Mindwtr CSV import complete',
+        parse: parseMindwtrCsvImportSource,
+        apply: (data, parsed) => {
+            const result = applyMindwtrCsvImport(data, parsed);
+            return { data: result.data, result };
+        },
+        countExtra: (result) => ({
+            tasks: String(result.importedTaskCount),
+            projects: String(result.importedProjectCount),
+            sections: String(result.importedSectionCount),
+            areas: String(result.importedAreaCount),
+            checklistItems: String(result.importedChecklistItemCount),
             standaloneTasks: String(result.importedStandaloneTaskCount),
         }),
     },

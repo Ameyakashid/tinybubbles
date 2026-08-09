@@ -175,7 +175,7 @@ Mindwtr is simple by default and powerful when you need it:
 - ☁️ **Dropbox Sync (Optional)** - Sign in with Dropbox and sync through a private app folder (store builds; not in FOSS builds)
 - 📤 **Export/Backup** - Export data to JSON
 - ♻️ **Restore from Backup** - Replace local data from a validated Mindwtr backup with a recovery snapshot first
-- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders Import** - Import TickTick CSV/ZIP, Todoist CSV/ZIP, DGT GTD JSON/ZIP, OmniFocus exports, or incomplete Apple Reminders into Mindwtr
+- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders + CSV Import** - Import TickTick CSV/ZIP, Todoist CSV/ZIP, DGT GTD JSON/ZIP, OmniFocus exports, incomplete Apple Reminders, or any app via a documented generic CSV format into Mindwtr
 - 🔗 **Obsidian Integration** - Desktop vault task import with deep links back to source notes
 - 🗓️ **External Calendars (System + ICS)** - Mobile reads system calendars and pushes dated tasks; macOS desktop reads Apple Calendar and can push dated tasks; desktop/web also support ICS subscriptions and task creation from events
 

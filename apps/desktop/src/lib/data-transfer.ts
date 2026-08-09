@@ -31,6 +31,10 @@ import {
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
 } from '@mindwtr/core/ticktick-import';
+import {
+    type MindwtrCsvImportExecutionResult,
+    type ParsedMindwtrCsvImportData,
+} from '@mindwtr/core/mindwtr-csv-import';
 
 import { SyncService } from './sync-service';
 import { tauriStorage } from './storage-adapter';
@@ -266,6 +270,11 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
         extensions: ['csv', 'json', 'zip'],
         title: 'OmniFocus Export',
     },
+    'mindwtr-csv': {
+        accept: '.csv,.zip,text/csv,application/zip',
+        extensions: ['csv', 'zip'],
+        title: 'Mindwtr CSV',
+    },
 };
 
 const inspectDesktopImportSource = async <S extends ImportPickerSourceId>(
@@ -293,6 +302,9 @@ export const inspectDesktopDgtImport = (): Promise<ImportSourceParseResultMap['d
 
 export const inspectDesktopOmniFocusImport = (): Promise<ImportSourceParseResultMap['omnifocus'] | null> =>
     inspectDesktopImportSource('omnifocus');
+
+export const inspectDesktopMindwtrCsvImport = (): Promise<ImportSourceParseResultMap['mindwtr-csv'] | null> =>
+    inspectDesktopImportSource('mindwtr-csv');
 
 const desktopLog = { logInfo, logError };
 
@@ -325,3 +337,8 @@ export const importDesktopOmniFocusData = (
     parsedData: ParsedOmniFocusImportData
 ): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> =>
     runImport('omnifocus', parsedData, desktopBoundaries, desktopLog);
+
+export const importDesktopMindwtrCsvData = (
+    parsedData: ParsedMindwtrCsvImportData
+): Promise<DesktopTransferResult & { result: MindwtrCsvImportExecutionResult }> =>
+    runImport('mindwtr-csv', parsedData, desktopBoundaries, desktopLog);

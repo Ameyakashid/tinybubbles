@@ -129,6 +129,7 @@ export * from './todoist-import';
 export * from './ticktick-import';
 export * from './dgt-import';
 export * from './omnifocus-import';
+export * from './mindwtr-csv-import';
 export * from './mind-sweep';
 export * from './focus-star';
 export * from './focus-grouping';

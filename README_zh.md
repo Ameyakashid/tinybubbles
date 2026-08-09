@@ -171,7 +171,7 @@ Mindwtr 默认简单，需要时也足够强大：
 - ☁️ **Dropbox 同步（可选）** - 登录 Dropbox 后通过专属应用文件夹同步（商店版提供，FOSS 构建不含）
 - 📤 **导出/备份** - 导出 JSON 数据
 - ♻️ **从备份恢复** - 先创建恢复快照，再用已验证的 Mindwtr 备份替换本地数据
-- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders 导入** - 将 TickTick CSV/ZIP、Todoist CSV/ZIP、DGT GTD JSON/ZIP、OmniFocus 导出或未完成的 Apple Reminders 导入到 Mindwtr
+- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders + CSV 导入** - 将 TickTick CSV/ZIP、Todoist CSV/ZIP、DGT GTD JSON/ZIP、OmniFocus 导出、未完成的 Apple Reminders，或任何应用的数据（通过有文档说明的通用 CSV 格式）导入到 Mindwtr
 - 🔗 **Obsidian 集成** - 桌面端导入 Vault 中的任务，并可深度链接回源笔记
 - 🗓️ **外部日历（系统日历 + ICS）** - 移动端读取系统日历并推送带日期的任务；macOS 桌面端可读取 Apple Calendar 并推送带日期的任务；桌面/Web 也支持 ICS 订阅与从事件创建任务
 
