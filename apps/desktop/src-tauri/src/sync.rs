@@ -3558,8 +3558,7 @@ mod tests {
         let backup = dir.path().join("data.json.bak");
         let backup_tmp = dir.path().join("data.json.bak.tmp");
         let backup_previous = dir.path().join("data.json.bak.previous");
-        fs::write(&backup, br#"{"tasks":[{"id":"preserved"}]}"#)
-            .expect("write previous backup");
+        fs::write(&backup, br#"{"tasks":[{"id":"preserved"}]}"#).expect("write previous backup");
         fs::write(&backup_tmp, br#"{"tasks":[{"id":"replacement"}]}"#)
             .expect("write replacement backup");
         let rename_calls = std::cell::Cell::new(0usize);
@@ -3588,6 +3587,100 @@ mod tests {
                 .as_deref(),
             Some("preserved")
         );
+    }
+
+    #[test]
+    fn missing_sync_file_recovers_valid_backup_before_seed() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let backup = dir.path().join("data.json.bak");
+        let seed = dir.path().join("mindwtr-backup-2026-01-01.json");
+        fs::write(&backup, br#"{"tasks":[{"id":"backup"}]}"#).expect("write backup");
+        fs::write(&seed, br#"{"tasks":[{"id":"seed"}]}"#).expect("write seed");
+
+        let value = read_sync_file_from_dir(dir.path()).expect("recover backup");
+
+        assert_eq!(value["tasks"][0]["id"], "backup");
+    }
+
+    #[test]
+    fn missing_sync_file_recovers_previous_backup_when_current_backup_is_absent() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let backup_previous = dir.path().join("data.json.bak.previous");
+        fs::write(&backup_previous, br#"{"tasks":[{"id":"previous-backup"}]}"#)
+            .expect("write previous backup");
+
+        let value = read_sync_file_from_dir(dir.path()).expect("recover previous backup");
+
+        assert_eq!(value["tasks"][0]["id"], "previous-backup");
+    }
+
+    #[test]
+    fn sync_file_replace_failure_restores_previous_primary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let primary = dir.path().join("data.json");
+        let replacement = dir.path().join("data.json.tmp");
+        let previous = dir.path().join("data.json.previous");
+        fs::write(&primary, b"previous primary").expect("write primary");
+        fs::write(&replacement, b"replacement").expect("write replacement");
+        let rename_calls = std::cell::Cell::new(0usize);
+
+        let result = replace_sync_file_preserving_previous(
+            &replacement,
+            &primary,
+            &previous,
+            |path| fs::remove_file(path),
+            |from, to| {
+                let call = rename_calls.get() + 1;
+                rename_calls.set(call);
+                if call == 2 {
+                    return Err(std::io::Error::other("injected replacement failure"));
+                }
+                fs::rename(from, to)
+            },
+        );
+
+        assert!(result.is_err());
+        assert_eq!(
+            fs::read(&primary).expect("restored primary"),
+            b"previous primary"
+        );
+        assert!(!previous.exists());
+        assert_eq!(
+            fs::read(&replacement).expect("replacement remains"),
+            b"replacement"
+        );
+    }
+
+    #[test]
+    fn sync_file_restore_failure_keeps_previous_primary_readable() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let primary = dir.path().join("data.json");
+        let replacement = dir.path().join("data.json.tmp");
+        let previous = dir.path().join("data.json.previous");
+        fs::write(&primary, br#"{"tasks":[{"id":"preserved-primary"}]}"#).expect("write primary");
+        fs::write(&replacement, br#"{"tasks":[{"id":"replacement"}]}"#).expect("write replacement");
+        let rename_calls = std::cell::Cell::new(0usize);
+
+        let result = replace_sync_file_preserving_previous(
+            &replacement,
+            &primary,
+            &previous,
+            |path| fs::remove_file(path),
+            |from, to| {
+                let call = rename_calls.get() + 1;
+                rename_calls.set(call);
+                if call >= 2 {
+                    return Err(std::io::Error::other("injected rename failure"));
+                }
+                fs::rename(from, to)
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!primary.exists());
+        assert!(previous.exists());
+        let value = read_sync_file_from_dir(dir.path()).expect("read preserved primary");
+        assert_eq!(value["tasks"][0]["id"], "preserved-primary");
     }
 
     #[test]
@@ -7121,10 +7214,11 @@ fn empty_remote_app_data() -> serde_json::Value {
 // Runs off the UI thread: the sync folder can be a network or FUSE mount
 // (rclone, WinFSP) where a single read blocks for tens of seconds, and a
 // plain `#[tauri::command]` executes on the main thread and freezes the window.
-fn replace_sync_backup_preserving_previous<Remove, Rename>(
+fn replace_file_preserving_previous<Remove, Rename>(
     replacement: &Path,
     target: &Path,
     previous: &Path,
+    description: &str,
     mut remove: Remove,
     mut rename: Rename,
 ) -> Result<(), String>
@@ -7134,12 +7228,12 @@ where
 {
     if previous.exists() {
         remove(previous).map_err(|error| {
-            format!("Failed to clear the previous sync-backup recovery file: {error}")
+            format!("Failed to clear the previous {description} recovery file: {error}")
         })?;
     }
 
     rename(target, previous)
-        .map_err(|error| format!("Failed to preserve the current sync backup: {error}"))?;
+        .map_err(|error| format!("Failed to preserve the current {description}: {error}"))?;
 
     match rename(replacement, target) {
         Ok(()) => {
@@ -7148,14 +7242,42 @@ where
         }
         Err(replace_error) => match rename(previous, target) {
             Ok(()) => Err(format!(
-                "Failed to install the replacement sync backup; restored the previous backup: {replace_error}"
+                "Failed to install the replacement {description}; restored the previous {description}: {replace_error}"
             )),
             Err(restore_error) => Err(format!(
-                "Failed to install the replacement sync backup ({replace_error}); the previous backup remains at {} because restoration also failed: {restore_error}",
+                "Failed to install the replacement {description} ({replace_error}); the previous {description} remains at {} because restoration also failed: {restore_error}",
                 previous.display()
             )),
         },
     }
+}
+
+fn replace_sync_backup_preserving_previous<Remove, Rename>(
+    replacement: &Path,
+    target: &Path,
+    previous: &Path,
+    remove: Remove,
+    rename: Rename,
+) -> Result<(), String>
+where
+    Remove: FnMut(&Path) -> std::io::Result<()>,
+    Rename: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    replace_file_preserving_previous(replacement, target, previous, "sync backup", remove, rename)
+}
+
+fn replace_sync_file_preserving_previous<Remove, Rename>(
+    replacement: &Path,
+    target: &Path,
+    previous: &Path,
+    remove: Remove,
+    rename: Rename,
+) -> Result<(), String>
+where
+    Remove: FnMut(&Path) -> std::io::Result<()>,
+    Rename: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    replace_file_preserving_previous(replacement, target, previous, "sync file", remove, rename)
 }
 
 fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<Value> {
@@ -7165,18 +7287,22 @@ fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<Value> {
         .find_map(|path| read_json_with_retries(path, 2).ok())
 }
 
-#[tauri::command(async)]
-pub(crate) fn read_sync_file(
-    app: tauri::AppHandle,
-    path: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let sync_dir = match path {
-        Some(path) => resolve_sync_dir(&app, Some(path))?,
-        None => {
-            configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
+fn read_sync_recovery(
+    primary_previous_file: &Path,
+    backup_file: &Path,
+    backup_previous_file: &Path,
+) -> Option<Value> {
+    if primary_previous_file.exists() {
+        if let Ok(value) = read_json_with_retries(primary_previous_file, 2) {
+            return Some(value);
         }
-    };
+    }
+    read_sync_backup(backup_file, backup_previous_file)
+}
+
+fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String> {
     let sync_file = sync_dir.join(DATA_FILE_NAME);
+    let primary_previous_file = sync_dir.join(format!("{}.previous", DATA_FILE_NAME));
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
     let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
     let legacy_sync_file = sync_dir.join(format!("{}-sync.json", APP_NAME));
@@ -7214,7 +7340,7 @@ pub(crate) fn read_sync_file(
         if legacy_sync_file.exists() {
             return Some(read_json_with_retries(&legacy_sync_file, 1));
         }
-        if let Some(seed_file) = find_seed_backup_file(&sync_dir) {
+        if let Some(seed_file) = find_seed_backup_file(sync_dir) {
             return Some(read_json_with_retries(&seed_file, 1));
         }
         None
@@ -7227,7 +7353,9 @@ pub(crate) fn read_sync_file(
             sync_dir
         );
         log::warn!("{}", msg);
-        if let Some(value) = read_sync_backup(&backup_file, &backup_previous_file) {
+        if let Some(value) =
+            read_sync_recovery(&primary_previous_file, &backup_file, &backup_previous_file)
+        {
             return Ok(value);
         }
         if let Some(result) = read_seed_or_legacy_file() {
@@ -7237,6 +7365,11 @@ pub(crate) fn read_sync_file(
     }
 
     if !sync_file.exists() {
+        if let Some(value) =
+            read_sync_recovery(&primary_previous_file, &backup_file, &backup_previous_file)
+        {
+            return Ok(value);
+        }
         if let Some(result) = read_seed_or_legacy_file() {
             return result;
         }
@@ -7246,12 +7379,28 @@ pub(crate) fn read_sync_file(
     match read_json_with_retries(&sync_file, 5) {
         Ok(value) => Ok(value),
         Err(primary_err) => {
-            if let Some(value) = read_sync_backup(&backup_file, &backup_previous_file) {
+            if let Some(value) =
+                read_sync_recovery(&primary_previous_file, &backup_file, &backup_previous_file)
+            {
                 return Ok(value);
             }
             Err(primary_err)
         }
     }
+}
+
+#[tauri::command(async)]
+pub(crate) fn read_sync_file(
+    app: tauri::AppHandle,
+    path: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let sync_dir = match path {
+        Some(path) => resolve_sync_dir(&app, Some(path))?,
+        None => {
+            configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
+        }
+    };
+    read_sync_file_from_dir(&sync_dir)
 }
 
 // Off the UI thread for the same reason as `read_sync_file`; concurrent writers
@@ -7271,6 +7420,7 @@ pub(crate) fn write_sync_file(
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
     let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
+    let primary_previous_file = sync_dir.join(format!("{}.previous", DATA_FILE_NAME));
     let tmp_file = sync_dir.join(format!("{}.tmp", DATA_FILE_NAME));
 
     if is_icloud_evicted(&sync_file) {
@@ -7322,7 +7472,17 @@ pub(crate) fn write_sync_file(
         }
 
         if cfg!(windows) && sync_file.exists() {
-            fs::remove_file(&sync_file).map_err(|e| e.to_string())?;
+            // Windows cannot rename over an existing destination. Move the
+            // primary aside instead of deleting it so a failed installation
+            // can roll back without depending on the best-effort .bak copy.
+            replace_sync_file_preserving_previous(
+                &tmp_file,
+                &sync_file,
+                &primary_previous_file,
+                |path| fs::remove_file(path),
+                |from, to| fs::rename(from, to),
+            )?;
+            return Ok(true);
         }
 
         match fs::rename(&tmp_file, &sync_file) {
