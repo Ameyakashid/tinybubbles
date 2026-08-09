@@ -35,6 +35,7 @@ const logMocks = vi.hoisted(() => ({
 
 const fileSystemMocks = vi.hoisted(() => ({
   fileWrites: [] as string[],
+  getInfoAsync: vi.fn(),
   readAsStringAsync: vi.fn(),
 }));
 
@@ -57,6 +58,7 @@ vi.mock('./file-system', () => ({
   StorageAccessFramework: null,
   documentDirectory: 'file://document/',
   cacheDirectory: 'file://cache/',
+  getInfoAsync: fileSystemMocks.getInfoAsync,
   readAsStringAsync: fileSystemMocks.readAsStringAsync,
   writeAsStringAsync: vi.fn(),
   EncodingType: {
@@ -131,6 +133,7 @@ describe('mobile data transfer', () => {
     vi.clearAllMocks();
     fileSystemMocks.fileWrites = [];
     fileSystemMocks.readAsStringAsync.mockResolvedValue('');
+    fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true, size: 1 });
     storeStateRef.current = {
       lastDataChangeAt: 1,
       fetchData: vi.fn().mockResolvedValue(undefined),
@@ -216,6 +219,34 @@ describe('mobile data transfer', () => {
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
       uri: 'content://large.csv',
     })).rejects.toThrow('Choose a file no larger than 16 MB');
+
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('stats a size-less cached import and rejects it before any bulk read', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({
+      exists: true,
+      size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
+    });
+
+    await expect(inspectMindwtrCsvDocument({
+      fileName: 'large.csv',
+      size: null,
+      uri: 'file://cache/large.csv',
+    })).rejects.toThrow('Choose a file no larger than 16 MB');
+
+    expect(fileSystemMocks.getInfoAsync).toHaveBeenCalledWith('file://cache/large.csv');
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects a size-less import when its copied URI size cannot be verified', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true });
+
+    await expect(inspectMindwtrCsvDocument({
+      fileName: 'unknown.csv',
+      size: null,
+      uri: 'file://cache/unknown.csv',
+    })).rejects.toThrow('could not verify the selected import file size');
 
     expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
   });

@@ -353,11 +353,27 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
 const pickImportDocument = (source: ImportPickerSourceId): Promise<TransferDocument | null> =>
     pickDocument(IMPORT_PICKER_DESCRIPTORS[source].mimeTypes);
 
+const resolveImportDocumentSize = async (document: TransferDocument): Promise<number> => {
+    if (typeof document.size === 'number' && Number.isFinite(document.size) && document.size >= 0) {
+        return document.size;
+    }
+    try {
+        const info = await FileSystem.getInfoAsync(document.uri);
+        if (info.exists && typeof info.size === 'number' && Number.isFinite(info.size) && info.size >= 0) {
+            return info.size;
+        }
+    } catch {
+        // The safe fallback for an unreadable provider is to stop before a bulk read.
+    }
+    throw new Error('Mindwtr could not verify the selected import file size. Copy it locally and try again.');
+};
+
 const inspectImportDocument = async <S extends ImportPickerSourceId>(
     source: S,
     document: TransferDocument
 ): Promise<ImportSourceParseResultMap[S]> => {
-    assertImportSourceFileSize(document.size);
+    const size = await resolveImportDocumentSize(document);
+    assertImportSourceFileSize(size);
     const bytes = await readBinaryFile(document.uri);
     return parseImportSource(source, { bytes, fileName: document.fileName });
 };
