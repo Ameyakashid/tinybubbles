@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
-import { SyncBackupSection } from './sync-settings-sections';
+import {
+  RecoverySnapshotsCard,
+  SyncBackupSection,
+  SyncPreferencesCard,
+} from './sync-settings-sections';
 
 const tc = {
   bg: '#0f172a',
@@ -103,5 +107,66 @@ describe('SyncBackupSection', () => {
       tree.root.findByProps({ testID: 'add-getting-started-content' }).props.onPress();
     });
     expect(handleAddGettingStartedContent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sync settings disclosure accessibility', () => {
+  it('exposes recovery snapshots as a collapsed button and hides its decorative chevron', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <RecoverySnapshotsCard
+          backupAction={null}
+          formatRecoverySnapshotLabel={(name) => name}
+          handleRestoreRecoverySnapshot={noop}
+          isBackupBusy={false}
+          isLoadingRecoverySnapshots={false}
+          isSyncing={false}
+          recoverySnapshots={[]}
+          recoverySnapshotsOpen={false}
+          setRecoverySnapshotsOpen={noop}
+          tr={translate}
+          t={translate}
+          tc={tc}
+        />,
+      );
+    });
+
+    const disclosure = tree.root.findByProps({ testID: 'recovery-snapshots-disclosure' });
+    expect(disclosure.props.accessibilityRole).toBe('button');
+    expect(disclosure.props.accessibilityState).toEqual({ expanded: false });
+    const chevron = tree.root.findByProps({ testID: 'recovery-snapshots-chevron' });
+    expect(chevron.props.accessible).toBe(false);
+    expect(chevron.props.accessibilityElementsHidden).toBe(true);
+    expect(chevron.props.importantForAccessibility).toBe('no-hide-descendants');
+  });
+
+  it('exposes sync preferences as an expanded button and hides its decorative chevron', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncPreferencesCard
+          syncAiEnabled={false}
+          syncAppearanceEnabled={false}
+          syncExternalCalendarsEnabled={false}
+          syncGtdEnabled={false}
+          syncLanguageEnabled={false}
+          syncOptionsOpen
+          syncSavedFiltersEnabled={false}
+          t={translate}
+          tc={tc}
+          toggleSyncOptionsOpen={noop}
+          updateSyncPreferences={noop}
+        />,
+      );
+    });
+
+    const disclosure = tree.root.findByProps({ testID: 'sync-preferences-disclosure' });
+    expect(disclosure.props.accessibilityRole).toBe('button');
+    expect(disclosure.props.accessibilityState).toEqual({ expanded: true });
+    const chevron = tree.root.findByProps({ testID: 'sync-preferences-chevron' });
+    expect(chevron.props.accessible).toBe(false);
+    expect(chevron.props.accessibilityElementsHidden).toBe(true);
+    expect(chevron.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 });

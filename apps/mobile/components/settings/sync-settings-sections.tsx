@@ -329,14 +329,28 @@ export function RecoverySnapshotsCard({
 }: RecoverySnapshotsCardProps) {
   return (
     <View style={[styles.settingCard, { backgroundColor: tc.cardBg, marginTop: 16 }]}>
-      <TouchableOpacity style={styles.settingRow} onPress={() => setRecoverySnapshotsOpen(!recoverySnapshotsOpen)}>
+      <TouchableOpacity
+        style={styles.settingRow}
+        onPress={() => setRecoverySnapshotsOpen(!recoverySnapshotsOpen)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: recoverySnapshotsOpen }}
+        testID="recovery-snapshots-disclosure"
+      >
         <View style={styles.settingInfo}>
           <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.recoverySnapshots')}</Text>
           <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
             {tr('settings.syncMobile.savedAutomaticallyBeforeRestoreAndImportOperations')}
           </Text>
         </View>
-        <Text style={[styles.chevron, { color: tc.secondaryText }]}>{recoverySnapshotsOpen ? '▾' : '▸'}</Text>
+        <Text
+          style={[styles.chevron, { color: tc.secondaryText }]}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          testID="recovery-snapshots-chevron"
+        >
+          {recoverySnapshotsOpen ? '▾' : '▸'}
+        </Text>
       </TouchableOpacity>
       {recoverySnapshotsOpen && (
         <>
@@ -412,12 +426,26 @@ export function SyncPreferencesCard({
 }: SyncPreferencesCardProps) {
   return (
     <View style={[styles.settingCard, { backgroundColor: tc.cardBg, marginTop: 16 }]}>
-      <TouchableOpacity style={styles.settingRow} onPress={toggleSyncOptionsOpen}>
+      <TouchableOpacity
+        style={styles.settingRow}
+        onPress={toggleSyncOptionsOpen}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: syncOptionsOpen }}
+        testID="sync-preferences-disclosure"
+      >
         <View style={styles.settingInfo}>
           <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.syncPreferences')}</Text>
           <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.syncPreferencesDesc')}</Text>
         </View>
-        <Text style={[styles.chevron, { color: tc.secondaryText }]}>{syncOptionsOpen ? '▾' : '▸'}</Text>
+        <Text
+          style={[styles.chevron, { color: tc.secondaryText }]}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          testID="sync-preferences-chevron"
+        >
+          {syncOptionsOpen ? '▾' : '▸'}
+        </Text>
       </TouchableOpacity>
       {syncOptionsOpen && (
         <>
