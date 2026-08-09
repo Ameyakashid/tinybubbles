@@ -6,6 +6,7 @@ import {
     assertImportSourceFileSize,
     basename,
     buildHeaderIndex,
+    createImportArchiveBudget,
     dedupeStrings,
     detectDelimiter,
     DEFAULT_IMPORT_CSV_LIMITS,
@@ -38,6 +39,21 @@ const TEST_CSV_LIMITS: ImportCsvLimits = {
 };
 
 describe('import-source-reader', () => {
+    it('enforces cumulative row, entity, and checklist budgets across compact archive entries', () => {
+        const rowBudget = createImportArchiveBudget({ maxChecklistItems: 2, maxEntities: 3, maxRows: 3 });
+        expect(parseCsvRows('h\none', ',', TEST_CSV_LIMITS, rowBudget).rows).toHaveLength(2);
+        expect(() => parseCsvRows('h\ntwo', ',', TEST_CSV_LIMITS, rowBudget))
+            .toThrowError(/across the archive.*3 rows/iu);
+
+        const entityBudget = createImportArchiveBudget({ maxChecklistItems: 2, maxEntities: 3, maxRows: 10 });
+        entityBudget.consumeEntities(2);
+        expect(() => entityBudget.consumeEntities(2)).toThrowError(/across the archive.*3 records/iu);
+
+        const checklistBudget = createImportArchiveBudget({ maxChecklistItems: 2, maxEntities: 10, maxRows: 10 });
+        checklistBudget.consumeChecklistItems(1);
+        expect(() => checklistBudget.consumeChecklistItems(2)).toThrowError(/across the archive.*2 checklist/iu);
+    });
+
     it('basename strips both slash styles and falls back to the whole value', () => {
         expect(basename('C:\\exports\\file.csv')).toBe('file.csv');
         expect(basename('/tmp/exports/file.csv')).toBe('file.csv');

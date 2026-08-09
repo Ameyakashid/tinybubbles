@@ -9,18 +9,21 @@ import {
     assertImportChecklistItemCount,
     basename,
     buildHeaderIndex,
+    createImportArchiveBudget,
     dedupeStrings,
     decodeTextBytes,
     detectDelimiter,
     formatLocalDate,
     formatLocalDateTime,
     getCell,
+    ImportSourceLimitError,
     normalizeContextName,
     normalizeHeaderCell,
     parseCsvRows,
     readImportSource,
     sanitizeCsvText,
     toImportBytes,
+    type ImportArchiveBudget,
 } from './import-source-reader';
 import { createProjectOrderReserver, normalizeTagId } from './store-helpers';
 import { nextRevision } from './sync-revision';
@@ -404,9 +407,10 @@ const parseMindwtrCsvRows = (
     csvText: string,
     counters: MindwtrCsvWarningCounters,
     source: MindwtrCsvRowSource,
+    archiveBudget: ImportArchiveBudget,
 ): ParsedMindwtrCsvImportData => {
     const delimiter = detectMindwtrCsvDelimiter(csvText);
-    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), delimiter);
+    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), delimiter, undefined, archiveBudget);
     if (hasUnclosedQuote) counters.unclosedQuotedFiles += 1;
     if (rows.length === 0) {
         return { areas: [], projects: [], sections: [], tasks: [], warnings: [] };
@@ -625,9 +629,13 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     const fileName = basename(input.fileName);
     const counters = createWarningCounters();
     const parsedData: ParsedMindwtrCsvImportData = { areas: [], projects: [], sections: [], tasks: [], warnings: [] };
+    const archiveBudget = createImportArchiveBudget();
 
     const parseOneCsv = (csvText: string, source: MindwtrCsvRowSource): void => {
-        mergeParsedData(parsedData, parseMindwtrCsvRows(csvText, counters, source));
+        const parsed = parseMindwtrCsvRows(csvText, counters, source, archiveBudget);
+        archiveBudget.consumeEntities(parsed.areas.length + parsed.projects.length + parsed.sections.length + parsed.tasks.length);
+        archiveBudget.consumeChecklistItems(parsed.tasks.reduce((sum, task) => sum + task.checklist.length, 0));
+        mergeParsedData(parsedData, parsed);
     };
 
     try {
@@ -656,7 +664,8 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
                         kind: 'zip-entry',
                         name: entryName,
                     });
-                } catch {
+                } catch (error) {
+                    if (error instanceof ImportSourceLimitError) throw error;
                     counters.invalidCsvFiles += 1;
                 }
             });

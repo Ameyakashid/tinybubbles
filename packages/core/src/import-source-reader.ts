@@ -12,6 +12,9 @@ export type ImportSourceLimitCode =
     | 'archive-entry-too-large'
     | 'archive-expanded-too-large'
     | 'archive-too-many-entries'
+    | 'archive-too-many-checklist-items'
+    | 'archive-too-many-entities'
+    | 'archive-too-many-rows'
     | 'checklist-too-many-items'
     | 'csv-cell-too-large'
     | 'csv-too-many-columns'
@@ -31,6 +34,12 @@ export type ImportSourceLimits = {
     maxTextBytes: number;
 };
 
+export type ImportArchiveBudgetLimits = {
+    maxChecklistItems: number;
+    maxEntities: number;
+    maxRows: number;
+};
+
 const MEBIBYTE = 1024 * 1024;
 
 export const DEFAULT_IMPORT_CSV_LIMITS: Readonly<ImportCsvLimits> = {
@@ -40,6 +49,14 @@ export const DEFAULT_IMPORT_CSV_LIMITS: Readonly<ImportCsvLimits> = {
 };
 
 export const DEFAULT_IMPORT_CHECKLIST_ITEM_LIMIT = 1_000;
+
+// These are archive-wide ceilings. Per-entry CSV limits still protect the parser, while this
+// budget prevents many individually valid entries from multiplying retained records/checklists.
+export const DEFAULT_IMPORT_ARCHIVE_BUDGET_LIMITS: Readonly<ImportArchiveBudgetLimits> = {
+    maxChecklistItems: 100_000,
+    maxEntities: 100_000,
+    maxRows: 100_000,
+};
 
 export const DEFAULT_IMPORT_SOURCE_LIMITS: Readonly<ImportSourceLimits> = {
     maxArchiveEntries: 128,
@@ -60,6 +77,47 @@ export class ImportSourceLimitError extends Error {
         this.code = code;
     }
 }
+
+export type ImportArchiveBudget = {
+    consumeChecklistItems: (count: number) => void;
+    consumeEntities: (count: number) => void;
+    consumeRows: (count?: number) => void;
+};
+
+export const createImportArchiveBudget = (
+    limits: Readonly<ImportArchiveBudgetLimits> = DEFAULT_IMPORT_ARCHIVE_BUDGET_LIMITS,
+): ImportArchiveBudget => {
+    let checklistItems = 0;
+    let entities = 0;
+    let rows = 0;
+    const consume = (
+        count: number,
+        current: number,
+        maximum: number,
+        code: ImportSourceLimitCode,
+        noun: string,
+    ): number => {
+        const next = current + Math.max(0, count);
+        if (next > maximum) {
+            throw new ImportSourceLimitError(
+                code,
+                `The CSV files contain too many ${noun} across the archive. Keep exports to ${maximum} ${noun} or fewer.`,
+            );
+        }
+        return next;
+    };
+    return {
+        consumeChecklistItems: (count) => {
+            checklistItems = consume(count, checklistItems, limits.maxChecklistItems, 'archive-too-many-checklist-items', 'checklist items');
+        },
+        consumeEntities: (count) => {
+            entities = consume(count, entities, limits.maxEntities, 'archive-too-many-entities', 'records');
+        },
+        consumeRows: (count = 1) => {
+            rows = consume(count, rows, limits.maxRows, 'archive-too-many-rows', 'rows');
+        },
+    };
+};
 
 export const assertImportSourceFileSize = (
     size: number | null | undefined,
@@ -152,6 +210,7 @@ export const parseCsvRows = (
     text: string,
     delimiter: string,
     limits: Readonly<ImportCsvLimits> = DEFAULT_IMPORT_CSV_LIMITS,
+    archiveBudget?: ImportArchiveBudget,
 ): { hasUnclosedQuote: boolean; rows: string[][] } => {
     const rows: string[][] = [];
     let currentRow: string[] = [];
@@ -191,6 +250,7 @@ export const parseCsvRows = (
                 `The CSV contains too many rows. Keep exports to ${limits.maxRows} rows or fewer.`,
             );
         }
+        archiveBudget?.consumeRows();
         rows.push(currentRow);
         currentRow = [];
     };

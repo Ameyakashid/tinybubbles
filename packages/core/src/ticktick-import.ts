@@ -4,13 +4,16 @@ import {
     appendWarning,
     basename,
     buildHeaderIndex,
+    createImportArchiveBudget,
     dedupeStrings,
     decodeTextBytes,
     getCell,
+    ImportSourceLimitError,
     joinDescription,
     parseCsvRows,
     readImportSource,
     sanitizeCsvText,
+    type ImportArchiveBudget,
 } from './import-source-reader';
 import { normalizeRecurrenceForLoad } from './recurrence';
 import { normalizeTagId } from './store-helpers';
@@ -351,8 +354,12 @@ const appendSubtaskDetails = (parts: string[], child: NormalizedTickTickRecord):
     }
 };
 
-const parseTickTickRows = (csvText: string, counters: TickTickWarningCounters): ParsedTickTickImportData => {
-    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), TICKTICK_DELIMITER);
+const parseTickTickRows = (
+    csvText: string,
+    counters: TickTickWarningCounters,
+    archiveBudget: ImportArchiveBudget,
+): ParsedTickTickImportData => {
+    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), TICKTICK_DELIMITER, undefined, archiveBudget);
     if (hasUnclosedQuote) counters.unclosedQuotedFiles += 1;
     if (rows.length === 0) {
         counters.emptyExports += 1;
@@ -567,9 +574,13 @@ export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImp
     const fileName = basename(input.fileName);
     const counters = createWarningCounters();
     const parsedData: ParsedTickTickImportData = { areas: [], projects: [], tasks: [], warnings: [] };
+    const archiveBudget = createImportArchiveBudget();
 
     const parseOneCsv = (csvText: string): void => {
-        mergeParsedData(parsedData, parseTickTickRows(csvText, counters));
+        const parsed = parseTickTickRows(csvText, counters, archiveBudget);
+        archiveBudget.consumeEntities(parsed.areas.length + parsed.projects.length + parsed.tasks.length);
+        archiveBudget.consumeChecklistItems(parsed.tasks.reduce((sum, task) => sum + task.checklist.length, 0));
+        mergeParsedData(parsedData, parsed);
     };
 
     try {
@@ -588,7 +599,8 @@ export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImp
                 }
                 try {
                     parseOneCsv(decodeTextBytes(entryBytes));
-                } catch {
+                } catch (error) {
+                    if (error instanceof ImportSourceLimitError) throw error;
                     counters.invalidCsvFiles += 1;
                 }
             });

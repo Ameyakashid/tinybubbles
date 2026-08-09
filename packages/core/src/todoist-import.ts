@@ -3,13 +3,16 @@ import {
     appendWarning,
     basename,
     buildHeaderIndex,
+    createImportArchiveBudget,
     decodeTextBytes,
     detectDelimiter,
     getCell,
+    ImportSourceLimitError,
     joinDescription,
     parseCsvRows,
     readImportSource,
     sanitizeCsvText,
+    type ImportArchiveBudget,
 } from './import-source-reader';
 import { ensureDeviceId, normalizeTagId } from './store-helpers';
 import type { AppData, Project, Section, Task, TaskPriority } from './types';
@@ -308,10 +311,11 @@ const finalizeParsedTask = (task: MutableParsedTodoistTask): ParsedTodoistTask =
 const parseTodoistRows = (
     csvText: string,
     fileName: string,
-    counters: TodoistWarningCounters
+    counters: TodoistWarningCounters,
+    archiveBudget: ImportArchiveBudget,
 ): ParsedTodoistProject => {
     const delimiter = detectDelimiter(csvText);
-    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), delimiter);
+    const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), delimiter, undefined, archiveBudget);
     if (hasUnclosedQuote) {
         counters.unclosedQuotedFiles += 1;
     }
@@ -556,9 +560,12 @@ export const parseTodoistImportSource = (input: TodoistFileInput): TodoistImport
     const counters = createWarningCounters();
     const parsedProjects: ParsedTodoistProject[] = [];
     const errors: string[] = [];
+    const archiveBudget = createImportArchiveBudget();
 
     const parseOneCsv = (csvText: string, sourceName: string): void => {
-        const project = parseTodoistRows(csvText, sourceName, counters);
+        const project = parseTodoistRows(csvText, sourceName, counters, archiveBudget);
+        archiveBudget.consumeEntities(1 + project.sections.length + project.tasks.length);
+        archiveBudget.consumeChecklistItems(project.checklistItemCount);
         if (project.tasks.length > 0) {
             parsedProjects.push(project);
         }
@@ -580,7 +587,8 @@ export const parseTodoistImportSource = (input: TodoistFileInput): TodoistImport
                 }
                 try {
                     parseOneCsv(decodeTextBytes(entryBytes), entryName);
-                } catch {
+                } catch (error) {
+                    if (error instanceof ImportSourceLimitError) throw error;
                     counters.invalidCsvFiles += 1;
                 }
             });
