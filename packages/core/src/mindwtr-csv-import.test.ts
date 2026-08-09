@@ -461,6 +461,31 @@ describe('mindwtr csv import', () => {
         expect(applied.importedTaskCount).toBe(2);
     });
 
+    it('keeps row fallbacks distinct across separately imported standalone CSV files', () => {
+        const firstParsed = parseMindwtrCsvImportSource({
+            fileName: 'first.csv',
+            text: buildCsv(['Title', 'Project'], [['First file task', 'Ops']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const secondParsed = parseMindwtrCsvImportSource({
+            fileName: 'second.csv',
+            text: buildCsv(['Title', 'Project'], [['Second file task', 'Personal']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), firstParsed, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const second = applyMindwtrCsvImport(first.data, secondParsed, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedTaskCount).toBe(1);
+        expect(second.data.tasks.map((task) => task.title)).toEqual([
+            'First file task',
+            'Second file task',
+        ]);
+        expect(second.warnings.some((warning) => warning.includes('already imported'))).toBe(false);
+    });
+
     it('normalizes a date-only Created At to a full UTC instant (C2)', () => {
         const csv = buildCsv(['Title', 'Created At'], [['Old task', '2026-08-01']]);
 
@@ -889,6 +914,55 @@ describe('mindwtr csv import', () => {
 
         expect(result.warnings.some((warning) => warning.includes('duplicated an earlier row'))).toBe(false);
         expect(applied.importedTaskCount).toBe(2);
+    });
+
+    it('keeps an explicit row-shaped ID distinct from a synthetic row fallback', () => {
+        const csv = buildCsv(
+            ['Title', 'ID'],
+            [
+                ['Synthetic fallback', ''],
+                ['Explicit stable ID', 'row-2'],
+            ],
+        );
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+        const applied = applyMindwtrCsvImport(
+            mockAppData([], [], []),
+            result.parsedData as ParsedMindwtrCsvImportData,
+        );
+
+        expect(result.preview?.taskCount).toBe(2);
+        expect(result.warnings.some((warning) => warning.includes('duplicated an earlier row'))).toBe(false);
+        expect(applied.importedTaskCount).toBe(2);
+        expect(applied.data.tasks.map((task) => task.title)).toEqual([
+            'Synthetic fallback',
+            'Explicit stable ID',
+        ]);
+    });
+
+    it('reuses the preceding global task ID for an unambiguous explicit CSV ID', () => {
+        const parsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title', 'Project', 'ID'], [['Existing task', 'Ops', 'stable-task']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), parsed, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const precedingGlobalId = generateDeterministicUUID(
+            'mindwtr:csv-import:v1:task:stable-task',
+        );
+        const precedingData = {
+            ...first.data,
+            tasks: first.data.tasks.map((task) => ({ ...task, id: precedingGlobalId })),
+        };
+
+        const second = applyMindwtrCsvImport(precedingData, parsed, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]?.id).toBe(precedingGlobalId);
     });
 
     it('does not duplicate records when a file with an ID column is imported again', () => {

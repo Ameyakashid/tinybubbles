@@ -91,6 +91,8 @@ export type ParsedMindwtrCsvTask = {
     reviewAt?: string;
     sectionSourceKey?: string;
     sourceId: string;
+    sourceIdentityKind: 'explicit-id' | 'row-fallback';
+    sourceKey: string;
     startTime?: string;
     status: TaskStatus;
     tags: string[];
@@ -198,7 +200,19 @@ const projectSourceKeyFor = (areaSourceKey: string | undefined, projectName: str
     encodeSourceKeyTuple(...(areaSourceKey ? [areaSourceKey] : []), normalizeSourceKey(projectName))
 );
 
-const canonicalTaskSourceKeyFor = (sourceId: string): string => encodeSourceKeyTuple(sourceId);
+const legacyCanonicalTaskSourceKeyFor = (sourceId: string): string => encodeSourceKeyTuple(sourceId);
+
+const explicitTaskSourceKeyFor = (sourceId: string): string => (
+    encodeSourceKeyTuple('explicit-id', sourceId)
+);
+
+const rowTaskSourceKeyFor = (
+    sourceKind: 'standalone-file' | 'zip-entry',
+    sourceName: string,
+    rowNumber: number,
+): string => encodeSourceKeyTuple('row-fallback', sourceKind, sourceName, String(rowNumber));
+
+const couldBeLegacyRowFallback = (sourceId: string): boolean => /(?:^|:)row-\d+$/u.test(sourceId);
 
 const colonProjectSourceKeyFor = (areaSourceKey: string | undefined, projectName: string): string => (
     `${areaSourceKey ? `${areaSourceKey}:` : ''}${normalizeSourceKey(projectName)}`
@@ -353,13 +367,15 @@ const parseTimestampCell = (raw: string, counters: MindwtrCsvWarningCounters): s
     return value;
 };
 
-// `sourcePrefix` is the ZIP entry name (empty for a lone CSV file). Without it, row 2 of a.csv
-// and row 2 of b.csv in one ZIP would both fall back to the same "row-2" id and collapse into
-// one task — see C1 in the review.
+type MindwtrCsvRowSource = {
+    kind: 'standalone-file' | 'zip-entry';
+    name: string;
+};
+
 const parseMindwtrCsvRows = (
     csvText: string,
     counters: MindwtrCsvWarningCounters,
-    sourcePrefix: string
+    source: MindwtrCsvRowSource,
 ): ParsedMindwtrCsvImportData => {
     const delimiter = detectMindwtrCsvDelimiter(csvText);
     const { rows, hasUnclosedQuote } = parseCsvRows(sanitizeCsvText(csvText), delimiter);
@@ -435,6 +451,12 @@ const parseMindwtrCsvRows = (
         const completedAt = parseTimestampCell(readCell(row, headerIndex, 'COMPLETED AT'), counters);
         const status = resolveStatus(readCell(row, headerIndex, 'STATUS'), Boolean(projectSourceKey), Boolean(completedAt), counters);
         const idColumn = readCell(row, headerIndex, 'ID').trim();
+        const rowNumber = rowIndex + 1;
+        const sourceIdentityKind = idColumn ? 'explicit-id' : 'row-fallback';
+        const sourceId = idColumn || `${source.kind === 'zip-entry' ? `${source.name}:` : ''}row-${rowNumber}`;
+        const sourceKey = idColumn
+            ? explicitTaskSourceKeyFor(idColumn)
+            : rowTaskSourceKeyFor(source.kind, source.name, rowNumber);
 
         tasks.push({
             areaSourceKey,
@@ -454,7 +476,9 @@ const parseMindwtrCsvRows = (
             projectSourceKey,
             reviewAt: parseDateCell(readCell(row, headerIndex, 'REVIEW DATE'), counters),
             sectionSourceKey,
-            sourceId: idColumn || `${sourcePrefix}row-${rowIndex + 1}`,
+            sourceId,
+            sourceIdentityKind,
+            sourceKey,
             startTime: parseDateCell(readCell(row, headerIndex, 'START DATE'), counters),
             status,
             tags: parseTags(readCell(row, headerIndex, 'TAGS')),
@@ -531,8 +555,8 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     const counters = createWarningCounters();
     const parsedData: ParsedMindwtrCsvImportData = { areas: [], projects: [], sections: [], tasks: [], warnings: [] };
 
-    const parseOneCsv = (csvText: string, sourcePrefix = ''): void => {
-        mergeParsedData(parsedData, parseMindwtrCsvRows(csvText, counters, sourcePrefix));
+    const parseOneCsv = (csvText: string, source: MindwtrCsvRowSource): void => {
+        mergeParsedData(parsedData, parseMindwtrCsvRows(csvText, counters, source));
     };
 
     try {
@@ -550,13 +574,13 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
                     return;
                 }
                 try {
-                    parseOneCsv(decodeTextBytes(entryBytes), `${entryName}:`);
+                    parseOneCsv(decodeTextBytes(entryBytes), { kind: 'zip-entry', name: entryName });
                 } catch {
                     counters.invalidCsvFiles += 1;
                 }
             });
         } else {
-            parseOneCsv(source.text);
+            parseOneCsv(source.text, { kind: 'standalone-file', name: fileName });
         }
     } catch (error) {
         return {
@@ -572,7 +596,7 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     // to a row apply will actually drop and delimiter-shaped but distinct IDs cannot false-positive.
     const seenTaskKeys = new Set<string>();
     parsedData.tasks.forEach((task) => {
-        const key = canonicalTaskSourceKeyFor(task.sourceId);
+        const key = task.sourceKey;
         if (seenTaskKeys.has(key)) counters.duplicateIds += 1;
         else seenTaskKeys.add(key);
     });
@@ -626,12 +650,15 @@ export const applyMindwtrCsvImport = (
     const projectBySourceKey = new Map(parsedData.projects.map((project) => [project.sourceKey, project]));
     const taskSourceKeyFor = (task: ParsedMindwtrCsvTask): string => {
         const project = task.projectSourceKey ? projectBySourceKey.get(task.projectSourceKey) : undefined;
+        if (task.sourceKey && (!project || project.sourceKey === projectSourceKeyFor(project.areaSourceKey, project.name))) {
+            return task.sourceKey;
+        }
         if (project && project.sourceKey !== projectSourceKeyFor(project.areaSourceKey, project.name)) {
             return `${task.projectSourceKey}:${task.sourceId}`;
         }
         // The stable ID (or ZIP-qualified row fallback) owns task identity; moving containers
         // in a corrected export must not manufacture a second task.
-        return canonicalTaskSourceKeyFor(task.sourceId);
+        return legacyCanonicalTaskSourceKeyFor(task.sourceId);
     };
     const tasksForImport = parsedData.tasks.map((task) => ({
         ...task,
@@ -774,6 +801,18 @@ export const applyMindwtrCsvImport = (
         const scopedId = createMindwtrCsvImportId('task', task.sourceKey);
         if (currentTaskById.has(scopedId)) {
             resolvedIds.task.set(task.sourceKey, scopedId);
+            return;
+        }
+        const precedingGlobalId = createMindwtrCsvImportId(
+            'task',
+            legacyCanonicalTaskSourceKeyFor(task.sourceId),
+        );
+        if (
+            task.sourceIdentityKind === 'explicit-id'
+            && !couldBeLegacyRowFallback(task.sourceId)
+            && currentTaskById.has(precedingGlobalId)
+        ) {
+            resolvedIds.task.set(task.sourceKey, precedingGlobalId);
             return;
         }
         const project = task.projectSourceKey ? projectBySourceKey.get(task.projectSourceKey) : undefined;
