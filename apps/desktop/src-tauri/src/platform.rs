@@ -99,8 +99,13 @@ fn path_is_under_allowed_root(path: &Path, allowed_roots: &[PathBuf]) -> bool {
         .any(|root| path == root || path.starts_with(root))
 }
 
+// Existing files AND directories are user-openable wherever they live: a user-added
+// link may point anywhere on their machine, and opening a folder in the file manager
+// is strictly less dangerous than opening a file (which is already allowed and can
+// execute). The managed-roots check remains for paths that don't exist locally yet
+// (e.g. Flatpak portal documents).
 fn path_is_openable(path: &Path, allowed_roots: &[PathBuf]) -> bool {
-    path_is_under_allowed_root(path, allowed_roots) || path.is_file()
+    path_is_under_allowed_root(path, allowed_roots) || path.is_file() || path.is_dir()
 }
 
 #[cfg(target_os = "macos")]
@@ -775,7 +780,7 @@ pub(crate) fn open_path(app: tauri::AppHandle, path: String) -> Result<bool, Str
     let normalized = normalize_open_path(&path)?;
     let allowed_roots = allowed_open_roots(&app);
     if !path_is_openable(&normalized, &allowed_roots) {
-        return Err("Path is outside Mindwtr-managed locations.".to_string());
+        return Err("Path does not exist or cannot be opened.".to_string());
     }
     open::that(normalized).map_err(|e| e.to_string())?;
     Ok(true)
@@ -869,10 +874,17 @@ mod tests {
     }
 
     #[test]
-    fn path_is_openable_rejects_unmanaged_directories() {
+    fn path_is_openable_allows_existing_user_linked_directories() {
         let temp = tempfile::tempdir().expect("should create temp dir");
 
-        assert!(!path_is_openable(temp.path(), &[]));
+        assert!(path_is_openable(temp.path(), &[]));
+    }
+
+    #[test]
+    fn path_is_openable_rejects_missing_paths() {
+        let temp = tempfile::tempdir().expect("should create temp dir");
+
+        assert!(!path_is_openable(&temp.path().join("does-not-exist"), &[]));
     }
 }
 
