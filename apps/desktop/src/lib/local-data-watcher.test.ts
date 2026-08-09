@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { flushPendingSave, setStorageAdapter, useTaskStore } from '@mindwtr/core';
+import {
+    flushPendingSave,
+    runDataTransferTransactionWithoutSnapshot,
+    setStorageAdapter,
+    useTaskStore,
+} from '@mindwtr/core';
 import type { AppData, StorageAdapter } from '@mindwtr/core';
 import { __localDataWatcherTestUtils, markLocalSqliteWrite, markLocalWrite, start } from './local-data-watcher';
 
@@ -70,6 +75,7 @@ const flushScheduledTimers = async () => {
         callbacks.forEach(([, callback]) => callback());
         await Promise.resolve();
     }
+    await __localDataWatcherTestUtils.waitForPendingMergeForTests();
 };
 
 const emptyData = (): AppData => ({
@@ -450,6 +456,74 @@ describe('local-data-watcher', () => {
         expect(saveCalls).toHaveLength(1);
         expect(saveCalls[0]?.tasks.some((task) => task.id === 'quick-add-1')).toBe(true);
         expect(scheduledTimers.size).toBe(0);
+    });
+
+    it('waits for a full-document transfer before reading and merging an external snapshot', async () => {
+        const transferTask = {
+            id: 'transfer-1',
+            title: 'Restored during transfer',
+            status: 'next' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        const externalTask = {
+            id: 'external-1',
+            title: 'Written by another process',
+            status: 'inbox' as const,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        const transferData = { ...emptyData(), tasks: [transferTask] } as AppData;
+        const externalSnapshot = { ...emptyData(), tasks: [externalTask] } as AppData;
+        let currentData = emptyData();
+        let releaseRefresh: (() => void) | undefined;
+        let markRefreshStarted: (() => void) | undefined;
+        const refreshGate = new Promise<void>((resolve) => {
+            releaseRefresh = resolve;
+        });
+        const refreshStarted = new Promise<void>((resolve) => {
+            markRefreshStarted = resolve;
+        });
+        const readDataJson = vi.fn(async () => externalSnapshot);
+
+        __localDataWatcherTestUtils.setDependenciesForTests({
+            readDataJson,
+            getSnapshot: () => currentData,
+            merge: (local, incoming) => ({
+                ...local,
+                tasks: [...local.tasks, ...incoming.tasks],
+            }),
+            persistMergedData: async (merged) => {
+                currentData = merged;
+            },
+        });
+
+        const transfer = runDataTransferTransactionWithoutSnapshot({
+            operation: 'test restore',
+            flushPendingSave: async () => undefined,
+            getCurrentChangeAt: () => 0,
+            readCurrentData: async () => currentData,
+            apply: () => ({ data: transferData, result: undefined }),
+            persistData: async (data) => {
+                currentData = data;
+            },
+            refreshData: async () => {
+                markRefreshStarted?.();
+                await refreshGate;
+                currentData = transferData;
+            },
+        });
+
+        await refreshStarted;
+        const watcherRefresh = __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+
+        expect(readDataJson).not.toHaveBeenCalled();
+
+        releaseRefresh?.();
+        await Promise.all([transfer, watcherRefresh]);
+
+        expect(readDataJson).toHaveBeenCalledTimes(1);
+        expect(currentData.tasks.map((task) => task.id)).toEqual(['transfer-1', 'external-1']);
     });
 
     it('persists merged changes through store save queue (without direct tauri save_data calls)', async () => {

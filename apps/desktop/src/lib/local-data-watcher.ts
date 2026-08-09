@@ -4,6 +4,7 @@ import {
     getInMemoryAppDataSnapshot,
     mergeAppData,
     normalizeAppData,
+    runSerializedSyncDocumentOperation,
     useTaskStore,
 } from '@mindwtr/core';
 import { invokeNative } from './tauri-invoke';
@@ -23,11 +24,6 @@ const timerHost = getDesktopTimerHost();
 type FsEvent = {
     path?: string;
     paths?: string[];
-};
-
-type PendingExternalData = {
-    data: AppData;
-    hash: string;
 };
 
 type LocalDataWatcherDependencies = {
@@ -110,7 +106,7 @@ let sqliteIgnoreDrainTimer: ReturnType<typeof setTimeout> | null = null;
 let hasPendingChangeDuringIgnore = false;
 let hasPendingSqliteChangeDuringSelfWrite = false;
 let pendingSqliteChangePaths: string[] = [];
-let pendingExternalData: PendingExternalData | null = null;
+let pendingExternalChange = false;
 let mergeInFlight: Promise<void> | null = null;
 let sqliteRefreshInFlight: Promise<void> | null = null;
 
@@ -327,21 +323,22 @@ const scheduleSqliteIgnoreDrain = () => {
     }, remainingMs + IGNORE_DRAIN_PADDING_MS);
 };
 
-const runPendingMerge = () => {
-    if (mergeInFlight) return;
+const runPendingMerge = (): Promise<void> => {
+    if (mergeInFlight) return mergeInFlight;
 
     mergeInFlight = (async () => {
-        while (pendingExternalData) {
-            const externalData = pendingExternalData;
-            pendingExternalData = null;
-            await mergeExternalData(externalData);
+        while (pendingExternalChange) {
+            pendingExternalChange = false;
+            await mergeExternalData();
         }
     })().finally(() => {
         mergeInFlight = null;
-        if (pendingExternalData) {
-            runPendingMerge();
+        if (pendingExternalChange) {
+            void runPendingMerge();
         }
     });
+
+    return mergeInFlight;
 };
 
 const stripSqliteRefreshBookkeeping = (data: AppData): AppData => {
@@ -392,36 +389,56 @@ const markSqliteSelfWriteWindow = (): void => {
     );
 };
 
-async function mergeExternalData(externalData: PendingExternalData): Promise<void> {
-    try {
-        await flushPendingSave();
+async function mergeExternalData(): Promise<void> {
+    // Full-document sync, imports/restores, and this watcher all enter this
+    // lane before reading their current inputs. A data transfer acquires its
+    // store-write barrier only after it reaches the front of the same lane, so
+    // the watcher never waits on that barrier while holding an earlier lock.
+    await runSerializedSyncDocumentOperation(async () => {
+        try {
+            await flushPendingSave();
 
-        const localSnapshot = localDataWatcherDependencies.getSnapshot();
-        const normalizedLocal = localDataWatcherDependencies.normalize(localSnapshot);
-        const localPayload = toStableJson(normalizedLocal);
-        const localHash = await localDataWatcherDependencies.hashPayload(localPayload);
+            const rawData = await localDataWatcherDependencies.readDataJson();
+            const normalizedExternal = localDataWatcherDependencies.normalize(rawData);
+            const externalPayload = toStableJson(normalizedExternal);
 
-        if (localHash === externalData.hash) {
-            lastKnownHash = externalData.hash;
-            return;
-        }
+            const matchedSelfWriteIndex = pendingSelfWrites.findIndex((entry) => entry.payload === externalPayload);
+            if (matchedSelfWriteIndex >= 0) {
+                lastKnownHash = await localDataWatcherDependencies.hashPayload(externalPayload);
+                pendingSelfWrites.splice(matchedSelfWriteIndex, 1);
+                return;
+            }
 
-        const merged = localDataWatcherDependencies.merge(normalizedLocal, externalData.data);
-        const normalizedMerged = localDataWatcherDependencies.normalize(merged);
-        const mergedPayload = toStableJson(normalizedMerged);
-        const mergedHash = await localDataWatcherDependencies.hashPayload(mergedPayload);
+            const externalHash = await localDataWatcherDependencies.hashPayload(externalPayload);
+            if (externalHash === lastKnownHash) return;
 
-        if (mergedHash === localHash) {
+            const localSnapshot = localDataWatcherDependencies.getSnapshot();
+            const normalizedLocal = localDataWatcherDependencies.normalize(localSnapshot);
+            const localPayload = toStableJson(normalizedLocal);
+            const localHash = await localDataWatcherDependencies.hashPayload(localPayload);
+
+            if (localHash === externalHash) {
+                lastKnownHash = externalHash;
+                return;
+            }
+
+            const merged = localDataWatcherDependencies.merge(normalizedLocal, normalizedExternal);
+            const normalizedMerged = localDataWatcherDependencies.normalize(merged);
+            const mergedPayload = toStableJson(normalizedMerged);
+            const mergedHash = await localDataWatcherDependencies.hashPayload(mergedPayload);
+
+            if (mergedHash === localHash) {
+                lastKnownHash = mergedHash;
+                return;
+            }
+
+            await localDataWatcherDependencies.persistMergedData(normalizedMerged);
             lastKnownHash = mergedHash;
-            return;
+            localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
+        } catch (error) {
+            localDataWatcherDependencies.logWarn('[local-data-watcher] Failed to merge external data: ' + String(error));
         }
-
-        await localDataWatcherDependencies.persistMergedData(normalizedMerged);
-        lastKnownHash = mergedHash;
-        localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
-    } catch (error) {
-        localDataWatcherDependencies.logWarn('[local-data-watcher] Failed to merge external data: ' + String(error));
-    }
+    });
 }
 
 const runSqliteRefresh = (): Promise<void> => {
@@ -543,57 +560,22 @@ async function handleExternalChange(options: { immediate?: boolean; ignoreSelfWi
         return;
     }
 
-    try {
-        const rawData = await localDataWatcherDependencies.readDataJson();
-        const normalized = localDataWatcherDependencies.normalize(rawData);
-        const payload = toStableJson(normalized);
+    pendingExternalChange = true;
 
-        const matchedSelfWriteIndex = pendingSelfWrites.findIndex((entry) => entry.payload === payload);
-        if (matchedSelfWriteIndex >= 0) {
-            lastKnownHash = await localDataWatcherDependencies.hashPayload(payload);
-            pendingSelfWrites.splice(matchedSelfWriteIndex, 1);
-            return;
-        }
-
-        const hash = await localDataWatcherDependencies.hashPayload(payload);
-
-        if (hash === lastKnownHash) {
-            if (options.immediate && pendingExternalData?.hash === hash) {
-                if (debounceTimer) {
-                    localDataWatcherDependencies.cancelSchedule(debounceTimer);
-                    debounceTimer = null;
-                }
-                const externalData = pendingExternalData;
-                pendingExternalData = null;
-                await mergeExternalData(externalData);
-            }
-            return;
-        }
-        lastKnownHash = hash;
-
-        if (options.immediate) {
-            if (debounceTimer) {
-                localDataWatcherDependencies.cancelSchedule(debounceTimer);
-                debounceTimer = null;
-            }
-            pendingExternalData = null;
-            await mergeExternalData({ data: normalized, hash });
-            return;
-        }
-
-        if (debounceTimer) {
-            localDataWatcherDependencies.cancelSchedule(debounceTimer);
-            debounceTimer = null;
-        }
-
-        pendingExternalData = { data: normalized, hash };
-        debounceTimer = localDataWatcherDependencies.schedule(() => {
-            debounceTimer = null;
-            runPendingMerge();
-        }, DEBOUNCE_MS);
-    } catch (error) {
-        localDataWatcherDependencies.logWarn('[local-data-watcher] Failed to read external change: ' + String(error));
+    if (debounceTimer) {
+        localDataWatcherDependencies.cancelSchedule(debounceTimer);
+        debounceTimer = null;
     }
+
+    if (options.immediate) {
+        await runPendingMerge();
+        return;
+    }
+
+    debounceTimer = localDataWatcherDependencies.schedule(() => {
+        debounceTimer = null;
+        void runPendingMerge();
+    }, DEBOUNCE_MS);
 }
 
 export async function refreshFromDiskNow(): Promise<void> {
@@ -690,7 +672,7 @@ export function stop(): void {
     hasPendingChangeDuringIgnore = false;
     hasPendingSqliteChangeDuringSelfWrite = false;
     pendingSqliteChangePaths = [];
-    pendingExternalData = null;
+    pendingExternalChange = false;
     pendingSelfWrites = [];
     sqliteIgnoreUntil = 0;
     sqliteSelfWriteUntil = 0;
@@ -712,10 +694,15 @@ export const __localDataWatcherTestUtils = {
         };
     },
     async triggerChangeForTests() {
-        await handleExternalChange();
+        await handleExternalChange({ immediate: true });
     },
     async refreshFromDiskNowForTests() {
         await refreshFromDiskNow();
+    },
+    async waitForPendingMergeForTests() {
+        while (mergeInFlight) {
+            await mergeInFlight;
+        }
     },
     resetForTests() {
         stop();
