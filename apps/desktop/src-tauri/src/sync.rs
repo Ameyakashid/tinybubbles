@@ -23,7 +23,7 @@ use crate::config::{
     get_keyring_secret, read_config, read_dropbox_credential_state, set_keyring_secret,
     update_dropbox_credential_state, write_config_files,
 };
-use crate::storage::{get_config_path, get_secrets_path, read_json_with_retries};
+use crate::storage::{get_config_path, get_secrets_path, read_json_with_retries_validated};
 #[cfg(target_os = "macos")]
 use crate::{
     mindwtr_macos_create_security_bookmark, mindwtr_macos_free_bookmark_string,
@@ -3612,6 +3612,92 @@ mod tests {
         let value = read_sync_file_from_dir(dir.path()).expect("recover previous backup");
 
         assert_eq!(value["tasks"][0]["id"], "previous-backup");
+    }
+
+    #[test]
+    fn parseable_non_object_primary_recovers_previous_primary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let primary = dir.path().join("data.json");
+        let previous = dir.path().join("data.json.previous");
+        fs::write(&primary, b"null").expect("write wrong-shape primary");
+        fs::write(&previous, br#"{"tasks":[{"id":"previous-primary"}]}"#)
+            .expect("write previous primary");
+
+        let value = read_sync_file_from_dir(dir.path()).expect("recover previous primary");
+
+        assert_eq!(value["tasks"][0]["id"], "previous-primary");
+    }
+
+    #[test]
+    fn wrong_typed_sync_surfaces_fall_through_to_next_recovery_candidate() {
+        for (surface, wrong_value) in [
+            ("tasks", serde_json::json!({})),
+            ("projects", serde_json::json!(false)),
+            ("sections", serde_json::json!("wrong")),
+            ("areas", serde_json::json!(1)),
+            ("people", serde_json::json!(null)),
+            ("settings", serde_json::json!([])),
+        ] {
+            let dir = tempfile::tempdir().expect("temp dir");
+            let previous = dir.path().join("data.json.previous");
+            let backup = dir.path().join("data.json.bak");
+            fs::write(
+                &previous,
+                serde_json::to_vec(&serde_json::json!({ (surface): wrong_value }))
+                    .expect("serialize wrong-shape candidate"),
+            )
+            .expect("write wrong-shape previous primary");
+            fs::write(&backup, br#"{"tasks":[{"id":"valid-backup"}]}"#)
+                .expect("write valid backup");
+
+            let value = read_sync_file_from_dir(dir.path()).expect("recover valid backup");
+
+            assert_eq!(
+                value["tasks"][0]["id"], "valid-backup",
+                "surface {surface} should not be normalized into a valid candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn corrupt_previous_primary_and_backup_recover_valid_previous_backup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        fs::write(dir.path().join("data.json.previous"), b"[]")
+            .expect("write wrong-shape previous primary");
+        fs::write(dir.path().join("data.json.bak"), br#"{"tasks":"wrong"}"#)
+            .expect("write wrong-shape backup");
+        fs::write(
+            dir.path().join("data.json.bak.previous"),
+            br#"{"tasks":[{"id":"previous-backup"}]}"#,
+        )
+        .expect("write valid previous backup");
+
+        let value = read_sync_file_from_dir(dir.path()).expect("recover previous backup");
+
+        assert_eq!(value["tasks"][0]["id"], "previous-backup");
+    }
+
+    #[test]
+    fn corrupt_recovery_chain_falls_through_to_seed_backup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        fs::write(dir.path().join("data.json.previous"), b"null")
+            .expect("write wrong-shape previous primary");
+        fs::write(dir.path().join("data.json.bak"), br#"{"areas":false}"#)
+            .expect("write wrong-shape backup");
+        fs::write(
+            dir.path().join("data.json.bak.previous"),
+            br#"{"settings":[]}"#,
+        )
+        .expect("write wrong-shape previous backup");
+        fs::write(
+            dir.path().join("mindwtr-backup-2026-08-09.json"),
+            br#"{"tasks":[{"id":"seed-backup"}]}"#,
+        )
+        .expect("write valid seed backup");
+
+        let value = read_sync_file_from_dir(dir.path()).expect("recover seed backup");
+
+        assert_eq!(value["tasks"][0]["id"], "seed-backup");
     }
 
     #[test]
@@ -7280,11 +7366,35 @@ where
     replace_file_preserving_previous(replacement, target, previous, "sync file", remove, rename)
 }
 
+fn read_sync_candidate(path: &Path, attempts: usize) -> Result<Value, String> {
+    read_json_with_retries_validated(path, attempts, |value| {
+        let Some(object) = value.as_object() else {
+            return Err("Invalid sync payload shape: expected an object".to_string());
+        };
+        for surface in ["tasks", "projects", "sections", "areas", "people"] {
+            if object.get(surface).is_some_and(|entry| !entry.is_array()) {
+                return Err(format!(
+                    "Invalid sync payload shape: {surface} must be an array when present"
+                ));
+            }
+        }
+        if object
+            .get("settings")
+            .is_some_and(|entry| !entry.is_object())
+        {
+            return Err(
+                "Invalid sync payload shape: settings must be an object when present".to_string(),
+            );
+        }
+        Ok(())
+    })
+}
+
 fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<Value> {
     [backup_file, previous_file]
         .into_iter()
         .filter(|path| path.exists())
-        .find_map(|path| read_json_with_retries(path, 2).ok())
+        .find_map(|path| read_sync_candidate(path, 2).ok())
 }
 
 fn read_sync_recovery(
@@ -7293,7 +7403,7 @@ fn read_sync_recovery(
     backup_previous_file: &Path,
 ) -> Option<Value> {
     if primary_previous_file.exists() {
-        if let Ok(value) = read_json_with_retries(primary_previous_file, 2) {
+        if let Ok(value) = read_sync_candidate(primary_previous_file, 2) {
             return Some(value);
         }
     }
@@ -7338,10 +7448,10 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
 
     let read_seed_or_legacy_file = || -> Option<Result<Value, String>> {
         if legacy_sync_file.exists() {
-            return Some(read_json_with_retries(&legacy_sync_file, 1));
+            return Some(read_sync_candidate(&legacy_sync_file, 1));
         }
         if let Some(seed_file) = find_seed_backup_file(sync_dir) {
-            return Some(read_json_with_retries(&seed_file, 1));
+            return Some(read_sync_candidate(&seed_file, 1));
         }
         None
     };
@@ -7376,7 +7486,7 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
         return Ok(empty_remote_app_data());
     }
 
-    match read_json_with_retries(&sync_file, 5) {
+    match read_sync_candidate(&sync_file, 5) {
         Ok(value) => Ok(value),
         Err(primary_err) => {
             if let Some(value) =

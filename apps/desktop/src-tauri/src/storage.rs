@@ -8164,7 +8164,14 @@ fn normalize_sync_value(value: Value) -> Value {
     })
 }
 
-pub(crate) fn read_json_with_retries(path: &Path, attempts: usize) -> Result<Value, String> {
+pub(crate) fn read_json_with_retries_validated<Validate>(
+    path: &Path,
+    attempts: usize,
+    validate: Validate,
+) -> Result<Value, String>
+where
+    Validate: Fn(&Value) -> Result<(), String>,
+{
     let mut last_err: Option<String> = None;
     for attempt in 0..attempts {
         // Re-check for iCloud eviction on each retry — the file may have been
@@ -8179,7 +8186,10 @@ pub(crate) fn read_json_with_retries(path: &Path, attempts: usize) -> Result<Val
 
         match fs::read_to_string(path) {
             Ok(content) => match parse_json_relaxed(&content) {
-                Ok(value) => return Ok(normalize_sync_value(value)),
+                Ok(value) => match validate(&value) {
+                    Ok(()) => return Ok(normalize_sync_value(value)),
+                    Err(error) => last_err = Some(error),
+                },
                 Err(e) => last_err = Some(e.to_string()),
             },
             Err(e) => last_err = Some(e.to_string()),
@@ -8191,4 +8201,8 @@ pub(crate) fn read_json_with_retries(path: &Path, attempts: usize) -> Result<Val
         }
     }
     Err(last_err.unwrap_or_else(|| "Failed to read sync file".to_string()))
+}
+
+pub(crate) fn read_json_with_retries(path: &Path, attempts: usize) -> Result<Value, String> {
+    read_json_with_retries_validated(path, attempts, |_| Ok(()))
 }
