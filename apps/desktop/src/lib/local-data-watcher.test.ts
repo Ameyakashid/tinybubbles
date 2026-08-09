@@ -380,6 +380,59 @@ describe('local-data-watcher', () => {
         expect(refreshStorageData).toHaveBeenCalledTimes(3);
     });
 
+    it('drains an external WAL event that arrives during an in-flight no-op refresh', async () => {
+        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const externalTask = {
+            id: 'external-during-refresh',
+            title: 'Written while refresh was in flight',
+            status: 'inbox' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        let diskTasks: AppData['tasks'] = [];
+        let releaseFirstRefresh: (() => void) | undefined;
+        let markFirstRefreshStarted: (() => void) | undefined;
+        const firstRefreshGate = new Promise<void>((resolve) => {
+            releaseFirstRefresh = resolve;
+        });
+        const firstRefreshStarted = new Promise<void>((resolve) => {
+            markFirstRefreshStarted = resolve;
+        });
+        const refreshStorageData = vi.fn(async () => {
+            const loadedTasks = diskTasks.slice();
+            if (refreshStorageData.mock.calls.length === 1) {
+                markFirstRefreshStarted?.();
+                await firstRefreshGate;
+            }
+            useTaskStore.setState({ tasks: loadedTasks, _allTasks: loadedTasks });
+        });
+
+        __localDataWatcherTestUtils.setDependenciesForTests({
+            watchFile: async (path, callback) => {
+                watchers.push({ path, callback });
+                return () => undefined;
+            },
+            refreshStorageData,
+        });
+
+        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+
+        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        await flushScheduledTimers();
+        await firstRefreshStarted;
+
+        diskTasks = [externalTask];
+        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+
+        releaseFirstRefresh?.();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
+        await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
+
+        expect(refreshStorageData).toHaveBeenCalledTimes(2);
+        expect(useTaskStore.getState().tasks.map((task) => task.id)).toEqual(['external-during-refresh']);
+    });
+
     it('does not treat sync bookkeeping-only SQLite refreshes as app data changes', async () => {
         const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
         const logInfo = vi.fn();

@@ -679,8 +679,11 @@ async function handleSqliteChange(options: { immediate?: boolean; paths?: string
     sqliteDebounceTimer = localDataWatcherDependencies.schedule(() => {
         sqliteDebounceTimer = null;
         if (scheduledDuringRefresh && localDataWatcherDependencies.now() < sqliteIgnoreUntil) {
+            hasPendingSqliteChangeDuringSelfWrite = true;
+            pendingSqliteChangePaths = paths.slice(0, 8);
+            scheduleSqliteIgnoreDrain();
             localDataWatcherDependencies.logInfo(
-                '[local-data-watcher] SQLite scheduled refresh skipped after no-op window',
+                '[local-data-watcher] SQLite scheduled refresh deferred after no-op window',
                 buildSqliteWatcherTraceExtra(paths, { scheduledDuringRefresh: String(scheduledDuringRefresh) }),
             );
             return;
