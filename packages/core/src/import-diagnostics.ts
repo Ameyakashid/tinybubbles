@@ -3,6 +3,11 @@ export type ImportDiagnosticSeverity = 'error' | 'warning';
 export type ImportDiagnosticCode =
     | 'adjusted-records'
     | 'archive-limit-exceeded'
+    | 'backup-empty-active-records'
+    | 'backup-newer-version'
+    | 'backup-older-version'
+    | 'backup-source-size-unknown'
+    | 'backup-source-too-large'
     | 'duplicate-identity'
     | 'empty-records'
     | 'invalid-archive-entry'
@@ -109,6 +114,12 @@ export const formatImportDiagnostic = (
     translate: ImportDiagnosticTranslator,
 ): string => {
     if (diagnostic.severity === 'error') {
+        if (diagnostic.code === 'backup-source-size-unknown') {
+            return translate('settings.backupDiagnostics.unknownSize');
+        }
+        if (diagnostic.code === 'backup-source-too-large') {
+            return translate('settings.backupDiagnostics.tooLarge', diagnostic.params);
+        }
         if (diagnostic.code === 'missing-required-column') {
             return translate('settings.importDiagnostics.missingColumn', diagnostic.params);
         }
@@ -119,6 +130,15 @@ export const formatImportDiagnostic = (
             return translate('settings.importDiagnostics.limitExceeded');
         }
         return translate('settings.importDiagnostics.cannotRead');
+    }
+    if (diagnostic.code === 'backup-empty-active-records') {
+        return translate('settings.backupDiagnostics.noActiveRecords');
+    }
+    if (diagnostic.code === 'backup-newer-version') {
+        return translate('settings.backupDiagnostics.newerVersion', diagnostic.params);
+    }
+    if (diagnostic.code === 'backup-older-version') {
+        return translate('settings.backupDiagnostics.olderVersion', diagnostic.params);
     }
     if (diagnostic.code === 'renamed-container') {
         return translate('settings.importDiagnostics.renamedContainer', diagnostic.params);

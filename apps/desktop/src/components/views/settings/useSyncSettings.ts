@@ -14,6 +14,7 @@ import {
     CLOCK_SKEW_THRESHOLD_MS,
     createImportDiagnostics,
     formatImportDiagnostic,
+    getBackupSourceFileDiagnostic,
     getInMemoryAppDataSnapshot,
     isConnectionAllowed,
     isValidCloudSyncToken,
@@ -57,6 +58,11 @@ export type WebDavTestState = 'idle' | 'success' | 'error';
 const DROPBOX_CREDENTIAL_CLEANUP_ERROR = 'Pending Dropbox authorization could not be safely cleared. Try again.';
 
 const IMPORT_DIAGNOSTIC_FALLBACKS: Record<string, string> = {
+    'settings.backupDiagnostics.newerVersion': 'This backup was created by a newer Mindwtr version ({{version}}).',
+    'settings.backupDiagnostics.noActiveRecords': 'This backup does not contain any active tasks or projects.',
+    'settings.backupDiagnostics.olderVersion': 'This backup was created by an older Mindwtr version ({{version}}).',
+    'settings.backupDiagnostics.tooLarge': 'The selected backup file is too large. Choose a backup no larger than {{maxSizeMb}} MB.',
+    'settings.backupDiagnostics.unknownSize': 'Mindwtr could not verify the selected backup file size. Copy it locally and try again.',
     'settings.importDiagnostics.adjustedRecords': '{{count}} imported record(s) needed an adjustment. Review the imported data.',
     'settings.importDiagnostics.cannotRead': 'Mindwtr could not safely read this export.',
     'settings.importDiagnostics.limitExceeded': 'This export exceeds a safe import limit. Choose a smaller export.',
@@ -80,6 +86,7 @@ const buildBackupConfirmation = (
     validation: NonNullable<Awaited<ReturnType<typeof inspectDesktopBackup>>>,
     effect: string,
     formatText: (key: string, fallback: string, replacements: Record<string, string | number>) => string,
+    formatDiagnostic: (diagnostic: ImportDiagnostic) => string,
 ): string => [
     validation.metadata?.backupAt
         ? formatText('settings.backupMobile.backupDateLabel', 'Backup date: {{backupDate}}', {
@@ -95,7 +102,12 @@ const buildBackupConfirmation = (
         projectCount: validation.metadata?.projectCount ?? 0,
     }),
     effect,
-    ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
+    ...(() => {
+        const warnings = validation.diagnostics
+            .filter((diagnostic) => diagnostic.severity === 'warning')
+            .map(formatDiagnostic);
+        return warnings.length > 0 ? ['', ...warnings] : [];
+    })(),
 ].filter(Boolean).join('\n');
 
 const formatClockSkew = (ms: number): string => {
@@ -266,6 +278,10 @@ export const useSyncSettings = ({
         const diagnostic = diagnostics.find((item) => item.severity === 'error');
         return diagnostic ? formatImportDiagnosticText(diagnostic) : fallback;
     }, [formatImportDiagnosticText]);
+    const formatThrownBackupError = useCallback((error: unknown, fallback: string): string => {
+        const diagnostic = getBackupSourceFileDiagnostic(error);
+        return diagnostic ? formatImportDiagnosticText(diagnostic) : toErrorMessage(error, fallback);
+    }, [formatImportDiagnosticText, toErrorMessage]);
 
     useEffect(() => {
         markSettingsOpenTrace('sync-settings-effect');
@@ -1147,7 +1163,7 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(validation.errors[0] || resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.'), 'error');
+                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.')), 'error');
                 return;
             }
 
@@ -1157,6 +1173,7 @@ export const useSyncSettings = ({
                     validation,
                     resolveText('settings.backupMobile.thisWillReplaceAllCurrentLocalDataARecoverySnapshot', 'This will replace all current local data. A recovery snapshot will be saved first.'),
                     formatText,
+                    formatImportDiagnosticText,
                 ),
             });
             if (!confirmed) return;
@@ -1169,11 +1186,11 @@ export const useSyncSettings = ({
                 ? formatText('settings.backupMobile.backupRestoredWithSnapshot', 'Backup restored successfully. Recovery snapshot saved as {{snapshotName}}.', { snapshotName })
                 : resolveText('settings.backupMobile.restoreComplete', 'Restore complete'), 'success', 6000);
         } catch (error) {
-            showToast(toErrorMessage(error, resolveText('settings.backupMobile.restoreFailed', 'Restore failed')), 'error');
+            showToast(formatThrownBackupError(error, resolveText('settings.backupMobile.restoreFailed', 'Restore failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [appVersion, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
+    }, [appVersion, formatImportDiagnosticText, formatImportError, formatText, formatThrownBackupError, isTauri, requestConfirmation, resolveText, showToast]);
 
     const handleMergeBackup = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1182,7 +1199,7 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(validation.errors[0] || resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.'), 'error');
+                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.')), 'error');
                 return;
             }
 
@@ -1195,6 +1212,7 @@ export const useSyncSettings = ({
                         'Newer items from the backup are combined with your current data. Nothing local is removed, and items you deleted here stay deleted. A recovery snapshot is saved first when available.',
                     ),
                     formatText,
+                    formatImportDiagnosticText,
                 ),
             });
             if (!confirmed) return;
@@ -1214,11 +1232,11 @@ export const useSyncSettings = ({
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 6000);
         } catch (error) {
-            showToast(toErrorMessage(error, resolveText('settings.mergeBackupFailed', 'Merge failed')), 'error');
+            showToast(formatThrownBackupError(error, resolveText('settings.mergeBackupFailed', 'Merge failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [appVersion, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
+    }, [appVersion, formatImportDiagnosticText, formatImportError, formatText, formatThrownBackupError, isTauri, requestConfirmation, resolveText, showToast]);
 
     const handleImportTodoist = useCallback(async () => {
         addBreadcrumb('transfer:restore');

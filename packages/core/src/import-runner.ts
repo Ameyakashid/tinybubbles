@@ -323,9 +323,10 @@ export function parseImportSource<S extends ImportSourceId>(
     input: ImportDescriptorInput,
 ): ImportSourceParseResultMap[S] {
     const result = IMPORT_DESCRIPTORS[source].parse(input);
+    const structuredDiagnostics = (result as { diagnostics?: ImportDiagnostic[] }).diagnostics;
     return {
         ...result,
-        diagnostics: [
+        diagnostics: structuredDiagnostics ?? [
             ...createImportDiagnostics(result.warnings, 'warning'),
             ...createImportDiagnostics(result.errors, 'error'),
         ],

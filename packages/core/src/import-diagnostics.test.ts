@@ -4,6 +4,16 @@ import { createImportDiagnostic, formatImportDiagnostic } from './import-diagnos
 
 describe('import diagnostics', () => {
     it.each([
+        ['backup-empty-active-records', 'warning', 'settings.backupDiagnostics.noActiveRecords'],
+        ['backup-newer-version', 'warning', 'settings.backupDiagnostics.newerVersion'],
+        ['backup-older-version', 'warning', 'settings.backupDiagnostics.olderVersion'],
+        ['backup-source-size-unknown', 'error', 'settings.backupDiagnostics.unknownSize'],
+        ['backup-source-too-large', 'error', 'settings.backupDiagnostics.tooLarge'],
+    ] as const)('formats structured backup diagnostic %s with localized copy', (code, severity, expectedKey) => {
+        expect(formatImportDiagnostic({ code, params: {}, severity }, (key) => key)).toBe(expectedKey);
+    });
+
+    it.each([
         ['1 unsupported recurrence rule', 'settings.importDiagnostics.unsupportedRecurrence'],
         ['2 dates could not be mapped', 'settings.importDiagnostics.unmappedDate'],
         ['3 statuses could not be mapped', 'settings.importDiagnostics.unmappedStatus'],

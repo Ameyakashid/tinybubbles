@@ -5,6 +5,7 @@ import {
     createImportDiagnostic,
     createImportDiagnostics,
     formatImportDiagnostic,
+    getBackupSourceFileDiagnostic,
     getInMemoryAppDataSnapshot,
     summarizeBackupMerge,
     type ImportDiagnostic,
@@ -96,6 +97,10 @@ export function useSyncSettingsBackupActions({
         createImportDiagnostic(error instanceof Error ? error.message : '', 'error'),
         tr,
     ), [tr]);
+    const formatThrownBackupError = useCallback((error: unknown): string => {
+        const diagnostic = getBackupSourceFileDiagnostic(error);
+        return diagnostic ? formatImportDiagnostic(diagnostic, tr) : String(error);
+    }, [tr]);
     const formatRecoverySnapshotLabel = useCallback((fileName: string): string => {
         const match = fileName.match(/^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})\.snapshot\.json$/i);
         if (!match) return fileName;
@@ -118,7 +123,14 @@ export function useSyncSettingsBackupActions({
                     : null,
             tr('settings.backupMobile.backupPreviewCounts', { taskCount: validation.metadata?.taskCount ?? 0, projectCount: validation.metadata?.projectCount ?? 0 }),
             effect,
-            ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
+            ...(() => {
+                const warningDiagnostics = validation.diagnostics
+                    ?? createImportDiagnostics(validation.warnings, 'warning');
+                const warnings = warningDiagnostics
+                    .filter((diagnostic) => diagnostic.severity === 'warning')
+                    .map((diagnostic) => formatImportDiagnostic(diagnostic, tr));
+                return warnings.length > 0 ? ['', ...warnings] : [];
+            })(),
         ].filter(Boolean);
         return details.join('\n');
     }, [tr]);
@@ -301,7 +313,10 @@ export function useSyncSettingsBackupActions({
             if (!validation.valid || !validation.data) {
                 showSettingsWarning(
                     tr('settings.backupMobile.invalidBackup'),
-                    validation.errors[0] || tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup')
+                    formatImportError(
+                        validation.diagnostics ?? createImportDiagnostics(validation.errors, 'error'),
+                        tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup'),
+                    )
                 );
                 return;
             }
@@ -323,11 +338,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.restoreFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.restoreFailed'), formatThrownBackupError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildBackupSummary, confirmRestoreBackup, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildBackupSummary, confirmRestoreBackup, formatImportError, formatThrownBackupError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const confirmMergeBackup = useCallback(async (validation: BackupValidation) => {
         if (!validation.data) return;
@@ -365,7 +380,10 @@ export function useSyncSettingsBackupActions({
             if (!validation.valid || !validation.data) {
                 showSettingsWarning(
                     tr('settings.backupMobile.invalidBackup'),
-                    validation.errors[0] || tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup')
+                    formatImportError(
+                        validation.diagnostics ?? createImportDiagnostics(validation.errors, 'error'),
+                        tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup'),
+                    )
                 );
                 return;
             }
@@ -382,11 +400,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.mergeBackupFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.mergeBackupFailed'), formatThrownBackupError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildBackupSummary, confirmMergeBackup, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildBackupSummary, confirmMergeBackup, formatImportError, formatThrownBackupError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const confirmTodoistImport = useCallback(async (parsedProjects: ParsedTodoistProject[]) => {
         setBackupAction('import');

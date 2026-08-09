@@ -1,4 +1,5 @@
 import type { AppData } from './types';
+import { createImportDiagnostics, type ImportDiagnostic } from './import-diagnostics';
 import { nextRevision, normalizeRevision, SYNC_BACKUP_RESTORE_REV_BY } from './sync-revision';
 import {
     compactPurgedProjectForLocalStorage,
@@ -18,13 +19,53 @@ export const BACKUP_FILE_PREFIX = 'mindwtr-backup-';
 // Backups legitimately include tombstones and attachment metadata, so they get a larger ceiling
 // than third-party imports. The cap still bounds the single JSON string each client must allocate.
 export const MAX_BACKUP_SOURCE_BYTES = 128 * 1024 * 1024;
+const MAX_BACKUP_SOURCE_MEBIBYTES = MAX_BACKUP_SOURCE_BYTES / (1024 * 1024);
+
+export type BackupSourceFileDiagnosticCode =
+    | 'backup-source-size-unknown'
+    | 'backup-source-too-large';
+
+export class BackupSourceFileError extends Error {
+    readonly code: BackupSourceFileDiagnosticCode;
+    readonly params: Record<string, number | string>;
+
+    constructor(
+        code: BackupSourceFileDiagnosticCode,
+        message: string,
+        params: Record<string, number | string> = {},
+    ) {
+        super(message);
+        this.name = 'BackupSourceFileError';
+        this.code = code;
+        this.params = params;
+    }
+}
+
+export const getBackupSourceFileDiagnostic = (error: unknown): ImportDiagnostic | null => {
+    if (!error || typeof error !== 'object') return null;
+    const candidate = error as { code?: unknown; params?: unknown };
+    if (candidate.code !== 'backup-source-size-unknown' && candidate.code !== 'backup-source-too-large') {
+        return null;
+    }
+    const params = candidate.params && typeof candidate.params === 'object'
+        ? candidate.params as Record<string, number | string>
+        : {};
+    return { code: candidate.code, params, severity: 'error' };
+};
 
 export const assertBackupSourceFileSize = (size: number | null | undefined): void => {
     if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) {
-        throw new Error('Mindwtr could not verify the selected backup file size. Copy it locally and try again.');
+        throw new BackupSourceFileError(
+            'backup-source-size-unknown',
+            'Mindwtr could not verify the selected backup file size. Copy it locally and try again.',
+        );
     }
     if (size > MAX_BACKUP_SOURCE_BYTES) {
-        throw new Error('The selected backup file is too large. Choose a backup no larger than 128 MB.');
+        throw new BackupSourceFileError(
+            'backup-source-too-large',
+            'The selected backup file is too large. Choose a backup no larger than 128 MB.',
+            { maxSizeMb: MAX_BACKUP_SOURCE_MEBIBYTES },
+        );
     }
 };
 
@@ -63,6 +104,7 @@ export type BackupValidation = {
     metadata: BackupMetadata | null;
     errors: string[];
     warnings: string[];
+    diagnostics: ImportDiagnostic[];
 };
 
 type BackupValidationOptions = {
@@ -307,6 +349,7 @@ export const validateBackupJson = (
 ): BackupValidation => {
     const errors: string[] = [];
     const warnings: string[] = [];
+    const diagnostics: ImportDiagnostic[] = [];
     const sanitized = sanitizeSerializedJsonText(rawJson);
     if (!sanitized) {
         return {
@@ -315,6 +358,7 @@ export const validateBackupJson = (
             metadata: null,
             errors: ['Backup file is empty.'],
             warnings,
+            diagnostics: createImportDiagnostics(['Backup file is empty.'], 'error'),
         };
     }
 
@@ -332,6 +376,11 @@ export const validateBackupJson = (
                     : 'Backup file is not valid JSON.',
             ],
             warnings,
+            diagnostics: createImportDiagnostics([
+                error instanceof Error && error.message
+                    ? `Backup file is not valid JSON: ${error.message}`
+                    : 'Backup file is not valid JSON.',
+            ], 'error'),
         };
     }
 
@@ -344,6 +393,7 @@ export const validateBackupJson = (
             metadata: null,
             errors: document.errors,
             warnings,
+            diagnostics: createImportDiagnostics(document.errors, 'error'),
         };
     }
 
@@ -356,6 +406,7 @@ export const validateBackupJson = (
             metadata: null,
             errors: dataErrors,
             warnings,
+            diagnostics: createImportDiagnostics(dataErrors, 'error'),
         };
     }
 
@@ -365,6 +416,7 @@ export const validateBackupJson = (
     const areaCount = normalized.areas.filter((area) => !area.deletedAt).length;
     if (taskCount === 0 && projectCount === 0) {
         warnings.push('This backup does not contain any active tasks or projects.');
+        diagnostics.push({ code: 'backup-empty-active-records', params: {}, severity: 'warning' });
     }
 
     const metadataVersion = typeof envelope.metadata?.version === 'string'
@@ -375,8 +427,10 @@ export const validateBackupJson = (
         const comparison = compareVersions(metadataVersion, appVersion);
         if (comparison > 0) {
             warnings.push(`This backup was created by a newer Mindwtr version (${metadataVersion}).`);
+            diagnostics.push({ code: 'backup-newer-version', params: { version: metadataVersion }, severity: 'warning' });
         } else if (comparison < 0) {
             warnings.push(`This backup was created by an older Mindwtr version (${metadataVersion}).`);
+            diagnostics.push({ code: 'backup-older-version', params: { version: metadataVersion }, severity: 'warning' });
         }
     }
 
@@ -399,5 +453,6 @@ export const validateBackupJson = (
         metadata,
         errors,
         warnings,
+        diagnostics,
     };
 };

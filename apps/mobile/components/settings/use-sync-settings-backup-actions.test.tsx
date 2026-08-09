@@ -63,6 +63,7 @@ vi.mock('@/lib/data-transfer', () => ({
 }));
 
 import { Alert } from 'react-native';
+import { BackupSourceFileError } from '@mindwtr/core';
 
 import * as dataTransfer from '@/lib/data-transfer';
 import { useSyncSettingsBackupActions } from './use-sync-settings-backup-actions';
@@ -73,6 +74,7 @@ describe('useSyncSettingsBackupActions', () => {
     let latest: HookResult | null = null;
     const showToast = vi.fn();
     const showSettingsErrorToast = vi.fn();
+    const showSettingsWarning = vi.fn();
 
     function Harness() {
         latest = useSyncSettingsBackupActions({
@@ -80,7 +82,7 @@ describe('useSyncSettingsBackupActions', () => {
             settings: {},
             setBackupAction: vi.fn(),
             showSettingsErrorToast,
-            showSettingsWarning: vi.fn(),
+            showSettingsWarning,
             showToast,
             t: (key: string) => key,
             tr: (key: string) => key,
@@ -182,5 +184,49 @@ describe('useSyncSettingsBackupActions', () => {
             tone: 'success',
         }));
         expect(dataTransfer.restoreDataFromBackup).not.toHaveBeenCalled();
+    });
+
+    it('renders structured backup warnings through the active locale', async () => {
+        vi.mocked(dataTransfer.pickBackupDocument).mockResolvedValue({ uri: 'file://backup.json', fileName: 'backup.json' });
+        vi.mocked(dataTransfer.inspectBackupDocument).mockResolvedValue({
+            valid: true,
+            data: { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} },
+            errors: [],
+            warnings: ['raw newer-version warning'],
+            diagnostics: [{
+                code: 'backup-newer-version',
+                params: { version: '2.0.0' },
+                severity: 'warning',
+            }],
+            metadata: { taskCount: 0, projectCount: 0 },
+        } as Awaited<ReturnType<typeof dataTransfer.inspectBackupDocument>>);
+
+        await act(async () => {
+            create(<Harness />);
+        });
+        await latest?.handleRestoreBackup();
+
+        expect(vi.mocked(Alert.alert).mock.calls[0]?.[1]).toContain('settings.backupDiagnostics.newerVersion');
+        expect(vi.mocked(Alert.alert).mock.calls[0]?.[1]).not.toContain('raw newer-version warning');
+    });
+
+    it('localizes a structured oversized-backup error', async () => {
+        vi.mocked(dataTransfer.pickBackupDocument).mockResolvedValue({ uri: 'file://backup.json', fileName: 'backup.json' });
+        vi.mocked(dataTransfer.inspectBackupDocument).mockRejectedValue(new BackupSourceFileError(
+            'backup-source-too-large',
+            'raw oversized error',
+            { maxSizeMb: 128 },
+        ));
+
+        await act(async () => {
+            create(<Harness />);
+        });
+        await latest?.handleRestoreBackup();
+
+        expect(showSettingsErrorToast).toHaveBeenCalledWith(
+            'settings.backupMobile.restoreFailed',
+            'settings.backupDiagnostics.tooLarge',
+            5200,
+        );
     });
 });

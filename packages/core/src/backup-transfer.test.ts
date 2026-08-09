@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    assertBackupSourceFileSize,
     countActiveRecords,
     createBackupFileName,
+    getBackupSourceFileDiagnostic,
+    MAX_BACKUP_SOURCE_BYTES,
     prepareRestoredBackupDataForSync,
     serializeBackupData,
     validateBackupJson,
@@ -46,6 +49,35 @@ const buildAppData = (): AppData => {
 };
 
 describe('backup transfer', () => {
+    it('returns exact structured warning codes without removing legacy warning text', () => {
+        const result = validateBackupJson(JSON.stringify({
+            backupMetadata: { version: '2.0.0' },
+            data: { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} },
+        }), { appVersion: '1.0.0' });
+
+        expect(result.valid).toBe(true);
+        expect(result.warnings).toHaveLength(2);
+        expect(result.diagnostics).toEqual([
+            { code: 'backup-empty-active-records', params: {}, severity: 'warning' },
+            { code: 'backup-newer-version', params: { version: '2.0.0' }, severity: 'warning' },
+        ]);
+    });
+
+    it('exposes structured size diagnostics for unknown and oversized backup files', () => {
+        for (const [size, code] of [
+            [null, 'backup-source-size-unknown'],
+            [MAX_BACKUP_SOURCE_BYTES + 1, 'backup-source-too-large'],
+        ] as const) {
+            let failure: unknown;
+            try {
+                assertBackupSourceFileSize(size);
+            } catch (error) {
+                failure = error;
+            }
+            expect(getBackupSourceFileDiagnostic(failure)).toMatchObject({ code, severity: 'error' });
+        }
+    });
+
     it('validates a serialized backup and derives metadata from the file name', () => {
         const data = buildAppData();
         const fileName = createBackupFileName(new Date('2026-03-30T12:34:56.789Z'));

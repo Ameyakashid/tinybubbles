@@ -22,7 +22,12 @@ vi.mock('../../../contexts/language-context', () => ({
     useLanguage: () => ({ t: languageMocks.t, language: 'en' }),
 }));
 
-import { isConnectionAllowed, SYNC_LOCAL_INSECURE_URL_OPTIONS, type SyncBackend } from '@mindwtr/core';
+import {
+    BackupSourceFileError,
+    isConnectionAllowed,
+    SYNC_LOCAL_INSECURE_URL_OPTIONS,
+    type SyncBackend,
+} from '@mindwtr/core';
 import { SyncService } from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { isValidHttpUrl } from './sync/sync-page-utils';
@@ -164,13 +169,13 @@ describe('useSyncSettings cloud token validation', () => {
         vi.restoreAllMocks();
     });
 
-    const setup = (showSaved = vi.fn()) => renderHook(() => useSyncSettings({
+    const setup = (showSaved = vi.fn(), requestConfirmation = vi.fn().mockResolvedValue(true)) => renderHook(() => useSyncSettings({
         appVersion: '1.0.0',
         isTauri: false,
         showSaved,
         selectSyncFolderTitle: 'Select folder',
         lastSyncNeverLabel: 'Never',
-        requestConfirmation: vi.fn().mockResolvedValue(true),
+        requestConfirmation,
     }));
 
     it('uses localized copy for desktop backup completion', async () => {
@@ -186,6 +191,51 @@ describe('useSyncSettings cloud token validation', () => {
         });
 
         expect(showToast).toHaveBeenCalledWith('localized:settings.exportSuccess', 'success');
+    });
+
+    it('renders structured backup warnings through the active desktop locale', async () => {
+        languageMocks.t.mockImplementation((key: string) => `localized:${key}`);
+        const requestConfirmation = vi.fn().mockResolvedValue(false);
+        vi.spyOn(dataTransfer, 'inspectDesktopBackup').mockResolvedValue({
+            valid: true,
+            data: { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} },
+            errors: [],
+            warnings: ['raw newer-version warning'],
+            diagnostics: [{
+                code: 'backup-newer-version',
+                params: { version: '2.0.0' },
+                severity: 'warning',
+            }],
+            metadata: { taskCount: 0, projectCount: 0 },
+        });
+
+        const { result } = setup(vi.fn(), requestConfirmation);
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        await act(async () => {
+            await result.current.dataTransferProps.onRestoreBackup();
+        });
+
+        expect(requestConfirmation.mock.calls[0]?.[0].message).toContain('localized:settings.backupDiagnostics.newerVersion');
+        expect(requestConfirmation.mock.calls[0]?.[0].message).not.toContain('raw newer-version warning');
+    });
+
+    it('localizes a structured oversized-backup error on desktop', async () => {
+        languageMocks.t.mockImplementation((key: string) => `localized:${key}`);
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        vi.spyOn(dataTransfer, 'inspectDesktopBackup').mockRejectedValue(new BackupSourceFileError(
+            'backup-source-too-large',
+            'raw oversized error',
+            { maxSizeMb: 128 },
+        ));
+
+        const { result } = setup();
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        await act(async () => {
+            await result.current.dataTransferProps.onRestoreBackup();
+        });
+
+        expect(showToast).toHaveBeenCalledWith('localized:settings.backupDiagnostics.tooLarge', 'error');
     });
 
     it('keeps an explicit self-hosted save in session state until sync proves it', async () => {
