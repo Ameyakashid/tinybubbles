@@ -341,7 +341,7 @@ describe('performSyncCycle', () => {
         expect(result.stats.sections.conflicts).toBe(0);
     });
 
-    it('fails before writes when merged data is invalid', async () => {
+    it('fails before writes when a remote entity envelope is invalid', async () => {
         let wroteLocal = false;
         let wroteRemote = false;
         const invalidIncoming: AppData = {
@@ -372,7 +372,7 @@ describe('performSyncCycle', () => {
             writeRemote: async () => {
                 wroteRemote = true;
             },
-        })).rejects.toThrow('Sync validation failed');
+        })).rejects.toThrow('Invalid remote sync payload');
         expect(wroteLocal).toBe(false);
         expect(wroteRemote).toBe(false);
     });
