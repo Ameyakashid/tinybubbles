@@ -604,19 +604,10 @@ export const applyMindwtrCsvImport = (
     // Before area scoping, deterministic project/section/task IDs used only the
     // project name. Reuse those IDs when one project name has an unambiguous
     // owner so upgrading does not turn a routine re-import into duplicates.
-    const projectNameCounts = new Map<string, number>();
-    parsedData.projects.forEach((project) => {
-        const legacySourceKey = normalizeSourceKey(project.name);
-        projectNameCounts.set(legacySourceKey, (projectNameCounts.get(legacySourceKey) ?? 0) + 1);
-    });
-
     const legacyProjectSourceKeyByScopedKey = new Map<string, string>();
     parsedData.projects.forEach((project) => {
         if (!project.areaSourceKey) return;
-        const legacySourceKey = normalizeSourceKey(project.name);
-        if (projectNameCounts.get(legacySourceKey) === 1) {
-            legacyProjectSourceKeyByScopedKey.set(project.sourceKey, legacySourceKey);
-        }
+        legacyProjectSourceKeyByScopedKey.set(project.sourceKey, normalizeSourceKey(project.name));
     });
 
     const legacySectionSourceKeyByScopedKey = new Map<string, string>();
@@ -701,9 +692,14 @@ export const applyMindwtrCsvImport = (
         const legacyId = legacySourceKey
             ? createMindwtrCsvImportId('project', legacySourceKey)
             : undefined;
+        const legacyProject = legacyId ? currentProjectById.get(legacyId) : undefined;
         resolvedIds.project.set(
             project.sourceKey,
-            legacyId && currentProjectById.has(legacyId) ? legacyId : scopedId,
+            legacyId
+                && legacyProject
+                && (legacyProject.areaId ?? undefined) === expectedAreaId
+                ? legacyId
+                : scopedId,
         );
     });
 
@@ -733,9 +729,12 @@ export const applyMindwtrCsvImport = (
         const legacyId = legacySourceKey
             ? createMindwtrCsvImportId('section', legacySourceKey)
             : undefined;
+        const legacySection = legacyId ? currentSectionById.get(legacyId) : undefined;
         resolvedIds.section.set(
             section.sourceKey,
-            legacyId && currentSectionById.has(legacyId) ? legacyId : scopedId,
+            legacyId && legacySection && legacySection.projectId === expectedProjectId
+                ? legacyId
+                : scopedId,
         );
     });
 
@@ -771,9 +770,15 @@ export const applyMindwtrCsvImport = (
         const legacyId = legacySourceKey
             ? createMindwtrCsvImportId('task', legacySourceKey)
             : undefined;
+        const legacyTask = legacyId ? currentTaskById.get(legacyId) : undefined;
         resolvedIds.task.set(
             task.sourceKey,
-            legacyId && currentTaskById.has(legacyId) ? legacyId : scopedId,
+            legacyId
+                && legacyTask
+                && (legacyTask.projectId ?? undefined) === expectedProjectId
+                && (legacyTask.areaId ?? undefined) === expectedAreaId
+                ? legacyId
+                : scopedId,
         );
     });
 

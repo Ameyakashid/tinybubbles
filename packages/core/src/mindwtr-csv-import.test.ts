@@ -499,6 +499,131 @@ describe('mindwtr csv import', () => {
         expect(second.data.tasks).toHaveLength(1);
     });
 
+    it('upgrades a shared legacy project through the branch matching its stored area ownership', () => {
+        const csv = buildCsv(
+            ['Title', 'Area', 'Project', 'Section', 'ID'],
+            [
+                ['Work task', 'Work', 'Ops', 'Backlog', 'work-task'],
+                ['Home task', 'Home', 'Ops', 'Backlog', 'home-task'],
+            ]
+        );
+        const scoped = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const workProject = scoped.projects.find((project) => project.areaSourceKey === 'work');
+        const workSection = scoped.sections.find((section) => section.projectSourceKey === workProject?.sourceKey);
+        const legacy: ParsedMindwtrCsvImportData = {
+            ...scoped,
+            projects: [{ ...(workProject as NonNullable<typeof workProject>), sourceKey: 'ops' }],
+            sections: [{
+                ...(workSection as NonNullable<typeof workSection>),
+                projectSourceKey: 'ops',
+                sourceKey: 'ops:backlog',
+            }],
+            tasks: scoped.tasks.map((task) => ({
+                ...task,
+                projectSourceKey: 'ops',
+                sectionSourceKey: 'ops:backlog',
+            })),
+        };
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), legacy, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        expect(first.data.projects).toHaveLength(1);
+        expect(first.data.sections).toHaveLength(1);
+        expect(first.data.tasks).toHaveLength(2);
+
+        const second = applyMindwtrCsvImport(first.data, scoped, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        const workArea = second.data.areas.find((area) => area.name === 'Work');
+        const homeArea = second.data.areas.find((area) => area.name === 'Home');
+        const upgradedWorkProject = second.data.projects.find((project) => project.areaId === workArea?.id);
+        const newHomeProject = second.data.projects.find((project) => project.areaId === homeArea?.id);
+        const upgradedWorkSection = second.data.sections.find((section) => (
+            section.projectId === upgradedWorkProject?.id
+        ));
+        const newHomeSection = second.data.sections.find((section) => section.projectId === newHomeProject?.id);
+        expect(second.importedProjectCount).toBe(1);
+        expect(second.importedSectionCount).toBe(1);
+        expect(second.importedTaskCount).toBe(1);
+        expect(second.data.projects).toHaveLength(2);
+        expect(second.data.sections).toHaveLength(2);
+        expect(second.data.tasks).toHaveLength(3);
+        expect(upgradedWorkProject?.id).toBe(first.data.projects[0]?.id);
+        expect(newHomeProject?.id).toBeTruthy();
+        expect(newHomeProject?.id).not.toBe(upgradedWorkProject?.id);
+        expect(upgradedWorkSection?.id).toBe(first.data.sections[0]?.id);
+        expect(newHomeSection?.id).toBeTruthy();
+        expect(newHomeSection?.id).not.toBe(upgradedWorkSection?.id);
+        expect(second.data.tasks.find((task) => (
+            task.title === 'Work task' && task.projectId === upgradedWorkProject?.id
+        ))?.id).toBe(first.data.tasks.find((task) => task.title === 'Work task')?.id);
+        expect(second.data.tasks.some((task) => (
+            task.title === 'Home task' && task.projectId === newHomeProject?.id
+        ))).toBe(true);
+
+        const third = applyMindwtrCsvImport(second.data, scoped, {
+            now: '2026-08-10T12:00:00.000Z',
+        });
+        expect(third.importedProjectCount).toBe(0);
+        expect(third.importedSectionCount).toBe(0);
+        expect(third.importedTaskCount).toBe(0);
+        expect(third.data.projects).toHaveLength(2);
+        expect(third.data.sections).toHaveLength(2);
+        expect(third.data.tasks).toHaveLength(3);
+    });
+
+    it('does not attach a uniquely named scoped re-import to a legacy project in another area', () => {
+        const legacyCsv = buildCsv(
+            ['Title', 'Area', 'Project', 'Section', 'ID'],
+            [['Legacy home task', 'Home', 'Ops', 'Backlog', 'stable-task']]
+        );
+        const legacyScoped = parseMindwtrCsvImportSource({ fileName: 'legacy.csv', text: legacyCsv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const legacy: ParsedMindwtrCsvImportData = {
+            ...legacyScoped,
+            projects: legacyScoped.projects.map((project) => ({ ...project, sourceKey: 'ops' })),
+            sections: legacyScoped.sections.map((section) => ({
+                ...section,
+                projectSourceKey: 'ops',
+                sourceKey: 'ops:backlog',
+            })),
+            tasks: legacyScoped.tasks.map((task) => ({
+                ...task,
+                projectSourceKey: 'ops',
+                sectionSourceKey: 'ops:backlog',
+            })),
+        };
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), legacy, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const workCsv = buildCsv(
+            ['Title', 'Area', 'Project', 'Section', 'ID'],
+            [['Scoped work task', 'Work', 'Ops', 'Backlog', 'stable-task']]
+        );
+        const workScoped = parseMindwtrCsvImportSource({ fileName: 'work.csv', text: workCsv })
+            .parsedData as ParsedMindwtrCsvImportData;
+
+        const second = applyMindwtrCsvImport(first.data, workScoped, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        const homeArea = second.data.areas.find((area) => area.name === 'Home');
+        const workArea = second.data.areas.find((area) => area.name === 'Work');
+        const homeProject = second.data.projects.find((project) => project.areaId === homeArea?.id);
+        const workProject = second.data.projects.find((project) => project.areaId === workArea?.id);
+        expect(second.importedProjectCount).toBe(1);
+        expect(second.importedSectionCount).toBe(1);
+        expect(second.importedTaskCount).toBe(1);
+        expect(homeProject?.id).toBe(first.data.projects[0]?.id);
+        expect(workProject?.id).toBeTruthy();
+        expect(workProject?.id).not.toBe(homeProject?.id);
+        expect(second.data.tasks.find((task) => task.title === 'Scoped work task')).toMatchObject({
+            projectId: workProject?.id,
+        });
+    });
+
     it('parses a tab-delimited file (T2)', () => {
         const csv = buildCsv(['Title', 'Project'], [['Tab task', 'Ops']], '\t');
 
