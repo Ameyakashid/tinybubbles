@@ -3713,6 +3713,53 @@ mod tests {
     }
 
     #[test]
+    fn malformed_entity_envelopes_fall_through_to_valid_backup() {
+        for malformed_tasks in [serde_json::json!([null]), serde_json::json!([{}])] {
+            let dir = tempfile::tempdir().expect("temp dir");
+            fs::write(
+                dir.path().join("data.json.previous"),
+                serde_json::to_vec(&serde_json::json!({ "tasks": malformed_tasks }))
+                    .expect("serialize malformed candidate"),
+            )
+            .expect("write malformed previous primary");
+            fs::write(
+                dir.path().join("data.json.bak"),
+                br#"{"tasks":[{"id":"valid-backup"}]}"#,
+            )
+            .expect("write valid backup");
+
+            let recovered = read_sync_file_from_dir(dir.path()).expect("recover valid backup");
+
+            assert_eq!(recovered["tasks"][0]["id"], "valid-backup");
+        }
+    }
+
+    #[test]
+    fn invalid_legacy_and_newest_seed_fall_through_to_older_seed() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        fs::write(
+            dir.path().join(format!("{}-sync.json", APP_NAME)),
+            br#"{"tasks":[null]}"#,
+        )
+        .expect("write invalid legacy candidate");
+        fs::write(
+            dir.path().join("mindwtr-backup-older.json"),
+            br#"{"tasks":[{"id":"older-valid"}]}"#,
+        )
+        .expect("write older valid seed");
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(
+            dir.path().join("mindwtr-backup-newest.json"),
+            br#"{"tasks":[{}]}"#,
+        )
+        .expect("write newest invalid seed");
+
+        let recovered = read_sync_file_from_dir(dir.path()).expect("recover older valid seed");
+
+        assert_eq!(recovered["tasks"][0]["id"], "older-valid");
+    }
+
+    #[test]
     fn corrupt_previous_primary_and_backup_recover_valid_previous_backup() {
         let dir = tempfile::tempdir().expect("temp dir");
         fs::write(dir.path().join("data.json.previous"), b"[]")
@@ -7525,10 +7572,29 @@ fn read_sync_candidate(path: &Path, attempts: usize) -> Result<Value, String> {
             return Err("Invalid sync payload shape: expected an object".to_string());
         };
         for surface in ["tasks", "projects", "sections", "areas", "people"] {
-            if object.get(surface).is_some_and(|entry| !entry.is_array()) {
+            let Some(entities) = object.get(surface) else {
+                continue;
+            };
+            let Some(entities) = entities.as_array() else {
                 return Err(format!(
                     "Invalid sync payload shape: {surface} must be an array when present"
                 ));
+            };
+            for (index, entity) in entities.iter().enumerate() {
+                let Some(entity) = entity.as_object() else {
+                    return Err(format!(
+                        "Invalid sync payload shape: {surface}[{index}] must be an object"
+                    ));
+                };
+                if !entity
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| !id.trim().is_empty())
+                {
+                    return Err(format!(
+                        "Invalid sync payload shape: {surface}[{index}].id must be a non-empty string"
+                    ));
+                }
             }
         }
         if object
@@ -7615,9 +7681,11 @@ fn read_sync_file_with_source_from_dir(sync_dir: &Path) -> Result<SyncFileRead, 
     let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
     let legacy_sync_file = sync_dir.join(format!("{}-sync.json", APP_NAME));
 
-    let find_seed_backup_file = |dir: &Path| -> Option<PathBuf> {
-        let mut latest: Option<(SystemTime, PathBuf)> = None;
-        let entries = fs::read_dir(dir).ok()?;
+    let find_seed_backup_files = |dir: &Path| -> Vec<PathBuf> {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut candidates: Vec<(SystemTime, String, PathBuf)> = Vec::new();
         for entry in entries.flatten() {
             let path = entry.path();
             if !path.is_file() {
@@ -7636,30 +7704,41 @@ fn read_sync_file_with_source_from_dir(sync_dir: &Path) -> Result<SyncFileRead, 
             let modified = fs::metadata(&path)
                 .and_then(|metadata| metadata.modified())
                 .unwrap_or(UNIX_EPOCH);
-            match &latest {
-                Some((latest_modified, _)) if &modified <= latest_modified => {}
-                _ => latest = Some((modified, path)),
-            }
+            candidates.push((modified, lower, path));
         }
-        latest.map(|(_, path)| path)
+        candidates.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
+        candidates.into_iter().map(|(_, _, path)| path).collect()
     };
 
     let read_seed_or_legacy_file = || -> Option<Result<SyncFileRead, String>> {
+        let mut first_error: Option<String> = None;
         if legacy_sync_file.exists() {
-            return Some(
-                read_sync_candidate(&legacy_sync_file, 1).map(|data| SyncFileRead {
-                    data,
-                    source: SyncFileReadSource::Legacy,
-                }),
-            );
+            match read_sync_candidate(&legacy_sync_file, 1) {
+                Ok(data) => {
+                    return Some(Ok(SyncFileRead {
+                        data,
+                        source: SyncFileReadSource::Legacy,
+                    }));
+                }
+                Err(error) => first_error = Some(error),
+            }
         }
-        if let Some(seed_file) = find_seed_backup_file(sync_dir) {
-            return Some(read_sync_candidate(&seed_file, 1).map(|data| SyncFileRead {
-                data,
-                source: SyncFileReadSource::Seed,
-            }));
+        for seed_file in find_seed_backup_files(sync_dir) {
+            match read_sync_candidate(&seed_file, 1) {
+                Ok(data) => {
+                    return Some(Ok(SyncFileRead {
+                        data,
+                        source: SyncFileReadSource::Seed,
+                    }));
+                }
+                Err(error) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
         }
-        None
+        first_error.map(Err)
     };
 
     if is_icloud_evicted(&sync_file) {

@@ -735,20 +735,20 @@ export const validateSyncPayloadShape = (data: unknown, source: 'local' | 'remot
         return errors;
     }
     const record = data as Record<string, unknown>;
-    if (record.tasks !== undefined && !Array.isArray(record.tasks)) {
-        errors.push(`${source} payload field "tasks" must be an array when present`);
-    }
-    if (record.projects !== undefined && !Array.isArray(record.projects)) {
-        errors.push(`${source} payload field "projects" must be an array when present`);
-    }
-    if (record.sections !== undefined && !Array.isArray(record.sections)) {
-        errors.push(`${source} payload field "sections" must be an array when present`);
-    }
-    if (record.areas !== undefined && !Array.isArray(record.areas)) {
-        errors.push(`${source} payload field "areas" must be an array when present`);
-    }
-    if (record.people !== undefined && !Array.isArray(record.people)) {
-        errors.push(`${source} payload field "people" must be an array when present`);
+    for (const surface of ['tasks', 'projects', 'sections', 'areas', 'people'] as const) {
+        const entities = record[surface];
+        if (entities !== undefined && !Array.isArray(entities)) {
+            errors.push(`${source} payload field "${surface}" must be an array when present`);
+            continue;
+        }
+        if (!Array.isArray(entities)) continue;
+        entities.forEach((entity, index) => {
+            if (!isObjectRecord(entity)) {
+                errors.push(`${source} payload field "${surface}[${index}]" must be an object`);
+            } else if (!isNonEmptyString(entity.id)) {
+                errors.push(`${source} payload field "${surface}[${index}].id" must be a non-empty string`);
+            }
+        });
     }
     if (record.settings !== undefined && !isObjectRecord(record.settings)) {
         errors.push(`${source} payload field "settings" must be an object when present`);

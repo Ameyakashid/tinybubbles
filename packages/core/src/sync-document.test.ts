@@ -61,6 +61,19 @@ describe('Sync document lifecycle', () => {
         });
     });
 
+    it('rejects malformed entity envelopes before merge code dereferences them', () => {
+        for (const surface of ['tasks', 'projects', 'sections', 'areas', 'people'] as const) {
+            expect(parseSyncDocument({ [surface]: [null] }, 'remote')).toEqual({
+                ok: false,
+                errors: [`remote payload field "${surface}[0]" must be an object`],
+            });
+            expect(parseSyncDocument({ [surface]: [{}] }, 'remote')).toEqual({
+                ok: false,
+                errors: [`remote payload field "${surface}[0].id" must be a non-empty string`],
+            });
+        }
+    });
+
     it('uses the same remote shape for equality and fingerprints', () => {
         const left = createData();
         left.settings.lastSyncAt = NOW;
