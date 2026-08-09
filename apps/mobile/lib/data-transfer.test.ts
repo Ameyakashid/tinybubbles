@@ -214,6 +214,11 @@ describe('mobile data transfer', () => {
   });
 
   it('rejects an oversized picked import before reading it into memory', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({
+      exists: true,
+      size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
+    });
+
     await expect(inspectMindwtrCsvDocument({
       fileName: 'large.csv',
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
@@ -224,12 +229,33 @@ describe('mobile data transfer', () => {
   });
 
   it('rejects an oversized picked backup before reading it into memory', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({
+      exists: true,
+      size: MAX_BACKUP_SOURCE_BYTES + 1,
+    });
+
     await expect(inspectBackupDocument({
       fileName: 'large.json',
       size: MAX_BACKUP_SOURCE_BYTES + 1,
       uri: 'content://large.json',
     })).rejects.toThrow('backup file is too large');
 
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('trusts the copied backup URI size over smaller picker metadata without a bulk read', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({
+      exists: true,
+      size: MAX_BACKUP_SOURCE_BYTES + 1,
+    });
+
+    await expect(inspectBackupDocument({
+      fileName: 'lying-size.json',
+      size: 1,
+      uri: 'file://cache/lying-size.json',
+    })).rejects.toThrow('backup file is too large');
+
+    expect(fileSystemMocks.getInfoAsync).toHaveBeenCalledWith('file://cache/lying-size.json');
     expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
   });
 

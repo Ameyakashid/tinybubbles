@@ -361,10 +361,10 @@ const pickImportDocument = (source: ImportPickerSourceId): Promise<TransferDocum
     pickDocument(IMPORT_PICKER_DESCRIPTORS[source].mimeTypes);
 
 const resolveDocumentSize = async (document: TransferDocument, kind: 'backup' | 'import'): Promise<number> => {
-    if (typeof document.size === 'number' && Number.isFinite(document.size) && document.size >= 0) {
-        return document.size;
-    }
     try {
+        // The picker reports the source-provider metadata, but imports read the
+        // URI copied into Mindwtr's cache. Stat that actual read target so stale
+        // or dishonest metadata cannot bypass the pre-read memory bound.
         const info = await FileSystem.getInfoAsync(document.uri);
         if (info.exists && typeof info.size === 'number' && Number.isFinite(info.size) && info.size >= 0) {
             return info.size;
