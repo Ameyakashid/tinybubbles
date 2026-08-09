@@ -14,6 +14,7 @@ import {
     type ParsedDgtImportData,
 } from './dgt-import';
 import { addBreadcrumb } from './log-breadcrumbs';
+import { createImportDiagnostics, type ImportDiagnostic } from './import-diagnostics';
 import type { ImportSourceInput } from './import-source-reader';
 import {
     applyMindwtrCsvImport,
@@ -51,7 +52,7 @@ export type ImportDescriptorInput = ImportSourceInput & {
     lastModified?: number | null;
 };
 
-export type ImportSourceParseResultMap = {
+type RawImportSourceParseResultMap = {
     backup: BackupValidation;
     'backup-merge': BackupValidation;
     dgt: DgtImportParseResult;
@@ -59,6 +60,12 @@ export type ImportSourceParseResultMap = {
     omnifocus: OmniFocusImportParseResult;
     ticktick: TickTickImportParseResult;
     todoist: TodoistImportParseResult;
+};
+
+export type ImportSourceParseResultMap = {
+    [S in keyof RawImportSourceParseResultMap]: RawImportSourceParseResultMap[S] & {
+        diagnostics: ImportDiagnostic[];
+    };
 };
 
 export type DataTransferBoundaries = {
@@ -103,7 +110,7 @@ type ImportDescriptor<S extends ImportSourceId> = {
     completeLabel: string;
     countExtra: (result: ImportTypeMap[S]['result']) => Record<string, string>;
     operation: string;
-    parse: (input: ImportDescriptorInput) => ImportSourceParseResultMap[S];
+    parse: (input: ImportDescriptorInput) => RawImportSourceParseResultMap[S];
     source: S;
     startLabel: string;
 };
@@ -315,7 +322,14 @@ export function parseImportSource<S extends ImportSourceId>(
     source: S,
     input: ImportDescriptorInput,
 ): ImportSourceParseResultMap[S] {
-    return IMPORT_DESCRIPTORS[source].parse(input);
+    const result = IMPORT_DESCRIPTORS[source].parse(input);
+    return {
+        ...result,
+        diagnostics: [
+            ...createImportDiagnostics(result.warnings, 'warning'),
+            ...createImportDiagnostics(result.errors, 'error'),
+        ],
+    } as ImportSourceParseResultMap[S];
 }
 
 // Closing this on `source` (rather than two free type parameters the caller had to spell out)

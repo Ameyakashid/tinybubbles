@@ -1445,4 +1445,10 @@ export const hiOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, फ़ाइल सिंक और पुनर्प्राप्ति के लिए सेटअप नोट्स।',
         'settings.importSetupGuideTitle': 'इंपोर्ट सेटअप गाइड',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple रिमाइंडर और बैकअप के समर्थित इंपोर्ट तरीके।',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} आयातित रिकॉर्ड में समायोजन की आवश्यकता थी। आयातित डेटा की समीक्षा करें।",
+        'settings.importDiagnostics.cannotRead': "Mindwtr इस निर्यात को सुरक्षित रूप से नहीं पढ़ सका।",
+        'settings.importDiagnostics.limitExceeded': "यह निर्यात सुरक्षित आयात सीमा से बड़ा है। छोटा निर्यात चुनें।",
+        'settings.importDiagnostics.missingColumn': "इस निर्यात में आवश्यक कॉलम नहीं है: {{column}}।",
+        'settings.importDiagnostics.noImportableRecords': "इस निर्यात में आयात करने योग्य कोई रिकॉर्ड नहीं मिला।",
+        'settings.importDiagnostics.renamedContainer': "डुप्लिकेट नाम से बचने के लिए “{{from}}” का नाम बदलकर “{{to}}” किया गया।",
 };

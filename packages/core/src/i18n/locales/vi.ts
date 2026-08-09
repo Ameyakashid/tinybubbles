@@ -2295,4 +2295,10 @@ export const viOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Ghi chú thiết lập cho Dropbox, iCloud, WebDAV, Đồng bộ tệp và khôi phục.',
         'settings.importSetupGuideTitle': 'Hướng dẫn thiết lập nhập',
         'settings.importSetupGuideDesc': 'Các đường dẫn nhập được hỗ trợ: Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Reminders và bản sao lưu.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} bản ghi đã nhập cần được điều chỉnh. Hãy xem lại dữ liệu đã nhập.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr không thể đọc bản xuất này một cách an toàn.",
+        'settings.importDiagnostics.limitExceeded': "Bản xuất này vượt quá giới hạn nhập an toàn. Hãy chọn bản xuất nhỏ hơn.",
+        'settings.importDiagnostics.missingColumn': "Bản xuất này thiếu cột bắt buộc: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "Không tìm thấy bản ghi nào có thể nhập trong bản xuất này.",
+        'settings.importDiagnostics.renamedContainer': "“{{from}}” đã được đổi tên thành “{{to}}” để tránh trùng tên.",
 };

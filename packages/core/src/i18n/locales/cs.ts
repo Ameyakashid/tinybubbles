@@ -2248,4 +2248,10 @@ export const csOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Poznámky k nastavení Dropboxu, iCloudu, WebDAV, synchronizace souborů a obnovení.',
         'settings.importSetupGuideTitle': 'Průvodce nastavením importu',
         'settings.importSetupGuideDesc': 'Podporované cesty importu pro Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Připomínky a zálohy.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} importovaných záznamů vyžadovalo úpravu. Zkontrolujte importovaná data.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr nemohl tento export bezpečně přečíst.",
+        'settings.importDiagnostics.limitExceeded': "Tento export překračuje bezpečný limit importu. Zvolte menší export.",
+        'settings.importDiagnostics.missingColumn': "V tomto exportu chybí povinný sloupec: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "V tomto exportu nebyly nalezeny žádné importovatelné záznamy.",
+        'settings.importDiagnostics.renamedContainer': "„{{from}}“ bylo přejmenováno na „{{to}}“, aby se zabránilo duplicitnímu názvu.",
 };

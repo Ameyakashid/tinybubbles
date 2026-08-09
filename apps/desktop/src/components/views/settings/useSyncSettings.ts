@@ -12,6 +12,8 @@ import { useLanguage } from '../../../contexts/language-context';
 import {
     addBreadcrumb,
     CLOCK_SKEW_THRESHOLD_MS,
+    createImportDiagnostics,
+    formatImportDiagnostic,
     getInMemoryAppDataSnapshot,
     isConnectionAllowed,
     isValidCloudSyncToken,
@@ -22,6 +24,7 @@ import {
     translateWithFallback,
     useTaskStore,
     type AppData,
+    type ImportDiagnostic,
     type SyncBackend,
 } from '@mindwtr/core';
 import {
@@ -52,6 +55,15 @@ export type DropboxTestState = 'idle' | 'success' | 'error';
 export type WebDavTestState = 'idle' | 'success' | 'error';
 
 const DROPBOX_CREDENTIAL_CLEANUP_ERROR = 'Pending Dropbox authorization could not be safely cleared. Try again.';
+
+const IMPORT_DIAGNOSTIC_FALLBACKS: Record<string, string> = {
+    'settings.importDiagnostics.adjustedRecords': '{{count}} imported record(s) needed an adjustment. Review the imported data.',
+    'settings.importDiagnostics.cannotRead': 'Mindwtr could not safely read this export.',
+    'settings.importDiagnostics.limitExceeded': 'This export exceeds a safe import limit. Choose a smaller export.',
+    'settings.importDiagnostics.missingColumn': 'This export is missing the required column: {{column}}.',
+    'settings.importDiagnostics.noImportableRecords': 'No importable records were found in this export.',
+    'settings.importDiagnostics.renamedContainer': '“{{from}}” was renamed to “{{to}}” to avoid a duplicate {{kind}} name.',
+};
 
 // Restore and merge read the same file and preview it identically; only the sentence about
 // what the action does to local data differs.
@@ -222,6 +234,21 @@ export const useSyncSettings = ({
         });
         return text;
     }, [resolveText]);
+
+    const formatImportDiagnosticText = useCallback((diagnostic: ImportDiagnostic): string => (
+        formatImportDiagnostic(diagnostic, (key, values = {}) => formatText(
+            key,
+            IMPORT_DIAGNOSTIC_FALLBACKS[key] ?? IMPORT_DIAGNOSTIC_FALLBACKS['settings.importDiagnostics.cannotRead'],
+            values,
+        ))
+    ), [formatText]);
+    const formatImportMessages = useCallback((messages: readonly string[]): string[] => (
+        createImportDiagnostics(messages, 'warning').map(formatImportDiagnosticText)
+    ), [formatImportDiagnosticText]);
+    const formatImportError = useCallback((diagnostics: readonly ImportDiagnostic[], fallback: string): string => {
+        const diagnostic = diagnostics.find((item) => item.severity === 'error');
+        return diagnostic ? formatImportDiagnosticText(diagnostic) : fallback;
+    }, [formatImportDiagnosticText]);
 
     useEffect(() => {
         markSettingsOpenTrace('sync-settings-effect');
@@ -1179,7 +1206,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopTodoistImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview) {
-                showToast(parseResult.errors[0] || 'The selected file is not a supported Todoist export.', 'error');
+                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported Todoist export.'), 'error');
                 return;
             }
 
@@ -1199,7 +1226,7 @@ export const useSyncSettings = ({
                     preview.checklistItemCount > 0 ? `${preview.checklistItemCount} subtask(s) will become checklist items.` : null,
                     'Imported tasks stay in Inbox so you can process them in Mindwtr.',
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
             });
             if (!confirmed) return;
@@ -1219,7 +1246,7 @@ export const useSyncSettings = ({
                 ),
                 result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} subtask(s) became checklist items.` : null,
                 snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 7000);
         } catch (error) {
@@ -1227,7 +1254,7 @@ export const useSyncSettings = ({
         } finally {
             setTransferAction(null);
         }
-    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
 
     const handleImportTickTick = useCallback(async () => {
@@ -1237,7 +1264,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopTickTickImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(parseResult.errors[0] || 'The selected file is not a supported TickTick backup.', 'error');
+                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported TickTick backup.'), 'error');
                 return;
             }
 
@@ -1259,7 +1286,7 @@ export const useSyncSettings = ({
                     preview.recurringCount > 0 ? `${preview.recurringCount} recurring task(s) will keep supported repeat rules.` : null,
                     'Imported active tasks stay in Inbox so you can process them in Mindwtr.',
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
             });
             if (!confirmed) return;
@@ -1280,7 +1307,7 @@ export const useSyncSettings = ({
                 ),
                 result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
                 snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
@@ -1288,7 +1315,7 @@ export const useSyncSettings = ({
         } finally {
             setTransferAction(null);
         }
-    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
     const handleImportDgt = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1297,7 +1324,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopDgtImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(parseResult.errors[0] || 'The selected file is not a supported DGT GTD export.', 'error');
+                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported DGT GTD export.'), 'error');
                 return;
             }
 
@@ -1320,7 +1347,7 @@ export const useSyncSettings = ({
                         ? `${preview.standaloneTaskCount} task(s) will stay outside projects so you can process them in Mindwtr.`
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
             });
             if (!confirmed) return;
@@ -1341,7 +1368,7 @@ export const useSyncSettings = ({
                 ),
                 result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
                 snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
@@ -1349,7 +1376,7 @@ export const useSyncSettings = ({
         } finally {
             setTransferAction(null);
         }
-    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
     const handleImportOmniFocus = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1358,7 +1385,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopOmniFocusImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(parseResult.errors[0] || 'The selected file is not a supported OmniFocus export.', 'error');
+                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported OmniFocus export.'), 'error');
                 return;
             }
 
@@ -1382,7 +1409,7 @@ export const useSyncSettings = ({
                         : null,
                     'Imported tasks keep OmniFocus notes, dates, tags, recurrence, and checklist children when supported.',
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
             });
             if (!confirmed) return;
@@ -1404,7 +1431,7 @@ export const useSyncSettings = ({
                 result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} nested task(s) became checklist items.` : null,
                 result.importedStandaloneTaskCount > 0 ? `${result.importedStandaloneTaskCount} task(s) stayed outside projects.` : null,
                 snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
@@ -1412,7 +1439,7 @@ export const useSyncSettings = ({
         } finally {
             setTransferAction(null);
         }
-    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
     const handleImportMindwtrCsv = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1421,7 +1448,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopMindwtrCsvImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(parseResult.errors[0] || 'The selected file is not a supported Mindwtr CSV file.', 'error');
+                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported Mindwtr CSV file.'), 'error');
                 return;
             }
 
@@ -1445,7 +1472,7 @@ export const useSyncSettings = ({
                         ? `${preview.standaloneTaskCount} task(s) will stay outside projects.`
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-                    ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+                    ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
             });
             if (!confirmed) return;
@@ -1467,7 +1494,7 @@ export const useSyncSettings = ({
                 ),
                 result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
                 snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
@@ -1475,7 +1502,7 @@ export const useSyncSettings = ({
         } finally {
             setTransferAction(null);
         }
-    }, [formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
 
     const syncPreferences = settings?.syncPreferences ?? {};
     const handleUpdateSyncPreferences = useCallback(

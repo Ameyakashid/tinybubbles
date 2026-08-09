@@ -1472,4 +1472,10 @@ export const arOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'ملاحظات إعداد Dropbox وiCloud وWebDAV ومزامنة الملفات والاسترداد.',
         'settings.importSetupGuideTitle': 'دليل إعداد الاستيراد',
         'settings.importSetupGuideDesc': 'مسارات الاستيراد المدعومة لـ Todoist وTickTick وDGT GTD وOmniFocus وMindwtr CSV وتذكيرات Apple والنسخ الاحتياطية.',
+        'settings.importDiagnostics.adjustedRecords': "احتاج {{count}} من السجلات المستوردة إلى تعديل. راجع البيانات المستوردة.",
+        'settings.importDiagnostics.cannotRead': "تعذر على Mindwtr قراءة هذا التصدير بأمان.",
+        'settings.importDiagnostics.limitExceeded': "يتجاوز هذا التصدير حد الاستيراد الآمن. اختر تصديرًا أصغر.",
+        'settings.importDiagnostics.missingColumn': "يفتقد هذا التصدير العمود المطلوب: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "لم يتم العثور على سجلات قابلة للاستيراد في هذا التصدير.",
+        'settings.importDiagnostics.renamedContainer': "تمت إعادة تسمية «{{from}}» إلى «{{to}}» لتجنب اسم مكرر.",
 };

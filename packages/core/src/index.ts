@@ -138,6 +138,7 @@ export * from './capture';
 export * from './session-restore';
 export * from './whisper-models';
 export * from './import-apply';
+export * from './import-diagnostics';
 export * from './import-runner';
 export * from './global-search-filter';
 export * from './calendar-composer';

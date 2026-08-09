@@ -2274,4 +2274,10 @@ export const zhHant: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox、iCloud、WebDAV、檔案同步和還原的設定說明。',
         'settings.importSetupGuideTitle': '匯入設定指南',
         'settings.importSetupGuideDesc': '支援 Todoist、TickTick、DGT GTD、OmniFocus、Mindwtr CSV、Apple 提醒事項和備份匯入路徑。',
+        'settings.importDiagnostics.adjustedRecords': "有 {{count}} 筆匯入記錄需要調整。請檢查匯入的資料。",
+        'settings.importDiagnostics.cannotRead': "Mindwtr 無法安全讀取此匯出檔案。",
+        'settings.importDiagnostics.limitExceeded': "此匯出檔案超過安全匯入限制。請選擇較小的匯出檔案。",
+        'settings.importDiagnostics.missingColumn': "此匯出檔案缺少必要欄位：{{column}}。",
+        'settings.importDiagnostics.noImportableRecords': "此匯出檔案中沒有可匯入的記錄。",
+        'settings.importDiagnostics.renamedContainer': "「{{from}}」已重新命名為「{{to}}」，以避免名稱重複。",
 };

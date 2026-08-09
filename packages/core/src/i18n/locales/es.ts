@@ -1389,4 +1389,10 @@ export const esOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Notas de configuración para Dropbox, iCloud, WebDAV, sincronización de archivos y recuperación.',
         'settings.importSetupGuideTitle': 'Guía de configuración de importación',
         'settings.importSetupGuideDesc': 'Rutas de importación compatibles para Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Recordatorios de Apple y copias de seguridad.',
+        'settings.importDiagnostics.adjustedRecords': "Se tuvieron que ajustar {{count}} registros importados. Revisa los datos importados.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr no pudo leer esta exportación de forma segura.",
+        'settings.importDiagnostics.limitExceeded': "Esta exportación supera un límite seguro de importación. Elige una exportación más pequeña.",
+        'settings.importDiagnostics.missingColumn': "A esta exportación le falta la columna obligatoria: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "No se encontraron registros importables en esta exportación.",
+        'settings.importDiagnostics.renamedContainer': "Se cambió el nombre de «{{from}}» a «{{to}}» para evitar un nombre duplicado.",
 };

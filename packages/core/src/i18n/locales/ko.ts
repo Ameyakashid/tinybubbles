@@ -2320,4 +2320,10 @@ export const koOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, 파일 동기화 및 복구 설정 안내입니다.',
         'settings.importSetupGuideTitle': '가져오기 설정 가이드',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple 미리 알림 및 백업 가져오기를 지원합니다.',
+        'settings.importDiagnostics.adjustedRecords': "가져온 레코드 {{count}}개를 조정해야 했습니다. 가져온 데이터를 확인하세요.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr에서 이 내보내기 파일을 안전하게 읽을 수 없습니다.",
+        'settings.importDiagnostics.limitExceeded': "이 내보내기 파일은 안전한 가져오기 한도를 초과합니다. 더 작은 파일을 선택하세요.",
+        'settings.importDiagnostics.missingColumn': "이 내보내기 파일에 필수 열이 없습니다: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "이 내보내기 파일에서 가져올 수 있는 레코드를 찾지 못했습니다.",
+        'settings.importDiagnostics.renamedContainer': "중복된 이름을 피하기 위해 “{{from}}”의 이름을 “{{to}}”(으)로 변경했습니다.",
 };

@@ -2274,4 +2274,10 @@ export const zhHans: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox、iCloud、WebDAV、文件同步和恢复的设置说明。',
         'settings.importSetupGuideTitle': '导入设置指南',
         'settings.importSetupGuideDesc': '支持 Todoist、TickTick、DGT GTD、OmniFocus、Mindwtr CSV、Apple 提醒事项和备份导入路径。',
+        'settings.importDiagnostics.adjustedRecords': "有 {{count}} 条导入记录需要调整。请检查导入的数据。",
+        'settings.importDiagnostics.cannotRead': "Mindwtr 无法安全读取此导出文件。",
+        'settings.importDiagnostics.limitExceeded': "此导出文件超过安全导入限制。请选择较小的导出文件。",
+        'settings.importDiagnostics.missingColumn': "此导出文件缺少必需列：{{column}}。",
+        'settings.importDiagnostics.noImportableRecords': "此导出文件中没有可导入的记录。",
+        'settings.importDiagnostics.renamedContainer': "“{{from}}”已重命名为“{{to}}”，以避免名称重复。",
 };

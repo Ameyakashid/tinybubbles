@@ -68,6 +68,30 @@ describe('runImport', () => {
             fileName: 'Inbox.csv',
             taskCount: 1,
         });
+        expect(result.diagnostics).toEqual([]);
+    });
+
+    it('returns stable diagnostic codes and parameters instead of requiring shells to render prose', () => {
+        const result = parseImportSource('todoist', {
+            fileName: 'Inbox.csv',
+            text: 'TYPE,CONTENT,DATE,DATE_LANG\ntask,Repeat task,every day,en',
+        });
+
+        expect(result.diagnostics).toContainEqual({
+            code: 'unsupported-recurrence',
+            params: { count: 1 },
+            severity: 'warning',
+        });
+
+        const invalid = parseImportSource('mindwtr-csv', {
+            fileName: 'export.csv',
+            text: 'Status\nnext',
+        });
+        expect(invalid.diagnostics).toContainEqual({
+            code: 'missing-required-column',
+            params: { column: 'Title' },
+            severity: 'error',
+        });
     });
 
     it('dispatches to the backup descriptor, persists, and logs start/complete', async () => {

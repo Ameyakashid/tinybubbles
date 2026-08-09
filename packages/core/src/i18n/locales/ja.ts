@@ -1445,4 +1445,10 @@ export const jaOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox、iCloud、WebDAV、ファイル同期、復元のセットアップ手順。',
         'settings.importSetupGuideTitle': 'インポートのセットアップガイド',
         'settings.importSetupGuideDesc': 'Todoist、TickTick、DGT GTD、OmniFocus、Mindwtr CSV、Appleリマインダー、バックアップからのインポートに対応しています。',
+        'settings.importDiagnostics.adjustedRecords': "インポートした{{count}}件のレコードを調整しました。インポートしたデータを確認してください。",
+        'settings.importDiagnostics.cannotRead': "Mindwtrはこのエクスポートを安全に読み取れませんでした。",
+        'settings.importDiagnostics.limitExceeded': "このエクスポートは安全なインポート上限を超えています。より小さいエクスポートを選択してください。",
+        'settings.importDiagnostics.missingColumn': "このエクスポートには必須列がありません: {{column}}。",
+        'settings.importDiagnostics.noImportableRecords': "このエクスポートにはインポート可能なレコードがありませんでした。",
+        'settings.importDiagnostics.renamedContainer': "名前の重複を避けるため、「{{from}}」を「{{to}}」に変更しました。",
 };

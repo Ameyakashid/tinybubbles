@@ -580,4 +580,10 @@ export const nlOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Instellingsnotities voor Dropbox, iCloud, WebDAV, bestandssynchronisatie en herstel.',
         'settings.importSetupGuideTitle': 'Handleiding voor importinstellingen',
         'settings.importSetupGuideDesc': 'Ondersteunde importroutes voor Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Herinneringen en back-ups.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} geïmporteerde records moesten worden aangepast. Controleer de geïmporteerde gegevens.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr kon deze export niet veilig lezen.",
+        'settings.importDiagnostics.limitExceeded': "Deze export overschrijdt een veilige importlimiet. Kies een kleinere export.",
+        'settings.importDiagnostics.missingColumn': "In deze export ontbreekt de vereiste kolom: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "Er zijn geen importeerbare records gevonden in deze export.",
+        'settings.importDiagnostics.renamedContainer': "‘{{from}}’ is hernoemd naar ‘{{to}}’ om een dubbele naam te voorkomen.",
 };

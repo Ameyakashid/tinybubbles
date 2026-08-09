@@ -2303,4 +2303,10 @@ export const faOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'نکات راه‌اندازی برای Dropbox، iCloud، WebDAV، همگام‌سازی فایل و بازیابی.',
         'settings.importSetupGuideTitle': 'راهنمای راه‌اندازی واردکردن',
         'settings.importSetupGuideDesc': 'روش‌های واردکردن پشتیبانی‌شده برای Todoist، TickTick، DGT GTD، OmniFocus، Mindwtr CSV، یادآورهای Apple و نسخه‌های پشتیبان.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} رکورد واردشده نیاز به اصلاح داشت. داده‌های واردشده را بررسی کنید.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr نتوانست این خروجی را با اطمینان بخواند.",
+        'settings.importDiagnostics.limitExceeded': "این خروجی از حد امن واردکردن فراتر می‌رود. خروجی کوچک‌تری انتخاب کنید.",
+        'settings.importDiagnostics.missingColumn': "ستون الزامی {{column}} در این خروجی وجود ندارد.",
+        'settings.importDiagnostics.noImportableRecords': "هیچ رکورد قابل واردکردنی در این خروجی یافت نشد.",
+        'settings.importDiagnostics.renamedContainer': "برای جلوگیری از نام تکراری، «{{from}}» به «{{to}}» تغییر نام یافت.",
 };

@@ -1445,4 +1445,10 @@ export const ruOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Примечания по настройке Dropbox, iCloud, WebDAV, синхронизации файлов и восстановления.',
         'settings.importSetupGuideTitle': 'Руководство по настройке импорта',
         'settings.importSetupGuideDesc': 'Поддерживаемые способы импорта из Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Напоминаний Apple и резервных копий.',
+        'settings.importDiagnostics.adjustedRecords': "Для {{count}} импортированных записей потребовалась корректировка. Проверьте импортированные данные.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr не удалось безопасно прочитать этот экспорт.",
+        'settings.importDiagnostics.limitExceeded': "Этот экспорт превышает безопасный лимит импорта. Выберите экспорт меньшего размера.",
+        'settings.importDiagnostics.missingColumn': "В этом экспорте отсутствует обязательный столбец: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "В этом экспорте не найдено записей для импорта.",
+        'settings.importDiagnostics.renamedContainer': "«{{from}}» переименовано в «{{to}}», чтобы избежать повторяющегося имени.",
 };

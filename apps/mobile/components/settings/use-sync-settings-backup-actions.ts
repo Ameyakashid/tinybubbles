@@ -1,7 +1,14 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import Constants from 'expo-constants';
-import { summarizeBackupMerge } from '@mindwtr/core';
+import {
+    createImportDiagnostic,
+    createImportDiagnostics,
+    formatImportDiagnostic,
+    summarizeBackupMerge,
+    type ImportDiagnostic,
+    type ImportDiagnosticSeverity,
+} from '@mindwtr/core';
 import type {
     Area,
     BackupValidation,
@@ -84,6 +91,22 @@ export function useSyncSettingsBackupActions({
     tasks,
     updateSettings,
 }: UseSyncSettingsBackupActionsParams) {
+    const formatImportMessages = useCallback((
+        messages: readonly string[],
+        severity: ImportDiagnosticSeverity = 'warning',
+    ): string[] => createImportDiagnostics(messages, severity)
+        .map((diagnostic) => formatImportDiagnostic(diagnostic, tr)), [tr]);
+    const formatImportError = useCallback((
+        diagnostics: readonly ImportDiagnostic[],
+        fallback: string,
+    ): string => {
+        const diagnostic = diagnostics.find((item) => item.severity === 'error');
+        return diagnostic ? formatImportDiagnostic(diagnostic, tr) : fallback;
+    }, [tr]);
+    const formatThrownImportError = useCallback((error: unknown): string => formatImportDiagnostic(
+        createImportDiagnostic(error instanceof Error ? error.message : '', 'error'),
+        tr,
+    ), [tr]);
     const formatRecoverySnapshotLabel = useCallback((fileName: string): string => {
         const match = fileName.match(/^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})\.snapshot\.json$/i);
         if (!match) return fileName;
@@ -128,10 +151,10 @@ export function useSyncSettingsBackupActions({
                 : null,
             tr('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem'),
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+            ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
         ].filter(Boolean);
         return details.join('\n');
-    }, [tr]);
+    }, [formatImportMessages, tr]);
 
     const buildTickTickSummary = useCallback((preview: NonNullable<TickTickImportParseResult['preview']>) => {
         const projectLines = preview.projects
@@ -156,10 +179,10 @@ export function useSyncSettingsBackupActions({
                 : null,
             tr('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem'),
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+            ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
         ].filter(Boolean);
         return details.join('\n');
-    }, [tr]);
+    }, [formatImportMessages, tr]);
 
     const buildDgtSummary = useCallback((preview: NonNullable<DgtImportParseResult['preview']>) => {
         const projectLines = preview.projects
@@ -183,10 +206,10 @@ export function useSyncSettingsBackupActions({
                 ? tr('settings.backupMobile.tasksWillStayOutsideProjects', { taskCount: preview.standaloneTaskCount })
                 : null,
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+            ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
         ].filter(Boolean);
         return details.join('\n');
-    }, [tr]);
+    }, [formatImportMessages, tr]);
 
     const buildOmniFocusSummary = useCallback((preview: NonNullable<OmniFocusImportParseResult['preview']>) => {
         const projectLines = preview.projects
@@ -211,10 +234,10 @@ export function useSyncSettingsBackupActions({
                 : null,
             tr('settings.backupMobile.importedTasksKeepOmnifocusNotesDatesTagsRecurrenceAndChecklist'),
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+            ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
         ].filter(Boolean);
         return details.join('\n');
-    }, [tr]);
+    }, [formatImportMessages, tr]);
 
     const buildMindwtrCsvSummary = useCallback((preview: NonNullable<MindwtrCsvImportParseResult['preview']>) => {
         const projectLines = preview.projects
@@ -241,10 +264,10 @@ export function useSyncSettingsBackupActions({
                 ? tr('settings.backupMobile.tasksWillStayOutsideProjects', { taskCount: preview.standaloneTaskCount })
                 : null,
             ...(projectLines.length > 0 ? ['', ...projectLines] : []),
-            ...(preview.warnings.length > 0 ? ['', ...preview.warnings] : []),
+            ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
         ].filter(Boolean);
         return details.join('\n');
-    }, [tr]);
+    }, [formatImportMessages, tr]);
 
     const handleBackup = useCallback(async () => {
         setBackupAction('export');
@@ -387,7 +410,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.subtasksBecameChecklistItems', { subtaskCount: result.importedChecklistItemCount })
                     : null,
                 tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean);
             showToast({
                 title: tr('settings.backupMobile.importComplete'),
@@ -397,11 +420,11 @@ export function useSyncSettingsBackupActions({
             });
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+    }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmTickTickImport = useCallback(async (parsedData: ParsedTickTickImportData) => {
         setBackupAction('import');
@@ -414,7 +437,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.checklistItemsPreserved', { checklistItemCount: result.importedChecklistItemCount })
                     : null,
                 tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean);
             showToast({
                 title: tr('settings.backupMobile.importComplete'),
@@ -424,11 +447,11 @@ export function useSyncSettingsBackupActions({
             });
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+    }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmDgtImport = useCallback(async (parsedData: ParsedDgtImportData) => {
         setBackupAction('import');
@@ -441,7 +464,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.checklistItemsPreserved', { checklistItemCount: result.importedChecklistItemCount })
                     : null,
                 tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean);
             showToast({
                 title: tr('settings.backupMobile.importComplete'),
@@ -451,11 +474,11 @@ export function useSyncSettingsBackupActions({
             });
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+    }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmOmniFocusImport = useCallback(async (parsedData: ParsedOmniFocusImportData) => {
         setBackupAction('import');
@@ -474,7 +497,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.tasksStayedOutsideProjects', { taskCount: result.importedStandaloneTaskCount })
                     : null,
                 tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean);
             showToast({
                 title: tr('settings.backupMobile.importComplete'),
@@ -484,11 +507,11 @@ export function useSyncSettingsBackupActions({
             });
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+    }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmMindwtrCsvImport = useCallback(async (parsedData: ParsedMindwtrCsvImportData) => {
         setBackupAction('import');
@@ -506,7 +529,7 @@ export function useSyncSettingsBackupActions({
                     ? tr('settings.backupMobile.checklistItemsPreserved', { checklistItemCount: result.importedChecklistItemCount })
                     : null,
                 tr('settings.backupMobile.recoverySnapshotSaved', { snapshotName }),
-                ...(result.warnings.length > 0 ? ['', ...result.warnings] : []),
+                ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean);
             showToast({
                 title: tr('settings.backupMobile.importComplete'),
@@ -516,11 +539,11 @@ export function useSyncSettingsBackupActions({
             });
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
+    }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const handleImportTodoist = useCallback(async () => {
         setBackupAction('import');
@@ -531,7 +554,7 @@ export function useSyncSettingsBackupActions({
             if (!parseResult.valid || !parseResult.preview) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedTodoistExport')
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedTodoistExport'))
                 );
                 return;
             }
@@ -548,11 +571,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildTodoistSummary, confirmTodoistImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildTodoistSummary, confirmTodoistImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportTickTick = useCallback(async () => {
         setBackupAction('import');
@@ -563,7 +586,7 @@ export function useSyncSettingsBackupActions({
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedTicktickBackup')
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedTicktickBackup'))
                 );
                 return;
             }
@@ -581,11 +604,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildTickTickSummary, confirmTickTickImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildTickTickSummary, confirmTickTickImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportDgt = useCallback(async () => {
         setBackupAction('import');
@@ -596,7 +619,7 @@ export function useSyncSettingsBackupActions({
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedDgtGtdExport')
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedDgtGtdExport'))
                 );
                 return;
             }
@@ -614,11 +637,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildDgtSummary, confirmDgtImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildDgtSummary, confirmDgtImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportOmniFocus = useCallback(async () => {
         setBackupAction('import');
@@ -629,7 +652,7 @@ export function useSyncSettingsBackupActions({
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedOmnifocusExport')
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedOmnifocusExport'))
                 );
                 return;
             }
@@ -647,11 +670,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildOmniFocusSummary, confirmOmniFocusImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildOmniFocusSummary, confirmOmniFocusImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportMindwtrCsv = useCallback(async () => {
         setBackupAction('import');
@@ -662,7 +685,7 @@ export function useSyncSettingsBackupActions({
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    parseResult.errors[0] || tr('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile')
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile'))
                 );
                 return;
             }
@@ -680,11 +703,11 @@ export function useSyncSettingsBackupActions({
             );
         } catch (error) {
             logSettingsError(error);
-            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), String(error), 5200);
+            showSettingsErrorToast(tr('settings.backupMobile.importFailed'), formatThrownImportError(error), 5200);
         } finally {
             setBackupAction(null);
         }
-    }, [buildMindwtrCsvSummary, confirmMindwtrCsvImport, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildMindwtrCsvSummary, confirmMindwtrCsvImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleRestoreRecoverySnapshot = useCallback(async (snapshotName: string) => {
         Alert.alert(

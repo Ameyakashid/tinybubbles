@@ -2341,4 +2341,10 @@ export const en: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Setup notes for Dropbox, iCloud, WebDAV, File Sync, and recovery.',
         'settings.importSetupGuideTitle': 'Import setup guide',
         'settings.importSetupGuideDesc': 'Supported Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Reminders, and backup import paths.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} imported record(s) needed an adjustment. Review the imported data.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr could not safely read this export.",
+        'settings.importDiagnostics.limitExceeded': "This export exceeds a safe import limit. Choose a smaller export.",
+        'settings.importDiagnostics.missingColumn': "This export is missing the required column: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "No importable records were found in this export.",
+        'settings.importDiagnostics.renamedContainer': "“{{from}}” was renamed to “{{to}}” to avoid a duplicate name.",
 };

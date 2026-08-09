@@ -1491,4 +1491,10 @@ export const trOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, Dosya Eşitleme ve kurtarma için kurulum notları.',
         'settings.importSetupGuideTitle': 'İçe aktarma kurulum kılavuzu',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Anımsatıcılar ve yedekler için desteklenen içe aktarma yolları.',
+        'settings.importDiagnostics.adjustedRecords': "İçe aktarılan {{count}} kayıt için ayarlama gerekti. İçe aktarılan verileri gözden geçirin.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr bu dışa aktarmayı güvenli bir şekilde okuyamadı.",
+        'settings.importDiagnostics.limitExceeded': "Bu dışa aktarma güvenli içe aktarma sınırını aşıyor. Daha küçük bir dışa aktarma seçin.",
+        'settings.importDiagnostics.missingColumn': "Bu dışa aktarmada gerekli sütun eksik: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "Bu dışa aktarmada içe aktarılabilir kayıt bulunamadı.",
+        'settings.importDiagnostics.renamedContainer': "Yinelenen bir adı önlemek için “{{from}}”, “{{to}}” olarak yeniden adlandırıldı.",
 };

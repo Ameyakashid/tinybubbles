@@ -2302,4 +2302,10 @@ export const svOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Inställningsanteckningar för Dropbox, iCloud, WebDAV, filsynkronisering och återställning.',
         'settings.importSetupGuideTitle': 'Guide för importinställning',
         'settings.importSetupGuideDesc': 'Importvägar som stöds för Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Påminnelser och säkerhetskopior.',
+        'settings.importDiagnostics.adjustedRecords': "{{count}} importerade poster behövde justeras. Granska de importerade uppgifterna.",
+        'settings.importDiagnostics.cannotRead': "Mindwtr kunde inte läsa exporten på ett säkert sätt.",
+        'settings.importDiagnostics.limitExceeded': "Exporten överskrider en säker importgräns. Välj en mindre export.",
+        'settings.importDiagnostics.missingColumn': "Exporten saknar den obligatoriska kolumnen: {{column}}.",
+        'settings.importDiagnostics.noImportableRecords': "Inga importerbara poster hittades i exporten.",
+        'settings.importDiagnostics.renamedContainer': "”{{from}}” bytte namn till ”{{to}}” för att undvika ett dubblettnamn.",
 };
