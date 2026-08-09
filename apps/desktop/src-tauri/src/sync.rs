@@ -3516,6 +3516,81 @@ mod tests {
     }
 
     #[test]
+    fn sync_backup_replace_failure_restores_previous_backup() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let backup = dir.path().join("data.json.bak");
+        let backup_tmp = dir.path().join("data.json.bak.tmp");
+        let backup_previous = dir.path().join("data.json.bak.previous");
+        fs::write(&backup, b"previous").expect("write previous backup");
+        fs::write(&backup_tmp, b"replacement").expect("write replacement backup");
+        let rename_calls = std::cell::Cell::new(0usize);
+
+        let result = replace_sync_backup_preserving_previous(
+            &backup_tmp,
+            &backup,
+            &backup_previous,
+            |path| fs::remove_file(path),
+            |from, to| {
+                let call = rename_calls.get() + 1;
+                rename_calls.set(call);
+                if call == 2 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "injected replacement failure",
+                    ));
+                }
+                fs::rename(from, to)
+            },
+        );
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(&backup).expect("restored backup"), b"previous");
+        assert!(!backup_previous.exists());
+        assert_eq!(
+            fs::read(&backup_tmp).expect("replacement remains"),
+            b"replacement"
+        );
+    }
+
+    #[test]
+    fn sync_backup_restore_failure_keeps_previous_backup_readable() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let backup = dir.path().join("data.json.bak");
+        let backup_tmp = dir.path().join("data.json.bak.tmp");
+        let backup_previous = dir.path().join("data.json.bak.previous");
+        fs::write(&backup, br#"{"tasks":[{"id":"preserved"}]}"#)
+            .expect("write previous backup");
+        fs::write(&backup_tmp, br#"{"tasks":[{"id":"replacement"}]}"#)
+            .expect("write replacement backup");
+        let rename_calls = std::cell::Cell::new(0usize);
+
+        let result = replace_sync_backup_preserving_previous(
+            &backup_tmp,
+            &backup,
+            &backup_previous,
+            |path| fs::remove_file(path),
+            |from, to| {
+                let call = rename_calls.get() + 1;
+                rename_calls.set(call);
+                if call >= 2 {
+                    return Err(std::io::Error::other("injected rename failure"));
+                }
+                fs::rename(from, to)
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!backup.exists());
+        assert!(backup_previous.exists());
+        assert_eq!(
+            read_sync_backup(&backup, &backup_previous)
+                .and_then(|value| value["tasks"][0]["id"].as_str().map(str::to_owned))
+                .as_deref(),
+            Some("preserved")
+        );
+    }
+
+    #[test]
     fn acquire_sync_lock_rejects_fresh_existing_lock() {
         let dir = tempfile::tempdir().expect("temp dir");
         let first = acquire_sync_lock(dir.path()).expect("first lock");
@@ -7046,6 +7121,50 @@ fn empty_remote_app_data() -> serde_json::Value {
 // Runs off the UI thread: the sync folder can be a network or FUSE mount
 // (rclone, WinFSP) where a single read blocks for tens of seconds, and a
 // plain `#[tauri::command]` executes on the main thread and freezes the window.
+fn replace_sync_backup_preserving_previous<Remove, Rename>(
+    replacement: &Path,
+    target: &Path,
+    previous: &Path,
+    mut remove: Remove,
+    mut rename: Rename,
+) -> Result<(), String>
+where
+    Remove: FnMut(&Path) -> std::io::Result<()>,
+    Rename: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    if previous.exists() {
+        remove(previous).map_err(|error| {
+            format!("Failed to clear the previous sync-backup recovery file: {error}")
+        })?;
+    }
+
+    rename(target, previous)
+        .map_err(|error| format!("Failed to preserve the current sync backup: {error}"))?;
+
+    match rename(replacement, target) {
+        Ok(()) => {
+            let _ = remove(previous);
+            Ok(())
+        }
+        Err(replace_error) => match rename(previous, target) {
+            Ok(()) => Err(format!(
+                "Failed to install the replacement sync backup; restored the previous backup: {replace_error}"
+            )),
+            Err(restore_error) => Err(format!(
+                "Failed to install the replacement sync backup ({replace_error}); the previous backup remains at {} because restoration also failed: {restore_error}",
+                previous.display()
+            )),
+        },
+    }
+}
+
+fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<Value> {
+    [backup_file, previous_file]
+        .into_iter()
+        .filter(|path| path.exists())
+        .find_map(|path| read_json_with_retries(path, 2).ok())
+}
+
 #[tauri::command(async)]
 pub(crate) fn read_sync_file(
     app: tauri::AppHandle,
@@ -7059,6 +7178,7 @@ pub(crate) fn read_sync_file(
     };
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
+    let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
     let legacy_sync_file = sync_dir.join(format!("{}-sync.json", APP_NAME));
 
     let find_seed_backup_file = |dir: &Path| -> Option<PathBuf> {
@@ -7107,10 +7227,8 @@ pub(crate) fn read_sync_file(
             sync_dir
         );
         log::warn!("{}", msg);
-        if backup_file.exists() {
-            if let Ok(value) = read_json_with_retries(&backup_file, 2) {
-                return Ok(value);
-            }
+        if let Some(value) = read_sync_backup(&backup_file, &backup_previous_file) {
+            return Ok(value);
         }
         if let Some(result) = read_seed_or_legacy_file() {
             return result;
@@ -7128,10 +7246,8 @@ pub(crate) fn read_sync_file(
     match read_json_with_retries(&sync_file, 5) {
         Ok(value) => Ok(value),
         Err(primary_err) => {
-            if backup_file.exists() {
-                if let Ok(value) = read_json_with_retries(&backup_file, 2) {
-                    return Ok(value);
-                }
+            if let Some(value) = read_sync_backup(&backup_file, &backup_previous_file) {
+                return Ok(value);
             }
             Err(primary_err)
         }
@@ -7154,6 +7270,7 @@ pub(crate) fn write_sync_file(
     };
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
+    let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
     let tmp_file = sync_dir.join(format!("{}.tmp", DATA_FILE_NAME));
 
     if is_icloud_evicted(&sync_file) {
@@ -7177,11 +7294,19 @@ pub(crate) fn write_sync_file(
             let backup_tmp = sync_dir.join(format!("{}.bak.tmp", DATA_FILE_NAME));
             let _ = fs::remove_file(&backup_tmp);
             if fs::copy(&sync_file, &backup_tmp).is_ok() {
-                if cfg!(windows) && backup_file.exists() {
-                    let _ = fs::remove_file(&backup_file);
-                }
-                if let Err(err) = fs::rename(&backup_tmp, &backup_file) {
-                    log::warn!("Sync backup rename failed ({err}); keeping previous backup");
+                let replace_result = if cfg!(windows) && backup_file.exists() {
+                    replace_sync_backup_preserving_previous(
+                        &backup_tmp,
+                        &backup_file,
+                        &backup_previous_file,
+                        |path| fs::remove_file(path),
+                        |from, to| fs::rename(from, to),
+                    )
+                } else {
+                    fs::rename(&backup_tmp, &backup_file).map_err(|error| error.to_string())
+                };
+                if let Err(err) = replace_result {
+                    log::warn!("Sync backup replacement failed: {err}");
                     let _ = fs::remove_file(&backup_tmp);
                 }
             }
