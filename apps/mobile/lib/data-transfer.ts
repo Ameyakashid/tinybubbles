@@ -240,11 +240,15 @@ const logStaleDataTransfer = ({
     });
 };
 
-const mobileDataTransferBoundaries = () => ({
+const mobileDataTransferBoundaries = (): Omit<DataTransferBoundaries, 'createRecoverySnapshot'> => ({
     flushPendingSave,
     getCurrentChangeAt: getLocalChangeAt,
     readCurrentData: () => mobileStorage.getData(),
-    persistData: (data: AppData) => mobileStorage.saveData(data),
+    persistData: async (data: AppData): Promise<void> => {
+        // Storage adapters may return their canonical persisted snapshot. The transfer contract
+        // intentionally reloads through refreshData, so consume that return value here.
+        await mobileStorage.saveData(data);
+    },
     refreshData: () => useTaskStore.getState().fetchData({ silent: true }),
     onStale: logStaleDataTransfer,
 });
