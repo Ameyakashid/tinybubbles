@@ -45,6 +45,8 @@ type AttachmentSyncResult = Promise<AppData | boolean | null | undefined>;
 export type FileSyncReadResult = {
     data: AppData;
     fingerprint: string;
+    source?: string;
+    needsRepair?: boolean;
 };
 
 /**
@@ -96,6 +98,7 @@ const isFileSyncReadResult = (value: AppData | FileSyncReadResult): value is Fil
 
 export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTransport): SyncBackendIO {
     let fileRemoteFingerprint: string | null = null;
+    let fileRemoteNeedsRepair = false;
     /** Dropbox token-retry policy: try with the current token; on an
      *  unauthorized response, force-refresh once and retry once; any other
      *  error, or a second unauthorized response, propagates. Outer transient
@@ -153,9 +156,11 @@ export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTran
             const remote = await transport.fileRead();
             if (remote && isFileSyncReadResult(remote)) {
                 fileRemoteFingerprint = remote.fingerprint;
+                fileRemoteNeedsRepair = remote.needsRepair === true;
                 return remote.data;
             }
             fileRemoteFingerprint = null;
+            fileRemoteNeedsRepair = false;
             return remote;
         },
         writeRemote: async (sanitized) => {
@@ -199,7 +204,9 @@ export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTran
             } else {
                 await transport.fileWrite(sanitized);
             }
+            fileRemoteNeedsRepair = false;
         },
+        requiresRemoteRepair: () => ctx.backend === 'file' && fileRemoteNeedsRepair,
         readRemoteFingerprint: async () => {
             if (ctx.backend === 'webdav') {
                 if (!ctx.webdav?.url) return null;

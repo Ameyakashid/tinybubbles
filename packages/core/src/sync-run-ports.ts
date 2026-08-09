@@ -67,6 +67,9 @@ export interface SyncBackendIO {
     readRemote(): Promise<AppData | null | undefined>;
     /** Transport write of the already-sanitized payload. */
     writeRemote(sanitized: AppData): Promise<SyncRemoteWriteOutcome>;
+    /** True when a transport read recovered from a fallback representation and
+     *  the canonical remote must be rewritten even if its content is aligned. */
+    requiresRemoteRepair?(): boolean;
     /** Cheap remote fingerprint (HEAD-equivalent) for the fast-check skip.
      *  Null when the remote has no data. Omit when the backend has no cheap
      *  check (file, CloudKit) — the fast-check then falls back to a full cycle. */

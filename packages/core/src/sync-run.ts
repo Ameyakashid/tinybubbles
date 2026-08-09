@@ -449,6 +449,7 @@ class SharedSyncRunMachine {
         if (!this.options.activationProbe
             && previousRemoteDocument
             && !remoteNeedsTombstoneCompaction
+            && this.requireIo().requiresRemoteRepair?.() !== true
             && areRemoteSyncDocumentsEqual(previousRemoteDocument, remoteDocument)) {
             if (this.backend !== 'cloudkit') {
                 this.notifier.tracePayload?.('remote-write-skipped-unchanged', remoteDocument, { backend: this.backend });

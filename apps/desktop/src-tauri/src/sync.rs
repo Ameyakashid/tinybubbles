@@ -3584,7 +3584,7 @@ mod tests {
         assert!(backup_previous.exists());
         assert_eq!(
             read_sync_backup(&backup, &backup_previous)
-                .and_then(|value| value["tasks"][0]["id"].as_str().map(str::to_owned))
+                .and_then(|value| value.data["tasks"][0]["id"].as_str().map(str::to_owned))
                 .as_deref(),
             Some("preserved")
         );
@@ -3598,9 +3598,61 @@ mod tests {
         fs::write(&backup, br#"{"tasks":[{"id":"backup"}]}"#).expect("write backup");
         fs::write(&seed, br#"{"tasks":[{"id":"seed"}]}"#).expect("write seed");
 
-        let value = read_sync_file_from_dir(dir.path()).expect("recover backup");
+        let recovered = read_sync_file_versioned_from_dir(dir.path()).expect("recover backup");
 
-        assert_eq!(value["tasks"][0]["id"], "backup");
+        assert_eq!(recovered.data["tasks"][0]["id"], "backup");
+        assert_eq!(recovered.source, "backup");
+        assert!(recovered.needs_repair);
+    }
+
+    #[test]
+    fn recovered_backup_is_repaired_without_rotating_corrupt_primary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let primary = dir.path().join(DATA_FILE_NAME);
+        let backup = dir.path().join(format!("{}.bak", DATA_FILE_NAME));
+        fs::write(&primary, b"not-json").expect("write corrupt primary");
+        fs::write(&backup, br#"{"tasks":[{"id":"recovered"}]}"#).expect("write valid backup");
+
+        let recovered = read_sync_file_versioned_from_dir(dir.path()).expect("recover backup");
+        assert!(recovered.needs_repair);
+        assert_eq!(recovered.source, "backup");
+
+        write_sync_file_to_dir(
+            dir.path(),
+            recovered.data.clone(),
+            Some(&recovered.fingerprint),
+        )
+        .expect("repair primary");
+
+        assert_eq!(
+            read_sync_candidate(&primary, 1).expect("repaired primary")["tasks"][0]["id"],
+            "recovered"
+        );
+        assert_eq!(
+            read_sync_candidate(&backup, 1).expect("known-good backup remains")["tasks"][0]["id"],
+            "recovered"
+        );
+    }
+
+    #[test]
+    fn recovered_backup_survives_failure_before_primary_install() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let primary = dir.path().join(DATA_FILE_NAME);
+        let backup = dir.path().join(format!("{}.bak", DATA_FILE_NAME));
+        let tmp = dir.path().join(format!("{}.tmp", DATA_FILE_NAME));
+        fs::write(&primary, b"not-json").expect("write corrupt primary");
+        fs::write(&backup, br#"{"tasks":[{"id":"preserved"}]}"#).expect("write valid backup");
+        fs::create_dir(&tmp).expect("block temp file creation");
+        let recovered = read_sync_file_versioned_from_dir(dir.path()).expect("recover backup");
+
+        let result =
+            write_sync_file_to_dir(dir.path(), recovered.data, Some(&recovered.fingerprint));
+
+        assert!(result.is_err());
+        assert_eq!(
+            read_sync_candidate(&backup, 1).expect("known-good backup survives")["tasks"][0]["id"],
+            "preserved"
+        );
     }
 
     #[test]
@@ -7491,27 +7543,72 @@ fn read_sync_candidate(path: &Path, attempts: usize) -> Result<Value, String> {
     })
 }
 
-fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<Value> {
-    [backup_file, previous_file]
-        .into_iter()
-        .filter(|path| path.exists())
-        .find_map(|path| read_sync_candidate(path, 2).ok())
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SyncFileReadSource {
+    Primary,
+    PrimaryPrevious,
+    Backup,
+    BackupPrevious,
+    Legacy,
+    Seed,
+    Empty,
+}
+
+impl SyncFileReadSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Primary => "primary",
+            Self::PrimaryPrevious => "primaryPrevious",
+            Self::Backup => "backup",
+            Self::BackupPrevious => "backupPrevious",
+            Self::Legacy => "legacy",
+            Self::Seed => "seed",
+            Self::Empty => "empty",
+        }
+    }
+
+    fn needs_repair(self) -> bool {
+        !matches!(self, Self::Primary | Self::Empty)
+    }
+}
+
+#[derive(Debug)]
+struct SyncFileRead {
+    data: Value,
+    source: SyncFileReadSource,
+}
+
+fn read_sync_backup(backup_file: &Path, previous_file: &Path) -> Option<SyncFileRead> {
+    [
+        (backup_file, SyncFileReadSource::Backup),
+        (previous_file, SyncFileReadSource::BackupPrevious),
+    ]
+    .into_iter()
+    .filter(|(path, _)| path.exists())
+    .find_map(|(path, source)| {
+        read_sync_candidate(path, 2)
+            .ok()
+            .map(|data| SyncFileRead { data, source })
+    })
 }
 
 fn read_sync_recovery(
     primary_previous_file: &Path,
     backup_file: &Path,
     backup_previous_file: &Path,
-) -> Option<Value> {
+) -> Option<SyncFileRead> {
     if primary_previous_file.exists() {
-        if let Ok(value) = read_sync_candidate(primary_previous_file, 2) {
-            return Some(value);
+        if let Ok(data) = read_sync_candidate(primary_previous_file, 2) {
+            return Some(SyncFileRead {
+                data,
+                source: SyncFileReadSource::PrimaryPrevious,
+            });
         }
     }
     read_sync_backup(backup_file, backup_previous_file)
 }
 
-fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String> {
+fn read_sync_file_with_source_from_dir(sync_dir: &Path) -> Result<SyncFileRead, String> {
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let primary_previous_file = sync_dir.join(format!("{}.previous", DATA_FILE_NAME));
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
@@ -7547,12 +7644,20 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
         latest.map(|(_, path)| path)
     };
 
-    let read_seed_or_legacy_file = || -> Option<Result<Value, String>> {
+    let read_seed_or_legacy_file = || -> Option<Result<SyncFileRead, String>> {
         if legacy_sync_file.exists() {
-            return Some(read_sync_candidate(&legacy_sync_file, 1));
+            return Some(
+                read_sync_candidate(&legacy_sync_file, 1).map(|data| SyncFileRead {
+                    data,
+                    source: SyncFileReadSource::Legacy,
+                }),
+            );
         }
         if let Some(seed_file) = find_seed_backup_file(sync_dir) {
-            return Some(read_sync_candidate(&seed_file, 1));
+            return Some(read_sync_candidate(&seed_file, 1).map(|data| SyncFileRead {
+                data,
+                source: SyncFileReadSource::Seed,
+            }));
         }
         None
     };
@@ -7584,11 +7689,17 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
         if let Some(result) = read_seed_or_legacy_file() {
             return result;
         }
-        return Ok(empty_remote_app_data());
+        return Ok(SyncFileRead {
+            data: empty_remote_app_data(),
+            source: SyncFileReadSource::Empty,
+        });
     }
 
     match read_sync_candidate(&sync_file, 5) {
-        Ok(value) => Ok(value),
+        Ok(data) => Ok(SyncFileRead {
+            data,
+            source: SyncFileReadSource::Primary,
+        }),
         Err(primary_err) => {
             if let Some(value) =
                 read_sync_recovery(&primary_previous_file, &backup_file, &backup_previous_file)
@@ -7600,11 +7711,17 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
     }
 }
 
+fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String> {
+    read_sync_file_with_source_from_dir(sync_dir).map(|result| result.data)
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SyncFileReadResult {
     data: Value,
     fingerprint: String,
+    source: &'static str,
+    needs_repair: bool,
 }
 
 fn sync_document_fingerprint(data: &Value) -> Result<String, String> {
@@ -7617,9 +7734,14 @@ fn sync_document_fingerprint(data: &Value) -> Result<String, String> {
 }
 
 fn read_sync_file_versioned_from_dir(sync_dir: &Path) -> Result<SyncFileReadResult, String> {
-    let data = read_sync_file_from_dir(sync_dir)?;
-    let fingerprint = sync_document_fingerprint(&data)?;
-    Ok(SyncFileReadResult { data, fingerprint })
+    let result = read_sync_file_with_source_from_dir(sync_dir)?;
+    let fingerprint = sync_document_fingerprint(&result.data)?;
+    Ok(SyncFileReadResult {
+        data: result.data,
+        fingerprint,
+        source: result.source.as_str(),
+        needs_repair: result.source.needs_repair(),
+    })
 }
 
 #[tauri::command(async)]
@@ -7681,7 +7803,7 @@ fn write_sync_file_to_dir(
             }
         }
 
-        if sync_file.exists() {
+        if sync_file.exists() && read_sync_candidate(&sync_file, 1).is_ok() {
             // fs::copy opens the destination with O_TRUNC, which rclone/WinFSP mounts
             // refuse without a VFS write cache — so the .bak silently stopped updating
             // there (#1001). Copy to a fresh temp name (a new file, always allowed) and

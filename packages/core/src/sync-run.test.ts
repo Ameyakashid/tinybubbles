@@ -177,6 +177,21 @@ const createHarness = (config: HarnessConfig = {}) => {
 };
 
 describe('runSharedSyncCycle', () => {
+    it('repairs an aligned file remote recovered from a fallback candidate', async () => {
+        const aligned = createData();
+        const { io, run } = createHarness({
+            local: aligned,
+            remote: aligned,
+            backend: 'file',
+            io: { requiresRemoteRepair: () => true },
+        });
+
+        const result = await run();
+
+        expect(result.success).toBe(true);
+        expect(io.writeRemote).toHaveBeenCalledTimes(1);
+    });
+
     it('returns success without any IO when setup reports the backend disabled', async () => {
         const { harness, io, storage, run, hooks } = createHarness({
             hooks: { setupCycle: vi.fn(async () => ({ kind: 'disabled' as const })) },
