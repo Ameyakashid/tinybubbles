@@ -68,7 +68,10 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<AppData> 
         _allPeople: allPeople,
         _peopleById: new Map(allPeople.map((person) => [person.id, person] as const)),
         settings: canonical.settings ?? state.settings,
-        lastDataChangeAt: Date.now(),
+        lastDataChangeAt: Math.max(
+            localDataWatcherDependencies.now(),
+            state.lastDataChangeAt + 1,
+        ),
     }));
     return canonical;
 };

@@ -885,6 +885,7 @@ describe('local-data-watcher', () => {
     });
 
     it('preserves merged people when writing external data through the store', async () => {
+        useTaskStore.setState({ lastDataChangeAt: 9_000_000_000_000_000 });
         externalData = {
             ...emptyData(),
             people: [
@@ -905,6 +906,7 @@ describe('local-data-watcher', () => {
         expect(useTaskStore.getState().people.some((person) => person.id === 'person-1')).toBe(true);
         expect(useTaskStore.getState()._allPeople.some((person) => person.id === 'person-1')).toBe(true);
         expect(useTaskStore.getState()._peopleById.get('person-1')?.name).toBe('Alex');
+        expect(useTaskStore.getState().lastDataChangeAt).toBe(9_000_000_000_000_001);
     });
 
     it('skips merge work when the external payload already matches the local snapshot', async () => {
