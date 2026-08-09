@@ -2090,43 +2090,47 @@ export class SyncService {
             }
 
             if (resolution === 'keep-local') {
-                await syncServiceDependencies.flushPendingSave();
-                const localData = await injectExternalCalendars(await readLocalDataForSync());
-                const sanitized = sanitizeAppDataForRemote(localData);
-                await SyncService.markSyncWrite(sanitized);
-                try {
-                    await invokeSyncNative('write_sync_file', { data: sanitized });
-                    return await SyncService.performSync();
-                } catch (error) {
-                    SyncService.finalizeSyncWriteIgnoreWindow();
-                    throw error;
-                }
+                await runSyncDocumentExclusive(async () => {
+                    await syncServiceDependencies.flushPendingSave();
+                    const localData = await injectExternalCalendars(await readLocalDataForSync());
+                    const sanitized = sanitizeAppDataForRemote(localData);
+                    await SyncService.markSyncWrite(sanitized);
+                    try {
+                        await invokeSyncNative('write_sync_file', { data: sanitized });
+                    } catch (error) {
+                        SyncService.finalizeSyncWriteIgnoreWindow();
+                        throw error;
+                    }
+                });
+                return await SyncService.performSync();
             }
 
-            await syncServiceDependencies.flushPendingSave();
-            const externalData = normalizeAppData(await invokeSyncNative<AppData>('read_sync_file'));
-            await persistLocalDataForSync(externalData, { mode: 'exact' });
-            await getStoreState().fetchData({ silent: true });
-            const now = new Date().toISOString();
-            const nextHistory = appendSyncHistory(getStoreState().settings, {
-                at: now,
-                status: 'success',
-                backend: 'file',
-                type: 'pull',
-                conflicts: 0,
-                conflictIds: [],
-                maxClockSkewMs: 0,
-                timestampAdjustments: 0,
-                details: 'external_override',
+            return await runSyncDocumentExclusive(async () => {
+                await syncServiceDependencies.flushPendingSave();
+                const externalData = normalizeAppData(await invokeSyncNative<AppData>('read_sync_file'));
+                await persistLocalDataForSync(externalData, { mode: 'exact' });
+                await getStoreState().fetchData({ silent: true });
+                const now = new Date().toISOString();
+                const nextHistory = appendSyncHistory(getStoreState().settings, {
+                    at: now,
+                    status: 'success',
+                    backend: 'file',
+                    type: 'pull',
+                    conflicts: 0,
+                    conflictIds: [],
+                    maxClockSkewMs: 0,
+                    timestampAdjustments: 0,
+                    details: 'external_override',
+                });
+                const persisted = await SyncService.persistSuccessfulSyncStatus('success', now, nextHistory);
+                if (!persisted) {
+                    throw new Error('Failed to persist sync status');
+                }
+                if (pendingChange?.incomingHash) {
+                    SyncService.lastObservedHash = pendingChange.incomingHash;
+                }
+                return { success: true };
             });
-            const persisted = await SyncService.persistSuccessfulSyncStatus('success', now, nextHistory);
-            if (!persisted) {
-                throw new Error('Failed to persist sync status');
-            }
-            if (pendingChange?.incomingHash) {
-                SyncService.lastObservedHash = pendingChange.incomingHash;
-            }
-            return { success: true };
         } catch (error) {
             SyncService.setPendingExternalSyncChange(pendingChange);
             const message = error instanceof Error ? error.message : String(error);

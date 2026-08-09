@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    runDataTransferTransactionWithoutSnapshot,
     runSerializedSyncDocumentOperation,
     type AppData,
     type Attachment,
@@ -46,6 +47,69 @@ const waitForAssertion = async (assertion: () => void, maxAttempts = 200): Promi
     throw lastError ?? new Error('Timed out waiting for expectation');
 };
 
+const ACTIVE_TRANSFER_EVENTS = [
+    'transfer:flush',
+    'transfer:read',
+    'transfer:persist:start',
+] as const;
+
+const emptyAppData = (): AppData => ({
+    tasks: [],
+    projects: [],
+    sections: [],
+    areas: [],
+    settings: {},
+});
+
+const startBlockedDataTransfer = async (events: string[], operation: string) => {
+    const currentData = emptyAppData();
+    let releaseTransfer!: () => void;
+    const transferBarrier = new Promise<void>((resolve) => {
+        releaseTransfer = resolve;
+    });
+    const transfer = runDataTransferTransactionWithoutSnapshot({
+        operation,
+        flushPendingSave: async () => {
+            events.push('transfer:flush');
+        },
+        getCurrentChangeAt: () => 0,
+        readCurrentData: async () => {
+            events.push('transfer:read');
+            return currentData;
+        },
+        apply: async (data) => ({ data, result: undefined }),
+        persistData: async () => {
+            events.push('transfer:persist:start');
+            await transferBarrier;
+            events.push('transfer:persist:end');
+        },
+        refreshData: async () => {
+            events.push('transfer:refresh');
+        },
+    });
+    await waitForAssertion(() => expect(events).toEqual(ACTIVE_TRANSFER_EVENTS));
+    return { currentData, releaseTransfer, transfer };
+};
+
+const waitForResolutionToRemainBlocked = async (
+    resolutionFlushStarted: Promise<void>,
+): Promise<void> => {
+    const resolutionState = await Promise.race([
+        resolutionFlushStarted.then(() => 'started' as const),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 0)),
+    ]);
+    expect(resolutionState).toBe('blocked');
+};
+
+const setPendingExternalSyncChangeForTests = () => {
+    (SyncService as any).didMigrate = true;
+    (SyncService as any).pendingExternalSyncChange = {
+        path: '/tmp/mindwtr-sync.json',
+        localHash: 'local-hash',
+        incomingHash: 'incoming-hash',
+    };
+};
+
 afterEach(async () => {
     __syncServiceTestUtils.resetDependenciesForTests();
     await SyncService.resetForTests();
@@ -76,6 +140,156 @@ describe('sync-service test utils', () => {
         releaseTransfer();
         await Promise.all([transfer, sync]);
         expect(events).toEqual(['transfer:start', 'transfer:end', 'sync']);
+    });
+
+    it('waits for an active data transfer before applying an external file replacement', async () => {
+        const events: string[] = [];
+        const { currentData, releaseTransfer, transfer } = await startBlockedDataTransfer(
+            events,
+            'test import',
+        );
+        const externalData = {
+            ...currentData,
+            tasks: [{
+                id: 'external-task',
+                title: 'External task',
+                status: 'next' as const,
+                tags: [],
+                contexts: [],
+                createdAt: '2026-08-09T12:00:00.000Z',
+                updatedAt: '2026-08-09T12:00:00.000Z',
+            }],
+        } satisfies AppData;
+        const fetchData = vi.fn(async () => {
+            events.push('resolution:refresh');
+        });
+        let markResolutionFlushStarted!: () => void;
+        const resolutionFlushStarted = new Promise<void>((resolve) => {
+            markResolutionFlushStarted = resolve;
+        });
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'get_sync_backend') return 'file';
+            if (command === 'read_sync_file') {
+                events.push('resolution:read-external');
+                return externalData;
+            }
+            if (command === 'save_data') {
+                events.push('resolution:save-external');
+                return args?.data;
+            }
+            throw new Error(`unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            flushPendingSave: vi.fn(async () => {
+                events.push('resolution:flush');
+                markResolutionFlushStarted();
+            }),
+            getStoreState: () => ({
+                fetchData,
+                lastDataChangeAt: 0,
+                settings: {},
+            }) as any,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            isTauriRuntime: () => true,
+            markLocalSqliteWrite: vi.fn(),
+            markLocalWrite: vi.fn(),
+        });
+        setPendingExternalSyncChangeForTests();
+
+        const resolution = SyncService.resolveExternalSyncChange('use-external');
+        try {
+            await waitForResolutionToRemainBlocked(resolutionFlushStarted);
+            expect(events).toEqual(ACTIVE_TRANSFER_EVENTS);
+
+            releaseTransfer();
+            await transfer;
+            await expect(resolution).resolves.toEqual({ success: true });
+            expect(events).toEqual([
+                'transfer:flush',
+                'transfer:read',
+                'transfer:persist:start',
+                'transfer:persist:end',
+                'transfer:refresh',
+                'resolution:flush',
+                'resolution:read-external',
+                'resolution:save-external',
+                'resolution:refresh',
+            ]);
+        } finally {
+            releaseTransfer();
+            await Promise.allSettled([transfer, resolution]);
+        }
+    });
+
+    it('waits for an active data transfer before keeping the local sync file', async () => {
+        const events: string[] = [];
+        const { currentData, releaseTransfer, transfer } = await startBlockedDataTransfer(
+            events,
+            'test restore',
+        );
+
+        let markResolutionFlushStarted!: () => void;
+        const resolutionFlushStarted = new Promise<void>((resolve) => {
+            markResolutionFlushStarted = resolve;
+        });
+        const invoke = vi.fn(async (command: string) => {
+            if (command === 'get_sync_backend') return 'file';
+            if (command === 'get_data') {
+                events.push('resolution:read-local');
+                return currentData;
+            }
+            if (command === 'write_sync_file') {
+                events.push('resolution:write-sync-file');
+                return true;
+            }
+            throw new Error(`unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            flushPendingSave: vi.fn(async () => {
+                events.push('resolution:flush');
+                markResolutionFlushStarted();
+            }),
+            getExternalCalendars: vi.fn(async () => []),
+            getStoreState: () => ({
+                lastDataChangeAt: 0,
+                setError: vi.fn(),
+                settings: {},
+            }) as any,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            isTauriRuntime: () => true,
+        });
+        setPendingExternalSyncChangeForTests();
+        const performSyncSpy = vi.spyOn(SyncService, 'performSync').mockImplementation(() => (
+            runSerializedSyncDocumentOperation(async () => {
+                events.push('follow-up:sync');
+                return { success: true };
+            })
+        ));
+
+        const resolution = SyncService.resolveExternalSyncChange('keep-local');
+        try {
+            await waitForResolutionToRemainBlocked(resolutionFlushStarted);
+            expect(events).toEqual(ACTIVE_TRANSFER_EVENTS);
+
+            releaseTransfer();
+            await transfer;
+            await expect(resolution).resolves.toEqual({ success: true });
+            expect(events).toEqual([
+                'transfer:flush',
+                'transfer:read',
+                'transfer:persist:start',
+                'transfer:persist:end',
+                'transfer:refresh',
+                'resolution:flush',
+                'resolution:read-local',
+                'resolution:write-sync-file',
+                'follow-up:sync',
+            ]);
+        } finally {
+            releaseTransfer();
+            await Promise.allSettled([transfer, resolution]);
+            performSyncSpy.mockRestore();
+        }
     });
 
     it('normalizes known sync backends and defaults unknown values to off', () => {
@@ -2287,6 +2501,11 @@ describe('SyncService testability hooks', () => {
         const result = await SyncService.resolveExternalSyncChange('keep-local');
 
         expect(result).toEqual({ success: false, error: 'disk full' });
+        expect((SyncService as any).pendingExternalSyncChange).toEqual({
+            path: '/tmp/mindwtr-sync.json',
+            localHash: 'local-hash',
+            incomingHash: 'incoming-hash',
+        });
         expect((SyncService as any).fileWriteIgnoreActive).toBe(false);
         expect((SyncService as any).ignoreFileEventsUntil).toBe(11_000);
         getMonotonicNowSpy.mockRestore();
