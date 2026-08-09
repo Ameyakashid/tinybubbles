@@ -299,6 +299,80 @@ describe('mindwtr csv import', () => {
         });
     });
 
+    it('keeps delimiter-shaped project and section paths distinct through parse and apply', () => {
+        const csv = buildCsv(
+            ['Title', 'Project', 'Section', 'Area', 'ID'],
+            [
+                ['Colon in area', 'Ops', 'Queue', 'Work:North', 'area-colon'],
+                ['Colon in project', 'North:Ops', 'Queue', 'Work', 'project-colon'],
+                ['Colon before section', 'Ops:North', 'Backlog', 'Work', 'project-section-colon'],
+                ['Colon in section', 'Ops', 'North:Backlog', 'Work', 'section-colon'],
+            ]
+        );
+
+        const parsed = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(parsed.preview).toMatchObject({ areaCount: 2, projectCount: 4, sectionCount: 4, taskCount: 4 });
+        const parsedProjects = parsed.parsedData?.projects ?? [];
+        const parsedSections = parsed.parsedData?.sections ?? [];
+        expect(new Set(parsedProjects.map((project) => project.sourceKey))).toHaveProperty('size', 4);
+        expect(new Set(parsedSections.map((section) => section.sourceKey))).toHaveProperty('size', 4);
+
+        const applied = applyMindwtrCsvImport(
+            mockAppData([], [], []),
+            parsed.parsedData as ParsedMindwtrCsvImportData,
+            { now: '2026-08-08T12:00:00.000Z' }
+        );
+
+        expect(applied.data.projects).toHaveLength(4);
+        expect(applied.data.sections).toHaveLength(4);
+        expect(applied.data.tasks).toHaveLength(4);
+        expect(new Set(applied.data.tasks.map((task) => task.projectId))).toHaveProperty('size', 4);
+        expect(new Set(applied.data.tasks.map((task) => task.sectionId))).toHaveProperty('size', 4);
+    });
+
+    it('reuses IDs from the colon-scoped importer after tuple escaping is introduced', () => {
+        const csv = buildCsv(
+            ['Title', 'Project', 'Section', 'Area', 'ID'],
+            [['Keep lineage', 'Ops:Core', 'Queue:Now', 'Work:North', 'task:1']]
+        );
+        const escaped = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const colonProjectSourceKey = 'work:north:ops:core';
+        const colonSectionSourceKey = 'work:north:ops:core:queue:now';
+        const colonScoped: ParsedMindwtrCsvImportData = {
+            ...escaped,
+            projects: escaped.projects.map((project) => ({
+                ...project,
+                sourceKey: colonProjectSourceKey,
+            })),
+            sections: escaped.sections.map((section) => ({
+                ...section,
+                projectSourceKey: colonProjectSourceKey,
+                sourceKey: colonSectionSourceKey,
+            })),
+            tasks: escaped.tasks.map((task) => ({
+                ...task,
+                projectSourceKey: colonProjectSourceKey,
+                sectionSourceKey: colonSectionSourceKey,
+            })),
+        };
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), colonScoped, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+
+        const second = applyMindwtrCsvImport(first.data, escaped, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedProjectCount).toBe(0);
+        expect(second.importedSectionCount).toBe(0);
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.projects).toHaveLength(1);
+        expect(second.data.sections).toHaveLength(1);
+        expect(second.data.tasks).toHaveLength(1);
+    });
+
     it('does not collapse rows at the same position across two CSVs in one ZIP (C1)', () => {
         const csvA = buildCsv(['Title', 'Project'], [['Task from A', 'Ops']]);
         const csvB = buildCsv(['Title', 'Project'], [['Task from B', 'Ops']]);

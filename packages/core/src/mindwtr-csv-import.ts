@@ -186,6 +186,21 @@ const countUnknownColumns = (headerRow: string[], counters: MindwtrCsvWarningCou
 
 const normalizeSourceKey = (value: string): string => value.trim().toLowerCase();
 
+// Source keys are tuples, not display paths. Escaping each component before joining keeps
+// `['work:north', 'ops']` distinct from `['work', 'north:ops']` while preserving the IDs
+// produced for the overwhelmingly common delimiter-free names.
+const encodeSourceKeyTuple = (...components: string[]): string => (
+    components.map((component) => encodeURIComponent(component)).join(':')
+);
+
+const projectSourceKeyFor = (areaSourceKey: string | undefined, projectName: string): string => (
+    encodeSourceKeyTuple(...(areaSourceKey ? [areaSourceKey] : []), normalizeSourceKey(projectName))
+);
+
+const colonProjectSourceKeyFor = (areaSourceKey: string | undefined, projectName: string): string => (
+    `${areaSourceKey ? `${areaSourceKey}:` : ''}${normalizeSourceKey(projectName)}`
+);
+
 const toNumber = (value: string, fallback: number): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -377,12 +392,16 @@ const parseMindwtrCsvRows = (
 
         const areaSourceKey = areaName ? normalizeSourceKey(areaName) : undefined;
         const projectSourceKey = projectName
-            ? `${areaSourceKey ? `${areaSourceKey}:` : ''}${normalizeSourceKey(projectName)}`
+            ? projectSourceKeyFor(areaSourceKey, projectName)
             : undefined;
         let sectionSourceKey: string | undefined;
         if (sectionName) {
             if (projectSourceKey) {
-                sectionSourceKey = `${projectSourceKey}:${normalizeSourceKey(sectionName)}`;
+                sectionSourceKey = encodeSourceKeyTuple(
+                    ...(areaSourceKey ? [areaSourceKey] : []),
+                    normalizeSourceKey(projectName),
+                    normalizeSourceKey(sectionName),
+                );
             } else {
                 counters.sectionWithoutProject += 1;
             }
@@ -611,39 +630,157 @@ export const applyMindwtrCsvImport = (
     });
 
     const legacyTaskSourceKeyByScopedKey = new Map<string, string>();
-    parsedData.tasks.forEach((task) => {
+    const projectBySourceKey = new Map(parsedData.projects.map((project) => [project.sourceKey, project]));
+    const taskSourceKeyFor = (task: ParsedMindwtrCsvTask): string => {
+        const project = task.projectSourceKey ? projectBySourceKey.get(task.projectSourceKey) : undefined;
+        if (!project) return encodeSourceKeyTuple('none', task.sourceId);
+        const currentProjectSourceKey = projectSourceKeyFor(project.areaSourceKey, project.name);
+        // Parsed payloads created by an older importer retain their own source-key grammar.
+        // This keeps tests, queued imports, and other in-memory callers able to apply them
+        // exactly as that importer would have done.
+        if (project.sourceKey !== currentProjectSourceKey) {
+            return `${task.projectSourceKey}:${task.sourceId}`;
+        }
+        return encodeSourceKeyTuple(
+            ...(project.areaSourceKey ? [project.areaSourceKey] : []),
+            normalizeSourceKey(project.name),
+            task.sourceId,
+        );
+    };
+    const tasksForImport = parsedData.tasks.map((task) => ({
+        ...task,
+        sourceKey: taskSourceKeyFor(task),
+    }));
+
+    tasksForImport.forEach((task) => {
         if (!task.projectSourceKey) return;
         const legacyProjectSourceKey = legacyProjectSourceKeyByScopedKey.get(task.projectSourceKey);
         if (!legacyProjectSourceKey) return;
-        legacyTaskSourceKeyByScopedKey.set(
-            `${task.projectSourceKey}:${task.sourceId}`,
-            `${legacyProjectSourceKey}:${task.sourceId}`,
+        legacyTaskSourceKeyByScopedKey.set(task.sourceKey, `${legacyProjectSourceKey}:${task.sourceId}`);
+    });
+
+    const currentProjectById = new Map(currentData.projects.map((project) => [project.id, project]));
+    const currentSectionById = new Map(currentData.sections.map((section) => [section.id, section]));
+    const currentTaskById = new Map(currentData.tasks.map((task) => [task.id, task]));
+    const resolvedIds = {
+        area: new Map<string, string>(),
+        project: new Map<string, string>(),
+        section: new Map<string, string>(),
+        task: new Map<string, string>(),
+    };
+
+    parsedData.areas.forEach((area) => {
+        resolvedIds.area.set(area.sourceKey, createMindwtrCsvImportId('area', area.sourceKey));
+    });
+
+    // The immediately preceding importer used raw colon-joined scoped paths. Prefer a current
+    // escaped-tuple ID, but recognize that predecessor only when the stored parent ownership
+    // proves which tuple it represented. Two previously-colliding paths can therefore reuse at
+    // most one old entity; the other receives its new injective ID.
+    parsedData.projects.forEach((project) => {
+        const scopedId = createMindwtrCsvImportId('project', project.sourceKey);
+        if (currentProjectById.has(scopedId)) {
+            resolvedIds.project.set(project.sourceKey, scopedId);
+            return;
+        }
+        const expectedAreaId = project.areaSourceKey
+            ? resolvedIds.area.get(project.areaSourceKey)
+            : undefined;
+        const colonSourceKey = colonProjectSourceKeyFor(project.areaSourceKey, project.name);
+        const colonId = createMindwtrCsvImportId('project', colonSourceKey);
+        const colonProject = currentProjectById.get(colonId);
+        if (
+            colonSourceKey !== project.sourceKey
+            && colonProject
+            && (colonProject.areaId ?? undefined) === expectedAreaId
+        ) {
+            resolvedIds.project.set(project.sourceKey, colonId);
+            return;
+        }
+        const legacySourceKey = legacyProjectSourceKeyByScopedKey.get(project.sourceKey);
+        const legacyId = legacySourceKey
+            ? createMindwtrCsvImportId('project', legacySourceKey)
+            : undefined;
+        resolvedIds.project.set(
+            project.sourceKey,
+            legacyId && currentProjectById.has(legacyId) ? legacyId : scopedId,
         );
     });
 
-    const currentIds = {
-        area: new Set(currentData.areas.map((area) => area.id)),
-        project: new Set(currentData.projects.map((project) => project.id)),
-        section: new Set(currentData.sections.map((section) => section.id)),
-        task: new Set(currentData.tasks.map((task) => task.id)),
-    };
-    const legacySourceKeys = {
-        area: new Map<string, string>(),
-        project: legacyProjectSourceKeyByScopedKey,
-        section: legacySectionSourceKeyByScopedKey,
-        task: legacyTaskSourceKeyByScopedKey,
-    };
+    parsedData.sections.forEach((section) => {
+        const scopedId = createMindwtrCsvImportId('section', section.sourceKey);
+        if (currentSectionById.has(scopedId)) {
+            resolvedIds.section.set(section.sourceKey, scopedId);
+            return;
+        }
+        const project = projectBySourceKey.get(section.projectSourceKey);
+        const expectedProjectId = resolvedIds.project.get(section.projectSourceKey);
+        const colonProjectSourceKey = project
+            ? colonProjectSourceKeyFor(project.areaSourceKey, project.name)
+            : section.projectSourceKey;
+        const colonSourceKey = `${colonProjectSourceKey}:${normalizeSourceKey(section.name)}`;
+        const colonId = createMindwtrCsvImportId('section', colonSourceKey);
+        const colonSection = currentSectionById.get(colonId);
+        if (
+            colonSourceKey !== section.sourceKey
+            && colonSection
+            && colonSection.projectId === expectedProjectId
+        ) {
+            resolvedIds.section.set(section.sourceKey, colonId);
+            return;
+        }
+        const legacySourceKey = legacySectionSourceKeyByScopedKey.get(section.sourceKey);
+        const legacyId = legacySourceKey
+            ? createMindwtrCsvImportId('section', legacySourceKey)
+            : undefined;
+        resolvedIds.section.set(
+            section.sourceKey,
+            legacyId && currentSectionById.has(legacyId) ? legacyId : scopedId,
+        );
+    });
+
+    tasksForImport.forEach((task) => {
+        const scopedId = createMindwtrCsvImportId('task', task.sourceKey);
+        if (currentTaskById.has(scopedId)) {
+            resolvedIds.task.set(task.sourceKey, scopedId);
+            return;
+        }
+        const project = task.projectSourceKey ? projectBySourceKey.get(task.projectSourceKey) : undefined;
+        const expectedProjectId = task.projectSourceKey
+            ? resolvedIds.project.get(task.projectSourceKey)
+            : undefined;
+        const expectedAreaId = !expectedProjectId && task.areaSourceKey
+            ? resolvedIds.area.get(task.areaSourceKey)
+            : undefined;
+        const colonProjectSourceKey = project
+            ? colonProjectSourceKeyFor(project.areaSourceKey, project.name)
+            : 'none';
+        const colonSourceKey = `${colonProjectSourceKey}:${task.sourceId}`;
+        const colonId = createMindwtrCsvImportId('task', colonSourceKey);
+        const colonTask = currentTaskById.get(colonId);
+        if (
+            colonSourceKey !== task.sourceKey
+            && colonTask
+            && (colonTask.projectId ?? undefined) === expectedProjectId
+            && (colonTask.areaId ?? undefined) === expectedAreaId
+        ) {
+            resolvedIds.task.set(task.sourceKey, colonId);
+            return;
+        }
+        const legacySourceKey = legacyTaskSourceKeyByScopedKey.get(task.sourceKey);
+        const legacyId = legacySourceKey
+            ? createMindwtrCsvImportId('task', legacySourceKey)
+            : undefined;
+        resolvedIds.task.set(
+            task.sourceKey,
+            legacyId && currentTaskById.has(legacyId) ? legacyId : scopedId,
+        );
+    });
+
     const compatibleIdFor = (
         kind: 'area' | 'project' | 'section' | 'task',
         sourceKey: string,
-    ): string => {
-        const scopedId = createMindwtrCsvImportId(kind, sourceKey);
-        if (currentIds[kind].has(scopedId)) return scopedId;
-        const legacySourceKey = legacySourceKeys[kind].get(sourceKey);
-        if (!legacySourceKey) return scopedId;
-        const legacyId = createMindwtrCsvImportId(kind, legacySourceKey);
-        return currentIds[kind].has(legacyId) ? legacyId : scopedId;
-    };
+    ): string => resolvedIds[kind].get(sourceKey) ?? createMindwtrCsvImportId(kind, sourceKey);
 
     return applyImport(
         currentData,
@@ -651,10 +788,7 @@ export const applyMindwtrCsvImport = (
             areas: parsedData.areas,
             projects: parsedData.projects,
             sections: parsedData.sections,
-            tasks: parsedData.tasks.map((task) => ({
-                ...task,
-                sourceKey: `${task.projectSourceKey ?? 'none'}:${task.sourceId}`,
-            })),
+            tasks: tasksForImport,
             warnings: parsedData.warnings,
         },
         {
