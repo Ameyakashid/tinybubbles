@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import {
   isTaskVisibleInArea,
   useTaskStore,
@@ -21,6 +20,77 @@ export type VisibleTaskContext = {
   visibleTasks: Task[];
 };
 
+type VisibleTaskContextInput = {
+  areas: Area[];
+  projects: Project[];
+  resolvedAreaFilter: AreaFilterSelection;
+  tasks: Task[];
+};
+
+const sameIds = (left: string[], right: string[]) => (
+  left.length === right.length && left.every((id, index) => id === right[index])
+);
+
+/**
+ * Memoizes the mobile-wide visibility projection by store snapshot. React
+ * Navigation keeps several screens mounted, so a module-level deriver lets
+ * every consumer reuse the same result instead of scanning the same store once
+ * per mounted route.
+ */
+export function createVisibleTaskContextDeriver() {
+  let previousInput: VisibleTaskContextInput | undefined;
+  let previousResult: VisibleTaskContext | undefined;
+
+  return (input: VisibleTaskContextInput): VisibleTaskContext => {
+    const hasSameFilter = previousInput
+      && sameIds(
+        previousInput.resolvedAreaFilter.included,
+        input.resolvedAreaFilter.included,
+      )
+      && sameIds(
+        previousInput.resolvedAreaFilter.excluded,
+        input.resolvedAreaFilter.excluded,
+      );
+    if (
+      previousResult
+      && previousInput?.areas === input.areas
+      && previousInput.projects === input.projects
+      && previousInput.tasks === input.tasks
+      && hasSameFilter
+    ) {
+      return previousResult;
+    }
+
+    const sortedAreas = [...input.areas]
+      .filter((area) => !area.deletedAt)
+      .sort((left, right) => {
+        if (left.order !== right.order) return left.order - right.order;
+        return left.name.localeCompare(right.name);
+      });
+    const areaById = new Map(sortedAreas.map((area) => [area.id, area]));
+    const projectById = new Map(input.projects.map((project) => [project.id, project]));
+    const visibility: AreaVisibilityContext = {
+      areaById,
+      projectById,
+      resolvedAreaFilter: input.resolvedAreaFilter,
+    };
+    const visibleTasks = input.tasks.filter((task) => isTaskVisibleInArea(task, visibility));
+    const result = {
+      areaById,
+      projectById,
+      resolvedAreaFilter: input.resolvedAreaFilter,
+      visibility,
+      visibleTasks,
+    };
+
+    previousInput = input;
+    previousResult = result;
+    return result;
+  };
+}
+
+const deriveVisibleTaskContext = createVisibleTaskContextDeriver();
+
 /**
  * "What can this screen show right now". Every task list on mobile needs the
  * same three things — the project lookup, the area lookup and the resolved area
@@ -28,28 +98,14 @@ export type VisibleTaskContext = {
  * `visibleTasks` and narrow it by status, so a dropped clause is a change to one
  * core predicate rather than an invisible divergence between screens.
  *
- * One predicate, not one computation: this is a plain hook, so each screen that
- * calls it builds its own `projectById` and runs its own filter. That is cheap
- * enough while screens mount one at a time; sharing the result would mean a
- * context provider.
+ * The projection is shared by store snapshot so mounted-but-inactive routes do
+ * not repeat the same O(tasks + projects) work.
  */
 export function useVisibleTaskContext(): VisibleTaskContext {
   const tasks = useTaskStore((state) => state.tasks);
   const projects = useTaskStore((state) => state.projects);
-  const { areaById, resolvedAreaFilter } = useMobileAreaFilter();
+  const areas = useTaskStore((state) => state.areas ?? []);
+  const { resolvedAreaFilter } = useMobileAreaFilter();
 
-  const projectById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project])),
-    [projects],
-  );
-  const visibility = useMemo<AreaVisibilityContext>(
-    () => ({ areaById, projectById, resolvedAreaFilter }),
-    [areaById, projectById, resolvedAreaFilter],
-  );
-  const visibleTasks = useMemo(
-    () => tasks.filter((task) => isTaskVisibleInArea(task, visibility)),
-    [tasks, visibility],
-  );
-
-  return { areaById, projectById, resolvedAreaFilter, visibility, visibleTasks };
+  return deriveVisibleTaskContext({ areas, projects, resolvedAreaFilter, tasks });
 }
