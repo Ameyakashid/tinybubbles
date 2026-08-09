@@ -42,19 +42,32 @@ describe('gemini provider request behavior', () => {
         expect(body.generationConfig?.maxOutputTokens).toBe(4096);
     });
 
-    const readThinkingConfig = (fetchMock: ReturnType<typeof vi.fn>) => {
+    const readGenerationConfig = (fetchMock: ReturnType<typeof vi.fn>) => {
         const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
         const body = JSON.parse(String(requestInit?.body ?? '{}')) as {
-            generationConfig?: { thinkingConfig?: { thinkingBudget?: number } };
+            generationConfig?: {
+                temperature?: number;
+                topP?: number;
+                topK?: number;
+                thinkingConfig?: { thinkingBudget?: number; thinkingLevel?: string };
+            };
         };
-        return body.generationConfig?.thinkingConfig;
+        return body.generationConfig;
     };
+
+    const readThinkingConfig = (fetchMock: ReturnType<typeof vi.fn>) =>
+        readGenerationConfig(fetchMock)?.thinkingConfig;
 
     it('disables thinking on thinking-capable models when no budget is set so the answer is not truncated', async () => {
         const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-        const provider = createGeminiProvider({ provider: 'gemini', apiKey: 'k', model: 'gemini-2.5-flash' });
+        const provider = createGeminiProvider({
+            provider: 'gemini',
+            endpoint: 'https://proxy.example.com/v1beta/models',
+            apiKey: 'k',
+            model: 'gemini-2.5-flash',
+        });
         await provider.breakDownTask({ title: 'Plan trip' });
 
         expect(readThinkingConfig(fetchMock)).toEqual({ thinkingBudget: 0 });
@@ -64,10 +77,89 @@ describe('gemini provider request behavior', () => {
         const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-        const provider = createGeminiProvider({ provider: 'gemini', apiKey: 'k', model: 'gemini-2.5-flash', thinkingBudget: 512 });
+        const provider = createGeminiProvider({
+            provider: 'gemini',
+            endpoint: 'https://proxy.example.com/v1beta/models',
+            apiKey: 'k',
+            model: 'gemini-2.5-flash',
+            thinkingBudget: 512,
+        });
         await provider.breakDownTask({ title: 'Plan trip' });
 
         expect(readThinkingConfig(fetchMock)).toEqual({ thinkingBudget: 512 });
+    });
+
+    it('uses the Gemini 3 request shape for the latest Flash models', async () => {
+        for (const model of ['gemini-3.6-flash', 'gemini-3.5-flash-lite']) {
+            const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
+            globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+            const provider = createGeminiProvider({ provider: 'gemini', apiKey: 'k', model, thinkingBudget: 0 });
+            await provider.breakDownTask({ title: 'Plan trip' });
+
+            const generationConfig = readGenerationConfig(fetchMock);
+            expect(generationConfig?.temperature).toBeUndefined();
+            expect(generationConfig?.topP).toBeUndefined();
+            expect(generationConfig?.topK).toBeUndefined();
+            expect(generationConfig?.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
+        }
+    });
+
+    it('maps the existing thinking choices to Gemini 3 thinking levels', async () => {
+        const cases = [
+            { budget: 128, level: 'low' },
+            { budget: 256, level: 'medium' },
+            { budget: 512, level: 'high' },
+        ];
+        for (const { budget, level } of cases) {
+            const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
+            globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+            const provider = createGeminiProvider({
+                provider: 'gemini',
+                apiKey: 'k',
+                model: 'gemini-3.6-flash',
+                thinkingBudget: budget,
+            });
+            await provider.breakDownTask({ title: 'Plan trip' });
+
+            expect(readThinkingConfig(fetchMock)).toEqual({ thinkingLevel: level });
+        }
+    });
+
+    it('uses low instead of unsupported minimal thinking for Gemini 3 Pro', async () => {
+        const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const provider = createGeminiProvider({
+            provider: 'gemini',
+            apiKey: 'k',
+            model: 'gemini-3.1-pro-preview',
+            thinkingBudget: 0,
+        });
+        await provider.breakDownTask({ title: 'Plan trip' });
+
+        expect(readThinkingConfig(fetchMock)).toEqual({ thinkingLevel: 'low' });
+    });
+
+    it('keeps sampling parameters and numeric thinking budgets for Gemini 2.5', async () => {
+        const fetchMock = vi.fn(async () => mockGeminiSuccess({ steps: ['Pick a date'] }));
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const provider = createGeminiProvider({
+            provider: 'gemini',
+            endpoint: 'https://proxy.example.com/v1beta/models',
+            apiKey: 'k',
+            model: 'gemini-2.5-flash',
+            thinkingBudget: 512,
+        });
+        await provider.breakDownTask({ title: 'Plan trip' });
+
+        const generationConfig = readGenerationConfig(fetchMock);
+        expect(generationConfig?.temperature).toBe(0.15);
+        expect(generationConfig?.topP).toBe(0.8);
+        expect(generationConfig?.topK).toBe(20);
+        expect(generationConfig?.thinkingConfig).toEqual({ thinkingBudget: 512 });
     });
 
     it('omits thinkingConfig for models that do not support thinking', async () => {

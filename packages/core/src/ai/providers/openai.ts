@@ -178,8 +178,13 @@ async function readOpenAIErrorInfo(response: Response): Promise<OpenAIErrorInfo>
     }
     if (raw) {
         try {
-            const data = JSON.parse(raw) as { error?: { message?: string; code?: string; type?: string } };
-            if (data?.error) {
+            const data = JSON.parse(raw) as {
+                error?: string | { message?: string; code?: string; type?: string };
+            };
+            if (typeof data?.error === 'string') {
+                message = data.error;
+                raw = '';
+            } else if (data?.error) {
                 message = data.error.message ?? '';
                 code = data.error.code ?? '';
                 type = data.error.type ?? '';

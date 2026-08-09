@@ -28,6 +28,39 @@ const resolveTimeoutMs = (value?: number) =>
 // Gemini 2.5+ (and 3.x) support `thinkingConfig`; sending it to older models can be rejected.
 const modelSupportsThinking = (model: string): boolean => /gemini-(2\.[5-9]|[3-9])/i.test(model);
 
+type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+
+const normalizeGeminiModelId = (model: string): string => model.trim().toLowerCase().replace(/^models\//, '');
+
+const isGemini3Model = (model: string): boolean => /^gemini-3(?:[.-]|$)/.test(normalizeGeminiModelId(model));
+
+const resolveGeminiThinkingConfig = (
+    model: string,
+    budget?: number,
+): { thinkingBudget: number } | { thinkingLevel: GeminiThinkingLevel } | undefined => {
+    if (!modelSupportsThinking(model)) return undefined;
+
+    const normalizedBudget = typeof budget === 'number' && Number.isFinite(budget) && budget > 0
+        ? Math.floor(budget)
+        : 0;
+    if (!isGemini3Model(model)) {
+        return { thinkingBudget: normalizedBudget };
+    }
+
+    let thinkingLevel: GeminiThinkingLevel;
+    if (normalizedBudget <= 0) {
+        // Gemini 3 Pro does not support `minimal`; Flash models do.
+        thinkingLevel = /\bpro\b/.test(normalizeGeminiModelId(model)) ? 'low' : 'minimal';
+    } else if (normalizedBudget <= 128) {
+        thinkingLevel = 'low';
+    } else if (normalizedBudget <= 256) {
+        thinkingLevel = 'medium';
+    } else {
+        thinkingLevel = 'high';
+    }
+    return { thinkingLevel };
+};
+
 async function buildGeminiError(response: Response, usingOfficialGemini: boolean): Promise<Error> {
     const httpStatus = response.status;
     let message = '';
@@ -178,18 +211,11 @@ async function requestGemini(config: AIProviderConfig, prompt: { system: string;
         // If URL parsing fails, fall back to a manual cleanup of key params.
         url = rawUrl.replace(/([?&])key=[^&]+&?/gi, '$1').replace(/[?&]$/, '');
     }
-    // Gemini 2.5+ "thinking" tokens count against maxOutputTokens; when the user has not
-    // set a budget these models still think dynamically, which can consume the budget and
-    // truncate the JSON answer (#596). Explicitly disable thinking for those models unless a
-    // budget is requested. Older models that do not support thinkingConfig get nothing sent.
-    const explicitBudget = typeof config.thinkingBudget === 'number' && config.thinkingBudget > 0
-        ? Math.floor(config.thinkingBudget)
-        : undefined;
-    const thinkingBudget = explicitBudget !== undefined
-        ? explicitBudget
-        : modelSupportsThinking(model)
-            ? 0
-            : undefined;
+    // Gemini 2.5 uses numeric token budgets. Gemini 3 replaced those with relative
+    // thinking levels and rejects the legacy shape on newer models. Keep the stored
+    // setting stable and translate it only at the provider boundary.
+    const thinkingConfig = resolveGeminiThinkingConfig(model, config.thinkingBudget);
+    const supportsSamplingParameters = !isGemini3Model(model);
     const body = {
         contents: [
             {
@@ -200,14 +226,16 @@ async function requestGemini(config: AIProviderConfig, prompt: { system: string;
             },
         ],
         generationConfig: {
-            temperature: 0.15,
-            topP: 0.8,
-            topK: 20,
+            ...(supportsSamplingParameters ? {
+                temperature: 0.15,
+                topP: 0.8,
+                topK: 20,
+            } : {}),
             candidateCount: 1,
             maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
             responseMimeType: 'application/json',
             ...(schema ? { responseSchema: schema } : {}),
-            ...(thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {}),
+            ...(thinkingConfig ? { thinkingConfig } : {}),
         },
     };
 

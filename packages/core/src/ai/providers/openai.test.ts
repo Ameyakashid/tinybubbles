@@ -371,6 +371,38 @@ describe('openai structured outputs', () => {
         );
     });
 
+    it('retries with json_schema when a custom endpoint returns a string error', async () => {
+        const requiresSchema = () =>
+            new Response(
+                JSON.stringify({ error: "'response_format.type' must be 'json_schema' or 'text'" }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
+            );
+        let call = 0;
+        const fetchMock = vi.fn(async () => {
+            call += 1;
+            return call === 1 ? requiresSchema() : mockOpenAiSuccess();
+        });
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const provider = createOpenAIProvider({
+            provider: 'openai',
+            endpoint: 'http://localhost:1234/v1/chat/completions',
+            apiKey: '',
+            model: 'google/gemma-4-e2b',
+        });
+        const result = await provider.clarifyTask({ title: 'Plan trip' });
+
+        expect(result.question).toBe('What is the next action?');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const second = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body)) as Record<string, unknown>;
+        expect(second.response_format).toEqual(
+            expect.objectContaining({
+                type: 'json_schema',
+                json_schema: expect.objectContaining({ name: 'clarify_response', strict: true }),
+            }),
+        );
+    });
+
     it('sends the operation-specific schema for each method', async () => {
         const cases = [
             { run: (p: ReturnType<typeof createOpenAIProvider>) => p.breakDownTask({ title: 'x' }), name: 'breakdown_response', reply: { steps: ['a'] } },
