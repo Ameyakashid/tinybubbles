@@ -614,6 +614,51 @@ describe('local-data-watcher', () => {
         expect(saveCalls[0]?.tasks.some((task) => task.id === 'ext-2')).toBe(true);
     });
 
+    it('keeps the store at the durable snapshot after bounded save failures and converges on a later retry', async () => {
+        const externalTask = {
+            id: 'ext-retry-1',
+            title: 'Persist after retry',
+            status: 'next' as const,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        externalData = { ...emptyData(), tasks: [externalTask] } as AppData;
+        let durableData = emptyData();
+        let saveAttempts = 0;
+
+        setStorageAdapter({
+            ...storageAdapter,
+            getData: async () => durableData,
+            saveData: async (data) => {
+                saveAttempts += 1;
+                markLocalWrite(data);
+                if (saveAttempts <= 2) {
+                    throw new Error('transient save failure');
+                }
+                durableData = data;
+            },
+        });
+
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+
+        expect(saveAttempts).toBe(2);
+        expect(useTaskStore.getState().tasks).toEqual([]);
+        expect(durableData.tasks).toEqual([]);
+        expect(__localDataWatcherTestUtils.getPendingSelfWritePayloadLengthForTests()).toBe(0);
+
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+
+        expect(saveAttempts).toBe(3);
+        expect(durableData.tasks.map((task) => task.id)).toEqual(['ext-retry-1']);
+        expect(useTaskStore.getState().tasks.map((task) => task.id)).toEqual(['ext-retry-1']);
+
+        externalData = durableData;
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+
+        expect(saveAttempts).toBe(3);
+        expect(__localDataWatcherTestUtils.getPendingSelfWritePayloadLengthForTests()).toBe(0);
+    });
+
     it('preserves merged people when writing external data through the store', async () => {
         externalData = {
             ...emptyData(),

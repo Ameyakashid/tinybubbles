@@ -20,6 +20,7 @@ const SQLITE_NOOP_REFRESH_IGNORE_MS = 2000;
 const SQLITE_SELF_WRITE_RETENTION_MS = 15_000;
 const SELF_WRITE_RETENTION_MS = 10_000;
 const MAX_PENDING_SELF_WRITES = 8;
+const MAX_MERGED_PERSIST_ATTEMPTS = 2;
 const timerHost = getDesktopTimerHost();
 
 type FsEvent = {
@@ -50,6 +51,8 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => 
     const allAreas = Array.isArray(merged.areas) ? merged.areas : [];
     const allPeople = Array.isArray(merged.people) ? merged.people : [];
 
+    await getStorageAdapter().saveData(merged);
+
     useTaskStore.setState((state) => ({
         _allTasks: allTasks,
         _allProjects: allProjects,
@@ -61,8 +64,6 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => 
         settings: merged.settings ?? state.settings,
         lastDataChangeAt: Date.now(),
     }));
-
-    await getStorageAdapter().saveData(merged);
 };
 
 const defaultDependencies: LocalDataWatcherDependencies = {
@@ -389,6 +390,27 @@ const markSqliteSelfWriteWindow = (): void => {
     );
 };
 
+const persistMergedDataWithRetry = async (merged: AppData): Promise<void> => {
+    for (let attempt = 1; attempt <= MAX_MERGED_PERSIST_ATTEMPTS; attempt += 1) {
+        const pendingSelfWritesBeforeAttempt = pendingSelfWrites.slice();
+        try {
+            await localDataWatcherDependencies.persistMergedData(merged);
+            return;
+        } catch (error) {
+            // Storage adapters mark a payload before starting their durable
+            // write. Restore the previous tokens when that write rejects so a
+            // failed attempt cannot suppress the external snapshot that still
+            // needs to be persisted.
+            pendingSelfWrites = pendingSelfWritesBeforeAttempt;
+            if (attempt === MAX_MERGED_PERSIST_ATTEMPTS) throw error;
+            localDataWatcherDependencies.logWarn(
+                '[local-data-watcher] Failed to persist merged data; retrying',
+                { attempt: String(attempt), maxAttempts: String(MAX_MERGED_PERSIST_ATTEMPTS) },
+            );
+        }
+    }
+};
+
 async function mergeExternalData(): Promise<void> {
     // Full-document sync, imports/restores, and this watcher all enter this
     // lane before reading their current inputs. A data transfer acquires its
@@ -432,7 +454,7 @@ async function mergeExternalData(): Promise<void> {
                 return;
             }
 
-            await localDataWatcherDependencies.persistMergedData(normalizedMerged);
+            await persistMergedDataWithRetry(normalizedMerged);
             lastKnownHash = mergedHash;
             localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
         } catch (error) {
