@@ -407,7 +407,7 @@ describe('ticktick import', () => {
         expect(result.importedTaskCount).toBe(2);
         expect(result.importedChecklistItemCount).toBe(3);
         expect(result.warnings).toContain('Imported area "Work" was renamed to "Work (TickTick)" to avoid a name conflict.');
-        expect(result.warnings).toContain('Imported project "Launch" was renamed to "Launch (TickTick)" to avoid a title conflict.');
+        expect(result.warnings).not.toContain('Imported project "Launch" was renamed to "Launch (TickTick)" to avoid a title conflict.');
         expect(result.data.settings.deviceId).toBeTruthy();
         expect(result.data.people).toEqual([existingPerson]);
 
@@ -421,7 +421,7 @@ describe('ticktick import', () => {
 
         const importedProject = result.data.projects.find((project) => project.id !== existingProject.id);
         expect(importedProject).toMatchObject({
-            title: 'Launch (TickTick)',
+            title: 'Launch',
             areaId: importedArea?.id,
             status: 'active',
             rev: 1,

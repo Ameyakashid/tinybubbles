@@ -249,7 +249,7 @@ describe('dgt import', () => {
         expect(result.importedTaskCount).toBe(6);
         expect(result.importedChecklistItemCount).toBe(2);
         expect(result.warnings).toContain('Imported area "Personal" was renamed to "Personal (DGT)" to avoid a name conflict.');
-        expect(result.warnings).toContain('Imported project "House Renovation" was renamed to "House Renovation (DGT)" to avoid a title conflict.');
+        expect(result.warnings).not.toContain('Imported project "House Renovation" was renamed to "House Renovation (DGT)" to avoid a title conflict.');
         expect(result.warnings).toContain('1 DGT recurring task could not be mapped and will be imported once.');
         expect(result.warnings).toContain('1 DGT task status could not be mapped and was imported to Inbox.');
         expect(result.data.settings.deviceId).toBeTruthy();
@@ -262,7 +262,7 @@ describe('dgt import', () => {
 
         const importedProject = result.data.projects.find((project) => project.id !== existingProject.id);
         expect(importedProject).toMatchObject({
-            title: 'House Renovation (DGT)',
+            title: 'House Renovation',
             areaId: importedArea?.id,
             dueDate: '2026-04-20',
         });
