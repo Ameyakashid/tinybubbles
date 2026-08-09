@@ -32,10 +32,19 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Validate Bun audit exceptions
+        run: bun test scripts/ci/validate-dependency-audit.test.js
+
       - name: Audit Bun dependencies
         run: |
           set -euo pipefail
-          if ! bun audit; then
+          # image-size is currently reachable only through Metro's build-time
+          # asset inspection. There is no patched release for these advisories;
+          # the repository governance test fails if the lockfile topology or exact
+          # exception list changes, so a new runtime path cannot inherit them.
+          if ! bun audit \
+            --ignore=GHSA-5p2g-fcmc-qvqq \
+            --ignore=GHSA-w3rx-r6r6-pgpr; then
             echo "bun audit reported vulnerabilities or failed." >&2
             exit 1
           fi
