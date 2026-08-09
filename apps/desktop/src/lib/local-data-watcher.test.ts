@@ -148,6 +148,32 @@ afterEach(async () => {
 });
 
 describe('local-data-watcher', () => {
+    it('retries a transient SQLite refresh failure on a bounded delayed lane', async () => {
+        const refreshStorageData = vi.fn()
+            .mockRejectedValueOnce(new Error('database is locked'))
+            .mockResolvedValue(undefined);
+        __localDataWatcherTestUtils.setDependenciesForTests({ refreshStorageData });
+
+        await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
+        expect(refreshStorageData).toHaveBeenCalledTimes(1);
+
+        await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
+        expect(refreshStorageData).toHaveBeenCalledTimes(2);
+    });
+
+    it('cancels a delayed SQLite refresh retry during watcher shutdown', async () => {
+        const refreshStorageData = vi.fn().mockRejectedValue(new Error('database is busy'));
+        __localDataWatcherTestUtils.setDependenciesForTests({ refreshStorageData });
+
+        await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
+        expect(refreshStorageData).toHaveBeenCalledTimes(1);
+
+        __localDataWatcherTestUtils.resetForTests();
+        await flushScheduledTimers();
+        expect(refreshStorageData).toHaveBeenCalledTimes(1);
+    });
+
     it('refreshes the store when SQLite WAL files change', async () => {
         const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
         const task = {

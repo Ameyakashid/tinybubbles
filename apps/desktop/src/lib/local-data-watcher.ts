@@ -23,6 +23,8 @@ const MAX_PENDING_SELF_WRITES = 8;
 const MAX_MERGED_PERSIST_ATTEMPTS = 2;
 const MAX_DELAYED_MERGED_PERSIST_RETRIES = 2;
 const MERGED_PERSIST_RETRY_COOLDOWN_MS = 1_000;
+const MAX_DELAYED_SQLITE_REFRESH_RETRIES = 2;
+const SQLITE_REFRESH_RETRY_COOLDOWN_MS = 1_000;
 const timerHost = getDesktopTimerHost();
 
 type FsEvent = {
@@ -119,6 +121,8 @@ let mergeInFlight: Promise<void> | null = null;
 let sqliteRefreshInFlight: Promise<void> | null = null;
 let mergedPersistRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let delayedMergedPersistRetryCount = 0;
+let sqliteRefreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let delayedSqliteRefreshRetryCount = 0;
 let watcherGeneration = 0;
 let sqliteEditUnlockUnsubscribe: (() => void) | null = null;
 
@@ -500,6 +504,44 @@ const persistMergedDataWithRetry = async (merged: AppData): Promise<AppData> => 
     throw new Error('Merged data persistence exhausted without a result');
 };
 
+const clearSqliteRefreshRetry = (): void => {
+    if (sqliteRefreshRetryTimer) {
+        localDataWatcherDependencies.cancelSchedule(sqliteRefreshRetryTimer);
+        sqliteRefreshRetryTimer = null;
+    }
+    delayedSqliteRefreshRetryCount = 0;
+};
+
+const isTransientSqliteRefreshError = (error: unknown): boolean => (
+    /\b(?:busy|locked|temporar(?:y|ily)|try again|resource unavailable)\b/iu.test(String(error))
+);
+
+const scheduleSqliteRefreshRetry = (error: unknown): void => {
+    if (!isTransientSqliteRefreshError(error)) return;
+    if (sqliteRefreshRetryTimer || delayedSqliteRefreshRetryCount >= MAX_DELAYED_SQLITE_REFRESH_RETRIES) {
+        if (delayedSqliteRefreshRetryCount >= MAX_DELAYED_SQLITE_REFRESH_RETRIES) {
+            localDataWatcherDependencies.logWarn(
+                '[local-data-watcher] SQLite refresh exhausted delayed retries',
+                { error: String(error), maxRetries: String(MAX_DELAYED_SQLITE_REFRESH_RETRIES) },
+            );
+        }
+        return;
+    }
+    delayedSqliteRefreshRetryCount += 1;
+    const retryNumber = delayedSqliteRefreshRetryCount;
+    const generation = watcherGeneration;
+    const delayMs = SQLITE_REFRESH_RETRY_COOLDOWN_MS * retryNumber;
+    sqliteRefreshRetryTimer = localDataWatcherDependencies.schedule(() => {
+        sqliteRefreshRetryTimer = null;
+        if (generation !== watcherGeneration) return;
+        void runSqliteRefresh();
+    }, delayMs);
+    localDataWatcherDependencies.logWarn(
+        '[local-data-watcher] Scheduled SQLite refresh retry',
+        { retryNumber: String(retryNumber), delayMs: String(delayMs), error: String(error) },
+    );
+};
+
 async function mergeExternalData(): Promise<void> {
     // Full-document sync, imports/restores, and this watcher all enter this
     // lane before reading their current inputs. A data transfer acquires its
@@ -579,6 +621,7 @@ const runSqliteRefresh = (): Promise<void> => {
             );
             await localDataWatcherDependencies.refreshStorageData();
             const afterSummary = await buildSnapshotTraceSummary(localDataWatcherDependencies.getSnapshot());
+            clearSqliteRefreshRetry();
             const changeExtra = buildSnapshotChangeTraceExtra(beforeSummary, afterSummary);
             if (beforeSummary.dataSig === afterSummary.dataSig) {
                 extendSqliteIgnoreWindow(SQLITE_NOOP_REFRESH_IGNORE_MS);
@@ -600,6 +643,7 @@ const runSqliteRefresh = (): Promise<void> => {
             );
             localDataWatcherDependencies.logInfo('[local-data-watcher] Refreshed after SQLite change');
         } catch (error) {
+            scheduleSqliteRefreshRetry(error);
             localDataWatcherDependencies.logWarn(
                 '[local-data-watcher] Failed to refresh SQLite change: ' + String(error),
                 { error: String(error) },
@@ -817,6 +861,7 @@ export function stop(): void {
         sqliteIgnoreDrainTimer = null;
     }
     clearMergedPersistRetry();
+    clearSqliteRefreshRetry();
     if (sqliteEditUnlockUnsubscribe) {
         sqliteEditUnlockUnsubscribe();
         sqliteEditUnlockUnsubscribe = null;
@@ -878,6 +923,7 @@ export const __localDataWatcherTestUtils = {
         pendingSelfWrites = [];
         mergeInFlight = null;
         sqliteRefreshInFlight = null;
+        delayedSqliteRefreshRetryCount = 0;
     },
     getPendingSelfWritePayloadLengthForTests() {
         return pendingSelfWrites.reduce((total, entry) => total + entry.payload.length, 0);
