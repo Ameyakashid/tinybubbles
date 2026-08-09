@@ -123,6 +123,7 @@ beforeEach(() => {
         _allPeople: [],
         _peopleById: new Map(),
         settings: { deviceId: 'dev-local' },
+        editLockCount: 0,
         lastDataChangeAt: 0,
         error: null,
     }));
@@ -183,6 +184,46 @@ describe('local-data-watcher', () => {
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
         expect(useTaskStore.getState().tasks[0]?.id).toBe('mcp-1');
+    });
+
+    it('monotonically stamps a changed SQLite refresh but leaves no-op refreshes unchanged', async () => {
+        const changedTask = {
+            id: 'sqlite-stamp',
+            title: 'SQLite stamp',
+            status: 'inbox' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        useTaskStore.setState({ lastDataChangeAt: 40 });
+        const refreshStorageData = vi.fn(async () => {
+            if (refreshStorageData.mock.calls.length === 1) {
+                useTaskStore.setState({ _allTasks: [changedTask] });
+            }
+        });
+        __localDataWatcherTestUtils.setDependenciesForTests({ refreshStorageData });
+
+        await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
+
+        expect(useTaskStore.getState().lastDataChangeAt).toBe(41);
+
+        await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
+
+        expect(useTaskStore.getState().lastDataChangeAt).toBe(41);
+    });
+
+    it('keeps an editor-blocked SQLite refresh pending until editing unlocks', async () => {
+        const refreshStorageData = vi.fn(async () => undefined);
+        __localDataWatcherTestUtils.setDependenciesForTests({ refreshStorageData });
+        useTaskStore.getState().lockEditing();
+
+        await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
+        const callsWhileEditing = refreshStorageData.mock.calls.length;
+
+        useTaskStore.getState().unlockEditing();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
+
+        expect(callsWhileEditing).toBe(0);
+        expect(refreshStorageData).toHaveBeenCalledTimes(1);
     });
 
     it('waits for an active document write before refreshing a SQLite WAL change', async () => {

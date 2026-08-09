@@ -41,6 +41,8 @@ type LocalDataWatcherDependencies = {
     normalize: (data: AppData) => AppData;
     merge: (local: AppData, incoming: AppData) => AppData;
     getSnapshot: () => AppData;
+    getEditLockCount: () => number;
+    subscribeStore: (listener: () => void) => () => void;
     persistMergedData: (merged: AppData) => Promise<AppData | void>;
     logInfo: (message: string, extra?: Record<string, unknown>) => void;
     logWarn: (message: string, extra?: Record<string, unknown>) => void;
@@ -85,6 +87,8 @@ const defaultDependencies: LocalDataWatcherDependencies = {
     normalize: normalizeAppData,
     merge: mergeAppData,
     getSnapshot: getInMemoryAppDataSnapshot,
+    getEditLockCount: () => useTaskStore.getState().editLockCount,
+    subscribeStore: (listener) => useTaskStore.subscribe(() => listener()),
     persistMergedData: persistMergedDataThroughStore,
     logInfo: (message, extra) => {
         void logInfo(message, extra ? { extra } : undefined);
@@ -116,6 +120,7 @@ let sqliteRefreshInFlight: Promise<void> | null = null;
 let mergedPersistRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let delayedMergedPersistRetryCount = 0;
 let watcherGeneration = 0;
+let sqliteEditUnlockUnsubscribe: (() => void) | null = null;
 
 const normalizePathsFromEvent = (event: FsEvent): string[] => {
     if (Array.isArray(event?.paths)) return event.paths;
@@ -331,6 +336,29 @@ const scheduleSqliteIgnoreDrain = () => {
     }, remainingMs + IGNORE_DRAIN_PADDING_MS);
 };
 
+const deferSqliteRefreshUntilEditingEnds = (paths: string[] = []): void => {
+    hasPendingSqliteChangeDuringSelfWrite = true;
+    pendingSqliteChangePaths = paths.slice(0, 8);
+    if (sqliteEditUnlockUnsubscribe) return;
+
+    const drainAfterUnlock = () => {
+        if (localDataWatcherDependencies.getEditLockCount() > 0) return;
+        const unsubscribe = sqliteEditUnlockUnsubscribe;
+        sqliteEditUnlockUnsubscribe = null;
+        unsubscribe?.();
+        if (!hasPendingSqliteChangeDuringSelfWrite) return;
+        hasPendingSqliteChangeDuringSelfWrite = false;
+        const pendingPaths = pendingSqliteChangePaths;
+        pendingSqliteChangePaths = [];
+        void handleSqliteChange({ immediate: true, paths: pendingPaths });
+    };
+
+    sqliteEditUnlockUnsubscribe = localDataWatcherDependencies.subscribeStore(drainAfterUnlock);
+    // Close the subscribe-after-check race if the editor unlocked just before
+    // the subscription became active.
+    drainAfterUnlock();
+};
+
 const runPendingMerge = (): Promise<void> => {
     if (mergeInFlight) return mergeInFlight;
 
@@ -539,6 +567,10 @@ const runSqliteRefresh = (): Promise<void> => {
 
     sqliteRefreshInFlight = runSerializedSyncDocumentWriteOperation(async () => {
         try {
+            if (localDataWatcherDependencies.getEditLockCount() > 0) {
+                deferSqliteRefreshUntilEditingEnds();
+                return;
+            }
             await flushPendingSave();
             const beforeSummary = await buildSnapshotTraceSummary(localDataWatcherDependencies.getSnapshot());
             localDataWatcherDependencies.logInfo(
@@ -556,6 +588,12 @@ const runSqliteRefresh = (): Promise<void> => {
                 );
                 return;
             }
+            useTaskStore.setState((state) => ({
+                lastDataChangeAt: Math.max(
+                    localDataWatcherDependencies.now(),
+                    state.lastDataChangeAt + 1,
+                ),
+            }));
             localDataWatcherDependencies.logInfo(
                 '[local-data-watcher] SQLite refresh changed snapshot',
                 changeExtra,
@@ -577,6 +615,15 @@ const runSqliteRefresh = (): Promise<void> => {
 async function handleSqliteChange(options: { immediate?: boolean; paths?: string[] } = {}): Promise<void> {
     const paths = options.paths ?? [];
     const now = localDataWatcherDependencies.now();
+
+    if (localDataWatcherDependencies.getEditLockCount() > 0) {
+        deferSqliteRefreshUntilEditingEnds(paths);
+        localDataWatcherDependencies.logInfo(
+            '[local-data-watcher] SQLite refresh deferred while an editor is open',
+            buildSqliteWatcherTraceExtra(paths),
+        );
+        return;
+    }
 
     if (!options.immediate) {
         localDataWatcherDependencies.logInfo(
@@ -767,6 +814,10 @@ export function stop(): void {
         sqliteIgnoreDrainTimer = null;
     }
     clearMergedPersistRetry();
+    if (sqliteEditUnlockUnsubscribe) {
+        sqliteEditUnlockUnsubscribe();
+        sqliteEditUnlockUnsubscribe = null;
+    }
     hasPendingChangeDuringIgnore = false;
     hasPendingSqliteChangeDuringSelfWrite = false;
     pendingSqliteChangePaths = [];
@@ -793,6 +844,9 @@ export const __localDataWatcherTestUtils = {
     },
     async triggerChangeForTests() {
         await handleExternalChange({ immediate: true });
+    },
+    async triggerSqliteChangeForTests() {
+        await handleSqliteChange({ immediate: true });
     },
     async refreshFromDiskNowForTests() {
         await refreshFromDiskNow();
