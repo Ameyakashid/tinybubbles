@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
     applyTickTickImport,
@@ -128,6 +128,25 @@ const sampleTickTickCsv = buildTickTickCsv([
 ]);
 
 describe('ticktick import', () => {
+    it('rejects the cumulative checklist limit before allocating checklist UUIDs', () => {
+        const randomUuid = vi.spyOn(globalThis.crypto, 'randomUUID');
+        const oversizedChecklist = Array.from({ length: 100_001 }, () => '▫ x').join('\n');
+        try {
+            const result = parseTickTickImportSource({
+                fileName: 'oversized-checklist.csv',
+                text: buildTickTickCsv([[
+                    '', 'List', 'Checklist', 'CHECKLIST', '', oversizedChecklist, 'true',
+                    '', '', '', '', '0', '0', '', '', '0', '', 'true', 'false', '', '', '', '',
+                ]]),
+            });
+
+            expect(result.valid).toBe(false);
+            expect(result.errors[0]).toContain('100000 checklist items');
+            expect(randomUuid).not.toHaveBeenCalled();
+        } finally {
+            randomUuid.mockRestore();
+        }
+    });
     it('parses a TickTick CSV backup with folders, lists, dates, recurrence, checklists, and parent rows', () => {
         const result = parseTickTickImportSource({
             fileName: 'TickTick-backup.csv',

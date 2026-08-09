@@ -300,7 +300,29 @@ const parseRecurrence = (value: string, counters: TickTickWarningCounters): Task
     return undefined;
 };
 
-const parseChecklistContent = (content: string): { checklist: ChecklistItem[]; description?: string } => {
+const countChecklistContentItems = (content: string): number => {
+    let count = 0;
+    let lineStart = 0;
+    for (let index = 0; index <= content.length; index += 1) {
+        if (index < content.length && content[index] !== '\n' && content[index] !== '\r') continue;
+        const trimmed = content.slice(lineStart, index).trim();
+        if (
+            (trimmed.startsWith(TICKTICK_CHECKLIST_UNCHECKED) || trimmed.startsWith(TICKTICK_CHECKLIST_CHECKED))
+            && trimmed.slice(1).trim().length > 0
+        ) {
+            count += 1;
+        }
+        if (content[index] === '\r' && content[index + 1] === '\n') index += 1;
+        lineStart = index + 1;
+    }
+    return count;
+};
+
+const parseChecklistContent = (
+    content: string,
+    archiveBudget: ImportArchiveBudget,
+): { checklist: ChecklistItem[]; description?: string } => {
+    archiveBudget.consumeChecklistItems(countChecklistContentItems(content));
     const checklist: ChecklistItem[] = [];
     const descriptionLines: string[] = [];
     content.replace(/\r/gu, '\n').split('\n').forEach((line) => {
@@ -401,7 +423,7 @@ const parseTickTickRows = (
         const status = resolveTaskStatus(getCell(row, headerIndex, 'STATUS'), completedAt, counters);
         const isChecklist = toBoolean(getCell(row, headerIndex, 'IS CHECK LIST'))
             || getCell(row, headerIndex, 'KIND').toUpperCase() === 'CHECKLIST';
-        const checklistData = isChecklist ? parseChecklistContent(content) : { checklist: [], description: content || undefined };
+        const checklistData = isChecklist ? parseChecklistContent(content, archiveBudget) : { checklist: [], description: content || undefined };
         const repeatText = getCell(row, headerIndex, 'REPEAT');
         const recurrence = parseRecurrence(repeatText, counters);
         const sourceId = getCell(row, headerIndex, 'TASKID') || `row-${rowIndex + 1}`;
@@ -482,7 +504,9 @@ const parseTickTickRows = (
     records.forEach((record) => {
         if (convertedChildIds.has(record.sourceId)) return;
         const descriptionParts = [record.content];
-        const childChecklistItems = (checklistChildrenByParent.get(record.sourceId) ?? [])
+        const checklistChildren = checklistChildrenByParent.get(record.sourceId) ?? [];
+        archiveBudget.consumeChecklistItems(checklistChildren.length);
+        const childChecklistItems = checklistChildren
             .sort((left, right) => left.order - right.order || left.sourceIndex - right.sourceIndex)
             .map((child) => {
                 appendSubtaskDetails(descriptionParts, child);
@@ -579,7 +603,6 @@ export const parseTickTickImportSource = (input: TickTickFileInput): TickTickImp
     const parseOneCsv = (csvText: string): void => {
         const parsed = parseTickTickRows(csvText, counters, archiveBudget);
         archiveBudget.consumeEntities(parsed.areas.length + parsed.projects.length + parsed.tasks.length);
-        archiveBudget.consumeChecklistItems(parsed.tasks.reduce((sum, task) => sum + task.checklist.length, 0));
         mergeParsedData(parsedData, parsed);
     };
 
