@@ -7170,7 +7170,21 @@ pub(crate) fn write_sync_file(
 
     let result = (|| -> Result<bool, String> {
         if sync_file.exists() {
-            let _ = fs::copy(&sync_file, &backup_file);
+            // fs::copy opens the destination with O_TRUNC, which rclone/WinFSP mounts
+            // refuse without a VFS write cache — so the .bak silently stopped updating
+            // there (#1001). Copy to a fresh temp name (a new file, always allowed) and
+            // rename over the old backup, the same shape the data file itself uses.
+            let backup_tmp = sync_dir.join(format!("{}.bak.tmp", DATA_FILE_NAME));
+            let _ = fs::remove_file(&backup_tmp);
+            if fs::copy(&sync_file, &backup_tmp).is_ok() {
+                if cfg!(windows) && backup_file.exists() {
+                    let _ = fs::remove_file(&backup_file);
+                }
+                if let Err(err) = fs::rename(&backup_tmp, &backup_file) {
+                    log::warn!("Sync backup rename failed ({err}); keeping previous backup");
+                    let _ = fs::remove_file(&backup_tmp);
+                }
+            }
         }
 
         let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;

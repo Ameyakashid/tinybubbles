@@ -8,6 +8,7 @@ _None yet._
 
 ## Full Change List
 
+- Desktop: the sync backup file (`data.json.bak`) now updates on rclone and WinFSP mounts that refuse in-place overwrites — it is written to a temp name and renamed into place, the same way the data file itself is. Previously the backup silently stopped updating there. (#1001)
 - All platforms: Settings → Data can now import a generic "Mindwtr CSV" file (or ZIP of CSVs) — a documented spreadsheet format covering titles, descriptions, statuses, projects, sections, areas, contexts, tags, assignees, priorities, energy, start/due/review dates, completion, checklists, and manual order — so migrations from apps without a dedicated importer no longer lose structure. (#1011)
 - All platforms: Settings → Data now folds the Data Transfer list (backup, restore, and the importers) behind its heading, so the page opens as a short summary instead of ten rows. Tap or click the heading to open it; searching for a setting inside still jumps straight to it.
 - All platforms: the app reaches its first screen faster from a cold start, most noticeably on mobile — startup no longer builds all 20 language dictionaries before drawing anything, and loads only the handful of getting-started strings the first-run seed needs.
