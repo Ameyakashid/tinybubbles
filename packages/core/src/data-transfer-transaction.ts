@@ -42,6 +42,14 @@ const runWithStoreWriteLock = <T>(operation: () => Promise<T>): Promise<T> => {
     return result;
 };
 
+/**
+ * Runs a complete-document writer after earlier sync/transfer work and blocks
+ * ordinary store actions until its read/replace window has finished.
+ */
+export const runSerializedSyncDocumentWriteOperation = <T>(
+    operation: () => Promise<T>
+): Promise<T> => syncDocumentOperationQueue.run(() => runWithStoreWriteLock(operation));
+
 export type DataTransferStaleDetails = {
     currentChangeAt: number;
     localSnapshotChangeAt: number;
@@ -87,7 +95,7 @@ export class DataTransferRefreshError extends Error {
 export async function runDataTransferTransaction<TResult, TSnapshot>(
     options: DataTransferTransactionWithSnapshotOptions<TResult, TSnapshot>
 ): Promise<{ result: TResult; snapshot: TSnapshot }> {
-    return runSerializedSyncDocumentOperation(() => runWithStoreWriteLock(async () => {
+    return runSerializedSyncDocumentWriteOperation(async () => {
         await options.flushPendingSave();
         const localSnapshotChangeAt = options.getCurrentChangeAt();
         const currentData = await options.readCurrentData();
@@ -124,7 +132,7 @@ export async function runDataTransferTransaction<TResult, TSnapshot>(
             result: application.result,
             snapshot,
         };
-    }));
+    });
 }
 
 export const runDataTransferTransactionWithoutSnapshot = async <TResult>(

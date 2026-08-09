@@ -1,10 +1,11 @@
 import {
     type AppData,
     flushPendingSave,
+    getStorageAdapter,
     getInMemoryAppDataSnapshot,
     mergeAppData,
     normalizeAppData,
-    runSerializedSyncDocumentOperation,
+    runSerializedSyncDocumentWriteOperation,
     useTaskStore,
 } from '@mindwtr/core';
 import { invokeNative } from './tauri-invoke';
@@ -61,8 +62,7 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => 
         lastDataChangeAt: Date.now(),
     }));
 
-    await useTaskStore.getState().persistSnapshot();
-    await flushPendingSave();
+    await getStorageAdapter().saveData(merged);
 };
 
 const defaultDependencies: LocalDataWatcherDependencies = {
@@ -394,7 +394,7 @@ async function mergeExternalData(): Promise<void> {
     // lane before reading their current inputs. A data transfer acquires its
     // store-write barrier only after it reaches the front of the same lane, so
     // the watcher never waits on that barrier while holding an earlier lock.
-    await runSerializedSyncDocumentOperation(async () => {
+    await runSerializedSyncDocumentWriteOperation(async () => {
         try {
             await flushPendingSave();
 

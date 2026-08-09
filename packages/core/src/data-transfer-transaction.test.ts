@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppData } from './types';
 import {
+    runAfterStoreWriteLock,
     runDataTransferTransaction,
     runDataTransferTransactionWithoutSnapshot,
+    runSerializedSyncDocumentWriteOperation,
 } from './data-transfer-transaction';
 
 const emptyData: AppData = {
@@ -199,5 +201,31 @@ describe('runDataTransferTransaction', () => {
 
         expect(transaction).toEqual({ snapshot: null, result: undefined });
         expect(persistData).toHaveBeenCalledWith(emptyData);
+    });
+
+    it('blocks ordinary store writes while a serialized document writer is active', async () => {
+        let markDocumentWriteStarted: (() => void) | undefined;
+        let releaseDocumentWrite: (() => void) | undefined;
+        const documentWriteStarted = new Promise<void>((resolve) => {
+            markDocumentWriteStarted = resolve;
+        });
+        const documentWriteGate = new Promise<void>((resolve) => {
+            releaseDocumentWrite = resolve;
+        });
+        const storeWrite = vi.fn(async () => undefined);
+
+        const documentWrite = runSerializedSyncDocumentWriteOperation(async () => {
+            markDocumentWriteStarted?.();
+            await documentWriteGate;
+        });
+
+        await documentWriteStarted;
+        const queuedStoreWrite = runAfterStoreWriteLock(storeWrite);
+        expect(storeWrite).not.toHaveBeenCalled();
+
+        releaseDocumentWrite?.();
+        await Promise.all([documentWrite, queuedStoreWrite]);
+
+        expect(storeWrite).toHaveBeenCalledOnce();
     });
 });
