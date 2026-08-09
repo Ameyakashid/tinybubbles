@@ -116,6 +116,7 @@ export function BackgroundSyncInfoCard({
 
 type SyncBackupSectionProps = {
   backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
+  handleAddGettingStartedContent: () => void;
   handleBackup: () => void;
   handleImportDgt: () => void;
   handleImportMindwtrCsv: () => void;
@@ -125,6 +126,7 @@ type SyncBackupSectionProps = {
   handleMergeBackup: () => void;
   handleRestoreBackup: () => void;
   isBackupBusy: boolean;
+  isGettingStartedBusy: boolean;
   isSyncing: boolean;
   tr: SettingsTranslator;
   t: Translate;
@@ -133,6 +135,7 @@ type SyncBackupSectionProps = {
 
 export function SyncBackupSection({
   backupAction,
+  handleAddGettingStartedContent,
   handleBackup,
   handleImportDgt,
   handleImportMindwtrCsv,
@@ -142,6 +145,7 @@ export function SyncBackupSection({
   handleMergeBackup,
   handleRestoreBackup,
   isBackupBusy,
+  isGettingStartedBusy,
   isSyncing,
   tr,
   t,
@@ -209,6 +213,18 @@ export function SyncBackupSection({
               </Text>
             </View>
             {backupAction === 'merge' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleAddGettingStartedContent}
+            disabled={isGettingStartedBusy}
+            testID="add-getting-started-content"
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>Add Getting Started content</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>Create or restore the guided setup project and sample inbox items.</Text>
+            </View>
+            {isGettingStartedBusy && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}

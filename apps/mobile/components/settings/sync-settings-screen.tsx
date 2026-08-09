@@ -871,6 +871,7 @@ function SyncSettingsView({
 
                         <SyncBackupSection
                             backupAction={backupAction}
+                            handleAddGettingStartedContent={() => handleAddGettingStartedContent()}
                             handleBackup={() => void handleBackup()}
                             handleImportDgt={() => void handleImportDgt()}
                             handleImportMindwtrCsv={() => void handleImportMindwtrCsv()}
@@ -880,6 +881,7 @@ function SyncSettingsView({
                             handleMergeBackup={() => void handleMergeBackup()}
                             handleRestoreBackup={() => void handleRestoreBackup()}
                             isBackupBusy={isBackupBusy}
+                            isGettingStartedBusy={isGettingStartedActionBusy}
                             isSyncing={isSyncing}
                             tr={tr}
                             t={t}

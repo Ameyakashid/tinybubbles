@@ -21,6 +21,7 @@ const noop = () => undefined;
 
 const baseProps = {
   backupAction: null,
+  handleAddGettingStartedContent: noop,
   handleBackup: noop,
   handleImportDgt: noop,
   handleImportMindwtrCsv: noop,
@@ -30,6 +31,7 @@ const baseProps = {
   handleMergeBackup: noop,
   handleRestoreBackup: noop,
   isBackupBusy: false,
+  isGettingStartedBusy: false,
   isSyncing: false,
   tr: translate,
   t: translate,
@@ -78,5 +80,28 @@ describe('SyncBackupSection', () => {
       tree.root.findAllByProps({ onPress: handleBackup })[0].props.onPress();
     });
     expect(handleBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Getting Started recovery from the normal folded data-transfer section', () => {
+    const handleAddGettingStartedContent = vi.fn();
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncBackupSection
+          {...baseProps}
+          handleAddGettingStartedContent={handleAddGettingStartedContent}
+        />,
+      );
+    });
+
+    act(() => {
+      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
+    });
+
+    expect(renderedText(tree)).toContain('Add Getting Started content');
+    act(() => {
+      tree.root.findByProps({ testID: 'add-getting-started-content' }).props.onPress();
+    });
+    expect(handleAddGettingStartedContent).toHaveBeenCalledTimes(1);
   });
 });
