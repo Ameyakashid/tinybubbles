@@ -1940,6 +1940,18 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState().error).toBe('Failed to fetch data: Database needs repair');
     });
 
+    it('can surface a fetch failure to infrastructure callers after recording it', async () => {
+        const failure = new Error('database is locked');
+        mockStorage.getData = vi.fn().mockRejectedValue(failure);
+
+        await expect(useTaskStore.getState().fetchData({
+            silent: true,
+            throwOnError: true,
+        })).rejects.toBe(failure);
+
+        expect(useTaskStore.getState().error).toBe('Failed to fetch data: database is locked');
+    });
+
     it('acknowledges only a storage snapshot that fetchData applied', async () => {
         const nowIso = '2026-07-31T12:00:00.000Z';
         vi.setSystemTime(new Date(nowIso));

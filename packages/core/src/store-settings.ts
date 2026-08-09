@@ -423,6 +423,7 @@ export const createSettingsActions = ({
         } catch (err) {
             markCoreStartupPhase('core.fetch_data.error');
             set({ error: getFetchDataErrorMessage(err), isLoading: false });
+            if (options?.throwOnError) throw err;
         }
     },
 

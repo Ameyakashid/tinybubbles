@@ -79,7 +79,7 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<AppData> 
 const defaultDependencies: LocalDataWatcherDependencies = {
     readDataJson: () => invokeNative<AppData>('read_data_json'),
     refreshStorageData: async () => {
-        await useTaskStore.getState().fetchData({ silent: true });
+        await useTaskStore.getState().fetchData({ silent: true, throwOnError: true });
     },
     watchFile: async (path, callback) => {
         const { watch } = await import('@tauri-apps/plugin-fs');
@@ -673,6 +673,10 @@ async function handleSqliteChange(options: { immediate?: boolean; paths?: string
     }
 
     if (!options.immediate) {
+        // A distinct filesystem event represents a fresh opportunity to read
+        // the database. Give it its own bounded retry allowance without
+        // cancelling a retry that is already queued for the same lane.
+        delayedSqliteRefreshRetryCount = 0;
         localDataWatcherDependencies.logInfo(
             '[local-data-watcher] SQLite event received',
             buildSqliteWatcherTraceExtra(paths),
