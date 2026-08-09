@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppData, Attachment } from '@mindwtr/core';
+import {
+    runSerializedSyncDocumentOperation,
+    type AppData,
+    type Attachment,
+} from '@mindwtr/core';
 import { DropboxUnauthorizedError } from './dropbox-sync';
 import {
     fallbackHashString,
@@ -50,6 +54,30 @@ afterEach(async () => {
 });
 
 describe('sync-service test utils', () => {
+    it('serializes desktop sync document work with imports and restores', async () => {
+        const events: string[] = [];
+        let releaseTransfer!: () => void;
+        const transferBarrier = new Promise<void>((resolve) => {
+            releaseTransfer = resolve;
+        });
+        const transfer = runSerializedSyncDocumentOperation(async () => {
+            events.push('transfer:start');
+            await transferBarrier;
+            events.push('transfer:end');
+        });
+        await waitForAssertion(() => expect(events).toEqual(['transfer:start']));
+
+        const sync = __syncServiceTestUtils.runSyncDocumentExclusiveForTests(async () => {
+            events.push('sync');
+        });
+        await Promise.resolve();
+        expect(events).toEqual(['transfer:start']);
+
+        releaseTransfer();
+        await Promise.all([transfer, sync]);
+        expect(events).toEqual(['transfer:start', 'transfer:end', 'sync']);
+    });
+
     it('normalizes known sync backends and defaults unknown values to off', () => {
         expect(normalizeSyncBackend('file')).toBe('file');
         expect(normalizeSyncBackend('webdav')).toBe('webdav');

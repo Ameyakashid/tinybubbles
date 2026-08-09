@@ -20,6 +20,7 @@ import {
     normalizeWebdavUrl,
     normalizeCloudUrl,
     runDataTransferTransactionWithoutSnapshot,
+    runSerializedSyncDocumentOperation,
     createSyncBackendIO,
     runSharedSyncCycle,
     sanitizeAppDataForRemote,
@@ -261,6 +262,9 @@ const fallbackSyncTranslations = getTranslationsSync('en');
 const syncRestoreQueue = createSerializedAsyncQueue();
 const runSyncRestoreExclusive = <T>(operation: () => Promise<T>): Promise<T> => (
     syncRestoreQueue.run(operation)
+);
+const runSyncDocumentExclusive = <T>(operation: () => Promise<T>): Promise<T> => (
+    runSyncRestoreExclusive(() => runSerializedSyncDocumentOperation(operation))
 );
 
 const resolveSyncText = (key: string, fallback: string): string => {
@@ -1035,7 +1039,7 @@ export class SyncService {
         // Detach it from the orchestrator, then wait for it to finish before a
         // following test replaces the service dependencies underneath it.
         SyncService.syncOrchestrator.reset();
-        await runSyncRestoreExclusive(async () => undefined);
+        await runSyncDocumentExclusive(async () => undefined);
         await SyncService.legacyMigrationPromise?.catch(() => undefined);
         await SyncService.stopFileWatcher();
         SyncService.didMigrate = false;
@@ -2265,7 +2269,7 @@ export class SyncService {
 
     static async cleanupAttachmentsNow(): Promise<void> {
         if (!isTauriRuntimeEnv()) return;
-        await runSyncRestoreExclusive(async () => {
+        await runSyncDocumentExclusive(async () => {
             await syncServiceDependencies.flushPendingSave();
             const localSnapshotChangeAt = getStoreState().lastDataChangeAt;
             const ensureLocalSnapshotFresh = () => {
@@ -2360,7 +2364,7 @@ export class SyncService {
     }
 
     private static runSyncCycle(options: SyncRunOptions): Promise<SyncRunResult> {
-        return runSyncRestoreExclusive(() => SyncService.runSyncCycleExclusive(options));
+        return runSyncDocumentExclusive(() => SyncService.runSyncCycleExclusive(options));
     }
 
     private static async runSyncCycleExclusive(options: SyncRunOptions): Promise<SyncRunResult> {
@@ -2573,6 +2577,9 @@ export const __syncServiceTestUtils = {
     },
     runSyncRestoreExclusiveForTests<T>(operation: () => Promise<T>) {
         return runSyncRestoreExclusive(operation);
+    },
+    runSyncDocumentExclusiveForTests<T>(operation: () => Promise<T>) {
+        return runSyncDocumentExclusive(operation);
     },
     clearWebdavDownloadBackoff() {
         clearAttachmentSyncState();
