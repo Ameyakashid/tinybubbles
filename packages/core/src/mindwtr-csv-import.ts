@@ -624,19 +624,12 @@ export const applyMindwtrCsvImport = (
     const projectBySourceKey = new Map(parsedData.projects.map((project) => [project.sourceKey, project]));
     const taskSourceKeyFor = (task: ParsedMindwtrCsvTask): string => {
         const project = task.projectSourceKey ? projectBySourceKey.get(task.projectSourceKey) : undefined;
-        if (!project) return encodeSourceKeyTuple('none', task.sourceId);
-        const currentProjectSourceKey = projectSourceKeyFor(project.areaSourceKey, project.name);
-        // Parsed payloads created by an older importer retain their own source-key grammar.
-        // This keeps tests, queued imports, and other in-memory callers able to apply them
-        // exactly as that importer would have done.
-        if (project.sourceKey !== currentProjectSourceKey) {
+        if (project && project.sourceKey !== projectSourceKeyFor(project.areaSourceKey, project.name)) {
             return `${task.projectSourceKey}:${task.sourceId}`;
         }
-        return encodeSourceKeyTuple(
-            ...(project.areaSourceKey ? [project.areaSourceKey] : []),
-            normalizeSourceKey(project.name),
-            task.sourceId,
-        );
+        // The stable ID (or ZIP-qualified row fallback) owns task identity; moving containers
+        // in a corrected export must not manufacture a second task.
+        return encodeSourceKeyTuple(task.sourceId);
     };
     const tasksForImport = parsedData.tasks.map((task) => ({
         ...task,
@@ -751,6 +744,24 @@ export const applyMindwtrCsvImport = (
         const expectedAreaId = !expectedProjectId && task.areaSourceKey
             ? resolvedIds.area.get(task.areaSourceKey)
             : undefined;
+        const previousScopedSourceKey = project
+            ? encodeSourceKeyTuple(
+                ...(project.areaSourceKey ? [project.areaSourceKey] : []),
+                normalizeSourceKey(project.name),
+                task.sourceId,
+            )
+            : encodeSourceKeyTuple('none', task.sourceId);
+        const previousScopedId = createMindwtrCsvImportId('task', previousScopedSourceKey);
+        const previousScopedTask = currentTaskById.get(previousScopedId);
+        if (
+            previousScopedSourceKey !== task.sourceKey
+            && previousScopedTask
+            && (previousScopedTask.projectId ?? undefined) === expectedProjectId
+            && (previousScopedTask.areaId ?? undefined) === expectedAreaId
+        ) {
+            resolvedIds.task.set(task.sourceKey, previousScopedId);
+            return;
+        }
         const colonProjectSourceKey = project
             ? colonProjectSourceKeyFor(project.areaSourceKey, project.name)
             : 'none';

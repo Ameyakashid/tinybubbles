@@ -7,6 +7,7 @@ import {
     type ParsedMindwtrCsvImportData,
 } from './mindwtr-csv-import';
 import { mockAppData } from './sync-test-utils';
+import { generateDeterministicUUID } from './uuid';
 
 const quoteCell = (cell: string): string => `"${cell.replace(/"/gu, '""')}"`;
 
@@ -373,6 +374,33 @@ describe('mindwtr csv import', () => {
         expect(second.data.tasks).toHaveLength(1);
     });
 
+    it('reuses a task ID from the escaped project-scoped importer', () => {
+        const csv = buildCsv(
+            ['Title', 'Project', 'Section', 'Area', 'ID'],
+            [['Keep lineage', 'Ops:Core', 'Queue:Now', 'Work:North', 'task:1']],
+        );
+        const parsed = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), parsed, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const priorTaskId = generateDeterministicUUID(
+            'mindwtr:csv-import:v1:task:work%3Anorth:ops%3Acore:task%3A1',
+        );
+        const priorData = {
+            ...first.data,
+            tasks: first.data.tasks.map((task) => ({ ...task, id: priorTaskId })),
+        };
+
+        const second = applyMindwtrCsvImport(priorData, parsed, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]?.id).toBe(priorTaskId);
+    });
+
     it('does not collapse rows at the same position across two CSVs in one ZIP (C1)', () => {
         const csvA = buildCsv(['Title', 'Project'], [['Task from A', 'Ops']]);
         const csvB = buildCsv(['Title', 'Project'], [['Task from B', 'Ops']]);
@@ -699,5 +727,33 @@ describe('mindwtr csv import', () => {
         expect(second.importedProjectCount).toBe(0);
         expect(second.data.tasks).toHaveLength(first.data.tasks.length);
         expect(second.data.projects).toHaveLength(first.data.projects.length);
+    });
+
+    it('keeps a stable task identity when a corrected re-export moves it between projects', () => {
+        const firstCsv = buildCsv(
+            ['Title', 'Project', 'ID'],
+            [['Move me', 'Before', 'stable-task']],
+        );
+        const movedCsv = buildCsv(
+            ['Title', 'Project', 'ID'],
+            [['Move me', 'After', 'stable-task']],
+        );
+        const firstParsed = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: firstCsv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const movedParsed = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: movedCsv })
+            .parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), firstParsed, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const originalTask = first.data.tasks[0];
+        const second = applyMindwtrCsvImport(first.data, movedParsed, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]?.id).toBe(originalTask?.id);
+        expect(second.data.tasks[0]?.projectId).toBe(originalTask?.projectId);
     });
 });
