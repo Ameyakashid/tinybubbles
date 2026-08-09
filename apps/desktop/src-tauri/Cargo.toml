@@ -25,6 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 # new package to the lockfile, only a new edge to an already-resolved one.
 toml = "0.8"
 log = "0.4"
+fs2 = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"

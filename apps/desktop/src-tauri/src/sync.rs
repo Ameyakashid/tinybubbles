@@ -1,5 +1,6 @@
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use fs2::FileExt;
 use rand::RngCore;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -3817,41 +3818,38 @@ mod tests {
     }
 
     #[test]
-    fn releasing_replaced_sync_lock_does_not_remove_new_owner() {
+    fn expired_lease_content_cannot_break_an_active_sync_lock() {
         let dir = tempfile::tempdir().expect("temp dir");
+        let lock_path = dir.path().join(".mindwtr.lock");
         let first = acquire_sync_lock(dir.path()).expect("first lock");
-        fs::write(&first.path, b"pid=other ts=9999999999").expect("replace lock owner");
+        fs::write(
+            &lock_path,
+            br#"{"ownerToken":"clock-skewed-peer","pid":42,"expiresAtMs":0}"#,
+        )
+        .expect("replace advisory lease metadata");
 
+        assert_eq!(
+            acquire_sync_lock(dir.path()).expect_err("active OS lock must reject takeover"),
+            "Sync lock held by another process"
+        );
         release_sync_lock(&first);
 
-        assert!(
-            first.path.exists(),
-            "old owner must not remove replacement lock"
-        );
+        let next = acquire_sync_lock(dir.path()).expect("released lock can be acquired");
+        release_sync_lock(&next);
     }
 
     #[test]
-    fn stale_sync_lock_takeover_preserves_new_owner_on_old_release() {
+    fn unlocked_legacy_lock_file_is_reused_without_stale_takeover() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let first = acquire_sync_lock_at(dir.path(), 1_000).expect("first lock");
-        let still_fresh = acquire_sync_lock_at(dir.path(), 1_000 + SYNC_LOCK_LEASE_MS - 1);
-        assert_eq!(
-            still_fresh.expect_err("unexpired lease must block takeover"),
-            "Sync lock held by another process"
-        );
+        let lock_path = dir.path().join(".mindwtr.lock");
+        fs::write(&lock_path, b"pid=42 ts=1").expect("write legacy lock metadata");
 
-        let second = acquire_sync_lock_at(dir.path(), 1_000 + SYNC_LOCK_LEASE_MS)
-            .expect("expired lease can be replaced");
-        release_sync_lock(&first);
+        let owner = acquire_sync_lock(dir.path()).expect("unlocked legacy file can be reused");
+        release_sync_lock(&owner);
 
-        assert_eq!(
-            read_sync_lock_lease(&second.path)
-                .expect("replacement lease remains")
-                .owner_token,
-            second.owner_token
-        );
-        release_sync_lock(&second);
-        assert!(!second.path.exists());
+        assert!(lock_path.exists(), "stable lock inode must not be unlinked");
+        let next = acquire_sync_lock(dir.path()).expect("next owner reuses stable lock inode");
+        release_sync_lock(&next);
     }
 
     #[test]
@@ -3865,7 +3863,7 @@ mod tests {
             let barrier = barrier.clone();
             contenders.push(std::thread::spawn(move || {
                 barrier.wait();
-                acquire_sync_lock_at(&path, 1_000)
+                acquire_sync_lock(&path)
             }));
         }
         barrier.wait();
@@ -7353,125 +7351,36 @@ fn is_icloud_path(path: &Path) -> bool {
     path_str.contains("Library/Mobile Documents/") || path_str.contains("iCloud")
 }
 
-const SYNC_LOCK_LEASE_MS: u64 = 5 * 60 * 1000;
 const SYNC_FILE_WRITE_CONFLICT: &str = "SYNC_FILE_WRITE_CONFLICT";
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SyncLockLease {
-    owner_token: String,
-    pid: u32,
-    expires_at_ms: u64,
-}
 
 #[derive(Debug)]
 struct SyncFileLock {
-    path: PathBuf,
-    owner_token: String,
-}
-
-fn sync_lock_now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_millis()
-        .min(u64::MAX as u128) as u64
-}
-
-fn new_sync_lock_owner_token() -> String {
-    let mut bytes = [0u8; 24];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    URL_SAFE_NO_PAD.encode(bytes)
-}
-
-fn read_sync_lock_lease(lock_path: &Path) -> Option<SyncLockLease> {
-    fs::read(lock_path)
-        .ok()
-        .and_then(|content| serde_json::from_slice(&content).ok())
-}
-
-fn remove_sync_lock_if_owned(lock_path: &Path, owner_token: &str) -> bool {
-    let Some(lease) = read_sync_lock_lease(lock_path) else {
-        return false;
-    };
-    if lease.owner_token != owner_token {
-        return false;
-    }
-    fs::remove_file(lock_path).is_ok()
-}
-
-fn remove_legacy_sync_lock_if_unchanged(lock_path: &Path, observed: &[u8]) -> bool {
-    if fs::read(lock_path).ok().as_deref() != Some(observed) {
-        return false;
-    }
-    fs::remove_file(lock_path).is_ok()
-}
-
-fn acquire_sync_lock_at(sync_dir: &Path, now_ms: u64) -> Result<SyncFileLock, String> {
-    let lock_path = sync_dir.join(".mindwtr.lock");
-    let owner_token = new_sync_lock_owner_token();
-    let lease = SyncLockLease {
-        owner_token: owner_token.clone(),
-        pid: std::process::id(),
-        expires_at_ms: now_ms.saturating_add(SYNC_LOCK_LEASE_MS),
-    };
-    let content = serde_json::to_vec(&lease)
-        .map_err(|error| format!("Failed to encode sync lock lease: {error}"))?;
-
-    for _ in 0..3 {
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock_path)
-        {
-            Ok(mut file) => {
-                if let Err(error) = file.write_all(&content).and_then(|_| file.sync_all()) {
-                    // This process just atomically created the path and has not
-                    // published a usable lease, so no other owner can validly
-                    // have acquired it yet.
-                    let _ = fs::remove_file(&lock_path);
-                    return Err(format!("Failed to acquire sync lock: {error}"));
-                }
-                return Ok(SyncFileLock {
-                    path: lock_path,
-                    owner_token,
-                });
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                if let Some(existing) = read_sync_lock_lease(&lock_path) {
-                    if existing.expires_at_ms > now_ms {
-                        return Err("Sync lock held by another process".to_string());
-                    }
-                    if !remove_sync_lock_if_owned(&lock_path, &existing.owner_token) {
-                        continue;
-                    }
-                } else {
-                    let observed = fs::read(&lock_path).unwrap_or_default();
-                    let is_stale = fs::metadata(&lock_path)
-                        .and_then(|metadata| metadata.modified())
-                        .ok()
-                        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
-                        .is_some_and(|age| age >= Duration::from_millis(SYNC_LOCK_LEASE_MS));
-                    if !is_stale {
-                        return Err("Sync lock held by another process".to_string());
-                    }
-                    if !remove_legacy_sync_lock_if_unchanged(&lock_path, &observed) {
-                        continue;
-                    }
-                }
-            }
-            Err(error) => return Err(format!("Failed to acquire sync lock: {error}")),
-        }
-    }
-    Err("Sync lock changed while acquiring it; retry the sync".to_string())
+    file: File,
 }
 
 fn acquire_sync_lock(sync_dir: &Path) -> Result<SyncFileLock, String> {
-    acquire_sync_lock_at(sync_dir, sync_lock_now_ms())
+    let lock_path = sync_dir.join(".mindwtr.lock");
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&lock_path)
+        .map_err(|error| format!("Failed to open sync lock: {error}"))?;
+    match file.try_lock_exclusive() {
+        Ok(()) => Ok(SyncFileLock { file }),
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            Err("Sync lock held by another process".to_string())
+        }
+        Err(error) => Err(format!(
+            "Failed to acquire an exclusive sync lock; this filesystem may not support safe concurrent writes: {error}"
+        )),
+    }
 }
 
 fn release_sync_lock(sync_lock: &SyncFileLock) {
-    let _ = remove_sync_lock_if_owned(&sync_lock.path, &sync_lock.owner_token);
+    if let Err(error) = FileExt::unlock(&sync_lock.file) {
+        log::warn!("Failed to release sync file lock: {error}");
+    }
 }
 
 /// The "no remote yet" payload for a fresh sync folder. Must include every
