@@ -157,7 +157,7 @@ describe('useSyncSettingsBackupActions', () => {
             data: backupData,
             errors: [],
             warnings: [],
-            metadata: { taskCount: 3, projectCount: 1 },
+            metadata: { taskCount: 3, projectCount: 1, sectionCount: 0, areaCount: 0 },
         } as unknown as Awaited<ReturnType<typeof dataTransfer.inspectBackupDocument>>);
         vi.mocked(dataTransfer.mergeDataFromBackup).mockResolvedValue({
             snapshotName: 'data.snapshot.json',
