@@ -544,6 +544,10 @@ function SyncSettingsView({
                 </Text>
                 <TouchableOpacity
                     accessibilityRole="button"
+                    accessibilityState={{
+                        busy: gettingStartedBusy,
+                        disabled: isGettingStartedActionBusy,
+                    }}
                     activeOpacity={0.78}
                     disabled={isGettingStartedActionBusy}
                     onPress={() => handleAddGettingStartedContent({ openProject: true })}
@@ -872,7 +876,8 @@ function SyncSettingsView({
                             handleMergeBackup={() => void handleMergeBackup()}
                             handleRestoreBackup={() => void handleRestoreBackup()}
                             isBackupBusy={isBackupBusy}
-                            isGettingStartedBusy={isGettingStartedActionBusy}
+                            isGettingStartedDisabled={isGettingStartedActionBusy}
+                            isGettingStartedBusy={gettingStartedBusy}
                             isSyncing={isSyncing}
                             tr={tr}
                             t={t}

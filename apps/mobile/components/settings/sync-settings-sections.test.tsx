@@ -1,6 +1,6 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
@@ -35,6 +35,7 @@ const baseProps = {
   handleMergeBackup: noop,
   handleRestoreBackup: noop,
   isBackupBusy: false,
+  isGettingStartedDisabled: false,
   isGettingStartedBusy: false,
   isSyncing: false,
   tr: translate,
@@ -108,6 +109,28 @@ describe('SyncBackupSection', () => {
       tree.root.findByProps({ testID: 'add-getting-started-content' }).props.onPress();
     });
     expect(handleAddGettingStartedContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes the Getting Started action as a disabled button without a false busy spinner', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncBackupSection
+          {...baseProps}
+          isGettingStartedDisabled
+          isGettingStartedBusy={false}
+        />,
+      );
+    });
+    act(() => {
+      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
+    });
+
+    const action = tree.root.findByProps({ testID: 'add-getting-started-content' });
+    expect(action.props.accessibilityRole).toBe('button');
+    expect(action.props.accessibilityState).toEqual({ busy: false, disabled: true });
+    expect(action.props.disabled).toBe(true);
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   });
 });
 

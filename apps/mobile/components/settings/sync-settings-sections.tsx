@@ -126,6 +126,7 @@ type SyncBackupSectionProps = {
   handleMergeBackup: () => void;
   handleRestoreBackup: () => void;
   isBackupBusy: boolean;
+  isGettingStartedDisabled: boolean;
   isGettingStartedBusy: boolean;
   isSyncing: boolean;
   tr: SettingsTranslator;
@@ -145,6 +146,7 @@ export function SyncBackupSection({
   handleMergeBackup,
   handleRestoreBackup,
   isBackupBusy,
+  isGettingStartedDisabled,
   isGettingStartedBusy,
   isSyncing,
   tr,
@@ -217,7 +219,9 @@ export function SyncBackupSection({
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleAddGettingStartedContent}
-            disabled={isGettingStartedBusy}
+            disabled={isGettingStartedDisabled}
+            accessibilityRole="button"
+            accessibilityState={{ busy: isGettingStartedBusy, disabled: isGettingStartedDisabled }}
             testID="add-getting-started-content"
           >
             <View style={styles.settingInfo}>
