@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
+import { SettingsDisclosureCard } from '../SettingRow';
 import type { SettingsDataPageProps } from './types';
 
 type DataTransferSectionProps = Pick<
@@ -38,7 +39,7 @@ function TransferActionButton({
             data-settings-key={settingsKey}
             onClick={onClick}
             disabled={disabled}
-            className="flex w-full items-center justify-between gap-4 px-1 py-3 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
         >
             <div>
                 <div className="text-sm font-medium text-foreground">{label}</div>
@@ -69,112 +70,93 @@ export function DataTransferSection({
     const [open, setOpen] = useState(false);
 
     return (
-        <section className="space-y-3">
-            <h2>
-                <button
-                    type="button"
-                    data-settings-key="dataTransfer"
-                    data-settings-section="dataTransfer"
-                    onClick={() => setOpen((prev) => !prev)}
-                    aria-expanded={open}
-                    className="flex w-full items-center gap-2 rounded-md text-left text-lg font-semibold transition-colors hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                    {open ? (
-                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    )}
-                    <RefreshCw className="w-5 h-5" />
-                    {t.dataTransfer}
-                </button>
-            </h2>
-            <div className="space-y-3">
-                <a
-                    href="https://docs.mindwtr.app/import/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                >
-                    Import guide
-                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-                <p className="text-sm text-muted-foreground">{t.dataTransferDesc}</p>
-                {open && (
-                    <div className="divide-y divide-border border-y border-border">
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="exportBackup"
-                            label={t.exportBackup}
-                            description={t.exportBackupDesc}
-                            statusText={transferAction === 'export' ? t.syncing : null}
-                            onClick={() => void onExportBackup()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="restoreBackup"
-                            label={t.restoreBackup}
-                            description={t.restoreBackupDesc}
-                            statusText={transferAction === 'restore' ? t.syncing : null}
-                            onClick={() => void onRestoreBackup()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="mergeBackup"
-                            label={t.mergeBackup}
-                            description={t.mergeBackupDesc}
-                            statusText={transferAction === 'merge' ? t.syncing : null}
-                            onClick={() => void onMergeBackup()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            label="Add Getting Started content"
-                            description="Create or restore the guided setup project and sample inbox items."
-                            statusText={null}
-                            onClick={() => void onAddGettingStartedContent()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="importTodoist"
-                            label={t.importTodoist}
-                            description={t.importTodoistDesc}
-                            statusText={transferAction === 'import' ? t.syncing : null}
-                            onClick={() => void onImportTodoist()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="importTickTick"
-                            label={t.importTickTick}
-                            description={t.importTickTickDesc}
-                            statusText={transferAction === 'import' ? t.syncing : null}
-                            onClick={() => void onImportTickTick()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="importDgt"
-                            label={t.importDgt}
-                            description={t.importDgtDesc}
-                            statusText={transferAction === 'import' ? t.syncing : null}
-                            onClick={() => void onImportDgt()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="importOmniFocus"
-                            label={t.importOmniFocus}
-                            description={t.importOmniFocusDesc}
-                            statusText={transferAction === 'import' ? t.syncing : null}
-                            onClick={() => void onImportOmniFocus()}
-                        />
-                        <TransferActionButton
-                            disabled={disabled}
-                            settingsKey="importMindwtrCsv"
-                            label={t.importMindwtrCsv}
-                            description={t.importMindwtrCsvDesc}
-                            statusText={transferAction === 'import' ? t.syncing : null}
-                            onClick={() => void onImportMindwtrCsv()}
-                        />
-                    </div>
-                )}
-            </div>
-        </section>
+        <SettingsDisclosureCard
+            sectionKey="dataTransfer"
+            title={t.dataTransfer}
+            description={t.dataTransferDesc}
+            open={open}
+            onToggle={() => setOpen((prev) => !prev)}
+        >
+            <a
+                href="https://docs.mindwtr.app/import/"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 px-4 py-3 text-sm font-medium text-primary hover:underline"
+            >
+                Import guide
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="exportBackup"
+                label={t.exportBackup}
+                description={t.exportBackupDesc}
+                statusText={transferAction === 'export' ? t.syncing : null}
+                onClick={() => void onExportBackup()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="restoreBackup"
+                label={t.restoreBackup}
+                description={t.restoreBackupDesc}
+                statusText={transferAction === 'restore' ? t.syncing : null}
+                onClick={() => void onRestoreBackup()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="mergeBackup"
+                label={t.mergeBackup}
+                description={t.mergeBackupDesc}
+                statusText={transferAction === 'merge' ? t.syncing : null}
+                onClick={() => void onMergeBackup()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                label="Add Getting Started content"
+                description="Create or restore the guided setup project and sample inbox items."
+                statusText={null}
+                onClick={() => void onAddGettingStartedContent()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="importTodoist"
+                label={t.importTodoist}
+                description={t.importTodoistDesc}
+                statusText={transferAction === 'import' ? t.syncing : null}
+                onClick={() => void onImportTodoist()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="importTickTick"
+                label={t.importTickTick}
+                description={t.importTickTickDesc}
+                statusText={transferAction === 'import' ? t.syncing : null}
+                onClick={() => void onImportTickTick()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="importDgt"
+                label={t.importDgt}
+                description={t.importDgtDesc}
+                statusText={transferAction === 'import' ? t.syncing : null}
+                onClick={() => void onImportDgt()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="importOmniFocus"
+                label={t.importOmniFocus}
+                description={t.importOmniFocusDesc}
+                statusText={transferAction === 'import' ? t.syncing : null}
+                onClick={() => void onImportOmniFocus()}
+            />
+            <TransferActionButton
+                disabled={disabled}
+                settingsKey="importMindwtrCsv"
+                label={t.importMindwtrCsv}
+                description={t.importMindwtrCsvDesc}
+                statusText={transferAction === 'import' ? t.syncing : null}
+                onClick={() => void onImportMindwtrCsv()}
+            />
+        </SettingsDisclosureCard>
     );
 }

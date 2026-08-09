@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
 
@@ -77,6 +78,55 @@ export function SettingsCard({ children }: { children: ReactNode }) {
     return (
         <div className="bg-card border border-border rounded-lg divide-y divide-border/50">
             {children}
+        </div>
+    );
+}
+
+type SettingsDisclosureCardProps = {
+    // Label key of the settings this card contains, so a search result can
+    // open it before scrolling to the row (see settings-search.ts).
+    sectionKey: string;
+    title: string;
+    description?: string;
+    hint?: string;
+    open: boolean;
+    onToggle: () => void;
+    children: ReactNode;
+};
+
+// A card that is itself the disclosure: title, description and a right-edge
+// chevron, with its rows opening in place underneath.
+export function SettingsDisclosureCard({
+    sectionKey,
+    title,
+    description,
+    hint,
+    open,
+    onToggle,
+    children,
+}: SettingsDisclosureCardProps) {
+    return (
+        <div className="bg-card border border-border rounded-lg">
+            <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={open}
+                data-settings-section={sectionKey}
+                data-settings-key={sectionKey}
+                className="w-full p-4 flex items-center justify-between gap-4 text-left"
+            >
+                <div className="min-w-0">
+                    <div className="text-sm font-medium">{title}</div>
+                    {description ? <div className="text-xs text-muted-foreground mt-1">{description}</div> : null}
+                    {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
+                </div>
+                {open ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+            </button>
+            {open ? (
+                <div className="border-t border-border divide-y divide-border">
+                    {children}
+                </div>
+            ) : null}
         </div>
     );
 }

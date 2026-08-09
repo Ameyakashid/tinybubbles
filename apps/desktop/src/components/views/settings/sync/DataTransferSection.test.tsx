@@ -47,6 +47,7 @@ function expandRows(getByRole: ReturnType<typeof render>['getByRole']) {
 describe('DataTransferSection', () => {
     it('links to the import guide in the docs site', () => {
         const { getByRole } = render(<DataTransferSection {...baseProps} />);
+        expandRows(getByRole);
 
         expect(getByRole('link', { name: /Import guide/ })).toHaveAttribute(
             'href',

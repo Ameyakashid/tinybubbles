@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import React from 'react';
 import { ActivityIndicator, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { translateWithFallback } from '@mindwtr/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
@@ -155,10 +156,11 @@ export function SyncBackupSection({
       <Text style={[styles.sectionTitle, { color: tc.text, marginTop: 24 }]}>{t('settings.backup')}</Text>
       <View style={[styles.settingCard, { backgroundColor: tc.cardBg }]}>
         <TouchableOpacity
-          style={styles.settingRow}
+          style={[styles.gtdNavigationRow, { borderTopWidth: 0 }]}
           onPress={() => setOpen((prev) => !prev)}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
+          activeOpacity={0.75}
           testID="data-transfer-disclosure"
         >
           <View style={styles.settingInfo}>
@@ -167,7 +169,7 @@ export function SyncBackupSection({
               {t('settings.dataTransferDesc')}
             </Text>
           </View>
-          <Text style={[styles.chevron, { color: tc.secondaryText }]}>{open ? '▾' : '▸'}</Text>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={tc.secondaryText} />
         </TouchableOpacity>
         {open && (
         <>
