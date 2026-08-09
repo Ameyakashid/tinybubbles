@@ -31,6 +31,10 @@ const entityIds = (tasks: string[] = []) => ({
     people: [],
 });
 
+const emptyData = () => ({
+    tasks: [], projects: [], sections: [], areas: [], people: [], settings: {},
+});
+
 const originalFetchData = useTaskStore.getState().fetchData;
 const setStoreSnapshot = (data: any, fetchData = originalFetchData) => {
     useTaskStore.setState({
@@ -68,20 +72,22 @@ describe('tauriStorage.saveData stuck-save warning (#913)', () => {
     });
 
     it('does not warn when save_data resolves before the threshold', async () => {
-        invokeMock.mockResolvedValue(undefined);
+        invokeMock.mockImplementation(async (_command, args) => args?.data);
 
-        await tauriStorage.saveData({} as any);
+        await tauriStorage.saveData(emptyData());
 
         expect(useTaskStore.getState().error).toBeNull();
     });
 
     it('surfaces a store error once save_data has not resolved after the threshold, and clears it once it resolves', async () => {
-        let resolveInvoke!: () => void;
-        invokeMock.mockImplementation(() => new Promise<void>((resolve) => {
+        let resolveInvoke!: (value: unknown) => void;
+        let canonical: unknown;
+        invokeMock.mockImplementation((_command, args) => new Promise<unknown>((resolve) => {
+            canonical = args?.data;
             resolveInvoke = resolve;
         }));
 
-        const savePromise = tauriStorage.saveData({} as any);
+        const savePromise = tauriStorage.saveData(emptyData());
 
         await vi.advanceTimersByTimeAsync(14_999);
         expect(useTaskStore.getState().error).toBeNull();
@@ -89,24 +95,26 @@ describe('tauriStorage.saveData stuck-save warning (#913)', () => {
         await vi.advanceTimersByTimeAsync(1);
         expect(useTaskStore.getState().error).toMatch(/has not completed/);
 
-        resolveInvoke();
+        resolveInvoke(canonical);
         await savePromise;
 
         expect(useTaskStore.getState().error).toBeNull();
     });
 
     it('leaves an unrelated error in place if one was set while the save was stuck', async () => {
-        let resolveInvoke!: () => void;
-        invokeMock.mockImplementation(() => new Promise<void>((resolve) => {
+        let resolveInvoke!: (value: unknown) => void;
+        let canonical: unknown;
+        invokeMock.mockImplementation((_command, args) => new Promise<unknown>((resolve) => {
+            canonical = args?.data;
             resolveInvoke = resolve;
         }));
 
-        const savePromise = tauriStorage.saveData({} as any);
+        const savePromise = tauriStorage.saveData(emptyData());
         await vi.advanceTimersByTimeAsync(15_000);
         expect(useTaskStore.getState().error).toMatch(/has not completed/);
 
         useTaskStore.getState().setError('Some unrelated error');
-        resolveInvoke();
+        resolveInvoke(canonical);
         await savePromise;
 
         expect(useTaskStore.getState().error).toBe('Some unrelated error');
