@@ -19,6 +19,7 @@ import {
     parseCsvRows,
     readImportSource,
     sanitizeCsvText,
+    toImportBytes,
 } from './import-source-reader';
 import { createProjectOrderReserver, normalizeTagId } from './store-helpers';
 import { nextRevision } from './sync-revision';
@@ -94,6 +95,7 @@ export type ParsedMindwtrCsvTask = {
     sourceId: string;
     sourceIdentityKind: 'explicit-id' | 'row-fallback';
     sourceKey: string;
+    compatibilitySourceKeys?: string[];
     startTime?: string;
     status: TaskStatus;
     tags: string[];
@@ -212,6 +214,28 @@ const rowTaskSourceKeyFor = (
     sourceName: string,
     rowNumber: number,
 ): string => encodeSourceKeyTuple('row-fallback', sourceKind, sourceName, String(rowNumber));
+
+const fingerprintImportBytes = (bytes: Uint8Array): string => {
+    let h1 = 1779033703;
+    let h2 = 3144134277;
+    let h3 = 1013904242;
+    let h4 = 2773480762;
+    for (const byte of bytes) {
+        h1 = h2 ^ Math.imul(h1 ^ byte, 597399067);
+        h2 = h3 ^ Math.imul(h2 ^ byte, 2869860233);
+        h3 = h4 ^ Math.imul(h3 ^ byte, 951274213);
+        h4 = h1 ^ Math.imul(h4 ^ byte, 2716044179);
+    }
+    return [h1, h2, h3, h4]
+        .map((part) => (part >>> 0).toString(16).padStart(8, '0'))
+        .join('');
+};
+
+const normalizeArchiveEntryIdentity = (entryName: string): string => entryName
+    .replace(/\\/gu, '/')
+    .split('/')
+    .filter((component) => component.length > 0 && component !== '.')
+    .join('/');
 
 const couldBeLegacyRowFallback = (sourceId: string): boolean => /(?:^|:)row-\d+$/u.test(sourceId);
 
@@ -369,6 +393,7 @@ const parseTimestampCell = (raw: string, counters: MindwtrCsvWarningCounters): s
 };
 
 type MindwtrCsvRowSource = {
+    documentFingerprint: string;
     kind: 'standalone-file' | 'zip-entry';
     name: string;
 };
@@ -457,7 +482,13 @@ const parseMindwtrCsvRows = (
         const sourceId = idColumn || `${source.kind === 'zip-entry' ? `${source.name}:` : ''}row-${rowNumber}`;
         const sourceKey = idColumn
             ? explicitTaskSourceKeyFor(idColumn)
-            : rowTaskSourceKeyFor(source.kind, source.name, rowNumber);
+            : encodeSourceKeyTuple(
+                'row-fallback-v2',
+                source.kind,
+                source.documentFingerprint,
+                ...(source.kind === 'zip-entry' ? [normalizeArchiveEntryIdentity(source.name)] : []),
+                String(rowNumber),
+            );
 
         tasks.push({
             areaSourceKey,
@@ -480,6 +511,9 @@ const parseMindwtrCsvRows = (
             sourceId,
             sourceIdentityKind,
             sourceKey,
+            ...(!idColumn ? {
+                compatibilitySourceKeys: [rowTaskSourceKeyFor(source.kind, source.name, rowNumber)],
+            } : {}),
             startTime: parseDateCell(readCell(row, headerIndex, 'START DATE'), counters),
             status,
             tags: parseTags(readCell(row, headerIndex, 'TAGS')),
@@ -597,6 +631,12 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     try {
         const source = readImportSource(input);
         if (source.kind === 'archive') {
+            const archiveBytes = toImportBytes(input.bytes);
+            const documentFingerprint = archiveBytes
+                ? fingerprintImportBytes(archiveBytes)
+                : generateDeterministicUUID(source.entries.map(({ entryName, entryBytes }) => (
+                    `${normalizeArchiveEntryIdentity(entryName)}:${fingerprintImportBytes(entryBytes)}`
+                )).sort().join('|'));
             source.entries.forEach(({ entryName, entryBytes }) => {
                 const lowerName = entryName.toLowerCase();
                 if (!entryName || entryName.endsWith('/')) return;
@@ -609,13 +649,21 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
                     return;
                 }
                 try {
-                    parseOneCsv(decodeTextBytes(entryBytes), { kind: 'zip-entry', name: entryName });
+                    parseOneCsv(decodeTextBytes(entryBytes), {
+                        documentFingerprint,
+                        kind: 'zip-entry',
+                        name: entryName,
+                    });
                 } catch {
                     counters.invalidCsvFiles += 1;
                 }
             });
         } else {
-            parseOneCsv(source.text, { kind: 'standalone-file', name: fileName });
+            parseOneCsv(source.text, {
+                documentFingerprint: generateDeterministicUUID(sanitizeCsvText(source.text)),
+                kind: 'standalone-file',
+                name: fileName,
+            });
         }
     } catch (error) {
         return {
@@ -838,6 +886,13 @@ export const applyMindwtrCsvImport = (
         const scopedId = createMindwtrCsvImportId('task', task.sourceKey);
         if (currentTaskById.has(scopedId)) {
             resolvedIds.task.set(task.sourceKey, scopedId);
+            return;
+        }
+        const compatibilityId = task.compatibilitySourceKeys
+            ?.map((sourceKey) => createMindwtrCsvImportId('task', sourceKey))
+            .find((id) => currentTaskById.has(id));
+        if (compatibilityId) {
+            resolvedIds.task.set(task.sourceKey, compatibilityId);
             return;
         }
         const precedingGlobalId = createMindwtrCsvImportId(

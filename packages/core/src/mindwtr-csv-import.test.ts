@@ -501,6 +501,92 @@ describe('mindwtr csv import', () => {
         expect(second.warnings.some((warning) => warning.includes('already imported'))).toBe(false);
     });
 
+    it('keeps no-ID rows distinct when same-named CSV files have different content', () => {
+        const firstParsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title'], [['First document task']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const secondParsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title'], [['Second document task']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), firstParsed);
+        const second = applyMindwtrCsvImport(first.data, secondParsed);
+
+        expect(second.importedTaskCount).toBe(1);
+        expect(second.data.tasks.map((task) => task.title)).toEqual([
+            'First document task',
+            'Second document task',
+        ]);
+    });
+
+    it('keeps no-ID row identity stable when identical CSV content is renamed', () => {
+        const csv = buildCsv(['Title'], [['Stable document task']]);
+        const firstParsed = parseMindwtrCsvImportSource({
+            fileName: 'first-name.csv',
+            text: csv,
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const renamedParsed = parseMindwtrCsvImportSource({
+            fileName: 'renamed.csv',
+            text: csv,
+        }).parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), firstParsed);
+        const second = applyMindwtrCsvImport(first.data, renamedParsed);
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]?.id).toBe(first.data.tasks[0]?.id);
+    });
+
+    it('keeps same-entry no-ID rows distinct across separate ZIP archives', () => {
+        const firstArchive = zipSync({
+            'tasks.csv': strToU8(buildCsv(['Title'], [['First archive task']])),
+        });
+        const secondArchive = zipSync({
+            'tasks.csv': strToU8(buildCsv(['Title'], [['Second archive task']])),
+        });
+        const firstParsed = parseMindwtrCsvImportSource({
+            fileName: 'first.zip',
+            bytes: firstArchive,
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const secondParsed = parseMindwtrCsvImportSource({
+            fileName: 'second.zip',
+            bytes: secondArchive,
+        }).parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), firstParsed);
+        const second = applyMindwtrCsvImport(first.data, secondParsed);
+
+        expect(second.importedTaskCount).toBe(1);
+        expect(second.data.tasks.map((task) => task.title)).toEqual([
+            'First archive task',
+            'Second archive task',
+        ]);
+    });
+
+    it('reuses IDs created by the preceding filename-based no-ID namespace', () => {
+        const parsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title'], [['Existing filename task']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const legacyFilenameParsed: ParsedMindwtrCsvImportData = {
+            ...parsed,
+            tasks: parsed.tasks.map((task) => ({
+                ...task,
+                sourceKey: 'row-fallback:standalone-file:export.csv:2',
+            })),
+        };
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), legacyFilenameParsed);
+        const second = applyMindwtrCsvImport(first.data, parsed);
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]?.id).toBe(first.data.tasks[0]?.id);
+    });
+
     it('normalizes a date-only Created At to a full UTC instant (C2)', () => {
         const csv = buildCsv(['Title', 'Created At'], [['Old task', '2026-08-01']]);
 
