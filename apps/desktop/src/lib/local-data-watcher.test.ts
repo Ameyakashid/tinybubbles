@@ -659,7 +659,7 @@ describe('local-data-watcher', () => {
         expect(lastAttempt?.tasks.some((task) => task.id === 'canonical-race')).toBe(true);
     });
 
-    it('keeps the store at the durable snapshot after bounded save failures and converges on a later retry', async () => {
+    it('keeps the store durable and automatically retries a transient merged-save failure', async () => {
         const externalTask = {
             id: 'ext-retry-1',
             title: 'Persist after retry',
@@ -691,7 +691,7 @@ describe('local-data-watcher', () => {
         expect(durableData.tasks).toEqual([]);
         expect(__localDataWatcherTestUtils.getPendingSelfWritePayloadLengthForTests()).toBe(0);
 
-        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+        await flushScheduledTimers();
 
         expect(saveAttempts).toBe(3);
         expect(durableData.tasks.map((task) => task.id)).toEqual(['ext-retry-1']);
@@ -702,6 +702,62 @@ describe('local-data-watcher', () => {
 
         expect(saveAttempts).toBe(3);
         expect(__localDataWatcherTestUtils.getPendingSelfWritePayloadLengthForTests()).toBe(0);
+    });
+
+    it('does not schedule delayed retries for terminal merged-save failures', async () => {
+        externalData = {
+            ...emptyData(),
+            tasks: [{
+                id: 'terminal-retry',
+                title: 'Terminal retry',
+                status: 'next',
+                createdAt: '2026-01-02T00:00:00.000Z',
+                updatedAt: '2026-01-02T00:00:00.000Z',
+            }],
+        } as AppData;
+        let saveAttempts = 0;
+        setStorageAdapter({
+            ...storageAdapter,
+            saveData: async () => {
+                saveAttempts += 1;
+                throw new Error('Refusing to overwrite existing data with an empty snapshot');
+            },
+        });
+
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+        await flushScheduledTimers();
+
+        expect(saveAttempts).toBe(1);
+        expect(useTaskStore.getState()._allTasks).toEqual([]);
+    });
+
+    it('cancels a delayed merged-save retry during watcher shutdown', async () => {
+        externalData = {
+            ...emptyData(),
+            tasks: [{
+                id: 'shutdown-retry',
+                title: 'Shutdown retry',
+                status: 'next',
+                createdAt: '2026-01-02T00:00:00.000Z',
+                updatedAt: '2026-01-02T00:00:00.000Z',
+            }],
+        } as AppData;
+        let saveAttempts = 0;
+        setStorageAdapter({
+            ...storageAdapter,
+            saveData: async () => {
+                saveAttempts += 1;
+                throw new Error('transient save failure');
+            },
+        });
+
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+        expect(saveAttempts).toBe(2);
+
+        __localDataWatcherTestUtils.resetForTests();
+        await flushScheduledTimers();
+
+        expect(saveAttempts).toBe(2);
     });
 
     it('preserves merged people when writing external data through the store', async () => {

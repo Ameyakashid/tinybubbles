@@ -21,6 +21,8 @@ const SQLITE_SELF_WRITE_RETENTION_MS = 15_000;
 const SELF_WRITE_RETENTION_MS = 10_000;
 const MAX_PENDING_SELF_WRITES = 8;
 const MAX_MERGED_PERSIST_ATTEMPTS = 2;
+const MAX_DELAYED_MERGED_PERSIST_RETRIES = 2;
+const MERGED_PERSIST_RETRY_COOLDOWN_MS = 1_000;
 const timerHost = getDesktopTimerHost();
 
 type FsEvent = {
@@ -111,6 +113,9 @@ let pendingSqliteChangePaths: string[] = [];
 let pendingExternalChange = false;
 let mergeInFlight: Promise<void> | null = null;
 let sqliteRefreshInFlight: Promise<void> | null = null;
+let mergedPersistRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let delayedMergedPersistRetryCount = 0;
+let watcherGeneration = 0;
 
 const normalizePathsFromEvent = (event: FsEvent): string[] => {
     if (Array.isArray(event?.paths)) return event.paths;
@@ -391,6 +396,59 @@ const markSqliteSelfWriteWindow = (): void => {
     );
 };
 
+const isTerminalMergedPersistError = (error: unknown): boolean => {
+    const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+    return [
+        'refusing to overwrite',
+        'invalid app data',
+        'invalid data snapshot',
+        'unsupported data version',
+        'validation failed',
+    ].some((fragment) => message.includes(fragment));
+};
+
+const clearMergedPersistRetry = (): void => {
+    if (mergedPersistRetryTimer) {
+        localDataWatcherDependencies.cancelSchedule(mergedPersistRetryTimer);
+        mergedPersistRetryTimer = null;
+    }
+    delayedMergedPersistRetryCount = 0;
+};
+
+const scheduleMergedPersistRetry = (error: unknown): void => {
+    if (isTerminalMergedPersistError(error)) {
+        localDataWatcherDependencies.logWarn(
+            '[local-data-watcher] Merged data persistence failed terminally; automatic retry disabled',
+            { error: String(error) },
+        );
+        return;
+    }
+    if (mergedPersistRetryTimer || delayedMergedPersistRetryCount >= MAX_DELAYED_MERGED_PERSIST_RETRIES) {
+        if (delayedMergedPersistRetryCount >= MAX_DELAYED_MERGED_PERSIST_RETRIES) {
+            localDataWatcherDependencies.logWarn(
+                '[local-data-watcher] Merged data persistence exhausted delayed retries',
+                { error: String(error), maxRetries: String(MAX_DELAYED_MERGED_PERSIST_RETRIES) },
+            );
+        }
+        return;
+    }
+
+    delayedMergedPersistRetryCount += 1;
+    const retryNumber = delayedMergedPersistRetryCount;
+    const generation = watcherGeneration;
+    const delayMs = MERGED_PERSIST_RETRY_COOLDOWN_MS * retryNumber;
+    mergedPersistRetryTimer = localDataWatcherDependencies.schedule(() => {
+        mergedPersistRetryTimer = null;
+        if (generation !== watcherGeneration) return;
+        pendingExternalChange = true;
+        void runPendingMerge();
+    }, delayMs);
+    localDataWatcherDependencies.logWarn(
+        '[local-data-watcher] Scheduled merged data persistence retry',
+        { retryNumber: String(retryNumber), delayMs: String(delayMs), error: String(error) },
+    );
+};
+
 const persistMergedDataWithRetry = async (merged: AppData): Promise<AppData> => {
     for (let attempt = 1; attempt <= MAX_MERGED_PERSIST_ATTEMPTS; attempt += 1) {
         const pendingSelfWritesBeforeAttempt = pendingSelfWrites.slice();
@@ -402,6 +460,7 @@ const persistMergedDataWithRetry = async (merged: AppData): Promise<AppData> => 
             // failed attempt cannot suppress the external snapshot that still
             // needs to be persisted.
             pendingSelfWrites = pendingSelfWritesBeforeAttempt;
+            if (isTerminalMergedPersistError(error)) throw error;
             if (attempt === MAX_MERGED_PERSIST_ATTEMPTS) throw error;
             localDataWatcherDependencies.logWarn(
                 '[local-data-watcher] Failed to persist merged data; retrying',
@@ -429,11 +488,15 @@ async function mergeExternalData(): Promise<void> {
             if (matchedSelfWriteIndex >= 0) {
                 lastKnownHash = await localDataWatcherDependencies.hashPayload(externalPayload);
                 pendingSelfWrites.splice(matchedSelfWriteIndex, 1);
+                clearMergedPersistRetry();
                 return;
             }
 
             const externalHash = await localDataWatcherDependencies.hashPayload(externalPayload);
-            if (externalHash === lastKnownHash) return;
+            if (externalHash === lastKnownHash) {
+                clearMergedPersistRetry();
+                return;
+            }
 
             const localSnapshot = localDataWatcherDependencies.getSnapshot();
             const normalizedLocal = localDataWatcherDependencies.normalize(localSnapshot);
@@ -442,6 +505,7 @@ async function mergeExternalData(): Promise<void> {
 
             if (localHash === externalHash) {
                 lastKnownHash = externalHash;
+                clearMergedPersistRetry();
                 return;
             }
 
@@ -452,6 +516,7 @@ async function mergeExternalData(): Promise<void> {
 
             if (mergedHash === localHash) {
                 lastKnownHash = mergedHash;
+                clearMergedPersistRetry();
                 return;
             }
 
@@ -459,8 +524,10 @@ async function mergeExternalData(): Promise<void> {
             lastKnownHash = await localDataWatcherDependencies.hashPayload(
                 toStableJson(localDataWatcherDependencies.normalize(canonical)),
             );
+            clearMergedPersistRetry();
             localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
         } catch (error) {
+            scheduleMergedPersistRetry(error);
             localDataWatcherDependencies.logWarn('[local-data-watcher] Failed to merge external data: ' + String(error));
         }
     });
@@ -678,6 +745,7 @@ export async function start(dataPath: string, dbPath?: string): Promise<void> {
 }
 
 export function stop(): void {
+    watcherGeneration += 1;
     if (debounceTimer) {
         localDataWatcherDependencies.cancelSchedule(debounceTimer);
         debounceTimer = null;
@@ -694,6 +762,7 @@ export function stop(): void {
         localDataWatcherDependencies.cancelSchedule(sqliteIgnoreDrainTimer);
         sqliteIgnoreDrainTimer = null;
     }
+    clearMergedPersistRetry();
     hasPendingChangeDuringIgnore = false;
     hasPendingSqliteChangeDuringSelfWrite = false;
     pendingSqliteChangePaths = [];
