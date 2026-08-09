@@ -23,6 +23,7 @@ import {
     runSerializedSyncDocumentOperation,
     createSyncBackendIO,
     runSharedSyncCycle,
+    SyncRemoteWriteConflict,
     sanitizeAppDataForRemote,
     computeStableValueFingerprint,
     computeSyncPayloadFingerprint,
@@ -50,6 +51,7 @@ import {
     type CloudCalendarFeed,
     type CloudJsonWriteResult,
     type CloudProvider,
+    type FileSyncReadResult,
     type RemoteJsonWriteResult,
     type SyncBackendContext,
     type SyncBackendIO,
@@ -1966,16 +1968,25 @@ export class SyncService {
                 if (!isTauriRuntimeEnv()) {
                     throw new Error('File sync is not available in the web app.');
                 }
-                return invokeSyncNative<AppData>('read_sync_file', context.usesConfigOverride
+                return invokeSyncNative<FileSyncReadResult>('read_sync_file_versioned', context.usesConfigOverride
                     ? { path: context.syncPath }
                     : undefined);
             },
-            fileWrite: async (sanitized) => {
+            fileWrite: async (sanitized, expectedFingerprint) => {
                 await SyncService.markSyncWrite(sanitized);
-                await invokeSyncNative('write_sync_file', {
-                    data: sanitized,
-                    ...(context.usesConfigOverride ? { path: context.syncPath } : {}),
-                });
+                try {
+                    await invokeSyncNative('write_sync_file', {
+                        data: sanitized,
+                        ...(expectedFingerprint ? { expectedFingerprint } : {}),
+                        ...(context.usesConfigOverride ? { path: context.syncPath } : {}),
+                    });
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    if (message.includes('SYNC_FILE_WRITE_CONFLICT')) {
+                        throw new SyncRemoteWriteConflict();
+                    }
+                    throw error;
+                }
             },
             cloudKitRead: async () => syncServiceDependencies.readRemoteCloudKit(),
             cloudKitWrite: async (sanitized) => {

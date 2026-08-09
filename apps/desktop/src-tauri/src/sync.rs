@@ -10,7 +10,7 @@ use std::error::Error as StdError;
 #[cfg(target_os = "macos")]
 use std::ffi::{CStr, CString};
 use std::fs;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -3770,6 +3770,39 @@ mod tests {
     }
 
     #[test]
+    fn stale_file_sync_writer_is_rejected_before_replacing_newer_remote_data() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        fs::write(
+            dir.path().join(DATA_FILE_NAME),
+            br#"{"tasks":[{"id":"initial"}]}"#,
+        )
+        .expect("seed sync file");
+        let first_reader = read_sync_file_versioned_from_dir(dir.path()).expect("first read");
+        let second_reader = read_sync_file_versioned_from_dir(dir.path()).expect("second read");
+        assert_eq!(first_reader.fingerprint, second_reader.fingerprint);
+
+        write_sync_file_to_dir(
+            dir.path(),
+            serde_json::json!({ "tasks": [{ "id": "first-writer" }] }),
+            Some(&first_reader.fingerprint),
+        )
+        .expect("first writer wins");
+
+        let stale_result = write_sync_file_to_dir(
+            dir.path(),
+            serde_json::json!({ "tasks": [{ "id": "stale-second-writer" }] }),
+            Some(&second_reader.fingerprint),
+        );
+
+        assert_eq!(
+            stale_result.expect_err("stale write must conflict"),
+            SYNC_FILE_WRITE_CONFLICT
+        );
+        let remote = read_sync_file_from_dir(dir.path()).expect("read winning remote");
+        assert_eq!(remote["tasks"][0]["id"], "first-writer");
+    }
+
+    #[test]
     fn acquire_sync_lock_rejects_fresh_existing_lock() {
         let dir = tempfile::tempdir().expect("temp dir");
         let first = acquire_sync_lock(dir.path()).expect("first lock");
@@ -3784,6 +3817,71 @@ mod tests {
     }
 
     #[test]
+    fn releasing_replaced_sync_lock_does_not_remove_new_owner() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = acquire_sync_lock(dir.path()).expect("first lock");
+        fs::write(&first.path, b"pid=other ts=9999999999").expect("replace lock owner");
+
+        release_sync_lock(&first);
+
+        assert!(
+            first.path.exists(),
+            "old owner must not remove replacement lock"
+        );
+    }
+
+    #[test]
+    fn stale_sync_lock_takeover_preserves_new_owner_on_old_release() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = acquire_sync_lock_at(dir.path(), 1_000).expect("first lock");
+        let still_fresh = acquire_sync_lock_at(dir.path(), 1_000 + SYNC_LOCK_LEASE_MS - 1);
+        assert_eq!(
+            still_fresh.expect_err("unexpired lease must block takeover"),
+            "Sync lock held by another process"
+        );
+
+        let second = acquire_sync_lock_at(dir.path(), 1_000 + SYNC_LOCK_LEASE_MS)
+            .expect("expired lease can be replaced");
+        release_sync_lock(&first);
+
+        assert_eq!(
+            read_sync_lock_lease(&second.path)
+                .expect("replacement lease remains")
+                .owner_token,
+            second.owner_token
+        );
+        release_sync_lock(&second);
+        assert!(!second.path.exists());
+    }
+
+    #[test]
+    fn concurrent_sync_lock_contenders_have_one_owner() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = Arc::new(dir.path().to_path_buf());
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        let mut contenders = Vec::new();
+        for _ in 0..2 {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            contenders.push(std::thread::spawn(move || {
+                barrier.wait();
+                acquire_sync_lock_at(&path, 1_000)
+            }));
+        }
+        barrier.wait();
+
+        let results = contenders
+            .into_iter()
+            .map(|contender| contender.join().expect("contender completes"))
+            .collect::<Vec<_>>();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+
+        let owner = results.into_iter().find_map(Result::ok).expect("one owner");
+        release_sync_lock(&owner);
+    }
+
+    #[test]
     fn blocking_io_commands_never_run_on_the_ui_thread() {
         // A plain `#[tauri::command]` on a blocking fn runs on the main thread,
         // so a slow sync mount freezes the whole window until the I/O returns.
@@ -3795,7 +3893,12 @@ mod tests {
         let sources: [(&str, &[&str]); 3] = [
             (
                 include_str!("sync.rs"),
-                &["set_sync_path", "read_sync_file", "write_sync_file"],
+                &[
+                    "set_sync_path",
+                    "read_sync_file",
+                    "read_sync_file_versioned",
+                    "write_sync_file",
+                ],
             ),
             (
                 include_str!("email_capture.rs"),
@@ -7250,36 +7353,125 @@ fn is_icloud_path(path: &Path) -> bool {
     path_str.contains("Library/Mobile Documents/") || path_str.contains("iCloud")
 }
 
-fn acquire_sync_lock(sync_dir: &Path) -> Result<PathBuf, String> {
-    let lock_path = sync_dir.join(".mindwtr.lock");
-    if lock_path.exists() {
-        if let Ok(meta) = fs::metadata(&lock_path) {
-            if let Ok(modified) = meta.modified() {
-                let age = SystemTime::now()
-                    .duration_since(modified)
-                    .unwrap_or(Duration::ZERO);
-                if age < Duration::from_secs(30) {
-                    return Err("Sync lock held by another process".to_string());
-                }
-            }
-        }
-        let _ = fs::remove_file(&lock_path);
-    }
-    let lock_content = format!(
-        "pid={} ts={}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_secs()
-    );
-    fs::write(&lock_path, lock_content.as_bytes())
-        .map_err(|e| format!("Failed to acquire sync lock: {e}"))?;
-    Ok(lock_path)
+const SYNC_LOCK_LEASE_MS: u64 = 5 * 60 * 1000;
+const SYNC_FILE_WRITE_CONFLICT: &str = "SYNC_FILE_WRITE_CONFLICT";
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncLockLease {
+    owner_token: String,
+    pid: u32,
+    expires_at_ms: u64,
 }
 
-fn release_sync_lock(lock_path: &Path) {
-    let _ = fs::remove_file(lock_path);
+#[derive(Debug)]
+struct SyncFileLock {
+    path: PathBuf,
+    owner_token: String,
+}
+
+fn sync_lock_now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+
+fn new_sync_lock_owner_token() -> String {
+    let mut bytes = [0u8; 24];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn read_sync_lock_lease(lock_path: &Path) -> Option<SyncLockLease> {
+    fs::read(lock_path)
+        .ok()
+        .and_then(|content| serde_json::from_slice(&content).ok())
+}
+
+fn remove_sync_lock_if_owned(lock_path: &Path, owner_token: &str) -> bool {
+    let Some(lease) = read_sync_lock_lease(lock_path) else {
+        return false;
+    };
+    if lease.owner_token != owner_token {
+        return false;
+    }
+    fs::remove_file(lock_path).is_ok()
+}
+
+fn remove_legacy_sync_lock_if_unchanged(lock_path: &Path, observed: &[u8]) -> bool {
+    if fs::read(lock_path).ok().as_deref() != Some(observed) {
+        return false;
+    }
+    fs::remove_file(lock_path).is_ok()
+}
+
+fn acquire_sync_lock_at(sync_dir: &Path, now_ms: u64) -> Result<SyncFileLock, String> {
+    let lock_path = sync_dir.join(".mindwtr.lock");
+    let owner_token = new_sync_lock_owner_token();
+    let lease = SyncLockLease {
+        owner_token: owner_token.clone(),
+        pid: std::process::id(),
+        expires_at_ms: now_ms.saturating_add(SYNC_LOCK_LEASE_MS),
+    };
+    let content = serde_json::to_vec(&lease)
+        .map_err(|error| format!("Failed to encode sync lock lease: {error}"))?;
+
+    for _ in 0..3 {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(&content).and_then(|_| file.sync_all()) {
+                    // This process just atomically created the path and has not
+                    // published a usable lease, so no other owner can validly
+                    // have acquired it yet.
+                    let _ = fs::remove_file(&lock_path);
+                    return Err(format!("Failed to acquire sync lock: {error}"));
+                }
+                return Ok(SyncFileLock {
+                    path: lock_path,
+                    owner_token,
+                });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if let Some(existing) = read_sync_lock_lease(&lock_path) {
+                    if existing.expires_at_ms > now_ms {
+                        return Err("Sync lock held by another process".to_string());
+                    }
+                    if !remove_sync_lock_if_owned(&lock_path, &existing.owner_token) {
+                        continue;
+                    }
+                } else {
+                    let observed = fs::read(&lock_path).unwrap_or_default();
+                    let is_stale = fs::metadata(&lock_path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                        .is_some_and(|age| age >= Duration::from_millis(SYNC_LOCK_LEASE_MS));
+                    if !is_stale {
+                        return Err("Sync lock held by another process".to_string());
+                    }
+                    if !remove_legacy_sync_lock_if_unchanged(&lock_path, &observed) {
+                        continue;
+                    }
+                }
+            }
+            Err(error) => return Err(format!("Failed to acquire sync lock: {error}")),
+        }
+    }
+    Err("Sync lock changed while acquiring it; retry the sync".to_string())
+}
+
+fn acquire_sync_lock(sync_dir: &Path) -> Result<SyncFileLock, String> {
+    acquire_sync_lock_at(sync_dir, sync_lock_now_ms())
+}
+
+fn release_sync_lock(sync_lock: &SyncFileLock) {
+    let _ = remove_sync_lock_if_owned(&sync_lock.path, &sync_lock.owner_token);
 }
 
 /// The "no remote yet" payload for a fresh sync folder. Must include every
@@ -7499,6 +7691,28 @@ fn read_sync_file_from_dir(sync_dir: &Path) -> Result<serde_json::Value, String>
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SyncFileReadResult {
+    data: Value,
+    fingerprint: String,
+}
+
+fn sync_document_fingerprint(data: &Value) -> Result<String, String> {
+    let serialized = serde_json::to_vec(data)
+        .map_err(|error| format!("Failed to fingerprint sync data: {error}"))?;
+    Ok(format!(
+        "file:v1:sha256={}",
+        URL_SAFE_NO_PAD.encode(Sha256::digest(serialized))
+    ))
+}
+
+fn read_sync_file_versioned_from_dir(sync_dir: &Path) -> Result<SyncFileReadResult, String> {
+    let data = read_sync_file_from_dir(sync_dir)?;
+    let fingerprint = sync_document_fingerprint(&data)?;
+    Ok(SyncFileReadResult { data, fingerprint })
+}
+
 #[tauri::command(async)]
 pub(crate) fn read_sync_file(
     app: tauri::AppHandle,
@@ -7513,20 +7727,25 @@ pub(crate) fn read_sync_file(
     read_sync_file_from_dir(&sync_dir)
 }
 
-// Off the UI thread for the same reason as `read_sync_file`; concurrent writers
-// are already rejected by `acquire_sync_lock`.
 #[tauri::command(async)]
-pub(crate) fn write_sync_file(
+pub(crate) fn read_sync_file_versioned(
     app: tauri::AppHandle,
-    data: Value,
     path: Option<String>,
-) -> Result<bool, String> {
+) -> Result<SyncFileReadResult, String> {
     let sync_dir = match path {
         Some(path) => resolve_sync_dir(&app, Some(path))?,
         None => {
             configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
         }
     };
+    read_sync_file_versioned_from_dir(&sync_dir)
+}
+
+fn write_sync_file_to_dir(
+    sync_dir: &Path,
+    data: Value,
+    expected_fingerprint: Option<&str>,
+) -> Result<bool, String> {
     let sync_file = sync_dir.join(DATA_FILE_NAME);
     let backup_file = sync_dir.join(format!("{}.bak", DATA_FILE_NAME));
     let backup_previous_file = sync_dir.join(format!("{}.bak.previous", DATA_FILE_NAME));
@@ -7543,9 +7762,16 @@ pub(crate) fn write_sync_file(
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
-    let lock_path = acquire_sync_lock(&sync_dir)?;
+    let sync_lock = acquire_sync_lock(sync_dir)?;
 
     let result = (|| -> Result<bool, String> {
+        if let Some(expected_fingerprint) = expected_fingerprint {
+            let current = read_sync_file_from_dir(sync_dir)?;
+            if sync_document_fingerprint(&current)? != expected_fingerprint {
+                return Err(SYNC_FILE_WRITE_CONFLICT.to_string());
+            }
+        }
+
         if sync_file.exists() {
             // fs::copy opens the destination with O_TRUNC, which rclone/WinFSP mounts
             // refuse without a VFS write cache — so the .bak silently stopped updating
@@ -7615,7 +7841,26 @@ pub(crate) fn write_sync_file(
         }
     })();
 
-    release_sync_lock(&lock_path);
+    release_sync_lock(&sync_lock);
 
     result
+}
+
+// Off the UI thread for the same reason as `read_sync_file`; concurrent writers
+// are serialized by `acquire_sync_lock`, and stale readers are rejected by the
+// expected fingerprint check while that lock is held.
+#[tauri::command(async)]
+pub(crate) fn write_sync_file(
+    app: tauri::AppHandle,
+    data: Value,
+    path: Option<String>,
+    expected_fingerprint: Option<String>,
+) -> Result<bool, String> {
+    let sync_dir = match path {
+        Some(path) => resolve_sync_dir(&app, Some(path))?,
+        None => {
+            configured_sync_dir(&app)?.ok_or_else(|| "Sync path is not configured".to_string())?
+        }
+    };
+    write_sync_file_to_dir(&sync_dir, data, expected_fingerprint.as_deref())
 }

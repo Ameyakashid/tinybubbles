@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     runDataTransferTransactionWithoutSnapshot,
     runSerializedSyncDocumentOperation,
+    SyncRemoteWriteConflict,
     type AppData,
     type Attachment,
 } from '@mindwtr/core';
@@ -2549,6 +2550,42 @@ describe('SyncService testability hooks', () => {
             .toBeInstanceOf(DropboxUnauthorizedError);
 
         expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    it('maps a native file fingerprint mismatch to a shared remote-write conflict', async () => {
+        const remote = emptyAppData();
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'read_sync_file_versioned') {
+                return { data: remote, fingerprint: 'file:v1:sha256=initial' };
+            }
+            if (command === 'write_sync_file') {
+                expect(args?.expectedFingerprint).toBe('file:v1:sha256=initial');
+                throw new Error('SYNC_FILE_WRITE_CONFLICT');
+            }
+            throw new Error(`unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            isTauriRuntime: () => true,
+        });
+        const io = (SyncService as any).createBackendIO({
+            backend: 'file',
+            usesConfigOverride: false,
+            networkWentOffline: false,
+            removeNetworkListener: null,
+            requestAbortController: new AbortController(),
+            webdavConfig: null,
+            cloudProvider: 'selfhosted',
+            cloudConfig: null,
+            dropboxAppKey: '',
+            dropboxCredentialHandle: null,
+            cachedDropboxAccessToken: null,
+            syncPath: '/tmp/mindwtr-sync',
+            fileBaseDir: '/tmp/mindwtr-sync',
+        });
+
+        await expect(io.readRemote()).resolves.toBe(remote);
+        await expect(io.writeRemote(remote)).rejects.toBeInstanceOf(SyncRemoteWriteConflict);
     });
 });
 

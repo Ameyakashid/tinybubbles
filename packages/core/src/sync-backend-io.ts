@@ -42,6 +42,11 @@ type DropboxRevResult = { rev: string | null };
 type DropboxDownloadResult = { data: AppData | null; rev: string | null };
 type AttachmentSyncResult = Promise<AppData | boolean | null | undefined>;
 
+export type FileSyncReadResult = {
+    data: AppData;
+    fingerprint: string;
+};
+
 /**
  * Platform transport for one sync cycle's active backend. Every member here
  * is a deliberate platform truth carried over verbatim from the desktop/mobile
@@ -60,8 +65,8 @@ export type SyncTransport = {
     cloudGet(): Promise<AppData | null | undefined>;
     cloudPut(sanitized: AppData): Promise<RemoteWriteResult>;
     cloudHead(): Promise<RemoteHeadResult>;
-    fileRead(): Promise<AppData | null | undefined>;
-    fileWrite(sanitized: AppData): Promise<void>;
+    fileRead(): Promise<AppData | FileSyncReadResult | null | undefined>;
+    fileWrite(sanitized: AppData, expectedFingerprint?: string): Promise<void>;
     cloudKitRead(): Promise<AppData | null | undefined>;
     cloudKitWrite(sanitized: AppData): Promise<void>;
     /** Resolve a Dropbox access token; `forceRefresh` on the auth-retry pass. */
@@ -81,7 +86,16 @@ const DROPBOX_REV_FINGERPRINT_PREFIX = 'dropbox:v1:rev=';
 /** `dropbox:v1:rev=` cached-fingerprint wire format — one place, not four. */
 export const buildDropboxRevFingerprint = (rev: string): string => `${DROPBOX_REV_FINGERPRINT_PREFIX}${rev}`;
 
+const isFileSyncReadResult = (value: AppData | FileSyncReadResult): value is FileSyncReadResult => (
+    typeof value === 'object'
+    && value !== null
+    && 'data' in value
+    && 'fingerprint' in value
+    && typeof value.fingerprint === 'string'
+);
+
 export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTransport): SyncBackendIO {
+    let fileRemoteFingerprint: string | null = null;
     /** Dropbox token-retry policy: try with the current token; on an
      *  unauthorized response, force-refresh once and retry once; any other
      *  error, or a second unauthorized response, propagates. Outer transient
@@ -136,7 +150,13 @@ export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTran
                 ctx.dropboxRev = remote.rev;
                 return remote.data;
             }
-            return transport.fileRead();
+            const remote = await transport.fileRead();
+            if (remote && isFileSyncReadResult(remote)) {
+                fileRemoteFingerprint = remote.fingerprint;
+                return remote.data;
+            }
+            fileRemoteFingerprint = null;
+            return remote;
         },
         writeRemote: async (sanitized) => {
             if (ctx.backend === 'cloudkit') {
@@ -174,7 +194,11 @@ export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTran
                     throw error;
                 }
             }
-            await transport.fileWrite(sanitized);
+            if (fileRemoteFingerprint) {
+                await transport.fileWrite(sanitized, fileRemoteFingerprint);
+            } else {
+                await transport.fileWrite(sanitized);
+            }
         },
         readRemoteFingerprint: async () => {
             if (ctx.backend === 'webdav') {

@@ -231,6 +231,21 @@ describe('createSyncBackendIO', () => {
             expect(transport.syncFileAttachments).toHaveBeenCalledWith(APP_DATA, helpers);
         });
 
+        it('threads the version from a file read into the matching write', async () => {
+            const ctx: SyncBackendContext = {
+                backend: 'file', cloudProvider: 'selfhosted', filePath: '/tmp/sync', dropboxRev: null,
+            };
+            const transport = makeTransport({
+                fileRead: vi.fn().mockResolvedValue({ data: APP_DATA, fingerprint: 'file-v1' }),
+            });
+            const io = createSyncBackendIO(ctx, transport);
+
+            await expect(io.readRemote()).resolves.toBe(APP_DATA);
+            await io.writeRemote(APP_DATA);
+
+            expect(transport.fileWrite).toHaveBeenCalledWith(APP_DATA, 'file-v1');
+        });
+
         it('skips attachment sync when no file path is configured', async () => {
             const ctx: SyncBackendContext = { backend: 'file', cloudProvider: 'selfhosted', filePath: '', dropboxRev: null };
             const transport = makeTransport();
