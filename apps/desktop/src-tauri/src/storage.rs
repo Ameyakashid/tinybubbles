@@ -1,4 +1,6 @@
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, ToSql};
+use rusqlite::{
+    params, params_from_iter, Connection, OptionalExtension, ToSql, TransactionBehavior,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -394,7 +396,7 @@ pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> 
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     conn.busy_timeout(Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
         .map_err(|e| e.to_string())?;
     conn.execute_batch(SQLITE_SCHEMA)
@@ -435,9 +437,7 @@ pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> 
     ensure_projects_purged_at_column(&conn)?;
     ensure_projects_area_order_index(&conn)?;
     ensure_sync_revision_columns(&conn)?;
-    let fts_schema_changed = ensure_tasks_fts_schema(&conn)?;
-    let fts_triggers_changed = ensure_fts_triggers(&conn)?;
-    ensure_fts_populated(&conn, fts_schema_changed || fts_triggers_changed)?;
+    ensure_fts_ready(&mut conn)?;
     ensure_calendar_sync_schema(&conn)?;
     Ok(conn)
 }
@@ -1173,23 +1173,20 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         return Ok(false);
     }
 
-    conn.execute_batch("BEGIN IMMEDIATE")
+    conn.execute("DROP TRIGGER IF EXISTS tasks_ai", [])
         .map_err(|e| e.to_string())?;
-    let result = (|| {
-        conn.execute("DROP TRIGGER IF EXISTS tasks_ai", [])
-            .map_err(|e| e.to_string())?;
-        conn.execute("DROP TRIGGER IF EXISTS tasks_ad", [])
-            .map_err(|e| e.to_string())?;
-        conn.execute("DROP TRIGGER IF EXISTS tasks_au", [])
-            .map_err(|e| e.to_string())?;
-        conn.execute("DROP TRIGGER IF EXISTS projects_ai", [])
-            .map_err(|e| e.to_string())?;
-        conn.execute("DROP TRIGGER IF EXISTS projects_ad", [])
-            .map_err(|e| e.to_string())?;
-        conn.execute("DROP TRIGGER IF EXISTS projects_au", [])
-            .map_err(|e| e.to_string())?;
+    conn.execute("DROP TRIGGER IF EXISTS tasks_ad", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DROP TRIGGER IF EXISTS tasks_au", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DROP TRIGGER IF EXISTS projects_ai", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DROP TRIGGER IF EXISTS projects_ad", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DROP TRIGGER IF EXISTS projects_au", [])
+        .map_err(|e| e.to_string())?;
 
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
           INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
           VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
@@ -1197,7 +1194,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
           INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
           VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
@@ -1205,7 +1202,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
           INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
           VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
@@ -1215,7 +1212,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
           INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
           VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
@@ -1223,7 +1220,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
           INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
           VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
@@ -1231,7 +1228,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-        conn.execute(
+    conn.execute(
         "CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
           INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
           VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
@@ -1242,18 +1239,12 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
     )
     .map_err(|e| e.to_string())?;
 
-        conn.execute(
-            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?1)",
-            params![FTS_TRIGGER_MIGRATION_VERSION],
-        )
-        .map_err(|e| e.to_string())?;
-        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-        Ok(true)
-    })();
-    if result.is_err() {
-        let _ = conn.execute_batch("ROLLBACK");
-    }
-    result
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?1)",
+        params![FTS_TRIGGER_MIGRATION_VERSION],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 fn sqlite_has_any_data(conn: &Connection) -> Result<bool, String> {
@@ -1346,6 +1337,46 @@ fn ensure_fts_populated(conn: &Connection, force_rebuild: bool) -> Result<(), St
         .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+fn ensure_fts_ready(conn: &mut Connection) -> Result<bool, String> {
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let schema_changed = ensure_tasks_fts_schema(&transaction)?;
+        let triggers_changed = ensure_fts_triggers(&transaction)?;
+        ensure_fts_populated(&transaction, schema_changed || triggers_changed)?;
+        Ok(schema_changed || triggers_changed)
+    })();
+
+    match result {
+        Ok(changed) => {
+            transaction.commit().map_err(|e| e.to_string())?;
+            Ok(changed)
+        }
+        Err(error) => {
+            transaction.rollback().map_err(|rollback_error| {
+                format!("{error}; FTS rollback failed: {rollback_error}")
+            })?;
+            Err(error)
+        }
+    }
+}
+
+fn rebuild_fts_atomically(conn: &mut Connection) -> Result<(), String> {
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    match ensure_fts_populated(&transaction, true) {
+        Ok(()) => transaction.commit().map_err(|e| e.to_string()),
+        Err(error) => {
+            transaction.rollback().map_err(|rollback_error| {
+                format!("{error}; FTS rollback failed: {rollback_error}")
+            })?;
+            Err(error)
+        }
+    }
 }
 fn json_str(value: Option<&Value>) -> Option<String> {
     value.and_then(|v| serde_json::to_string(v).ok())
@@ -3372,7 +3403,7 @@ pub(crate) fn load_data_snapshot(app: &tauri::AppHandle) -> Result<Value, String
                 );
                 return Ok(value);
             }
-            ensure_fts_populated(&conn, true)?;
+            rebuild_fts_atomically(&mut conn)?;
         }
     }
 
@@ -5491,9 +5522,15 @@ mod tests {
 
     #[test]
     fn ensure_tasks_fts_schema_recreates_index_missing_assigned_to() {
-        let conn = Connection::open_in_memory().expect("should open in-memory db");
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
         conn.execute_batch(
             r#"
+            DROP TRIGGER tasks_ai;
+            DROP TRIGGER tasks_ad;
+            DROP TRIGGER tasks_au;
+            DROP TABLE tasks_fts;
             CREATE VIRTUAL TABLE tasks_fts USING fts5(
               id UNINDEXED,
               title,
@@ -5508,7 +5545,7 @@ mod tests {
         )
         .expect("should create legacy fts table");
 
-        ensure_tasks_fts_schema(&conn).expect("should recreate tasks FTS table");
+        ensure_fts_ready(&mut conn).expect("should recreate tasks FTS table");
 
         let mut stmt = conn
             .prepare("PRAGMA table_info(tasks_fts)")
@@ -5615,7 +5652,7 @@ mod tests {
 
     #[test]
     fn sqlite_fts_trigger_migration_rebuilds_stale_assignee_content_once() {
-        let conn = Connection::open_in_memory().expect("should open in-memory db");
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
         conn.execute_batch(SQLITE_SCHEMA)
             .expect("should create schema");
         conn.execute_batch(
@@ -5642,9 +5679,7 @@ mod tests {
             .expect("should search stale index");
         assert_eq!(before, 0);
 
-        let triggers_changed = ensure_fts_triggers(&conn).expect("should migrate FTS triggers");
-        assert!(triggers_changed);
-        ensure_fts_populated(&conn, triggers_changed).expect("should rebuild FTS content");
+        assert!(ensure_fts_ready(&mut conn).expect("should migrate and rebuild FTS atomically"));
 
         let after: i64 = conn
             .query_row(
@@ -5654,7 +5689,74 @@ mod tests {
             )
             .expect("should search rebuilt index");
         assert_eq!(after, 1);
-        assert!(!ensure_fts_triggers(&conn).expect("migration should be idempotent"));
+        assert!(!ensure_fts_ready(&mut conn).expect("migration should be idempotent"));
+        let after_restart: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tasks_fts WHERE tasks_fts MATCH 'alice*'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("should preserve rebuilt terms on restart");
+        assert_eq!(after_restart, 1);
+    }
+
+    #[test]
+    fn sqlite_fts_migration_failure_rolls_back_for_other_connections() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("fts-rollback.sqlite");
+        let mut writer = Connection::open(&db_path).expect("writer connection");
+        writer
+            .execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        writer
+            .execute_batch(
+                r#"
+                DROP TRIGGER tasks_ai;
+                DROP TRIGGER tasks_ad;
+                DROP TRIGGER tasks_au;
+                DELETE FROM schema_migrations WHERE version = 4;
+                INSERT INTO tasks (id, title, status, checklist, createdAt, updatedAt)
+                VALUES ('task-malformed-checklist', 'Stable searchable term', 'next', '{malformed',
+                        '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+                INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+                SELECT rowid, title, '', '', '', '', '', '' FROM tasks;
+                "#,
+            )
+            .expect("should prepare stale FTS state");
+        let reader = Connection::open(&db_path).expect("reader connection");
+
+        let error =
+            ensure_fts_ready(&mut writer).expect_err("malformed checklist should fail rebuild");
+        assert!(
+            error.contains("malformed JSON"),
+            "unexpected error: {error}"
+        );
+
+        let visible_terms: i64 = reader
+            .query_row(
+                "SELECT COUNT(*) FROM tasks_fts WHERE tasks_fts MATCH 'stable*'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("reader should retain pre-migration index");
+        let visible_task_triggers: i64 = reader
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'tasks_a%'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("reader should inspect rolled-back triggers");
+        let visible_marker: i64 = reader
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE version = 4",
+                [],
+                |row| row.get(0),
+            )
+            .expect("reader should inspect rolled-back migration marker");
+
+        assert_eq!(visible_terms, 1);
+        assert_eq!(visible_task_triggers, 0);
+        assert_eq!(visible_marker, 0);
     }
 
     #[test]
