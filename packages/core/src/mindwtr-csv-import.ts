@@ -581,8 +581,71 @@ export const applyMindwtrCsvImport = (
     currentData: AppData,
     parsedData: ParsedMindwtrCsvImportData,
     options: { now?: Date | string } = {}
-): MindwtrCsvImportExecutionResult => (
-    applyImport(
+): MindwtrCsvImportExecutionResult => {
+    // Before area scoping, deterministic project/section/task IDs used only the
+    // project name. Reuse those IDs when one project name has an unambiguous
+    // owner so upgrading does not turn a routine re-import into duplicates.
+    const projectNameCounts = new Map<string, number>();
+    parsedData.projects.forEach((project) => {
+        const legacySourceKey = normalizeSourceKey(project.name);
+        projectNameCounts.set(legacySourceKey, (projectNameCounts.get(legacySourceKey) ?? 0) + 1);
+    });
+
+    const legacyProjectSourceKeyByScopedKey = new Map<string, string>();
+    parsedData.projects.forEach((project) => {
+        if (!project.areaSourceKey) return;
+        const legacySourceKey = normalizeSourceKey(project.name);
+        if (projectNameCounts.get(legacySourceKey) === 1) {
+            legacyProjectSourceKeyByScopedKey.set(project.sourceKey, legacySourceKey);
+        }
+    });
+
+    const legacySectionSourceKeyByScopedKey = new Map<string, string>();
+    parsedData.sections.forEach((section) => {
+        const legacyProjectSourceKey = legacyProjectSourceKeyByScopedKey.get(section.projectSourceKey);
+        if (!legacyProjectSourceKey) return;
+        legacySectionSourceKeyByScopedKey.set(
+            section.sourceKey,
+            `${legacyProjectSourceKey}:${normalizeSourceKey(section.name)}`,
+        );
+    });
+
+    const legacyTaskSourceKeyByScopedKey = new Map<string, string>();
+    parsedData.tasks.forEach((task) => {
+        if (!task.projectSourceKey) return;
+        const legacyProjectSourceKey = legacyProjectSourceKeyByScopedKey.get(task.projectSourceKey);
+        if (!legacyProjectSourceKey) return;
+        legacyTaskSourceKeyByScopedKey.set(
+            `${task.projectSourceKey}:${task.sourceId}`,
+            `${legacyProjectSourceKey}:${task.sourceId}`,
+        );
+    });
+
+    const currentIds = {
+        area: new Set(currentData.areas.map((area) => area.id)),
+        project: new Set(currentData.projects.map((project) => project.id)),
+        section: new Set(currentData.sections.map((section) => section.id)),
+        task: new Set(currentData.tasks.map((task) => task.id)),
+    };
+    const legacySourceKeys = {
+        area: new Map<string, string>(),
+        project: legacyProjectSourceKeyByScopedKey,
+        section: legacySectionSourceKeyByScopedKey,
+        task: legacyTaskSourceKeyByScopedKey,
+    };
+    const compatibleIdFor = (
+        kind: 'area' | 'project' | 'section' | 'task',
+        sourceKey: string,
+    ): string => {
+        const scopedId = createMindwtrCsvImportId(kind, sourceKey);
+        if (currentIds[kind].has(scopedId)) return scopedId;
+        const legacySourceKey = legacySourceKeys[kind].get(sourceKey);
+        if (!legacySourceKey) return scopedId;
+        const legacyId = createMindwtrCsvImportId(kind, legacySourceKey);
+        return currentIds[kind].has(legacyId) ? legacyId : scopedId;
+    };
+
+    return applyImport(
         currentData,
         {
             areas: parsedData.areas,
@@ -596,9 +659,9 @@ export const applyMindwtrCsvImport = (
         },
         {
             fallbacks: { area: MINDWTR_CSV_AREA_FALLBACK, project: MINDWTR_CSV_PROJECT_FALLBACK },
-            idFor: createMindwtrCsvImportId,
+            idFor: compatibleIdFor,
             now: options.now,
             suffix: MINDWTR_CSV_IMPORT_SUFFIX,
         }
-    )
-);
+    );
+};

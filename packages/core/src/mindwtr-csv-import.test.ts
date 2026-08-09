@@ -388,6 +388,43 @@ describe('mindwtr csv import', () => {
         expect(second.data.sections).toHaveLength(1);
     });
 
+    it('recognizes records created by the pre-area-scoped deterministic IDs', () => {
+        const csv = buildCsv(
+            ['Title', 'Area', 'Project', 'Section', 'ID'],
+            [['Legacy task', 'Work', 'Ops', 'Backlog', 'stable-task']],
+        );
+        const scoped = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv })
+            .parsedData as ParsedMindwtrCsvImportData;
+        const legacy: ParsedMindwtrCsvImportData = {
+            ...scoped,
+            projects: scoped.projects.map((project) => ({ ...project, sourceKey: 'ops' })),
+            sections: scoped.sections.map((section) => ({
+                ...section,
+                projectSourceKey: 'ops',
+                sourceKey: 'ops:backlog',
+            })),
+            tasks: scoped.tasks.map((task) => ({
+                ...task,
+                projectSourceKey: 'ops',
+                sectionSourceKey: 'ops:backlog',
+            })),
+        };
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), legacy, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+
+        const second = applyMindwtrCsvImport(first.data, scoped, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedProjectCount).toBe(0);
+        expect(second.importedSectionCount).toBe(0);
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.projects).toHaveLength(1);
+        expect(second.data.sections).toHaveLength(1);
+        expect(second.data.tasks).toHaveLength(1);
+    });
+
     it('parses a tab-delimited file (T2)', () => {
         const csv = buildCsv(['Title', 'Project'], [['Tab task', 'Ops']], '\t');
 
