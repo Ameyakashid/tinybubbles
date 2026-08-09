@@ -146,108 +146,135 @@ export function SyncBackupSection({
   t,
   tc,
 }: SyncBackupSectionProps) {
+  // Migration and backup are rare errands, so the rows stay folded until asked
+  // for (same disclosure shape as the recovery snapshots card below).
+  const [open, setOpen] = React.useState(false);
+
   return (
     <>
       <Text style={[styles.sectionTitle, { color: tc.text, marginTop: 24 }]}>{t('settings.backup')}</Text>
       <View style={[styles.settingCard, { backgroundColor: tc.cardBg }]}>
-        <TouchableOpacity style={styles.settingRow} onPress={handleBackup} disabled={isSyncing || isBackupBusy}>
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: '#3B82F6' }]}>{t('settings.exportBackup')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.saveToSyncFolder')}</Text>
-          </View>
-          {backupAction === 'export' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleRestoreBackup}
-          disabled={isSyncing || isBackupBusy}
+          style={styles.settingRow}
+          onPress={() => setOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          testID="data-transfer-disclosure"
         >
           <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.restoreBackup')}</Text>
+            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.dataTransfer')}</Text>
             <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.replaceLocalDataFromABackupJsonFile')}
+              {t('settings.dataTransferDesc')}
             </Text>
           </View>
-          {backupAction === 'restore' && <ActivityIndicator size="small" color={tc.tint} />}
+          <Text style={[styles.chevron, { color: tc.secondaryText }]}>{open ? '▾' : '▸'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleMergeBackup}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.mergeBackup')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {t('settings.mergeBackupDesc')}
-            </Text>
-          </View>
-          {backupAction === 'merge' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleImportTodoist}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTodoist')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
-            </Text>
-          </View>
-          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleImportTickTick}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTicktick')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
-            </Text>
-          </View>
-          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleImportDgt}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromDgtGtd')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
-            </Text>
-          </View>
-          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleImportOmniFocus}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromOmnifocus')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
-            </Text>
-          </View>
-          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-          onPress={handleImportMindwtrCsv}
-          disabled={isSyncing || isBackupBusy}
-        >
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromMindwtrCsv')}</Text>
-            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
-            </Text>
-          </View>
-          {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
-        </TouchableOpacity>
+        {open && (
+        <>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleBackup}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: '#3B82F6' }]}>{t('settings.exportBackup')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.saveToSyncFolder')}</Text>
+            </View>
+            {backupAction === 'export' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleRestoreBackup}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.restoreBackup')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.replaceLocalDataFromABackupJsonFile')}
+              </Text>
+            </View>
+            {backupAction === 'restore' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleMergeBackup}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.mergeBackup')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {t('settings.mergeBackupDesc')}
+              </Text>
+            </View>
+            {backupAction === 'merge' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleImportTodoist}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTodoist')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
+              </Text>
+            </View>
+            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleImportTickTick}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTicktick')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
+              </Text>
+            </View>
+            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleImportDgt}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromDgtGtd')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
+              </Text>
+            </View>
+            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleImportOmniFocus}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromOmnifocus')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
+              </Text>
+            </View>
+            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
+            onPress={handleImportMindwtrCsv}
+            disabled={isSyncing || isBackupBusy}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromMindwtrCsv')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+                {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
+              </Text>
+            </View>
+            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+          </TouchableOpacity>
+        </>
+        )}
       </View>
     </>
   );
