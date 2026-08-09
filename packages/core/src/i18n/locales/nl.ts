@@ -586,4 +586,13 @@ export const nlOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "In deze export ontbreekt de vereiste kolom: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Er zijn geen importeerbare records gevonden in deze export.",
         'settings.importDiagnostics.renamedContainer': "‘{{from}}’ is hernoemd naar ‘{{to}}’ om een dubbele naam te voorkomen.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} dubbele records zijn overgeslagen.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} lege records zijn overgeslagen.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} archiefbestanden konden niet worden gelezen en zijn overgeslagen.",
+        'settings.importDiagnostics.missingParent': "{{count}} records hadden geen overeenkomend bovenliggend item en zijn op het dichtstbijzijnde veilige niveau geïmporteerd.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} niet-ondersteunde archiefitems zijn overgeslagen.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} eerder geïmporteerde of verwijderde records zijn overgeslagen.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} datumwaarden konden niet worden gekoppeld en zijn weggelaten.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} statuswaarden konden niet worden gekoppeld; een veilige standaard is gebruikt.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} niet-ondersteunde herhaalregels zijn als notities bewaard.",
 };

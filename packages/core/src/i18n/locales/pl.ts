@@ -1474,4 +1474,13 @@ export const plOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "W tym eksporcie brakuje wymaganej kolumny: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "W tym eksporcie nie znaleziono rekordów możliwych do zaimportowania.",
         'settings.importDiagnostics.renamedContainer': "Zmieniono nazwę „{{from}}” na „{{to}}”, aby uniknąć duplikatu.",
+        'settings.importDiagnostics.duplicateIdentity': "Pominięto {{count}} zduplikowanych rekordów.",
+        'settings.importDiagnostics.emptyRecords': "Pominięto {{count}} pustych rekordów.",
+        'settings.importDiagnostics.invalidArchiveEntries': "Nie udało się odczytać {{count}} plików archiwum, więc je pominięto.",
+        'settings.importDiagnostics.missingParent': "{{count}} rekordów nie miało pasującego elementu nadrzędnego i zostało zaimportowanych na najbliższym bezpiecznym poziomie.",
+        'settings.importDiagnostics.skippedArchiveEntries': "Pominięto {{count}} nieobsługiwanych elementów archiwum.",
+        'settings.importDiagnostics.skippedExistingRecords': "Pominięto {{count}} wcześniej zaimportowanych lub usuniętych rekordów.",
+        'settings.importDiagnostics.unmappedDate': "Nie udało się odwzorować {{count}} wartości daty, więc je pominięto.",
+        'settings.importDiagnostics.unmappedStatus': "Nie udało się odwzorować {{count}} wartości stanu; użyto bezpieślnej wartości domyślnej.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} nieobsługiwanych reguł powtarzania zachowano jako notatki.",
 };

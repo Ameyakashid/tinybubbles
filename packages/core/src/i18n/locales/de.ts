@@ -1542,4 +1542,13 @@ export const deOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Diesem Export fehlt die erforderliche Spalte: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "In diesem Export wurden keine importierbaren Datensätze gefunden.",
         'settings.importDiagnostics.renamedContainer': "„{{from}}“ wurde in „{{to}}“ umbenannt, um einen doppelten Namen zu vermeiden.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} doppelte Datensätze wurden übersprungen.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} leere Datensätze wurden übersprungen.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} Archivdateien konnten nicht gelesen werden und wurden übersprungen.",
+        'settings.importDiagnostics.missingParent': "{{count}} Datensätze hatten kein passendes übergeordnetes Element und wurden auf der nächsten sicheren Ebene importiert.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} nicht unterstützte Archiveinträge wurden übersprungen.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} zuvor importierte oder gelöschte Datensätze wurden übersprungen.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} Datumswerte konnten nicht zugeordnet werden und wurden ausgelassen.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} Statuswerte konnten nicht zugeordnet werden; ein sicherer Standard wurde verwendet.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} nicht unterstützte Wiederholungsregeln wurden als Notizen beibehalten.",
 };

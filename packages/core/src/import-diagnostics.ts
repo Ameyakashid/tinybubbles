@@ -123,8 +123,24 @@ export const formatImportDiagnostic = (
     if (diagnostic.code === 'renamed-container') {
         return translate('settings.importDiagnostics.renamedContainer', diagnostic.params);
     }
+    const warningKeys: Partial<Record<ImportDiagnosticCode, string>> = {
+        'duplicate-identity': 'settings.importDiagnostics.duplicateIdentity',
+        'empty-records': 'settings.importDiagnostics.emptyRecords',
+        'invalid-archive-entry': 'settings.importDiagnostics.invalidArchiveEntries',
+        'missing-parent': 'settings.importDiagnostics.missingParent',
+        'skipped-archive-entry': 'settings.importDiagnostics.skippedArchiveEntries',
+        'skipped-existing-records': 'settings.importDiagnostics.skippedExistingRecords',
+        'unmapped-date': 'settings.importDiagnostics.unmappedDate',
+        'unmapped-status': 'settings.importDiagnostics.unmappedStatus',
+        'unsupported-recurrence': 'settings.importDiagnostics.unsupportedRecurrence',
+    };
+    const warningKey = warningKeys[diagnostic.code];
+    if (warningKey) {
+        return translate(warningKey, {
+            count: typeof diagnostic.params.count === 'number' ? diagnostic.params.count : 1,
+        });
+    }
     return translate('settings.importDiagnostics.adjustedRecords', {
         count: typeof diagnostic.params.count === 'number' ? diagnostic.params.count : 1,
     });
 };
-

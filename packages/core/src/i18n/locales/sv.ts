@@ -2308,4 +2308,13 @@ export const svOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Exporten saknar den obligatoriska kolumnen: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Inga importerbara poster hittades i exporten.",
         'settings.importDiagnostics.renamedContainer': "”{{from}}” bytte namn till ”{{to}}” för att undvika ett dubblettnamn.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} dubblerade poster hoppades över.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} tomma poster hoppades över.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} filer i arkivet kunde inte läsas och hoppades över.",
+        'settings.importDiagnostics.missingParent': "{{count}} poster saknade en matchande överordnad post och importerades på närmaste säkra nivå.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} arkivposter som inte stöds hoppades över.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} tidigare importerade eller borttagna poster hoppades över.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} datumvärden kunde inte mappas och utelämnades.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} statusvärden kunde inte mappas; ett säkert standardvärde användes.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} upprepningsregler som inte stöds sparades som anteckningar.",
 };

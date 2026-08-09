@@ -1478,4 +1478,13 @@ export const arOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "يفتقد هذا التصدير العمود المطلوب: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "لم يتم العثور على سجلات قابلة للاستيراد في هذا التصدير.",
         'settings.importDiagnostics.renamedContainer': "تمت إعادة تسمية «{{from}}» إلى «{{to}}» لتجنب اسم مكرر.",
+        'settings.importDiagnostics.duplicateIdentity': "تم تخطي {{count}} من السجلات المكررة.",
+        'settings.importDiagnostics.emptyRecords': "تم تخطي {{count}} من السجلات الفارغة.",
+        'settings.importDiagnostics.invalidArchiveEntries': "تعذر تحليل {{count}} من ملفات الأرشيف وتم تخطيها.",
+        'settings.importDiagnostics.missingParent': "لم يكن لـ {{count}} من السجلات أصل مطابق، فتم استيرادها في أقرب مستوى آمن.",
+        'settings.importDiagnostics.skippedArchiveEntries': "تم تخطي {{count}} من إدخالات الأرشيف غير المدعومة.",
+        'settings.importDiagnostics.skippedExistingRecords': "تم تخطي {{count}} من السجلات المستوردة سابقًا أو المحذوفة.",
+        'settings.importDiagnostics.unmappedDate': "تعذر تعيين {{count}} من قيم التاريخ وتم حذفها.",
+        'settings.importDiagnostics.unmappedStatus': "تعذر تعيين {{count}} من قيم الحالة، فاستُخدمت قيمة افتراضية آمنة.",
+        'settings.importDiagnostics.unsupportedRecurrence': "تم الاحتفاظ بـ {{count}} من قواعد التكرار غير المدعومة كملاحظات.",
 };

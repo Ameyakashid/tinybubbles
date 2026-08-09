@@ -2254,4 +2254,13 @@ export const csOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "V tomto exportu chybí povinný sloupec: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "V tomto exportu nebyly nalezeny žádné importovatelné záznamy.",
         'settings.importDiagnostics.renamedContainer': "„{{from}}“ bylo přejmenováno na „{{to}}“, aby se zabránilo duplicitnímu názvu.",
+        'settings.importDiagnostics.duplicateIdentity': "Bylo přeskočeno {{count}} duplicitních záznamů.",
+        'settings.importDiagnostics.emptyRecords': "Bylo přeskočeno {{count}} prázdných záznamů.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} souborů v archivu se nepodařilo načíst a bylo přeskočeno.",
+        'settings.importDiagnostics.missingParent': "{{count}} záznamů nemělo odpovídající nadřazenou položku a bylo importováno na nejbližší bezpečnou úroveň.",
+        'settings.importDiagnostics.skippedArchiveEntries': "Bylo přeskočeno {{count}} nepodporovaných položek archivu.",
+        'settings.importDiagnostics.skippedExistingRecords': "Bylo přeskočeno {{count}} dříve importovaných nebo smazaných záznamů.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} hodnot data nebylo možné převést a byly vynechány.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} hodnot stavu nebylo možné převést; byla použita bezpečná výchozí hodnota.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} nepodporovaných pravidel opakování bylo zachováno v poznámkách.",
 };

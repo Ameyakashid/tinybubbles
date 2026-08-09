@@ -1451,4 +1451,13 @@ export const jaOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "このエクスポートには必須列がありません: {{column}}。",
         'settings.importDiagnostics.noImportableRecords': "このエクスポートにはインポート可能なレコードがありませんでした。",
         'settings.importDiagnostics.renamedContainer': "名前の重複を避けるため、「{{from}}」を「{{to}}」に変更しました。",
+        'settings.importDiagnostics.duplicateIdentity': "重複するレコード {{count}} 件をスキップしました。",
+        'settings.importDiagnostics.emptyRecords': "空のレコード {{count}} 件をスキップしました。",
+        'settings.importDiagnostics.invalidArchiveEntries': "アーカイブ内のファイル {{count}} 件を解析できなかったためスキップしました。",
+        'settings.importDiagnostics.missingParent': "{{count}} 件のレコードに対応する親がなかったため、最も近い安全な階層にインポートしました。",
+        'settings.importDiagnostics.skippedArchiveEntries': "未対応のアーカイブ項目 {{count}} 件をスキップしました。",
+        'settings.importDiagnostics.skippedExistingRecords': "以前にインポート済み、または削除済みのレコード {{count}} 件をスキップしました。",
+        'settings.importDiagnostics.unmappedDate': "日付値 {{count}} 件を変換できなかったため省略しました。",
+        'settings.importDiagnostics.unmappedStatus': "状態値 {{count}} 件を変換できなかったため、安全な既定値を使用しました。",
+        'settings.importDiagnostics.unsupportedRecurrence': "未対応の繰り返しルール {{count}} 件をメモとして保持しました。",
 };

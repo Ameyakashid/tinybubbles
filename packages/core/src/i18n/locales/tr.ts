@@ -1497,4 +1497,13 @@ export const trOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Bu dışa aktarmada gerekli sütun eksik: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Bu dışa aktarmada içe aktarılabilir kayıt bulunamadı.",
         'settings.importDiagnostics.renamedContainer': "Yinelenen bir adı önlemek için “{{from}}”, “{{to}}” olarak yeniden adlandırıldı.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} yinelenen kayıt atlandı.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} boş kayıt atlandı.",
+        'settings.importDiagnostics.invalidArchiveEntries': "Arşivdeki {{count}} dosya ayrıştırılamadı ve atlandı.",
+        'settings.importDiagnostics.missingParent': "{{count}} kayıt için eşleşen üst öğe bulunamadı; en yakın güvenli düzeyde içe aktarıldı.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} desteklenmeyen arşiv öğesi atlandı.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} daha önce içe aktarılmış veya silinmiş kayıt atlandı.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} tarih değeri eşlenemedi ve çıkarıldı.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} durum değeri eşlenemedi; güvenli bir varsayılan kullanıldı.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} desteklenmeyen yineleme kuralı not olarak korundu.",
 };

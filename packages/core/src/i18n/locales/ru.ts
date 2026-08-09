@@ -1451,4 +1451,13 @@ export const ruOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "В этом экспорте отсутствует обязательный столбец: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "В этом экспорте не найдено записей для импорта.",
         'settings.importDiagnostics.renamedContainer': "«{{from}}» переименовано в «{{to}}», чтобы избежать повторяющегося имени.",
+        'settings.importDiagnostics.duplicateIdentity': "Пропущено повторяющихся записей: {{count}}.",
+        'settings.importDiagnostics.emptyRecords': "Пропущено пустых записей: {{count}}.",
+        'settings.importDiagnostics.invalidArchiveEntries': "Не удалось обработать файлов архива: {{count}}. Они пропущены.",
+        'settings.importDiagnostics.missingParent': "Для {{count}} записей не найден родитель; они импортированы на ближайший безопасный уровень.",
+        'settings.importDiagnostics.skippedArchiveEntries': "Пропущено неподдерживаемых элементов архива: {{count}}.",
+        'settings.importDiagnostics.skippedExistingRecords': "Пропущено ранее импортированных или удалённых записей: {{count}}.",
+        'settings.importDiagnostics.unmappedDate': "Не удалось сопоставить значений даты: {{count}}. Они опущены.",
+        'settings.importDiagnostics.unmappedStatus': "Не удалось сопоставить значений статуса: {{count}}. Использовано безопасное значение.",
+        'settings.importDiagnostics.unsupportedRecurrence': "Неподдерживаемых правил повтора сохранено в заметках: {{count}}.",
 };

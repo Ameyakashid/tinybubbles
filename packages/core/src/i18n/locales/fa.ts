@@ -2309,4 +2309,13 @@ export const faOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "ستون الزامی {{column}} در این خروجی وجود ندارد.",
         'settings.importDiagnostics.noImportableRecords': "هیچ رکورد قابل واردکردنی در این خروجی یافت نشد.",
         'settings.importDiagnostics.renamedContainer': "برای جلوگیری از نام تکراری، «{{from}}» به «{{to}}» تغییر نام یافت.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} رکورد تکراری نادیده گرفته شد.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} رکورد خالی نادیده گرفته شد.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} فایل بایگانی قابل پردازش نبود و نادیده گرفته شد.",
+        'settings.importDiagnostics.missingParent': "{{count}} رکورد والد منطبق نداشت و در نزدیک‌ترین سطح امن وارد شد.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} مورد پشتیبانی‌نشده در بایگانی نادیده گرفته شد.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} رکوردی که قبلاً وارد یا حذف شده بود نادیده گرفته شد.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} مقدار تاریخ قابل تبدیل نبود و حذف شد.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} مقدار وضعیت قابل تبدیل نبود و مقدار پیش‌فرض امن استفاده شد.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} قانون تکرار پشتیبانی‌نشده به‌صورت یادداشت نگه داشته شد.",
 };

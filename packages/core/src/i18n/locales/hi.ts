@@ -1451,4 +1451,13 @@ export const hiOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "इस निर्यात में आवश्यक कॉलम नहीं है: {{column}}।",
         'settings.importDiagnostics.noImportableRecords': "इस निर्यात में आयात करने योग्य कोई रिकॉर्ड नहीं मिला।",
         'settings.importDiagnostics.renamedContainer': "डुप्लिकेट नाम से बचने के लिए “{{from}}” का नाम बदलकर “{{to}}” किया गया।",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} डुप्लिकेट रिकॉर्ड छोड़ दिए गए।",
+        'settings.importDiagnostics.emptyRecords': "{{count}} खाली रिकॉर्ड छोड़ दिए गए।",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} आर्काइव फ़ाइलें पढ़ी नहीं जा सकीं और छोड़ दी गईं।",
+        'settings.importDiagnostics.missingParent': "{{count}} रिकॉर्ड का मेल खाता पैरेंट नहीं था; उन्हें निकटतम सुरक्षित स्तर पर इम्पोर्ट किया गया।",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} असमर्थित आर्काइव प्रविष्टियाँ छोड़ दी गईं।",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} पहले इम्पोर्ट किए गए या मिटाए गए रिकॉर्ड छोड़ दिए गए।",
+        'settings.importDiagnostics.unmappedDate': "{{count}} तारीख मान मैप नहीं हो सके और हटा दिए गए।",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} स्थिति मान मैप नहीं हो सके; सुरक्षित डिफ़ॉल्ट का उपयोग हुआ।",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} असमर्थित दोहराव नियम नोट्स के रूप में रखे गए।",
 };

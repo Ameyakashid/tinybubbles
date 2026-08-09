@@ -2347,4 +2347,13 @@ export const en: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "This export is missing the required column: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "No importable records were found in this export.",
         'settings.importDiagnostics.renamedContainer': "“{{from}}” was renamed to “{{to}}” to avoid a duplicate name.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} duplicate record(s) were skipped.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} empty record(s) were skipped.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} archive file(s) could not be parsed and were skipped.",
+        'settings.importDiagnostics.missingParent': "{{count}} record(s) had no matching parent and were imported at the nearest safe level.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} unsupported archive entry/entries were skipped.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} previously imported or deleted record(s) were skipped.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} date value(s) could not be mapped and were omitted.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} status value(s) could not be mapped and used a safe default.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} unsupported repeat rule(s) were kept as notes.",
 };

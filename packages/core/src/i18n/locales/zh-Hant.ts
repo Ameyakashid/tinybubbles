@@ -2280,4 +2280,13 @@ export const zhHant: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "此匯出檔案缺少必要欄位：{{column}}。",
         'settings.importDiagnostics.noImportableRecords': "此匯出檔案中沒有可匯入的記錄。",
         'settings.importDiagnostics.renamedContainer': "「{{from}}」已重新命名為「{{to}}」，以避免名稱重複。",
+        'settings.importDiagnostics.duplicateIdentity': "已略過 {{count}} 筆重複記錄。",
+        'settings.importDiagnostics.emptyRecords': "已略過 {{count}} 筆空白記錄。",
+        'settings.importDiagnostics.invalidArchiveEntries': "壓縮檔中有 {{count}} 個檔案無法解析，已略過。",
+        'settings.importDiagnostics.missingParent': "{{count}} 筆記錄沒有相符的上層項目，已匯入至最近的安全層級。",
+        'settings.importDiagnostics.skippedArchiveEntries': "已略過 {{count}} 個不支援的壓縮檔項目。",
+        'settings.importDiagnostics.skippedExistingRecords': "已略過 {{count}} 筆先前匯入或已刪除的記錄。",
+        'settings.importDiagnostics.unmappedDate': "{{count}} 個日期值無法轉換，已省略。",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} 個狀態值無法轉換，已使用安全預設值。",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} 條不支援的重複規則已保留為備註。",
 };

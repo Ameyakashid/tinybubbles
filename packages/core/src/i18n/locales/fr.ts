@@ -2064,4 +2064,13 @@ export const frOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Il manque la colonne obligatoire dans cette exportation : {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Aucun enregistrement importable n’a été trouvé dans cette exportation.",
         'settings.importDiagnostics.renamedContainer': "« {{from}} » a été renommé en « {{to}} » pour éviter un nom en double.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} enregistrements en double ont été ignorés.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} enregistrements vides ont été ignorés.",
+        'settings.importDiagnostics.invalidArchiveEntries': "{{count}} fichiers de l’archive n’ont pas pu être analysés et ont été ignorés.",
+        'settings.importDiagnostics.missingParent': "{{count}} enregistrements n’avaient pas de parent correspondant et ont été importés au niveau sûr le plus proche.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} éléments non pris en charge de l’archive ont été ignorés.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} enregistrements déjà importés ou supprimés ont été ignorés.",
+        'settings.importDiagnostics.unmappedDate': "{{count}} valeurs de date n’ont pas pu être converties et ont été omises.",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} valeurs d’état n’ont pas pu être converties ; une valeur sûre a été utilisée.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} règles de répétition non prises en charge ont été conservées dans les notes.",
 };

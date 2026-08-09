@@ -2301,4 +2301,13 @@ export const viOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Bản xuất này thiếu cột bắt buộc: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Không tìm thấy bản ghi nào có thể nhập trong bản xuất này.",
         'settings.importDiagnostics.renamedContainer': "“{{from}}” đã được đổi tên thành “{{to}}” để tránh trùng tên.",
+        'settings.importDiagnostics.duplicateIdentity': "Đã bỏ qua {{count}} bản ghi trùng lặp.",
+        'settings.importDiagnostics.emptyRecords': "Đã bỏ qua {{count}} bản ghi trống.",
+        'settings.importDiagnostics.invalidArchiveEntries': "Không thể phân tích {{count}} tệp trong gói và đã bỏ qua.",
+        'settings.importDiagnostics.missingParent': "{{count}} bản ghi không có mục cha phù hợp và được nhập ở cấp an toàn gần nhất.",
+        'settings.importDiagnostics.skippedArchiveEntries': "Đã bỏ qua {{count}} mục không được hỗ trợ trong gói.",
+        'settings.importDiagnostics.skippedExistingRecords': "Đã bỏ qua {{count}} bản ghi đã nhập trước đó hoặc đã xóa.",
+        'settings.importDiagnostics.unmappedDate': "Không thể ánh xạ {{count}} giá trị ngày và đã lược bỏ.",
+        'settings.importDiagnostics.unmappedStatus': "Không thể ánh xạ {{count}} giá trị trạng thái; đã dùng giá trị mặc định an toàn.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} quy tắc lặp lại không được hỗ trợ đã được giữ trong ghi chú.",
 };

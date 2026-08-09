@@ -2326,4 +2326,13 @@ export const koOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "이 내보내기 파일에 필수 열이 없습니다: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "이 내보내기 파일에서 가져올 수 있는 레코드를 찾지 못했습니다.",
         'settings.importDiagnostics.renamedContainer': "중복된 이름을 피하기 위해 “{{from}}”의 이름을 “{{to}}”(으)로 변경했습니다.",
+        'settings.importDiagnostics.duplicateIdentity': "중복 레코드 {{count}}개를 건너뛰었습니다.",
+        'settings.importDiagnostics.emptyRecords': "빈 레코드 {{count}}개를 건너뛰었습니다.",
+        'settings.importDiagnostics.invalidArchiveEntries': "압축 파일의 파일 {{count}}개를 분석할 수 없어 건너뛰었습니다.",
+        'settings.importDiagnostics.missingParent': "{{count}}개 레코드에 일치하는 상위 항목이 없어 가장 가까운 안전한 단계로 가져왔습니다.",
+        'settings.importDiagnostics.skippedArchiveEntries': "지원하지 않는 압축 항목 {{count}}개를 건너뛰었습니다.",
+        'settings.importDiagnostics.skippedExistingRecords': "이전에 가져왔거나 삭제된 레코드 {{count}}개를 건너뛰었습니다.",
+        'settings.importDiagnostics.unmappedDate': "날짜 값 {{count}}개를 변환할 수 없어 생략했습니다.",
+        'settings.importDiagnostics.unmappedStatus': "상태 값 {{count}}개를 변환할 수 없어 안전한 기본값을 사용했습니다.",
+        'settings.importDiagnostics.unsupportedRecurrence': "지원하지 않는 반복 규칙 {{count}}개를 메모로 보존했습니다.",
 };

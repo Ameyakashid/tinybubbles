@@ -1395,4 +1395,13 @@ export const esOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "A esta exportación le falta la columna obligatoria: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "No se encontraron registros importables en esta exportación.",
         'settings.importDiagnostics.renamedContainer': "Se cambió el nombre de «{{from}}» a «{{to}}» para evitar un nombre duplicado.",
+        'settings.importDiagnostics.duplicateIdentity': "Se omitieron {{count}} registros duplicados.",
+        'settings.importDiagnostics.emptyRecords': "Se omitieron {{count}} registros vacíos.",
+        'settings.importDiagnostics.invalidArchiveEntries': "No se pudieron analizar {{count}} archivos del paquete y se omitieron.",
+        'settings.importDiagnostics.missingParent': "{{count}} registros no tenían un elemento superior coincidente y se importaron en el nivel seguro más cercano.",
+        'settings.importDiagnostics.skippedArchiveEntries': "Se omitieron {{count}} elementos no compatibles del paquete.",
+        'settings.importDiagnostics.skippedExistingRecords': "Se omitieron {{count}} registros ya importados o eliminados.",
+        'settings.importDiagnostics.unmappedDate': "No se pudieron asignar {{count}} valores de fecha y se omitieron.",
+        'settings.importDiagnostics.unmappedStatus': "No se pudieron asignar {{count}} valores de estado; se usó un valor seguro.",
+        'settings.importDiagnostics.unsupportedRecurrence': "Se conservaron como notas {{count}} reglas de repetición no compatibles.",
 };

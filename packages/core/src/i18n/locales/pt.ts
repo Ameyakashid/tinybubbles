@@ -1540,4 +1540,13 @@ export const ptOverrides: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "Esta exportação não contém a coluna obrigatória: {{column}}.",
         'settings.importDiagnostics.noImportableRecords': "Nenhum registro importável foi encontrado nesta exportação.",
         'settings.importDiagnostics.renamedContainer': "“{{from}}” foi renomeado para “{{to}}” para evitar um nome duplicado.",
+        'settings.importDiagnostics.duplicateIdentity': "{{count}} registros duplicados foram ignorados.",
+        'settings.importDiagnostics.emptyRecords': "{{count}} registros vazios foram ignorados.",
+        'settings.importDiagnostics.invalidArchiveEntries': "Não foi possível analisar {{count}} arquivos do pacote; eles foram ignorados.",
+        'settings.importDiagnostics.missingParent': "{{count}} registros não tinham um item superior correspondente e foram importados no nível seguro mais próximo.",
+        'settings.importDiagnostics.skippedArchiveEntries': "{{count}} itens não compatíveis do pacote foram ignorados.",
+        'settings.importDiagnostics.skippedExistingRecords': "{{count}} registros já importados ou excluídos foram ignorados.",
+        'settings.importDiagnostics.unmappedDate': "Não foi possível mapear {{count}} valores de data; eles foram omitidos.",
+        'settings.importDiagnostics.unmappedStatus': "Não foi possível mapear {{count}} valores de estado; foi usado um padrão seguro.",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} regras de repetição não compatíveis foram mantidas como notas.",
 };

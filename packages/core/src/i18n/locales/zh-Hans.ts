@@ -2280,4 +2280,13 @@ export const zhHans: Record<string, string> = {
         'settings.importDiagnostics.missingColumn': "此导出文件缺少必需列：{{column}}。",
         'settings.importDiagnostics.noImportableRecords': "此导出文件中没有可导入的记录。",
         'settings.importDiagnostics.renamedContainer': "“{{from}}”已重命名为“{{to}}”，以避免名称重复。",
+        'settings.importDiagnostics.duplicateIdentity': "已跳过 {{count}} 条重复记录。",
+        'settings.importDiagnostics.emptyRecords': "已跳过 {{count}} 条空记录。",
+        'settings.importDiagnostics.invalidArchiveEntries': "压缩包中有 {{count}} 个文件无法解析，已跳过。",
+        'settings.importDiagnostics.missingParent': "{{count}} 条记录没有匹配的上级项目，已导入到最近的安全层级。",
+        'settings.importDiagnostics.skippedArchiveEntries': "已跳过 {{count}} 个不支持的压缩包项目。",
+        'settings.importDiagnostics.skippedExistingRecords': "已跳过 {{count}} 条之前导入或已删除的记录。",
+        'settings.importDiagnostics.unmappedDate': "{{count}} 个日期值无法转换，已省略。",
+        'settings.importDiagnostics.unmappedStatus': "{{count}} 个状态值无法转换，已使用安全默认值。",
+        'settings.importDiagnostics.unsupportedRecurrence': "{{count}} 条不支持的重复规则已保留为备注。",
 };
