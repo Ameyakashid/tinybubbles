@@ -179,6 +179,7 @@ describe('local-data-watcher', () => {
 
         watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
         await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
         expect(useTaskStore.getState().tasks[0]?.id).toBe('mcp-1');
@@ -270,6 +271,7 @@ describe('local-data-watcher', () => {
 
         watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
         await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
     });
@@ -304,7 +306,7 @@ describe('local-data-watcher', () => {
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
     });
 
-    it('does not feed SQLite watcher loops when a refresh finds no data changes', async () => {
+    it('drains a real WAL event that arrives during SQLite no-op suppression', async () => {
         const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
         const refreshStorageData = vi.fn();
 
@@ -320,19 +322,21 @@ describe('local-data-watcher', () => {
 
         watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
         await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
 
         watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
         await flushScheduledTimers();
+        await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
-        expect(refreshStorageData).toHaveBeenCalledTimes(1);
+        expect(refreshStorageData).toHaveBeenCalledTimes(2);
 
         nowMs = 2100;
         watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
         await flushScheduledTimers();
 
-        expect(refreshStorageData).toHaveBeenCalledTimes(2);
+        expect(refreshStorageData).toHaveBeenCalledTimes(3);
     });
 
     it('does not treat sync bookkeeping-only SQLite refreshes as app data changes', async () => {

@@ -319,7 +319,8 @@ const scheduleSqliteIgnoreDrain = () => {
         localDataWatcherDependencies.cancelSchedule(sqliteIgnoreDrainTimer);
         sqliteIgnoreDrainTimer = null;
     }
-    const remainingMs = Math.max(0, sqliteSelfWriteUntil - localDataWatcherDependencies.now());
+    const drainAfter = Math.max(sqliteIgnoreUntil, sqliteSelfWriteUntil);
+    const remainingMs = Math.max(0, drainAfter - localDataWatcherDependencies.now());
     sqliteIgnoreDrainTimer = localDataWatcherDependencies.schedule(() => {
         sqliteIgnoreDrainTimer = null;
         if (!hasPendingSqliteChangeDuringSelfWrite) return;
@@ -586,10 +587,13 @@ async function handleSqliteChange(options: { immediate?: boolean; paths?: string
         if (now < sqliteIgnoreUntil) {
             if (now < sqliteSelfWriteUntil) {
                 sqliteSuppressedSelfWriteEvents += 1;
-                hasPendingSqliteChangeDuringSelfWrite = true;
-                pendingSqliteChangePaths = paths.slice(0, 8);
-                scheduleSqliteIgnoreDrain();
             }
+            // The no-op window suppresses watcher feedback, but a WAL event can
+            // also be a real concurrent writer. Coalesce every ignored event
+            // and drain it once the active suppression window closes.
+            hasPendingSqliteChangeDuringSelfWrite = true;
+            pendingSqliteChangePaths = paths.slice(0, 8);
+            scheduleSqliteIgnoreDrain();
             localDataWatcherDependencies.logInfo(
                 '[local-data-watcher] SQLite event ignored inside write window',
                 buildSqliteWatcherTraceExtra(paths),
@@ -796,6 +800,11 @@ export const __localDataWatcherTestUtils = {
     async waitForPendingMergeForTests() {
         while (mergeInFlight) {
             await mergeInFlight;
+        }
+    },
+    async waitForPendingSqliteRefreshForTests() {
+        while (sqliteRefreshInFlight) {
+            await sqliteRefreshInFlight;
         }
     },
     resetForTests() {
