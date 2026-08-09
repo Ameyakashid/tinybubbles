@@ -120,6 +120,36 @@ describe('mindwtr csv import', () => {
         ]);
     });
 
+    it('rejects an impossible date-only value instead of rolling it into another month', () => {
+        const csv = buildCsv(['Title', 'Due Date'], [['Impossible date', '2026-02-31']]);
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(result.parsedData?.tasks).toMatchObject([{ dueDate: undefined }]);
+        expect(result.warnings).toContain('1 date value could not be parsed and was skipped.');
+    });
+
+    it('rejects local datetimes with impossible calendar or clock components', () => {
+        const csv = buildCsv(
+            ['Title', 'Start Date', 'Due Date'],
+            [['Impossible datetimes', '2026-13-01T09:30:00', '2026-02-28T24:00:00']]
+        );
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(result.parsedData?.tasks).toMatchObject([{ startTime: undefined, dueDate: undefined }]);
+        expect(result.warnings).toContain('2 date values could not be parsed and were skipped.');
+    });
+
+    it('rejects an entity timestamp that would roll into another calendar date', () => {
+        const csv = buildCsv(['Title', 'Created At'], [['Impossible timestamp', '2026-02-31T09:30:00']]);
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(result.parsedData?.tasks).toMatchObject([{ createdAt: undefined }]);
+        expect(result.warnings).toContain('1 date value could not be parsed and was skipped.');
+    });
+
     it('defaults empty Status to next with a Project and to inbox without one', () => {
         const csv = buildCsv(
             ['Title', 'Project', 'Status'],

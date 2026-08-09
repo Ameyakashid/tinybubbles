@@ -255,13 +255,50 @@ const normalizeSqlTimestampShape = (value: string): string => value
     .replace(/(\.\d{3})\d+/u, '$1')
     .replace(/ (Z|[+-]\d{2}:?\d{2})$/iu, '$1');
 
+const isValidCalendarDate = (value: string): boolean => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1) return false;
+    const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return day <= (daysInMonth[month - 1] ?? 0);
+};
+
+const isValidClockTime = (value: string): boolean => {
+    const match = /^(\d{2})(?::(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?$/u.exec(value);
+    if (!match) return false;
+    const hour = Number(match[1]);
+    const minute = match[2] ? Number(match[2]) : 0;
+    const second = match[3] ? Number(match[3]) : 0;
+    return hour < 24 && minute < 60 && second < 60;
+};
+
+const hasValidCalendarComponents = (value: string): boolean => {
+    const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}(?::\d{2}(?::\d{2}(?:\.\d{1,3})?)?)?))?(?:Z|[+-](\d{2}):?(\d{2}))?$/iu.exec(value);
+    if (!match) return true;
+    const offsetHour = match[3] ? Number(match[3]) : 0;
+    const offsetMinute = match[4] ? Number(match[4]) : 0;
+    return isValidCalendarDate(match[1])
+        && (!match[2] || isValidClockTime(match[2]))
+        && offsetHour < 24
+        && offsetMinute < 60;
+};
+
 const parseCsvDateValue = (value: string): string | undefined => {
     const trimmed = normalizeSqlTimestampShape(value.trim());
     if (!trimmed) return undefined;
     const dateOnlyMatch = /^(\d{4}-\d{2}-\d{2})$/u.exec(trimmed);
-    if (dateOnlyMatch) return dateOnlyMatch[1];
+    if (dateOnlyMatch) return isValidCalendarDate(dateOnlyMatch[1]) ? dateOnlyMatch[1] : undefined;
     const dateTimeMatch = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?)$/u.exec(trimmed);
-    if (dateTimeMatch) return `${dateTimeMatch[1]}T${dateTimeMatch[2]}`;
+    if (dateTimeMatch) {
+        return isValidCalendarDate(dateTimeMatch[1]) && isValidClockTime(dateTimeMatch[2])
+            ? `${dateTimeMatch[1]}T${dateTimeMatch[2]}`
+            : undefined;
+    }
+    if (!hasValidCalendarComponents(trimmed)) return undefined;
     const parsed = safeParseDate(trimmed);
     if (!parsed) return undefined;
     if (/Z$|[+-]\d{2}:?\d{2}$/iu.test(trimmed)) return parsed.toISOString();
@@ -273,8 +310,11 @@ const parseCsvDateValue = (value: string): string | undefined => {
 // storage reads back as UTC midnight in some readers (sync.ts's `new Date(...)`) and local
 // midnight in others (safeParseDate) — one string, two different instants. Normalizing through
 // safeParseDate + toISOString here, once, means every reader agrees forever after.
-const normalizeEntityTimestamp = (value: string): string | undefined =>
-    safeParseDate(normalizeSqlTimestampShape(value.trim()))?.toISOString();
+const normalizeEntityTimestamp = (value: string): string | undefined => {
+    const normalized = normalizeSqlTimestampShape(value.trim());
+    if (!hasValidCalendarComponents(normalized)) return undefined;
+    return safeParseDate(normalized)?.toISOString();
+};
 
 // SQL exports render missing values as the literal string NULL; treating those cells as
 // empty keeps them from becoming task titles, tags, or contexts named "NULL".
