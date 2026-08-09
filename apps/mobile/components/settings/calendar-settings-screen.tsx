@@ -9,6 +9,7 @@ import {
     generateUUID,
     hasExplicitExternalCalendarColor,
     normalizeExternalCalendarColor,
+    shallow,
     tFallback,
     themeExternalCalendarDisplayColor,
     type ExternalCalendarSubscription,
@@ -100,7 +101,10 @@ export function CalendarSettingsScreen() {
     const filledButton = useFilledButtonColors();
     const { showToast } = useToast();
     const { isChineseLanguage, tr, t } = useSettingsLocalization();
-    const { settings, updateSettings } = useTaskStore();
+    const { settings, updateSettings } = useTaskStore((state) => ({
+        settings: state.settings,
+        updateSettings: state.updateSettings,
+    }), shallow);
     const scrollContentStyle = useSettingsScrollContent();
     const [externalCalendars, setExternalCalendars] = useState<ExternalCalendarSubscription[]>([]);
     const [newCalendarName, setNewCalendarName] = useState('');

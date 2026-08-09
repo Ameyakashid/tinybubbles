@@ -31,6 +31,7 @@ import {
     getDefaultTaskAreaMode,
     resolveDefaultNewTaskAreaId,
     sanitizePomodoroDurations,
+    shallow,
     tFallback,
     type DefaultProjectFlowMode,
     type FeatureSettings,
@@ -75,7 +76,11 @@ export function GtdSettingsScreen({
     const insets = useSafeAreaInsets();
     const { tr, t } = useSettingsLocalization();
     const { showToast } = useToast();
-    const { settings, updateSettings, areas } = useTaskStore();
+    const { settings, updateSettings, areas } = useTaskStore((state) => ({
+        areas: state.areas,
+        settings: state.settings,
+        updateSettings: state.updateSettings,
+    }), shallow);
     const scrollContentStyle = useSettingsScrollContent();
     const [taskEditorExpandedSections, setTaskEditorExpandedSections] = useState<Record<TaskEditorSectionId, boolean>>({
         basic: true,

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
     listMergeConflictSamples,
+    shallow,
     summarizeMergeStats,
     translateWithFallback,
     useTaskStore,
@@ -91,7 +92,16 @@ function SyncSettingsView({
         addTask,
         seedGettingStarted,
         updateSettings,
-    } = useTaskStore();
+    } = useTaskStore((state) => ({
+        addTask: state.addTask,
+        areas: state.areas,
+        projects: state.projects,
+        sections: state.sections,
+        seedGettingStarted: state.seedGettingStarted,
+        settings: state.settings,
+        tasks: state.tasks,
+        updateSettings: state.updateSettings,
+    }), shallow);
     const extraConfig = Constants.expoConfig?.extra as MobileExtraConfig | undefined;
     const isFossBuild = extraConfig?.isFossBuild === true || extraConfig?.isFossBuild === 'true';
     const analyticsHeartbeatUrl = typeof extraConfig?.analyticsHeartbeatUrl === 'string'

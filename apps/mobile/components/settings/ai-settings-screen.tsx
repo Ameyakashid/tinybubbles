@@ -16,6 +16,7 @@ import {
     getModelOptions,
     mergeModelOptions,
     parseOpenAIExtraBodyParamsInput,
+    shallow,
     type AIProviderId,
     type AIReasoningEffort,
     type AppSettings,
@@ -60,7 +61,10 @@ export function AISettingsScreen() {
     const { showToast } = useToast();
     const { tr, t } = useSettingsLocalization();
     const scrollContentStyleWithKeyboard = useSettingsScrollContent(140);
-    const { settings, updateSettings } = useTaskStore();
+    const { settings, updateSettings } = useTaskStore((state) => ({
+        settings: state.settings,
+        updateSettings: state.updateSettings,
+    }), shallow);
     const extraConfig = Constants.expoConfig?.extra as MobileExtraConfig | undefined;
     const isFossBuild = extraConfig?.isFossBuild === true || extraConfig?.isFossBuild === 'true';
     const isExpoGo = Constants.appOwnership === 'expo';

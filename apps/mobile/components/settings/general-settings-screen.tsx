@@ -10,6 +10,7 @@ import {
     normalizeWeekStartPreference,
     normalizeWeekStartSetting,
     resolveCalendarSystemSetting,
+    shallow,
     tFallback,
     useTaskStore,
 } from '@mindwtr/core';
@@ -31,7 +32,10 @@ import { styles } from './settings.styles';
 export function GeneralSettingsScreen() {
     const { themeMode, setThemeMode } = useTheme();
     const { language, tr, setLanguage, t } = useSettingsLocalization();
-    const { settings, updateSettings } = useTaskStore();
+    const { settings, updateSettings } = useTaskStore((state) => ({
+        settings: state.settings,
+        updateSettings: state.updateSettings,
+    }), shallow);
     const tc = useThemeColors();
     const scrollContentStyle = useSettingsScrollContent();
     const [themePickerOpen, setThemePickerOpen] = useState(false);
