@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    runAfterStoreWriteLock,
     runDataTransferTransactionWithoutSnapshot,
     runSerializedSyncDocumentOperation,
     SyncRemoteWriteConflict,
@@ -220,6 +221,66 @@ describe('sync-service test utils', () => {
             releaseTransfer();
             await Promise.allSettled([transfer, resolution]);
         }
+    });
+
+    it('blocks ordinary store writes through external exact replacement persistence', async () => {
+        const events: string[] = [];
+        let releaseExternalRead!: () => void;
+        const externalReadBarrier = new Promise<void>((resolve) => {
+            releaseExternalRead = resolve;
+        });
+        let markExternalReadStarted!: () => void;
+        const externalReadStarted = new Promise<void>((resolve) => {
+            markExternalReadStarted = resolve;
+        });
+        const externalData = emptyAppData();
+        const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+            if (command === 'get_sync_backend') return 'file';
+            if (command === 'read_sync_file') {
+                events.push('resolution:read:start');
+                markExternalReadStarted();
+                await externalReadBarrier;
+                events.push('resolution:read:end');
+                return externalData;
+            }
+            if (command === 'save_data') {
+                events.push('resolution:persist');
+                return args?.data;
+            }
+            throw new Error(`unexpected command: ${command}`);
+        });
+        __syncServiceTestUtils.setDependenciesForTests({
+            flushPendingSave: vi.fn(async () => undefined),
+            getStoreState: () => ({
+                fetchData: vi.fn(async () => undefined),
+                lastDataChangeAt: 0,
+                settings: {},
+            }) as any,
+            invoke: invoke as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+            isTauriRuntime: () => true,
+            markLocalSqliteWrite: vi.fn(),
+            markLocalWrite: vi.fn(),
+        });
+        setPendingExternalSyncChangeForTests();
+
+        const resolution = SyncService.resolveExternalSyncChange('use-external');
+        await externalReadStarted;
+        const ordinaryWrite = runAfterStoreWriteLock(async () => {
+            events.push('ordinary:write');
+        });
+        await Promise.resolve();
+        const eventsBeforeRelease = [...events];
+
+        releaseExternalRead();
+        await expect(resolution).resolves.toEqual({ success: true });
+        await ordinaryWrite;
+        expect(eventsBeforeRelease).toEqual(['resolution:read:start']);
+        expect(events).toEqual([
+            'resolution:read:start',
+            'resolution:read:end',
+            'resolution:persist',
+            'ordinary:write',
+        ]);
     });
 
     it('waits for an active data transfer before keeping the local sync file', async () => {

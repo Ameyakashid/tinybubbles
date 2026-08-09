@@ -21,6 +21,7 @@ import {
     normalizeCloudUrl,
     runDataTransferTransactionWithoutSnapshot,
     runSerializedSyncDocumentOperation,
+    runSerializedSyncDocumentWriteOperation,
     createSyncBackendIO,
     runSharedSyncCycle,
     SyncRemoteWriteConflict,
@@ -267,6 +268,9 @@ const runSyncRestoreExclusive = <T>(operation: () => Promise<T>): Promise<T> => 
 );
 const runSyncDocumentExclusive = <T>(operation: () => Promise<T>): Promise<T> => (
     runSyncRestoreExclusive(() => runSerializedSyncDocumentOperation(operation))
+);
+const runSyncDocumentWriteExclusive = <T>(operation: () => Promise<T>): Promise<T> => (
+    runSyncRestoreExclusive(() => runSerializedSyncDocumentWriteOperation(operation))
 );
 
 const resolveSyncText = (key: string, fallback: string): string => {
@@ -2116,7 +2120,7 @@ export class SyncService {
                 return await SyncService.performSync();
             }
 
-            return await runSyncDocumentExclusive(async () => {
+            return await runSyncDocumentWriteExclusive(async () => {
                 await syncServiceDependencies.flushPendingSave();
                 const externalData = normalizeAppData(await invokeSyncNative<AppData>('read_sync_file'));
                 await persistLocalDataForSync(externalData, { mode: 'exact' });
