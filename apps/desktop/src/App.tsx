@@ -56,6 +56,7 @@ import {
 import { SyncService } from './lib/sync-service';
 import type { ExternalSyncChange, ExternalSyncChangeResolution } from './lib/sync-service';
 import { migratePortableAttachments } from './lib/portable-migration';
+import { logDesktopStartupContext } from './lib/startup-context';
 import * as LocalDataWatcher from './lib/local-data-watcher';
 import { invokeNative } from './lib/tauri-invoke';
 import { getInstallSourceOrFallback, isFlatpakRuntime, isTauriRuntime } from './lib/runtime';
@@ -741,6 +742,9 @@ function App() {
                 if (!cancelled) {
                     setHasHydratedSettings(true);
                 }
+                void logDesktopStartupContext(
+                    useTaskStore.getState().settings?.diagnostics?.loggingEnabled === true,
+                ).catch(() => undefined);
             })
             .then(() => {
                 if (!disposed && isTauriRuntime()) {

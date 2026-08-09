@@ -4,7 +4,7 @@ import App from './App.tsx';
 import { QuickAddWindowApp } from './QuickAddWindowApp.tsx';
 import './index.css';
 
-import { type AppData, consoleLogger, setLogger, setStorageAdapter, SQLITE_SCHEMA_VERSION } from '@mindwtr/core';
+import { consoleLogger, setLogger, setStorageAdapter } from '@mindwtr/core';
 import { LanguageProvider } from './contexts/language-context';
 import { isTauriRuntime } from './lib/runtime';
 import { invokeNative, preloadNativeTransport } from './lib/tauri-invoke';
@@ -24,11 +24,6 @@ import { loadStoredFullscreen } from './lib/window-state';
 import { restoreStoredWebviewZoom } from './lib/webview-zoom';
 import { isQuickAddWindowLocation } from './lib/quick-add-window';
 import {
-    detectDesktopPlatform,
-    getDesktopChannel,
-    getDesktopLocale,
-    getDesktopOsMajor,
-    getDesktopVersion,
     sendDesktopDailyHeartbeat,
 } from './lib/analytics-heartbeat';
 
@@ -77,57 +72,6 @@ const installCoreLoggerBridge = () => {
             return;
         }
         void logInfo(payload.message, { scope, extra });
-    });
-};
-
-const getLoggingReason = (loggingEnabled: boolean): string => {
-    if (isDiagnosticsEnabled()) return 'diagnostics-build';
-    return loggingEnabled ? 'user-enabled' : 'startup-force';
-};
-
-const getStartupLoggingEnabled = async (): Promise<boolean> => {
-    if (isTauriRuntime()) {
-        try {
-            const data = await invokeNative<AppData>('get_data');
-            return data?.settings?.diagnostics?.loggingEnabled === true;
-        } catch {
-            return false;
-        }
-    }
-    try {
-        const data = await webStorage.getData();
-        return data.settings.diagnostics?.loggingEnabled === true;
-    } catch {
-        return false;
-    }
-};
-
-const logDesktopStartupContext = async (): Promise<void> => {
-    const platform = detectDesktopPlatform();
-    const [channel, version, loggingEnabled, syncBackend] = await Promise.all([
-        getDesktopChannel(),
-        getDesktopVersion(),
-        getStartupLoggingEnabled(),
-        isTauriRuntime()
-            ? import('./lib/sync-service')
-                .then(({ SyncService }) => SyncService.getSyncBackend())
-                .catch(() => 'off')
-            : Promise.resolve('off'),
-    ]);
-
-    void logInfo('App started', {
-        scope: 'startup',
-        force: true,
-        extra: {
-            version,
-            platform,
-            osMajor: getDesktopOsMajor(platform),
-            locale: getDesktopLocale(),
-            channel,
-            syncBackend,
-            schemaVersion: String(SQLITE_SCHEMA_VERSION),
-            loggingReason: getLoggingReason(loggingEnabled),
-        },
     });
 };
 
@@ -253,7 +197,6 @@ async function bootstrap() {
     await initStorage();
     setupGlobalErrorLogging();
     if (!isQuickAddWindow) {
-        await logDesktopStartupContext().catch(() => undefined);
         await restoreFullscreenState();
         await restoreWebviewZoomState();
     }
