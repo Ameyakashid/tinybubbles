@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
     listMergeConflictSamples,
-    shallow,
     summarizeMergeStats,
     translateWithFallback,
     useTaskStore,
@@ -56,6 +55,10 @@ import {
 import { SyncSelfHostedBackendPanel } from './sync-settings-selfhosted-panel';
 import { SyncWebDavBackendPanel } from './sync-settings-webdav-panel';
 import { useSyncSettingsBackupActions } from './use-sync-settings-backup-actions';
+import {
+    useSyncSettingsStoreSlice,
+    type SettingsScreenMode,
+} from './use-sync-settings-store-slice';
 import { useSyncSettingsTransportActions, type CloudKitAccountStatus } from './use-sync-settings-transport-actions';
 import { SettingsGuideLink, SettingsTopBar } from './settings.shell';
 import { styles } from './settings.styles';
@@ -63,7 +66,6 @@ import { styles } from './settings.styles';
 const DATA_AND_SYNC_GUIDE_URL = 'https://docs.mindwtr.app/data-sync/';
 const IMPORT_GUIDE_URL = 'https://docs.mindwtr.app/import/';
 
-type SettingsScreenMode = 'sync' | 'data';
 type VisibleSyncBackendOption = 'off' | 'file' | 'dropbox' | 'webdav' | 'selfhosted' | 'cloudkit';
 type VisibleSyncBackendGroup = {
     description: string;
@@ -92,16 +94,7 @@ function SyncSettingsView({
         addTask,
         seedGettingStarted,
         updateSettings,
-    } = useTaskStore((state) => ({
-        addTask: state.addTask,
-        areas: state.areas,
-        projects: state.projects,
-        sections: state.sections,
-        seedGettingStarted: state.seedGettingStarted,
-        settings: state.settings,
-        tasks: state.tasks,
-        updateSettings: state.updateSettings,
-    }), shallow);
+    } = useSyncSettingsStoreSlice(mode);
     const extraConfig = Constants.expoConfig?.extra as MobileExtraConfig | undefined;
     const isFossBuild = extraConfig?.isFossBuild === true || extraConfig?.isFossBuild === 'true';
     const analyticsHeartbeatUrl = typeof extraConfig?.analyticsHeartbeatUrl === 'string'

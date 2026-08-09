@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeneralSettingsScreen } from './general-settings-screen';
 import { GtdSettingsScreen } from './gtd-settings-screen';
+import { useSyncSettingsStoreSlice } from './use-sync-settings-store-slice';
 
 const updateSettings = vi.hoisted(() => vi.fn(async () => undefined));
 const storeHarness = vi.hoisted(() => ({
@@ -137,6 +138,11 @@ const renderAndCountCommits = (element: React.ReactElement) => {
     };
 };
 
+const SyncSettingsStoreProbe = () => {
+    useSyncSettingsStoreSlice('sync');
+    return null;
+};
+
 describe('settings store subscriptions', () => {
     beforeEach(() => {
         updateSettings.mockClear();
@@ -162,6 +168,22 @@ describe('settings store subscriptions', () => {
         ['GTD', () => <GtdSettingsScreen onNavigate={vi.fn()} screen="gtd" />],
     ])('does not rerender the %s settings screen for an unrelated task mutation', (_name, makeScreen) => {
         const rendered = renderAndCountCommits(makeScreen());
+        const commitsBeforeTaskMutation = rendered.commits;
+
+        act(() => {
+            storeHarness.state = {
+                ...storeHarness.state,
+                tasks: [{ id: 'unrelated-task', title: 'Unrelated task' }],
+            };
+            storeHarness.listeners.forEach((listener) => listener());
+        });
+
+        expect(rendered.commits).toBe(commitsBeforeTaskMutation);
+        act(() => rendered.tree.unmount());
+    });
+
+    it('does not rerender the Sync settings store slice for an unrelated task mutation', () => {
+        const rendered = renderAndCountCommits(<SyncSettingsStoreProbe />);
         const commitsBeforeTaskMutation = rendered.commits;
 
         act(() => {
