@@ -127,6 +127,80 @@ const parseRustInsertColumns = (source: string, table: string): string[] => {
     return unique(match[1].split(',').map((column) => column.trim()).filter(Boolean), `Rust INSERT ${table}`);
 };
 
+const parseFtsTableColumnLists = (source: string, table: string): string[][] => {
+    const pattern = new RegExp(
+        `CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5\\(([\\s\\S]*?)\\n\\s*\\)`,
+        'g',
+    );
+    return Array.from(source.matchAll(pattern), (match, index) => unique(
+        match[1]
+            .split('\n')
+            .map((line) => line.trim().replace(/,$/, ''))
+            .filter((line) => Boolean(line) && !line.includes('='))
+            .map((line) => line.split(/\s+/)[0]),
+        `${table} definition ${index + 1}`,
+    ));
+};
+
+const compareFtsTableDefinitions = (
+    label: string,
+    actualDefinitions: string[][],
+    expected: string[],
+): string[] => {
+    if (actualDefinitions.length === 0) return [`${label}: missing definition`];
+    return actualDefinitions.flatMap((actual, index) => compareSet(
+        `${label} definition ${index + 1}`,
+        actual,
+        expected,
+    ));
+};
+
+const normalizeSql = (sql: string): string => sql
+    .replace(/;?\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const parseFtsTriggers = (source: string): Map<string, string[]> => {
+    const triggers = new Map<string, string[]>();
+    const pattern = /CREATE TRIGGER IF NOT EXISTS ([A-Za-z0-9_]+)\s+[\s\S]*?\bEND\b;?/g;
+    for (const match of source.matchAll(pattern)) {
+        if (!match[0].includes('_fts')) continue;
+        const definitions = triggers.get(match[1]) ?? [];
+        definitions.push(normalizeSql(match[0]));
+        triggers.set(match[1], definitions);
+    }
+    return triggers;
+};
+
+const compareFtsTriggers = (
+    label: string,
+    actual: Map<string, string[]>,
+    expected: Map<string, string[]>,
+): string[] => {
+    const failures: string[] = [];
+    for (const [name, expectedDefinitions] of expected) {
+        if (expectedDefinitions.length !== 1) {
+            failures.push(`core SQLite ${name} trigger: expected one definition, got ${expectedDefinitions.length}`);
+            continue;
+        }
+        const expectedSql = expectedDefinitions[0];
+        const actualDefinitions = actual.get(name) ?? [];
+        if (actualDefinitions.length === 0) {
+            failures.push(`${label} ${name} trigger: missing definition`);
+            continue;
+        }
+        actualDefinitions.forEach((actualSql, index) => {
+            if (actualSql !== expectedSql) {
+                failures.push(`${label} ${name} trigger definition ${index + 1} differs from core`);
+            }
+        });
+    }
+    for (const name of actual.keys()) {
+        if (!expected.has(name)) failures.push(`${label} ${name} trigger: unexpected definition`);
+    }
+    return failures;
+};
+
 // core's own schema is the source of truth for which columns REFERENCES
 // another table's `id` (revision-aware sync relies on ON DELETE SET
 // NULL/CASCADE actions, not app code, to keep container references
@@ -594,6 +668,7 @@ const failures: string[] = [];
 const coreTypes = read(PATHS.coreTypes);
 const coreSqliteSchema = read(PATHS.coreSqliteSchema);
 const desktopRustStorage = read(PATHS.desktopRustStorage);
+const desktopRustProductionStorage = desktopRustStorage.split(/\n#\[cfg\(test\)\]\nmod tests\s*\{/)[0];
 const swiftMapper = read(PATHS.swiftMapper);
 const objcMapper = read(PATHS.objcMapper);
 const mcpQueries = read(PATHS.mcpQueries);
@@ -738,6 +813,25 @@ for (const entity of ENTITIES) {
 
 failures.push(...compareRequiredPragmas('core SQLite schema', coreSqliteSchema));
 failures.push(...compareRequiredPragmas('desktop Rust schema', desktopRustStorage));
+
+for (const table of ['tasks_fts', 'projects_fts']) {
+    const coreDefinitions = parseFtsTableColumnLists(coreSqliteSchema, table);
+    if (coreDefinitions.length !== 1) {
+        failures.push(`core SQLite ${table} schema: expected one definition, got ${coreDefinitions.length}`);
+        continue;
+    }
+    failures.push(...compareFtsTableDefinitions(
+        `desktop Rust ${table} schema`,
+        parseFtsTableColumnLists(desktopRustProductionStorage, table),
+        coreDefinitions[0],
+    ));
+}
+
+failures.push(...compareFtsTriggers(
+    'desktop Rust',
+    parseFtsTriggers(desktopRustProductionStorage),
+    parseFtsTriggers(coreSqliteSchema),
+));
 
 for (const entity of ENTITIES) {
     const expectedCloud = EXPECTED[entity].cloud;

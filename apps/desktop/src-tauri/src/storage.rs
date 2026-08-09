@@ -34,6 +34,9 @@ const SNAPSHOT_RETENTION_RECENT_COUNT: usize = 2;
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 const STORAGE_RETRY_ATTEMPTS: usize = 4;
 const STORAGE_RETRY_BASE_DELAY_MS: u64 = 120;
+// Version 4 adds assignedTo to the desktop-native FTS schema and forces one
+// content rebuild after the corrected triggers are installed.
+const FTS_TRIGGER_MIGRATION_VERSION: i64 = 4;
 
 const SQLITE_SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;
@@ -198,6 +201,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
   contexts,
   checklist,
   location,
+  assignedTo,
   content=''
 );
 
@@ -211,20 +215,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
 );
 
 CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
-  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
-  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
-  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
-  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
-  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+  INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
+  INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+  VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
@@ -431,9 +435,9 @@ pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> 
     ensure_projects_purged_at_column(&conn)?;
     ensure_projects_area_order_index(&conn)?;
     ensure_sync_revision_columns(&conn)?;
-    ensure_tasks_fts_schema(&conn)?;
-    ensure_fts_triggers(&conn)?;
-    ensure_fts_populated(&conn, false)?;
+    let fts_schema_changed = ensure_tasks_fts_schema(&conn)?;
+    let fts_triggers_changed = ensure_fts_triggers(&conn)?;
+    ensure_fts_populated(&conn, fts_schema_changed || fts_triggers_changed)?;
     ensure_calendar_sync_schema(&conn)?;
     Ok(conn)
 }
@@ -1079,17 +1083,24 @@ fn ensure_projects_area_order_index(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_tasks_fts_schema(conn: &Connection) -> Result<(), String> {
+fn ensure_tasks_fts_schema(conn: &Connection) -> Result<bool, String> {
     let mut stmt = conn
         .prepare("PRAGMA table_info(tasks_fts)")
         .map_err(|e| e.to_string())?;
     let columns = stmt
         .query_map([], |row| row.get::<_, String>(1))
         .map_err(|e| e.to_string())?;
+    let mut has_checklist = false;
+    let mut has_assigned_to = false;
     for column in columns {
-        if column.map_err(|e| e.to_string())? == "checklist" {
-            return Ok(());
+        match column.map_err(|e| e.to_string())?.as_str() {
+            "checklist" => has_checklist = true,
+            "assignedTo" => has_assigned_to = true,
+            _ => {}
         }
+    }
+    if has_checklist && has_assigned_to {
+        return Ok(false);
     }
 
     conn.execute("DROP TRIGGER IF EXISTS tasks_ai", [])
@@ -1109,53 +1120,110 @@ fn ensure_tasks_fts_schema(conn: &Connection) -> Result<(), String> {
           contexts,
           checklist,
           location,
+          assignedTo,
           content=''
         )",
         [],
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(true)
 }
 
-fn ensure_fts_triggers(conn: &Connection) -> Result<(), String> {
-    conn.execute("DROP TRIGGER IF EXISTS tasks_ai", [])
-        .map_err(|e| e.to_string())?;
-    conn.execute("DROP TRIGGER IF EXISTS tasks_ad", [])
-        .map_err(|e| e.to_string())?;
-    conn.execute("DROP TRIGGER IF EXISTS tasks_au", [])
-        .map_err(|e| e.to_string())?;
-    conn.execute("DROP TRIGGER IF EXISTS projects_ad", [])
-        .map_err(|e| e.to_string())?;
-    conn.execute("DROP TRIGGER IF EXISTS projects_au", [])
-        .map_err(|e| e.to_string())?;
+fn fts_triggers_are_current(conn: &Connection) -> Result<bool, String> {
+    for name in [
+        "tasks_ai",
+        "tasks_ad",
+        "tasks_au",
+        "projects_ai",
+        "projects_ad",
+        "projects_au",
+    ] {
+        let sql = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?1",
+                params![name],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let Some(sql) = sql else {
+            return Ok(false);
+        };
+        // Trust the marker only while the actual SQL is still current. An older
+        // desktop binary can recreate these triggers without assignedTo while
+        // leaving the shared schema_migrations table untouched.
+        if name.starts_with("tasks_") && !sql.contains("assignedTo") {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
 
-    conn.execute(
+fn ensure_fts_triggers(conn: &Connection) -> Result<bool, String> {
+    let migration_applied = conn
+        .query_row(
+            "SELECT 1 FROM schema_migrations WHERE version = ?1 LIMIT 1",
+            params![FTS_TRIGGER_MIGRATION_VERSION],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .is_some();
+    if migration_applied && fts_triggers_are_current(conn)? {
+        return Ok(false);
+    }
+
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        conn.execute("DROP TRIGGER IF EXISTS tasks_ai", [])
+            .map_err(|e| e.to_string())?;
+        conn.execute("DROP TRIGGER IF EXISTS tasks_ad", [])
+            .map_err(|e| e.to_string())?;
+        conn.execute("DROP TRIGGER IF EXISTS tasks_au", [])
+            .map_err(|e| e.to_string())?;
+        conn.execute("DROP TRIGGER IF EXISTS projects_ai", [])
+            .map_err(|e| e.to_string())?;
+        conn.execute("DROP TRIGGER IF EXISTS projects_ad", [])
+            .map_err(|e| e.to_string())?;
+        conn.execute("DROP TRIGGER IF EXISTS projects_au", [])
+            .map_err(|e| e.to_string())?;
+
+        conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
-          INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
-          VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+          INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+          VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
         END",
         [],
     )
     .map_err(|e| e.to_string())?;
-    conn.execute(
+        conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-          INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
-          VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
+          INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+          VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
         END",
         [],
     )
     .map_err(|e| e.to_string())?;
-    conn.execute(
+        conn.execute(
         "CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-          INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location)
-          VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''));
-          INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
-          VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''));
+          INSERT INTO tasks_fts (tasks_fts, rowid, title, description, tags, contexts, checklist, location, assignedTo)
+          VALUES ('delete', old.rowid, old.title, coalesce(old.description, ''), coalesce(old.tags, ''), coalesce(old.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(old.checklist)), ''), coalesce(old.location, ''), coalesce(old.assignedTo, ''));
+          INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+          VALUES (new.rowid, new.title, coalesce(new.description, ''), coalesce(new.tags, ''), coalesce(new.contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(new.checklist)), ''), coalesce(new.location, ''), coalesce(new.assignedTo, ''));
         END",
         [],
     )
     .map_err(|e| e.to_string())?;
-    conn.execute(
+        conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS projects_ai AFTER INSERT ON projects BEGIN
+          INSERT INTO projects_fts (rowid, title, supportNotes, tagIds, areaTitle)
+          VALUES (new.rowid, new.title, coalesce(new.supportNotes, ''), coalesce(new.tagIds, ''), coalesce(new.areaTitle, ''));
+        END",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+        conn.execute(
         "CREATE TRIGGER IF NOT EXISTS projects_ad AFTER DELETE ON projects BEGIN
           INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
           VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
@@ -1163,7 +1231,7 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<(), String> {
         [],
     )
     .map_err(|e| e.to_string())?;
-    conn.execute(
+        conn.execute(
         "CREATE TRIGGER IF NOT EXISTS projects_au AFTER UPDATE ON projects BEGIN
           INSERT INTO projects_fts (projects_fts, rowid, title, supportNotes, tagIds, areaTitle)
           VALUES ('delete', old.rowid, old.title, coalesce(old.supportNotes, ''), coalesce(old.tagIds, ''), coalesce(old.areaTitle, ''));
@@ -1174,12 +1242,18 @@ fn ensure_fts_triggers(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)",
-        [],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?1)",
+            params![FTS_TRIGGER_MIGRATION_VERSION],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        Ok(true)
+    })();
+    if result.is_err() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    result
 }
 
 fn sqlite_has_any_data(conn: &Connection) -> Result<bool, String> {
@@ -1234,8 +1308,8 @@ fn ensure_fts_populated(conn: &Connection, force_rebuild: bool) -> Result<(), St
         conn.execute("INSERT INTO tasks_fts(tasks_fts) VALUES('delete-all')", [])
             .map_err(|e| e.to_string())?;
         conn.execute(
-            "INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
-             SELECT rowid, title, coalesce(description, ''), coalesce(tags, ''), coalesce(contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(tasks.checklist)), ''), coalesce(location, '') FROM tasks",
+            "INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+             SELECT rowid, title, coalesce(description, ''), coalesce(tags, ''), coalesce(contexts, ''), coalesce((SELECT group_concat(json_extract(value, '$.title'), ' ') FROM json_each(tasks.checklist)), ''), coalesce(location, ''), coalesce(assignedTo, '') FROM tasks",
             [],
         )
         .map_err(|e| e.to_string())?;
@@ -5416,7 +5490,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_tasks_fts_schema_recreates_legacy_index_with_checklist() {
+    fn ensure_tasks_fts_schema_recreates_index_missing_assigned_to() {
         let conn = Connection::open_in_memory().expect("should open in-memory db");
         conn.execute_batch(
             r#"
@@ -5426,6 +5500,8 @@ mod tests {
               description,
               tags,
               contexts,
+              checklist,
+              location,
               content=''
             );
             "#,
@@ -5445,6 +5521,7 @@ mod tests {
 
         assert!(column_names.iter().any(|name| name == "checklist"));
         assert!(column_names.iter().any(|name| name == "location"));
+        assert!(column_names.iter().any(|name| name == "assignedTo"));
     }
 
     #[test]
@@ -5484,6 +5561,100 @@ mod tests {
             .expect("should search fts");
 
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn sqlite_fts_tracks_assignee_insert_update_and_delete() {
+        let mut conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+
+        let data = serde_json::json!({
+            "tasks": [{
+                "id": "task-assignee",
+                "title": "Prepare handoff",
+                "status": "next",
+                "assignedTo": "Alice Example",
+                "tags": [],
+                "contexts": [],
+                "checklist": [],
+                "createdAt": "2026-08-09T00:00:00.000Z",
+                "updatedAt": "2026-08-09T00:00:00.000Z"
+            }],
+            "projects": [],
+            "areas": [],
+            "sections": [],
+            "settings": {}
+        });
+
+        migrate_json_to_sqlite(&mut conn, &data).expect("should write data");
+
+        let search_count = |query: &str| -> i64 {
+            conn.query_row(
+                "SELECT COUNT(*) FROM tasks_fts WHERE tasks_fts MATCH ?1",
+                params![query],
+                |row| row.get(0),
+            )
+            .expect("should search fts")
+        };
+
+        assert_eq!(search_count("alice*"), 1);
+
+        conn.execute(
+            "UPDATE tasks SET assignedTo = ?1 WHERE id = ?2",
+            params!["Bob Example", "task-assignee"],
+        )
+        .expect("should update assignee");
+        assert_eq!(search_count("alice*"), 0);
+        assert_eq!(search_count("bob*"), 1);
+
+        conn.execute("DELETE FROM tasks WHERE id = ?1", params!["task-assignee"])
+            .expect("should delete task");
+        assert_eq!(search_count("bob*"), 0);
+    }
+
+    #[test]
+    fn sqlite_fts_trigger_migration_rebuilds_stale_assignee_content_once() {
+        let conn = Connection::open_in_memory().expect("should open in-memory db");
+        conn.execute_batch(SQLITE_SCHEMA)
+            .expect("should create schema");
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER tasks_ai;
+            DROP TRIGGER tasks_ad;
+            DROP TRIGGER tasks_au;
+            INSERT INTO tasks (id, title, status, assignedTo, createdAt, updatedAt)
+            VALUES ('task-stale-assignee', 'Prepare handoff', 'next', 'Alice Example',
+                    '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+            INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location)
+            SELECT rowid, title, '', '', '', '', '' FROM tasks WHERE id = 'task-stale-assignee';
+            INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);
+            "#,
+        )
+        .expect("should create stale pre-migration index content");
+
+        let before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tasks_fts WHERE tasks_fts MATCH 'alice*'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("should search stale index");
+        assert_eq!(before, 0);
+
+        let triggers_changed = ensure_fts_triggers(&conn).expect("should migrate FTS triggers");
+        assert!(triggers_changed);
+        ensure_fts_populated(&conn, triggers_changed).expect("should rebuild FTS content");
+
+        let after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tasks_fts WHERE tasks_fts MATCH 'alice*'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("should search rebuilt index");
+        assert_eq!(after, 1);
+        assert!(!ensure_fts_triggers(&conn).expect("migration should be idempotent"));
     }
 
     #[test]

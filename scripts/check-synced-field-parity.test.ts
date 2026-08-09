@@ -9,10 +9,12 @@ import { spawnSync } from 'child_process';
 // assert on exit code + output instead.
 const REPO_ROOT = join(import.meta.dir, '..');
 const SCHEMA_PATH = join(REPO_ROOT, 'packages/core/src/cloudkit-production-schema.json');
+const DESKTOP_RUST_STORAGE_PATH = join(REPO_ROOT, 'apps/desktop/src-tauri/src/storage.rs');
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts/check-synced-field-parity.ts');
 const BUN_BIN = Bun.which('bun') || process.execPath;
 
 const originalSchema = readFileSync(SCHEMA_PATH, 'utf8');
+const originalDesktopRustStorage = readFileSync(DESKTOP_RUST_STORAGE_PATH, 'utf8');
 type ProductionRecord = { deployed: string[]; pendingProduction: string[] };
 type ProductionSchema = { records: Record<string, ProductionRecord> };
 
@@ -20,6 +22,7 @@ type ProductionSchema = { records: Record<string, ProductionRecord> };
 // before its own try/finally runs.
 afterEach(() => {
     writeFileSync(SCHEMA_PATH, originalSchema);
+    writeFileSync(DESKTOP_RUST_STORAGE_PATH, originalDesktopRustStorage);
 });
 
 const runCheck = (args: string[] = []) => (
@@ -32,6 +35,15 @@ const runCheckWithSchema = (schema: unknown, args: string[] = []) => {
         return runCheck(args);
     } finally {
         writeFileSync(SCHEMA_PATH, originalSchema);
+    }
+};
+
+const runCheckWithDesktopRustStorage = (source: string) => {
+    writeFileSync(DESKTOP_RUST_STORAGE_PATH, source);
+    try {
+        return runCheck();
+    } finally {
+        writeFileSync(DESKTOP_RUST_STORAGE_PATH, originalDesktopRustStorage);
     }
 };
 
@@ -106,5 +118,34 @@ describe('CloudKit production schema gate', () => {
         markAllDeployed(schema);
         const result = runCheckWithSchema(schema, ['--release-gate']);
         expect(result.status).toBe(0);
+    });
+});
+
+describe('desktop Rust FTS parity', () => {
+    test('fails when a task FTS schema omits a core column', () => {
+        const source = originalDesktopRustStorage.replace(
+            "  assignedTo,\n  content=''",
+            "  content=''",
+        );
+        expect(source).not.toBe(originalDesktopRustStorage);
+
+        const result = runCheckWithDesktopRustStorage(source);
+
+        expect(result.status).toBe(1);
+        expect(result.stdout + result.stderr).toContain('desktop Rust tasks_fts schema');
+        expect(result.stdout + result.stderr).toContain('assignedTo');
+    });
+
+    test('fails when a task FTS trigger omits a core value mapping', () => {
+        const source = originalDesktopRustStorage.replace(
+            "coalesce(new.location, '')",
+            "''",
+        );
+        expect(source).not.toBe(originalDesktopRustStorage);
+
+        const result = runCheckWithDesktopRustStorage(source);
+
+        expect(result.status).toBe(1);
+        expect(result.stdout + result.stderr).toContain('desktop Rust tasks_ai trigger');
     });
 });
