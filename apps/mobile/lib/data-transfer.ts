@@ -7,6 +7,7 @@ import {
     addBreadcrumb,
     assertBackupSourceFileSize,
     assertImportSourceFileSize,
+    BackupSourceFileError,
     countActiveRecords,
     createBackupFileName,
     flushPendingSave,
@@ -372,7 +373,13 @@ const resolveDocumentSize = async (document: TransferDocument, kind: 'backup' | 
     } catch {
         // The safe fallback for an unreadable provider is to stop before a bulk read.
     }
-    throw new Error(`Mindwtr could not verify the selected ${kind} file size. Copy it locally and try again.`);
+    if (kind === 'backup') {
+        throw new BackupSourceFileError(
+            'backup-source-size-unknown',
+            'Mindwtr could not verify the selected backup file size. Copy it locally and try again.',
+        );
+    }
+    throw new Error('Mindwtr could not verify the selected import file size. Copy it locally and try again.');
 };
 
 const inspectImportDocument = async <S extends ImportPickerSourceId>(

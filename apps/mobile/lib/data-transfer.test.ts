@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_IMPORT_SOURCE_LIMITS, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, getBackupSourceFileDiagnostic, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
 import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
 
 const emptyData: AppData = {
@@ -269,6 +269,26 @@ describe('mobile data transfer', () => {
     })).rejects.toThrow('could not verify the selected backup file size');
 
     expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an unknown copied-backup size as a structured diagnostic', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true });
+
+    let failure: unknown;
+    try {
+      await inspectBackupDocument({
+        fileName: 'unknown.json',
+        size: null,
+        uri: 'file://cache/unknown.json',
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(getBackupSourceFileDiagnostic(failure)).toMatchObject({
+      code: 'backup-source-size-unknown',
+      severity: 'error',
+    });
   });
 
   it('stats a size-less cached import and rejects it before any bulk read', async () => {

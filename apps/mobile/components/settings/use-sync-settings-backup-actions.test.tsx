@@ -229,4 +229,39 @@ describe('useSyncSettingsBackupActions', () => {
             5200,
         );
     });
+
+    it('uses the active locale for an unknown backup size', async () => {
+        function LocalizedHarness() {
+            latest = useSyncSettingsBackupActions({
+                refreshRecoverySnapshots: vi.fn(),
+                settings: {},
+                setBackupAction: vi.fn(),
+                showSettingsErrorToast,
+                showSettingsWarning,
+                showToast,
+                t: (key: string) => key,
+                tr: (key: string) => key === 'settings.backupDiagnostics.unknownSize'
+                    ? 'Impossible de vérifier la taille de la sauvegarde.'
+                    : key,
+                updateSettings: vi.fn().mockResolvedValue(undefined),
+            });
+            return null;
+        }
+        vi.mocked(dataTransfer.pickBackupDocument).mockResolvedValue({ uri: 'file://backup.json', fileName: 'backup.json' });
+        vi.mocked(dataTransfer.inspectBackupDocument).mockRejectedValue(new BackupSourceFileError(
+            'backup-source-size-unknown',
+            'raw English error',
+        ));
+
+        await act(async () => {
+            create(<LocalizedHarness />);
+        });
+        await latest?.handleRestoreBackup();
+
+        expect(showSettingsErrorToast).toHaveBeenCalledWith(
+            'settings.backupMobile.restoreFailed',
+            'Impossible de vérifier la taille de la sauvegarde.',
+            5200,
+        );
+    });
 });
