@@ -247,8 +247,16 @@ const resolveStatus = (
 // datetime with no explicit offset keeps its literal wall-clock digits instead of shifting
 // through UTC. Used for startTime/dueDate/reviewAt only — NOT for entity timestamps, which
 // must be a real instant (see normalizeEntityTimestamp below).
+// SQL exports (the main source feeding this importer) write timestamps like
+// "2026-02-21 22:44:00.6390000 +00:00": fractional seconds beyond milliseconds and a
+// space before the offset, neither of which safeParseDate accepts. Normalize both away
+// here rather than loosening the app-wide parser.
+const normalizeSqlTimestampShape = (value: string): string => value
+    .replace(/(\.\d{3})\d+/u, '$1')
+    .replace(/ (Z|[+-]\d{2}:?\d{2})$/iu, '$1');
+
 const parseCsvDateValue = (value: string): string | undefined => {
-    const trimmed = value.trim();
+    const trimmed = normalizeSqlTimestampShape(value.trim());
     if (!trimmed) return undefined;
     const dateOnlyMatch = /^(\d{4}-\d{2}-\d{2})$/u.exec(trimmed);
     if (dateOnlyMatch) return dateOnlyMatch[1];
@@ -265,7 +273,15 @@ const parseCsvDateValue = (value: string): string | undefined => {
 // storage reads back as UTC midnight in some readers (sync.ts's `new Date(...)`) and local
 // midnight in others (safeParseDate) — one string, two different instants. Normalizing through
 // safeParseDate + toISOString here, once, means every reader agrees forever after.
-const normalizeEntityTimestamp = (value: string): string | undefined => safeParseDate(value)?.toISOString();
+const normalizeEntityTimestamp = (value: string): string | undefined =>
+    safeParseDate(normalizeSqlTimestampShape(value.trim()))?.toISOString();
+
+// SQL exports render missing values as the literal string NULL; treating those cells as
+// empty keeps them from becoming task titles, tags, or contexts named "NULL".
+const readCell = (row: string[], headerIndex: Map<string, number>, key: string): string => {
+    const value = getCell(row, headerIndex, key);
+    return /^null$/iu.test(value) ? '' : value;
+};
 
 const parseDateCell = (raw: string, counters: MindwtrCsvWarningCounters): string | undefined => {
     const value = parseCsvDateValue(raw);
@@ -308,16 +324,16 @@ const parseMindwtrCsvRows = (
 
     for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
         const row = rows[rowIndex] || [];
-        const title = getCell(row, headerIndex, 'TITLE').trim();
+        const title = readCell(row, headerIndex, 'TITLE').trim();
         if (!title) {
             if (row.some((cell) => String(cell || '').trim().length > 0)) counters.emptyTitleRows += 1;
             continue;
         }
 
-        const projectName = getCell(row, headerIndex, 'PROJECT').trim();
-        const sectionName = getCell(row, headerIndex, 'SECTION').trim();
-        const areaName = getCell(row, headerIndex, 'AREA').trim();
-        if (getCell(row, headerIndex, 'RECURRENCE')) counters.recurrenceColumnsIgnored += 1;
+        const projectName = readCell(row, headerIndex, 'PROJECT').trim();
+        const sectionName = readCell(row, headerIndex, 'SECTION').trim();
+        const areaName = readCell(row, headerIndex, 'AREA').trim();
+        if (readCell(row, headerIndex, 'RECURRENCE')) counters.recurrenceColumnsIgnored += 1;
 
         const projectSourceKey = projectName ? normalizeSourceKey(projectName) : undefined;
         const areaSourceKey = areaName ? normalizeSourceKey(areaName) : undefined;
@@ -352,32 +368,32 @@ const parseMindwtrCsvRows = (
             });
         }
 
-        const completedAt = parseTimestampCell(getCell(row, headerIndex, 'COMPLETED AT'), counters);
-        const status = resolveStatus(getCell(row, headerIndex, 'STATUS'), Boolean(projectSourceKey), Boolean(completedAt), counters);
-        const idColumn = getCell(row, headerIndex, 'ID').trim();
+        const completedAt = parseTimestampCell(readCell(row, headerIndex, 'COMPLETED AT'), counters);
+        const status = resolveStatus(readCell(row, headerIndex, 'STATUS'), Boolean(projectSourceKey), Boolean(completedAt), counters);
+        const idColumn = readCell(row, headerIndex, 'ID').trim();
 
         tasks.push({
             areaSourceKey,
-            assignedTo: getCell(row, headerIndex, 'ASSIGNED TO').trim() || undefined,
-            checklist: parseChecklist(getCell(row, headerIndex, 'CHECKLIST')),
+            assignedTo: readCell(row, headerIndex, 'ASSIGNED TO').trim() || undefined,
+            checklist: parseChecklist(readCell(row, headerIndex, 'CHECKLIST')),
             completedAt,
-            contexts: parseContexts(getCell(row, headerIndex, 'CONTEXTS')),
-            createdAt: parseTimestampCell(getCell(row, headerIndex, 'CREATED AT'), counters),
-            description: getCell(row, headerIndex, 'DESCRIPTION').trim() || undefined,
-            dueDate: parseDateCell(getCell(row, headerIndex, 'DUE DATE'), counters),
-            energyLevel: parseEnergy(getCell(row, headerIndex, 'ENERGY')),
-            location: getCell(row, headerIndex, 'LOCATION').trim() || undefined,
+            contexts: parseContexts(readCell(row, headerIndex, 'CONTEXTS')),
+            createdAt: parseTimestampCell(readCell(row, headerIndex, 'CREATED AT'), counters),
+            description: readCell(row, headerIndex, 'DESCRIPTION').trim() || undefined,
+            dueDate: parseDateCell(readCell(row, headerIndex, 'DUE DATE'), counters),
+            energyLevel: parseEnergy(readCell(row, headerIndex, 'ENERGY')),
+            location: readCell(row, headerIndex, 'LOCATION').trim() || undefined,
             // Falls back to row index like TickTick's own ORDER column handling; ties after
             // sorting keep CSV row order because Array#sort is a stable sort.
-            order: toNumber(getCell(row, headerIndex, 'ORDER'), rowIndex),
-            priority: parsePriority(getCell(row, headerIndex, 'PRIORITY')),
+            order: toNumber(readCell(row, headerIndex, 'ORDER'), rowIndex),
+            priority: parsePriority(readCell(row, headerIndex, 'PRIORITY')),
             projectSourceKey,
-            reviewAt: parseDateCell(getCell(row, headerIndex, 'REVIEW DATE'), counters),
+            reviewAt: parseDateCell(readCell(row, headerIndex, 'REVIEW DATE'), counters),
             sectionSourceKey,
             sourceId: idColumn || `${sourcePrefix}row-${rowIndex + 1}`,
-            startTime: parseDateCell(getCell(row, headerIndex, 'START DATE'), counters),
+            startTime: parseDateCell(readCell(row, headerIndex, 'START DATE'), counters),
             status,
-            tags: parseTags(getCell(row, headerIndex, 'TAGS')),
+            tags: parseTags(readCell(row, headerIndex, 'TAGS')),
             title,
         });
     }

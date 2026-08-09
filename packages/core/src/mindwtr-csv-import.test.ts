@@ -247,6 +247,56 @@ describe('mindwtr csv import', () => {
         expect(task?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
+    it('accepts SQL-shaped timestamps: long fractional seconds and a space before the offset (#1011)', () => {
+        const csv = buildCsv(
+            ['Title', 'Due Date', 'Completed At', 'Status'],
+            [['SQL task', '2026-02-21 22:44:00.6390000 +00:00', '2026-02-21 22:44:00.6390000 +00:00', 'done']],
+        );
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        const [task] = result.parsedData?.tasks ?? [];
+        expect(task?.completedAt).toBe('2026-02-21T22:44:00.639Z');
+        expect(task?.dueDate).toBe('2026-02-21T22:44:00.639Z');
+        expect(result.parsedData?.warnings ?? []).toEqual([]);
+    });
+
+    it('treats literal NULL cells as empty (#1011)', () => {
+        const csv = buildCsv(
+            ['Title', 'Project', 'Contexts', 'Tags', 'Due Date'],
+            [['Real task', 'NULL', 'null', 'NULL', 'NULL'], ['NULL', 'Ops', '', '', '']],
+        );
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(result.parsedData?.tasks).toHaveLength(1);
+        const [task] = result.parsedData?.tasks ?? [];
+        expect(task?.title).toBe('Real task');
+        expect(task?.projectSourceKey).toBeUndefined();
+        expect(task?.contexts).toEqual([]);
+        expect(task?.tags).toEqual([]);
+        expect(task?.dueDate).toBeUndefined();
+        expect(result.parsedData?.warnings.some((w) => w.includes('empty title'))).toBe(true);
+    });
+
+    it('reports skipped rows when re-importing after the tasks were deleted (#1011)', () => {
+        const csv = buildCsv(['Title', 'Project'], [['Task one', 'Ops'], ['Task two', 'Ops']]);
+        const parsedData = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv }).parsedData as ParsedMindwtrCsvImportData;
+
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), parsedData, { now: '2026-08-08T12:00:00.000Z' });
+        const withDeletion = {
+            ...first.data,
+            tasks: first.data.tasks.map((task, index) => (index === 0
+                ? { ...task, deletedAt: '2026-08-09T00:00:00.000Z' }
+                : task)),
+        };
+        const second = applyMindwtrCsvImport(withDeletion, parsedData, { now: '2026-08-09T12:00:00.000Z' });
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.warnings.some((w) => w.includes('1 task was skipped because it was already imported earlier.'))).toBe(true);
+        expect(second.warnings.some((w) => w.includes('deleted here; deletions are kept on re-import'))).toBe(true);
+    });
+
     it('does not duplicate a Section when the same import is applied again (T1)', () => {
         const csv = buildCsv(['Title', 'Project', 'Section'], [['Task one', 'Ops', 'Backlog']]);
         const parsedData = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv }).parsedData as ParsedMindwtrCsvImportData;

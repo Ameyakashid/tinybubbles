@@ -202,6 +202,7 @@ export function applyImport(
     const existingProjectById = new Map(nextData.projects.map((project) => [project.id, project]));
     const existingSectionById = new Map(nextData.sections.map((section) => [section.id, section]));
     const existingTaskIds = new Set(nextData.tasks.map((task) => task.id));
+    const deletedTaskIds = new Set(nextData.tasks.filter((task) => task.deletedAt || task.purgedAt).map((task) => task.id));
 
     const areaIdBySourceKey = new Map<string, string>();
     const projectIdBySourceKey = new Map<string, string>();
@@ -339,9 +340,17 @@ export function applyImport(
         return 0;
     };
 
+    // "0 imported" with no reason reads as a failure to the user re-importing a file whose
+    // rows they deleted (#1011) — count the skips so the result message can say why.
+    let skippedExistingTaskCount = 0;
+    let skippedDeletedTaskCount = 0;
     parsed.tasks.forEach((task) => {
         const taskId = idFor('task', task.sourceKey ?? '');
-        if (existingTaskIds.has(taskId)) return;
+        if (existingTaskIds.has(taskId)) {
+            if (deletedTaskIds.has(taskId)) skippedDeletedTaskCount += 1;
+            else skippedExistingTaskCount += 1;
+            return;
+        }
         const projectId = task.projectSourceKey ? projectIdBySourceKey.get(task.projectSourceKey) : undefined;
         const areaId = !projectId && task.areaSourceKey ? areaIdBySourceKey.get(task.areaSourceKey) : undefined;
         const sectionId = task.sectionSourceKey ? sectionIdBySourceKey.get(task.sectionSourceKey) : undefined;
@@ -394,6 +403,17 @@ export function applyImport(
         importedChecklistItemCount += checklist?.length ?? 0;
         if (!projectId) importedStandaloneTaskCount += 1;
     });
+
+    if (skippedExistingTaskCount > 0) {
+        warnings.push(skippedExistingTaskCount === 1
+            ? '1 task was skipped because it was already imported earlier.'
+            : `${skippedExistingTaskCount} tasks were skipped because they were already imported earlier.`);
+    }
+    if (skippedDeletedTaskCount > 0) {
+        warnings.push(skippedDeletedTaskCount === 1
+            ? '1 task was skipped because it was imported earlier and then deleted here; deletions are kept on re-import.'
+            : `${skippedDeletedTaskCount} tasks were skipped because they were imported earlier and then deleted here; deletions are kept on re-import.`);
+    }
 
     return {
         data: nextData,
