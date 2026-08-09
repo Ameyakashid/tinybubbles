@@ -287,6 +287,9 @@ describe('mindwtr csv import', () => {
         expect(workProject?.id).toBeTruthy();
         expect(homeProject?.id).toBeTruthy();
         expect(workProject?.id).not.toBe(homeProject?.id);
+        expect(workProject?.title).toBe('Planning');
+        expect(homeProject?.title).toBe('Planning');
+        expect(applied.warnings.some((warning) => warning.includes('was renamed'))).toBe(false);
         expect(workSection?.id).toBeTruthy();
         expect(homeSection?.id).toBeTruthy();
         expect(workSection?.id).not.toBe(homeSection?.id);

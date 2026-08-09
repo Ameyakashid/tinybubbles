@@ -191,9 +191,13 @@ export function applyImport(
     const usedAreaNames = new Set(
         nextData.areas.filter((area) => !area.deletedAt).map((area) => area.name.trim().toLowerCase())
     );
-    const usedProjectTitles = new Set(
-        nextData.projects.filter((project) => !project.deletedAt).map((project) => project.title.trim().toLowerCase())
-    );
+    const usedProjectTitlesByAreaId = new Map<string | undefined, Set<string>>();
+    nextData.projects.filter((project) => !project.deletedAt).forEach((project) => {
+        const areaId = project.areaId ?? undefined;
+        const usedTitles = usedProjectTitlesByAreaId.get(areaId) ?? new Set<string>();
+        usedTitles.add(project.title.trim().toLowerCase());
+        usedProjectTitlesByAreaId.set(areaId, usedTitles);
+    });
     const warnings = [...parsed.warnings];
 
     // Includes tombstones deliberately: a deterministic idFor must see prior deletions so a
@@ -255,6 +259,8 @@ export function applyImport(
             return;
         }
         const areaId = project.areaSourceKey ? areaIdBySourceKey.get(project.areaSourceKey) : undefined;
+        const usedProjectTitles = usedProjectTitlesByAreaId.get(areaId) ?? new Set<string>();
+        usedProjectTitlesByAreaId.set(areaId, usedProjectTitles);
         const projectTitle = resolveUniqueName(project.name, usedProjectTitles, opts.fallbacks.project, opts.suffix);
         if (projectTitle !== project.name) {
             warnings.push(`Imported project "${project.name}" was renamed to "${projectTitle}" to avoid a title conflict.`);

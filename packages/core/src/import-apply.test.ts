@@ -46,6 +46,7 @@ describe('applyImport', () => {
             color: '#111827',
             order: 0,
             tagIds: [],
+            areaId: existingArea.id,
             createdAt: '2026-06-01T00:00:00.000Z',
             updatedAt: '2026-06-01T00:00:00.000Z',
         };
