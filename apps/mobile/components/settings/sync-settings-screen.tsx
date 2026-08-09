@@ -434,18 +434,14 @@ function SyncSettingsView({
         handleShareLog,
         toggleDebugLogging,
     } = useSyncSettingsBackupActions({
-        areas,
         tr,
-        projects,
         refreshRecoverySnapshots,
-        sections,
         settings,
         setBackupAction,
         showSettingsErrorToast,
         showSettingsWarning,
         showToast,
         t,
-        tasks,
         updateSettings,
     });
     const {

@@ -5,12 +5,12 @@ import {
     createImportDiagnostic,
     createImportDiagnostics,
     formatImportDiagnostic,
+    getInMemoryAppDataSnapshot,
     summarizeBackupMerge,
     type ImportDiagnostic,
     type ImportDiagnosticSeverity,
 } from '@mindwtr/core';
 import type {
-    Area,
     BackupValidation,
     DgtImportParseResult,
     MindwtrCsvImportParseResult,
@@ -18,11 +18,8 @@ import type {
     ParsedOmniFocusImportData,
     ParsedDgtImportData,
     ParsedMindwtrCsvImportData,
-    Project,
     ParsedTodoistProject,
     ParsedTickTickImportData,
-    Section,
-    Task,
     TickTickImportParseResult,
     TodoistImportParseResult,
 } from '@mindwtr/core';
@@ -56,11 +53,8 @@ import { logSettingsError } from '@/lib/settings-utils';
 type BackupAction = null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
 
 type UseSyncSettingsBackupActionsParams = {
-    areas: Area[];
     tr: (key: string, values?: Record<string, string | number | boolean | null | undefined>) => string;
-    projects: Project[];
     refreshRecoverySnapshots: () => Promise<void>;
-    sections: Section[];
     settings: Record<string, any>;
     setBackupAction: React.Dispatch<React.SetStateAction<BackupAction>>;
     showSettingsErrorToast: (title: string, message: string, durationMs?: number) => void;
@@ -72,23 +66,18 @@ type UseSyncSettingsBackupActionsParams = {
         durationMs?: number;
     }) => void;
     t: (key: string) => string;
-    tasks: Task[];
     updateSettings: (updates: Record<string, any>) => Promise<unknown>;
 };
 
 export function useSyncSettingsBackupActions({
-    areas,
     tr,
-    projects,
     refreshRecoverySnapshots,
-    sections,
     settings,
     setBackupAction,
     showSettingsErrorToast,
     showSettingsWarning,
     showToast,
     t,
-    tasks,
     updateSettings,
 }: UseSyncSettingsBackupActionsParams) {
     const formatImportMessages = useCallback((
@@ -272,14 +261,14 @@ export function useSyncSettingsBackupActions({
     const handleBackup = useCallback(async () => {
         setBackupAction('export');
         try {
-            await exportCurrentDataBackup({ tasks, projects, sections, areas, settings });
+            await exportCurrentDataBackup(getInMemoryAppDataSnapshot());
         } catch (error) {
             logSettingsError(error);
             showSettingsErrorToast(tr('settings.syncMobile.error'), tr('settings.backupMobile.failedToExportBackup'));
         } finally {
             setBackupAction(null);
         }
-    }, [areas, tr, projects, sections, setBackupAction, settings, showSettingsErrorToast, tasks]);
+    }, [tr, setBackupAction, showSettingsErrorToast]);
 
     const confirmRestoreBackup = useCallback(async (validation: BackupValidation) => {
         if (!validation.data) return;

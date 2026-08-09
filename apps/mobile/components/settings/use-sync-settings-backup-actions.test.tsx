@@ -13,6 +13,15 @@ const sharingMocks = vi.hoisted(() => ({
     shareAsync: vi.fn(),
 }));
 
+const coreMocks = vi.hoisted(() => ({
+    getInMemoryAppDataSnapshot: vi.fn(),
+}));
+
+vi.mock('@mindwtr/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@mindwtr/core')>(),
+    getInMemoryAppDataSnapshot: coreMocks.getInMemoryAppDataSnapshot,
+}));
+
 vi.mock('react-native', () => ({
     Alert: { alert: vi.fn() },
 }));
@@ -67,17 +76,13 @@ describe('useSyncSettingsBackupActions', () => {
 
     function Harness() {
         latest = useSyncSettingsBackupActions({
-            areas: [],
-            projects: [],
             refreshRecoverySnapshots: vi.fn(),
-            sections: [],
             settings: {},
             setBackupAction: vi.fn(),
             showSettingsErrorToast,
             showSettingsWarning: vi.fn(),
             showToast,
             t: (key: string) => key,
-            tasks: [],
             tr: (key: string) => key,
             updateSettings: vi.fn().mockResolvedValue(undefined),
         });
@@ -90,6 +95,29 @@ describe('useSyncSettingsBackupActions', () => {
         appLogMocks.ensureLogFilePath.mockResolvedValue('file://logs/mindwtr.log');
         sharingMocks.isAvailableAsync.mockResolvedValue(true);
         sharingMocks.shareAsync.mockResolvedValue(undefined);
+        coreMocks.getInMemoryAppDataSnapshot.mockReturnValue({
+            tasks: [], projects: [], sections: [], areas: [], people: [], settings: {},
+        });
+    });
+
+    it('exports the authoritative in-memory snapshot at press time', async () => {
+        const snapshot = {
+            tasks: [{ id: 'deleted-task', deleted: true, attachments: [{ id: 'deleted-file', deleted: true }] }],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [{ id: 'person-1', name: 'Ada' }],
+            settings: { theme: 'dark' },
+        };
+        coreMocks.getInMemoryAppDataSnapshot.mockReturnValue(snapshot);
+
+        await act(async () => {
+            create(<Harness />);
+        });
+        await latest?.handleBackup();
+
+        expect(coreMocks.getInMemoryAppDataSnapshot).toHaveBeenCalledTimes(1);
+        expect(dataTransfer.exportCurrentDataBackup).toHaveBeenCalledWith(snapshot);
     });
 
     it('shows a warning instead of rejecting when Expo Go sharing fails', async () => {
