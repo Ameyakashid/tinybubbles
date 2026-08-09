@@ -22,9 +22,11 @@ import {
 import FocusScreen from '../app/(drawer)/(tabs)/focus';
 import ArchivedScreen from '../app/(drawer)/archived';
 import TrashScreen from '../app/(drawer)/trash';
+import { ProjectDetailModal } from '../components/projects-screen/ProjectDetailModal';
 import { ProjectRow } from '../components/projects-screen/ProjectRow';
 import { buildProjectListRows } from '../components/projects-screen/project-list-model';
 import { TaskEditModal } from '../components/task-edit-modal';
+import { TaskList } from '../components/task-list';
 
 const LARGE_TASK_COUNT = 5_000;
 const PROJECT_COUNT = 40;
@@ -69,6 +71,8 @@ const PERFORMANCE_BUDGET_MS = {
   saveWhileEditorMounted: 150,
   toggleCompleteWhileEditorMounted: 150,
   renderFocus: 350,
+  renderProjectDetail: 500,
+  renderTaskList: 350,
   renderArchived: 350,
   selectAllArchived: 150,
   renderTrash: 350,
@@ -227,6 +231,7 @@ vi.mock('react-native', async (importOriginal) => {
     ...actual,
     RefreshControl,
     SectionList,
+    useWindowDimensions: () => ({ height: 844, width: 390 }),
   };
 });
 
@@ -315,6 +320,7 @@ vi.mock('../components/task-edit/TaskEditFormTab', () => ({
 // app that re-renders far more than the real one — the same trap the theme-mock
 // note above describes. Keep the memo; do not unwrap it.
 vi.mock('../components/swipeable-task-item', () => ({
+  readTaskRowRenderCount: () => 0,
   SwipeableTaskItem: React.memo((props: Record<string, unknown>) => React.createElement('SwipeableTaskItem', props)),
 }));
 
@@ -322,13 +328,26 @@ vi.mock('../components/pomodoro-panel', () => ({
   PomodoroPanel: (props: Record<string, unknown>) => React.createElement('PomodoroPanel', props),
 }));
 
+// This closed overlay is outside the list render path under measurement.
+vi.mock('../components/task-list/TaskListTagModal', () => ({
+  TaskListTagModal: () => null,
+}));
+
 vi.mock('lucide-react-native', () => {
   const Icon = (props: Record<string, unknown>) => React.createElement('Icon', props);
   return {
     Archive: Icon,
     AlertTriangle: Icon,
+    ArrowDown: Icon,
+    ArrowUp: Icon,
+    ArrowUpDown: Icon,
     BookmarkPlus: Icon,
+    ChevronDown: Icon,
+    ChevronRight: Icon,
+    ClipboardCheck: Icon,
     Copy: Icon,
+    Folder: Icon,
+    GripVertical: Icon,
     MoreHorizontal: Icon,
     SlidersHorizontal: Icon,
     Star: Icon,
@@ -543,6 +562,47 @@ const createLargeStoreData = (count = LARGE_TASK_COUNT): LargeStoreData => {
   };
 };
 
+type ProjectDetailModalProps = React.ComponentProps<typeof ProjectDetailModal>;
+
+const createProjectNotes = (): ProjectDetailModalProps['notes'] => ({
+  commitSelectedProjectNotes: vi.fn(),
+  handleSelectedProjectNotesApplyAction: vi.fn(() => ({ value: '', selection: { start: 0, end: 0 } })),
+  handleSelectedProjectNotesApplyAutocomplete: vi.fn(),
+  handleSelectedProjectNotesChange: vi.fn(),
+  handleSelectedProjectNotesSelectionChange: vi.fn(),
+  handleSelectedProjectNotesUndo: vi.fn(),
+  isSelectedProjectNotesFocused: false,
+  notesExpanded: false,
+  notesFullscreen: false,
+  resetProjectNotesUi: vi.fn(),
+  selectedProjectNotes: '',
+  selectedProjectNotesDirection: 'ltr',
+  selectedProjectNotesInputRef: { current: null },
+  selectedProjectNotesSelection: { start: 0, end: 0 },
+  selectedProjectNotesTextDirectionStyle: { writingDirection: 'ltr', textAlign: 'left' },
+  selectedProjectNotesUndoDepth: 0,
+  setIsSelectedProjectNotesFocused: vi.fn(),
+  setNotesExpanded: vi.fn(),
+  setNotesFullscreen: vi.fn(),
+  setShowNotesPreview: vi.fn(),
+  showNotesPreview: false,
+});
+
+const createProjectAttachments = (): ProjectDetailModalProps['attachments'] => ({
+  addProjectFileAttachment: vi.fn(),
+  confirmAddProjectLink: vi.fn(),
+  downloadAttachment: vi.fn(),
+  imagePreviewAttachment: null,
+  linkInput: '',
+  linkModalVisible: false,
+  openAttachment: vi.fn(),
+  removeProjectAttachment: vi.fn(),
+  resetProjectAttachmentUi: vi.fn(),
+  setImagePreviewAttachment: vi.fn(),
+  setLinkInput: vi.fn(),
+  setLinkModalVisible: vi.fn(),
+});
+
 const resetStore = () => {
   useTaskStore.setState({
     tasks: [],
@@ -713,6 +773,95 @@ describe('large-store mobile interaction performance', () => {
 
     act(() => {
       editorTree?.unmount();
+    });
+  });
+
+  it('keeps the shared TaskList render within the large-store budget', () => {
+    const data = createLargeStoreData();
+    loadLargeStore(data);
+
+    let taskListTree: ReactTestRenderer | null = null;
+    const renderTaskListMs = measureBestSync(
+      () => {
+        act(() => {
+          taskListTree = renderer.create(<TaskList title="Next" statusFilter="next" />);
+        });
+      },
+      () => {
+        act(() => {
+          taskListTree?.unmount();
+          taskListTree = null;
+        });
+      },
+    );
+
+    expectWithinBudget(
+      'Render TaskList',
+      renderTaskListMs,
+      PERFORMANCE_BUDGET_MS.renderTaskList,
+    );
+    expect(taskListTree).not.toBeNull();
+
+    act(() => {
+      taskListTree?.unmount();
+    });
+  });
+
+  it('keeps ProjectDetailModal with 5,000 project tasks within budget', () => {
+    const data = createLargeStoreData();
+    const selectedProject = data.projects[0];
+    const projectTasks = data.tasks.map((entry) => ({
+      ...entry,
+      areaId: selectedProject.areaId,
+      projectId: selectedProject.id,
+      sectionId: undefined,
+    }));
+    loadLargeStore({
+      ...data,
+      targetTask: projectTasks[1234],
+      tasks: projectTasks,
+    });
+
+    const props: ProjectDetailModalProps = {
+      areaName: 'Area 0',
+      attachments: createProjectAttachments(),
+      notes: createProjectNotes(),
+      onClose: vi.fn(),
+      onDuplicateProject: vi.fn(),
+      onOpenAreaPicker: vi.fn(),
+      onOpenQuickAdd: vi.fn(),
+      onOpenTagPicker: vi.fn(),
+      onProjectChange: vi.fn(),
+      onTaskSortByChange: vi.fn(),
+      project: selectedProject,
+      sections: [],
+      taskSortBy: 'default',
+      tasks: projectTasks,
+    };
+    let projectDetailTree: ReactTestRenderer | null = null;
+    const renderProjectDetailMs = measureBestSync(
+      () => {
+        act(() => {
+          projectDetailTree = renderer.create(<ProjectDetailModal {...props} />);
+        });
+      },
+      () => {
+        act(() => {
+          projectDetailTree?.unmount();
+          projectDetailTree = null;
+        });
+      },
+    );
+
+    expectWithinBudget(
+      'Render ProjectDetailModal',
+      renderProjectDetailMs,
+      PERFORMANCE_BUDGET_MS.renderProjectDetail,
+    );
+    expect(projectDetailTree).not.toBeNull();
+
+    act(() => {
+      projectDetailTree?.unmount();
     });
   });
 
