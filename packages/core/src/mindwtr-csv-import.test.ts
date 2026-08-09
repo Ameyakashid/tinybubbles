@@ -742,7 +742,7 @@ describe('mindwtr csv import', () => {
         });
     });
 
-    it('keeps prior tasks unchanged when a repeated CSV ID makes migration ambiguous', () => {
+    it('drops a later repeated CSV ID before legacy migration matching', () => {
         const csv = buildCsv(
             ['Title', 'Area', 'Project', 'ID'],
             [
@@ -776,6 +776,9 @@ describe('mindwtr csv import', () => {
             rev: priorTask?.rev,
         });
         expect(second.warnings).toContain(
+            '1 row had an ID that duplicated an earlier row in this import and was dropped.',
+        );
+        expect(second.warnings).not.toContain(
             '1 repeated CSV ID matched a prior import; existing tasks were kept unchanged.',
         );
     });
@@ -880,10 +883,10 @@ describe('mindwtr csv import', () => {
 
     it('warns when an ID value is duplicated within one import', () => {
         const csv = buildCsv(
-            ['Title', 'Project', 'ID'],
+            ['Title', 'Area', 'Project', 'Section', 'ID'],
             [
-                ['First', 'Ops', 'dup-1'],
-                ['Second', 'Personal', 'dup-1'],
+                ['First', 'Work', 'Ops', 'Backlog', 'dup-1'],
+                ['Second', 'Home', 'Personal', 'Later', 'dup-1'],
             ]
         );
 
@@ -894,7 +897,19 @@ describe('mindwtr csv import', () => {
         );
 
         expect(result.warnings).toContain('1 row had an ID that duplicated an earlier row in this import and was dropped.');
+        expect(result.preview).toMatchObject({
+            areaCount: 1,
+            projectCount: 1,
+            sectionCount: 1,
+            taskCount: 1,
+            projects: [{ areaName: 'Work', name: 'Ops', taskCount: 1 }],
+        });
+        expect(result.parsedData?.tasks.map((task) => task.title)).toEqual(['First']);
         expect(applied.importedTaskCount).toBe(1);
+        expect(applied.data.areas.map((area) => area.name)).toEqual(['Work']);
+        expect(applied.data.projects.map((project) => project.title)).toEqual(['Ops']);
+        expect(applied.data.sections.map((section) => section.title)).toEqual(['Backlog']);
+        expect(applied.warnings.some((warning) => warning.includes('already imported earlier'))).toBe(false);
     });
 
     it('does not warn that distinct tuple-shaped IDs were dropped when both import', () => {

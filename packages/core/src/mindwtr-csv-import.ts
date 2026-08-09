@@ -517,6 +517,40 @@ const mergeParsedData = (target: ParsedMindwtrCsvImportData, source: ParsedMindw
     target.tasks.push(...source.tasks);
 };
 
+const dropDuplicateTasksAndUnusedContainers = (
+    parsedData: ParsedMindwtrCsvImportData,
+    counters: MindwtrCsvWarningCounters,
+): void => {
+    const seenTaskKeys = new Set<string>();
+    parsedData.tasks = parsedData.tasks.filter((task) => {
+        if (seenTaskKeys.has(task.sourceKey)) {
+            counters.duplicateIds += 1;
+            return false;
+        }
+        seenTaskKeys.add(task.sourceKey);
+        return true;
+    });
+
+    const usedSectionKeys = new Set(
+        parsedData.tasks.flatMap((task) => task.sectionSourceKey ? [task.sectionSourceKey] : []),
+    );
+    const usedProjectKeys = new Set(
+        parsedData.tasks.flatMap((task) => task.projectSourceKey ? [task.projectSourceKey] : []),
+    );
+    parsedData.sections = parsedData.sections.filter((section) => (
+        usedSectionKeys.has(section.sourceKey) && usedProjectKeys.has(section.projectSourceKey)
+    ));
+    parsedData.projects = parsedData.projects.filter((project) => usedProjectKeys.has(project.sourceKey));
+
+    const usedAreaKeys = new Set(
+        parsedData.tasks.flatMap((task) => task.areaSourceKey ? [task.areaSourceKey] : []),
+    );
+    parsedData.projects.forEach((project) => {
+        if (project.areaSourceKey) usedAreaKeys.add(project.areaSourceKey);
+    });
+    parsedData.areas = parsedData.areas.filter((area) => usedAreaKeys.has(area.sourceKey));
+};
+
 const bucketKeyForTask = (task: ParsedMindwtrCsvTask): string => (
     task.projectSourceKey ? `project:${task.projectSourceKey}`
         : task.areaSourceKey ? `area:${task.areaSourceKey}`
@@ -593,13 +627,9 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     }
 
     // Preview and apply share this global task identity, so every duplicate warning corresponds
-    // to a row apply will actually drop and delimiter-shaped but distinct IDs cannot false-positive.
-    const seenTaskKeys = new Set<string>();
-    parsedData.tasks.forEach((task) => {
-        const key = task.sourceKey;
-        if (seenTaskKeys.has(key)) counters.duplicateIds += 1;
-        else seenTaskKeys.add(key);
-    });
+    // to a row apply will actually drop. Containers referenced only by a dropped row must not
+    // inflate the preview or create empty Area/Project/Section records during apply.
+    dropDuplicateTasksAndUnusedContainers(parsedData, counters);
 
     // Stable sort: groups each task's manual Order within its own project/area bucket while
     // preserving original row order as the tiebreak (Array#sort is required to be stable).
