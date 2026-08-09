@@ -577,7 +577,10 @@ export function CalendarView() {
 
                                 <div className="space-y-1">
                                     {visibleItems.map((item) => {
-                                        const timeLabel = item.start && (item.kind === 'scheduled' || item.kind === 'completed' || (item.kind === 'event' && !item.event.allDay))
+                                        const isAllDayScheduled = item.kind === 'scheduled' && !hasTimeComponent(item.task.startTime);
+                                        const timeLabel = isAllDayScheduled
+                                            ? t('calendar.allDay')
+                                            : item.start && (item.kind === 'scheduled' || item.kind === 'completed' || (item.kind === 'event' && !item.event.allDay))
                                             ? safeFormatDate(item.start, 'p')
                                             : item.kind === 'event' && item.event.allDay
                                                 ? t('calendar.allDay')

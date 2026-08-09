@@ -379,6 +379,22 @@ describe('CalendarView', () => {
         });
     });
 
+    it('labels a date-only scheduled task All day in the month grid, never a midnight time', async () => {
+        storeMocks.taskStoreState.tasks = [makeTask({
+            id: 'date-only-start',
+            title: 'Sort photos',
+            startTime: '2026-04-04',
+            status: 'next',
+        })];
+
+        renderCalendar();
+        await flushCalendarEffects();
+
+        const chip = screen.getByText('Sort photos').closest('button');
+        expect(chip).toHaveTextContent('All day');
+        expect(chip).not.toHaveTextContent(/12:00/);
+    });
+
     it('opens the day view when month overflow is clicked', async () => {
         storeMocks.taskStoreState.tasks = Array.from({ length: 5 }, (_, index) => makeTask({
             id: `overflow-task-${index}`,

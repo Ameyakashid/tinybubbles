@@ -1680,6 +1680,8 @@ export function CalendarView() {
                   const start = item.task.startTime ? safeParseDate(item.task.startTime) : null;
                   const timeLabel = completed
                     ? (item.start ? safeFormatDate(item.start, 'p') : t('status.done'))
+                    : start && isAllDayScheduledTask(item.task)
+                    ? t('calendar.allDay')
                     : start
                     ? formatTimeRange(start, timeEstimateToMinutes(item.task.timeEstimate))
                     : t('calendar.deadline');
