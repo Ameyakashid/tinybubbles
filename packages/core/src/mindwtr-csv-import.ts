@@ -6,6 +6,7 @@ import { safeParseDate } from './date';
 import { applyImport, type ImportExecutionResult, type ImportParseResult } from './import-apply';
 import {
     appendWarning,
+    assertImportChecklistItemCount,
     basename,
     buildHeaderIndex,
     dedupeStrings,
@@ -275,6 +276,7 @@ const CHECKLIST_ITEM_PATTERN = /^\[([ xX])\]\s*(.*)$/u;
 
 const parseChecklist = (value: string): ChecklistItem[] => {
     if (!value.trim()) return [];
+    assertImportChecklistItemCount(value);
     return value.replace(/\r/gu, '\n').split(/\n|\|/u)
         .map((line) => line.trim())
         .filter(Boolean)

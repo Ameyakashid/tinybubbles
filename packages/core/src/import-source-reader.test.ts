@@ -8,6 +8,7 @@ import {
     buildHeaderIndex,
     dedupeStrings,
     detectDelimiter,
+    DEFAULT_IMPORT_CSV_LIMITS,
     getCell,
     isZipBytes,
     ImportSourceLimitError,
@@ -19,6 +20,7 @@ import {
     sanitizeJsonText,
     toImportBytes,
     type ImportSourceLimits,
+    type ImportCsvLimits,
 } from './import-source-reader';
 
 const TEST_LIMITS: ImportSourceLimits = {
@@ -27,6 +29,12 @@ const TEST_LIMITS: ImportSourceLimits = {
     maxArchiveExpandedBytes: 96,
     maxInputBytes: 256,
     maxTextBytes: 64,
+};
+
+const TEST_CSV_LIMITS: ImportCsvLimits = {
+    maxCellChars: 4,
+    maxColumns: 3,
+    maxRows: 2,
 };
 
 describe('import-source-reader', () => {
@@ -85,6 +93,26 @@ describe('import-source-reader', () => {
             ['a', 'b,c', 'd"e'],
             ['f', 'g', 'h'],
         ]);
+    });
+
+    it('parseCsvRows skips newline-only rows without retaining one array per line', () => {
+        const { rows } = parseCsvRows(`${'\n'.repeat(100_000)}a,b`, ',');
+
+        expect(rows).toEqual([['a', 'b']]);
+    });
+
+    it('parseCsvRows enforces row, column, and cell boundaries while accepting exact limits', () => {
+        expect(parseCsvRows('abcd,x,y\na,b,c', ',', TEST_CSV_LIMITS).rows).toHaveLength(2);
+        expect(() => parseCsvRows('abcd,x,y\na,b,c\nx,y,z', ',', TEST_CSV_LIMITS)).toThrowError(
+            expect.objectContaining({ code: 'csv-too-many-rows' }),
+        );
+        expect(() => parseCsvRows('a,b,c,d', ',', TEST_CSV_LIMITS)).toThrowError(
+            expect.objectContaining({ code: 'csv-too-many-columns' }),
+        );
+        expect(() => parseCsvRows('abcde', ',', TEST_CSV_LIMITS)).toThrowError(
+            expect.objectContaining({ code: 'csv-cell-too-large' }),
+        );
+        expect(DEFAULT_IMPORT_CSV_LIMITS.maxRows).toBeGreaterThanOrEqual(5_000);
     });
 
     it('buildHeaderIndex/getCell resolve columns case-insensitively', () => {
@@ -158,6 +186,18 @@ describe('import-source-reader', () => {
             TEST_LIMITS,
         )).toThrowError(expect.objectContaining({ code: 'text-too-large' }));
         expect(decode).not.toHaveBeenCalled();
+    });
+
+    it('validates selected text even when a smaller byte payload is also present', () => {
+        expect(() => readImportSource(
+            {
+                fileName: 'selected.csv',
+                bytes: strToU8('x'),
+                text: 'x'.repeat(TEST_LIMITS.maxTextBytes + 1),
+            },
+            undefined,
+            TEST_LIMITS,
+        )).toThrowError(expect.objectContaining({ code: 'text-too-large' }));
     });
 
     it('rejects a compact ZIP whose original entry size exceeds the cap', () => {

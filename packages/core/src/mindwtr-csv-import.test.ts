@@ -79,6 +79,18 @@ describe('mindwtr csv import', () => {
         expect(result.parsedData?.tasks).toMatchObject([{ title: 'Semicolon task', projectSourceKey: 'ops' }]);
     });
 
+    it('rejects a checklist that exceeds the safe item limit before allocating items', () => {
+        const checklist = Array.from({ length: 1_001 }, (_, index) => `item ${index}`).join('|');
+
+        const result = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title', 'Checklist'], [['Too many items', checklist]]),
+        });
+
+        expect(result.valid).toBe(false);
+        expect(result.errors[0]).toContain('checklist');
+    });
+
     it('errors when the Title column is missing', () => {
         const csv = buildCsv(['Status', 'Project'], [['next', 'Ops']]);
 

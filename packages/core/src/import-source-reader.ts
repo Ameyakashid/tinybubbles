@@ -11,7 +11,17 @@ export type ImportSourceLimitCode =
     | 'text-too-large'
     | 'archive-entry-too-large'
     | 'archive-expanded-too-large'
-    | 'archive-too-many-entries';
+    | 'archive-too-many-entries'
+    | 'checklist-too-many-items'
+    | 'csv-cell-too-large'
+    | 'csv-too-many-columns'
+    | 'csv-too-many-rows';
+
+export type ImportCsvLimits = {
+    maxCellChars: number;
+    maxColumns: number;
+    maxRows: number;
+};
 
 export type ImportSourceLimits = {
     maxArchiveEntries: number;
@@ -22,6 +32,14 @@ export type ImportSourceLimits = {
 };
 
 const MEBIBYTE = 1024 * 1024;
+
+export const DEFAULT_IMPORT_CSV_LIMITS: Readonly<ImportCsvLimits> = {
+    maxCellChars: MEBIBYTE,
+    maxColumns: 256,
+    maxRows: 100_000,
+};
+
+export const DEFAULT_IMPORT_CHECKLIST_ITEM_LIMIT = 1_000;
 
 export const DEFAULT_IMPORT_SOURCE_LIMITS: Readonly<ImportSourceLimits> = {
     maxArchiveEntries: 128,
@@ -52,6 +70,33 @@ export const assertImportSourceFileSize = (
         'input-too-large',
         `The selected import file is too large. Choose a file no larger than ${formatLimit(limits.maxInputBytes)}.`,
     );
+};
+
+export const assertImportChecklistItemCount = (
+    value: string,
+    maxItems = DEFAULT_IMPORT_CHECKLIST_ITEM_LIMIT,
+): void => {
+    let itemCount = 0;
+    let hasContent = false;
+    const finishItem = (): void => {
+        if (!hasContent) return;
+        itemCount += 1;
+        hasContent = false;
+        if (itemCount > maxItems) {
+            throw new ImportSourceLimitError(
+                'checklist-too-many-items',
+                `A checklist contains too many items. Keep each checklist to ${maxItems} items or fewer.`,
+            );
+        }
+    };
+    for (const character of value) {
+        if (character === '|' || character === '\r' || character === '\n') {
+            finishItem();
+        } else if (!/\s/u.test(character)) {
+            hasContent = true;
+        }
+    }
+    finishItem();
 };
 
 const assertTextSize = (
@@ -103,11 +148,52 @@ export const detectDelimiter = (text: string, fallback = ','): string => {
     return semicolonCount > commaCount ? ';' : ',';
 };
 
-export const parseCsvRows = (text: string, delimiter: string): { hasUnclosedQuote: boolean; rows: string[][] } => {
+export const parseCsvRows = (
+    text: string,
+    delimiter: string,
+    limits: Readonly<ImportCsvLimits> = DEFAULT_IMPORT_CSV_LIMITS,
+): { hasUnclosedQuote: boolean; rows: string[][] } => {
     const rows: string[][] = [];
     let currentRow: string[] = [];
     let currentCell = '';
     let inQuotes = false;
+
+    const appendCharacter = (character: string): void => {
+        if (currentCell.length >= limits.maxCellChars) {
+            throw new ImportSourceLimitError(
+                'csv-cell-too-large',
+                `A CSV cell is too large. Keep each cell to ${limits.maxCellChars} characters or fewer.`,
+            );
+        }
+        currentCell += character;
+    };
+
+    const finishCell = (): void => {
+        if (currentRow.length >= limits.maxColumns) {
+            throw new ImportSourceLimitError(
+                'csv-too-many-columns',
+                `A CSV row contains too many columns. Keep each row to ${limits.maxColumns} columns or fewer.`,
+            );
+        }
+        currentRow.push(currentCell);
+        currentCell = '';
+    };
+
+    const finishRow = (): void => {
+        if (currentCell.length === 0 && currentRow.every((cell) => cell.length === 0)) {
+            currentRow = [];
+            return;
+        }
+        finishCell();
+        if (rows.length >= limits.maxRows) {
+            throw new ImportSourceLimitError(
+                'csv-too-many-rows',
+                `The CSV contains too many rows. Keep exports to ${limits.maxRows} rows or fewer.`,
+            );
+        }
+        rows.push(currentRow);
+        currentRow = [];
+    };
 
     for (let index = 0; index < text.length; index += 1) {
         const char = text[index];
@@ -115,13 +201,13 @@ export const parseCsvRows = (text: string, delimiter: string): { hasUnclosedQuot
         if (inQuotes) {
             if (char === '"') {
                 if (next === '"') {
-                    currentCell += '"';
+                    appendCharacter('"');
                     index += 1;
                 } else {
                     inQuotes = false;
                 }
             } else {
-                currentCell += char;
+                appendCharacter(char);
             }
             continue;
         }
@@ -131,30 +217,24 @@ export const parseCsvRows = (text: string, delimiter: string): { hasUnclosedQuot
             continue;
         }
         if (char === delimiter) {
-            currentRow.push(currentCell);
-            currentCell = '';
+            finishCell();
             continue;
         }
         if (char === '\r' || char === '\n') {
             if (char === '\r' && next === '\n') {
                 index += 1;
             }
-            currentRow.push(currentCell);
-            rows.push(currentRow);
-            currentRow = [];
-            currentCell = '';
+            finishRow();
             continue;
         }
-        currentCell += char;
+        appendCharacter(char);
     }
 
-    currentRow.push(currentCell);
-    if (currentRow.length > 1 || currentRow[0] !== '' || rows.length === 0) {
-        rows.push(currentRow);
-    }
+    finishRow();
+    if (rows.length === 0 && text.length === 0) rows.push(['']);
 
     return {
-        rows: rows.filter((row) => row.some((cell) => cell.length > 0)),
+        rows,
         hasUnclosedQuote: inQuotes,
     };
 };
@@ -288,8 +368,8 @@ export const readImportSource = (
     }
     if (bytes) assertTextSize(bytes.byteLength, limits);
     const text = input.text ?? (bytes ? decodeText(bytes) : '');
-    if (!bytes) {
-        if (text.length > limits.maxTextBytes) assertTextSize(text.length, limits);
+    if (text.length > limits.maxTextBytes) assertTextSize(text.length, limits);
+    if (!bytes || input.text != null) {
         assertTextSize(new TextEncoder().encode(text).byteLength, limits);
     }
     return { kind: 'text', fileName, text };
