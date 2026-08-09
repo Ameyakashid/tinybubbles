@@ -206,7 +206,7 @@ describe('useSyncSettings cloud token validation', () => {
                 params: { version: '2.0.0' },
                 severity: 'warning',
             }],
-            metadata: { taskCount: 0, projectCount: 0 },
+            metadata: { taskCount: 0, projectCount: 0, sectionCount: 0, areaCount: 0 },
         });
 
         const { result } = setup(vi.fn(), requestConfirmation);
