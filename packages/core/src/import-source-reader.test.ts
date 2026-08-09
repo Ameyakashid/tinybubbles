@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
     appendWarning,
+    assertImportChecklistItemCount,
     assertImportSourceFileSize,
     basename,
     buildHeaderIndex,
@@ -39,6 +40,17 @@ const TEST_CSV_LIMITS: ImportCsvLimits = {
 };
 
 describe('import-source-reader', () => {
+    it('counts checklist items without splitting them so archive budgets can precharge allocation', () => {
+        const itemCount = assertImportChecklistItemCount(' first ||\n second \r\n | third ', 3);
+        expect(itemCount).toBe(3);
+
+        const checklistBudget = createImportArchiveBudget({ maxChecklistItems: 3, maxEntities: 10, maxRows: 10 });
+        checklistBudget.consumeChecklistItems(itemCount);
+        expect(() => checklistBudget.consumeChecklistItems(
+            assertImportChecklistItemCount('fourth', 3),
+        )).toThrowError(/across the archive.*3 checklist/iu);
+    });
+
     it('enforces cumulative row, entity, and checklist budgets across compact archive entries', () => {
         const rowBudget = createImportArchiveBudget({ maxChecklistItems: 2, maxEntities: 3, maxRows: 3 });
         expect(parseCsvRows('h\none', ',', TEST_CSV_LIMITS, rowBudget).rows).toHaveLength(2);

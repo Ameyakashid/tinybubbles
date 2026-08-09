@@ -133,7 +133,7 @@ export const assertImportSourceFileSize = (
 export const assertImportChecklistItemCount = (
     value: string,
     maxItems = DEFAULT_IMPORT_CHECKLIST_ITEM_LIMIT,
-): void => {
+): number => {
     let itemCount = 0;
     let hasContent = false;
     const finishItem = (): void => {
@@ -155,6 +155,7 @@ export const assertImportChecklistItemCount = (
         }
     }
     finishItem();
+    return itemCount;
 };
 
 const assertTextSize = (

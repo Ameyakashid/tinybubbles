@@ -277,9 +277,13 @@ const parseEnergy = (value: string): TaskEnergyLevel | undefined => {
 
 const CHECKLIST_ITEM_PATTERN = /^\[([ xX])\]\s*(.*)$/u;
 
-const parseChecklist = (value: string): ChecklistItem[] => {
+const parseChecklist = (value: string, archiveBudget: ImportArchiveBudget): ChecklistItem[] => {
     if (!value.trim()) return [];
-    assertImportChecklistItemCount(value);
+    const itemCount = assertImportChecklistItemCount(value);
+    // Charge the archive-wide allowance while the checklist is still one
+    // string. A rejected archive must not first allocate split strings, UUIDs,
+    // and checklist objects that it is guaranteed to discard.
+    archiveBudget.consumeChecklistItems(itemCount);
     return value.replace(/\r/gu, '\n').split(/\n|\|/u)
         .map((line) => line.trim())
         .filter(Boolean)
@@ -499,7 +503,7 @@ const parseMindwtrCsvRows = (
         tasks.push({
             areaSourceKey,
             assignedTo: readCell(row, headerIndex, 'ASSIGNED TO').trim() || undefined,
-            checklist: parseChecklist(readCell(row, headerIndex, 'CHECKLIST')),
+            checklist: parseChecklist(readCell(row, headerIndex, 'CHECKLIST'), archiveBudget),
             completedAt,
             contexts: parseContexts(readCell(row, headerIndex, 'CONTEXTS')),
             createdAt: parseTimestampCell(readCell(row, headerIndex, 'CREATED AT'), counters),
@@ -634,7 +638,6 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
     const parseOneCsv = (csvText: string, source: MindwtrCsvRowSource): void => {
         const parsed = parseMindwtrCsvRows(csvText, counters, source, archiveBudget);
         archiveBudget.consumeEntities(parsed.areas.length + parsed.projects.length + parsed.sections.length + parsed.tasks.length);
-        archiveBudget.consumeChecklistItems(parsed.tasks.reduce((sum, task) => sum + task.checklist.length, 0));
         mergeParsedData(parsedData, parsed);
     };
 
