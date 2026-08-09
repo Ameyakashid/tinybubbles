@@ -31,6 +31,13 @@ interface OpenAIResponseSchema {
     schema: Record<string, unknown>;
 }
 
+// Nullable via anyOf rather than `type: [X, 'null']` — LM Studio's MLX structured-output
+// engine (outlines) rejects array-form `type` with "'type' must be a string" (#1012),
+// while both it and OpenAI strict mode accept the anyOf spelling.
+const nullable = (schema: Record<string, unknown>): Record<string, unknown> => ({
+    anyOf: [schema, { type: 'null' }],
+});
+
 const CLARIFY_JSON_SCHEMA: OpenAIResponseSchema = {
     name: 'clarify_response',
     schema: {
@@ -51,19 +58,19 @@ const CLARIFY_JSON_SCHEMA: OpenAIResponseSchema = {
                     },
                 },
             },
-            suggestedAction: {
-                // Whole object is nullable (may be absent), but when present it must
-                // carry a non-null title so ClarifySuggestion.title: string stays sound.
-                type: ['object', 'null'],
+            // Whole object is nullable (may be absent), but when present it must
+            // carry a non-null title so ClarifySuggestion.title: string stays sound.
+            suggestedAction: nullable({
+                type: 'object',
                 additionalProperties: false,
                 required: ['title', 'context', 'timeEstimate', 'isProject'],
                 properties: {
                     title: { type: 'string' },
-                    context: { type: ['string', 'null'] },
-                    timeEstimate: { type: ['string', 'null'] },
-                    isProject: { type: ['boolean', 'null'] },
+                    context: nullable({ type: 'string' }),
+                    timeEstimate: nullable({ type: 'string' }),
+                    isProject: nullable({ type: 'boolean' }),
                 },
-            },
+            }),
         },
     },
 };
@@ -111,8 +118,8 @@ const COPILOT_JSON_SCHEMA: OpenAIResponseSchema = {
         additionalProperties: false,
         required: ['context', 'timeEstimate', 'tags'],
         properties: {
-            context: { type: ['string', 'null'] },
-            timeEstimate: { type: ['string', 'null'] },
+            context: nullable({ type: 'string' }),
+            timeEstimate: nullable({ type: 'string' }),
             tags: { type: 'array', items: { type: 'string' } },
         },
     },

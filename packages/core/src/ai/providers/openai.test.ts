@@ -419,6 +419,23 @@ describe('openai structured outputs', () => {
         }
     });
 
+    it('never sends array-form type in any schema — LM Studio outlines rejects it (#1012)', async () => {
+        const cases = [
+            { run: (p: ReturnType<typeof createOpenAIProvider>) => p.clarifyTask({ title: 'x' }), reply: { question: 'q', options: [], suggestedAction: null } },
+            { run: (p: ReturnType<typeof createOpenAIProvider>) => p.breakDownTask({ title: 'x' }), reply: { steps: ['a'] } },
+            { run: (p: ReturnType<typeof createOpenAIProvider>) => p.analyzeReview({ items: [] }), reply: { suggestions: [] } },
+            { run: (p: ReturnType<typeof createOpenAIProvider>) => p.predictMetadata({ title: 'x' }), reply: { context: null, timeEstimate: null, tags: [] } },
+        ];
+        for (const { run, reply } of cases) {
+            const fetchMock = vi.fn(async () => mockContent(reply));
+            globalThis.fetch = fetchMock as unknown as typeof fetch;
+            const provider = createOpenAIProvider({ provider: 'openai', apiKey: 'test-key', model: 'gpt-5.4-mini' });
+            await run(provider);
+            const body = JSON.stringify(readBody(fetchMock).response_format);
+            expect(body).not.toContain('"type":[');
+        }
+    });
+
     it('parses a strict-schema clarify response with a null suggestedAction', async () => {
         const fetchMock = vi.fn(async () =>
             mockContent({ question: 'Next action?', options: [{ label: 'Do', action: 'do' }], suggestedAction: null }));
