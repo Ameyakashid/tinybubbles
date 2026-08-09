@@ -37,10 +37,10 @@ describe('mindwtr csv import', () => {
         expect(result.errors).toEqual([]);
         expect(result.parsedData?.areas).toMatchObject([{ name: 'Work', sourceKey: 'work' }]);
         expect(result.parsedData?.projects).toMatchObject([
-            { name: 'Marketing', sourceKey: 'marketing', areaSourceKey: 'work' },
+            { name: 'Marketing', sourceKey: 'work:marketing', areaSourceKey: 'work' },
         ]);
         expect(result.parsedData?.sections).toMatchObject([
-            { name: 'Launch', projectSourceKey: 'marketing', sourceKey: 'marketing:launch' },
+            { name: 'Launch', projectSourceKey: 'work:marketing', sourceKey: 'work:marketing:launch' },
         ]);
 
         const [task] = result.parsedData?.tasks ?? [];
@@ -48,8 +48,8 @@ describe('mindwtr csv import', () => {
             title: 'Draft launch email',
             description: 'Multi-line\ndescription text',
             status: 'waiting',
-            projectSourceKey: 'marketing',
-            sectionSourceKey: 'marketing:launch',
+            projectSourceKey: 'work:marketing',
+            sectionSourceKey: 'work:marketing:launch',
             contexts: ['@phone', '@home'],
             tags: ['#urgent', '#review'],
             assignedTo: 'Alex',
@@ -218,6 +218,55 @@ describe('mindwtr csv import', () => {
         });
         expect(task.areaId).toBeUndefined();
         expect(task.checklist).toEqual([{ id: expect.any(String), title: 'Draft copy', isCompleted: true }]);
+    });
+
+    it('keeps equal project and section names distinct across areas when parsing and applying', () => {
+        const csv = buildCsv(
+            ['Title', 'Project', 'Section', 'Area', 'ID'],
+            [
+                ['Plan work', 'Planning', 'Backlog', 'Work', 'work-plan'],
+                ['Plan home', 'Planning', 'Backlog', 'Home', 'home-plan'],
+            ]
+        );
+
+        const parsed = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+
+        expect(parsed.preview).toMatchObject({ areaCount: 2, projectCount: 2, sectionCount: 2, taskCount: 2 });
+        expect(parsed.parsedData?.projects).toMatchObject([
+            { name: 'Planning', areaSourceKey: 'work', sourceKey: 'work:planning' },
+            { name: 'Planning', areaSourceKey: 'home', sourceKey: 'home:planning' },
+        ]);
+        expect(parsed.parsedData?.sections).toMatchObject([
+            { name: 'Backlog', projectSourceKey: 'work:planning', sourceKey: 'work:planning:backlog' },
+            { name: 'Backlog', projectSourceKey: 'home:planning', sourceKey: 'home:planning:backlog' },
+        ]);
+
+        const applied = applyMindwtrCsvImport(
+            mockAppData([], [], []),
+            parsed.parsedData as ParsedMindwtrCsvImportData,
+            { now: '2026-08-08T12:00:00.000Z' }
+        );
+        const workArea = applied.data.areas.find((area) => area.name === 'Work');
+        const homeArea = applied.data.areas.find((area) => area.name === 'Home');
+        const workProject = applied.data.projects.find((project) => project.areaId === workArea?.id);
+        const homeProject = applied.data.projects.find((project) => project.areaId === homeArea?.id);
+        const workSection = applied.data.sections.find((section) => section.projectId === workProject?.id);
+        const homeSection = applied.data.sections.find((section) => section.projectId === homeProject?.id);
+
+        expect(workProject?.id).toBeTruthy();
+        expect(homeProject?.id).toBeTruthy();
+        expect(workProject?.id).not.toBe(homeProject?.id);
+        expect(workSection?.id).toBeTruthy();
+        expect(homeSection?.id).toBeTruthy();
+        expect(workSection?.id).not.toBe(homeSection?.id);
+        expect(applied.data.tasks.find((task) => task.title === 'Plan work')).toMatchObject({
+            projectId: workProject?.id,
+            sectionId: workSection?.id,
+        });
+        expect(applied.data.tasks.find((task) => task.title === 'Plan home')).toMatchObject({
+            projectId: homeProject?.id,
+            sectionId: homeSection?.id,
+        });
     });
 
     it('does not collapse rows at the same position across two CSVs in one ZIP (C1)', () => {

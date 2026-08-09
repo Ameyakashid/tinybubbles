@@ -335,8 +335,10 @@ const parseMindwtrCsvRows = (
         const areaName = readCell(row, headerIndex, 'AREA').trim();
         if (readCell(row, headerIndex, 'RECURRENCE')) counters.recurrenceColumnsIgnored += 1;
 
-        const projectSourceKey = projectName ? normalizeSourceKey(projectName) : undefined;
         const areaSourceKey = areaName ? normalizeSourceKey(areaName) : undefined;
+        const projectSourceKey = projectName
+            ? `${areaSourceKey ? `${areaSourceKey}:` : ''}${normalizeSourceKey(projectName)}`
+            : undefined;
         let sectionSourceKey: string | undefined;
         if (sectionName) {
             if (projectSourceKey) {
