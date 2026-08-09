@@ -2427,7 +2427,16 @@ describe('TaskStore', () => {
     });
 
     it('clears project archive metadata from deleted task tombstones during fetch', async () => {
-        const archivedAt = '2026-05-10T00:00:00.000Z';
+        // Dates are relative on purpose. This test needs the tombstone to SURVIVE
+        // fetchData's purge so it can assert the archive metadata was stripped, and
+        // tombstones expire after DEFAULT_TOMBSTONE_RETENTION_DAYS (90). Hardcoded
+        // dates made it a time bomb: it was written 2026-05-13 with deletedAt
+        // 2026-05-11 and started failing on 2026-08-09, exactly 90 days later, when
+        // the tombstone aged out and `_allTasks` came back empty.
+        const dayMs = 24 * 60 * 60 * 1000;
+        const archivedAt = new Date(Date.now() - 3 * dayMs).toISOString();
+        const deletedAt = new Date(Date.now() - 2 * dayMs).toISOString();
+        const createdAt = new Date(Date.now() - 10 * dayMs).toISOString();
         mockStorage.getData = vi.fn().mockResolvedValue({
             tasks: [
                 {
@@ -2436,9 +2445,9 @@ describe('TaskStore', () => {
                     status: 'done',
                     tags: [],
                     contexts: [],
-                    createdAt: '2026-05-01T00:00:00.000Z',
+                    createdAt,
                     updatedAt: archivedAt,
-                    deletedAt: '2026-05-11T00:00:00.000Z',
+                    deletedAt,
                     completedAt: archivedAt,
                     statusBeforeProjectArchive: 'next',
                     completedAtBeforeProjectArchive: null,
