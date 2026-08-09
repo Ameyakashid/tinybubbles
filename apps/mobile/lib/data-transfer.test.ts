@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, type AppData } from '@mindwtr/core';
 import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
 
 const emptyData: AppData = {
@@ -35,6 +35,7 @@ const logMocks = vi.hoisted(() => ({
 
 const fileSystemMocks = vi.hoisted(() => ({
   fileWrites: [] as string[],
+  readAsStringAsync: vi.fn(),
 }));
 
 vi.mock('@mindwtr/core', async () => {
@@ -56,7 +57,7 @@ vi.mock('./file-system', () => ({
   StorageAccessFramework: null,
   documentDirectory: 'file://document/',
   cacheDirectory: 'file://cache/',
-  readAsStringAsync: vi.fn(),
+  readAsStringAsync: fileSystemMocks.readAsStringAsync,
   writeAsStringAsync: vi.fn(),
   EncodingType: {
     Base64: 'base64',
@@ -108,7 +109,7 @@ vi.mock('./app-log', () => ({
   logInfo: logMocks.logInfo,
 }));
 
-import { createMobileRecoverySnapshot, importTodoistData } from './data-transfer';
+import { createMobileRecoverySnapshot, importTodoistData, inspectMindwtrCsvDocument } from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
   name: 'Todoist',
@@ -129,6 +130,7 @@ describe('mobile data transfer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fileSystemMocks.fileWrites = [];
+    fileSystemMocks.readAsStringAsync.mockResolvedValue('');
     storeStateRef.current = {
       lastDataChangeAt: 1,
       fetchData: vi.fn().mockResolvedValue(undefined),
@@ -206,5 +208,15 @@ describe('mobile data transfer', () => {
     await expect(createMobileRecoverySnapshot()).rejects.toThrow('Local data changed');
 
     expect(fileSystemMocks.fileWrites).toHaveLength(0);
+  });
+
+  it('rejects an oversized picked import before reading it into memory', async () => {
+    await expect(inspectMindwtrCsvDocument({
+      fileName: 'large.csv',
+      size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
+      uri: 'content://large.csv',
+    })).rejects.toThrow('Choose a file no larger than 16 MB');
+
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
   });
 });

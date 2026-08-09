@@ -1,14 +1,16 @@
 import { strToU8, zipSync } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
     appendWarning,
+    assertImportSourceFileSize,
     basename,
     buildHeaderIndex,
     dedupeStrings,
     detectDelimiter,
     getCell,
     isZipBytes,
+    ImportSourceLimitError,
     joinDescription,
     normalizeHeaderCell,
     parseCsvRows,
@@ -16,7 +18,16 @@ import {
     sanitizeCsvText,
     sanitizeJsonText,
     toImportBytes,
+    type ImportSourceLimits,
 } from './import-source-reader';
+
+const TEST_LIMITS: ImportSourceLimits = {
+    maxArchiveEntries: 2,
+    maxArchiveEntryBytes: 64,
+    maxArchiveExpandedBytes: 96,
+    maxInputBytes: 256,
+    maxTextBytes: 64,
+};
 
 describe('import-source-reader', () => {
     it('basename strips both slash styles and falls back to the whole value', () => {
@@ -126,5 +137,77 @@ describe('import-source-reader', () => {
         expect(names).toEqual(['a.csv', 'nested/', 'notes.txt']);
         const csvEntry = result.entries.find((entry) => entry.entryName === 'a.csv');
         expect(new TextDecoder().decode(csvEntry?.entryBytes)).toBe('1,2');
+    });
+
+    it('rejects a platform-reported file above the input cap and accepts the exact boundary', () => {
+        expect(() => assertImportSourceFileSize(TEST_LIMITS.maxInputBytes, TEST_LIMITS)).not.toThrow();
+        expect(() => assertImportSourceFileSize(TEST_LIMITS.maxInputBytes + 1, TEST_LIMITS)).toThrowError(
+            ImportSourceLimitError,
+        );
+        expect(() => assertImportSourceFileSize(TEST_LIMITS.maxInputBytes + 1, TEST_LIMITS)).toThrowError(
+            expect.objectContaining({ code: 'input-too-large' }),
+        );
+    });
+
+    it('rejects oversized raw bytes before decoding them', () => {
+        const decode = vi.fn(() => 'decoded');
+
+        expect(() => readImportSource(
+            { fileName: 'large.csv', bytes: new Uint8Array(TEST_LIMITS.maxTextBytes + 1) },
+            decode,
+            TEST_LIMITS,
+        )).toThrowError(expect.objectContaining({ code: 'text-too-large' }));
+        expect(decode).not.toHaveBeenCalled();
+    });
+
+    it('rejects a compact ZIP whose original entry size exceeds the cap', () => {
+        const entryLimit = 512;
+        const archive = zipSync({
+            'large.csv': new Uint8Array(entryLimit + 1).fill(65),
+        }, { level: 9 });
+
+        expect(archive.byteLength).toBeLessThan(entryLimit);
+        expect(() => readImportSource(
+            { fileName: 'large.zip', bytes: archive },
+            undefined,
+            { ...TEST_LIMITS, maxArchiveEntryBytes: entryLimit },
+        )).toThrowError(expect.objectContaining({ code: 'archive-entry-too-large' }));
+    });
+
+    it('caps aggregate expanded ZIP bytes and archive entry count', () => {
+        const aggregateArchive = zipSync({
+            'one.csv': new Uint8Array(49),
+            'two.csv': new Uint8Array(48),
+        });
+        expect(() => readImportSource(
+            { fileName: 'aggregate.zip', bytes: aggregateArchive },
+            undefined,
+            TEST_LIMITS,
+        )).toThrowError(expect.objectContaining({ code: 'archive-expanded-too-large' }));
+
+        const entryCountArchive = zipSync({
+            'one.csv': new Uint8Array(0),
+            'two.csv': new Uint8Array(0),
+            'three.csv': new Uint8Array(0),
+        });
+        expect(() => readImportSource(
+            { fileName: 'many.zip', bytes: entryCountArchive },
+            undefined,
+            { ...TEST_LIMITS, maxInputBytes: 512 },
+        )).toThrowError(expect.objectContaining({ code: 'archive-too-many-entries' }));
+    });
+
+    it('accepts archive entries and aggregate expanded bytes at their exact boundaries', () => {
+        const archive = zipSync({
+            'one.csv': new Uint8Array(32),
+            'two.csv': new Uint8Array(64),
+        });
+        const result = readImportSource(
+            { fileName: 'boundary.zip', bytes: archive },
+            undefined,
+            { ...TEST_LIMITS, maxInputBytes: 512 },
+        );
+
+        expect(result.kind).toBe('archive');
     });
 });

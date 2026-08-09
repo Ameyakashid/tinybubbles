@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, type AppData } from '@mindwtr/core';
 import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
 
 const emptyData: AppData = {
@@ -38,6 +38,13 @@ const syncServiceMocks = vi.hoisted(() => ({
     createDataSnapshot: vi.fn(),
 }));
 
+const nativePickerMocks = vi.hoisted(() => ({
+    open: vi.fn(),
+    readFile: vi.fn(),
+    readTextFile: vi.fn(),
+    stat: vi.fn(),
+}));
+
 vi.mock('@mindwtr/core', async () => {
     const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
     return {
@@ -73,12 +80,27 @@ vi.mock('./sync-service', () => ({
     },
 }));
 
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+    open: nativePickerMocks.open,
+}));
+
+vi.mock('@tauri-apps/plugin-fs', () => ({
+    readFile: nativePickerMocks.readFile,
+    readTextFile: nativePickerMocks.readTextFile,
+    stat: nativePickerMocks.stat,
+}));
+
 vi.mock('./app-log', () => ({
     logError: logMocks.logError,
     logInfo: logMocks.logInfo,
 }));
 
-import { createDesktopRecoverySnapshot, importDesktopTodoistData, mergeDesktopBackup } from './data-transfer';
+import {
+    createDesktopRecoverySnapshot,
+    importDesktopTodoistData,
+    inspectDesktopMindwtrCsvImport,
+    mergeDesktopBackup,
+} from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
     name: 'Todoist',
@@ -105,6 +127,9 @@ describe('desktop data transfer', () => {
         storageMocks.saveData.mockResolvedValue(undefined);
         runtimeRef.isTauri = false;
         syncServiceMocks.createDataSnapshot.mockResolvedValue('data.snapshot.json');
+        nativePickerMocks.open.mockResolvedValue('/tmp/import.csv');
+        nativePickerMocks.stat.mockResolvedValue({ size: 0 });
+        nativePickerMocks.readFile.mockResolvedValue(new Uint8Array());
     });
 
     it('aborts Todoist import when local data changes before the full snapshot write', async () => {
@@ -192,5 +217,18 @@ describe('desktop data transfer', () => {
         syncServiceMocks.createDataSnapshot.mockResolvedValue(null);
 
         await expect(createDesktopRecoverySnapshot()).rejects.toThrow('Could not create a recovery snapshot');
+    });
+
+    it('rejects an oversized native import before reading it into memory', async () => {
+        runtimeRef.isTauri = true;
+        nativePickerMocks.stat.mockResolvedValue({
+            size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
+        });
+
+        await expect(inspectDesktopMindwtrCsvImport()).rejects.toThrow(
+            'Choose a file no larger than 16 MB',
+        );
+
+        expect(nativePickerMocks.readFile).not.toHaveBeenCalled();
     });
 });

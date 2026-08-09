@@ -5,6 +5,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import {
     addBreadcrumb,
+    assertImportSourceFileSize,
     countActiveRecords,
     createBackupFileName,
     flushPendingSave,
@@ -54,6 +55,7 @@ const MAX_LOCAL_SNAPSHOTS = 5;
 export type TransferDocument = {
     fileName: string;
     lastModified?: number | null;
+    size?: number | null;
     uri: string;
 };
 
@@ -183,6 +185,7 @@ const pickDocument = async (type: string | string[]): Promise<TransferDocument |
         uri: asset.uri,
         fileName: asset.name || asset.uri.split('/').pop() || 'import',
         lastModified: asset.lastModified ?? null,
+        size: asset.size ?? null,
     };
 };
 
@@ -354,6 +357,7 @@ const inspectImportDocument = async <S extends ImportPickerSourceId>(
     source: S,
     document: TransferDocument
 ): Promise<ImportSourceParseResultMap[S]> => {
+    assertImportSourceFileSize(document.size);
     const bytes = await readBinaryFile(document.uri);
     return parseImportSource(source, { bytes, fileName: document.fileName });
 };

@@ -6,6 +6,65 @@ import { strFromU8, unzipSync } from 'fflate';
 
 const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 
+export type ImportSourceLimitCode =
+    | 'input-too-large'
+    | 'text-too-large'
+    | 'archive-entry-too-large'
+    | 'archive-expanded-too-large'
+    | 'archive-too-many-entries';
+
+export type ImportSourceLimits = {
+    maxArchiveEntries: number;
+    maxArchiveEntryBytes: number;
+    maxArchiveExpandedBytes: number;
+    maxInputBytes: number;
+    maxTextBytes: number;
+};
+
+const MEBIBYTE = 1024 * 1024;
+
+export const DEFAULT_IMPORT_SOURCE_LIMITS: Readonly<ImportSourceLimits> = {
+    maxArchiveEntries: 128,
+    maxArchiveEntryBytes: 8 * MEBIBYTE,
+    maxArchiveExpandedBytes: 16 * MEBIBYTE,
+    maxInputBytes: 16 * MEBIBYTE,
+    maxTextBytes: 8 * MEBIBYTE,
+};
+
+const formatLimit = (bytes: number): string => `${Math.max(1, Math.floor(bytes / MEBIBYTE))} MB`;
+
+export class ImportSourceLimitError extends Error {
+    readonly code: ImportSourceLimitCode;
+
+    constructor(code: ImportSourceLimitCode, message: string) {
+        super(message);
+        this.name = 'ImportSourceLimitError';
+        this.code = code;
+    }
+}
+
+export const assertImportSourceFileSize = (
+    size: number | null | undefined,
+    limits: Readonly<ImportSourceLimits> = DEFAULT_IMPORT_SOURCE_LIMITS,
+): void => {
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= limits.maxInputBytes) return;
+    throw new ImportSourceLimitError(
+        'input-too-large',
+        `The selected import file is too large. Choose a file no larger than ${formatLimit(limits.maxInputBytes)}.`,
+    );
+};
+
+const assertTextSize = (
+    size: number,
+    limits: Readonly<ImportSourceLimits>,
+): void => {
+    if (size <= limits.maxTextBytes) return;
+    throw new ImportSourceLimitError(
+        'text-too-large',
+        `The selected import data is too large. Choose an export no larger than ${formatLimit(limits.maxTextBytes)}.`,
+    );
+};
+
 export const basename = (value: string): string => {
     const parts = String(value || '').split(/[\\/]/u);
     return parts[parts.length - 1] || value;
@@ -188,14 +247,50 @@ export type ReadImportSourceResult =
 // and generic UTF-8 decode that were duplicated verbatim in all four parsers.
 export const readImportSource = (
     input: ImportSourceInput,
-    decodeText: (bytes: Uint8Array) => string = decodeTextBytes
+    decodeText: (bytes: Uint8Array) => string = decodeTextBytes,
+    limits: Readonly<ImportSourceLimits> = DEFAULT_IMPORT_SOURCE_LIMITS,
 ): ReadImportSourceResult => {
     const fileName = basename(input.fileName);
     const bytes = toImportBytes(input.bytes);
+    assertImportSourceFileSize(bytes?.byteLength, limits);
     if (bytes && isZipBytes(bytes)) {
-        const entries = Object.entries(unzipSync(bytes)).map(([entryName, entryBytes]) => ({ entryName, entryBytes }));
+        let entryCount = 0;
+        let expandedBytes = 0;
+        const unzipped = unzipSync(bytes, {
+            // fflate calls this with central-directory sizes before inflating the entry. Rejecting
+            // here prevents a small compressed payload from allocating an unbounded output buffer.
+            filter: (entry) => {
+                entryCount += 1;
+                if (entryCount > limits.maxArchiveEntries) {
+                    throw new ImportSourceLimitError(
+                        'archive-too-many-entries',
+                        `The selected archive contains too many files. Choose one with no more than ${limits.maxArchiveEntries} entries.`,
+                    );
+                }
+                if (entry.originalSize > limits.maxArchiveEntryBytes) {
+                    throw new ImportSourceLimitError(
+                        'archive-entry-too-large',
+                        `The archive entry “${entry.name}” is too large. Choose an export whose files are no larger than ${formatLimit(limits.maxArchiveEntryBytes)} each.`,
+                    );
+                }
+                expandedBytes += entry.originalSize;
+                if (expandedBytes > limits.maxArchiveExpandedBytes) {
+                    throw new ImportSourceLimitError(
+                        'archive-expanded-too-large',
+                        `The selected archive expands to too much data. Choose an export no larger than ${formatLimit(limits.maxArchiveExpandedBytes)} when unpacked.`,
+                    );
+                }
+                return true;
+            },
+        });
+        const entries = Object.entries(unzipped).map(([entryName, entryBytes]) => ({ entryName, entryBytes }));
         return { kind: 'archive', fileName, entries };
     }
+    if (bytes) assertTextSize(bytes.byteLength, limits);
     const text = input.text ?? (bytes ? decodeText(bytes) : '');
+    if (!bytes) {
+        if (text.length > limits.maxTextBytes) assertTextSize(text.length, limits);
+        assertTextSize(new TextEncoder().encode(text).byteLength, limits);
+    }
     return { kind: 'text', fileName, text };
 };
