@@ -150,6 +150,55 @@ test("RC validation checks the committed FOSS version before platform builds sta
   expect(versionCheckIndex).toBeLessThan(tagCommitCheckIndex);
 });
 
+test("existing RC releases stay immutable while dispatch can retry beta channels", () => {
+  const text = readFileSync(".github/workflows/release-rc.yml", "utf8");
+  const workflow = parse(text);
+  const validate = workflow.jobs.validate;
+  const detectStep = validate.steps.find(
+    (step) => step.name === "Detect existing RC release",
+  );
+
+  expect(validate.outputs.existing_release).toBe(
+    "${{ steps.existing_release.outputs.exists }}",
+  );
+  expect(detectStep).toBeDefined();
+  expect(detectStep.run).toContain('gh release view "$TAG"');
+  expect(detectStep.run).not.toContain('if [ "$EVENT_NAME" != "push" ]');
+
+  for (const jobName of [
+    "linux",
+    "macos",
+    "windows",
+    "android-version-code",
+    "android",
+    "android-foss",
+    "ios-appstore",
+    "macos-appstore",
+    "prerelease",
+  ]) {
+    expect(workflow.jobs[jobName].if).toContain(
+      "needs.validate.outputs.existing_release != 'true'",
+    );
+  }
+
+  const createStep = workflow.jobs.prerelease.steps.find(
+    (step) => step.name === "Create GitHub prerelease",
+  );
+  expect(createStep.run).toContain('gh release create "$TAG"');
+  expect(createStep.run).not.toContain("gh release edit");
+  expect(createStep.run).not.toContain("gh release upload");
+  expect(text).not.toContain("--clobber");
+
+  for (const jobName of ["flathub-beta", "aur-beta", "linux-repos-beta"]) {
+    const condition = workflow.jobs[jobName].if;
+    expect(condition).toContain("needs.prerelease.result == 'success'");
+    expect(condition).toContain(
+      "needs.validate.outputs.existing_release == 'true'",
+    );
+    expect(condition).toContain("github.event_name == 'workflow_dispatch'");
+  }
+});
+
 test("stable and RC releases sign and verify the checksum manifest", () => {
   const stable = parse(readFileSync(".github/workflows/release.yml", "utf8"));
   const rc = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));

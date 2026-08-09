@@ -70,7 +70,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
       base_version: ${{ steps.base.outputs.base_version }}
-      retag_recovery: ${{ steps.retag.outputs.retag_recovery }}
+      existing_release: ${{ steps.existing_release.outputs.exists }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -99,27 +99,18 @@ jobs:
           BASE_VERSION="${VERSION%%-*}"
           echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Detect retag recovery push
-        id: retag
+      - name: Detect existing RC release
+        id: existing_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "push" ]; then
-            echo "retag_recovery=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # A retag after a FAILED attempt must run the full release from the tag
-          # push. Only an already-published release for this tag is immutable:
-          # then the push validates only, and changes require the next RC number.
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
-            echo "retag_recovery=true" >> "$GITHUB_OUTPUT"
-            echo "A GitHub release already exists for $TAG. Skipping publication on this tag push; cut the next RC number to ship changes."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "A GitHub release already exists for $TAG. Its artifacts are immutable, so build and prerelease publication jobs will be skipped."
           else
-            echo "retag_recovery=false" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify app versions use the stable base version
@@ -183,7 +174,7 @@ jobs:
           echo "Verified $TAG points at $HEAD_SHA."
 
   linux:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' }}
     needs: validate
     uses: ./.github/workflows/release-linux.yml
     with:
@@ -191,7 +182,7 @@ jobs:
     secrets: inherit
 
   macos:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' }}
     needs: validate
     uses: ./.github/workflows/release-macos.yml
     with:
@@ -199,7 +190,7 @@ jobs:
     secrets: inherit
 
   windows:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' }}
     needs: validate
     uses: ./.github/workflows/release-windows.yml
     permissions:
@@ -212,7 +203,7 @@ jobs:
     secrets: inherit
 
   android-version-code:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' }}
     needs: validate
     runs-on: ubuntu-latest
     name: Android VersionCode Preflight
@@ -287,7 +278,7 @@ jobs:
             node scripts/ci/android-version-code-policy.js
 
   android:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' }}
     needs: [validate, android-version-code]
     permissions:
       actions: read
@@ -303,7 +294,7 @@ jobs:
     secrets: inherit
 
   android-foss:
-    if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.validate.result == 'success' && needs['android-version-code'].result == 'success' }}
+    if: ${{ always() && needs.validate.outputs.existing_release != 'true' && needs.validate.result == 'success' && needs['android-version-code'].result == 'success' }}
     needs: [validate, android-version-code]
     uses: ./.github/workflows/release-android-foss.yml
     with:
@@ -312,7 +303,7 @@ jobs:
     secrets: inherit
 
   ios-appstore:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_ios_testflight) }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_ios_testflight) }}
     needs: validate
     uses: ./.github/workflows/release-ios-appstore.yml
     with:
@@ -325,7 +316,7 @@ jobs:
     secrets: inherit
 
   macos-appstore:
-    if: ${{ needs.validate.outputs.retag_recovery != 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_macos_testflight) }}
+    if: ${{ needs.validate.outputs.existing_release != 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_macos_testflight) }}
     needs: validate
     uses: ./.github/workflows/release-macos-appstore.yml
     with:
@@ -338,7 +329,7 @@ jobs:
     secrets: inherit
 
   retag-recovery-notice:
-    if: ${{ needs.validate.outputs.retag_recovery == 'true' }}
+    if: ${{ needs.validate.outputs.existing_release == 'true' && github.event_name == 'push' }}
     needs: validate
     runs-on: ubuntu-latest
     name: Retag Recovery Notice
@@ -351,7 +342,7 @@ jobs:
           echo "Dispatch release-rc.yml manually with explicit channel flags when ready."
 
   prerelease:
-    if: ${{ always() && needs.validate.result == 'success' && needs.linux.result == 'success' && needs.macos.result == 'success' && needs.windows.result == 'success' && needs.android.result == 'success' && needs.android-foss.result == 'success' && (needs.ios-appstore.result == 'success' || needs.ios-appstore.result == 'skipped') && (needs.macos-appstore.result == 'success' || needs.macos-appstore.result == 'skipped') }}
+    if: ${{ always() && needs.validate.outputs.existing_release != 'true' && needs.validate.result == 'success' && needs.linux.result == 'success' && needs.macos.result == 'success' && needs.windows.result == 'success' && needs.android.result == 'success' && needs.android-foss.result == 'success' && (needs.ios-appstore.result == 'success' || needs.ios-appstore.result == 'skipped') && (needs.macos-appstore.result == 'success' || needs.macos-appstore.result == 'skipped') }}
     needs: [validate, linux, macos, windows, android, android-foss, ios-appstore, macos-appstore]
     runs-on: ubuntu-latest
     name: Create GitHub Prerelease
@@ -491,21 +482,13 @@ jobs:
           TAG="${{ needs.validate.outputs.tag }}"
           NOTES_FILE="${{ steps.release_notes.outputs.body_path }}"
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" \
-              --draft=false \
-              --prerelease \
-              --notes-file "$NOTES_FILE"
-            gh release upload "$TAG" ./release-assets/* --clobber
-          else
-            gh release create "$TAG" ./release-assets/* \
-              --draft=false \
-              --prerelease \
-              --notes-file "$NOTES_FILE"
-          fi
+          gh release create "$TAG" ./release-assets/* \
+            --draft=false \
+            --prerelease \
+            --notes-file "$NOTES_FILE"
 
   flathub-beta:
-    if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.prerelease.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_flathub_beta) }}
+    if: ${{ always() && needs.validate.result == 'success' && (needs.prerelease.result == 'success' || (needs.validate.outputs.existing_release == 'true' && github.event_name == 'workflow_dispatch')) && (github.event_name != 'workflow_dispatch' || inputs.run_flathub_beta) }}
     needs: [validate, prerelease]
     name: Update Flathub Beta
     uses: ./.github/workflows/update-flathub.yml
@@ -515,7 +498,7 @@ jobs:
     secrets: inherit
 
   aur-beta:
-    if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.prerelease.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_aur_beta) }}
+    if: ${{ always() && needs.validate.result == 'success' && (needs.prerelease.result == 'success' || (needs.validate.outputs.existing_release == 'true' && github.event_name == 'workflow_dispatch')) && (github.event_name != 'workflow_dispatch' || inputs.run_aur_beta) }}
     needs: [validate, prerelease]
     name: Prepare AUR Beta Proposal (mindwtr-bin-beta)
     uses: ./.github/workflows/update-aur-beta.yml
@@ -523,7 +506,7 @@ jobs:
       tag: ${{ needs.validate.outputs.tag }}
 
   linux-repos-beta:
-    if: ${{ always() && needs.validate.outputs.retag_recovery != 'true' && needs.prerelease.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.run_linux_repos_beta) }}
+    if: ${{ always() && needs.validate.result == 'success' && (needs.prerelease.result == 'success' || (needs.validate.outputs.existing_release == 'true' && github.event_name == 'workflow_dispatch')) && (github.event_name != 'workflow_dispatch' || inputs.run_linux_repos_beta) }}
     needs: [validate, prerelease]
     name: Update Linux Beta Repos
     permissions:
