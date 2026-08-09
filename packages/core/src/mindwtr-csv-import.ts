@@ -21,7 +21,8 @@ import {
     sanitizeCsvText,
 } from './import-source-reader';
 import { normalizeTagId } from './store-helpers';
-import type { AppData, ChecklistItem, TaskEnergyLevel, TaskPriority, TaskStatus } from './types';
+import { nextRevision } from './sync-revision';
+import type { AppData, ChecklistItem, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from './types';
 import { generateDeterministicUUID, generateUUID as uuidv4 } from './uuid';
 
 const MINDWTR_CSV_IMPORT_ID_NAMESPACE = 'mindwtr:csv-import:v1';
@@ -646,6 +647,18 @@ export const applyMindwtrCsvImport = (
     const currentProjectById = new Map(currentData.projects.map((project) => [project.id, project]));
     const currentSectionById = new Map(currentData.sections.map((section) => [section.id, section]));
     const currentTaskById = new Map(currentData.tasks.map((task) => [task.id, task]));
+    const currentAreaSourceKeyById = new Map(currentData.areas.map((area) => [
+        area.id,
+        normalizeSourceKey(area.name),
+    ]));
+    const currentProjectTaskScopes = currentData.projects.map((project) => {
+        const areaSourceKey = project.areaId ? currentAreaSourceKeyById.get(project.areaId) : undefined;
+        return {
+            areaSourceKey,
+            colonProjectSourceKey: colonProjectSourceKeyFor(areaSourceKey, project.title),
+            projectSourceKey: normalizeSourceKey(project.title),
+        };
+    });
     const resolvedIds = {
         area: new Map<string, string>(),
         project: new Map<string, string>(),
@@ -731,6 +744,31 @@ export const applyMindwtrCsvImport = (
         );
     });
 
+    const taskSourceIdCounts = new Map<string, number>();
+    parsedData.tasks.forEach((task) => {
+        taskSourceIdCounts.set(task.sourceId, (taskSourceIdCounts.get(task.sourceId) ?? 0) + 1);
+    });
+    const migrationSourceKeys = new Set<string>();
+    const ambiguousMigrationSourceIds = new Set<string>();
+    const pendingTaskMigrations = new Map<string, {
+        areaId?: string;
+        projectId?: string;
+        sectionId?: string;
+    }>();
+    const historicalTaskCandidatesFor = (sourceKeys: Array<string | undefined>): Array<{ id: string; task: Task }> => {
+        const candidatesById = new Map<string, Task>();
+        sourceKeys.forEach((sourceKey) => {
+            if (!sourceKey) return;
+            const id = createMindwtrCsvImportId('task', sourceKey);
+            const historicalTask = currentTaskById.get(id);
+            if (historicalTask) candidatesById.set(id, historicalTask);
+        });
+        return Array.from(candidatesById, ([id, historicalTask]) => ({ id, task: historicalTask }));
+    };
+
+    // Older task IDs embedded their container path. Reuse an owned candidate unchanged; when a
+    // single importer-generated candidate proves that the CSV container was previously collapsed
+    // or moved, preserve the task and repair only its container references after creation.
     tasksForImport.forEach((task) => {
         const scopedId = createMindwtrCsvImportId('task', task.sourceKey);
         if (currentTaskById.has(scopedId)) {
@@ -744,6 +782,9 @@ export const applyMindwtrCsvImport = (
         const expectedAreaId = !expectedProjectId && task.areaSourceKey
             ? resolvedIds.area.get(task.areaSourceKey)
             : undefined;
+        const expectedSectionId = task.sectionSourceKey
+            ? resolvedIds.section.get(task.sectionSourceKey)
+            : undefined;
         const previousScopedSourceKey = project
             ? encodeSourceKeyTuple(
                 ...(project.areaSourceKey ? [project.areaSourceKey] : []),
@@ -751,46 +792,56 @@ export const applyMindwtrCsvImport = (
                 task.sourceId,
             )
             : encodeSourceKeyTuple('none', task.sourceId);
-        const previousScopedId = createMindwtrCsvImportId('task', previousScopedSourceKey);
-        const previousScopedTask = currentTaskById.get(previousScopedId);
-        if (
-            previousScopedSourceKey !== task.sourceKey
-            && previousScopedTask
-            && (previousScopedTask.projectId ?? undefined) === expectedProjectId
-            && (previousScopedTask.areaId ?? undefined) === expectedAreaId
-        ) {
-            resolvedIds.task.set(task.sourceKey, previousScopedId);
-            return;
-        }
         const colonProjectSourceKey = project
             ? colonProjectSourceKeyFor(project.areaSourceKey, project.name)
             : 'none';
         const colonSourceKey = `${colonProjectSourceKey}:${task.sourceId}`;
-        const colonId = createMindwtrCsvImportId('task', colonSourceKey);
-        const colonTask = currentTaskById.get(colonId);
-        if (
-            colonSourceKey !== task.sourceKey
-            && colonTask
-            && (colonTask.projectId ?? undefined) === expectedProjectId
-            && (colonTask.areaId ?? undefined) === expectedAreaId
-        ) {
-            resolvedIds.task.set(task.sourceKey, colonId);
+        const legacySourceKey = legacyTaskSourceKeyByScopedKey.get(task.sourceKey);
+        let historicalCandidates = historicalTaskCandidatesFor(
+            [previousScopedSourceKey, colonSourceKey, legacySourceKey]
+                .filter((sourceKey) => sourceKey !== task.sourceKey),
+        );
+        if (historicalCandidates.length === 0 && currentTaskById.size > 0) {
+            const priorContainerSourceKeys = currentProjectTaskScopes.flatMap((scope) => {
+                return [
+                    encodeSourceKeyTuple(
+                        ...(scope.areaSourceKey ? [scope.areaSourceKey] : []),
+                        scope.projectSourceKey,
+                        task.sourceId,
+                    ),
+                    `${scope.colonProjectSourceKey}:${task.sourceId}`,
+                    `${scope.projectSourceKey}:${task.sourceId}`,
+                ];
+            });
+            historicalCandidates = historicalTaskCandidatesFor(priorContainerSourceKeys);
+        }
+        const ownedCandidate = historicalCandidates.find(({ task: historicalTask }) => (
+            (historicalTask.projectId ?? undefined) === expectedProjectId
+            && (historicalTask.areaId ?? undefined) === expectedAreaId
+        ));
+        if (ownedCandidate) {
+            resolvedIds.task.set(task.sourceKey, ownedCandidate.id);
             return;
         }
-        const legacySourceKey = legacyTaskSourceKeyByScopedKey.get(task.sourceKey);
-        const legacyId = legacySourceKey
-            ? createMindwtrCsvImportId('task', legacySourceKey)
-            : undefined;
-        const legacyTask = legacyId ? currentTaskById.get(legacyId) : undefined;
-        resolvedIds.task.set(
-            task.sourceKey,
-            legacyId
-                && legacyTask
-                && (legacyTask.projectId ?? undefined) === expectedProjectId
-                && (legacyTask.areaId ?? undefined) === expectedAreaId
-                ? legacyId
-                : scopedId,
-        );
+        if (historicalCandidates.length === 0) {
+            resolvedIds.task.set(task.sourceKey, scopedId);
+            return;
+        }
+
+        const [candidate] = historicalCandidates;
+        resolvedIds.task.set(task.sourceKey, candidate.id);
+        if (candidate.task.deletedAt || candidate.task.purgedAt) return;
+        if ((taskSourceIdCounts.get(task.sourceId) ?? 0) > 1 || historicalCandidates.length > 1) {
+            ambiguousMigrationSourceIds.add(task.sourceId);
+            return;
+        }
+
+        migrationSourceKeys.add(task.sourceKey);
+        pendingTaskMigrations.set(candidate.id, {
+            ...(expectedProjectId ? { projectId: expectedProjectId } : {}),
+            ...(expectedSectionId ? { sectionId: expectedSectionId } : {}),
+            ...(expectedAreaId ? { areaId: expectedAreaId } : {}),
+        });
     });
 
     const compatibleIdFor = (
@@ -798,13 +849,16 @@ export const applyMindwtrCsvImport = (
         sourceKey: string,
     ): string => resolvedIds[kind].get(sourceKey) ?? createMindwtrCsvImportId(kind, sourceKey);
 
-    return applyImport(
+    const applied = applyImport(
         currentData,
         {
             areas: parsedData.areas,
             projects: parsedData.projects,
             sections: parsedData.sections,
-            tasks: tasksForImport,
+            tasks: tasksForImport.filter((task) => (
+                !migrationSourceKeys.has(task.sourceKey)
+                && !ambiguousMigrationSourceIds.has(task.sourceId)
+            )),
             warnings: parsedData.warnings,
         },
         {
@@ -814,4 +868,60 @@ export const applyMindwtrCsvImport = (
             suffix: MINDWTR_CSV_IMPORT_SUFFIX,
         }
     );
+
+    const liveProjectIds = new Set(applied.data.projects.filter((project) => !project.deletedAt).map((project) => project.id));
+    const liveSectionById = new Map(applied.data.sections.filter((section) => !section.deletedAt).map((section) => [section.id, section]));
+    const liveAreaIds = new Set(applied.data.areas.filter((area) => !area.deletedAt).map((area) => area.id));
+    const resolvedNow = options.now instanceof Date
+        ? options.now
+        : typeof options.now === 'string' && options.now.trim()
+            ? new Date(options.now)
+            : new Date();
+    const updatedAt = Number.isFinite(resolvedNow.getTime()) ? resolvedNow.toISOString() : new Date().toISOString();
+    let migratedTaskCount = 0;
+    let unavailableMigrationCount = 0;
+    const migratedTasks = applied.data.tasks.map((task) => {
+        const migration = pendingTaskMigrations.get(task.id);
+        if (!migration) return task;
+        if (
+            (migration.projectId && !liveProjectIds.has(migration.projectId))
+            || (migration.areaId && !liveAreaIds.has(migration.areaId))
+        ) {
+            unavailableMigrationCount += 1;
+            return task;
+        }
+        const section = migration.sectionId ? liveSectionById.get(migration.sectionId) : undefined;
+        const sectionId = section && section.projectId === migration.projectId ? section.id : undefined;
+        migratedTaskCount += 1;
+        return {
+            ...task,
+            projectId: migration.projectId,
+            sectionId,
+            areaId: migration.areaId,
+            updatedAt,
+            rev: nextRevision(task.rev),
+            revBy: applied.data.settings.deviceId,
+        };
+    });
+    const warnings = [...applied.warnings];
+    if (migratedTaskCount > 0) {
+        warnings.push(migratedTaskCount === 1
+            ? '1 previously imported task was moved to match its CSV container.'
+            : `${migratedTaskCount} previously imported tasks were moved to match their CSV containers.`);
+    }
+    if (ambiguousMigrationSourceIds.size > 0) {
+        warnings.push(ambiguousMigrationSourceIds.size === 1
+            ? '1 repeated CSV ID matched a prior import; existing tasks were kept unchanged.'
+            : `${ambiguousMigrationSourceIds.size} repeated CSV IDs matched prior imports; existing tasks were kept unchanged.`);
+    }
+    if (unavailableMigrationCount > 0) {
+        warnings.push(unavailableMigrationCount === 1
+            ? '1 previously imported task could not be moved because its CSV container is unavailable.'
+            : `${unavailableMigrationCount} previously imported tasks could not be moved because their CSV containers are unavailable.`);
+    }
+    return {
+        ...applied,
+        data: { ...applied.data, tasks: migratedTasks },
+        warnings,
+    };
 };
