@@ -439,6 +439,7 @@ jobs:
       - name: Validate release assets
         run: |
           set -euo pipefail
+          VERSION="${{ needs.validate.outputs.version }}"
           count="$(find ./release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
           if [ "${count}" -eq 0 ]; then
             echo "No release artifacts were downloaded. Aborting release creation."
@@ -472,8 +473,16 @@ jobs:
             echo "Missing macOS artifact (*.dmg)." >&2
             missing=1
           fi
-          if ! has_match "*.exe"; then
-            echo "Missing Windows artifact (*.exe)." >&2
+          expected_windows_installer="./release-assets/mindwtr_${VERSION}_x64-setup.exe"
+          mapfile -d '' -t windows_installers < <(find ./release-assets -maxdepth 1 -type f -name '*.exe' -print0)
+          if [ "${#windows_installers[@]}" -ne 1 ]; then
+            echo "Expected exactly one Windows installer for ${VERSION}; found ${#windows_installers[@]}." >&2
+            if [ "${#windows_installers[@]}" -gt 0 ]; then
+              printf '  %s\n' "${windows_installers[@]}" >&2
+            fi
+            missing=1
+          elif [ "${windows_installers[0]}" != "$expected_windows_installer" ]; then
+            echo "Expected Windows installer ${expected_windows_installer}; found ${windows_installers[0]}." >&2
             missing=1
           fi
           if ! has_match "*.AppImage" && ! has_match "*.deb" && ! has_match "*.rpm" && ! has_match "*.snap"; then

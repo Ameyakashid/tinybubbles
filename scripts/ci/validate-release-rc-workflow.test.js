@@ -199,6 +199,67 @@ test("existing RC releases stay immutable while dispatch can retry beta channels
   }
 });
 
+test("Windows release signs and publishes exactly the current NSIS installer", () => {
+  const windowsText = readFileSync(
+    ".github/workflows/release-windows.yml",
+    "utf8",
+  );
+  const windows = parse(windowsText);
+  const steps = windows.jobs.standalone.steps;
+  const bundleStep = steps.find((step) => step.name === "Bundle installer");
+  const resolveStep = steps.find(
+    (step) => step.name === "Resolve current NSIS installer",
+  );
+  const stageStep = steps.find(
+    (step) => step.name === "Stage unsigned installer for signing",
+  );
+  const applyStep = steps.find(
+    (step) => step.name === "Apply and verify signed installer",
+  );
+  const collectStep = steps.find(
+    (step) => step.name === "Collect Windows artifacts",
+  );
+
+  expect(bundleStep.run).toContain(
+    'Remove-Item -Recurse -Force "$bundleDir"',
+  );
+  expect(bundleStep.run.indexOf("Remove-Item")).toBeLessThan(
+    bundleStep.run.indexOf("bunx tauri bundle"),
+  );
+  expect(resolveStep).toBeDefined();
+  expect(resolveStep.run).toContain("tauri.conf.json");
+  expect(resolveStep.run).toContain("$tauriConfig.productName");
+  expect(resolveStep.run).toContain(
+    '"${productName}_${baseVersion}_x64-setup.exe"',
+  );
+  expect(resolveStep.run).toContain("$installers.Count -ne 1");
+  expect(resolveStep.run).toContain("$installer.FullName -ne $expectedPath");
+
+  const installerOutput =
+    "${{ steps.current-installer.outputs.installer_path }}";
+  expect(stageStep.run).toContain(installerOutput);
+  expect(applyStep.run).toContain(installerOutput);
+  expect(collectStep.run).toContain(installerOutput);
+  expect(stageStep.run).not.toContain("Select-Object -First 1");
+  expect(collectStep.run).not.toContain(
+    'Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe"',
+  );
+
+  const stable = parse(readFileSync(".github/workflows/release.yml", "utf8"));
+  const validateAssets = stable.jobs.release.steps.find(
+    (step) => step.name === "Validate release assets",
+  );
+  expect(validateAssets.run).toContain(
+    'expected_windows_installer="./release-assets/mindwtr_${VERSION}_x64-setup.exe"',
+  );
+  expect(validateAssets.run).toContain(
+    "${windows_installers[@]}",
+  );
+  expect(validateAssets.run).toContain(
+    '"${#windows_installers[@]}" -ne 1',
+  );
+});
+
 test("stable and RC releases sign and verify the checksum manifest", () => {
   const stable = parse(readFileSync(".github/workflows/release.yml", "utf8"));
   const rc = parse(readFileSync(".github/workflows/release-rc.yml", "utf8"));

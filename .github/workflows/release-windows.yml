@@ -185,21 +185,43 @@ jobs:
         timeout-minutes: 20
         shell: pwsh
         run: |
+          $bundleDir = "apps/desktop/src-tauri/target/release/bundle"
+          Remove-Item -Recurse -Force "$bundleDir" -ErrorAction SilentlyContinue
           cd apps/desktop
           bunx tauri bundle
+
+      - name: Resolve current NSIS installer
+        id: current-installer
+        shell: pwsh
+        run: |
+          $nsisDir = "apps/desktop/src-tauri/target/release/bundle/nsis"
+          $tauriConfig = Get-Content -Raw "apps/desktop/src-tauri/tauri.conf.json" | ConvertFrom-Json
+          $productName = [string]$tauriConfig.productName
+          $baseVersion = [string]$tauriConfig.version
+          $expectedName = "${productName}_${baseVersion}_x64-setup.exe"
+          $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $nsisDir $expectedName))
+          $installers = @(Get-ChildItem -LiteralPath $nsisDir -Filter "*.exe" -File -ErrorAction SilentlyContinue)
+          if ($installers.Count -ne 1) {
+            $found = ($installers | ForEach-Object { $_.Name }) -join ', '
+            throw "Expected exactly one NSIS installer, $expectedName; found $($installers.Count): $found"
+          }
+          $installer = $installers[0]
+          if ($installer.FullName -ne $expectedPath) {
+            throw "Expected current NSIS installer $expectedPath, found $($installer.FullName)"
+          }
+          "installer_path=$expectedPath" >> $env:GITHUB_OUTPUT
+          "installer_name=$($installer.Name)" >> $env:GITHUB_OUTPUT
 
       - name: Stage unsigned installer for signing
         id: stage-unsigned-installer
         if: ${{ steps.stage-unsigned-exe.outcome == 'success' }}
         shell: pwsh
         run: |
-          $nsis = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
-          if (-not $nsis) { throw "NSIS installer not found for signing." }
-          "nsis_name=$($nsis.Name)" >> $env:GITHUB_OUTPUT
+          $nsisPath = "${{ steps.current-installer.outputs.installer_path }}"
           New-Item -ItemType Directory -Force -Path signing-unsigned-installer | Out-Null
           # Stable name so the SignPath artifact configuration never has to
           # track version-suffixed file names.
-          Copy-Item $nsis.FullName "signing-unsigned-installer/mindwtr-setup.exe"
+          Copy-Item -LiteralPath $nsisPath -Destination "signing-unsigned-installer/mindwtr-setup.exe"
 
       - name: Upload unsigned installer
         id: upload-unsigned-installer
@@ -228,8 +250,8 @@ jobs:
         if: ${{ steps.stage-unsigned-installer.outcome == 'success' }}
         shell: pwsh
         run: |
-          $nsisPath = "apps/desktop/src-tauri/target/release/bundle/nsis/${{ steps.stage-unsigned-installer.outputs.nsis_name }}"
-          Copy-Item "signing-signed-installer/mindwtr-setup.exe" $nsisPath -Force
+          $nsisPath = "${{ steps.current-installer.outputs.installer_path }}"
+          Copy-Item -LiteralPath "signing-signed-installer/mindwtr-setup.exe" -Destination $nsisPath -Force
           $policy = "${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}"
 
           # Unpack the installer and check the exe it will drop in Program
@@ -309,10 +331,10 @@ jobs:
             return $target
           }
 
-          Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
-            $target = Resolve-ReleaseAssetName -Name $_.Name
-            Copy-Item $_.FullName "release-artifacts/$target"
-          }
+          $nsisPath = "${{ steps.current-installer.outputs.installer_path }}"
+          $nsisName = Split-Path -Leaf $nsisPath
+          $target = Resolve-ReleaseAssetName -Name $nsisName
+          Copy-Item -LiteralPath $nsisPath -Destination "release-artifacts/$target"
           Get-ChildItem "mindwtr_*_windows_x64_portable.zip" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item $_.FullName "release-artifacts/$($_.Name)"
           }
