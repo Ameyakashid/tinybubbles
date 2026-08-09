@@ -538,6 +538,7 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
     language,
     logPath,
     cancelLabel,
+    translate,
     showSaved,
     requestConfirmation,
     t,

@@ -512,7 +512,7 @@ function SyncSettingsView({
             .then((result) => {
                 if (!result.id) {
                     showToast({
-                        message: 'Getting Started content was not created.',
+                        message: t('onboarding.toastNotCreated'),
                         tone: 'info',
                     });
                     return;
@@ -521,7 +521,7 @@ function SyncSettingsView({
                     router.push({ pathname: '/projects-screen', params: { projectId: result.id } } as never);
                 }
                 showToast({
-                    message: 'Getting Started content is ready in Projects.',
+                    message: t('onboarding.toastReady'),
                     tone: 'success',
                     actionLabel: options?.openProject ? undefined : t('common.open'),
                     onAction: options?.openProject
@@ -534,7 +534,7 @@ function SyncSettingsView({
             .catch((error) => {
                 logSettingsError(error);
                 showToast({
-                    message: 'Failed to add Getting Started content.',
+                    message: t('onboarding.toastFailed'),
                     tone: 'error',
                 });
             })
@@ -547,9 +547,11 @@ function SyncSettingsView({
     const onboardingHandoffCard = onboardingHandoff ? (
         <View style={[styles.settingCard, { backgroundColor: tc.cardBg, marginBottom: 12 }]}>
             <View style={styles.settingRowColumn}>
-                <Text style={[styles.settingLabel, { color: tc.text }]}>Continue setup</Text>
+                <Text style={[styles.settingLabel, { color: tc.text }]}>
+                    {t('settings.gettingStartedContentContinueTitle')}
+                </Text>
                 <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                    When you are done here, you can still add the guided Getting Started project and sample inbox items.
+                    {t('settings.gettingStartedContentContinueDesc')}
                 </Text>
                 <TouchableOpacity
                     accessibilityRole="button"
@@ -573,7 +575,7 @@ function SyncSettingsView({
                             { color: isGettingStartedActionBusy ? tc.secondaryText : tc.onTint },
                         ]}
                     >
-                        {gettingStartedBusy ? t('common.loading') : 'Start fresh'}
+                        {gettingStartedBusy ? t('common.loading') : t('onboarding.startFreshTitle')}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -733,8 +735,8 @@ function SyncSettingsView({
                         </View>
 
                         <SettingsGuideLink
-                            title="Data & Sync setup guide"
-                            description="Setup notes for Dropbox, iCloud, WebDAV, File Sync, and recovery."
+                            title={t('settings.syncSetupGuideTitle')}
+                            description={t('settings.syncSetupGuideDesc')}
                             url={DATA_AND_SYNC_GUIDE_URL}
                             testID="sync-guide-link"
                         />
@@ -863,8 +865,8 @@ function SyncSettingsView({
                 ) : (
                     <>
                         <SettingsGuideLink
-                            title="Import setup guide"
-                            description="Supported Todoist, TickTick, DGT GTD, OmniFocus, Mindwtr CSV, Apple Reminders, and backup import paths."
+                            title={t('settings.importSetupGuideTitle')}
+                            description={t('settings.importSetupGuideDesc')}
                             url={IMPORT_GUIDE_URL}
                             testID="import-guide-link"
                         />

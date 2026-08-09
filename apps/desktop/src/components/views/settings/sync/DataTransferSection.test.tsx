@@ -8,6 +8,9 @@ const baseProps = {
     t: {
         dataTransfer: 'Data Transfer',
         dataTransferDesc: 'Import and export data.',
+        gettingStartedContentAction: 'Localized Getting Started recovery',
+        gettingStartedContentDesc: 'Localized guided setup description.',
+        importSetupGuideTitle: 'Localized import guide',
         exportBackup: 'Export Backup',
         exportBackupDesc: 'Save backup.',
         restoreBackup: 'Restore Backup',
@@ -49,7 +52,7 @@ describe('DataTransferSection', () => {
         const { getByRole } = render(<DataTransferSection {...baseProps} />);
         expandRows(getByRole);
 
-        expect(getByRole('link', { name: /Import guide/ })).toHaveAttribute(
+        expect(getByRole('link', { name: /Localized import guide/ })).toHaveAttribute(
             'href',
             'https://docs.mindwtr.app/import/'
         );
@@ -118,7 +121,7 @@ describe('DataTransferSection', () => {
 
     it('exposes a recovery action for Getting Started content', () => {
         const onAddGettingStartedContent = vi.fn();
-        const { getByRole } = render(
+        const { getByRole, getByText } = render(
             <DataTransferSection
                 {...baseProps}
                 onAddGettingStartedContent={onAddGettingStartedContent}
@@ -126,8 +129,9 @@ describe('DataTransferSection', () => {
         );
         expandRows(getByRole);
 
-        fireEvent.click(getByRole('button', { name: /add getting started content/i }));
+        fireEvent.click(getByRole('button', { name: /localized getting started recovery/i }));
 
         expect(onAddGettingStartedContent).toHaveBeenCalledTimes(1);
+        expect(getByText('Localized guided setup description.')).toBeTruthy();
     });
 });

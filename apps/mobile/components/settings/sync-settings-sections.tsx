@@ -221,8 +221,8 @@ export function SyncBackupSection({
             testID="add-getting-started-content"
           >
             <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: tc.tint }]}>Add Getting Started content</Text>
-              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>Create or restore the guided setup project and sample inbox items.</Text>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.gettingStartedContentAction')}</Text>
+              <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.gettingStartedContentDesc')}</Text>
             </View>
             {isGettingStartedBusy && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>

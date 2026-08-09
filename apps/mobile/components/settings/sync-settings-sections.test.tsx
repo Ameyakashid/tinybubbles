@@ -102,7 +102,8 @@ describe('SyncBackupSection', () => {
       tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
     });
 
-    expect(renderedText(tree)).toContain('Add Getting Started content');
+    expect(renderedText(tree)).toContain('settings.gettingStartedContentAction');
+    expect(renderedText(tree)).toContain('settings.gettingStartedContentDesc');
     act(() => {
       tree.root.findByProps({ testID: 'add-getting-started-content' }).props.onPress();
     });

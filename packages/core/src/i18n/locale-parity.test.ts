@@ -42,6 +42,23 @@ const locales = Object.entries(LOCALES) as Array<[Locale, (typeof LOCALES)[Local
 const fullParityLocales = locales.filter(([, descriptor]) => descriptor.translatedKeyFloor === 'all');
 const countFloorLocales = locales.filter(([, descriptor]) => typeof descriptor.translatedKeyFloor === 'number');
 const nonLatinOverrideLocales = locales.filter(([, descriptor]) => isMixedEnglishChecked(descriptor, englishKeyCount));
+const recoverySettingsKeys = [
+    'onboarding.startFreshTitle',
+    'onboarding.toastNotCreated',
+    'onboarding.toastReady',
+    'onboarding.toastFailed',
+    'settings.gettingStartedContentAction',
+    'settings.gettingStartedContentDesc',
+    'settings.gettingStartedContentConfirmTitle',
+    'settings.gettingStartedContentConfirmDesc',
+    'settings.gettingStartedContentConfirm',
+    'settings.gettingStartedContentContinueTitle',
+    'settings.gettingStartedContentContinueDesc',
+    'settings.syncSetupGuideTitle',
+    'settings.syncSetupGuideDesc',
+    'settings.importSetupGuideTitle',
+    'settings.importSetupGuideDesc',
+] as const;
 
 describe('locale parity', () => {
     it.each(fullParityLocales)('keeps %s in full key parity with English', (lang) => {
@@ -73,6 +90,16 @@ describe('locale parity', () => {
 
     it.each(locales)('keeps desktop search scope hint translated in %s', (lang) => {
         expect(translationsByLocale[lang]['search.scopeHint']).toBeTruthy();
+    });
+
+    it('defines the recovery settings copy in English', () => {
+        const missing = recoverySettingsKeys.filter((key) => !en[key]);
+        expect(missing).toEqual([]);
+    });
+
+    it.each(locales)('keeps recovery settings copy translated in %s', (lang) => {
+        const missing = recoverySettingsKeys.filter((key) => !translationsByLocale[lang][key]);
+        expect(missing).toEqual([]);
     });
 
     it.each(locales)('keeps %s limited to known English keys', (lang) => {

@@ -81,7 +81,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Tiếng Việt',
         nonLatin: false,
-        translatedKeyFloor: 2202,
+        translatedKeyFloor: 2213,
     },
     zh: {
         loadSync: () => require('./locales/zh-Hans') as typeof import('./locales/zh-Hans'),
@@ -111,7 +111,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Español',
         nonLatin: false,
-        translatedKeyFloor: 1363,
+        translatedKeyFloor: 1374,
     },
     hi: {
         loadSync: () => require('./locales/hi') as typeof import('./locales/hi'),
@@ -121,7 +121,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'हिन्दी',
         nonLatin: true,
-        translatedKeyFloor: 1419,
+        translatedKeyFloor: 1430,
     },
     ar: {
         loadSync: () => require('./locales/ar') as typeof import('./locales/ar'),
@@ -131,7 +131,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'العربية',
         nonLatin: true,
-        translatedKeyFloor: 1446,
+        translatedKeyFloor: 1457,
     },
     de: {
         loadSync: () => require('./locales/de') as typeof import('./locales/de'),
@@ -141,7 +141,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Deutsch',
         nonLatin: false,
-        translatedKeyFloor: 1457,
+        translatedKeyFloor: 1468,
     },
     ru: {
         loadSync: () => require('./locales/ru') as typeof import('./locales/ru'),
@@ -151,7 +151,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Русский',
         nonLatin: true,
-        translatedKeyFloor: 1419,
+        translatedKeyFloor: 1430,
     },
     ja: {
         loadSync: () => require('./locales/ja') as typeof import('./locales/ja'),
@@ -161,7 +161,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: '日本語',
         nonLatin: true,
-        translatedKeyFloor: 1419,
+        translatedKeyFloor: 1430,
     },
     fr: {
         loadSync: () => require('./locales/fr') as typeof import('./locales/fr'),
@@ -171,7 +171,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Français',
         nonLatin: false,
-        translatedKeyFloor: 1950,
+        translatedKeyFloor: 1961,
     },
     pt: {
         loadSync: () => require('./locales/pt') as typeof import('./locales/pt'),
@@ -184,7 +184,7 @@ export const LOCALES = {
         // which variant they are choosing. Same reason zh/zh-Hant carry a script tag.
         native: 'Português (Brasil)',
         nonLatin: false,
-        translatedKeyFloor: 1463,
+        translatedKeyFloor: 1474,
     },
     pl: {
         loadSync: () => require('./locales/pl') as typeof import('./locales/pl'),
@@ -194,7 +194,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Polski',
         nonLatin: false,
-        translatedKeyFloor: 1442,
+        translatedKeyFloor: 1453,
     },
     cs: {
         loadSync: () => require('./locales/cs') as typeof import('./locales/cs'),
@@ -204,7 +204,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Čeština',
         nonLatin: false,
-        translatedKeyFloor: 2222,
+        translatedKeyFloor: 2233,
     },
     ko: {
         loadSync: () => require('./locales/ko') as typeof import('./locales/ko'),
@@ -216,7 +216,7 @@ export const LOCALES = {
         nonLatin: true,
         // Rewritten end to end by a native speaker in #934 (64 -> ~100%), replacing a machine
         // translation that rendered brand names as common nouns ('Gemini' as the constellation).
-        translatedKeyFloor: 2224,
+        translatedKeyFloor: 2235,
     },
     it: {
         loadSync: () => require('./locales/it') as typeof import('./locales/it'),
@@ -226,7 +226,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Italiano',
         nonLatin: false,
-        translatedKeyFloor: 1559,
+        translatedKeyFloor: 1570,
     },
     tr: {
         loadSync: () => require('./locales/tr') as typeof import('./locales/tr'),
@@ -236,7 +236,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Türkçe',
         nonLatin: false,
-        translatedKeyFloor: 1465,
+        translatedKeyFloor: 1476,
     },
     nl: {
         loadSync: () => require('./locales/nl') as typeof import('./locales/nl'),
@@ -246,7 +246,7 @@ export const LOCALES = {
         mode: 'overrides',
         native: 'Nederlands',
         nonLatin: false,
-        translatedKeyFloor: 554,
+        translatedKeyFloor: 569,
     },
     fa: {
         loadSync: () => require('./locales/fa') as typeof import('./locales/fa'),

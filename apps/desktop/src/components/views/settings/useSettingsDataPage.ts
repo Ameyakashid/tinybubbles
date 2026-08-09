@@ -20,6 +20,7 @@ type UseSettingsDataPageOptions = {
     language: Language;
     logPath: string;
     cancelLabel: string;
+    translate: (key: string) => string;
     showSaved: () => void;
     requestConfirmation: (options: ConfirmationRequestOptions) => Promise<boolean>;
     t: Pick<
@@ -30,6 +31,9 @@ type UseSettingsDataPageOptions = {
         | 'analyticsHeartbeatKeepEnabled'
         | 'attachmentsCleanupPendingDeletesConfirm'
         | 'attachmentsCleanupPendingDeletesConfirmTitle'
+        | 'gettingStartedContentConfirm'
+        | 'gettingStartedContentConfirmDesc'
+        | 'gettingStartedContentConfirmTitle'
     >;
     /** Import/export lives in useSyncSettings; the Data page just renders it. */
     dataTransferProps: SettingsDataTransferProps;
@@ -44,6 +48,7 @@ export function useSettingsDataPage({
     language,
     logPath,
     cancelLabel,
+    translate,
     showSaved,
     requestConfirmation,
     t,
@@ -177,9 +182,9 @@ export function useSettingsDataPage({
     const onAddGettingStartedContent = useCallback(async () => {
         if (visibleDataCount > 0) {
             const confirmed = await requestConfirmation({
-                title: 'Add Getting Started content?',
-                description: 'This adds a guided Getting Started project and sample inbox items to your current data. Existing Getting Started content will not be duplicated.',
-                confirmLabel: 'Add content',
+                title: t.gettingStartedContentConfirmTitle,
+                description: t.gettingStartedContentConfirmDesc,
+                confirmLabel: t.gettingStartedContentConfirm,
                 cancelLabel,
             });
             if (!confirmed) return;
@@ -189,15 +194,26 @@ export function useSettingsDataPage({
             const result = await seedGettingStarted({ language });
             if (result.id) {
                 useUiStore.getState().setProjectView({ selectedProjectId: result.id });
-                showToast('Getting Started content is ready in Projects.', 'success');
+                showToast(translate('onboarding.toastReady'), 'success');
                 return;
             }
-            showToast('Getting Started content was not created.', 'info');
+            showToast(translate('onboarding.toastNotCreated'), 'info');
         } catch (error) {
-            showToast('Failed to add Getting Started content.', 'error');
+            showToast(translate('onboarding.toastFailed'), 'error');
             reportError('Failed to add Getting Started content', error);
         }
-    }, [cancelLabel, language, requestConfirmation, seedGettingStarted, showToast, visibleDataCount]);
+    }, [
+        cancelLabel,
+        language,
+        requestConfirmation,
+        seedGettingStarted,
+        showToast,
+        t.gettingStartedContentConfirm,
+        t.gettingStartedContentConfirmDesc,
+        t.gettingStartedContentConfirmTitle,
+        translate,
+        visibleDataCount,
+    ]);
 
     return {
         isTauri,

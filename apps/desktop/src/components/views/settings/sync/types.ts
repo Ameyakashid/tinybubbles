@@ -3,6 +3,17 @@ import type { AppSettings, SettingsSyncPreferences, SyncBackend } from '@mindwtr
 export type SettingsSyncLabels = {
     dataTransfer: string;
     dataTransferDesc: string;
+    gettingStartedContentAction: string;
+    gettingStartedContentDesc: string;
+    gettingStartedContentConfirmTitle: string;
+    gettingStartedContentConfirmDesc: string;
+    gettingStartedContentConfirm: string;
+    gettingStartedContentContinueTitle: string;
+    gettingStartedContentContinueDesc: string;
+    syncSetupGuideTitle: string;
+    syncSetupGuideDesc: string;
+    importSetupGuideTitle: string;
+    importSetupGuideDesc: string;
     exportBackup: string;
     exportBackupDesc: string;
     restoreBackup: string;

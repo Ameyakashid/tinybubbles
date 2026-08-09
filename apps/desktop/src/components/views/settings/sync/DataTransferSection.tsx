@@ -83,7 +83,7 @@ export function DataTransferSection({
                 rel="noreferrer"
                 className="flex items-center gap-1 px-4 py-3 text-sm font-medium text-primary hover:underline"
             >
-                Import guide
+                {t.importSetupGuideTitle}
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
             <TransferActionButton
@@ -112,8 +112,8 @@ export function DataTransferSection({
             />
             <TransferActionButton
                 disabled={disabled}
-                label="Add Getting Started content"
-                description="Create or restore the guided setup project and sample inbox items."
+                label={t.gettingStartedContentAction}
+                description={t.gettingStartedContentDesc}
                 statusText={null}
                 onClick={() => void onAddGettingStartedContent()}
             />
