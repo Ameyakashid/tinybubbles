@@ -79,13 +79,21 @@ const IMPORT_DIAGNOSTIC_FALLBACKS: Record<string, string> = {
 const buildBackupConfirmation = (
     validation: NonNullable<Awaited<ReturnType<typeof inspectDesktopBackup>>>,
     effect: string,
+    formatText: (key: string, fallback: string, replacements: Record<string, string | number>) => string,
 ): string => [
     validation.metadata?.backupAt
-        ? `Backup date: ${new Date(validation.metadata.backupAt).toLocaleString()}`
+        ? formatText('settings.backupMobile.backupDateLabel', 'Backup date: {{backupDate}}', {
+            backupDate: new Date(validation.metadata.backupAt).toLocaleString(),
+        })
         : validation.metadata?.fileName
-            ? `File: ${validation.metadata.fileName}`
+            ? formatText('settings.backupMobile.fileLabel', 'File: {{fileName}}', {
+                fileName: validation.metadata.fileName,
+            })
             : null,
-    `Contains ${validation.metadata?.taskCount ?? 0} tasks and ${validation.metadata?.projectCount ?? 0} projects.`,
+    formatText('settings.backupMobile.backupPreviewCounts', 'Contains {{taskCount}} tasks and {{projectCount}} projects.', {
+        taskCount: validation.metadata?.taskCount ?? 0,
+        projectCount: validation.metadata?.projectCount ?? 0,
+    }),
     effect,
     ...(validation.warnings.length > 0 ? ['', ...validation.warnings] : []),
 ].filter(Boolean).join('\n');
@@ -1108,29 +1116,29 @@ export const useSyncSettings = ({
         try {
             const result = await SyncService.restoreDataSnapshot(snapshotFileName);
             if (!result.success) {
-                showToast(result.error || 'Failed to restore snapshot.', 'error');
+                showToast(result.error || resolveText('settings.backupMobile.restoreFailed', 'Restore failed'), 'error');
                 return false;
             }
-            showToast('Snapshot restored.', 'success');
+            showToast(resolveText('settings.backupMobile.recoverySnapshotRestored', 'Recovery snapshot restored.'), 'success');
             setSnapshots(await SyncService.listDataSnapshots());
             return true;
         } finally {
             setIsRestoringSnapshot(false);
         }
-    }, [showToast]);
+    }, [resolveText, showToast]);
 
     const handleExportBackup = useCallback(async () => {
         addBreadcrumb('transfer:export');
         setTransferAction('export');
         try {
             await exportDesktopBackup(getInMemoryAppDataSnapshot());
-            showToast('Backup exported.', 'success');
+            showToast(resolveText('settings.exportSuccess', 'Data exported successfully!'), 'success');
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to export backup.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.failedToExportBackup', 'Failed to export backup')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [showToast, toErrorMessage]);
+    }, [resolveText, showToast, toErrorMessage]);
 
     const handleRestoreBackup = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1139,15 +1147,16 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(validation.errors[0] || 'Selected file is not a valid Mindwtr backup.', 'error');
+                showToast(validation.errors[0] || resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.'), 'error');
                 return;
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Restore backup?',
+                title: resolveText('settings.backupMobile.restoreBackup', 'Restore backup?'),
                 message: buildBackupConfirmation(
                     validation,
-                    'This will replace current local data. A recovery snapshot will be saved first when available.',
+                    resolveText('settings.backupMobile.thisWillReplaceAllCurrentLocalDataARecoverySnapshot', 'This will replace all current local data. A recovery snapshot will be saved first.'),
+                    formatText,
                 ),
             });
             if (!confirmed) return;
@@ -1156,13 +1165,15 @@ export const useSyncSettings = ({
             if (isTauri) {
                 setSnapshots(await SyncService.listDataSnapshots());
             }
-            showToast(snapshotName ? `Backup restored. Snapshot saved as ${snapshotName}.` : 'Backup restored.', 'success', 6000);
+            showToast(snapshotName
+                ? formatText('settings.backupMobile.backupRestoredWithSnapshot', 'Backup restored successfully. Recovery snapshot saved as {{snapshotName}}.', { snapshotName })
+                : resolveText('settings.backupMobile.restoreComplete', 'Restore complete'), 'success', 6000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to restore backup.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.restoreFailed', 'Restore failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [appVersion, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [appVersion, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const handleMergeBackup = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1171,7 +1182,7 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(validation.errors[0] || 'Selected file is not a valid Mindwtr backup.', 'error');
+                showToast(validation.errors[0] || resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.'), 'error');
                 return;
             }
 
@@ -1183,6 +1194,7 @@ export const useSyncSettings = ({
                         'settings.mergeBackupConfirm',
                         'Newer items from the backup are combined with your current data. Nothing local is removed, and items you deleted here stay deleted. A recovery snapshot is saved first when available.',
                     ),
+                    formatText,
                 ),
             });
             if (!confirmed) return;
@@ -1198,11 +1210,11 @@ export const useSyncSettings = ({
                     '{{addedCount}} task(s) added, {{updatedCount}} updated.',
                     { addedCount: merged.added, updatedCount: merged.updated },
                 ),
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 6000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to merge backup.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.mergeBackupFailed', 'Merge failed')), 'error');
         } finally {
             setTransferAction(null);
         }
@@ -1215,7 +1227,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopTodoistImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview) {
-                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported Todoist export.'), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedTodoistExport', 'The selected file is not a supported Todoist export.')), 'error');
                 return;
             }
 
@@ -1224,16 +1236,16 @@ export const useSyncSettings = ({
                 .slice(0, 4)
                 .map((project: { name: string; taskCount: number }) => `- ${project.name}: ${project.taskCount}`);
             if (preview.projects.length > 4) {
-                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+                projectLines.push(formatText('settings.backupMobile.moreProjects', '• {{projectCount}} more project(s)…', { projectCount: preview.projects.length - 4 }));
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Import Todoist data?',
+                title: resolveText('settings.backupMobile.importTodoistData', 'Import Todoist data?'),
                 message: [
-                    `Import ${preview.taskCount} tasks from ${preview.projectCount} project(s)?`,
-                    preview.sectionCount > 0 ? `${preview.sectionCount} section(s) will be preserved.` : null,
-                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} subtask(s) will become checklist items.` : null,
-                    'Imported tasks stay in Inbox so you can process them in Mindwtr.',
+                    formatText('settings.backupMobile.importTodoistTasksFromProjects', 'Import {{taskCount}} tasks from {{projectCount}} Todoist project(s)?', { taskCount: preview.taskCount, projectCount: preview.projectCount }),
+                    preview.sectionCount > 0 ? formatText('settings.backupMobile.sectionsWillBePreserved', '{{sectionCount}} section(s) will be preserved.', { sectionCount: preview.sectionCount }) : null,
+                    preview.checklistItemCount > 0 ? formatText('settings.backupMobile.subtasksWillBecomeChecklistItems', '{{subtaskCount}} subtask(s) will become checklist items.', { subtaskCount: preview.checklistItemCount }) : null,
+                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Mindwtr.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
@@ -1253,17 +1265,17 @@ export const useSyncSettings = ({
                         projectCount: result.importedProjectCount,
                     },
                 ),
-                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} subtask(s) became checklist items.` : null,
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                result.importedChecklistItemCount > 0 ? formatText('settings.backupMobile.subtasksBecameChecklistItems', '{{subtaskCount}} subtask(s) became checklist items.', { subtaskCount: result.importedChecklistItemCount }) : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
                 ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 7000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to import Todoist data.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.importFailed', 'Import failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
 
     const handleImportTickTick = useCallback(async () => {
@@ -1273,7 +1285,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopTickTickImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported TickTick backup.'), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedTicktickBackup', 'The selected file is not a supported TickTick backup.')), 'error');
                 return;
             }
 
@@ -1282,18 +1294,18 @@ export const useSyncSettings = ({
                 .slice(0, 4)
                 .map((project: { areaName?: string; name: string; taskCount: number }) => `- ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
             if (preview.projects.length > 4) {
-                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+                projectLines.push(formatText('settings.backupMobile.moreProjects', '• {{projectCount}} more project(s)…', { projectCount: preview.projects.length - 4 }));
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Import TickTick data?',
+                title: resolveText('settings.backupMobile.importTicktickData', 'Import TickTick data?'),
                 message: [
-                    `Import ${preview.taskCount} task(s) from ${preview.fileName}?`,
-                    preview.areaCount > 0 ? `${preview.areaCount} area(s) will be created from TickTick folders.` : null,
-                    preview.projectCount > 0 ? `${preview.projectCount} project(s) will be created from TickTick lists.` : null,
-                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} checklist item(s) will be preserved.` : null,
-                    preview.recurringCount > 0 ? `${preview.recurringCount} recurring task(s) will keep supported repeat rules.` : null,
-                    'Imported active tasks stay in Inbox so you can process them in Mindwtr.',
+                    formatText('settings.backupMobile.importTaskCountFromFile', 'Import {{taskCount}} task(s) from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
+                    preview.areaCount > 0 ? formatText('settings.backupMobile.ticktickAreasWillBeCreated', '{{areaCount}} area(s) will be created from TickTick folders.', { areaCount: preview.areaCount }) : null,
+                    preview.projectCount > 0 ? formatText('settings.backupMobile.ticktickProjectsWillBeCreated', '{{projectCount}} project(s) will be created from TickTick lists.', { projectCount: preview.projectCount }) : null,
+                    preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
+                    preview.recurringCount > 0 ? formatText('settings.backupMobile.recurringTasksWillKeepSupportedRepeatRules', '{{taskCount}} recurring task(s) will keep supported repeat rules.', { taskCount: preview.recurringCount }) : null,
+                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Mindwtr.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
@@ -1314,17 +1326,17 @@ export const useSyncSettings = ({
                         areaCount: result.importedAreaCount,
                     },
                 ),
-                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                result.importedChecklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsPreserved', '{{checklistItemCount}} checklist item(s) were preserved.', { checklistItemCount: result.importedChecklistItemCount }) : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
                 ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to import TickTick data.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.importFailed', 'Import failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const handleImportDgt = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1333,7 +1345,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopDgtImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported DGT GTD export.'), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedDgtGtdExport', 'The selected file is not a supported DGT GTD export.')), 'error');
                 return;
             }
 
@@ -1342,18 +1354,18 @@ export const useSyncSettings = ({
                 .slice(0, 4)
                 .map((project: { areaName?: string; name: string; taskCount: number }) => `- ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
             if (preview.projects.length > 4) {
-                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+                projectLines.push(formatText('settings.backupMobile.moreProjects', '• {{projectCount}} more project(s)…', { projectCount: preview.projects.length - 4 }));
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Import DGT GTD data?',
+                title: resolveText('settings.backupMobile.importDgtGtdData', 'Import DGT GTD data?'),
                 message: [
-                    `Import ${preview.taskCount} tasks from ${preview.fileName}?`,
-                    preview.areaCount > 0 ? `${preview.areaCount} area(s) will be created from DGT folders.` : null,
-                    preview.projectCount > 0 ? `${preview.projectCount} project(s) will be created.` : null,
-                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} checklist item(s) will be preserved.` : null,
+                    formatText('settings.backupMobile.importTasksFromFile', 'Import {{taskCount}} tasks from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
+                    preview.areaCount > 0 ? formatText('settings.backupMobile.dgtAreasWillBeCreated', '{{areaCount}} area(s) will be created from DGT folders.', { areaCount: preview.areaCount }) : null,
+                    preview.projectCount > 0 ? formatText('settings.backupMobile.projectsWillBeCreated', '{{projectCount}} project(s) will be created.', { projectCount: preview.projectCount }) : null,
+                    preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? `${preview.standaloneTaskCount} task(s) will stay outside projects so you can process them in Mindwtr.`
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
@@ -1375,17 +1387,17 @@ export const useSyncSettings = ({
                         areaCount: result.importedAreaCount,
                     },
                 ),
-                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                result.importedChecklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsPreserved', '{{checklistItemCount}} checklist item(s) were preserved.', { checklistItemCount: result.importedChecklistItemCount }) : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
                 ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to import DGT GTD data.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.importFailed', 'Import failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const handleImportOmniFocus = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1394,7 +1406,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopOmniFocusImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported OmniFocus export.'), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedOmnifocusExport', 'The selected file is not a supported OmniFocus export.')), 'error');
                 return;
             }
 
@@ -1403,20 +1415,20 @@ export const useSyncSettings = ({
                 .slice(0, 4)
                 .map((project) => `- ${project.name}: ${project.taskCount}`);
             if (preview.projects.length > 4) {
-                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+                projectLines.push(formatText('settings.backupMobile.moreProjects', '• {{projectCount}} more project(s)…', { projectCount: preview.projects.length - 4 }));
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Import OmniFocus data?',
+                title: resolveText('settings.backupMobile.importOmnifocusData', 'Import OmniFocus data?'),
                 message: [
-                    `Import ${preview.taskCount} task(s) from ${preview.fileName}?`,
-                    preview.projectCount > 0 ? `${preview.projectCount} project(s) will be created when needed.` : null,
-                    preview.areaCount > 0 ? `${preview.areaCount} area(s) will be created from OmniFocus folders when needed.` : null,
-                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} nested task(s) will become checklist items when possible.` : null,
+                    formatText('settings.backupMobile.importTaskCountFromFile', 'Import {{taskCount}} task(s) from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
+                    preview.projectCount > 0 ? formatText('settings.backupMobile.projectsWillBeCreatedWhenNeeded', '{{projectCount}} project(s) will be created when needed.', { projectCount: preview.projectCount }) : null,
+                    preview.areaCount > 0 ? formatText('settings.backupMobile.omnifocusAreasWillBeCreated', '{{areaCount}} area(s) will be created from OmniFocus folders when needed.', { areaCount: preview.areaCount }) : null,
+                    preview.checklistItemCount > 0 ? formatText('settings.backupMobile.nestedTasksWillBecomeChecklistItems', '{{taskCount}} nested task(s) will become checklist items when possible.', { taskCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? `${preview.standaloneTaskCount} task(s) will stay outside projects so you can process them in Mindwtr.`
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
                         : null,
-                    'Imported tasks keep OmniFocus notes, dates, tags, recurrence, and checklist children when supported.',
+                    resolveText('settings.backupMobile.importedTasksKeepOmnifocusNotesDatesTagsRecurrenceAndChecklist', 'Imported tasks keep OmniFocus notes, dates, tags, recurrence, and checklist children when supported.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
@@ -1436,19 +1448,19 @@ export const useSyncSettings = ({
                         projectCount: result.importedProjectCount,
                     },
                 ),
-                result.importedAreaCount > 0 ? `${result.importedAreaCount} area(s) were created from OmniFocus folders.` : null,
-                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} nested task(s) became checklist items.` : null,
-                result.importedStandaloneTaskCount > 0 ? `${result.importedStandaloneTaskCount} task(s) stayed outside projects.` : null,
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                result.importedAreaCount > 0 ? formatText('settings.backupMobile.omnifocusAreasCreated', '{{areaCount}} area(s) were created from OmniFocus folders.', { areaCount: result.importedAreaCount }) : null,
+                result.importedChecklistItemCount > 0 ? formatText('settings.backupMobile.nestedTasksBecameChecklistItems', '{{taskCount}} nested task(s) became checklist items.', { taskCount: result.importedChecklistItemCount }) : null,
+                result.importedStandaloneTaskCount > 0 ? formatText('settings.backupMobile.tasksStayedOutsideProjects', '{{taskCount}} task(s) stayed outside projects.', { taskCount: result.importedStandaloneTaskCount }) : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
                 ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to import OmniFocus data.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.importFailed', 'Import failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const handleImportMindwtrCsv = useCallback(async () => {
         addBreadcrumb('transfer:restore');
@@ -1457,7 +1469,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopMindwtrCsvImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, 'The selected file is not a supported Mindwtr CSV file.'), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile', 'The selected file is not a supported Mindwtr CSV file.')), 'error');
                 return;
             }
 
@@ -1466,19 +1478,19 @@ export const useSyncSettings = ({
                 .slice(0, 4)
                 .map((project) => `- ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
             if (preview.projects.length > 4) {
-                projectLines.push(`- ${preview.projects.length - 4} more project(s)...`);
+                projectLines.push(formatText('settings.backupMobile.moreProjects', '• {{projectCount}} more project(s)…', { projectCount: preview.projects.length - 4 }));
             }
 
             const confirmed = await requestConfirmation({
-                title: 'Import Mindwtr CSV data?',
+                title: resolveText('settings.backupMobile.importMindwtrCsvData', 'Import Mindwtr CSV data?'),
                 message: [
-                    `Import ${preview.taskCount} task(s) from ${preview.fileName}?`,
-                    preview.areaCount > 0 ? `${preview.areaCount} area(s) will be created from the Area column.` : null,
-                    preview.projectCount > 0 ? `${preview.projectCount} project(s) will be created from the Project column.` : null,
-                    preview.sectionCount > 0 ? `${preview.sectionCount} section(s) will be created from the Section column.` : null,
-                    preview.checklistItemCount > 0 ? `${preview.checklistItemCount} checklist item(s) will be preserved.` : null,
+                    formatText('settings.backupMobile.importTaskCountFromFile', 'Import {{taskCount}} task(s) from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
+                    preview.areaCount > 0 ? formatText('settings.backupMobile.mindwtrCsvAreasWillBeCreated', '{{areaCount}} area(s) will be created from the Area column.', { areaCount: preview.areaCount }) : null,
+                    preview.projectCount > 0 ? formatText('settings.backupMobile.projectsWillBeCreatedWhenNeeded', '{{projectCount}} project(s) will be created when needed.', { projectCount: preview.projectCount }) : null,
+                    preview.sectionCount > 0 ? formatText('settings.backupMobile.mindwtrCsvSectionsWillBeCreated', '{{sectionCount}} section(s) will be created from the Section column.', { sectionCount: preview.sectionCount }) : null,
+                    preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? `${preview.standaloneTaskCount} task(s) will stay outside projects.`
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
@@ -1501,17 +1513,17 @@ export const useSyncSettings = ({
                         areaCount: result.importedAreaCount,
                     },
                 ),
-                result.importedChecklistItemCount > 0 ? `${result.importedChecklistItemCount} checklist item(s) were preserved.` : null,
-                snapshotName ? `Snapshot saved as ${snapshotName}.` : null,
+                result.importedChecklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsPreserved', '{{checklistItemCount}} checklist item(s) were preserved.', { checklistItemCount: result.importedChecklistItemCount }) : null,
+                snapshotName ? formatText('settings.backupMobile.recoverySnapshotSaved', 'Recovery snapshot saved as {{snapshotName}}.', { snapshotName }) : null,
                 ...(result.warnings.length > 0 ? ['', ...formatImportMessages(result.warnings)] : []),
             ].filter(Boolean).join('\n');
             showToast(details, 'success', 8000);
         } catch (error) {
-            showToast(toErrorMessage(error, 'Failed to import Mindwtr CSV data.'), 'error');
+            showToast(toErrorMessage(error, resolveText('settings.backupMobile.importFailed', 'Import failed')), 'error');
         } finally {
             setTransferAction(null);
         }
-    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, showToast, toErrorMessage]);
+    }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
     const syncPreferences = settings?.syncPreferences ?? {};
     const handleUpdateSyncPreferences = useCallback(

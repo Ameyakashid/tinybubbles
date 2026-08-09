@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
+const languageMocks = vi.hoisted(() => ({
+    t: vi.fn((key: string) => key),
+}));
+
 vi.mock('../../../lib/app-log', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../../lib/app-log')>();
     return {
@@ -15,7 +19,7 @@ vi.mock('../../../lib/settings-open-diagnostics', () => ({
 }));
 
 vi.mock('../../../contexts/language-context', () => ({
-    useLanguage: () => ({ t: (key: string) => key, language: 'en' }),
+    useLanguage: () => ({ t: languageMocks.t, language: 'en' }),
 }));
 
 import { isConnectionAllowed, SYNC_LOCAL_INSECURE_URL_OPTIONS, type SyncBackend } from '@mindwtr/core';
@@ -23,6 +27,7 @@ import { SyncService } from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { isValidHttpUrl } from './sync/sync-page-utils';
 import { useSyncSettings } from './useSyncSettings';
+import * as dataTransfer from '../../../lib/data-transfer';
 
 const initialUiState = useUiStore.getState();
 const COMMITTED_RESULT = {
@@ -117,6 +122,7 @@ const NO_TARGET: TargetInputs = {
 
 describe('useSyncSettings cloud token validation', () => {
     beforeEach(() => {
+        languageMocks.t.mockImplementation((key: string) => key);
         SyncService.forgetPendingDropboxCredentialHandleForSession();
         act(() => {
             useUiStore.setState(initialUiState, true);
@@ -166,6 +172,21 @@ describe('useSyncSettings cloud token validation', () => {
         lastSyncNeverLabel: 'Never',
         requestConfirmation: vi.fn().mockResolvedValue(true),
     }));
+
+    it('uses localized copy for desktop backup completion', async () => {
+        languageMocks.t.mockImplementation((key: string) => `localized:${key}`);
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        vi.spyOn(dataTransfer, 'exportDesktopBackup').mockResolvedValue(undefined);
+
+        const { result } = setup();
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        await act(async () => {
+            await result.current.dataTransferProps.onExportBackup();
+        });
+
+        expect(showToast).toHaveBeenCalledWith('localized:settings.exportSuccess', 'success');
+    });
 
     it('keeps an explicit self-hosted save in session state until sync proves it', async () => {
         const showToast = vi.fn();
