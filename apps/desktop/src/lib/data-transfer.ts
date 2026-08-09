@@ -1,5 +1,6 @@
 import {
     addBreadcrumb,
+    assertBackupSourceFileSize,
     assertImportSourceFileSize,
     countActiveRecords,
     createBackupFileName,
@@ -107,6 +108,7 @@ const pickTransferDocument = async (
         const { readFile, readTextFile, stat } = await import('@tauri-apps/plugin-fs');
         const info = await stat(selected);
         if (options.mode === 'binary') assertImportSourceFileSize(info.size);
+        else assertBackupSourceFileSize(info.size);
         return options.mode === 'binary'
             ? {
                 bytes: await readFile(selected),
@@ -123,6 +125,7 @@ const pickTransferDocument = async (
     const file = await pickBrowserFile(options.accept);
     if (!file) return null;
     if (options.mode === 'binary') assertImportSourceFileSize(file.size);
+    else assertBackupSourceFileSize(file.size);
     return options.mode === 'binary'
         ? {
             bytes: new Uint8Array(await file.arrayBuffer()),

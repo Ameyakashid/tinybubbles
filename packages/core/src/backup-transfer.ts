@@ -15,6 +15,19 @@ import { parseSyncDocument } from './sync-document';
 
 export const BACKUP_FILE_PREFIX = 'mindwtr-backup-';
 
+// Backups legitimately include tombstones and attachment metadata, so they get a larger ceiling
+// than third-party imports. The cap still bounds the single JSON string each client must allocate.
+export const MAX_BACKUP_SOURCE_BYTES = 128 * 1024 * 1024;
+
+export const assertBackupSourceFileSize = (size: number | null | undefined): void => {
+    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) {
+        throw new Error('Mindwtr could not verify the selected backup file size. Copy it locally and try again.');
+    }
+    if (size > MAX_BACKUP_SOURCE_BYTES) {
+        throw new Error('The selected backup file is too large. Choose a backup no larger than 128 MB.');
+    }
+};
+
 export type ActiveRecordCounts = {
     areas: number;
     people: number;

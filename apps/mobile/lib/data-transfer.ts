@@ -5,6 +5,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import {
     addBreadcrumb,
+    assertBackupSourceFileSize,
     assertImportSourceFileSize,
     countActiveRecords,
     createBackupFileName,
@@ -292,6 +293,8 @@ export const inspectBackupDocument = async (
     document: TransferDocument,
     options?: { appVersion?: string | null }
 ): Promise<ImportSourceParseResultMap['backup']> => {
+    const size = await resolveDocumentSize(document, 'backup');
+    assertBackupSourceFileSize(size);
     const rawJson = await readTextFile(document.uri);
     return parseImportSource('backup', {
         appVersion: options?.appVersion,
@@ -357,7 +360,7 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
 const pickImportDocument = (source: ImportPickerSourceId): Promise<TransferDocument | null> =>
     pickDocument(IMPORT_PICKER_DESCRIPTORS[source].mimeTypes);
 
-const resolveImportDocumentSize = async (document: TransferDocument): Promise<number> => {
+const resolveDocumentSize = async (document: TransferDocument, kind: 'backup' | 'import'): Promise<number> => {
     if (typeof document.size === 'number' && Number.isFinite(document.size) && document.size >= 0) {
         return document.size;
     }
@@ -369,14 +372,14 @@ const resolveImportDocumentSize = async (document: TransferDocument): Promise<nu
     } catch {
         // The safe fallback for an unreadable provider is to stop before a bulk read.
     }
-    throw new Error('Mindwtr could not verify the selected import file size. Copy it locally and try again.');
+    throw new Error(`Mindwtr could not verify the selected ${kind} file size. Copy it locally and try again.`);
 };
 
 const inspectImportDocument = async <S extends ImportPickerSourceId>(
     source: S,
     document: TransferDocument
 ): Promise<ImportSourceParseResultMap[S]> => {
-    const size = await resolveImportDocumentSize(document);
+    const size = await resolveDocumentSize(document, 'import');
     assertImportSourceFileSize(size);
     const bytes = await readBinaryFile(document.uri);
     return parseImportSource(source, { bytes, fileName: document.fileName });

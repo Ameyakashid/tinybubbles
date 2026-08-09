@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_IMPORT_SOURCE_LIMITS, type AppData } from '@mindwtr/core';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
 import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
 
 const emptyData: AppData = {
@@ -99,6 +99,7 @@ import {
     createDesktopRecoverySnapshot,
     importDesktopTodoistData,
     inspectDesktopMindwtrCsvImport,
+    inspectDesktopBackup,
     mergeDesktopBackup,
 } from './data-transfer';
 
@@ -230,5 +231,21 @@ describe('desktop data transfer', () => {
         );
 
         expect(nativePickerMocks.readFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects an oversized native backup before reading it into memory', async () => {
+        runtimeRef.isTauri = true;
+        nativePickerMocks.stat.mockResolvedValue({ size: MAX_BACKUP_SOURCE_BYTES + 1 });
+
+        await expect(inspectDesktopBackup()).rejects.toThrow('backup file is too large');
+        expect(nativePickerMocks.readTextFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects a native backup whose size cannot be verified before reading', async () => {
+        runtimeRef.isTauri = true;
+        nativePickerMocks.stat.mockResolvedValue({});
+
+        await expect(inspectDesktopBackup()).rejects.toThrow('could not verify the selected backup file size');
+        expect(nativePickerMocks.readTextFile).not.toHaveBeenCalled();
     });
 });

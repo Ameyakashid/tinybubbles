@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_IMPORT_SOURCE_LIMITS, type AppData } from '@mindwtr/core';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
 import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
 
 const emptyData: AppData = {
@@ -111,7 +111,7 @@ vi.mock('./app-log', () => ({
   logInfo: logMocks.logInfo,
 }));
 
-import { createMobileRecoverySnapshot, importTodoistData, inspectMindwtrCsvDocument } from './data-transfer';
+import { createMobileRecoverySnapshot, importTodoistData, inspectBackupDocument, inspectMindwtrCsvDocument } from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
   name: 'Todoist',
@@ -219,6 +219,28 @@ describe('mobile data transfer', () => {
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
       uri: 'content://large.csv',
     })).rejects.toThrow('Choose a file no larger than 16 MB');
+
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized picked backup before reading it into memory', async () => {
+    await expect(inspectBackupDocument({
+      fileName: 'large.json',
+      size: MAX_BACKUP_SOURCE_BYTES + 1,
+      uri: 'content://large.json',
+    })).rejects.toThrow('backup file is too large');
+
+    expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects a size-less backup when its copied URI size cannot be verified', async () => {
+    fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true });
+
+    await expect(inspectBackupDocument({
+      fileName: 'unknown.json',
+      size: null,
+      uri: 'file://cache/unknown.json',
+    })).rejects.toThrow('could not verify the selected backup file size');
 
     expect(fileSystemMocks.readAsStringAsync).not.toHaveBeenCalled();
   });
