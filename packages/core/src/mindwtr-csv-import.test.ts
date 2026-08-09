@@ -858,13 +858,37 @@ describe('mindwtr csv import', () => {
             ['Title', 'Project', 'ID'],
             [
                 ['First', 'Ops', 'dup-1'],
-                ['Second', 'Ops', 'dup-1'],
+                ['Second', 'Personal', 'dup-1'],
             ]
         );
 
         const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+        const applied = applyMindwtrCsvImport(
+            mockAppData([], [], []),
+            result.parsedData as ParsedMindwtrCsvImportData,
+        );
 
         expect(result.warnings).toContain('1 row had an ID that duplicated an earlier row in this import and was dropped.');
+        expect(applied.importedTaskCount).toBe(1);
+    });
+
+    it('does not warn that distinct tuple-shaped IDs were dropped when both import', () => {
+        const csv = buildCsv(
+            ['Title', 'Area', 'Project', 'ID'],
+            [
+                ['Colon in ID', '', 'a', 'b:c'],
+                ['Colon in project path', 'a', 'b', 'c'],
+            ],
+        );
+
+        const result = parseMindwtrCsvImportSource({ fileName: 'export.csv', text: csv });
+        const applied = applyMindwtrCsvImport(
+            mockAppData([], [], []),
+            result.parsedData as ParsedMindwtrCsvImportData,
+        );
+
+        expect(result.warnings.some((warning) => warning.includes('duplicated an earlier row'))).toBe(false);
+        expect(applied.importedTaskCount).toBe(2);
     });
 
     it('does not duplicate records when a file with an ID column is imported again', () => {

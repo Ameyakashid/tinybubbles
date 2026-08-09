@@ -198,6 +198,8 @@ const projectSourceKeyFor = (areaSourceKey: string | undefined, projectName: str
     encodeSourceKeyTuple(...(areaSourceKey ? [areaSourceKey] : []), normalizeSourceKey(projectName))
 );
 
+const canonicalTaskSourceKeyFor = (sourceId: string): string => encodeSourceKeyTuple(sourceId);
+
 const colonProjectSourceKeyFor = (areaSourceKey: string | undefined, projectName: string): string => (
     `${areaSourceKey ? `${areaSourceKey}:` : ''}${normalizeSourceKey(projectName)}`
 );
@@ -566,12 +568,11 @@ export const parseMindwtrCsvImportSource = (input: MindwtrCsvFileInput): Mindwtr
         };
     }
 
-    // A duplicated user-supplied ID (within one file, or across CSVs in one ZIP that share a
-    // project) collapses to one task at apply time via the same `${projectSourceKey}:${sourceId}`
-    // key — warn about it here so the drop isn't silent.
+    // Preview and apply share this global task identity, so every duplicate warning corresponds
+    // to a row apply will actually drop and delimiter-shaped but distinct IDs cannot false-positive.
     const seenTaskKeys = new Set<string>();
     parsedData.tasks.forEach((task) => {
-        const key = `${task.projectSourceKey ?? 'none'}:${task.sourceId}`;
+        const key = canonicalTaskSourceKeyFor(task.sourceId);
         if (seenTaskKeys.has(key)) counters.duplicateIds += 1;
         else seenTaskKeys.add(key);
     });
@@ -630,7 +631,7 @@ export const applyMindwtrCsvImport = (
         }
         // The stable ID (or ZIP-qualified row fallback) owns task identity; moving containers
         // in a corrected export must not manufacture a second task.
-        return encodeSourceKeyTuple(task.sourceId);
+        return canonicalTaskSourceKeyFor(task.sourceId);
     };
     const tasksForImport = parsedData.tasks.map((task) => ({
         ...task,
