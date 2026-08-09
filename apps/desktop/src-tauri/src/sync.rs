@@ -3870,6 +3870,58 @@ mod tests {
     }
 
     #[test]
+    fn copied_sync_install_does_not_acknowledge_file_flush_failure() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let tmp = dir.path().join("data.json.tmp");
+        let target = dir.path().join(DATA_FILE_NAME);
+        fs::write(&tmp, b"replacement").expect("write temp");
+        fs::write(&target, b"replacement").expect("write copied target");
+        let removed = std::cell::Cell::new(false);
+        let parent_synced = std::cell::Cell::new(false);
+
+        let result = finish_copied_sync_file_durably(
+            &tmp,
+            &target,
+            |_| Err(std::io::Error::other("injected file flush failure")),
+            |_| {
+                removed.set(true);
+                Ok(())
+            },
+            |_| {
+                parent_synced.set(true);
+                Ok(())
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!removed.get(), "temp remains available after failed flush");
+        assert!(!parent_synced.get(), "directory is not acknowledged early");
+    }
+
+    #[test]
+    fn copied_sync_install_does_not_acknowledge_directory_flush_failure() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let tmp = dir.path().join("data.json.tmp");
+        let target = dir.path().join(DATA_FILE_NAME);
+        fs::write(&tmp, b"replacement").expect("write temp");
+        fs::write(&target, b"replacement").expect("write copied target");
+
+        let result = finish_copied_sync_file_durably(
+            &tmp,
+            &target,
+            |_| Ok(()),
+            |path| fs::remove_file(path),
+            |_| Err(std::io::Error::other("injected directory flush failure")),
+        );
+
+        assert!(result.is_err());
+        assert!(
+            !tmp.exists(),
+            "copied temp is removed before directory flush"
+        );
+    }
+
+    #[test]
     fn stale_file_sync_writer_is_rejected_before_replacing_newer_remote_data() {
         let dir = tempfile::tempdir().expect("temp dir");
         fs::write(
@@ -7500,6 +7552,63 @@ fn empty_remote_app_data() -> serde_json::Value {
 // Runs off the UI thread: the sync folder can be a network or FUSE mount
 // (rclone, WinFSP) where a single read blocks for tens of seconds, and a
 // plain `#[tauri::command]` executes on the main thread and freezes the window.
+fn sync_regular_file_for_durability(path: &Path) -> std::io::Result<()> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?
+        .sync_all()
+}
+
+fn sync_parent_directory_for_durability(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let parent = path.parent().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "sync path has no parent")
+        })?;
+        return match File::open(parent).and_then(|directory| directory.sync_all()) {
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::InvalidInput | std::io::ErrorKind::Unsupported
+                ) =>
+            {
+                log::warn!("Sync filesystem does not support directory metadata flushes: {error}");
+                Ok(())
+            }
+            result => result,
+        };
+    }
+
+    #[cfg(not(unix))]
+    {
+        // Rust's portable File API cannot open a Windows directory for
+        // FlushFileBuffers. The replacement file itself is still flushed;
+        // Unix platforms additionally persist the rename metadata above.
+        let _ = path;
+        Ok(())
+    }
+}
+
+fn finish_copied_sync_file_durably<SyncFile, Remove, SyncParent>(
+    tmp_file: &Path,
+    sync_file: &Path,
+    mut sync_file_contents: SyncFile,
+    mut remove: Remove,
+    mut sync_parent: SyncParent,
+) -> Result<(), String>
+where
+    SyncFile: FnMut(&Path) -> std::io::Result<()>,
+    Remove: FnMut(&Path) -> std::io::Result<()>,
+    SyncParent: FnMut(&Path) -> std::io::Result<()>,
+{
+    sync_file_contents(sync_file)
+        .map_err(|error| format!("Failed to flush copied sync file: {error}"))?;
+    remove(tmp_file).map_err(|error| format!("Failed to remove copied sync temp file: {error}"))?;
+    sync_parent(sync_file)
+        .map_err(|error| format!("Failed to flush sync directory metadata: {error}"))
+}
+
 fn replace_file_preserving_previous<Remove, Rename>(
     replacement: &Path,
     target: &Path,
@@ -7890,17 +7999,27 @@ fn write_sync_file_to_dir(
             let backup_tmp = sync_dir.join(format!("{}.bak.tmp", DATA_FILE_NAME));
             let _ = fs::remove_file(&backup_tmp);
             if fs::copy(&sync_file, &backup_tmp).is_ok() {
-                let replace_result = if cfg!(windows) && backup_file.exists() {
-                    replace_sync_backup_preserving_previous(
-                        &backup_tmp,
-                        &backup_file,
-                        &backup_previous_file,
-                        |path| fs::remove_file(path),
-                        |from, to| fs::rename(from, to),
-                    )
-                } else {
-                    fs::rename(&backup_tmp, &backup_file).map_err(|error| error.to_string())
-                };
+                let replace_result =
+                    if let Err(error) = sync_regular_file_for_durability(&backup_tmp) {
+                        Err(format!("Failed to flush sync backup temp file: {error}"))
+                    } else {
+                        let replacement = if cfg!(windows) && backup_file.exists() {
+                            replace_sync_backup_preserving_previous(
+                                &backup_tmp,
+                                &backup_file,
+                                &backup_previous_file,
+                                |path| fs::remove_file(path),
+                                |from, to| fs::rename(from, to),
+                            )
+                        } else {
+                            fs::rename(&backup_tmp, &backup_file).map_err(|error| error.to_string())
+                        };
+                        let directory_flush = sync_parent_directory_for_durability(&backup_file)
+                            .map_err(|error| {
+                                format!("Failed to flush sync backup directory metadata: {error}")
+                            });
+                        replacement.and(directory_flush)
+                    };
                 if let Err(err) = replace_result {
                     log::warn!("Sync backup replacement failed: {err}");
                     let _ = fs::remove_file(&backup_tmp);
@@ -7921,18 +8040,26 @@ fn write_sync_file_to_dir(
             // Windows cannot rename over an existing destination. Move the
             // primary aside instead of deleting it so a failed installation
             // can roll back without depending on the best-effort .bak copy.
-            replace_sync_file_preserving_previous(
+            let replacement = replace_sync_file_preserving_previous(
                 &tmp_file,
                 &sync_file,
                 &primary_previous_file,
                 |path| fs::remove_file(path),
                 |from, to| fs::rename(from, to),
-            )?;
+            );
+            let directory_flush = sync_parent_directory_for_durability(&sync_file)
+                .map_err(|error| format!("Failed to flush sync directory metadata: {error}"));
+            replacement?;
+            directory_flush?;
             return Ok(true);
         }
 
         match fs::rename(&tmp_file, &sync_file) {
-            Ok(()) => Ok(true),
+            Ok(()) => {
+                sync_parent_directory_for_durability(&sync_file)
+                    .map_err(|error| format!("Failed to flush sync directory metadata: {error}"))?;
+                Ok(true)
+            }
             Err(rename_err) => {
                 log::warn!(
                     "Atomic rename failed ({}), falling back to direct write",
@@ -7940,7 +8067,13 @@ fn write_sync_file_to_dir(
                 );
                 match fs::copy(&tmp_file, &sync_file) {
                     Ok(_) => {
-                        let _ = fs::remove_file(&tmp_file);
+                        finish_copied_sync_file_durably(
+                            &tmp_file,
+                            &sync_file,
+                            sync_regular_file_for_durability,
+                            |path| fs::remove_file(path),
+                            sync_parent_directory_for_durability,
+                        )?;
                         Ok(true)
                     }
                     Err(copy_err) => Err(format!(
