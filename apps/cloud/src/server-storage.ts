@@ -1,7 +1,10 @@
 import {
+    closeSync,
     existsSync,
+    fsyncSync,
     lstatSync,
     mkdirSync,
+    openSync,
     readFileSync,
     realpathSync,
     renameSync,
@@ -31,6 +34,26 @@ type BodyReadError = {
 export type WriteLockRunner = {
     <T>(key: string, fn: () => Promise<T>, signal?: AbortSignal): Promise<T>;
     getPendingLockCount: () => number;
+};
+
+export type DurableFileSystem = {
+    openSync: (path: string, flags: 'r' | 'wx', mode?: number) => number;
+    writeFileSync: (handle: number, data: string | Uint8Array) => void;
+    fsyncSync: (handle: number) => void;
+    closeSync: (handle: number) => void;
+    renameSync: (source: string, destination: string) => void;
+    existsSync: (path: string) => boolean;
+    unlinkSync: (path: string) => void;
+};
+
+const nodeDurableFileSystem: DurableFileSystem = {
+    openSync: (path, flags, mode) => openSync(path, flags, mode),
+    writeFileSync: (handle, data) => writeFileSync(handle, data),
+    fsyncSync,
+    closeSync,
+    renameSync,
+    existsSync,
+    unlinkSync,
 };
 
 const createDefaultData = (): AppData => ({ tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} });
@@ -242,6 +265,72 @@ export function pathContainsSymlink(rootRealPath: string, targetPath: string): b
     return false;
 }
 
+export function durablyPublishFile(
+    destinationPath: string,
+    data: string | Uint8Array,
+    options: {
+        beforeRename?: (tempPath: string) => boolean;
+        fileSystem?: DurableFileSystem;
+        tempName?: string;
+    } = {},
+): boolean {
+    const parentPath = dirname(destinationPath);
+    const fileSystem = options.fileSystem ?? nodeDurableFileSystem;
+    const tempName = options.tempName
+        ?? `.${basename(destinationPath)}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`;
+    if (basename(tempName) !== tempName) {
+        throw new Error('Durable publication temp name must not contain a path');
+    }
+    const tempPath = join(parentPath, tempName);
+    let tempHandle: number | null = null;
+
+    try {
+        tempHandle = fileSystem.openSync(tempPath, 'wx', 0o600);
+        fileSystem.writeFileSync(tempHandle, data);
+        fileSystem.fsyncSync(tempHandle);
+        fileSystem.closeSync(tempHandle);
+        tempHandle = null;
+
+        if (options.beforeRename && !options.beforeRename(tempPath)) {
+            return false;
+        }
+
+        fileSystem.renameSync(tempPath, destinationPath);
+
+        let parentHandle: number | null = null;
+        try {
+            parentHandle = fileSystem.openSync(parentPath, 'r');
+            fileSystem.fsyncSync(parentHandle);
+            fileSystem.closeSync(parentHandle);
+            parentHandle = null;
+        } finally {
+            if (parentHandle !== null) {
+                try {
+                    fileSystem.closeSync(parentHandle);
+                } catch {
+                    // The original durability-stage error is more actionable.
+                }
+            }
+        }
+        return true;
+    } finally {
+        if (tempHandle !== null) {
+            try {
+                fileSystem.closeSync(tempHandle);
+            } catch {
+                // The original durability-stage error is more actionable.
+            }
+        }
+        if (fileSystem.existsSync(tempPath)) {
+            try {
+                fileSystem.unlinkSync(tempPath);
+            } catch {
+                // Best-effort cleanup; the failed publication is still rejected.
+            }
+        }
+    }
+}
+
 export function writeAttachmentFileSafely(rootRealPath: string, filePath: string, body: Uint8Array): boolean {
     const parentPath = dirname(filePath);
     if (!ensureDirectoryWithinRoot(rootRealPath, parentPath)) return false;
@@ -263,30 +352,33 @@ export function writeAttachmentFileSafely(rootRealPath: string, filePath: string
         }
     }
 
-    const tempPath = join(
-        parentRealPath,
-        `.mindwtr-upload-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
-    );
-    let tempExists = false;
-    try {
-        writeFileSync(tempPath, body, { flag: 'wx', mode: 0o600 });
-        tempExists = true;
-        const tempRealPath = realpathSync(tempPath);
-        if (!isPathWithinRoot(tempRealPath, rootRealPath)) {
-            return false;
-        }
-        renameSync(tempPath, safeFilePath);
-        tempExists = false;
-        return true;
-    } finally {
-        if (tempExists && existsSync(tempPath)) {
-            try {
-                unlinkSync(tempPath);
-            } catch {
-                // Best-effort cleanup for temp files.
+    return durablyPublishFile(safeFilePath, body, {
+        tempName: `.mindwtr-upload-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
+        beforeRename: (tempPath) => {
+            const tempRealPath = realpathSync(tempPath);
+            if (!isPathWithinRoot(tempRealPath, rootRealPath)) {
+                return false;
             }
-        }
-    }
+            if (pathContainsSymlink(rootRealPath, parentPath)) {
+                return false;
+            }
+            const currentParentRealPath = realpathSync(parentPath);
+            if (currentParentRealPath !== parentRealPath || !isPathWithinRoot(currentParentRealPath, rootRealPath)) {
+                return false;
+            }
+            if (existsSync(safeFilePath)) {
+                const stat = lstatSync(safeFilePath);
+                if (stat.isSymbolicLink()) {
+                    return false;
+                }
+                const currentRealFilePath = realpathSync(safeFilePath);
+                if (!isPathWithinRoot(currentRealFilePath, rootRealPath)) {
+                    return false;
+                }
+            }
+            return true;
+        },
+    });
 }
 
 export function readData(filePath: string): AppData | null {
@@ -328,25 +420,7 @@ export function loadAppDataUncached(filePath: string): AppData {
 export function writeData(filePath: string, data: unknown) {
     mkdirSync(dirname(filePath), { recursive: true });
     const serialized = JSON.stringify(data, null, 2);
-    const tempPath = join(
-        dirname(filePath),
-        `.${basename(filePath)}.${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
-    );
-    let tempExists = false;
-    try {
-        writeFileSync(tempPath, serialized, { flag: 'wx', mode: 0o600 });
-        tempExists = true;
-        renameSync(tempPath, filePath);
-        tempExists = false;
-    } finally {
-        if (tempExists && existsSync(tempPath)) {
-            try {
-                unlinkSync(tempPath);
-            } catch {
-                // Best-effort cleanup if the atomic replace fails partway through.
-            }
-        }
-    }
+    durablyPublishFile(filePath, serialized);
 }
 
 const CLOUD_LOCK_SHARD_COUNT = 64;
