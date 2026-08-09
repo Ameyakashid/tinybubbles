@@ -1021,7 +1021,14 @@ describe('desktop sync-service runtime', () => {
             if (command === 'get_sync_path') return '/sync/data.json';
             if (command === 'create_data_snapshot') return undefined;
             if (command === 'get_data') return structuredClone(localSyncedData);
-            if (command === 'read_sync_file') return structuredClone(remoteSyncedData);
+            if (command === 'read_sync_file_versioned') {
+                return {
+                    data: structuredClone(remoteSyncedData),
+                    fingerprint: 'file:v1:sha256=remote-synced-data',
+                    source: 'primary',
+                    needsRepair: false,
+                };
+            }
             if (command === 'save_data') return undefined;
             if (command === 'write_sync_file') return undefined;
             throw new Error(`Unexpected command: ${command} ${JSON.stringify(args)}`);
