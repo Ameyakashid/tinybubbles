@@ -614,6 +614,51 @@ describe('local-data-watcher', () => {
         expect(saveCalls[0]?.tasks.some((task) => task.id === 'ext-2')).toBe(true);
     });
 
+    it('reconciles the store to the canonical native snapshot before ordinary writes resume', async () => {
+        const externalTask = {
+            id: 'external-race',
+            title: 'External task',
+            status: 'next' as const,
+            createdAt: '2026-01-02T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        const canonicalOnlyTask = {
+            id: 'canonical-race',
+            title: 'Concurrent native task',
+            status: 'next' as const,
+            createdAt: '2026-01-03T00:00:00.000Z',
+            updatedAt: '2026-01-03T00:00:00.000Z',
+        } as AppData['tasks'][number];
+        externalData = { ...emptyData(), tasks: [externalTask] } as AppData;
+        let firstSave = true;
+        const attemptedSnapshots: AppData[] = [];
+
+        setStorageAdapter({
+            ...storageAdapter,
+            saveData: (async (data: AppData) => {
+                attemptedSnapshots.push(data);
+                if (firstSave) {
+                    firstSave = false;
+                    return { ...data, tasks: [...data.tasks, canonicalOnlyTask] };
+                }
+                return data;
+            }) as StorageAdapter['saveData'],
+        });
+
+        await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
+
+        expect(useTaskStore.getState()._allTasks.map((task) => task.id).sort()).toEqual([
+            'canonical-race',
+            'external-race',
+        ]);
+
+        await useTaskStore.getState().addTask('Ordinary write after watcher');
+        await flushPendingSave();
+
+        const lastAttempt = attemptedSnapshots[attemptedSnapshots.length - 1];
+        expect(lastAttempt?.tasks.some((task) => task.id === 'canonical-race')).toBe(true);
+    });
+
     it('keeps the store at the durable snapshot after bounded save failures and converges on a later retry', async () => {
         const externalTask = {
             id: 'ext-retry-1',

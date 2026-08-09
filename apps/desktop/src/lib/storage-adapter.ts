@@ -185,7 +185,7 @@ const enqueueSave = (
         predecessor: SaveQueueOutcome | null,
         recordPersisted: (result: SaveOperationResult) => void,
     ) => Promise<SaveOperationResult>,
-): Promise<void> => {
+): Promise<AppData | null> => {
     const predecessor: Promise<SaveQueueOutcome | null> = pendingSaveCount > 0
         ? saveQueue
         : Promise.resolve(null);
@@ -228,6 +228,7 @@ const enqueueSave = (
     return outcome.then((result) => {
         pendingSaveCount -= 1;
         if (result.failed) throw result.error;
+        return result.canonical;
     });
 };
 
@@ -300,7 +301,7 @@ export const tauriStorage: StorageAdapter = {
             }
         }
     },
-    saveData: async (data: AppData): Promise<void> => {
+    saveData: async (data: AppData): Promise<AppData> => {
         // Associate the CAS baseline with this target before it enters the
         // queue. A getData() while another save is in flight must not widen
         // this save's observation set to newer rows it never saw.
@@ -310,7 +311,7 @@ export const tauriStorage: StorageAdapter = {
             : undefined;
         lastObservedData = data;
         const queuedSaveVersion = beginSaveGeneration();
-        return enqueueSave((predecessor, recordPersisted) => withStuckSaveWarning('save_data', 'Save', async () => {
+        const canonical = await enqueueSave((predecessor, recordPersisted) => withStuckSaveWarning('save_data', 'Save', async () => {
             const provenance = predecessor?.provenance;
             const effectiveData = predecessor?.confirmedBefore && provenance
                 ? {
@@ -379,6 +380,8 @@ export const tauriStorage: StorageAdapter = {
                 throw new Error(`Failed to save data: ${detail}`);
             }
         }));
+        if (!canonical) throw new Error('save_data returned no canonical data');
+        return canonical;
     },
     saveTask: async (task: Task): Promise<void> => {
         const baselineTask = lastObservedData && Array.isArray(lastObservedData.tasks)
@@ -395,7 +398,7 @@ export const tauriStorage: StorageAdapter = {
             lastObservedData = attemptedData;
         }
         const queuedSaveVersion = beginSaveGeneration();
-        return enqueueSave((predecessor, recordPersisted) => withStuckSaveWarning('save_task', 'Task save', async () => {
+        await enqueueSave((predecessor, recordPersisted) => withStuckSaveWarning('save_task', 'Task save', async () => {
             markLocalSqliteWrite();
             try {
                 const effectiveBaselineTask = predecessor?.provenance

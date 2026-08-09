@@ -173,7 +173,9 @@ const desktopBoundaries: DataTransferBoundaries = {
     createRecoverySnapshot: async () => (
         isTauriRuntime() ? SyncService.createDataSnapshot() : null
     ),
-    persistData: (data) => getStorage().saveData(data),
+    persistData: async (data) => {
+        await getStorage().saveData(data);
+    },
     refreshData: () => useTaskStore.getState().fetchData({ silent: true }),
     onStale: ({ operation: staleOperation, localSnapshotChangeAt, currentChangeAt }) => {
         void logInfo('Data transfer aborted after local data changed', {

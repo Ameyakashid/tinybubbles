@@ -39,19 +39,19 @@ type LocalDataWatcherDependencies = {
     normalize: (data: AppData) => AppData;
     merge: (local: AppData, incoming: AppData) => AppData;
     getSnapshot: () => AppData;
-    persistMergedData: (merged: AppData) => Promise<void>;
+    persistMergedData: (merged: AppData) => Promise<AppData | void>;
     logInfo: (message: string, extra?: Record<string, unknown>) => void;
     logWarn: (message: string, extra?: Record<string, unknown>) => void;
 };
 
-const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => {
-    const allTasks = Array.isArray(merged.tasks) ? merged.tasks : [];
-    const allProjects = Array.isArray(merged.projects) ? merged.projects : [];
-    const allSections = Array.isArray(merged.sections) ? merged.sections : [];
-    const allAreas = Array.isArray(merged.areas) ? merged.areas : [];
-    const allPeople = Array.isArray(merged.people) ? merged.people : [];
-
-    await getStorageAdapter().saveData(merged);
+const persistMergedDataThroughStore = async (merged: AppData): Promise<AppData> => {
+    const persisted = await getStorageAdapter().saveData(merged);
+    const canonical = persisted ?? merged;
+    const allTasks = Array.isArray(canonical.tasks) ? canonical.tasks : [];
+    const allProjects = Array.isArray(canonical.projects) ? canonical.projects : [];
+    const allSections = Array.isArray(canonical.sections) ? canonical.sections : [];
+    const allAreas = Array.isArray(canonical.areas) ? canonical.areas : [];
+    const allPeople = Array.isArray(canonical.people) ? canonical.people : [];
 
     useTaskStore.setState((state) => ({
         _allTasks: allTasks,
@@ -61,9 +61,10 @@ const persistMergedDataThroughStore = async (merged: AppData): Promise<void> => 
         people: allPeople.filter((person) => !person.deletedAt),
         _allPeople: allPeople,
         _peopleById: new Map(allPeople.map((person) => [person.id, person] as const)),
-        settings: merged.settings ?? state.settings,
+        settings: canonical.settings ?? state.settings,
         lastDataChangeAt: Date.now(),
     }));
+    return canonical;
 };
 
 const defaultDependencies: LocalDataWatcherDependencies = {
@@ -390,12 +391,11 @@ const markSqliteSelfWriteWindow = (): void => {
     );
 };
 
-const persistMergedDataWithRetry = async (merged: AppData): Promise<void> => {
+const persistMergedDataWithRetry = async (merged: AppData): Promise<AppData> => {
     for (let attempt = 1; attempt <= MAX_MERGED_PERSIST_ATTEMPTS; attempt += 1) {
         const pendingSelfWritesBeforeAttempt = pendingSelfWrites.slice();
         try {
-            await localDataWatcherDependencies.persistMergedData(merged);
-            return;
+            return await localDataWatcherDependencies.persistMergedData(merged) ?? merged;
         } catch (error) {
             // Storage adapters mark a payload before starting their durable
             // write. Restore the previous tokens when that write rejects so a
@@ -409,6 +409,7 @@ const persistMergedDataWithRetry = async (merged: AppData): Promise<void> => {
             );
         }
     }
+    throw new Error('Merged data persistence exhausted without a result');
 };
 
 async function mergeExternalData(): Promise<void> {
@@ -454,8 +455,10 @@ async function mergeExternalData(): Promise<void> {
                 return;
             }
 
-            await persistMergedDataWithRetry(normalizedMerged);
-            lastKnownHash = mergedHash;
+            const canonical = await persistMergedDataWithRetry(normalizedMerged);
+            lastKnownHash = await localDataWatcherDependencies.hashPayload(
+                toStableJson(localDataWatcherDependencies.normalize(canonical)),
+            );
             localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
         } catch (error) {
             localDataWatcherDependencies.logWarn('[local-data-watcher] Failed to merge external data: ' + String(error));

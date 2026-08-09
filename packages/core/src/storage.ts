@@ -29,7 +29,8 @@ export interface StorageAdapter {
     getData(): Promise<AppData>;
     /** Confirms that the exact snapshot returned by getData was applied to the live store. */
     acknowledgeDataLoad?: (data: AppData) => void;
-    saveData(data: AppData): Promise<void>;
+    /** Returns the authoritative persisted snapshot when the backend can provide it. */
+    saveData(data: AppData): Promise<AppData | void>;
     saveTask?: (task: Task, snapshot?: AppData) => Promise<void>;
     queryTasks?: (options: TaskQueryOptions) => Promise<Task[]>;
     searchAll?: (query: string) => Promise<SearchResults>;
