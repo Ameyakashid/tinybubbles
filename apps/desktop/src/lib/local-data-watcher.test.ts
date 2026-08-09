@@ -184,6 +184,71 @@ describe('local-data-watcher', () => {
         expect(useTaskStore.getState().tasks[0]?.id).toBe('mcp-1');
     });
 
+    it('waits for an active document write before refreshing a SQLite WAL change', async () => {
+        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const events: string[] = [];
+        let releaseDocumentWrite: (() => void) | undefined;
+        let markDocumentWriteStarted: (() => void) | undefined;
+        let markRefreshComplete: (() => void) | undefined;
+        const documentWriteGate = new Promise<void>((resolve) => {
+            releaseDocumentWrite = resolve;
+        });
+        const documentWriteStarted = new Promise<void>((resolve) => {
+            markDocumentWriteStarted = resolve;
+        });
+        const refreshComplete = new Promise<void>((resolve) => {
+            markRefreshComplete = resolve;
+        });
+        const refreshStorageData = vi.fn(async () => {
+            events.push('sqlite:refresh');
+            markRefreshComplete?.();
+        });
+
+        __localDataWatcherTestUtils.setDependenciesForTests({
+            watchFile: async (path, callback) => {
+                watchers.push({ path, callback });
+                return () => undefined;
+            },
+            refreshStorageData,
+        });
+
+        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+
+        const documentWrite = runDataTransferTransactionWithoutSnapshot({
+            operation: 'test concurrent document write',
+            flushPendingSave: async () => undefined,
+            getCurrentChangeAt: () => 0,
+            readCurrentData: async () => emptyData(),
+            apply: (data) => ({ data, result: undefined }),
+            persistData: async () => {
+                events.push('document:start');
+                markDocumentWriteStarted?.();
+                await documentWriteGate;
+                events.push('document:end');
+            },
+            refreshData: async () => undefined,
+        });
+
+        await documentWriteStarted;
+        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+
+        try {
+            await flushScheduledTimers();
+
+            expect(refreshStorageData).not.toHaveBeenCalled();
+            expect(events).toEqual(['document:start']);
+
+            releaseDocumentWrite?.();
+            await documentWrite;
+            await refreshComplete;
+
+            expect(events).toEqual(['document:start', 'document:end', 'sqlite:refresh']);
+        } finally {
+            releaseDocumentWrite?.();
+            await Promise.allSettled([documentWrite, refreshComplete]);
+        }
+    });
+
     it('ignores SQLite shared-memory events from read activity', async () => {
         const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
         const refreshStorageData = vi.fn();

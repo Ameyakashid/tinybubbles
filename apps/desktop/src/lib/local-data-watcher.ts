@@ -444,7 +444,7 @@ async function mergeExternalData(): Promise<void> {
 const runSqliteRefresh = (): Promise<void> => {
     if (sqliteRefreshInFlight) return sqliteRefreshInFlight;
 
-    sqliteRefreshInFlight = (async () => {
+    sqliteRefreshInFlight = runSerializedSyncDocumentWriteOperation(async () => {
         try {
             await flushPendingSave();
             const beforeSummary = await buildSnapshotTraceSummary(localDataWatcherDependencies.getSnapshot());
@@ -474,7 +474,7 @@ const runSqliteRefresh = (): Promise<void> => {
                 { error: String(error) },
             );
         }
-    })().finally(() => {
+    }).finally(() => {
         sqliteRefreshInFlight = null;
     });
 
