@@ -85,7 +85,9 @@ const EXPECTED: Record<Entity, Record<Surface, string[]>> = {
 const PATHS = {
     coreTypes: 'packages/core/src/types.ts',
     coreSqliteSchema: 'packages/core/src/sqlite-schema.ts',
-    desktopRustSchema: 'apps/desktop/src-tauri/src/lib.rs',
+    // SQLITE_SCHEMA, the required pragmas and the INSERT statements all live in
+    // storage.rs. They were in lib.rs until dfc748ab1 moved them next to their
+    // only users; this check reads the DDL and the inserts from the same file.
     desktopRustStorage: 'apps/desktop/src-tauri/src/storage.rs',
     swiftMapper: 'apps/mobile/modules/cloudkit-sync/ios/CloudKitRecordMapper.swift',
     objcMapper: 'apps/desktop/src-tauri/src/macos_cloudkit_bridge.m',
@@ -591,7 +593,6 @@ const failures: string[] = [];
 
 const coreTypes = read(PATHS.coreTypes);
 const coreSqliteSchema = read(PATHS.coreSqliteSchema);
-const desktopRustSchema = read(PATHS.desktopRustSchema);
 const desktopRustStorage = read(PATHS.desktopRustStorage);
 const swiftMapper = read(PATHS.swiftMapper);
 const objcMapper = read(PATHS.objcMapper);
@@ -725,18 +726,18 @@ for (const entity of ENTITIES) {
     const expectedSqlite = [...EXPECTED[entity].sqlite, ...legacySqlite];
 
     failures.push(...compareSet(`core SQLite schema ${table}`, parseCreateTableColumns(coreSqliteSchema, table), expectedSqlite));
-    failures.push(...compareSet(`desktop Rust schema ${table}`, parseCreateTableColumns(desktopRustSchema, table), expectedSqlite));
+    failures.push(...compareSet(`desktop Rust schema ${table}`, parseCreateTableColumns(desktopRustStorage, table), expectedSqlite));
     failures.push(...compareSet(`desktop Rust storage INSERT ${table}`, parseRustInsertColumns(desktopRustStorage, table), expectedSqlite));
 
     failures.push(...compareForeignKeys(
         `desktop Rust schema ${table}`,
-        parseForeignKeyReferences(desktopRustSchema, table),
+        parseForeignKeyReferences(desktopRustStorage, table),
         parseForeignKeyReferences(coreSqliteSchema, table)
     ));
 }
 
 failures.push(...compareRequiredPragmas('core SQLite schema', coreSqliteSchema));
-failures.push(...compareRequiredPragmas('desktop Rust schema', desktopRustSchema));
+failures.push(...compareRequiredPragmas('desktop Rust schema', desktopRustStorage));
 
 for (const entity of ENTITIES) {
     const expectedCloud = EXPECTED[entity].cloud;
