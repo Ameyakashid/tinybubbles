@@ -420,24 +420,39 @@ describe('mindwtr csv import', () => {
         const first = applyMindwtrCsvImport(mockAppData([], [], []), beforeParsed, {
             now: '2026-08-08T12:00:00.000Z',
         });
+        const targetSeed = parseMindwtrCsvImportSource({
+            fileName: 'target.csv',
+            text: buildCsv(
+                ['Title', 'Project', 'ID'],
+                [['Existing target task', 'After', 'existing-after-task']],
+            ),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const seeded = applyMindwtrCsvImport(first.data, targetSeed, {
+            now: '2026-08-08T13:00:00.000Z',
+        });
         const priorTaskId = generateDeterministicUUID(
             'mindwtr:csv-import:v1:task:before:stable-task',
         );
         const priorData = {
-            ...first.data,
-            tasks: first.data.tasks.map((task) => ({ ...task, id: priorTaskId })),
+            ...seeded.data,
+            tasks: seeded.data.tasks.map((task) => task.title === 'Move prior import'
+                ? { ...task, id: priorTaskId }
+                : task),
         };
 
         const second = applyMindwtrCsvImport(priorData, afterParsed, {
             now: '2026-08-09T12:00:00.000Z',
         });
         const afterProject = second.data.projects.find((project) => project.title === 'After');
+        const migratedTask = second.data.tasks.find((task) => task.title === 'Move prior import');
 
         expect(second.importedTaskCount).toBe(0);
-        expect(second.data.tasks).toHaveLength(1);
-        expect(second.data.tasks[0]).toMatchObject({
+        expect(second.data.tasks).toHaveLength(2);
+        expect(migratedTask).toMatchObject({
             id: priorTaskId,
             projectId: afterProject?.id,
+            order: 1,
+            orderNum: 1,
             rev: 2,
             revBy: second.data.settings.deviceId,
         });
@@ -594,7 +609,7 @@ describe('mindwtr csv import', () => {
         expect(second.data.tasks).toHaveLength(1);
     });
 
-    it('repairs a shared legacy task container without duplicating the task', () => {
+    it('keeps an edited shared legacy task in its current container without duplicating it', () => {
         const csv = buildCsv(
             ['Title', 'Area', 'Project', 'Section', 'ID'],
             [
@@ -667,18 +682,19 @@ describe('mindwtr csv import', () => {
         expect(second.data.tasks.find((task) => (
             task.title === 'Work task' && task.projectId === upgradedWorkProject?.id
         ))?.id).toBe(first.data.tasks.find((task) => task.title === 'Work task')?.id);
-        expect(second.data.tasks.find((task) => (
-            task.title === 'Home task' && task.projectId === newHomeProject?.id
-        ))).toMatchObject({
+        expect(second.data.tasks.find((task) => task.title === 'Home task')).toMatchObject({
             id: legacyHomeTask?.id,
-            sectionId: newHomeSection?.id,
+            projectId: legacyHomeTask?.projectId,
+            sectionId: legacyHomeTask?.sectionId,
             description: 'Keep this local edit',
             priority: 'urgent',
-            rev: 8,
-            revBy: second.data.settings.deviceId,
-            updatedAt: '2026-08-09T12:00:00.000Z',
+            rev: 7,
+            updatedAt: '2026-08-08T18:00:00.000Z',
         });
-        expect(second.warnings).toContain('1 previously imported task was moved to match its CSV container.');
+        expect(second.warnings).toContain(
+            '1 previously imported task was kept in its current container because it was edited after import.',
+        );
+        expect(second.warnings).not.toContain('1 previously imported task was moved to match its CSV container.');
 
         const third = applyMindwtrCsvImport(second.data, scoped, {
             now: '2026-08-10T12:00:00.000Z',
@@ -689,6 +705,47 @@ describe('mindwtr csv import', () => {
         expect(third.data.projects).toHaveLength(2);
         expect(third.data.sections).toHaveLength(2);
         expect(third.data.tasks).toHaveLength(2);
+    });
+
+    it('clears project ordering when an untouched legacy task is safely moved to Inbox', () => {
+        const beforeParsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(
+                ['Title', 'Project', 'Order', 'ID'],
+                [['Move to Inbox', 'Before', '4', 'stable-task']],
+            ),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const afterParsed = parseMindwtrCsvImportSource({
+            fileName: 'export.csv',
+            text: buildCsv(['Title', 'ID'], [['Move to Inbox', 'stable-task']]),
+        }).parsedData as ParsedMindwtrCsvImportData;
+        const first = applyMindwtrCsvImport(mockAppData([], [], []), beforeParsed, {
+            now: '2026-08-08T12:00:00.000Z',
+        });
+        const priorTaskId = generateDeterministicUUID(
+            'mindwtr:csv-import:v1:task:before:stable-task',
+        );
+        const priorData = {
+            ...first.data,
+            tasks: first.data.tasks.map((task) => ({ ...task, id: priorTaskId })),
+        };
+
+        const second = applyMindwtrCsvImport(priorData, afterParsed, {
+            now: '2026-08-09T12:00:00.000Z',
+        });
+
+        expect(second.importedTaskCount).toBe(0);
+        expect(second.data.tasks).toHaveLength(1);
+        expect(second.data.tasks[0]).toMatchObject({
+            id: priorTaskId,
+            projectId: undefined,
+            sectionId: undefined,
+            areaId: undefined,
+            order: undefined,
+            orderNum: undefined,
+            rev: 2,
+        });
+        expect(second.warnings).toContain('1 previously imported task was moved to match its CSV container.');
     });
 
     it('repairs a task from a previously colliding colon-scoped path without duplicating it', () => {
