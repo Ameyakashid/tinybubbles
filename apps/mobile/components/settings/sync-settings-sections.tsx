@@ -138,6 +138,9 @@ type SyncBackupSectionProps = {
   handleImportTodoist: () => void;
   handleMergeBackup: () => void;
   handleRestoreBackup: () => void;
+  // The screen owns the docs URL, so it passes the rendered link in rather than
+  // this module reaching into the settings shell for SettingsGuideLink.
+  importGuide?: ReactNode;
   isBackupBusy: boolean;
   isGettingStartedDisabled: boolean;
   isGettingStartedBusy: boolean;
@@ -147,6 +150,10 @@ type SyncBackupSectionProps = {
   tc: ThemeColors;
 };
 
+// Two folded cards, matching desktop's Data page: restoring a backup and
+// migrating from another app are unrelated errands, and both are rare enough to
+// stay folded until asked for (same disclosure shape as the recovery snapshots
+// card below). The cards title themselves, so there is no outer section header.
 export function SyncBackupSection({
   backupAction,
   handleAddGettingStartedContent,
@@ -158,6 +165,7 @@ export function SyncBackupSection({
   handleImportTodoist,
   handleMergeBackup,
   handleRestoreBackup,
+  importGuide,
   isBackupBusy,
   isGettingStartedDisabled,
   isGettingStartedBusy,
@@ -166,30 +174,28 @@ export function SyncBackupSection({
   t,
   tc,
 }: SyncBackupSectionProps) {
-  // Migration and backup are rare errands, so the rows stay folded until asked
-  // for (same disclosure shape as the recovery snapshots card below).
-  const [open, setOpen] = React.useState(false);
+  const [backupOpen, setBackupOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
 
   return (
     <>
-      <Text style={[styles.sectionTitle, { color: tc.text, marginTop: 24 }]}>{t('settings.backup')}</Text>
-      <View style={[styles.settingCard, { backgroundColor: tc.cardBg }]}>
+      <View style={[styles.settingCard, { backgroundColor: tc.cardBg, marginTop: 24 }]}>
         <TouchableOpacity
           style={[styles.gtdNavigationRow, { borderTopWidth: 0 }]}
-          onPress={() => setOpen((prev) => !prev)}
+          onPress={() => setBackupOpen((prev) => !prev)}
           accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
+          accessibilityState={{ expanded: backupOpen }}
           activeOpacity={0.75}
-          testID="data-transfer-disclosure"
+          testID="backup-disclosure"
         >
           <View style={styles.settingInfo}>
-            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.dataTransfer')}</Text>
+            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.backup')}</Text>
             <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-              {t('settings.dataTransferDesc')}
+              {t('settings.backupDesc')}
             </Text>
           </View>
           <Ionicons
-            name={open ? 'chevron-up' : 'chevron-down'}
+            name={backupOpen ? 'chevron-up' : 'chevron-down'}
             size={18}
             color={tc.secondaryText}
             accessible={false}
@@ -197,7 +203,7 @@ export function SyncBackupSection({
             importantForAccessibility="no-hide-descendants"
           />
         </TouchableOpacity>
-        {open && (
+        {backupOpen && (
         <>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -270,6 +276,41 @@ export function SyncBackupSection({
             </View>
             {isGettingStartedBusy && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
+        </>
+        )}
+      </View>
+
+      <View style={[styles.settingCard, { backgroundColor: tc.cardBg, marginTop: 16 }]}>
+        <TouchableOpacity
+          style={[styles.gtdNavigationRow, { borderTopWidth: 0 }]}
+          onPress={() => setImportOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: importOpen }}
+          activeOpacity={0.75}
+          testID="import-disclosure"
+        >
+          <View style={styles.settingInfo}>
+            <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.importData')}</Text>
+            <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
+              {t('settings.importDataDesc')}
+            </Text>
+          </View>
+          <Ionicons
+            name={importOpen ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={tc.secondaryText}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        </TouchableOpacity>
+        {importOpen && (
+        <>
+          {importGuide ? (
+            <View style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}>
+              {importGuide}
+            </View>
+          ) : null}
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportTodoist}

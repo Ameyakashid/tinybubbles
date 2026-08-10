@@ -63,6 +63,14 @@ describe('SyncBackupSection', () => {
     ['data-transfer-import-mindwtr-csv', 'settings.syncMobile.importFromMindwtrCsv', 'settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks'],
   ] as const;
 
+  function expand(tree: renderer.ReactTestRenderer, ...testIDs: string[]) {
+    act(() => {
+      for (const testID of testIDs) {
+        tree.root.findByProps({ testID }).props.onPress();
+      }
+    });
+  }
+
   it.each([
     ['import:todoist', 'handleImportTodoist'],
     ['import:ticktick', 'handleImportTickTick'],
@@ -83,54 +91,78 @@ describe('SyncBackupSection', () => {
         <SyncBackupSection {...baseProps} {...handlers} backupAction={backupAction} isBackupBusy />,
       );
     });
-    act(() => {
-      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
-    });
+    expand(tree, 'backup-disclosure', 'import-disclosure');
 
     const spinners = tree.root.findAllByType(ActivityIndicator);
     expect(spinners).toHaveLength(1);
     expect(spinners[0].parent?.props.onPress).toBe(handlers[handlerName]);
   });
 
-  it('starts folded, showing only the disclosure header', () => {
+  it('starts with both cards folded, showing only their disclosure headers', () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => {
       tree = renderer.create(<SyncBackupSection {...baseProps} />);
     });
 
-    const header = tree.root.findByProps({ testID: 'data-transfer-disclosure' });
-    expect(header.props.accessibilityState).toEqual({ expanded: false });
+    for (const testID of ['backup-disclosure', 'import-disclosure']) {
+      expect(tree.root.findByProps({ testID }).props.accessibilityState, testID).toEqual({ expanded: false });
+    }
     const texts = renderedText(tree);
-    expect(texts).toContain('settings.dataTransfer');
+    expect(texts).toContain('settings.backup');
+    expect(texts).toContain('settings.importData');
     expect(texts).not.toContain('settings.exportBackup');
     expect(texts).not.toContain('settings.syncMobile.importFromTodoist');
-    const chevron = tree.root.findByType(Ionicons);
-    expect(chevron.props.accessible).toBe(false);
-    expect(chevron.props.accessibilityElementsHidden).toBe(true);
-    expect(chevron.props.importantForAccessibility).toBe('no-hide-descendants');
+    const chevrons = tree.root.findAllByType(Ionicons);
+    expect(chevrons).toHaveLength(2);
+    for (const chevron of chevrons) {
+      expect(chevron.props.accessible).toBe(false);
+      expect(chevron.props.accessibilityElementsHidden).toBe(true);
+      expect(chevron.props.importantForAccessibility).toBe('no-hide-descendants');
+    }
   });
 
-  it('reveals the transfer rows when the header is pressed', () => {
+  // The split the maintainer asked for: opening one card must not drag the
+  // other errand's rows in with it.
+  it('reveals only the backup rows when the backup header is pressed', () => {
     const handleBackup = vi.fn();
     let tree!: renderer.ReactTestRenderer;
     act(() => {
       tree = renderer.create(<SyncBackupSection {...baseProps} handleBackup={handleBackup} />);
     });
 
-    act(() => {
-      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
-    });
+    expand(tree, 'backup-disclosure');
 
-    const header = tree.root.findByProps({ testID: 'data-transfer-disclosure' });
-    expect(header.props.accessibilityState).toEqual({ expanded: true });
+    expect(tree.root.findByProps({ testID: 'backup-disclosure' }).props.accessibilityState)
+      .toEqual({ expanded: true });
+    expect(tree.root.findByProps({ testID: 'import-disclosure' }).props.accessibilityState)
+      .toEqual({ expanded: false });
     const texts = renderedText(tree);
     expect(texts).toContain('settings.exportBackup');
-    expect(texts).toContain('settings.syncMobile.importFromMindwtrCsv');
+    expect(texts).toContain('settings.gettingStartedContentAction');
+    expect(texts).not.toContain('settings.syncMobile.importFromMindwtrCsv');
 
     act(() => {
       tree.root.findAllByProps({ onPress: handleBackup })[0].props.onPress();
     });
     expect(handleBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it('reveals only the importers when the import header is pressed, guide link first', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncBackupSection {...baseProps} importGuide={<Text>import-guide</Text>} />,
+      );
+    });
+
+    expand(tree, 'import-disclosure');
+
+    const texts = renderedText(tree);
+    expect(texts).toContain('settings.syncMobile.importFromMindwtrCsv');
+    expect(texts).not.toContain('settings.exportBackup');
+    expect(texts.indexOf('import-guide')).toBeLessThan(
+      texts.indexOf('settings.syncMobile.importFromTodoist'),
+    );
   });
 
   it('exposes every revealed data action as a named button with disabled and busy state', () => {
@@ -144,9 +176,7 @@ describe('SyncBackupSection', () => {
         />,
       );
     });
-    act(() => {
-      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
-    });
+    expand(tree, 'backup-disclosure', 'import-disclosure');
 
     for (const [testID, label, hint] of actionRows) {
       const row = tree.root.findByProps({ testID });
@@ -166,7 +196,7 @@ describe('SyncBackupSection', () => {
     }
   });
 
-  it('offers Getting Started recovery from the normal folded data-transfer section', () => {
+  it('offers Getting Started recovery from the normal folded backup section', () => {
     const handleAddGettingStartedContent = vi.fn();
     let tree!: renderer.ReactTestRenderer;
     act(() => {
@@ -178,9 +208,7 @@ describe('SyncBackupSection', () => {
       );
     });
 
-    act(() => {
-      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
-    });
+    expand(tree, 'backup-disclosure');
 
     expect(renderedText(tree)).toContain('settings.gettingStartedContentAction');
     expect(renderedText(tree)).toContain('settings.gettingStartedContentDesc');
@@ -201,9 +229,7 @@ describe('SyncBackupSection', () => {
         />,
       );
     });
-    act(() => {
-      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
-    });
+    expand(tree, 'backup-disclosure');
 
     const action = tree.root.findByProps({ testID: 'add-getting-started-content' });
     expect(action.props.accessibilityRole).toBe('button');

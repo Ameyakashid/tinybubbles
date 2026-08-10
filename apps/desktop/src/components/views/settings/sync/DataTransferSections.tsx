@@ -3,19 +3,25 @@ import { useState } from 'react';
 import { SettingsDisclosureCard } from '../SettingRow';
 import type { SettingsDataPageProps } from './types';
 
-type DataTransferSectionProps = Pick<
+type BackupSectionProps = Pick<
     SettingsDataPageProps,
     | 't'
     | 'transferAction'
     | 'onExportBackup'
     | 'onRestoreBackup'
     | 'onMergeBackup'
+    | 'onAddGettingStartedContent'
+>;
+
+type ImportSectionProps = Pick<
+    SettingsDataPageProps,
+    | 't'
+    | 'transferAction'
     | 'onImportTodoist'
     | 'onImportTickTick'
     | 'onImportDgt'
     | 'onImportOmniFocus'
     | 'onImportMindwtrCsv'
-    | 'onAddGettingStartedContent'
 >;
 
 function TransferActionButton({
@@ -50,42 +56,28 @@ function TransferActionButton({
     );
 }
 
-export function DataTransferSection({
+// Backup and migration are both rare errands, so each card stays folded until
+// asked for. Search reveals a row by clicking its card's header (see
+// expandSettingsSection); nothing persists the choice.
+export function BackupSection({
     onExportBackup,
-    onImportDgt,
-    onImportMindwtrCsv,
-    onImportOmniFocus,
-    onImportTickTick,
-    onImportTodoist,
     onMergeBackup,
     onRestoreBackup,
     onAddGettingStartedContent,
     t,
     transferAction,
-}: DataTransferSectionProps) {
+}: BackupSectionProps) {
     const disabled = transferAction !== null;
-    // Migration and backup are rare errands, so the ten rows stay folded until
-    // asked for. Search reveals them by clicking this header (see
-    // expandSettingsSection); nothing persists the choice.
     const [open, setOpen] = useState(false);
 
     return (
         <SettingsDisclosureCard
-            sectionKey="dataTransfer"
-            title={t.dataTransfer}
-            description={t.dataTransferDesc}
+            sectionKey="backup"
+            title={t.backup}
+            description={t.backupDesc}
             open={open}
             onToggle={() => setOpen((prev) => !prev)}
         >
-            <a
-                href="https://docs.mindwtr.app/import/"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 px-4 py-3 text-sm font-medium text-primary hover:underline"
-            >
-                {t.importSetupGuideTitle}
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            </a>
             <TransferActionButton
                 disabled={disabled}
                 settingsKey="exportBackup"
@@ -117,6 +109,39 @@ export function DataTransferSection({
                 statusText={null}
                 onClick={() => void onAddGettingStartedContent()}
             />
+        </SettingsDisclosureCard>
+    );
+}
+
+export function ImportSection({
+    onImportDgt,
+    onImportMindwtrCsv,
+    onImportOmniFocus,
+    onImportTickTick,
+    onImportTodoist,
+    t,
+    transferAction,
+}: ImportSectionProps) {
+    const disabled = transferAction !== null;
+    const [open, setOpen] = useState(false);
+
+    return (
+        <SettingsDisclosureCard
+            sectionKey="importData"
+            title={t.importData}
+            description={t.importDataDesc}
+            open={open}
+            onToggle={() => setOpen((prev) => !prev)}
+        >
+            <a
+                href="https://docs.mindwtr.app/import/"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 px-4 py-3 text-sm font-medium text-primary hover:underline"
+            >
+                {t.importSetupGuideTitle}
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
             <TransferActionButton
                 disabled={disabled}
                 settingsKey="importTodoist"

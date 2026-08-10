@@ -857,13 +857,6 @@ function SyncSettingsView({
                     </>
                 ) : (
                     <>
-                        <SettingsGuideLink
-                            title={t('settings.importSetupGuideTitle')}
-                            description={t('settings.importSetupGuideDesc')}
-                            url={IMPORT_GUIDE_URL}
-                            testID="import-guide-link"
-                        />
-
                         <SyncBackupSection
                             backupAction={backupAction}
                             handleAddGettingStartedContent={() => handleAddGettingStartedContent()}
@@ -875,6 +868,15 @@ function SyncSettingsView({
                             handleImportTodoist={() => void handleImportTodoist()}
                             handleMergeBackup={() => void handleMergeBackup()}
                             handleRestoreBackup={() => void handleRestoreBackup()}
+                            importGuide={(
+                                <SettingsGuideLink
+                                    title={t('settings.importSetupGuideTitle')}
+                                    description={t('settings.importSetupGuideDesc')}
+                                    url={IMPORT_GUIDE_URL}
+                                    style={{ marginBottom: 0 }}
+                                    testID="import-guide-link"
+                                />
+                            )}
                             isBackupBusy={isBackupBusy}
                             isGettingStartedDisabled={isGettingStartedActionBusy}
                             isGettingStartedBusy={gettingStartedBusy}
