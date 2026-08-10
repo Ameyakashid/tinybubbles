@@ -263,7 +263,13 @@ export function ensureDurableDirectory(
             if (realEntry.isSymbolicLink() || !realEntry.isDirectory()) return null;
 
             const relativeTarget = relative(existingAncestor, absoluteTarget);
-            if (!relativeTarget || relativeTarget === '.') return existingRealPath;
+            if (!relativeTarget || relativeTarget === '.') {
+                // A previous attempt can leave the target visible after mkdir while
+                // failing to fsync its parent entry. Re-sync the entry on retries;
+                // existence alone is not proof that the directory is durable.
+                syncDirectoryEntryParent(dirname(absoluteTarget), fileSystem);
+                return existingRealPath;
+            }
             const canonicalTarget = resolve(existingRealPath, relativeTarget);
             if (!ensureDirectoryWithinRoot(
                 existingRealPath,

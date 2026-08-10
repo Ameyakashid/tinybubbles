@@ -161,15 +161,18 @@ describe('durablyPublishFile', () => {
 function createDurableDirectoryFileSystem(
     initialDirectories: string[],
     failureStage?: DirectoryFailureStage,
+    failureCount = Number.POSITIVE_INFINITY,
 ) {
     const directories = new Set(initialDirectories);
     const createdDirectories = new Set<string>();
     const events: string[] = [];
     const handles = new Map<number, string>();
     let nextHandle = 1;
+    let remainingFailures = failureCount;
 
     const failAt = (stage: DirectoryFailureStage): void => {
-        if (failureStage === stage) {
+        if (failureStage === stage && remainingFailures > 0) {
+            remainingFailures -= 1;
             throw Object.assign(new Error(`injected ${stage} failure`), { code: 'EIO' });
         }
     };
@@ -283,6 +286,30 @@ describe('ensureDurableDirectory', () => {
             'open-parent:/cloud/data/namespace/attachments/projects',
             'fsync-parent:/cloud/data/namespace/attachments/projects',
             'close-parent:/cloud/data/namespace/attachments/projects',
+        ]);
+    });
+
+    test('re-establishes target entry durability when retrying after parent fsync failure', () => {
+        const harness = createDurableDirectoryFileSystem(['/cloud'], 'fsync-parent', 1);
+
+        expect(() => ensureDurableDirectory(
+            '/cloud/data',
+            harness.fileSystem,
+        )).toThrow('injected fsync-parent failure');
+        expect(harness.directories.has('/cloud/data')).toBe(true);
+
+        expect(ensureDurableDirectory(
+            '/cloud/data',
+            harness.fileSystem,
+        )).toBe('/cloud/data');
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/data',
+            'open-parent:/cloud',
+            'close-parent:/cloud',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
         ]);
     });
 
