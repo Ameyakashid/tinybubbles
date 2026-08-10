@@ -253,6 +253,42 @@ describe('local-data-watcher', () => {
         expect(lateUnwatch).toHaveBeenCalledTimes(1);
     });
 
+    it('contains throwing cleanup callbacks and still disposes every watcher resource', async () => {
+        const dataUnwatch = vi.fn(() => {
+            throw new Error('data unwatch failed');
+        });
+        const sqliteUnwatch = vi.fn();
+        const editUnlockUnsubscribe = vi.fn(() => {
+            throw new Error('edit unlock unsubscribe failed');
+        });
+        const callbacks: Array<(event: { path?: string; paths?: string[] }) => void> = [];
+        const watchFile = vi.fn(async (_path: string, callback: (event: { path?: string; paths?: string[] }) => void) => {
+            callbacks.push(callback);
+            return callbacks.length === 1 ? dataUnwatch : sqliteUnwatch;
+        });
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            getEditLockCount: () => 1,
+            subscribeStore: () => editUnlockUnsubscribe,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        callbacks[1]?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+
+        expect(() => controller.stop()).not.toThrow();
+        expect(dataUnwatch).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+        expect(editUnlockUnsubscribe).toHaveBeenCalledTimes(1);
+        expect(() => controller.stop()).not.toThrow();
+        expect(dataUnwatch).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+        expect(editUnlockUnsubscribe).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps controller payload and timer state isolated', () => {
         const controllerA = createLocalDataWatcherController({
             now: () => 100,

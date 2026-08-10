@@ -394,7 +394,7 @@ export const createLocalDataWatcherController = (
             if (localDataWatcherDependencies.getEditLockCount() > 0) return;
             const unsubscribe = sqliteEditUnlockUnsubscribe;
             sqliteEditUnlockUnsubscribe = null;
-            unsubscribe?.();
+            runWatcherCleanupSafely(unsubscribe, 'release edit-unlock subscription');
             if (!hasPendingSqliteChangeDuringSelfWrite) return;
             hasPendingSqliteChangeDuringSelfWrite = false;
             const pendingPaths = pendingSqliteChangePaths;
@@ -860,6 +860,19 @@ export const createLocalDataWatcherController = (
         markSqliteSelfWriteWindow();
     }
 
+    function runWatcherCleanupSafely(cleanup: (() => void) | null | undefined, label: string): void {
+        if (!cleanup) return;
+        try {
+            cleanup();
+        } catch (error) {
+            try {
+                localDataWatcherDependencies.logWarn(`[local-data-watcher] Failed to ${label}: ${String(error)}`);
+            } catch {
+                // Teardown must continue even if diagnostics are unavailable.
+            }
+        }
+    }
+
     const clearWatchRegistrationRetry = (channel: WatchChannelState): void => {
         if (channel.retryTimer) {
             localDataWatcherDependencies.cancelSchedule(channel.retryTimer);
@@ -875,7 +888,7 @@ export const createLocalDataWatcherController = (
         channel.callback = null;
         const unwatch = channel.unwatch;
         channel.unwatch = null;
-        unwatch?.();
+        runWatcherCleanupSafely(unwatch, 'release file watcher');
     };
 
     const scheduleWatchRegistrationRetry = (channel: WatchChannelState): void => {
@@ -905,7 +918,7 @@ export const createLocalDataWatcherController = (
                 const registered = await localDataWatcherDependencies.watchFile(path, callback);
                 const unwatch = resolveUnwatch(registered);
                 if (generation !== watcherGeneration || channel.path !== path) {
-                    unwatch?.();
+                    runWatcherCleanupSafely(unwatch, 'release stale file watcher');
                     return;
                 }
                 channel.unwatch = unwatch;
@@ -1016,7 +1029,7 @@ export const createLocalDataWatcherController = (
         clearMergedPersistRetry();
         clearSqliteRefreshRetry();
         if (sqliteEditUnlockUnsubscribe) {
-            sqliteEditUnlockUnsubscribe();
+            runWatcherCleanupSafely(sqliteEditUnlockUnsubscribe, 'release edit-unlock subscription');
             sqliteEditUnlockUnsubscribe = null;
         }
         hasPendingChangeDuringIgnore = false;
