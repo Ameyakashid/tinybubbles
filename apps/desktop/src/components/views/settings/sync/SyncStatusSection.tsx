@@ -298,12 +298,12 @@ export function SyncStatusSection({
                                         const timestamp = safeFormatDate(entry.at, 'PPpp', entry.at);
                                         const statusLabel = formatHistoryStatus(entry.status);
                                         const parts = [
-                                            entry.backend ? `Backend: ${entry.backend}` : null,
-                                            entry.type ? `Type: ${entry.type}` : null,
+                                            entry.backend ? `${t.syncHistoryBackend}: ${entry.backend}` : null,
+                                            entry.type ? `${t.syncHistoryType}: ${entry.type}` : null,
                                             entry.conflicts ? `${t.lastSyncConflicts}: ${entry.conflicts}` : null,
                                             entry.maxClockSkewMs > 0 ? `${t.lastSyncSkew}: ${formatClockSkew(entry.maxClockSkewMs)}` : null,
                                             entry.timestampAdjustments > 0 ? `${t.lastSyncAdjusted}: ${entry.timestampAdjustments}` : null,
-                                            entry.details ? `Details: ${entry.details}` : null,
+                                            entry.details ? `${t.syncHistoryDetails}: ${entry.details}` : null,
                                         ].filter(Boolean);
                                         return (
                                             <div key={`${entry.at}-${entry.status}`} className="text-xs text-muted-foreground">

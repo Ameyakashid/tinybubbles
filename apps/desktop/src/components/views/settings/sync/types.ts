@@ -129,6 +129,9 @@ export type SettingsSyncLabels = {
     syncConflictDeleteRestore: string;
     syncConflictMore: string;
     syncHistory: string;
+    syncHistoryBackend: string;
+    syncHistoryType: string;
+    syncHistoryDetails: string;
     recoverySnapshots: string;
     recoverySnapshotsDesc: string;
     recoverySnapshotsLoading: string;

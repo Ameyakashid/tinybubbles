@@ -80,4 +80,31 @@ describe('SyncStatusSection', () => {
         expect(queryByText(firstSnapshot)).not.toBeInTheDocument();
         expect(queryByText(secondSnapshot)).not.toBeInTheDocument();
     });
+
+    it('uses localized labels for sync history metadata', () => {
+        const { getByRole, getByText, queryByText } = renderStatus(new Date().toISOString(), {
+            lastSyncHistory: [{
+                at: '2026-08-01T12:00:00.000Z',
+                status: 'success',
+                backend: 'webdav',
+                type: 'manual',
+                conflicts: 0,
+                maxClockSkewMs: 0,
+                timestampAdjustments: 0,
+                details: 'uploaded 2 records',
+            }],
+            t: labelsWith({
+                syncHistoryBackend: 'Source',
+                syncHistoryType: 'Kind',
+                syncHistoryDetails: 'Info',
+            }),
+        });
+
+        fireEvent.click(getByRole('button', { name: 'syncHistory' }));
+
+        const historyEntry = getByText(/Source: webdav/);
+        expect(historyEntry).toHaveTextContent('Kind: manual');
+        expect(historyEntry).toHaveTextContent('Info: uploaded 2 records');
+        expect(queryByText(/Backend:|Type:|Details:/)).not.toBeInTheDocument();
+    });
 });
