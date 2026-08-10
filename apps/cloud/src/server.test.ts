@@ -55,7 +55,13 @@ import {
     validateAppData,
     validateEntityProps,
 } from './server-validation';
-import { resolveServerMergeTimestamp, startCloudServer } from './server';
+import {
+    canonicalCloudRoute,
+    resolveServerMergeTimestamp,
+    shouldLogCloudRequest,
+    startCloudServer,
+    type CloudRequestCompletion,
+} from './server';
 
 const expireFileForOrphanGc = (path: string): void => {
     const staleTime = new Date(Date.now() - 10 * 60 * 1000);
@@ -1607,14 +1613,29 @@ describe('cloud server api', () => {
     let dataDir = '';
     let baseUrl = '';
     let stopServer: (() => void) | null = null;
+    let completionRecords: CloudRequestCompletion[] = [];
 
     const integrationToken = 'integration-token-1234567890';
     const authHeaders = {
         Authorization: `Bearer ${integrationToken}`,
     };
+    const expectCompletion = (
+        completion: CloudRequestCompletion,
+        expected: Omit<CloudRequestCompletion, 'elapsedMs'>,
+    ): void => {
+        const { elapsedMs, ...actual } = completion;
+        expect(actual).toEqual(expected);
+        expect(Number.isFinite(elapsedMs) && elapsedMs >= 0).toBe(true);
+    };
+    const getRequestId = (response: Response): string => {
+        const requestId = response.headers.get('X-Request-Id');
+        expect(requestId).toBeTruthy();
+        return requestId!;
+    };
 
     beforeEach(async () => {
         dataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-test-'));
+        completionRecords = [];
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1623,6 +1644,8 @@ describe('cloud server api', () => {
             maxPerWindow: 1_000,
             maxAttachmentPerWindow: 1_000,
             allowedAuthTokens: new Set([integrationToken]),
+            logAllRequests: true,
+            requestCompletionSink: (record) => completionRecords.push(record),
         });
         baseUrl = `http://127.0.0.1:${server.port}`;
         stopServer = server.stop;
@@ -1652,7 +1675,142 @@ describe('cloud server api', () => {
         expect(response.headers.get('Access-Control-Allow-Origin')).toBe(corsOrigin);
         expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Authorization, Content-Type');
         expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS');
+        const requestId = getRequestId(response);
+        expect(response.headers.get('Access-Control-Expose-Headers')).toContain('X-Request-Id');
+        expectCompletion(completionRecords.at(-1)!, {
+            requestId,
+            method: 'OPTIONS',
+            route: '/v1/tasks',
+            status: 204,
+        });
         expect(await response.text()).toBe('');
+    });
+
+    test('correlates success, validation, authorization, and internal-error responses without sensitive route data', async () => {
+        const success = await fetch(`${baseUrl}/health?token=query-secret`);
+        const successId = getRequestId(success);
+        expect(success.status).toBe(200);
+        expectCompletion(completionRecords.at(-1)!, {
+            requestId: successId,
+            method: 'GET',
+            route: '/health',
+            status: 200,
+        });
+
+        const validation = await fetch(`${baseUrl}/v1/tasks`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'content-type': 'application/json' },
+            body: '{}',
+        });
+        expect(validation.status).toBe(400);
+        expectCompletion(completionRecords.at(-1)!, {
+            requestId: getRequestId(validation),
+            method: 'POST',
+            route: '/v1/tasks',
+            status: 400,
+        });
+
+        const privateEntityId = 'private-project-identifier';
+        const authorization = await fetch(`${baseUrl}/v1/projects/${privateEntityId}?credential=query-secret`);
+        expect(authorization.status).toBe(401);
+        const authorizationRecord = completionRecords.at(-1)!;
+        expectCompletion(authorizationRecord, {
+            requestId: getRequestId(authorization),
+            method: 'GET',
+            route: '/v1/projects/:id',
+            status: 401,
+        });
+        const serializedAuthorizationRecord = JSON.stringify(authorizationRecord);
+        expect(serializedAuthorizationRecord).not.toContain(privateEntityId);
+        expect(serializedAuthorizationRecord).not.toContain('query-secret');
+        expect(serializedAuthorizationRecord).not.toContain(integrationToken);
+
+        const namespacePath = join(dataDir, `${tokenToKey(integrationToken)}.json`);
+        mkdirSync(namespacePath);
+        const internalError = await fetch(`${baseUrl}/v1/data`, { headers: authHeaders });
+        expect(internalError.status).toBe(500);
+        expectCompletion(completionRecords.at(-1)!, {
+            requestId: getRequestId(internalError),
+            method: 'GET',
+            route: '/v1/data',
+            status: 500,
+        });
+        rmSync(namespacePath, { recursive: true, force: true });
+    });
+
+    test('canonicalizes dynamic and unknown paths without retaining identifiers', () => {
+        expect(canonicalCloudRoute('/v1/tasks/task-secret/complete')).toBe('/v1/tasks/:id/complete');
+        expect(canonicalCloudRoute('/v1/attachments/private/folder/file.pdf')).toBe('/v1/attachments/:path');
+        expect(canonicalCloudRoute('/v1/calendar/private-token.ics')).toBe('/v1/calendar/:token');
+        expect(canonicalCloudRoute('/private/unknown/path')).toBe('unmatched');
+    });
+
+    test('logs failures and slow requests by default while gating ordinary completions', () => {
+        const ordinary: CloudRequestCompletion = {
+            requestId: 'request-id',
+            method: 'GET',
+            route: '/health',
+            status: 200,
+            elapsedMs: 5,
+        };
+        expect(shouldLogCloudRequest(ordinary, false, 1_000)).toBe(false);
+        expect(shouldLogCloudRequest({ ...ordinary, status: 401 }, false, 1_000)).toBe(true);
+        expect(shouldLogCloudRequest({ ...ordinary, elapsedMs: 1_000 }, false, 1_000)).toBe(true);
+        expect(shouldLogCloudRequest(ordinary, true, 1_000)).toBe(true);
+    });
+
+    test('correlates rate-limit and timeout responses with their completion records', async () => {
+        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-correlation-'));
+        const isolatedToken = 'correlation-token-1234567890';
+        const isolatedRecords: CloudRequestCompletion[] = [];
+        const isolatedServer = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: isolatedDataDir,
+            windowMs: 60_000,
+            maxPerWindow: 1,
+            requestTimeoutMs: 100,
+            allowedAuthTokens: new Set([isolatedToken]),
+            logAllRequests: true,
+            requestCompletionSink: (record) => isolatedRecords.push(record),
+        });
+        const isolatedBaseUrl = `http://127.0.0.1:${isolatedServer.port}`;
+        const isolatedAuthHeaders = { Authorization: `Bearer ${isolatedToken}` };
+
+        try {
+            const first = await fetch(`${isolatedBaseUrl}/v1/projects`, { headers: isolatedAuthHeaders });
+            expect(first.status).toBe(200);
+            const rateLimited = await fetch(`${isolatedBaseUrl}/v1/projects`, { headers: isolatedAuthHeaders });
+            expect(rateLimited.status).toBe(429);
+            expectCompletion(isolatedRecords.at(-1)!, {
+                requestId: getRequestId(rateLimited),
+                method: 'GET',
+                route: '/v1/projects',
+                status: 429,
+            });
+
+            const stalledBody = new ReadableStream<Uint8Array>({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode('{'));
+                },
+            });
+            const timeout = await fetch(`${isolatedBaseUrl}/v1/data`, {
+                method: 'PUT',
+                headers: { ...isolatedAuthHeaders, 'content-type': 'application/json' },
+                body: stalledBody,
+                duplex: 'half',
+            });
+            expect(timeout.status).toBe(408);
+            expectCompletion(isolatedRecords.at(-1)!, {
+                requestId: getRequestId(timeout),
+                method: 'PUT',
+                route: '/v1/data',
+                status: 408,
+            });
+        } finally {
+            isolatedServer.stop();
+            rmSync(isolatedDataDir, { recursive: true, force: true });
+        }
     });
 
     test('returns post-write metadata for PUT /v1/data', async () => {

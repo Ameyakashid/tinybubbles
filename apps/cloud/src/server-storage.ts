@@ -569,6 +569,10 @@ export async function readRequestBytes(
                 signal.removeEventListener('abort', onAbort);
             }
         }
+        // reader.cancel() resolves a pending read as { done: true } instead of
+        // throwing, so recheck the request signal before treating partial bytes
+        // as a complete body.
+        throwIfRequestAborted(signal);
 
         if (chunks.length === 0) {
             return new Uint8Array();

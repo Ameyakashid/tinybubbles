@@ -118,6 +118,63 @@ const generateRequestId = (): string => {
     return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
+export type CloudRequestCompletion = {
+    requestId: string;
+    method: string;
+    route: string;
+    status: number;
+    elapsedMs: number;
+};
+
+export const shouldLogCloudRequest = (
+    completion: CloudRequestCompletion,
+    logAllRequests: boolean,
+    slowRequestMs: number,
+): boolean => (
+    logAllRequests
+    || completion.status >= 400
+    || completion.elapsedMs >= slowRequestMs
+);
+
+const STATIC_CLOUD_ROUTES = new Set([
+    '/',
+    '/health',
+    '/v1/areas',
+    '/v1/attachments/orphans',
+    '/v1/calendar/feed',
+    '/v1/data',
+    '/v1/projects',
+    '/v1/search',
+    '/v1/sections',
+    '/v1/tasks',
+]);
+
+export function canonicalCloudRoute(pathname: string): string {
+    if (STATIC_CLOUD_ROUTES.has(pathname)) return pathname;
+    const taskActionMatch = pathname.match(/^\/v1\/tasks\/[^/]+\/(complete|archive)$/);
+    if (taskActionMatch) return `/v1/tasks/:id/${taskActionMatch[1]}`;
+    if (/^\/v1\/tasks\/[^/]+$/.test(pathname)) return '/v1/tasks/:id';
+    if (/^\/v1\/projects\/[^/]+$/.test(pathname)) return '/v1/projects/:id';
+    if (/^\/v1\/sections\/[^/]+$/.test(pathname)) return '/v1/sections/:id';
+    if (/^\/v1\/areas\/[^/]+$/.test(pathname)) return '/v1/areas/:id';
+    if (/^\/v1\/calendar\/[^/]+\.ics$/.test(pathname)) return '/v1/calendar/:token';
+    if (pathname.startsWith('/v1/attachments/')) return '/v1/attachments/:path';
+    return 'unmatched';
+}
+
+const attachRequestId = (response: Response, requestId: string): void => {
+    response.headers.set('X-Request-Id', requestId);
+    if (!response.headers.has('Access-Control-Allow-Origin')) return;
+    const exposedHeaders = (response.headers.get('Access-Control-Expose-Headers') ?? '')
+        .split(',')
+        .map((header) => header.trim())
+        .filter(Boolean);
+    if (!exposedHeaders.some((header) => header.toLowerCase() === 'x-request-id')) {
+        exposedHeaders.push('X-Request-Id');
+        response.headers.set('Access-Control-Expose-Headers', exposedHeaders.join(', '));
+    }
+};
+
 const emptyCorsResponse = (status: number): Response => {
     const headers = new Headers({
         'Access-Control-Allow-Origin': corsOrigin,
@@ -830,6 +887,9 @@ type CloudServerOptions = {
     trustProxyHeaders?: boolean;
     trustedProxyIps?: Set<string> | null;
     maxAnyTokenNamespaces?: number;
+    logAllRequests?: boolean;
+    slowRequestMs?: number;
+    requestCompletionSink?: (record: CloudRequestCompletion) => void;
 };
 
 type CloudServerHandle = {
@@ -870,6 +930,20 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const withWriteLock = createWriteLockRunner(dataDir);
     const rateLimitCleanupMs = Number(process.env.MINDWTR_CLOUD_RATE_CLEANUP_MS || 60_000);
     const requestTimeoutMs = Number(options.requestTimeoutMs ?? process.env.MINDWTR_CLOUD_REQUEST_TIMEOUT_MS ?? 30_000);
+    const logAllRequests = options.logAllRequests
+        ?? parseBoolEnv(process.env.MINDWTR_CLOUD_LOG_ALL_REQUESTS);
+    const rawSlowRequestMs = Number(options.slowRequestMs ?? process.env.MINDWTR_CLOUD_SLOW_REQUEST_MS ?? 1_000);
+    const slowRequestMs = Number.isFinite(rawSlowRequestMs) && rawSlowRequestMs >= 0
+        ? rawSlowRequestMs
+        : 1_000;
+    const requestCompletionSink = options.requestCompletionSink ?? ((record: CloudRequestCompletion) => {
+        const context = { ...record };
+        if (record.status >= 400 || record.elapsedMs >= slowRequestMs) {
+            logWarn('request completed', context);
+        } else {
+            logInfo('request completed', context);
+        }
+    });
     const rateLimiter = createRateLimiter({ windowMs, maxKeys: RATE_LIMIT_MAX_KEYS });
 
     const getRequestIpAddress = (req: Request): string | null => {
@@ -998,6 +1072,8 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         port,
         async fetch(req: Request) {
             const requestId = generateRequestId();
+            const requestStartedAt = performance.now();
+            let requestRoute = 'unmatched';
             const requestAbortController = new AbortController();
             const withRequestWriteLock = Object.assign(
                 <T>(key: string, handler: () => Promise<T>) => (
@@ -1009,11 +1085,15 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                 requestAbortController.abort(createRequestAbortError('Request timed out', 408));
             }, requestTimeoutMs);
             try {
-                throwIfRequestAborted(requestAbortController.signal);
-                if (req.method === 'OPTIONS') return preflightResponse();
+                const response = await (async (): Promise<Response> => {
+                    try {
+                        throwIfRequestAborted(requestAbortController.signal);
 
-                const url = new URL(req.url);
-                const pathname = normalizeRequestPathname(url);
+                        const url = new URL(req.url);
+                        const pathname = normalizeRequestPathname(url);
+                        requestRoute = canonicalCloudRoute(pathname);
+
+                        if (req.method === 'OPTIONS') return preflightResponse();
 
                 if (req.method === 'GET' && pathname === '/health') {
                     return jsonResponse({ ok: true });
@@ -1334,23 +1414,37 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     if (attachmentPathResponse) return attachmentPathResponse;
                 }
 
-                return errorResponse('Not found', 404);
-            } catch (error) {
-                if (isRequestAbortError(error)) {
-                    return errorResponse(error.message, error.status);
-                }
-                if (error && typeof error === 'object' && 'code' in error) {
-                    const code = (error as { code?: unknown }).code;
-                    if (code === 'EACCES') {
-                        logError(`permission denied writing cloud data (requestId=${requestId})`, error);
-                        return createInternalServerErrorResponse(
-                            'Cloud data directory is not writable. Check volume permissions.',
-                            requestId,
-                        );
+                        return errorResponse('Not found', 404);
+                    } catch (error) {
+                        if (isRequestAbortError(error)) {
+                            return errorResponse(error.message, error.status);
+                        }
+                        if (error && typeof error === 'object' && 'code' in error) {
+                            const code = (error as { code?: unknown }).code;
+                            if (code === 'EACCES') {
+                                logError(`permission denied writing cloud data (requestId=${requestId})`, error);
+                                return createInternalServerErrorResponse(
+                                    'Cloud data directory is not writable. Check volume permissions.',
+                                    requestId,
+                                );
+                            }
+                        }
+                        logError(`request failed (requestId=${requestId})`, error);
+                        return createInternalServerErrorResponse('Internal server error', requestId);
                     }
+                })();
+                attachRequestId(response, requestId);
+                const completion: CloudRequestCompletion = {
+                    requestId,
+                    method: req.method,
+                    route: requestRoute,
+                    status: response.status,
+                    elapsedMs: Math.max(0, Math.round(performance.now() - requestStartedAt)),
+                };
+                if (shouldLogCloudRequest(completion, logAllRequests, slowRequestMs)) {
+                    requestCompletionSink(completion);
                 }
-                logError(`request failed (requestId=${requestId})`, error);
-                return createInternalServerErrorResponse('Internal server error', requestId);
+                return response;
             } finally {
                 clearTimeout(requestTimeout);
             }
