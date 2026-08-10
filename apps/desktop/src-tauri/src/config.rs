@@ -1171,6 +1171,19 @@ enum PendingCredentialResolution {
     Resolved(Option<String>),
 }
 
+fn next_credential_generation_for_service(
+    state: &ConfigCredentialStateFile,
+    service: CredentialService,
+) -> Result<u64, String> {
+    state
+        .bindings
+        .get(service.state_key())
+        .map(|binding| binding.generation)
+        .unwrap_or(0)
+        .checked_add(1)
+        .ok_or_else(|| format!("{} credential generation overflowed", service.state_key()))
+}
+
 fn reconcile_pending_credential_unlocked(
     state_path: &Path,
     state: &mut ConfigCredentialStateFile,
@@ -1208,10 +1221,7 @@ fn reconcile_pending_credential_unlocked(
         }
     }
 
-    let expected_generation = state
-        .credential_generation
-        .checked_add(1)
-        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    let expected_generation = next_credential_generation_for_service(state, service)?;
     if pending.generation == expected_generation
         && pending.endpoint_fingerprint == current_endpoint_fingerprint
     {
@@ -1280,14 +1290,12 @@ fn resolve_bound_credential_unlocked(
             ))
         }
     };
-    state.credential_generation = state
-        .credential_generation
-        .checked_add(1)
-        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    let service_generation = next_credential_generation_for_service(&state, service)?;
+    state.credential_generation = state.credential_generation.max(service_generation);
     state.bindings.insert(
         service_key.to_string(),
         CredentialBinding {
-            generation: state.credential_generation,
+            generation: service_generation,
             endpoint_fingerprint: current_endpoint_fingerprint,
             credential_fingerprint: credential_fingerprint(effective.as_deref()),
         },
@@ -1395,10 +1403,7 @@ where
     let target_credential_fingerprint = credential_fingerprint(next_secret.as_deref());
     let state_path = config_credential_state_path_from_secrets_path(secrets_path);
     let mut state = previous_state.clone();
-    let next_generation = state
-        .credential_generation
-        .checked_add(1)
-        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    let next_generation = next_credential_generation_for_service(&state, service)?;
     state.pending_credential = Some(CredentialBindingPending {
         service: service.state_key().to_string(),
         generation: next_generation,
@@ -1446,7 +1451,8 @@ where
         {
             return Err("Credential pending marker changed before commit".to_string());
         }
-        committed_state.credential_generation = next_generation;
+        committed_state.credential_generation =
+            committed_state.credential_generation.max(next_generation);
         committed_state.bindings.insert(
             service.state_key().to_string(),
             CredentialBinding {
@@ -3947,6 +3953,103 @@ mod tests {
                 Some(pending_service.state_key())
             );
         }
+    }
+
+    #[test]
+    fn unbound_cloud_read_does_not_invalidate_exact_pending_email_recovery() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let email_keyring = std::cell::RefCell::new(None::<String>);
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+        let committed = update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Email,
+            CredentialSecretUpdate::Replace(Some("old-email-secret".to_string())),
+            |config| {
+                config.email_capture_config =
+                    Some(r#"{"enabled":true,"email":"old@example.com"}"#.to_string())
+            },
+            || Ok(email_keyring.borrow().clone()),
+            |secret| {
+                *email_keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("seed email binding");
+
+        let mut target = committed;
+        target.email_capture_config =
+            Some(r#"{"enabled":true,"email":"new@example.com"}"#.to_string());
+        let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+        let mut state = read_config_credential_state_file(&state_path)
+            .unwrap()
+            .expect("state exists");
+        let pending_generation = state.credential_generation + 1;
+        state.pending_credential = Some(CredentialBindingPending {
+            service: CredentialService::Email.state_key().to_string(),
+            generation: pending_generation,
+            endpoint_fingerprint: endpoint_fingerprint(CredentialService::Email, &target),
+            credential_fingerprint: credential_fingerprint(Some("new-email-secret")),
+        });
+        write_config_credential_state_file(&state_path, &state).unwrap();
+        *email_keyring.borrow_mut() = Some("new-email-secret".to_string());
+        write_config_files(&config_path, &secrets_path, &target)
+            .expect("publish exact pending email target");
+
+        let (_, cloud_token) = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            || Ok(None),
+        )
+        .expect("unbound cloud transport remains readable");
+        assert_eq!(cloud_token, None);
+        let interleaved_state = read_config_credential_state_file(&state_path)
+            .unwrap()
+            .expect("state exists");
+        assert_eq!(
+            interleaved_state.credential_generation,
+            state.credential_generation
+        );
+        assert_eq!(
+            interleaved_state
+                .pending_credential
+                .as_ref()
+                .map(|pending| pending.generation),
+            Some(pending_generation)
+        );
+
+        let (recovered_config, recovered_secret) = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Email,
+            || Ok(email_keyring.borrow().clone()),
+        )
+        .expect("exact pending email target recovers after unrelated cloud read");
+        assert_eq!(
+            recovered_config.email_capture_config,
+            target.email_capture_config
+        );
+        assert_eq!(recovered_secret.as_deref(), Some("new-email-secret"));
+
+        let recovered_state = read_config_credential_state_file(&state_path)
+            .unwrap()
+            .expect("state exists");
+        assert!(recovered_state.pending_credential.is_none());
+        assert_eq!(
+            recovered_state
+                .bindings
+                .get(CredentialService::Email.state_key())
+                .map(|binding| binding.generation),
+            Some(pending_generation)
+        );
+        assert!(recovered_state
+            .bindings
+            .contains_key(CredentialService::Cloud.state_key()));
     }
 
     #[test]
