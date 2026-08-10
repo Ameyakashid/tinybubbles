@@ -9,6 +9,26 @@ vi.mock('@/lib/app-log', () => ({
   logWarn: vi.fn(),
 }));
 
+const setHighlightTask = vi.hoisted(() => vi.fn());
+const storeTasksById = vi.hoisted(() => new Map<string, any>());
+const storeProjectsById = vi.hoisted(() => new Map<string, any>());
+const storeAreasById = vi.hoisted(() => new Map<string, any>());
+
+vi.mock('@mindwtr/core', async (importOriginal) => {
+  const { mockCore } = await import('../test-support/mock-core');
+  return mockCore(importOriginal, () => ({
+    _tasksById: storeTasksById,
+    _projectsById: storeProjectsById,
+    _areasById: storeAreasById,
+    setHighlightTask,
+  }));
+});
+
+const syncAppSearchIndexingWithPreference = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@/lib/app-search-service', () => ({
+  syncAppSearchIndexingWithPreference,
+}));
+
 const persistAttachmentLocallyDetailed = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/attachment-sync', () => ({
   persistAttachmentLocallyDetailed,
@@ -37,6 +57,7 @@ function TestHarness({
   resetShareIntent = vi.fn(),
   router,
   shareFiles = null,
+  shareSubject = null,
   shareText = null,
   shareWebUrl = null,
   showToast,
@@ -46,6 +67,7 @@ function TestHarness({
   resetShareIntent?: ReturnType<typeof vi.fn>;
   router: RouterMock;
   shareFiles?: SharedFile[] | null;
+  shareSubject?: string | null;
   shareText?: string | null;
   shareWebUrl?: string | null;
   showToast: ReturnType<typeof vi.fn>;
@@ -58,6 +80,7 @@ function TestHarness({
     resetShareIntent,
     router,
     shareFiles,
+    shareSubject,
     shareText,
     shareWebUrl,
     showToast,
@@ -71,6 +94,9 @@ describe('useRootLayoutExternalCapture', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    storeTasksById.clear();
+    storeProjectsById.clear();
+    storeAreasById.clear();
     router = {
       canGoBack: vi.fn(() => false),
       push: vi.fn(),
@@ -149,6 +175,67 @@ describe('useRootLayoutExternalCapture', () => {
     });
   });
 
+  it('uses the email subject as the title and the body as the description', () => {
+    act(() => {
+      create(
+        <TestHarness
+          hasShareIntent
+          incomingUrl={null}
+          router={router}
+          shareSubject="Quarterly budget review"
+          shareText="Please review the attached numbers before Friday."
+          showToast={showToast}
+        />
+      );
+    });
+
+    const params = router.replace.mock.calls[0][0].params;
+    expect(decodeURIComponent(params.initialValue)).toBe('Quarterly budget review');
+    expect(JSON.parse(decodeURIComponent(params.initialProps))).toEqual({
+      description: 'Please review the attached numbers before Friday.',
+    });
+  });
+
+  it('appends a distinct shared URL under the subject-derived title and body', () => {
+    act(() => {
+      create(
+        <TestHarness
+          hasShareIntent
+          incomingUrl={null}
+          router={router}
+          shareSubject="Read this article"
+          shareText="Thought you'd find this useful."
+          shareWebUrl="https://example.com/article"
+          showToast={showToast}
+        />
+      );
+    });
+
+    const params = router.replace.mock.calls[0][0].params;
+    expect(decodeURIComponent(params.initialValue)).toBe('Read this article');
+    expect(JSON.parse(decodeURIComponent(params.initialProps))).toEqual({
+      description: "Thought you'd find this useful.\nhttps://example.com/article",
+    });
+  });
+
+  it('leaves non-email shares unchanged when no subject is present', () => {
+    act(() => {
+      create(
+        <TestHarness
+          hasShareIntent
+          incomingUrl={null}
+          router={router}
+          shareText="The paragraph I selected in another app"
+          showToast={showToast}
+        />
+      );
+    });
+
+    const params = router.replace.mock.calls[0][0].params;
+    expect(decodeURIComponent(params.initialValue)).toBe('The paragraph I selected in another app');
+    expect(params.initialProps).toBeUndefined();
+  });
+
   it('copies a shared file into attachments and opens capture with it attached', async () => {
     const resetShareIntent = vi.fn();
     persistAttachmentLocallyDetailed.mockImplementation(async (attachment: { uri: string }) => ({
@@ -189,6 +276,36 @@ describe('useRootLayoutExternalCapture', () => {
     });
     expect(showToast).not.toHaveBeenCalled();
     expect(resetShareIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefers the email subject as the title over the filename for file shares', async () => {
+    const resetShareIntent = vi.fn();
+    persistAttachmentLocallyDetailed.mockImplementation(async (attachment: { uri: string }) => ({
+      attachment: { ...attachment, uri: 'file:///data/mindwtr/attachments/copied.pdf' },
+      status: 'copied',
+    }));
+
+    await act(async () => {
+      create(
+        <TestHarness
+          hasShareIntent
+          incomingUrl={null}
+          resetShareIntent={resetShareIntent}
+          router={router}
+          shareFiles={[{ fileName: 'Invoice March.pdf', mimeType: 'application/pdf', path: '/share/tmp/Invoice March.pdf', size: 1024 }]}
+          shareSubject="Invoice for last month"
+          shareText="See attached."
+          showToast={showToast}
+        />
+      );
+    });
+
+    expect(router.replace).toHaveBeenCalledTimes(1);
+    const params = router.replace.mock.calls[0][0].params;
+    expect(decodeURIComponent(params.initialValue)).toBe('Invoice for last month');
+    const props = JSON.parse(decodeURIComponent(params.initialProps));
+    expect(props.description).toBe('See attached.');
+    expect(props.attachments).toHaveLength(1);
   });
 
   it('falls back to shared text capture and reports the skipped file when the copy fails', async () => {
@@ -377,5 +494,107 @@ describe('useRootLayoutExternalCapture', () => {
 
     expect(router.replace).toHaveBeenCalledWith('/focus');
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('arms the AppSearch index once on mount (#1017)', () => {
+    act(() => {
+      create(<TestHarness incomingUrl={null} router={router} showToast={showToast} />);
+    });
+    expect(syncAppSearchIndexingWithPreference).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the matching task for a valid entity-open task link (#1017)', () => {
+    storeTasksById.set('task-1', { id: 'task-1', title: 'Buy milk' });
+
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr://open?task=task-1"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+
+    expect(setHighlightTask).toHaveBeenCalledWith('task-1');
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: '/focus',
+      params: expect.objectContaining({ taskId: 'task-1', taskTab: 'view' }),
+    });
+  });
+
+  it('opens the matching project for a valid entity-open project link (#1017)', () => {
+    storeProjectsById.set('proj-1', { id: 'proj-1', title: 'Kitchen' });
+
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr:///open?project=proj-1"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+
+    expect(router.replace).toHaveBeenCalledWith({
+      pathname: '/projects-screen',
+      params: { projectId: 'proj-1' },
+    });
+  });
+
+  it('opens Projects (the closest existing view) for a valid entity-open area link (#1017)', () => {
+    storeAreasById.set('area-1', { id: 'area-1', name: 'Home' });
+
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr://open?area=area-1"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+
+    expect(router.replace).toHaveBeenCalledWith({ pathname: '/projects-screen' });
+  });
+
+  it('falls back to Inbox for an unknown or deleted entity id (#1017)', () => {
+    storeTasksById.set('task-deleted', { id: 'task-deleted', title: 'Gone', deletedAt: '2026-01-01T00:00:00.000Z' });
+
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr://open?task=task-unknown"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+    expect(router.replace).toHaveBeenCalledWith('/inbox');
+    router.replace.mockClear();
+
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr://open?task=task-deleted"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+    expect(router.replace).toHaveBeenCalledWith('/inbox');
+  });
+
+  it('falls back to Inbox for a malformed entity-open link', () => {
+    act(() => {
+      create(
+        <TestHarness
+          incomingUrl="mindwtr://open?bogus=1"
+          router={router}
+          showToast={showToast}
+        />
+      );
+    });
+    expect(router.replace).toHaveBeenCalledWith('/inbox');
   });
 });

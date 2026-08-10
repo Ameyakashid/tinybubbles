@@ -480,6 +480,7 @@ function RootLayoutContentInner() {
     resetShareIntent,
     router,
     shareFiles: shareIntent?.files,
+    shareSubject: shareIntent?.meta?.title,
     shareText: shareIntent?.text,
     shareWebUrl: shareIntent?.webUrl,
     showToast,

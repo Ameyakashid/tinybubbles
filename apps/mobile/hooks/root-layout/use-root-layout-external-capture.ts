@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as FileSystem from 'expo-file-system';
 
-import { generateUUID, validateAttachmentForUpload, type Attachment, type Task } from '@mindwtr/core';
+import { generateUUID, useTaskStore, validateAttachmentForUpload, type Attachment, type Task } from '@mindwtr/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { logError, logWarn } from '@/lib/app-log';
+import { syncAppSearchIndexingWithPreference } from '@/lib/app-search-service';
 import { persistAttachmentLocallyDetailed } from '@/lib/attachment-sync';
 import {
+    isEntityOpenUrl,
     isOpenFeatureUrl,
     isShortcutCaptureUrl,
     normalizeShortcutTags,
+    parseEntityOpenUrl,
     parseOpenFeatureUrl,
     parseShortcutCaptureUrl,
     resolveOpenFeaturePath,
+    type EntityOpenKind,
     type ShortcutCapturePayload,
 } from '@/lib/capture-deeplink';
 
@@ -39,6 +43,7 @@ type UseRootLayoutExternalCaptureParams = {
     resetShareIntent: () => void;
     router: RouterLike;
     shareFiles?: SharedIntentFile[] | null;
+    shareSubject?: string | null;
     shareText?: string | null;
     shareWebUrl?: string | null;
     showToast: (options: ToastOptions) => void;
@@ -64,9 +69,11 @@ type ShareIntentFileCaptureResult = {
 // managed attachments dir before the capture sheet ever sees them.
 async function buildShareIntentFileCaptureParams({
     files,
+    shareSubject,
     shareText,
 }: {
     files?: SharedIntentFile[] | null;
+    shareSubject?: string | null;
     shareText?: string | null;
 }): Promise<ShareIntentFileCaptureResult> {
     const candidates = (files ?? [])
@@ -135,11 +142,19 @@ async function buildShareIntentFileCaptureParams({
         return { params: null, candidateCount: candidates.length, attachedCount: 0 };
     }
 
-    const title = trimSharedValue(shareText) || stripFileExtension(attachments[0].title);
+    const subject = trimSharedValue(shareSubject);
+    const text = trimSharedValue(shareText);
+    const title = subject || text || stripFileExtension(attachments[0].title);
+    const props: Partial<Task> = { attachments };
+    // Only a real email subject earns a description; plain file shares keep
+    // their long-standing shape (title only, no body).
+    if (subject && text) {
+        props.description = text;
+    }
     return {
         params: {
             initialValue: encodeURIComponent(title),
-            initialProps: encodeURIComponent(JSON.stringify({ attachments } satisfies Partial<Task>)),
+            initialProps: encodeURIComponent(JSON.stringify(props satisfies Partial<Task>)),
         },
         candidateCount: candidates.length,
         attachedCount: attachments.length,
@@ -147,12 +162,35 @@ async function buildShareIntentFileCaptureParams({
 }
 
 function buildShareIntentCaptureParams({
+    shareSubject,
     shareText,
     shareWebUrl,
 }: {
+    shareSubject?: string | null;
     shareText?: string | null;
     shareWebUrl?: string | null;
 }): Record<string, string> | null {
+    const subject = trimSharedValue(shareSubject);
+    if (subject) {
+        // Email shares (FairEmail etc.) carry a real subject: it becomes the
+        // title, and the body/URL move to the description instead of being
+        // dumped into the title together.
+        const text = trimSharedValue(shareText);
+        const url = trimSharedValue(shareWebUrl);
+        const descriptionLines = [text, url && url !== text ? url : null]
+            .filter((line): line is string => Boolean(line));
+
+        const params: Record<string, string> = {
+            initialValue: encodeURIComponent(subject),
+        };
+        if (descriptionLines.length > 0) {
+            params.initialProps = encodeURIComponent(JSON.stringify({
+                description: descriptionLines.join('\n'),
+            } satisfies Partial<Task>));
+        }
+        return params;
+    }
+
     const title = trimSharedValue(shareText) || trimSharedValue(shareWebUrl);
     if (!title) return null;
 
@@ -169,6 +207,28 @@ function buildShareIntentCaptureParams({
     return params;
 }
 
+// Deep links are untrusted input (#1017): resolve an entity-open URL to a
+// navigation target only when the id still exists in the store, and fall
+// back to the default view otherwise. Areas have no dedicated detail screen,
+// so an area link opens Projects — the closest existing view that lists them.
+function resolveEntityOpenPath(kind: EntityOpenKind, id: string): { pathname: string; params?: Record<string, string> } | null {
+    const state = useTaskStore.getState();
+    if (kind === 'task') {
+        const task = state._tasksById?.get(id);
+        if (false) return null;
+        state.setHighlightTask(id);
+        return { pathname: '/focus', params: { taskId: id, openToken: `deeplink:${Date.now()}`, taskTab: 'view' } };
+    }
+    if (kind === 'project') {
+        const project = state._projectsById?.get(id);
+        if (!project || project.deletedAt) return null;
+        return { pathname: '/projects-screen', params: { projectId: id } };
+    }
+    const area = state._areasById?.get(id);
+    if (!area || area.deletedAt) return null;
+    return { pathname: '/projects-screen' };
+}
+
 export function useRootLayoutExternalCapture({
     dataReady,
     hasShareIntent,
@@ -177,6 +237,7 @@ export function useRootLayoutExternalCapture({
     resetShareIntent,
     router,
     shareFiles,
+    shareSubject,
     shareText,
     shareWebUrl,
     showToast,
@@ -186,6 +247,16 @@ export function useRootLayoutExternalCapture({
     // mid-copy (language load swaps resolveText, for instance) must not start
     // a second copy of the same share.
     const shareHandlingRef = useRef(false);
+
+    // Arms the AppSearch index (#1017) once per app start if the device-local
+    // preference is on. This hook already owns every other OS-level entry
+    // point (share intents, deep links) and runs unconditionally on mount, so
+    // it is the natural place to also arm the search-index subscription —
+    // there is no dedicated root-layout-startup file in this task's scope.
+    // No-op (and no AsyncStorage read) when unsupported or off.
+    useEffect(() => {
+        void syncAppSearchIndexingWithPreference();
+    }, []);
 
     const openCaptureConfirmation = useCallback((payload: ShortcutCapturePayload) => {
         const tags = normalizeShortcutTags(payload.tags);
@@ -239,12 +310,12 @@ export function useRootLayoutExternalCapture({
         if (!hasSharedFiles) {
             // Text/URL shares stay synchronous; only file shares need the
             // async copy into the managed attachments dir.
-            finish(buildShareIntentCaptureParams({ shareText, shareWebUrl }));
+            finish(buildShareIntentCaptureParams({ shareSubject, shareText, shareWebUrl }));
             resetShareIntent();
             shareHandlingRef.current = false;
             return;
         }
-        void buildShareIntentFileCaptureParams({ files: shareFiles, shareText })
+        void buildShareIntentFileCaptureParams({ files: shareFiles, shareSubject, shareText })
             .then((result) => {
                 const skippedCount = result.candidateCount - result.attachedCount;
                 if (skippedCount > 0) {
@@ -257,7 +328,7 @@ export function useRootLayoutExternalCapture({
                         tone: 'warning',
                     });
                 }
-                const params = result.params ?? buildShareIntentCaptureParams({ shareText, shareWebUrl });
+                const params = result.params ?? buildShareIntentCaptureParams({ shareSubject, shareText, shareWebUrl });
                 if (params) {
                     router.replace({
                         pathname: '/capture-modal',
@@ -273,7 +344,7 @@ export function useRootLayoutExternalCapture({
                 resetShareIntent();
                 shareHandlingRef.current = false;
             });
-    }, [hasShareIntent, resolveText, resetShareIntent, router, shareFiles, shareText, shareWebUrl, showToast]);
+    }, [hasShareIntent, resolveText, resetShareIntent, router, shareFiles, shareSubject, shareText, shareWebUrl, showToast]);
 
     useEffect(() => {
         if (!dataReady) return;
@@ -287,6 +358,19 @@ export function useRootLayoutExternalCapture({
             return;
         }
         if (isOpenFeatureUrl(incomingUrl)) {
+            lastHandledUrl.current = incomingUrl;
+            router.replace('/inbox');
+            return;
+        }
+
+        const entityPayload = parseEntityOpenUrl(incomingUrl);
+        if (entityPayload) {
+            lastHandledUrl.current = incomingUrl;
+            const target = resolveEntityOpenPath(entityPayload.kind, entityPayload.id);
+            router.replace(target ?? '/inbox');
+            return;
+        }
+        if (isEntityOpenUrl(incomingUrl)) {
             lastHandledUrl.current = incomingUrl;
             router.replace('/inbox');
             return;

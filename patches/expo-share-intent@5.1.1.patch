@@ -1,0 +1,14 @@
+diff --git a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+index 0153c89c7e2ce4fa20351bc2d5e7b1c6cd341dbe..5b0e9fdee27c7f08881f0e6d2dc30843bec0cb61 100644
+--- a/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
++++ b/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+@@ -129,7 +129,8 @@ class ExpoShareIntentModule : Module() {
+                         "text" to intent.getStringExtra(Intent.EXTRA_TEXT),
+                         "type" to "text",
+                         "meta" to mapOf(
+-                            "title" to intent.getCharSequenceExtra(Intent.EXTRA_TITLE),
++                            "title" to (intent.getCharSequenceExtra(Intent.EXTRA_TITLE)
++                                ?: intent.getStringExtra(Intent.EXTRA_SUBJECT)),
+                         )
+                     ))
+                 } else if (intent.action == Intent.ACTION_VIEW) {
