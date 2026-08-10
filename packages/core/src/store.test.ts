@@ -3590,6 +3590,45 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState().persistenceFailure).toBeNull();
     });
 
+    it('keeps a failed incremental snapshot pending so fetch cannot replace it with stale storage', async () => {
+        const task = createStoreTask('incremental-fetch-race');
+        useTaskStore.setState({
+            tasks: [task],
+            _allTasks: [task],
+            _tasksById: buildEntityMap([task]),
+        });
+        mockStorage.saveTask = vi.fn().mockRejectedValue(new Error('incremental write failed'));
+        mockStorage.getData = vi.fn().mockResolvedValue({
+            tasks: [task],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {},
+        });
+        mockStorage.saveData = vi.fn().mockRejectedValue(new Error('snapshot write failed'));
+        setStorageAdapter(mockStorage);
+
+        await expect(runWithImmediateSaveTracking(
+            () => useTaskStore.getState().updateTask(task.id, { title: 'Unsaved edit' })
+        )).rejects.toThrow('incremental write failed');
+
+        const fetchPromise = useTaskStore.getState().fetchData({ silent: true });
+        const fetchRejection = expect(fetchPromise).rejects.toThrow('snapshot write failed');
+        await vi.advanceTimersByTimeAsync(4_000);
+        await fetchRejection;
+        expect(mockStorage.getData).not.toHaveBeenCalled();
+        expect(useTaskStore.getState()._tasksById.get(task.id)?.title).toBe('Unsaved edit');
+
+        mockStorage.saveData = vi.fn().mockResolvedValue(undefined);
+        await useTaskStore.getState().retryPersistence();
+
+        const retriedSnapshot = (mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls[0]?.[0];
+        expect(retriedSnapshot.tasks).toHaveLength(1);
+        expect(retriedSnapshot.tasks[0].title).toBe('Unsaved edit');
+        expect(useTaskStore.getState().persistenceFailure).toBeNull();
+    });
+
     it('should add a project', () => {
         const { addProject } = useTaskStore.getState();
         addProject('New Project', '#ff0000');

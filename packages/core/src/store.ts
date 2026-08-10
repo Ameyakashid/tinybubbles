@@ -365,10 +365,32 @@ const schedulePendingSaveFlush = () => {
     }, SAVE_FLUSH_DELAY_MS);
 };
 
-const trackImmediateSave = (save: Promise<void>): Promise<void> => {
+const enqueuePendingSave = (
+    data: AppData,
+    onError?: (msg: string) => void,
+    schedule = true,
+) => {
+    pendingVersion += 1;
+    pendingSaves.push({
+        version: pendingVersion,
+        data: sanitizeAppDataForStorage(data),
+        onErrorCallbacks: onError ? [onError] : [],
+        attempts: 0,
+    });
+    enforcePendingSaveCap();
+    markCoreStartupPhase('core.debounced_save.enqueued', {
+        version: pendingVersion,
+        queueLen: pendingSaves.length,
+        caller: getDebouncedSaveCaller(),
+    });
+    if (schedule) schedulePendingSaveFlush();
+};
+
+const trackImmediateSave = (save: Promise<void>, retrySnapshot?: AppData): Promise<void> => {
     let trackedSave: Promise<void>;
     trackedSave = save
         .catch((error) => {
+            if (retrySnapshot) enqueuePendingSave(retrySnapshot, undefined, false);
             recordPersistenceFailure(toSaveErrorMessage(error));
             throw error;
         })
@@ -405,20 +427,7 @@ export const runWithImmediateSaveTracking = async <T>(operation: () => Promise<T
  * @param onError Callback for save failures
  */
 const debouncedSave = (data: AppData, onError?: (msg: string) => void) => {
-    pendingVersion += 1;
-    pendingSaves.push({
-        version: pendingVersion,
-        data: sanitizeAppDataForStorage(data),
-        onErrorCallbacks: onError ? [onError] : [],
-        attempts: 0,
-    });
-    enforcePendingSaveCap();
-    markCoreStartupPhase('core.debounced_save.enqueued', {
-        version: pendingVersion,
-        queueLen: pendingSaves.length,
-        caller: getDebouncedSaveCaller(),
-    });
-    schedulePendingSaveFlush();
+    enqueuePendingSave(data, onError);
 };
 
 /**
