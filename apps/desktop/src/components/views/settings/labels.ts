@@ -36,6 +36,8 @@ export const SETTINGS_LABEL_KEYS = [
     'showTaskAgeDesc',
     'gtd',
     'gtdDesc',
+    'settingsSaveFailed',
+    'pomodoroAutoStartNotice',
     'inboxProcessing',
     'inboxProcessingDesc',
     'inboxDefaultMode',
@@ -609,6 +611,8 @@ export type SettingsLabels = Record<(typeof SETTINGS_LABEL_KEYS)[number], string
 // of the app (e.g. `back` -> `common.back`) or core spells it differently.
 export const labelKeyOverrides: Partial<Record<keyof SettingsLabels, string>> = {
     back: 'common.back',
+    settingsSaveFailed: 'settings.feedback.saveFailed',
+    pomodoroAutoStartNotice: 'settings.gtdMobile.pomodoroWillNowAdvancePhasesAutomatically',
     // "Auto" is already translated for text direction; the feed color picker
     // means the same thing (follow the source), so no new locale key.
     calendarColorAuto: 'taskEdit.textDirection.auto',

@@ -12,7 +12,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { reportError } from '../../../lib/report-error';
+import { reportSettingsFailure } from './settings-feedback';
 import { dispatchDesktopOnboardingEvent } from '../../../lib/desktop-onboarding-events';
 import { useUiStore } from '../../../store/ui-store';
 import type { Language } from '../../../contexts/language-context';
@@ -32,6 +32,8 @@ import { SettingField, SettingRow, SettingsDisclosureCard } from './SettingRow';
 
 type Labels = {
     gtdDesc: string;
+    settingsSaveFailed: string;
+    pomodoroAutoStartNotice: string;
     features: string;
     featuresDesc: string;
     autoArchive: string;
@@ -260,7 +262,7 @@ export function SettingsGtdPage({
     const showPomodoroAutoStartNotice = () => {
         if (pomodoroAutoStartNoticeShownRef.current) return;
         pomodoroAutoStartNoticeShownRef.current = true;
-        showToast('Pomodoro will now advance phases automatically.', 'info', 5000);
+        showToast(t.pomodoroAutoStartNotice, 'info', 5000);
     };
 
     const updatePomodoroSettings = (
@@ -280,7 +282,7 @@ export function SettingsGtdPage({
             if (options?.showAutoStartNotice) {
                 showPomodoroAutoStartNotice();
             }
-        }).catch((error) => reportError('Failed to update Pomodoro settings', error));
+        }).catch((error) => reportSettingsFailure('Failed to update Pomodoro settings', error, t.settingsSaveFailed));
     };
 
     const savePomodoroCustomDurations = (nextDurations: { focusMinutes: number; breakMinutes: number }) => {
@@ -294,7 +296,7 @@ export function SettingsGtdPage({
                 ...(safeSettings.gtd ?? {}),
                 ...partial,
             },
-        }).then(showSaved).catch((error) => reportError('Failed to update GTD settings', error));
+        }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update GTD settings', error, t.settingsSaveFailed));
     };
 
     const toggleTimeEstimatePreset = (value: TimeEstimate) => {
@@ -318,7 +320,7 @@ export function SettingsGtdPage({
                 ...(safeSettings.features ?? {}),
                 timeEstimates: true,
             },
-        }).then(showSaved).catch((error) => reportError('Failed to enable time estimates', error));
+        }).then(showSaved).catch((error) => reportSettingsFailure('Failed to enable time estimates', error, t.settingsSaveFailed));
     };
 
     const commitDefaultScheduleTime = () => {
@@ -404,7 +406,7 @@ export function SettingsGtdPage({
                     ...next,
                 },
             },
-        }).then(showSaved).catch((error) => reportError('Failed to update task editor layout', error));
+        }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update task editor layout', error, t.settingsSaveFailed));
     };
     const toggleFieldVisibility = (fieldId: TaskEditorFieldId) => {
         const nextHidden = new Set(hiddenSet);
@@ -431,7 +433,7 @@ export function SettingsGtdPage({
                     ...partial,
                 },
             },
-        }).then(showSaved).catch((error) => reportError('Failed to update inbox processing settings', error));
+        }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update inbox processing settings', error, t.settingsSaveFailed));
     };
     const updateWeeklyReviewConfig = (partial: GtdSettings['weeklyReview']) => {
         updateSettings({
@@ -442,7 +444,7 @@ export function SettingsGtdPage({
                     ...partial,
                 },
             },
-        }).then(showSaved).catch((error) => reportError('Failed to update weekly review settings', error));
+        }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update weekly review settings', error, t.settingsSaveFailed));
     };
     const moveFieldInGroup = (fieldId: TaskEditorFieldId, delta: number, groupFields: TaskEditorFieldId[]) => {
         const groupOrder = taskEditorOrder.filter((id) => groupFields.includes(id));
@@ -546,7 +548,7 @@ export function SettingsGtdPage({
                                     ...(safeSettings.gtd ?? {}),
                                     autoArchiveDays: Number.isFinite(value) ? value : 7,
                                 },
-                            }).then(showSaved).catch((error) => reportError('Failed to update auto-archive settings', error));
+                            }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update auto-archive settings', error, t.settingsSaveFailed));
                         }}
                         className="text-sm bg-muted/50 text-foreground border border-border rounded px-2 py-1 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
                     >
@@ -645,7 +647,7 @@ export function SettingsGtdPage({
                                     ...(safeSettings.features ?? {}),
                                     pomodoro: !pomodoroEnabled,
                                 },
-                            }).then(showSaved).catch((error) => reportError('Failed to update feature flags', error));
+                            }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update feature flags', error, t.settingsSaveFailed));
                         }}
                     />
                 </SettingRow>
@@ -804,7 +806,7 @@ export function SettingsGtdPage({
                                         ...(safeSettings.gtd ?? {}),
                                         defaultCaptureMethod: 'text',
                                     },
-                                }).then(showSaved).catch((error) => reportError('Failed to update capture defaults', error));
+                                }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update capture defaults', error, t.settingsSaveFailed));
                             }}
                             className={cn(
                                 'px-3 py-1 text-xs rounded-md transition-colors',
@@ -823,7 +825,7 @@ export function SettingsGtdPage({
                                         ...(safeSettings.gtd ?? {}),
                                         defaultCaptureMethod: 'audio',
                                     },
-                                }).then(showSaved).catch((error) => reportError('Failed to update capture defaults', error));
+                                }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update capture defaults', error, t.settingsSaveFailed));
                             }}
                             className={cn(
                                 'px-3 py-1 text-xs rounded-md transition-colors',
@@ -870,7 +872,7 @@ export function SettingsGtdPage({
                                         ...(safeSettings.gtd ?? {}),
                                         saveAudioAttachments: !saveAudioAttachments,
                                     },
-                                }).then(showSaved).catch((error) => reportError('Failed to update audio capture settings', error));
+                                }).then(showSaved).catch((error) => reportSettingsFailure('Failed to update audio capture settings', error, t.settingsSaveFailed));
                             }}
                         />
                     </SettingRow>
@@ -882,7 +884,7 @@ export function SettingsGtdPage({
                         onCheckedChange={() => {
                             updateSettings({ quickAddAutoClean: !quickAddAutoClean })
                                 .then(showSaved)
-                                .catch((error) => reportError('Failed to update quick add settings', error));
+                                .catch((error) => reportSettingsFailure('Failed to update quick add settings', error, t.settingsSaveFailed));
                         }}
                     />
                 </SettingRow>
@@ -898,7 +900,7 @@ export function SettingsGtdPage({
                                 },
                             })
                                 .then(showSaved)
-                                .catch((error) => reportError('Failed to update quick add settings', error));
+                                .catch((error) => reportSettingsFailure('Failed to update quick add settings', error, t.settingsSaveFailed));
                         }}
                     />
                 </SettingRow>
@@ -909,7 +911,7 @@ export function SettingsGtdPage({
                         onCheckedChange={() => {
                             updateSettings({ markdownEditorAssist: !markdownEditorAssist })
                                 .then(showSaved)
-                                .catch((error) => reportError('Failed to update editor settings', error));
+                                .catch((error) => reportSettingsFailure('Failed to update editor settings', error, t.settingsSaveFailed));
                         }}
                     />
                 </SettingRow>

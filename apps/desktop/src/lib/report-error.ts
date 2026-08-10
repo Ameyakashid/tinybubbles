@@ -8,15 +8,18 @@ type ReportErrorOptions = {
     scope?: string;
     step?: string;
     toast?: boolean;
+    /** Localized, user-safe copy. The label and raw error remain diagnostic-only. */
+    userMessage?: string;
 };
 
 export const reportError = (label: string, error: unknown, options?: ReportErrorOptions) => {
     const message = error instanceof Error ? error.message : String(error);
     const prefix = options?.category ? `[${options.category}] ` : '';
     const fullMessage = `${label}: ${message}`;
-    useTaskStore.getState().setError(`${prefix}${fullMessage}`);
+    const visibleMessage = options?.userMessage ?? fullMessage;
+    useTaskStore.getState().setError(`${prefix}${visibleMessage}`);
     if (options?.toast !== false) {
-        useUiStore.getState().showToast(fullMessage, 'error');
+        useUiStore.getState().showToast(visibleMessage, 'error');
     }
     void logError(error, {
         scope: options?.scope ?? 'ui',

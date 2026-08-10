@@ -4,6 +4,7 @@ import { getModelOptions } from '@mindwtr/core';
 import type { AppData } from '@mindwtr/core';
 
 import { useAiSettings } from './useAiSettings';
+import { useUiStore } from '../../../store/ui-store';
 
 type HookResult = ReturnType<typeof useAiSettings>;
 
@@ -35,6 +36,14 @@ const coreMocks = vi.hoisted(() => ({
 const aiConfigMocks = vi.hoisted(() => ({
     loadAIKey: vi.fn(async (_provider: string) => ''),
     saveAIKey: vi.fn(async () => undefined),
+}));
+
+const languageMocks = vi.hoisted(() => ({
+    t: vi.fn((key: string) => key),
+}));
+
+vi.mock('../../../contexts/language-context', () => ({
+    useLanguage: () => ({ t: languageMocks.t, language: 'en' }),
 }));
 
 vi.mock('../../../lib/ai-config', () => ({
@@ -78,6 +87,7 @@ const settingsWithSpeech = (speechToText: NonNullable<NonNullable<AppData['setti
 describe('useAiSettings speech provider changes', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        languageMocks.t.mockImplementation((key: string) => key);
         // The model downloads go through the shared native-invoke adapter, which
         // refuses outside the desktop shell.
         (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
@@ -91,6 +101,36 @@ describe('useAiSettings speech provider changes', () => {
         tauriCoreMocks.invoke.mockResolvedValue(null);
         eventMocks.listen.mockResolvedValue(vi.fn());
         coreMocks.fetchProviderModelsCached.mockResolvedValue([]);
+    });
+
+    it('shows localized safe feedback when saving AI settings fails', async () => {
+        let result: HookResult | null = null;
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        languageMocks.t.mockImplementation((key: string) => (
+            key === 'settings.feedback.saveFailed' ? 'Impossible d’enregistrer ce réglage.' : key
+        ));
+
+        function Probe() {
+            result = useAiSettings({
+                isTauri: false,
+                settings: { ai: {} },
+                updateSettings: vi.fn(async () => { throw new Error('provider detail'); }),
+                showSaved: vi.fn(),
+                enabled: false,
+            });
+            return null;
+        }
+
+        render(<Probe />);
+        act(() => {
+            result?.onUpdateAISettings({ enabled: true });
+        });
+
+        await waitFor(() => {
+            expect(showToast).toHaveBeenCalledWith('Impossible d’enregistrer ce réglage.', 'error');
+        });
+        expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('provider detail'), expect.anything());
     });
 
     afterEach(() => {

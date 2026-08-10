@@ -193,6 +193,23 @@ describe('useSyncSettings cloud token validation', () => {
         expect(showToast).toHaveBeenCalledWith('localized:settings.exportSuccess', 'success');
     });
 
+    it('uses the active locale for sync setup feedback', async () => {
+        languageMocks.t.mockImplementation((key: string) => (
+            key === 'settings.sync.readyToVerify' ? 'Paramètres prêts à vérifier.' : key
+        ));
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+
+        const { result } = setup();
+        await waitFor(() => expect(SyncService.getCloudConfig).toHaveBeenCalled());
+        act(() => result.current.syncPageProps.onSyncPathChange('/sync'));
+        await act(async () => {
+            await result.current.syncPageProps.onSaveSyncPath();
+        });
+
+        expect(showToast).toHaveBeenCalledWith('Paramètres prêts à vérifier.', 'info');
+    });
+
     it('renders structured backup warnings through the active desktop locale', async () => {
         languageMocks.t.mockImplementation((key: string) => `localized:${key}`);
         const requestConfirmation = vi.fn().mockResolvedValue(false);

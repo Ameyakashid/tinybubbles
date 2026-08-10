@@ -11,8 +11,9 @@ import {
     isSupportedCalendarSourceUrl,
     localPathToCalendarFileUrl,
 } from '../../../lib/external-calendar-source';
-import { reportError } from '../../../lib/report-error';
 import { isTauriRuntime } from '../../../lib/runtime';
+import { useLanguage } from '../../../contexts/language-context';
+import { reportSettingsFailure, resolveSettingsFeedback } from './settings-feedback';
 import {
     enableDesktopCalendarPush,
     getDesktopCalendarPushEnabled,
@@ -39,6 +40,18 @@ type UseCalendarSettingsOptions = {
 };
 
 export function useCalendarSettings({ showSaved, settings, updateSettings, supportsSystemCalendar }: UseCalendarSettingsOptions) {
+    const { t } = useLanguage();
+    const resolveFeedback = useCallback((key: string, fallback: string) => (
+        resolveSettingsFeedback(t, key, fallback)
+    ), [t]);
+    const loadFailedMessage = resolveFeedback(
+        'settings.feedback.loadFailed',
+        "Couldn't load this setting. Try again.",
+    );
+    const saveFailedMessage = resolveFeedback(
+        'settings.feedback.saveFailed',
+        "Couldn't save this setting. Try again.",
+    );
     const [externalCalendars, setExternalCalendars] = useState<ExternalCalendarSubscription[]>([]);
     const [newCalendarName, setNewCalendarName] = useState('');
     const [newCalendarUrl, setNewCalendarUrl] = useState('');
@@ -63,11 +76,11 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
                 }
                 setExternalCalendars(stored);
             })
-            .catch((error) => reportError('Failed to load calendars', error));
+            .catch((error) => reportSettingsFailure('Failed to load calendars', error, loadFailedMessage));
         return () => {
             cancelled = true;
         };
-    }, [settings?.externalCalendars]);
+    }, [loadFailedMessage, settings?.externalCalendars]);
 
     const refreshSystemCalendarPermission = useCallback(async () => {
         if (!supportsSystemCalendar) {
@@ -99,10 +112,10 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
         try {
             setCalendarPushTargets(await getDesktopCalendarPushTargetCalendars());
         } catch (error) {
-            reportError('Failed to load system calendar push targets', error);
-            setCalendarError(String(error));
+            reportSettingsFailure('Failed to load system calendar push targets', error, loadFailedMessage);
+            setCalendarError(loadFailedMessage);
         }
-    }, [supportsSystemCalendar]);
+    }, [loadFailedMessage, supportsSystemCalendar]);
 
     useEffect(() => {
         if (!supportsSystemCalendar) {
@@ -123,15 +136,15 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             })
             .catch((error) => {
                 if (!cancelled) {
-                    reportError('Failed to load system calendar push settings', error);
-                    setCalendarError(String(error));
+                    reportSettingsFailure('Failed to load system calendar push settings', error, loadFailedMessage);
+                    setCalendarError(loadFailedMessage);
                 }
             });
         void refreshCalendarPushTargets();
         return () => {
             cancelled = true;
         };
-    }, [supportsSystemCalendar, refreshCalendarPushTargets]);
+    }, [loadFailedMessage, supportsSystemCalendar, refreshCalendarPushTargets]);
 
     const persistCalendars = useCallback(async (next: ExternalCalendarSubscription[]) => {
         setCalendarError(null);
@@ -141,19 +154,22 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             await updateSettings({ externalCalendars: next });
             showSaved();
         } catch (error) {
-            reportError('Failed to save calendars', error);
-            setCalendarError(String(error));
+            reportSettingsFailure('Failed to save calendars', error, saveFailedMessage);
+            setCalendarError(saveFailedMessage);
         }
-    }, [showSaved, updateSettings]);
+    }, [saveFailedMessage, showSaved, updateSettings]);
 
     const handleAddCalendar = useCallback(() => {
         const url = newCalendarUrl.trim();
         if (!url) return;
         if (!isSupportedCalendarSourceUrl(url)) {
-            setCalendarError('Use an http(s), webcal, or absolute file:///path.ics source.');
+            setCalendarError(resolveFeedback(
+                'settings.calendar.invalidSource',
+                'Use an http(s), webcal, or absolute file:///path.ics source.',
+            ));
             return;
         }
-        const name = (newCalendarName.trim() || 'Calendar').trim();
+        const name = (newCalendarName.trim() || resolveFeedback('calendar.title', 'Calendar')).trim();
         const id = generateUUID();
         // No color yet: an unset color means "no explicit pick", so a feed
         // hint or the deterministic hash fallback can still apply (#974).
@@ -164,11 +180,14 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
         setNewCalendarName('');
         setNewCalendarUrl('');
         persistCalendars(next);
-    }, [externalCalendars, newCalendarName, newCalendarUrl, persistCalendars]);
+    }, [externalCalendars, newCalendarName, newCalendarUrl, persistCalendars, resolveFeedback]);
 
     const handleChooseLocalCalendarFile = useCallback(async () => {
         if (!isTauriRuntime()) {
-            setCalendarError('Local ICS files require the desktop app.');
+            setCalendarError(resolveFeedback(
+                'settings.calendar.localIcsDesktopRequired',
+                'Local ICS files require the desktop app.',
+            ));
             return;
         }
         setCalendarError(null);
@@ -183,13 +202,16 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             const url = localPathToCalendarFileUrl(String(selected));
             setNewCalendarUrl(url);
             if (!newCalendarName.trim()) {
-                setNewCalendarName(getCalendarSourceFileName(url).replace(/\.ics$/i, '') || 'Calendar');
+                setNewCalendarName(
+                    getCalendarSourceFileName(url).replace(/\.ics$/i, '')
+                    || resolveFeedback('calendar.title', 'Calendar'),
+                );
             }
         } catch (error) {
-            reportError('Failed to choose local ICS calendar', error);
-            setCalendarError(String(error));
+            reportSettingsFailure('Failed to choose local ICS calendar', error, loadFailedMessage);
+            setCalendarError(loadFailedMessage);
         }
-    }, [newCalendarName]);
+    }, [loadFailedMessage, newCalendarName, resolveFeedback]);
 
     const handleToggleCalendar = useCallback((id: string, enabled: boolean) => {
         const next = externalCalendars.map((calendar) => (calendar.id === id ? { ...calendar, enabled } : calendar));
@@ -245,7 +267,10 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
                 setSystemCalendarPermission(status);
             }
             if (status !== 'granted') {
-                setCalendarError('System calendar access is required to push tasks.');
+                setCalendarError(resolveFeedback(
+                    'settings.calendarMobile.calendarAccessIsRequiredToPushTasksToYourCalendar',
+                    'Calendar access is required to push tasks to your calendar.',
+                ));
                 return;
             }
 
@@ -253,17 +278,20 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             setCalendarPushEnabledState(ok);
             await refreshCalendarPushTargets();
             if (!ok) {
-                setCalendarError('Could not create or find a writable system calendar target.');
+                setCalendarError(resolveFeedback(
+                    'settings.calendar.writableTargetUnavailable',
+                    'Could not create or find a writable system calendar target.',
+                ));
                 return;
             }
             showSaved();
         } catch (error) {
-            reportError('Failed to update system calendar push setting', error);
-            setCalendarError(String(error));
+            reportSettingsFailure('Failed to update system calendar push setting', error, saveFailedMessage);
+            setCalendarError(saveFailedMessage);
         } finally {
             setCalendarPushLoading(false);
         }
-    }, [refreshCalendarPushTargets, showSaved, supportsSystemCalendar, systemCalendarPermission]);
+    }, [refreshCalendarPushTargets, resolveFeedback, saveFailedMessage, showSaved, supportsSystemCalendar, systemCalendarPermission]);
 
     const handleCalendarPushTargetChange = useCallback(async (calendarId: string | null) => {
         if (!supportsSystemCalendar) return;
@@ -278,10 +306,10 @@ export function useCalendarSettings({ showSaved, settings, updateSettings, suppo
             }
             showSaved();
         } catch (error) {
-            reportError('Failed to update system calendar push target', error);
-            setCalendarError(String(error));
+            reportSettingsFailure('Failed to update system calendar push target', error, saveFailedMessage);
+            setCalendarError(saveFailedMessage);
         }
-    }, [calendarPushEnabled, showSaved, supportsSystemCalendar]);
+    }, [calendarPushEnabled, saveFailedMessage, showSaved, supportsSystemCalendar]);
 
     // Only user-initiated work blocks the controls; loading the target list in
     // the background must never leave the push toggle stuck greyed out (#575).

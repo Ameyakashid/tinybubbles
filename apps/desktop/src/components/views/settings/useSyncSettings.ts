@@ -6,9 +6,9 @@ import {
 } from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { logError } from '../../../lib/app-log';
-import { reportError } from '../../../lib/report-error';
 import { markSettingsOpenTrace, measureSettingsOpenStep } from '../../../lib/settings-open-diagnostics';
 import { useLanguage } from '../../../contexts/language-context';
+import { reportSettingsFailure, resolveSettingsFeedback } from './settings-feedback';
 import {
     addBreadcrumb,
     CLOCK_SKEW_THRESHOLD_MS,
@@ -22,7 +22,6 @@ import {
     SYNC_LOCAL_INSECURE_URL_OPTIONS,
     summarizeBackupMerge,
     summarizeMergeStats,
-    translateWithFallback,
     useTaskStore,
     type AppData,
     type ImportDiagnostic,
@@ -55,8 +54,6 @@ import type {
 export type { SyncBackend };
 export type DropboxTestState = 'idle' | 'success' | 'error';
 export type WebDavTestState = 'idle' | 'success' | 'error';
-
-const DROPBOX_CREDENTIAL_CLEANUP_ERROR = 'Pending Dropbox authorization could not be safely cleared. Try again.';
 
 const IMPORT_DIAGNOSTIC_FALLBACKS: Record<string, string> = {
     'settings.backupDiagnostics.newerVersion': 'This backup was created by a newer Mindwtr version ({{version}}).',
@@ -187,26 +184,36 @@ export const useSyncSettings = ({
         return syncConfigurationGeneration.current;
     }, []);
 
+    const resolveText = useCallback((key: string, fallback: string): string => {
+        return resolveSettingsFeedback(t, key, fallback);
+    }, [t]);
+    const dropboxCredentialCleanupMessage = resolveText(
+        'settings.sync.dropboxCredentialCleanupFailed',
+        'Pending Dropbox authorization could not be safely cleared. Try again.',
+    );
+
     const formatSyncPathError = useCallback((message?: string): string => {
         const normalized = (message || '').toLowerCase();
         if (normalized.includes('must be a directory')) {
-            return 'Select a folder for sync, not a backup JSON file.';
+            return resolveText(
+                'settings.sync.folderRequired',
+                'Select a folder for sync, not a backup JSON file.',
+            );
         }
         if (normalized.includes('permission denied') || normalized.includes('operation not permitted')) {
-            return 'Mindwtr cannot access this folder. Choose a folder you own, then try again.';
+            return resolveText(
+                'settings.sync.folderPermissionDenied',
+                'Mindwtr cannot access this folder. Choose a folder you own, then try again.',
+            );
         }
-        return message || 'Failed to save sync folder.';
-    }, []);
+        return resolveText('settings.syncMobile.failedToSetSyncPath', 'Failed to set sync path');
+    }, [resolveText]);
 
     const toErrorMessage = useCallback((error: unknown, fallback: string): string => {
         if (error instanceof Error && error.message.trim()) return error.message.trim();
         const text = String(error || '').trim();
         return text || fallback;
     }, []);
-
-    const resolveText = useCallback((key: string, fallback: string): string => {
-        return translateWithFallback(t, key, fallback);
-    }, [t]);
 
     const isManualInsecureOverride = useCallback((url: string, allowInsecureHttp: boolean): boolean => {
         if (!allowInsecureHttp) return false;
@@ -220,7 +227,10 @@ export const useSyncSettings = ({
 
     const validateSyncHttpUrl = useCallback((url: string, allowInsecureHttp: boolean): boolean => {
         if (!isValidHttpUrl(url)) {
-            const message = 'Enter a valid http(s) URL.';
+            const message = resolveText(
+                'settings.sync.validHttpUrl',
+                'Enter a valid http(s) URL.',
+            );
             setSyncError(message);
             showToast(message, 'error');
             return false;
@@ -229,41 +239,46 @@ export const useSyncSettings = ({
             ...SYNC_LOCAL_INSECURE_URL_OPTIONS,
             allowInsecureHttp,
         })) {
-            const message = 'Public HTTP sync URLs are blocked. Use HTTPS, or enable insecure HTTP only for a trusted private network.';
+            const message = resolveText(
+                'settings.syncMobile.publicHttpSyncUrlsAreBlockedUseHttpsOrEnable',
+                'Public HTTP sync URLs are blocked. Use HTTPS, or enable insecure HTTP only for a trusted private network.',
+            );
             setSyncError(message);
             showToast(message, 'error');
             return false;
         }
         if (isManualInsecureOverride(url, allowInsecureHttp)) {
-            showToast('Only use insecure HTTP on trusted networks. Sync data will be sent unencrypted.', 'info');
+            showToast(resolveText(
+                'settings.syncMobile.onlyUseThisOnTrustedNetworksSyncDataWillBe',
+                'Only use insecure HTTP on trusted networks. Sync data will be sent unencrypted.',
+            ), 'info');
         }
         return true;
-    }, [isManualInsecureOverride, showToast]);
+    }, [isManualInsecureOverride, resolveText, showToast]);
 
     // An empty token field means "unchanged, use keyring" (#899) and must never be
     // validated or blocked; only a non-empty token that fails the shape check is rejected.
     const validateCloudToken = useCallback((token: string): boolean => {
         if (!token) return true;
         if (!isValidCloudSyncToken(token)) {
-            const message = 'Sync token must be 20-512 characters using letters, numbers, or . _ ~ + / = -';
+            const message = resolveText(
+                'settings.sync.invalidToken',
+                'Sync token must be 20-512 characters using letters, numbers, or . _ ~ + / = -',
+            );
             setSyncError(message);
             showToast(message, 'error');
             return false;
         }
         return true;
-    }, [showToast]);
+    }, [resolveText, showToast]);
 
     const formatText = useCallback((
         key: string,
         fallback: string,
         replacements: Record<string, string | number>,
     ): string => {
-        let text = resolveText(key, fallback);
-        Object.entries(replacements).forEach(([name, value]) => {
-            text = text.split(`{{${name}}}`).join(String(value));
-        });
-        return text;
-    }, [resolveText]);
+        return resolveSettingsFeedback(t, key, fallback, replacements);
+    }, [t]);
 
     const formatImportDiagnosticText = useCallback((diagnostic: ImportDiagnostic): string => (
         formatImportDiagnostic(diagnostic, (key, values = {}) => formatText(
@@ -322,8 +337,8 @@ export const useSyncSettings = ({
                 setCloudProvider(configuration.cloudProvider);
             })
             .catch((error) => {
-                setSyncError('Failed to load sync configuration.');
                 void logError(error, { scope: 'sync', step: 'loadConfiguration' });
+                setSyncError(resolveText('settings.feedback.loadFailed', "Couldn't load this setting. Try again."));
             });
         measureSettingsOpenStep('sync-load-dropbox-app-key', () => SyncService.getDropboxAppKey())
             .then((value) => {
@@ -333,8 +348,8 @@ export const useSyncSettings = ({
             })
             .catch((error) => {
                 setDropboxConfigured(false);
-                setSyncError('Failed to load Dropbox app key.');
                 void logError(error, { scope: 'sync', step: 'loadDropboxAppKey' });
+                setSyncError(resolveText('settings.feedback.loadFailed', "Couldn't load this setting. Try again."));
             });
         measureSettingsOpenStep('sync-load-dropbox-redirect-uri', () => SyncService.getDropboxRedirectUri())
             .then(setDropboxRedirectUri)
@@ -345,7 +360,7 @@ export const useSyncSettings = ({
             void logError(error, { scope: 'sync', step: 'loadSnapshots' });
         });
         return unsubscribe;
-    }, [isTauri]);
+    }, [isTauri, resolveText]);
 
     useEffect(() => {
         let cancelled = false;
@@ -453,27 +468,31 @@ export const useSyncSettings = ({
             setCalendarFeedUrl(result.url);
             setSyncError(null);
             showToast(
-                action === 'rotate' ? 'Calendar feed URL generated.' : 'Calendar feed revoked.',
+                action === 'rotate'
+                    ? resolveText('settings.sync.calendarFeedGenerated', 'Calendar feed URL generated.')
+                    : resolveText('settings.sync.calendarFeedRevoked', 'Calendar feed revoked.'),
                 'success',
             );
         } catch (error) {
-            const message = toErrorMessage(error, 'Calendar feed request failed.');
+            const message = resolveText('settings.feedback.actionFailed', "Couldn't complete this action. Try again.");
+            void logError(error, { scope: 'sync', step: `calendarFeed:${action}` });
             setSyncError(message);
             showToast(message, 'error');
         } finally {
             setCalendarFeedBusy(false);
         }
-    }, [showToast, toErrorMessage]);
+    }, [resolveText, showToast]);
 
     const handleCopyCalendarFeedUrl = useCallback(async () => {
         if (!calendarFeedUrl) return;
         try {
             await navigator.clipboard.writeText(calendarFeedUrl);
-            showToast('Subscription URL copied.', 'success');
-        } catch {
-            showToast('Could not copy the subscription URL.', 'error');
+            showToast(resolveText('settings.sync.calendarFeedCopied', 'Subscription URL copied.'), 'success');
+        } catch (error) {
+            void logError(error, { scope: 'sync', step: 'copyCalendarFeedUrl' });
+            showToast(resolveText('settings.sync.calendarFeedCopyFailed', 'Could not copy the subscription URL.'), 'error');
         }
-    }, [calendarFeedUrl, showToast]);
+    }, [calendarFeedUrl, resolveText, showToast]);
 
     const handleSaveSyncPath = useCallback(async () => {
         if (!syncPath.trim()) return;
@@ -481,8 +500,8 @@ export const useSyncSettings = ({
         hasPendingSyncConfiguration.current = true;
         setSyncPath(syncPath.trim());
         setSyncError(null);
-        showToast('Sync folder ready. Sync now to verify and save it.', 'info');
-    }, [advanceSyncConfigurationGeneration, showToast, syncPath]);
+        showToast(resolveText('settings.sync.readyToVerify', 'Settings ready. Sync now to verify and save them.'), 'info');
+    }, [advanceSyncConfigurationGeneration, resolveText, showToast, syncPath]);
 
     const handleChangeSyncLocation = useCallback(async () => {
         try {
@@ -500,13 +519,13 @@ export const useSyncSettings = ({
                 hasPendingSyncConfiguration.current = true;
                 setSyncPath(selected);
                 setSyncError(null);
-                showToast('Sync folder ready. Sync now to verify and save it.', 'info');
+                showToast(resolveText('settings.sync.readyToVerify', 'Settings ready. Sync now to verify and save them.'), 'info');
             }
         } catch (error) {
-            setSyncError('Failed to change sync location.');
+            setSyncError(resolveText('settings.feedback.actionFailed', "Couldn't complete this action. Try again."));
             void logError(error, { scope: 'sync', step: 'changeLocation' });
         }
-    }, [advanceSyncConfigurationGeneration, isTauri, selectSyncFolderTitle, showToast]);
+    }, [advanceSyncConfigurationGeneration, isTauri, resolveText, selectSyncFolderTitle, showToast]);
 
     const clearLocalDropboxCredentialHandle = useCallback((expectedHandle?: string) => {
         if (expectedHandle && dropboxCredentialHandleRef.current !== expectedHandle) return;
@@ -567,7 +586,7 @@ export const useSyncSettings = ({
             });
             if (syncConfigurationGeneration.current !== mutationGeneration) return;
             if (!discarded) {
-                setSyncError(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+                setSyncError(dropboxCredentialCleanupMessage);
                 return;
             }
         }
@@ -590,14 +609,16 @@ export const useSyncSettings = ({
                 showSaved();
             }
         } catch (error) {
-            setSyncError(toErrorMessage(error, 'Failed to save sync backend.'));
+            void logError(error, { scope: 'sync', step: 'saveBackend' });
+            setSyncError(resolveText('settings.feedback.saveFailed', "Couldn't save this setting. Try again."));
         }
     }, [
         advanceSyncConfigurationGeneration,
         discardPendingDropboxCredential,
+        dropboxCredentialCleanupMessage,
         persistedSyncBackend,
+        resolveText,
         showSaved,
-        toErrorMessage,
     ]);
 
     const handleSaveWebDav = useCallback(async () => {
@@ -617,12 +638,13 @@ export const useSyncSettings = ({
                 setWebdavHasPassword(true);
             }
             setSyncError(null);
-            showToast('WebDAV settings ready. Sync now to verify and save them.', 'info');
+            showToast(resolveText('settings.sync.readyToVerify', 'Settings ready. Sync now to verify and save them.'), 'info');
         } finally {
             setIsSavingWebDav(false);
         }
     }, [
         advanceSyncConfigurationGeneration,
+        resolveText,
         showToast,
         validateSyncHttpUrl,
         webdavAllowInsecureHttp,
@@ -634,7 +656,10 @@ export const useSyncSettings = ({
     const handleTestWebDavConnection = useCallback(async () => {
         const trimmedUrl = webdavUrl.trim();
         if (!trimmedUrl) {
-            const message = 'Enter a WebDAV URL first.';
+            const message = resolveText(
+                'settings.syncMobile.pleaseSetAWebdavUrlFirst',
+                'Please set a WebDAV URL first',
+            );
             setWebdavTestState('error');
             setSyncError(message);
             showToast(message, 'error');
@@ -653,16 +678,17 @@ export const useSyncSettings = ({
             });
             setWebdavTestState('success');
             setSyncError(null);
-            showToast('WebDAV endpoint is reachable.', 'success');
+            showToast(resolveText('settings.syncMobile.webdavEndpointIsReachable', 'WebDAV endpoint is reachable.'), 'success');
         } catch (error) {
-            const message = toErrorMessage(error, 'WebDAV connection failed.');
+            const message = resolveText('settings.syncMobile.connectionFailed', 'Connection failed');
+            void logError(error, { scope: 'sync', step: 'testWebDavConnection' });
             setWebdavTestState('error');
             setSyncError(message);
             showToast(message, 'error');
         } finally {
             setIsTestingWebDav(false);
         }
-    }, [showToast, toErrorMessage, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavHasPassword, webdavPassword, webdavUrl, webdavUsername]);
+    }, [resolveText, showToast, validateSyncHttpUrl, webdavAllowInsecureHttp, webdavHasPassword, webdavPassword, webdavUrl, webdavUsername]);
 
     const handleSaveCloud = useCallback(async () => {
         const trimmedUrl = cloudUrl.trim();
@@ -674,12 +700,13 @@ export const useSyncSettings = ({
         setCloudUrl(trimmedUrl);
         setCloudToken(trimmedToken);
         setSyncError(null);
-        showToast('Self-hosted settings ready. Sync now to verify and save them.', 'info');
+        showToast(resolveText('settings.sync.readyToVerify', 'Settings ready. Sync now to verify and save them.'), 'info');
     }, [
         advanceSyncConfigurationGeneration,
         cloudAllowInsecureHttp,
         cloudUrl,
         cloudToken,
+        resolveText,
         showToast,
         validateCloudToken,
         validateSyncHttpUrl,
@@ -694,7 +721,7 @@ export const useSyncSettings = ({
             });
             if (syncConfigurationGeneration.current !== mutationGeneration) return;
             if (!discarded) {
-                setSyncError(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+                setSyncError(dropboxCredentialCleanupMessage);
                 return;
             }
         }
@@ -706,12 +733,15 @@ export const useSyncSettings = ({
             setDropboxTestState('idle');
             setDropboxAuthInProgress(false);
         }
-    }, [advanceSyncConfigurationGeneration, discardPendingDropboxCredential, persistedCloudProvider]);
+    }, [advanceSyncConfigurationGeneration, discardPendingDropboxCredential, dropboxCredentialCleanupMessage, persistedCloudProvider]);
 
     const handleConnectDropbox = useCallback(async () => {
         const appKey = dropboxAppKey.trim();
         if (!appKey) {
-            showToast('Dropbox app key is not configured in this build.', 'error');
+            showToast(resolveText(
+                'settings.syncMobile.dropboxAppKeyIsNotConfiguredInThisBuild',
+                'Dropbox app key is not configured in this build.',
+            ), 'error');
             return;
         }
         const connectGeneration = advanceSyncConfigurationGeneration();
@@ -720,7 +750,7 @@ export const useSyncSettings = ({
         setDropboxBusy(true);
         try {
             const discarded = await discardPendingDropboxCredential();
-            if (!discarded) throw new Error(DROPBOX_CREDENTIAL_CLEANUP_ERROR);
+            if (!discarded) throw new Error(dropboxCredentialCleanupMessage);
             if (syncConfigurationGeneration.current !== connectGeneration) return;
             const credentialHandle = await SyncService.connectDropbox(appKey);
             if (syncConfigurationGeneration.current !== connectGeneration) {
@@ -737,10 +767,11 @@ export const useSyncSettings = ({
             setDropboxTestState('idle');
             hasPendingSyncConfiguration.current = true;
             setSyncError(null);
-            showToast('Dropbox authorization ready. Sync now to verify and save it.', 'info');
+            showToast(resolveText('settings.sync.readyToVerify', 'Settings ready. Sync now to verify and save them.'), 'info');
         } catch (error) {
             if (syncConfigurationGeneration.current !== connectGeneration) return;
-            const message = toErrorMessage(error, 'Failed to connect Dropbox.');
+            const message = resolveText('settings.syncMobile.connectionFailed', 'Connection failed');
+            void logError(error, { scope: 'sync', step: 'connectDropbox' });
             let connected = false;
             try {
                 connected = await SyncService.isDropboxConnected(appKey);
@@ -763,8 +794,9 @@ export const useSyncSettings = ({
         discardDropboxCredential,
         discardPendingDropboxCredential,
         dropboxAppKey,
+        dropboxCredentialCleanupMessage,
+        resolveText,
         showToast,
-        toErrorMessage,
     ]);
 
     const handleDisconnectDropbox = useCallback(async () => {
@@ -796,10 +828,11 @@ export const useSyncSettings = ({
             setDropboxConnected(false);
             setDropboxTestState('idle');
             setSyncError(null);
-            showToast('Disconnected from Dropbox.', 'success');
+            showToast(resolveText('settings.sync.dropboxDisconnected', 'Disconnected from Dropbox.'), 'success');
         } catch (error) {
             if (syncConfigurationGeneration.current !== disconnectGeneration) return;
-            const message = toErrorMessage(error, 'Failed to disconnect Dropbox.');
+            const message = resolveText('settings.syncMobile.disconnectFailed', 'Disconnect failed');
+            void logError(error, { scope: 'sync', step: 'disconnectDropbox' });
             setDropboxTestState('error');
             setSyncError(message);
             showToast(message, 'error');
@@ -813,14 +846,17 @@ export const useSyncSettings = ({
         clearLocalDropboxCredentialHandle,
         discardPendingDropboxCredential,
         dropboxAppKey,
+        resolveText,
         showToast,
-        toErrorMessage,
     ]);
 
     const handleTestDropboxConnection = useCallback(async () => {
         const appKey = dropboxAppKey.trim();
         if (!appKey) {
-            showToast('Dropbox app key is not configured in this build.', 'error');
+            showToast(resolveText(
+                'settings.syncMobile.dropboxAppKeyIsNotConfiguredInThisBuild',
+                'Dropbox app key is not configured in this build.',
+            ), 'error');
             return;
         }
         setDropboxBusy(true);
@@ -832,7 +868,7 @@ export const useSyncSettings = ({
             if (!connected) {
                 setDropboxConnected(false);
                 setDropboxTestState('error');
-                showToast('Connect Dropbox first.', 'error');
+                showToast(resolveText('settings.syncMobile.pleaseConnectDropboxFirst', 'Please connect Dropbox first.'), 'error');
                 return;
             }
             await SyncService.testDropboxConnection(appKey, {
@@ -840,9 +876,10 @@ export const useSyncSettings = ({
             });
             setDropboxConnected(true);
             setDropboxTestState('success');
-            showToast('Dropbox account is reachable.', 'success');
+            showToast(resolveText('settings.syncMobile.dropboxAccountIsReachable', 'Dropbox account is reachable.'), 'success');
         } catch (error) {
-            const message = toErrorMessage(error, 'Dropbox connection failed.');
+            const message = resolveText('settings.syncMobile.connectionFailed', 'Connection failed');
+            void logError(error, { scope: 'sync', step: 'testDropboxConnection' });
             setDropboxConnected(Boolean(dropboxCredentialHandleRef.current));
             setDropboxTestState('error');
             setSyncError(message);
@@ -850,7 +887,7 @@ export const useSyncSettings = ({
         } finally {
             setDropboxBusy(false);
         }
-    }, [dropboxAppKey, showToast, toErrorMessage]);
+    }, [dropboxAppKey, resolveText, showToast]);
 
     const commitProvenSyncConfiguration = useCallback(async (
         config: DesktopSyncConfigOverride,
@@ -984,7 +1021,10 @@ export const useSyncSettings = ({
                     if (configOverride.dropboxCredentialHandle) {
                         await resolveCapturedCredential();
                     }
-                    showToast('Local changes arrived during sync. Try Sync now again.', 'info');
+                    showToast(resolveText(
+                        'settings.syncQueuedBody',
+                        'Local changes arrived during sync. A retry was queued automatically.',
+                    ), 'info');
                     return;
                 }
                 if (
@@ -996,7 +1036,13 @@ export const useSyncSettings = ({
                     if (configOverride.dropboxCredentialHandle) {
                         await resolveCapturedCredential();
                     }
-                    showToast(probeResult.error || 'Sync setup could not be verified. Your previous sync settings are still active.', 'error');
+                    if (probeResult.error) {
+                        void logError(new Error(probeResult.error), { scope: 'sync', step: 'activationProbe' });
+                    }
+                    showToast(resolveText(
+                        'settings.sync.verificationFailed',
+                        'Sync setup could not be verified. Your previous sync settings are still active.',
+                    ), 'error');
                     return;
                 }
                 if (syncConfigurationGeneration.current !== activationGeneration) {
@@ -1015,7 +1061,10 @@ export const useSyncSettings = ({
                 ignorePendingRemoteWriteBackoff: needsActivationProbe,
             });
             if (result.skipped === 'requeued') {
-                showToast('Local changes arrived during sync. Retry queued.', 'info');
+                showToast(resolveText(
+                    'settings.syncQueuedBody',
+                    'Local changes arrived during sync. A retry was queued automatically.',
+                ), 'info');
             } else if (
                 result.success
                 && !result.remoteWriteDeferred
@@ -1025,16 +1074,24 @@ export const useSyncSettings = ({
                 const mergeSummary = summarizeMergeStats(result.stats);
                 const maxClockSkewMs = mergeSummary.maxClockSkewMs;
                 const timestampAdjustments = mergeSummary.timestampAdjustments;
-                showToast('Sync completed', 'success');
+                showToast(resolveText('settings.lastSyncSuccess', 'Sync completed'), 'success');
                 if (maxClockSkewMs > CLOCK_SKEW_THRESHOLD_MS) {
                     showToast(
-                        `Large device clock skew detected during sync (${formatClockSkew(maxClockSkewMs)}). Check time settings on each device.`,
+                        formatText(
+                            'settings.syncClockSkewWarning',
+                            'Large device clock skew detected ({skew}). Check time settings on each device.',
+                            { skew: formatClockSkew(maxClockSkewMs) },
+                        ),
                         'info',
                         7000
                     );
                 } else if (timestampAdjustments > 0) {
                     showToast(
-                        `Adjusted ${timestampAdjustments} future-dated timestamp${timestampAdjustments === 1 ? '' : 's'} during sync. Check device clocks if this repeats.`,
+                        formatText(
+                            'settings.syncAdjustedTimestamps',
+                            'Adjusted {count} future-dated timestamps during sync.',
+                            { count: timestampAdjustments },
+                        ),
                         'info',
                         7000
                     );
@@ -1043,14 +1100,20 @@ export const useSyncSettings = ({
                     setSnapshots(await SyncService.listDataSnapshots());
                 }
             } else {
-                showToast(result.error || 'Sync did not complete. Your previous sync settings are still active.', 'error');
+                if (result.error) {
+                    void logError(new Error(result.error), { scope: 'sync', step: 'performResult' });
+                }
+                showToast(resolveText(
+                    'settings.sync.incomplete',
+                    'Sync did not complete. Your previous sync settings are still active.',
+                ), 'error');
             }
         } catch (error) {
             if (activationCredentialHandle) {
                 await resolveCapturedCredential();
             }
             void logError(error, { scope: 'sync', step: 'perform' });
-            const message = toErrorMessage(error, 'Sync failed');
+            const message = resolveText('settings.lastSyncError', 'Sync failed');
             setSyncError(message);
             showToast(message, 'error');
         }
@@ -1064,13 +1127,14 @@ export const useSyncSettings = ({
         discardDropboxCredential,
         discardPendingDropboxCredential,
         dropboxAppKey,
+        formatText,
         isTauri,
         persistedCloudProvider,
         persistedSyncBackend,
+        resolveText,
         showToast,
         syncBackend,
         syncPath,
-        toErrorMessage,
         validateCloudToken,
         validateSyncHttpUrl,
         webdavAllowInsecureHttp,
@@ -1549,9 +1613,13 @@ export const useSyncSettings = ({
         (updates: Partial<SyncPreferences>) => {
             updateSettings({ syncPreferences: { ...syncPreferences, ...updates } })
                 .then(showSaved)
-                .catch((error) => reportError('Failed to update sync preferences', error));
+                .catch((error) => reportSettingsFailure(
+                    'Failed to update sync preferences',
+                    error,
+                    resolveText('settings.feedback.saveFailed', "Couldn't save this setting. Try again."),
+                ));
         },
-        [syncPreferences, showSaved, updateSettings],
+        [resolveText, syncPreferences, showSaved, updateSettings],
     );
 
     const lastSyncAt = settings?.lastSyncAt;

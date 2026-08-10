@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getEnglishSettingsLabels } from './labels';
 import { SettingsGtdPage } from './SettingsGtdPage';
+import { useUiStore } from '../../../store/ui-store';
 
 describe('SettingsGtdPage', () => {
     it('saves the task editor presentation setting', async () => {
@@ -61,6 +62,35 @@ describe('SettingsGtdPage', () => {
                 },
             });
         });
+    });
+
+    it('uses localized safe feedback when a GTD setting cannot be saved', async () => {
+        const updateSettings = vi.fn().mockRejectedValue(new Error('database detail'));
+        const showToast = vi.fn();
+        useUiStore.setState({ showToast } as never);
+        const labels = {
+            ...getEnglishSettingsLabels(),
+            settingsSaveFailed: 'Impossible d’enregistrer ce réglage.',
+        };
+
+        const { getByRole } = render(
+            <SettingsGtdPage
+                t={labels}
+                language="fr"
+                settings={{ gtd: { defaultProjectFlowMode: 'parallel' } }}
+                updateSettings={updateSettings}
+                showSaved={vi.fn()}
+                autoArchiveDays={7}
+                areas={[]}
+            />
+        );
+
+        fireEvent.click(getByRole('button', { name: /sequential/i }));
+
+        await waitFor(() => {
+            expect(showToast).toHaveBeenCalledWith('Impossible d’enregistrer ce réglage.', 'error');
+        });
+        expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('database detail'), expect.anything());
     });
 
     it('saves the default area for new tasks', async () => {

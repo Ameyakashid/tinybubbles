@@ -15,11 +15,11 @@ import { exists, remove, size } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import { getManagedPath } from '../../../lib/managed-paths';
 import { loadAIKey, saveAIKey } from '../../../lib/ai-config';
-import { reportError } from '../../../lib/report-error';
-import { logWarn } from '../../../lib/app-log';
 import { downloadParakeetModel, downloadWhisperModel } from '../../../lib/speech-to-text';
 import { markSettingsOpenTrace, measureSettingsOpenStep } from '../../../lib/settings-open-diagnostics';
 import { useUiStore } from '../../../store/ui-store';
+import { useLanguage } from '../../../contexts/language-context';
+import { reportSettingsFailure, resolveSettingsFeedback } from './settings-feedback';
 import {
     DEFAULT_PARAKEET_MODEL,
     DEFAULT_WHISPER_MODEL,
@@ -73,6 +73,14 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     const [fetchedChatModels, setFetchedChatModels] = useState<string[] | null>(null);
     const [fetchedSpeechModels, setFetchedSpeechModels] = useState<string[] | null>(null);
     const showToast = useUiStore((state) => state.showToast);
+    const { t } = useLanguage();
+    const resolveFeedback = useCallback((key: string, fallback: string) => (
+        resolveSettingsFeedback(t, key, fallback)
+    ), [t]);
+    const saveFailedMessage = resolveFeedback(
+        'settings.feedback.saveFailed',
+        "Couldn't save this setting. Try again.",
+    );
 
     const aiProvider = (settings?.ai?.provider ?? 'openai') as AIProviderId;
     const aiApiKey = aiKey.provider === aiProvider ? aiKey.value : '';
@@ -123,8 +131,8 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     const updateAISettings = useCallback((next: AiSettingsUpdate) => {
         updateSettings({ ai: { ...(settings?.ai ?? {}), ...next } })
             .then(showSaved)
-            .catch((error) => reportError('Failed to update AI settings', error));
-    }, [settings?.ai, showSaved, updateSettings]);
+            .catch((error) => reportSettingsFailure('Failed to update AI settings', error, saveFailedMessage));
+    }, [saveFailedMessage, settings?.ai, showSaved, updateSettings]);
 
     const updateSpeechSettings = useCallback((next: SpeechSettingsUpdate) => {
         updateSettings({
@@ -134,8 +142,8 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
             },
         })
             .then(showSaved)
-            .catch((error) => reportError('Failed to update speech settings', error));
-    }, [settings?.ai, showSaved, updateSettings]);
+            .catch((error) => reportSettingsFailure('Failed to update speech settings', error, saveFailedMessage));
+    }, [saveFailedMessage, settings?.ai, showSaved, updateSettings]);
 
     const handleAIProviderChange = useCallback((provider: AIProviderId) => {
         updateAISettings({
@@ -154,8 +162,10 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
 
     const handleAiApiKeyChange = useCallback((value: string) => {
         setAiKey({ provider: aiProvider, value });
-        saveAIKey(aiProvider, value).catch((error) => reportError('Failed to save AI key', error));
-    }, [aiProvider, enabled]);
+        saveAIKey(aiProvider, value).catch((error) => (
+            reportSettingsFailure('Failed to save AI key', error, saveFailedMessage)
+        ));
+    }, [aiProvider, saveFailedMessage]);
 
     const handleSpeechProviderChange = useCallback((provider: SpeechProvider) => {
         const nextModel = provider === 'openai'
@@ -178,9 +188,11 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
     const handleSpeechApiKeyChange = useCallback((value: string) => {
         setSpeechKey({ provider: speechProvider, value });
         if (speechProvider !== 'whisper' && speechProvider !== 'parakeet') {
-            saveAIKey(speechProvider as AIProviderId, value).catch((error) => reportError('Failed to save speech API key', error));
+            saveAIKey(speechProvider as AIProviderId, value).catch((error) => (
+                reportSettingsFailure('Failed to save speech API key', error, saveFailedMessage)
+            ));
         }
-    }, [speechProvider, enabled]);
+    }, [saveFailedMessage, speechProvider]);
 
     const resolveWhisperPath = useCallback(async (modelId: string) => {
         if (!isTauri) return null;
@@ -326,12 +338,17 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
                     dispose.forEach((unlisten) => unlisten());
                 }
             })
-            .catch((error) => reportError('Failed to subscribe to offline model download progress', error));
+            .catch((error) => reportSettingsFailure(
+                'Failed to subscribe to offline model download progress',
+                error,
+                resolveFeedback('settings.feedback.loadFailed', "Couldn't load this setting. Try again."),
+                { toast: false },
+            ));
         return () => {
             active = false;
             unlisteners.forEach((unlisten) => unlisten());
         };
-    }, [enabled, isTauri]);
+    }, [enabled, isTauri, resolveFeedback]);
 
     useEffect(() => {
         let active = true;
@@ -481,13 +498,14 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
             setSpeechDownloadState('success');
             setTimeout(() => setSpeechDownloadState('idle'), 2000);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = resolveFeedback('settings.speechOfflineDownloadError', 'Offline model download failed');
             setSpeechDownloadError(message);
             setSpeechDownloadProgress(null);
             setSpeechDownloadState('error');
-            showToast(`Offline model download failed: ${message}`, 'error', 6000);
+            reportSettingsFailure('Offline model download failed', error, message, { toast: false });
+            showToast(message, 'error', 6000);
         }
-    }, [isTauri, selectedLocalSpeechModelSize, showToast, speechModel, speechProvider, updateSpeechSettings]);
+    }, [isTauri, resolveFeedback, selectedLocalSpeechModelSize, showToast, speechModel, speechProvider, updateSpeechSettings]);
 
     const handleDeleteWhisperModel = useCallback(async () => {
         const currentPath = speechOfflinePath || speechSettings.offlineModelPath;
@@ -511,17 +529,14 @@ export function useAiSettings({ isTauri, settings, updateSettings, showSaved, en
             }
             updateSpeechSettings({ offlineModelPath: undefined });
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            void logWarn('Offline model delete failed', {
-                scope: 'ai',
-                extra: { error: message },
-            });
+            const message = resolveFeedback('settings.speechOfflineDeleteError', 'Offline model delete failed');
             setSpeechDownloadError(message);
             setSpeechDownloadProgress(null);
             setSpeechDownloadState('error');
-            showToast(`Offline model delete failed: ${message}`, 'error', 6000);
+            reportSettingsFailure('Offline model delete failed', error, message, { toast: false });
+            showToast(message, 'error', 6000);
         }
-    }, [resolveParakeetPath, showToast, speechOfflinePath, speechProvider, speechSettings.offlineModelPath, updateSpeechSettings]);
+    }, [resolveFeedback, resolveParakeetPath, showToast, speechOfflinePath, speechProvider, speechSettings.offlineModelPath, updateSpeechSettings]);
 
     return {
         aiEnabled,
