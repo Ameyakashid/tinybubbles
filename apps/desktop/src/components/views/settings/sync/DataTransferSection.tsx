@@ -122,7 +122,7 @@ export function DataTransferSection({
                 settingsKey="importTodoist"
                 label={t.importTodoist}
                 description={t.importTodoistDesc}
-                statusText={transferAction === 'import' ? t.syncing : null}
+                statusText={transferAction === 'import:todoist' ? t.syncing : null}
                 onClick={() => void onImportTodoist()}
             />
             <TransferActionButton
@@ -130,7 +130,7 @@ export function DataTransferSection({
                 settingsKey="importTickTick"
                 label={t.importTickTick}
                 description={t.importTickTickDesc}
-                statusText={transferAction === 'import' ? t.syncing : null}
+                statusText={transferAction === 'import:ticktick' ? t.syncing : null}
                 onClick={() => void onImportTickTick()}
             />
             <TransferActionButton
@@ -138,7 +138,7 @@ export function DataTransferSection({
                 settingsKey="importDgt"
                 label={t.importDgt}
                 description={t.importDgtDesc}
-                statusText={transferAction === 'import' ? t.syncing : null}
+                statusText={transferAction === 'import:dgt' ? t.syncing : null}
                 onClick={() => void onImportDgt()}
             />
             <TransferActionButton
@@ -146,7 +146,7 @@ export function DataTransferSection({
                 settingsKey="importOmniFocus"
                 label={t.importOmniFocus}
                 description={t.importOmniFocusDesc}
-                statusText={transferAction === 'import' ? t.syncing : null}
+                statusText={transferAction === 'import:omnifocus' ? t.syncing : null}
                 onClick={() => void onImportOmniFocus()}
             />
             <TransferActionButton
@@ -154,7 +154,7 @@ export function DataTransferSection({
                 settingsKey="importMindwtrCsv"
                 label={t.importMindwtrCsv}
                 description={t.importMindwtrCsvDesc}
-                statusText={transferAction === 'import' ? t.syncing : null}
+                statusText={transferAction === 'import:mindwtr-csv' ? t.syncing : null}
                 onClick={() => void onImportMindwtrCsv()}
             />
         </SettingsDisclosureCard>

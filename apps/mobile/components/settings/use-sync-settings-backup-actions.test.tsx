@@ -75,12 +75,13 @@ describe('useSyncSettingsBackupActions', () => {
     const showToast = vi.fn();
     const showSettingsErrorToast = vi.fn();
     const showSettingsWarning = vi.fn();
+    const setBackupAction = vi.fn();
 
     function Harness() {
         latest = useSyncSettingsBackupActions({
             refreshRecoverySnapshots: vi.fn(),
             settings: {},
-            setBackupAction: vi.fn(),
+            setBackupAction,
             showSettingsErrorToast,
             showSettingsWarning,
             showToast,
@@ -100,6 +101,40 @@ describe('useSyncSettingsBackupActions', () => {
         coreMocks.getInMemoryAppDataSnapshot.mockReturnValue({
             tasks: [], projects: [], sections: [], areas: [], people: [], settings: {},
         });
+    });
+
+    it.each([
+        ['handleImportTodoist', 'import:todoist'],
+        ['handleImportTickTick', 'import:ticktick'],
+        ['handleImportDgt', 'import:dgt'],
+        ['handleImportOmniFocus', 'import:omnifocus'],
+        ['handleImportMindwtrCsv', 'import:mindwtr-csv'],
+    ] as const)('tracks and clears the exact operation for %s cancellation', async (handlerName, action) => {
+        await act(async () => {
+            create(<Harness />);
+        });
+
+        await latest?.[handlerName]();
+
+        expect(setBackupAction.mock.calls).toEqual([[action], [null]]);
+    });
+
+    it('tracks the exact recovery snapshot through confirmation', async () => {
+        vi.mocked(dataTransfer.restoreLocalDataSnapshot).mockResolvedValue(undefined);
+        await act(async () => {
+            create(<Harness />);
+        });
+
+        await latest?.handleRestoreRecoverySnapshot('data.second.snapshot.json');
+        const [, , buttons] = vi.mocked(Alert.alert).mock.calls[0] as [string, string, Array<{ onPress?: () => Promise<void> }>];
+        await act(async () => {
+            await buttons[1].onPress?.();
+        });
+
+        expect(setBackupAction.mock.calls).toEqual([
+            ['snapshot:data.second.snapshot.json'],
+            [null],
+        ]);
     });
 
     it('exports the authoritative in-memory snapshot at press time', async () => {

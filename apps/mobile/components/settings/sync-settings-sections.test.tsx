@@ -50,6 +50,35 @@ const renderedText = (tree: renderer.ReactTestRenderer): string[] =>
     .filter((child): child is string => typeof child === 'string');
 
 describe('SyncBackupSection', () => {
+  it.each([
+    ['import:todoist', 'handleImportTodoist'],
+    ['import:ticktick', 'handleImportTickTick'],
+    ['import:dgt', 'handleImportDgt'],
+    ['import:omnifocus', 'handleImportOmniFocus'],
+    ['import:mindwtr-csv', 'handleImportMindwtrCsv'],
+  ] as const)('shows one spinner on the active %s row', (backupAction, handlerName) => {
+    const handlers = {
+      handleImportTodoist: vi.fn(),
+      handleImportTickTick: vi.fn(),
+      handleImportDgt: vi.fn(),
+      handleImportOmniFocus: vi.fn(),
+      handleImportMindwtrCsv: vi.fn(),
+    };
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncBackupSection {...baseProps} {...handlers} backupAction={backupAction} isBackupBusy />,
+      );
+    });
+    act(() => {
+      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
+    });
+
+    const spinners = tree.root.findAllByType(ActivityIndicator);
+    expect(spinners).toHaveLength(1);
+    expect(spinners[0].parent?.props.onPress).toBe(handlers[handlerName]);
+  });
+
   it('starts folded, showing only the disclosure header', () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => {
@@ -135,6 +164,34 @@ describe('SyncBackupSection', () => {
 });
 
 describe('sync settings disclosure accessibility', () => {
+  it('shows activity only on the exact recovery snapshot', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <RecoverySnapshotsCard
+          backupAction="snapshot:data.second.snapshot.json"
+          formatRecoverySnapshotLabel={(name) => name}
+          handleRestoreRecoverySnapshot={noop}
+          isBackupBusy
+          isLoadingRecoverySnapshots={false}
+          isSyncing={false}
+          recoverySnapshots={['data.first.snapshot.json', 'data.second.snapshot.json']}
+          recoverySnapshotsOpen
+          setRecoverySnapshotsOpen={noop}
+          tr={translate}
+          t={translate}
+          tc={tc}
+        />,
+      );
+    });
+
+    const spinners = tree.root.findAllByType(ActivityIndicator);
+    expect(spinners).toHaveLength(1);
+    expect(
+      spinners[0].parent?.findAllByType(Text).some((node) => node.props.children === 'data.second.snapshot.json'),
+    ).toBe(true);
+  });
+
   it('exposes recovery snapshots as a collapsed button and hides its decorative chevron', () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => {

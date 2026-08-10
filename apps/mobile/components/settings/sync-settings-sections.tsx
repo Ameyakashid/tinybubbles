@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { translateWithFallback } from '@mindwtr/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
+import type { BackupAction } from './use-sync-settings-backup-actions';
 
 import { styles } from './settings.styles';
 
@@ -115,7 +116,7 @@ export function BackgroundSyncInfoCard({
 }
 
 type SyncBackupSectionProps = {
-  backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
+  backupAction: BackupAction;
   handleAddGettingStartedContent: () => void;
   handleBackup: () => void;
   handleImportDgt: () => void;
@@ -241,7 +242,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
               </Text>
             </View>
-            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:todoist' && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -254,7 +255,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
               </Text>
             </View>
-            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:ticktick' && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -267,7 +268,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
               </Text>
             </View>
-            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:dgt' && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -280,7 +281,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
               </Text>
             </View>
-            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:omnifocus' && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -293,7 +294,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
               </Text>
             </View>
-            {backupAction === 'import' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:mindwtr-csv' && <ActivityIndicator size="small" color={tc.tint} />}
           </TouchableOpacity>
         </>
         )}
@@ -303,7 +304,7 @@ export function SyncBackupSection({
 }
 
 type RecoverySnapshotsCardProps = {
-  backupAction: null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
+  backupAction: BackupAction;
   formatRecoverySnapshotLabel: (fileName: string) => string;
   handleRestoreRecoverySnapshot: (snapshotName: string) => void;
   isBackupBusy: boolean;
@@ -388,7 +389,7 @@ export function RecoverySnapshotsCard({
                     {snapshot}
                   </Text>
                 </View>
-                {backupAction === 'snapshot' ? (
+                {backupAction === `snapshot:${snapshot}` ? (
                   <ActivityIndicator size="small" color={tc.tint} />
                 ) : (
                   <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.recoverySnapshotsRestore')}</Text>

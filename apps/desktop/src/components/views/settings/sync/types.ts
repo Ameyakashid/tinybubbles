@@ -243,8 +243,19 @@ export type SettingsDiagnosticsProps = {
     onClearLog: () => void;
 };
 
+export type TransferAction =
+    | null
+    | 'export'
+    | 'restore'
+    | 'merge'
+    | 'import:todoist'
+    | 'import:ticktick'
+    | 'import:dgt'
+    | 'import:omnifocus'
+    | 'import:mindwtr-csv';
+
 export type SettingsDataTransferProps = {
-    transferAction: null | 'export' | 'restore' | 'merge' | 'import';
+    transferAction: TransferAction;
     onExportBackup: () => Promise<void> | void;
     onRestoreBackup: () => Promise<void> | void;
     onMergeBackup: () => Promise<void> | void;

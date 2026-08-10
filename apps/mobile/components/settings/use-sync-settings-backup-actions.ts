@@ -51,7 +51,17 @@ import {
 import { clearLog, ensureLogFilePath, logInfo } from '@/lib/app-log';
 import { logSettingsError } from '@/lib/settings-utils';
 
-type BackupAction = null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot';
+export type BackupAction =
+    | null
+    | 'export'
+    | 'restore'
+    | 'merge'
+    | 'import:todoist'
+    | 'import:ticktick'
+    | 'import:dgt'
+    | 'import:omnifocus'
+    | 'import:mindwtr-csv'
+    | `snapshot:${string}`;
 
 type UseSyncSettingsBackupActionsParams = {
     tr: (key: string, values?: Record<string, string | number | boolean | null | undefined>) => string;
@@ -407,7 +417,7 @@ export function useSyncSettingsBackupActions({
     }, [buildBackupSummary, confirmMergeBackup, formatImportError, formatThrownBackupError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const confirmTodoistImport = useCallback(async (parsedProjects: ParsedTodoistProject[]) => {
-        setBackupAction('import');
+        setBackupAction('import:todoist');
         try {
             const { snapshotName, result } = await importTodoistData(parsedProjects);
             await refreshRecoverySnapshots();
@@ -434,7 +444,7 @@ export function useSyncSettingsBackupActions({
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmTickTickImport = useCallback(async (parsedData: ParsedTickTickImportData) => {
-        setBackupAction('import');
+        setBackupAction('import:ticktick');
         try {
             const { snapshotName, result } = await importTickTickData(parsedData);
             await refreshRecoverySnapshots();
@@ -461,7 +471,7 @@ export function useSyncSettingsBackupActions({
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmDgtImport = useCallback(async (parsedData: ParsedDgtImportData) => {
-        setBackupAction('import');
+        setBackupAction('import:dgt');
         try {
             const { snapshotName, result } = await importDgtData(parsedData);
             await refreshRecoverySnapshots();
@@ -488,7 +498,7 @@ export function useSyncSettingsBackupActions({
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmOmniFocusImport = useCallback(async (parsedData: ParsedOmniFocusImportData) => {
-        setBackupAction('import');
+        setBackupAction('import:omnifocus');
         try {
             const { snapshotName, result } = await importOmniFocusData(parsedData);
             await refreshRecoverySnapshots();
@@ -521,7 +531,7 @@ export function useSyncSettingsBackupActions({
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const confirmMindwtrCsvImport = useCallback(async (parsedData: ParsedMindwtrCsvImportData) => {
-        setBackupAction('import');
+        setBackupAction('import:mindwtr-csv');
         try {
             const { snapshotName, result } = await importMindwtrCsvData(parsedData);
             await refreshRecoverySnapshots();
@@ -553,7 +563,7 @@ export function useSyncSettingsBackupActions({
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
     const handleImportTodoist = useCallback(async () => {
-        setBackupAction('import');
+        setBackupAction('import:todoist');
         try {
             const document = await pickTodoistDocument();
             if (!document) return;
@@ -585,7 +595,7 @@ export function useSyncSettingsBackupActions({
     }, [buildTodoistSummary, confirmTodoistImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportTickTick = useCallback(async () => {
-        setBackupAction('import');
+        setBackupAction('import:ticktick');
         try {
             const document = await pickTickTickDocument();
             if (!document) return;
@@ -618,7 +628,7 @@ export function useSyncSettingsBackupActions({
     }, [buildTickTickSummary, confirmTickTickImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportDgt = useCallback(async () => {
-        setBackupAction('import');
+        setBackupAction('import:dgt');
         try {
             const document = await pickDgtDocument();
             if (!document) return;
@@ -651,7 +661,7 @@ export function useSyncSettingsBackupActions({
     }, [buildDgtSummary, confirmDgtImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportOmniFocus = useCallback(async () => {
-        setBackupAction('import');
+        setBackupAction('import:omnifocus');
         try {
             const document = await pickOmniFocusDocument();
             if (!document) return;
@@ -684,7 +694,7 @@ export function useSyncSettingsBackupActions({
     }, [buildOmniFocusSummary, confirmOmniFocusImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleImportMindwtrCsv = useCallback(async () => {
-        setBackupAction('import');
+        setBackupAction('import:mindwtr-csv');
         try {
             const document = await pickMindwtrCsvDocument();
             if (!document) return;
@@ -726,7 +736,7 @@ export function useSyncSettingsBackupActions({
                     text: tr('markdown.referenceRestore'),
                     style: 'destructive',
                     onPress: async () => {
-                        setBackupAction('snapshot');
+                        setBackupAction(`snapshot:${snapshotName}`);
                         try {
                             await restoreLocalDataSnapshot(snapshotName);
                             await refreshRecoverySnapshots();

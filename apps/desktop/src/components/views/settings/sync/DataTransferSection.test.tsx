@@ -48,6 +48,23 @@ function expandRows(getByRole: ReturnType<typeof render>['getByRole']) {
 }
 
 describe('DataTransferSection', () => {
+    it.each([
+        ['import:todoist', /import from todoist/i],
+        ['import:ticktick', /import from ticktick/i],
+        ['import:dgt', /import from dgt gtd/i],
+        ['import:omnifocus', /import from omnifocus/i],
+        ['import:mindwtr-csv', /import from mindwtr csv/i],
+    ] as const)('shows progress only on the active %s row', (transferAction, activeLabel) => {
+        const { getAllByText, getByRole } = render(
+            <DataTransferSection {...baseProps} transferAction={transferAction} />
+        );
+        expandRows(getByRole);
+
+        const statuses = getAllByText('Working...');
+        expect(statuses).toHaveLength(1);
+        expect(statuses[0].closest('button')).toBe(getByRole('button', { name: activeLabel }));
+    });
+
     it('links to the import guide in the docs site', () => {
         const { getByRole } = render(<DataTransferSection {...baseProps} />);
         expandRows(getByRole);

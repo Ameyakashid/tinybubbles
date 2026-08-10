@@ -49,6 +49,7 @@ import type {
     SettingsDataTransferProps,
     SettingsSyncPageProps,
     SyncPreferences,
+    TransferAction,
 } from './sync/types';
 
 export type { SyncBackend };
@@ -175,7 +176,7 @@ export const useSyncSettings = ({
     const [snapshots, setSnapshots] = useState<string[]>([]);
     const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
     const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
-    const [transferAction, setTransferAction] = useState<null | 'export' | 'restore' | 'merge' | 'import'>(null);
+    const [transferAction, setTransferAction] = useState<TransferAction>(null);
     const showToast = useUiStore((state) => state.showToast);
     const settings = useTaskStore((state) => state.settings) ?? ({} as AppData['settings']);
     const updateSettings = useTaskStore((state) => state.updateSettings);
@@ -1240,7 +1241,7 @@ export const useSyncSettings = ({
 
     const handleImportTodoist = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import');
+        setTransferAction('import:todoist');
         try {
             const parseResult = await inspectDesktopTodoistImport();
             if (!parseResult) return;
@@ -1298,7 +1299,7 @@ export const useSyncSettings = ({
 
     const handleImportTickTick = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import');
+        setTransferAction('import:ticktick');
         try {
             const parseResult = await inspectDesktopTickTickImport();
             if (!parseResult) return;
@@ -1358,7 +1359,7 @@ export const useSyncSettings = ({
 
     const handleImportDgt = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import');
+        setTransferAction('import:dgt');
         try {
             const parseResult = await inspectDesktopDgtImport();
             if (!parseResult) return;
@@ -1419,7 +1420,7 @@ export const useSyncSettings = ({
 
     const handleImportOmniFocus = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import');
+        setTransferAction('import:omnifocus');
         try {
             const parseResult = await inspectDesktopOmniFocusImport();
             if (!parseResult) return;
@@ -1482,7 +1483,7 @@ export const useSyncSettings = ({
 
     const handleImportMindwtrCsv = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import');
+        setTransferAction('import:mindwtr-csv');
         try {
             const parseResult = await inspectDesktopMindwtrCsvImport();
             if (!parseResult) return;

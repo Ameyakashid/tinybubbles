@@ -54,7 +54,7 @@ import {
 } from './sync-settings-sections';
 import { SyncSelfHostedBackendPanel } from './sync-settings-selfhosted-panel';
 import { SyncWebDavBackendPanel } from './sync-settings-webdav-panel';
-import { useSyncSettingsBackupActions } from './use-sync-settings-backup-actions';
+import { useSyncSettingsBackupActions, type BackupAction } from './use-sync-settings-backup-actions';
 import {
     useSyncSettingsStoreSlice,
     type SettingsScreenMode,
@@ -114,7 +114,7 @@ function SyncSettingsView({
     const supportsNativeICloudSync = Platform.OS === 'ios' && isCloudKitAvailable();
     const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
     const [syncHistoryExpanded, setSyncHistoryExpanded] = useState(false);
-    const [backupAction, setBackupAction] = useState<null | 'export' | 'restore' | 'merge' | 'import' | 'snapshot'>(null);
+    const [backupAction, setBackupAction] = useState<BackupAction>(null);
     const [gettingStartedBusy, setGettingStartedBusy] = useState(false);
     const [recoverySnapshots, setRecoverySnapshots] = useState<string[]>([]);
     const [recoverySnapshotsOpen, setRecoverySnapshotsOpen] = useState(false);
