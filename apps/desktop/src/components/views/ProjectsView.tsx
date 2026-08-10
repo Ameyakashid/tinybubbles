@@ -8,8 +8,6 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { ErrorBoundary } from '../ErrorBoundary';
-import { tFallback, useTaskStore, type Task, type Project } from '@mindwtr/core';
 import {
     DndContext,
     DragOverlay,
@@ -20,6 +18,19 @@ import {
     type DragEndEvent,
     type DragStartEvent,
 } from '@dnd-kit/core';
+import {
+    AREA_FILTER_ALL,
+    AREA_FILTER_NONE,
+    buildProjectGroups,
+    projectMatchesAreaFilterSelection,
+    tFallback,
+    useTaskStore,
+    type Project,
+    type ProjectAreaGroup,
+    type ProjectTagFilter,
+    type Task,
+} from '@mindwtr/core';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { useLanguage } from '../../contexts/language-context';
 import { PromptModal } from '../PromptModal';
 import { ProjectsSidebar } from './projects/ProjectsSidebar';
@@ -42,14 +53,6 @@ import {
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useUiStore } from '../../store/ui-store';
-import {
-    AREA_FILTER_ALL,
-    AREA_FILTER_NONE,
-    buildProjectGroups,
-    projectMatchesAreaFilterSelection,
-    type ProjectAreaGroup,
-    type ProjectTagFilter,
-} from '@mindwtr/core';
 import { reportError } from '../../lib/report-error';
 import { useAreaSidebarState } from './projects/useAreaSidebarState';
 import { useProjectsViewStore } from './projects/useProjectsViewStore';
