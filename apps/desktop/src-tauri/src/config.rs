@@ -283,6 +283,15 @@ pub(crate) enum CredentialService {
 }
 
 impl CredentialService {
+    fn from_state_key(value: &str) -> Option<Self> {
+        match value {
+            "webdav" => Some(Self::Webdav),
+            "cloud" => Some(Self::Cloud),
+            "email" => Some(Self::Email),
+            _ => None,
+        }
+    }
+
     fn state_key(self) -> &'static str {
         match self {
             Self::Webdav => "webdav",
@@ -1127,6 +1136,108 @@ fn select_secret_for_fingerprint(
     Err("Credential binding does not match any available secret authority".to_string())
 }
 
+fn select_exact_secret_for_fingerprint(
+    expected_fingerprint: &str,
+    keyring: &Result<Option<String>, String>,
+    fallback: Option<String>,
+) -> Result<Option<String>, String> {
+    if expected_fingerprint == credential_fingerprint(None) {
+        return match (keyring, fallback) {
+            (Ok(None), None) => Ok(None),
+            _ => Err("Pending credential authorities do not prove absence".to_string()),
+        };
+    }
+
+    let mut matched: Option<String> = None;
+    if let Ok(Some(secret)) = keyring {
+        if credential_fingerprint(Some(secret)) != expected_fingerprint {
+            return Err("Pending keyring credential does not match its target".to_string());
+        }
+        matched = Some(secret.clone());
+    }
+    if let Some(secret) = fallback {
+        if credential_fingerprint(Some(&secret)) != expected_fingerprint {
+            return Err("Pending fallback credential does not match its target".to_string());
+        }
+        matched = Some(secret);
+    }
+    matched
+        .map(Some)
+        .ok_or_else(|| "Pending credential target has no exact available authority".to_string())
+}
+
+enum PendingCredentialResolution {
+    NotApplicable,
+    Resolved(Option<String>),
+}
+
+fn reconcile_pending_credential_unlocked(
+    state_path: &Path,
+    state: &mut ConfigCredentialStateFile,
+    config: &AppConfigToml,
+    service: CredentialService,
+    keyring: &Result<Option<String>, String>,
+) -> Result<PendingCredentialResolution, String> {
+    let Some(pending) = state.pending_credential.clone() else {
+        return Ok(PendingCredentialResolution::NotApplicable);
+    };
+    if pending.service != service.state_key() {
+        return Ok(PendingCredentialResolution::NotApplicable);
+    }
+    CredentialService::from_state_key(&pending.service)
+        .ok_or_else(|| "Credential pending marker names an invalid service".to_string())?;
+
+    let service_key = service.state_key();
+    let binding = state
+        .bindings
+        .get(service_key)
+        .cloned()
+        .ok_or_else(|| format!("{service_key} pending credential has no committed binding"))?;
+    let current_endpoint_fingerprint = endpoint_fingerprint(service, config);
+    let fallback = service.fallback(config).map(str::to_string);
+
+    if binding.endpoint_fingerprint == current_endpoint_fingerprint {
+        if let Ok(secret) = select_exact_secret_for_fingerprint(
+            &binding.credential_fingerprint,
+            keyring,
+            fallback.clone(),
+        ) {
+            state.pending_credential = None;
+            write_config_credential_state_file(state_path, state)?;
+            return Ok(PendingCredentialResolution::Resolved(secret));
+        }
+    }
+
+    let expected_generation = state
+        .credential_generation
+        .checked_add(1)
+        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    if pending.generation == expected_generation
+        && pending.endpoint_fingerprint == current_endpoint_fingerprint
+    {
+        if let Ok(secret) =
+            select_exact_secret_for_fingerprint(&pending.credential_fingerprint, keyring, fallback)
+        {
+            state.credential_generation = pending.generation;
+            state.bindings.insert(
+                service_key.to_string(),
+                CredentialBinding {
+                    generation: pending.generation,
+                    endpoint_fingerprint: pending.endpoint_fingerprint,
+                    credential_fingerprint: pending.credential_fingerprint,
+                },
+            );
+            state.pending_credential = None;
+            write_config_credential_state_file(state_path, state)?;
+            return Ok(PendingCredentialResolution::Resolved(secret));
+        }
+    }
+
+    Err(format!(
+        "{service_key} credential update was interrupted and remains fail-closed"
+    ))
+}
+
 fn resolve_bound_credential_unlocked(
     config_path: &Path,
     secrets_path: &Path,
@@ -1136,8 +1247,10 @@ fn resolve_bound_credential_unlocked(
 ) -> Result<Option<String>, String> {
     let state_path = config_credential_state_path_from_secrets_path(secrets_path);
     let mut state = load_config_credential_state_unlocked(config_path, secrets_path)?;
-    if state.pending_credential.is_some() {
-        return Err("Credential update was interrupted and remains fail-closed".to_string());
+    if let PendingCredentialResolution::Resolved(secret) =
+        reconcile_pending_credential_unlocked(&state_path, &mut state, config, service, &keyring)?
+    {
+        return Ok(secret);
     }
     let service_key = service.state_key();
     let current_endpoint_fingerprint = endpoint_fingerprint(service, config);
@@ -1264,6 +1377,14 @@ where
         Err(error) => return Err(error),
     };
     let previous_state = load_config_credential_state_unlocked(config_path, secrets_path)?;
+    if let Some(pending) = &previous_state.pending_credential {
+        if pending.service != service.state_key() {
+            return Err(format!(
+                "{} credential update is still pending",
+                pending.service
+            ));
+        }
+    }
     let mut next_config = previous_config.clone();
     mutate_config(&mut next_config);
     let next_secret = match &secret_update {
@@ -3616,6 +3737,216 @@ mod tests {
             || Ok(keyring.borrow().clone()),
         )
         .is_err());
+    }
+
+    #[test]
+    fn bound_credential_reader_reconciles_exact_crash_stages() {
+        for old_password in [Some("old-password"), None] {
+            for crash_stage in CredentialPublicationStage::ALL {
+                let dir = tempfile::tempdir().expect("tempdir");
+                let config_path = dir.path().join("config.toml");
+                let secrets_path = dir.path().join("secrets.toml");
+                let keyring = std::cell::RefCell::new(None::<String>);
+                write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+                    .expect("seed config");
+                let committed = update_bound_credential_paths_with(
+                    &config_path,
+                    &secrets_path,
+                    CredentialService::Webdav,
+                    CredentialSecretUpdate::Replace(old_password.map(str::to_string)),
+                    |config| config.webdav_url = Some("https://old.example/dav".to_string()),
+                    || Ok(keyring.borrow().clone()),
+                    |secret| {
+                        *keyring.borrow_mut() = secret;
+                        Ok(())
+                    },
+                    |_| Ok(()),
+                )
+                .expect("seed committed binding");
+                let mut target = committed;
+                target.webdav_url = Some("https://new.example/dav".to_string());
+                let target_endpoint = endpoint_fingerprint(CredentialService::Webdav, &target);
+                let target_credential = credential_fingerprint(Some("new-password"));
+                let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+                let mut state = read_config_credential_state_file(&state_path)
+                    .unwrap()
+                    .expect("state exists");
+                let target_generation = state.credential_generation + 1;
+                state.pending_credential = Some(CredentialBindingPending {
+                    service: CredentialService::Webdav.state_key().to_string(),
+                    generation: target_generation,
+                    endpoint_fingerprint: target_endpoint.clone(),
+                    credential_fingerprint: target_credential.clone(),
+                });
+                write_config_credential_state_file(&state_path, &state).unwrap();
+
+                if crash_stage != CredentialPublicationStage::PendingState {
+                    *keyring.borrow_mut() = Some("new-password".to_string());
+                }
+                if matches!(
+                    crash_stage,
+                    CredentialPublicationStage::ConfigPair
+                        | CredentialPublicationStage::ReadBack
+                        | CredentialPublicationStage::CommittedState
+                ) {
+                    write_config_files(&config_path, &secrets_path, &target)
+                        .expect("publish target config pair");
+                }
+                if crash_stage == CredentialPublicationStage::CommittedState {
+                    let mut state = read_config_credential_state_file(&state_path)
+                        .unwrap()
+                        .expect("state exists");
+                    state.credential_generation = target_generation;
+                    state.bindings.insert(
+                        CredentialService::Webdav.state_key().to_string(),
+                        CredentialBinding {
+                            generation: target_generation,
+                            endpoint_fingerprint: target_endpoint,
+                            credential_fingerprint: target_credential,
+                        },
+                    );
+                    state.pending_credential = None;
+                    write_config_credential_state_file(&state_path, &state).unwrap();
+                }
+
+                let result = read_bound_credential_paths_with(
+                    &config_path,
+                    &secrets_path,
+                    CredentialService::Webdav,
+                    || Ok(keyring.borrow().clone()),
+                );
+                if crash_stage == CredentialPublicationStage::SecretStore {
+                    assert!(result.is_err(), "{crash_stage:?} must remain fail-closed");
+                } else {
+                    let (config, password) = result.expect("exact generation reconciles");
+                    let expected_endpoint =
+                        if crash_stage == CredentialPublicationStage::PendingState {
+                            "https://old.example/dav"
+                        } else {
+                            "https://new.example/dav"
+                        };
+                    let expected_password =
+                        if crash_stage == CredentialPublicationStage::PendingState {
+                            old_password
+                        } else {
+                            Some("new-password")
+                        };
+                    assert_eq!(config.webdav_url.as_deref(), Some(expected_endpoint));
+                    assert_eq!(password.as_deref(), expected_password);
+                }
+
+                let recovered_state = read_config_credential_state_file(&state_path)
+                    .unwrap()
+                    .expect("state exists");
+                assert_eq!(
+                    recovered_state.pending_credential.is_some(),
+                    crash_stage == CredentialPublicationStage::SecretStore,
+                    "{crash_stage:?} pending state"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pending_email_and_webdav_updates_do_not_block_committed_cloud_transport() {
+        for pending_service in [CredentialService::Email, CredentialService::Webdav] {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let config_path = dir.path().join("config.toml");
+            let secrets_path = dir.path().join("secrets.toml");
+            let cloud_keyring = std::cell::RefCell::new(None::<String>);
+            let pending_keyring = std::cell::RefCell::new(None::<String>);
+            write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+                .expect("seed config");
+            update_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                CredentialService::Cloud,
+                CredentialSecretUpdate::Replace(Some("cloud-token".to_string())),
+                |config| config.cloud_url = Some("https://cloud.example".to_string()),
+                || Ok(cloud_keyring.borrow().clone()),
+                |secret| {
+                    *cloud_keyring.borrow_mut() = secret;
+                    Ok(())
+                },
+                |_| Ok(()),
+            )
+            .expect("seed cloud binding");
+            let committed = update_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                pending_service,
+                CredentialSecretUpdate::Replace(Some("old-service-secret".to_string())),
+                |config| match pending_service {
+                    CredentialService::Email => {
+                        config.email_capture_config =
+                            Some(r#"{"enabled":true,"email":"old@example.com"}"#.to_string())
+                    }
+                    CredentialService::Webdav => {
+                        config.webdav_url = Some("https://old.example/dav".to_string())
+                    }
+                    CredentialService::Cloud => unreachable!(),
+                },
+                || Ok(pending_keyring.borrow().clone()),
+                |secret| {
+                    *pending_keyring.borrow_mut() = secret;
+                    Ok(())
+                },
+                |_| Ok(()),
+            )
+            .expect("seed service binding");
+            let mut target = committed;
+            match pending_service {
+                CredentialService::Email => {
+                    target.email_capture_config =
+                        Some(r#"{"enabled":true,"email":"new@example.com"}"#.to_string())
+                }
+                CredentialService::Webdav => {
+                    target.webdav_url = Some("https://new.example/dav".to_string())
+                }
+                CredentialService::Cloud => unreachable!(),
+            }
+            let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+            let mut state = read_config_credential_state_file(&state_path)
+                .unwrap()
+                .expect("state exists");
+            state.pending_credential = Some(CredentialBindingPending {
+                service: pending_service.state_key().to_string(),
+                generation: state.credential_generation + 1,
+                endpoint_fingerprint: endpoint_fingerprint(pending_service, &target),
+                credential_fingerprint: credential_fingerprint(Some("new-service-secret")),
+            });
+            write_config_credential_state_file(&state_path, &state).unwrap();
+            *pending_keyring.borrow_mut() = Some("new-service-secret".to_string());
+
+            assert!(read_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                pending_service,
+                || Ok(pending_keyring.borrow().clone()),
+            )
+            .is_err());
+            let (cloud_config, cloud_token) = read_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                CredentialService::Cloud,
+                || Ok(cloud_keyring.borrow().clone()),
+            )
+            .expect("unrelated committed cloud binding stays readable");
+            assert_eq!(
+                cloud_config.cloud_url.as_deref(),
+                Some("https://cloud.example")
+            );
+            assert_eq!(cloud_token.as_deref(), Some("cloud-token"));
+            assert_eq!(
+                read_config_credential_state_file(&state_path)
+                    .unwrap()
+                    .expect("state exists")
+                    .pending_credential
+                    .as_ref()
+                    .map(|pending| pending.service.as_str()),
+                Some(pending_service.state_key())
+            );
+        }
     }
 
     #[test]
