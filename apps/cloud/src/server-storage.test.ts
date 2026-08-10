@@ -2,10 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { dirname } from 'path';
 import {
     durablyPublishFile,
+    durablyRemoveDirectory,
+    durablyRemoveFile,
     ensureDurableDirectory,
     ensureDirectoryWithinRoot,
     type DurableDirectoryFileSystem,
     type DurableFileSystem,
+    type DurableRemovalFileSystem,
 } from './server-storage';
 
 type DirectoryFailureStage =
@@ -22,6 +25,13 @@ type FailureStage =
     | 'fsync-temp'
     | 'close-temp'
     | 'rename'
+    | 'open-parent'
+    | 'fsync-parent'
+    | 'close-parent';
+
+type RemovalFailureStage =
+    | 'unlink'
+    | 'rmdir'
     | 'open-parent'
     | 'fsync-parent'
     | 'close-parent';
@@ -155,6 +165,134 @@ describe('durablyPublishFile', () => {
         ]);
         expect(harness.files.get('/cloud/data.json')).toBe('old');
         expect([...harness.files.keys()].filter((path) => path.endsWith('.tmp'))).toEqual([]);
+    });
+});
+
+function createDurableRemovalFileSystem(
+    initialEntries: string[],
+    failureStage?: RemovalFailureStage,
+    failureCount = Number.POSITIVE_INFINITY,
+) {
+    const entries = new Set(initialEntries);
+    const events: string[] = [];
+    const handles = new Map<number, string>();
+    let nextHandle = 1;
+    let remainingFailures = failureCount;
+
+    const enter = (stage: RemovalFailureStage, path: string): void => {
+        events.push(`${stage}:${path}`);
+        if (failureStage === stage && remainingFailures > 0) {
+            remainingFailures -= 1;
+            throw Object.assign(new Error(`injected ${stage} failure`), { code: 'EIO' });
+        }
+    };
+
+    const fileSystem: DurableRemovalFileSystem = {
+        existsSync: (path) => entries.has(path),
+        unlinkSync(path) {
+            enter('unlink', path);
+            entries.delete(path);
+        },
+        rmdirSync(path) {
+            enter('rmdir', path);
+            entries.delete(path);
+        },
+        openSync(path) {
+            enter('open-parent', path);
+            const handle = nextHandle++;
+            handles.set(handle, path);
+            return handle;
+        },
+        fsyncSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            enter('fsync-parent', path);
+        },
+        closeSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            enter('close-parent', path);
+            handles.delete(handle);
+        },
+    };
+
+    return { entries, events, fileSystem };
+}
+
+describe('durable attachment removal', () => {
+    test('unlinks a file and syncs its parent before acknowledging deletion', () => {
+        const harness = createDurableRemovalFileSystem(['/cloud', '/cloud/file.bin']);
+
+        expect(durablyRemoveFile('/cloud/file.bin', harness.fileSystem)).toBe(true);
+
+        expect(harness.events).toEqual([
+            'unlink:/cloud/file.bin',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+        ]);
+        expect(harness.entries.has('/cloud/file.bin')).toBe(false);
+    });
+
+    test('removes an empty directory and syncs its parent before acknowledging pruning', () => {
+        const harness = createDurableRemovalFileSystem(['/cloud', '/cloud/empty']);
+
+        expect(durablyRemoveDirectory('/cloud/empty', harness.fileSystem)).toBe(true);
+
+        expect(harness.events).toEqual([
+            'rmdir:/cloud/empty',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+        ]);
+        expect(harness.entries.has('/cloud/empty')).toBe(false);
+    });
+
+    test('re-establishes deletion durability on retry after the file is already absent', () => {
+        const harness = createDurableRemovalFileSystem(
+            ['/cloud', '/cloud/file.bin'],
+            'fsync-parent',
+            1,
+        );
+
+        expect(() => durablyRemoveFile('/cloud/file.bin', harness.fileSystem))
+            .toThrow('injected fsync-parent failure');
+        expect(harness.entries.has('/cloud/file.bin')).toBe(false);
+
+        expect(durablyRemoveFile('/cloud/file.bin', harness.fileSystem)).toBe(false);
+        expect(harness.events).toEqual([
+            'unlink:/cloud/file.bin',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+        ]);
+    });
+
+    for (const failureStage of [
+        'unlink',
+        'open-parent',
+        'fsync-parent',
+        'close-parent',
+    ] satisfies RemovalFailureStage[]) {
+        test(`does not acknowledge file deletion when ${failureStage} fails`, () => {
+            const harness = createDurableRemovalFileSystem(
+                ['/cloud', '/cloud/file.bin'],
+                failureStage,
+            );
+
+            expect(() => durablyRemoveFile('/cloud/file.bin', harness.fileSystem))
+                .toThrow(`injected ${failureStage} failure`);
+        });
+    }
+
+    test('does not acknowledge directory pruning when rmdir fails', () => {
+        const harness = createDurableRemovalFileSystem(['/cloud', '/cloud/empty'], 'rmdir');
+
+        expect(() => durablyRemoveDirectory('/cloud/empty', harness.fileSystem))
+            .toThrow('injected rmdir failure');
     });
 });
 

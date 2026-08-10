@@ -2,7 +2,7 @@
 // and the garbage collector that reconciles on-disk attachment files against what the
 // stored AppData still references. Pulled out of server.ts so these rules — previously
 // reachable only by spinning up a live server — have a direct test surface.
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, unlinkSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from 'fs';
 import { join, relative } from 'path';
 import {
     validateAttachmentForUpload,
@@ -14,12 +14,15 @@ import {
 import { corsOrigin, errorResponse, jsonResponse, logFailureWarn } from './server-config';
 import { loadAppData } from './server-data-cache';
 import {
+    durablyRemoveDirectory,
+    durablyRemoveFile,
     isBodyReadError,
     isPathWithinRoot,
     normalizeAttachmentRelativePath,
     readRequestBytes,
     throwIfRequestAborted,
     writeAttachmentFileSafely,
+    type DurableRemovalFileSystem,
 } from './server-storage';
 import { validateAppData } from './server-validation';
 
@@ -103,7 +106,12 @@ export function collectReferencedAttachmentCloudKeys(data: AppData): Set<string>
     return referenced;
 }
 
-export function garbageCollectOrphanAttachments(dataDir: string, key: string, data: AppData): {
+export function garbageCollectOrphanAttachments(
+    dataDir: string,
+    key: string,
+    data: AppData,
+    removalFileSystem?: DurableRemovalFileSystem,
+): {
     deleted: number;
     errors: string[];
     kept: number;
@@ -141,9 +149,16 @@ export function garbageCollectOrphanAttachments(dataDir: string, key: string, da
             if (stat.isDirectory()) {
                 visit(entryPath);
                 try {
-                    if (entryPath !== rootRealPath) rmdirSync(entryPath);
-                } catch {
-                    // Directory still has referenced files or concurrent writes.
+                    if (entryPath !== rootRealPath) {
+                        durablyRemoveDirectory(entryPath, removalFileSystem);
+                    }
+                } catch (error) {
+                    const code = typeof error === 'object' && error !== null && 'code' in error
+                        ? String((error as { code?: unknown }).code ?? '')
+                        : '';
+                    if (code !== 'ENOTEMPTY' && code !== 'EEXIST') {
+                        errors.push(`${relative(rootRealPath, entryPath)}: ${(error as Error).message}`);
+                    }
                 }
                 continue;
             }
@@ -159,8 +174,9 @@ export function garbageCollectOrphanAttachments(dataDir: string, key: string, da
                 continue;
             }
             try {
-                unlinkSync(entryPath);
-                deleted += 1;
+                if (durablyRemoveFile(entryPath, removalFileSystem)) {
+                    deleted += 1;
+                }
             } catch (error) {
                 errors.push(`${relativePath}: ${(error as Error).message}`);
             }
@@ -215,7 +231,11 @@ export async function handleAttachmentPathRequest(
     req: Request,
     pathname: string,
     resolved: { rootRealPath: string; filePath: string },
-    options: { maxAttachmentBytes: number; abortSignal: AbortSignal },
+    options: {
+        maxAttachmentBytes: number;
+        abortSignal: AbortSignal;
+        removalFileSystem?: DurableRemovalFileSystem;
+    },
 ): Promise<Response> {
     const { rootRealPath, filePath } = resolved;
 
@@ -270,14 +290,19 @@ export async function handleAttachmentPathRequest(
 
     if (req.method === 'DELETE') {
         if (!existsSync(filePath)) {
-            return jsonResponse({ ok: true });
+            try {
+                durablyRemoveFile(filePath, options.removalFileSystem);
+                return jsonResponse({ ok: true });
+            } catch {
+                return errorResponse('Failed to delete attachment', 500);
+            }
         }
         try {
             const realFilePath = realpathSync(filePath);
             if (!isPathWithinRoot(realFilePath, rootRealPath)) {
                 return errorResponse('Invalid attachment path', 400);
             }
-            unlinkSync(realFilePath);
+            durablyRemoveFile(realFilePath, options.removalFileSystem);
             return jsonResponse({ ok: true });
         } catch {
             return errorResponse('Failed to delete attachment', 500);

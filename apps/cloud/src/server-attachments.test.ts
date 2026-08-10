@@ -1,5 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
+import {
+    closeSync,
+    existsSync,
+    fsyncSync,
+    mkdirSync,
+    mkdtempSync,
+    openSync,
+    rmSync,
+    rmdirSync,
+    symlinkSync,
+    unlinkSync,
+    utimesSync,
+    writeFileSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { AppData, Attachment, Project, Task } from '@mindwtr/core';
@@ -10,7 +23,9 @@ import {
     collectRetainedAttachmentCloudKeysForProjectPurge,
     garbageCollectOrphanAttachments,
     getAttachmentCloudKey,
+    handleAttachmentPathRequest,
 } from './server-attachments';
+import type { DurableRemovalFileSystem } from './server-storage';
 
 const iso = '2026-01-01T00:00:00.000Z';
 
@@ -48,6 +63,53 @@ const emptyAppData = (): AppData => ({ tasks: [], projects: [], sections: [], ar
 const expireFile = (path: string): void => {
     const staleTime = new Date(Date.now() - 10 * 60 * 1000);
     utimesSync(path, staleTime, staleTime);
+};
+
+const createRemovalFileSystem = (
+    shouldFail: (stage: 'unlink' | 'rmdir' | 'open-parent' | 'fsync-parent' | 'close-parent', path: string) => boolean,
+) => {
+    const events: string[] = [];
+    const handles = new Map<number, string>();
+    const enter = (
+        stage: 'unlink' | 'rmdir' | 'open-parent' | 'fsync-parent' | 'close-parent',
+        path: string,
+    ) => {
+        events.push(`${stage}:${path}`);
+        if (shouldFail(stage, path)) {
+            throw Object.assign(new Error(`injected ${stage} failure`), { code: 'EIO' });
+        }
+    };
+    const fileSystem: DurableRemovalFileSystem = {
+        existsSync,
+        unlinkSync(path) {
+            enter('unlink', path);
+            unlinkSync(path);
+        },
+        rmdirSync(path) {
+            enter('rmdir', path);
+            rmdirSync(path);
+        },
+        openSync(path) {
+            enter('open-parent', path);
+            const handle = openSync(path, 'r');
+            handles.set(handle, path);
+            return handle;
+        },
+        fsyncSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            enter('fsync-parent', path);
+            fsyncSync(handle);
+        },
+        closeSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            enter('close-parent', path);
+            handles.delete(handle);
+            closeSync(handle);
+        },
+    };
+    return { events, fileSystem };
 };
 
 describe('getAttachmentCloudKey', () => {
@@ -253,5 +315,96 @@ describe('garbageCollectOrphanAttachments', () => {
             expect(existsSync(join(attachmentsRoot, 'stale-only'))).toBe(false);
             expect(existsSync(join(attachmentsRoot, 'fresh-only'))).toBe(true);
         });
+    });
+
+    test('reports a file deletion durability failure without counting it as deleted', () => {
+        withSandbox((dataDir) => {
+            const key = 'gc-file-durability-failure';
+            const attachmentsRoot = join(dataDir, key, 'attachments');
+            const stalePath = join(attachmentsRoot, 'mixed', 'stale.bin');
+            const retainedPath = join(attachmentsRoot, 'mixed', 'retained.bin');
+            mkdirSync(join(attachmentsRoot, 'mixed'), { recursive: true });
+            writeFileSync(stalePath, 'stale');
+            writeFileSync(retainedPath, 'retained');
+            expireFile(stalePath);
+            const data = emptyAppData();
+            data.tasks = [makeTask({
+                id: 'retained-task',
+                title: 'Retained',
+                attachments: [makeFileAttachment({ id: 'retained', cloudKey: 'mixed/retained.bin' })],
+            })];
+            const removal = createRemovalFileSystem((stage, path) => (
+                stage === 'fsync-parent' && path === join(attachmentsRoot, 'mixed')
+            ));
+
+            const result = garbageCollectOrphanAttachments(
+                dataDir,
+                key,
+                data,
+                removal.fileSystem,
+            );
+
+            expect(result.deleted).toBe(0);
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0]).toContain('stale.bin: injected fsync-parent failure');
+            expect(existsSync(stalePath)).toBe(false);
+            expect(existsSync(retainedPath)).toBe(true);
+        });
+    });
+
+    test('reports a pruned-directory durability failure', () => {
+        withSandbox((dataDir) => {
+            const key = 'gc-directory-durability-failure';
+            const attachmentsRoot = join(dataDir, key, 'attachments');
+            const staleOnlyDir = join(attachmentsRoot, 'stale-only');
+            const stalePath = join(staleOnlyDir, 'stale.bin');
+            mkdirSync(staleOnlyDir, { recursive: true });
+            writeFileSync(stalePath, 'stale');
+            expireFile(stalePath);
+            const removal = createRemovalFileSystem((stage, path) => (
+                stage === 'fsync-parent' && path === attachmentsRoot
+            ));
+
+            const result = garbageCollectOrphanAttachments(
+                dataDir,
+                key,
+                emptyAppData(),
+                removal.fileSystem,
+            );
+
+            expect(result.deleted).toBe(1);
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0]).toContain('stale-only: injected fsync-parent failure');
+            expect(existsSync(staleOnlyDir)).toBe(false);
+        });
+    });
+});
+
+describe('handleAttachmentPathRequest DELETE', () => {
+    test('returns 500 instead of acknowledging a deletion whose parent fsync fails', async () => {
+        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-delete-'));
+        try {
+            const rootRealPath = join(sandbox, 'attachments');
+            const filePath = join(rootRealPath, 'file.bin');
+            mkdirSync(rootRealPath, { recursive: true });
+            writeFileSync(filePath, 'attachment');
+            const removal = createRemovalFileSystem((stage) => stage === 'fsync-parent');
+
+            const response = await handleAttachmentPathRequest(
+                new Request('http://localhost/v1/attachments/file.bin', { method: 'DELETE' }),
+                '/v1/attachments/file.bin',
+                { rootRealPath, filePath },
+                {
+                    maxAttachmentBytes: 1024,
+                    abortSignal: new AbortController().signal,
+                    removalFileSystem: removal.fileSystem,
+                },
+            );
+
+            expect(response.status).toBe(500);
+            expect(existsSync(filePath)).toBe(false);
+        } finally {
+            rmSync(sandbox, { recursive: true, force: true });
+        }
     });
 });

@@ -8,6 +8,7 @@ import {
     readFileSync,
     realpathSync,
     renameSync,
+    rmdirSync,
     unlinkSync,
     writeFileSync,
 } from 'fs';
@@ -58,6 +59,17 @@ export type DurableDirectoryFileSystem = {
     closeSync: (handle: number) => void;
 };
 
+type DurableDirectorySyncFileSystem = Pick<
+    DurableDirectoryFileSystem,
+    'openSync' | 'fsyncSync' | 'closeSync'
+>;
+
+export type DurableRemovalFileSystem = DurableDirectorySyncFileSystem & {
+    existsSync: (path: string) => boolean;
+    unlinkSync: (path: string) => void;
+    rmdirSync: (path: string) => void;
+};
+
 const nodeDurableFileSystem: DurableFileSystem = {
     openSync: (path, flags, mode) => openSync(path, flags, mode),
     writeFileSync: (handle, data) => writeFileSync(handle, data),
@@ -72,6 +84,15 @@ const nodeDurableDirectoryFileSystem: DurableDirectoryFileSystem = {
     lstatSync,
     mkdirSync: (path, options) => mkdirSync(path, options),
     realpathSync,
+    openSync: (path, flags) => openSync(path, flags),
+    fsyncSync,
+    closeSync,
+};
+
+const nodeDurableRemovalFileSystem: DurableRemovalFileSystem = {
+    existsSync,
+    unlinkSync,
+    rmdirSync,
     openSync: (path, flags) => openSync(path, flags),
     fsyncSync,
     closeSync,
@@ -180,7 +201,7 @@ function isFsErrorWithCode(error: unknown, code: string): boolean {
  */
 function syncDirectoryEntryParent(
     parentPath: string,
-    fileSystem: DurableDirectoryFileSystem,
+    fileSystem: DurableDirectorySyncFileSystem,
 ): void {
     let handle: number | null = null;
     try {
@@ -197,6 +218,49 @@ function syncDirectoryEntryParent(
             }
         }
     }
+}
+
+function durablyRemoveEntry(
+    targetPath: string,
+    remove: (path: string) => void,
+    fileSystem: DurableRemovalFileSystem,
+): boolean {
+    const parentPath = dirname(targetPath);
+    if (!fileSystem.existsSync(targetPath)) {
+        // A preceding attempt may have made the removal visible but failed while
+        // publishing the parent-directory change. Re-sync an existing parent so
+        // an idempotent retry cannot acknowledge visibility as durability.
+        if (fileSystem.existsSync(parentPath)) {
+            syncDirectoryEntryParent(parentPath, fileSystem);
+        }
+        return false;
+    }
+
+    try {
+        remove(targetPath);
+    } catch (error) {
+        if (!isFsErrorWithCode(error, 'ENOENT')) throw error;
+        if (fileSystem.existsSync(parentPath)) {
+            syncDirectoryEntryParent(parentPath, fileSystem);
+        }
+        return false;
+    }
+    syncDirectoryEntryParent(parentPath, fileSystem);
+    return true;
+}
+
+export function durablyRemoveFile(
+    targetPath: string,
+    fileSystem: DurableRemovalFileSystem = nodeDurableRemovalFileSystem,
+): boolean {
+    return durablyRemoveEntry(targetPath, (path) => fileSystem.unlinkSync(path), fileSystem);
+}
+
+export function durablyRemoveDirectory(
+    targetPath: string,
+    fileSystem: DurableRemovalFileSystem = nodeDurableRemovalFileSystem,
+): boolean {
+    return durablyRemoveEntry(targetPath, (path) => fileSystem.rmdirSync(path), fileSystem);
 }
 
 export function ensureDirectoryWithinRoot(
