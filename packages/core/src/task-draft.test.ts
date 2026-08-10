@@ -211,6 +211,42 @@ describe('task-draft', () => {
         const patch = taskDraftToUpdatePatch({ ...draft, contexts: '@office, , @home ', tags: '' }, baseTask);
         expect(patch).toMatchObject({ contexts: ['@office', '@home'], tags: [] });
     });
+
+    it('normalizes bare context/tag tokens to their prefix (#1013)', () => {
+        const draft = createTaskDraft(baseTask);
+        const patch = taskDraftToUpdatePatch(
+            { ...draft, contexts: 'home, @office', tags: 'urgent, #q3' },
+            baseTask,
+        );
+        expect(patch).toMatchObject({
+            contexts: ['@home', '@office'],
+            tags: ['#urgent', '#q3'],
+        });
+    });
+
+    it('leaves already-prefixed tokens unchanged (idempotent)', () => {
+        const draft = createTaskDraft(baseTask);
+        const patch = taskDraftToUpdatePatch(
+            { ...draft, contexts: '@home, @office', tags: '#urgent, #q3' },
+            baseTask,
+        );
+        expect(patch).toMatchObject({
+            contexts: ['@home', '@office'],
+            tags: ['#urgent', '#q3'],
+        });
+    });
+
+    it('collapses doubled prefixes and drops whitespace-only tokens', () => {
+        const draft = createTaskDraft(baseTask);
+        const patch = taskDraftToUpdatePatch(
+            { ...draft, contexts: '@@home,   ', tags: '  , ##q3' },
+            baseTask,
+        );
+        expect(patch).toMatchObject({
+            contexts: ['@home'],
+            tags: ['#q3'],
+        });
+    });
     it('omits the attachments key when the draft buffer is empty or absent', () => {
         const withAttachment: Task = {
             ...baseTask,

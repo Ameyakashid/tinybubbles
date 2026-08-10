@@ -11,6 +11,8 @@ import {
 } from 'date-fns';
 
 import { timeEstimateToFilterBucket, timeEstimateToMinutes } from './calendar-scheduling';
+import type { BulkTaskTokenField } from './bulk-task-tokens';
+import { normalizeBulkTaskTokenInput } from './bulk-task-tokens';
 import { safeParseDate, safeParseDueDate } from './date';
 import { matchesHierarchicalToken, normalizePrefixedToken } from './hierarchy-utils';
 import type {
@@ -211,17 +213,30 @@ export function hasActiveFilterCriteria(criteria: FilterCriteria | undefined): b
     );
 }
 
-const matchesAnyToken = (selected: readonly string[] | undefined, actual: readonly string[] | undefined): boolean => {
+// `selected` (the filter criteria) is already prefix-normalized by
+// normalizeFilterCriteria. A task's own contexts/tags can still hold a bare
+// token saved before #1013's draft-save fix, so `actual` gets the same
+// normalization here — otherwise a selected "@home" chip never matches a
+// stored bare "home", even though both mean the same context.
+const matchesAnyToken = (
+    selected: readonly string[] | undefined,
+    actual: readonly string[] | undefined,
+    field: BulkTaskTokenField
+): boolean => {
     if (!selected || selected.length === 0) return true;
-    const actualValues = actual ?? [];
+    const actualValues = (actual ?? []).map((token) => normalizeBulkTaskTokenInput(token, field));
     return selected.some((selectedToken) =>
         actualValues.some((actualToken) => matchesHierarchicalToken(selectedToken, actualToken))
     );
 };
 
-const matchesAllTokens = (selected: readonly string[] | undefined, actual: readonly string[] | undefined): boolean => {
+const matchesAllTokens = (
+    selected: readonly string[] | undefined,
+    actual: readonly string[] | undefined,
+    field: BulkTaskTokenField
+): boolean => {
     if (!selected || selected.length === 0) return true;
-    const actualValues = actual ?? [];
+    const actualValues = (actual ?? []).map((token) => normalizeBulkTaskTokenInput(token, field));
     return selected.every((selectedToken) =>
         actualValues.some((actualToken) => matchesHierarchicalToken(selectedToken, actualToken))
     );
@@ -230,11 +245,12 @@ const matchesAllTokens = (selected: readonly string[] | undefined, actual: reado
 const matchesTokens = (
     selected: readonly string[] | undefined,
     actual: readonly string[] | undefined,
+    field: BulkTaskTokenField,
     mode: ApplyFilterOptions['tokenMatchMode'] = 'any'
 ): boolean => (
     mode === 'all'
-        ? matchesAllTokens(selected, actual)
-        : matchesAnyToken(selected, actual)
+        ? matchesAllTokens(selected, actual, field)
+        : matchesAnyToken(selected, actual, field)
 );
 
 const matchesDateRange = (
@@ -359,12 +375,12 @@ const taskMatchesPreparedFilterCriteria = (
     const { normalized, projectById, now, contextMatchMode, tagMatchMode, weekStartsOn } = context;
 
     if (normalized.statuses?.length && !normalized.statuses.includes(task.status)) return false;
-    if (!matchesTokens(normalized.contexts, task.contexts, contextMatchMode)) return false;
-    if (!matchesTokens(normalized.tags, task.tags, tagMatchMode)) return false;
+    if (!matchesTokens(normalized.contexts, task.contexts, 'contexts', contextMatchMode)) return false;
+    if (!matchesTokens(normalized.tags, task.tags, 'tags', tagMatchMode)) return false;
     // Excluded tokens always subtract: a task carrying ANY excluded context/tag
     // (hierarchical) is filtered out, independent of the include match modes.
-    if (normalized.excludedContexts?.length && matchesAnyToken(normalized.excludedContexts, task.contexts)) return false;
-    if (normalized.excludedTags?.length && matchesAnyToken(normalized.excludedTags, task.tags)) return false;
+    if (normalized.excludedContexts?.length && matchesAnyToken(normalized.excludedContexts, task.contexts, 'contexts')) return false;
+    if (normalized.excludedTags?.length && matchesAnyToken(normalized.excludedTags, task.tags, 'tags')) return false;
 
     if (normalized.areas?.length) {
         const projectAreaId = task.projectId ? projectById?.get(task.projectId)?.areaId : undefined;

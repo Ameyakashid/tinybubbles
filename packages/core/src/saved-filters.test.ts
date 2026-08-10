@@ -156,6 +156,34 @@ describe('saved filters', () => {
         expect(filtered.map((item) => item.id)).toEqual(['keep']);
     });
 
+    it('matches a stored bare context/tag token against a prefixed filter selection (#1013 dead-filter symptom)', () => {
+        const tasks = [
+            task({ id: 'bare-home', contexts: ['home'], tags: ['urgent'] }),
+            task({ id: 'prefixed-office', contexts: ['@office'], tags: ['#later'] }),
+        ];
+
+        const filtered = applyFilter(tasks, {
+            contexts: ['@home'],
+            tags: ['#urgent'],
+        });
+
+        expect(filtered.map((item) => item.id)).toEqual(['bare-home']);
+    });
+
+    it('excludes a task carrying a stored bare token when the excluded filter is prefixed', () => {
+        const tasks = [
+            task({ id: 'keep', contexts: ['@desk'] }),
+            task({ id: 'drop-bare-home', contexts: ['@desk', 'home'] }),
+        ];
+
+        const filtered = applyFilter(tasks, {
+            contexts: ['@desk'],
+            excludedContexts: ['@home'],
+        });
+
+        expect(filtered.map((item) => item.id)).toEqual(['keep']);
+    });
+
     it('normalization drops an excluded token that is also included (include wins)', () => {
         const normalized = normalizeFilterCriteria({
             contexts: ['@desk', '@phone'],

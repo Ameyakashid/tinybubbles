@@ -1,3 +1,4 @@
+import { normalizeBulkTaskTokenInput } from './bulk-task-tokens';
 import {
     hasTimeComponent,
     safeFormatDate,
@@ -274,7 +275,11 @@ export function taskDraftToUpdatePatch(
         }
         recurrenceValue.rrule = draft.recurrenceRRule;
     }
-    const splitTokens = (value: string) => value.split(',').map((token) => token.trim()).filter(Boolean);
+    // Contexts/tags are the shared draft-save path for both apps; normalizing
+    // the @/# prefix here (rather than trusting typed text) is the invariant
+    // desktop's typed-input path was missing — see #1013.
+    const splitTokens = (value: string, field: 'contexts' | 'tags') =>
+        value.split(',').map((token) => normalizeBulkTaskTokenInput(token, field)).filter(Boolean);
 
     // Attachment removal soft-deletes records, so a legitimate buffer is never
     // shorter than the stored list. An empty/absent buffer means the caller has
@@ -297,8 +302,8 @@ export function taskDraftToUpdatePatch(
         // section is only valid inside its project.
         sectionId: resolvedProjectId ? (draft.sectionId || undefined) : undefined,
         areaId: resolvedProjectId ? undefined : (draft.areaId || undefined),
-        contexts: splitTokens(draft.contexts),
-        tags: splitTokens(draft.tags),
+        contexts: splitTokens(draft.contexts, 'contexts'),
+        tags: splitTokens(draft.tags, 'tags'),
         description: draft.description || undefined,
         location: draft.location.trim() || undefined,
         recurrence: recurrenceValue,
