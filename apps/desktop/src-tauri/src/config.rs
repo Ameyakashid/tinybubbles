@@ -180,15 +180,88 @@ where
 }
 
 #[cfg(unix)]
-fn sync_secrets_parent_directory(parent: &Path) -> Result<(), String> {
+fn sync_config_parent_directory(parent: &Path) -> Result<(), String> {
     fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|e| e.to_string())
 }
 
 #[cfg(not(unix))]
-fn sync_secrets_parent_directory(_parent: &Path) -> Result<(), String> {
+fn sync_config_parent_directory(_parent: &Path) -> Result<(), String> {
+    // Windows has no documented equivalent of fsyncing a directory. Its
+    // namespace barrier lives in `publish_atomic_temp_file` (and the durable
+    // deletion path) via MOVEFILE_WRITE_THROUGH instead.
     Ok(())
+}
+
+#[cfg(windows)]
+fn windows_path_wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+
+    path.as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
+#[cfg(windows)]
+fn windows_move_file_write_through(source: &Path, destination: &Path) -> Result<(), String> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let source = windows_path_wide(source);
+    let destination = windows_path_wide(destination);
+    // SAFETY: both buffers are NUL-terminated and remain alive for the call.
+    if unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error().to_string());
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn publish_atomic_temp_file(
+    temp_file: tempfile::NamedTempFile,
+    destination: &Path,
+) -> Result<(), String> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        SetFileAttributesW, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY,
+    };
+
+    let source_path = temp_file.path().to_path_buf();
+    let source = windows_path_wide(&source_path);
+    // tempfile marks named files temporary on Windows. Normalize the attribute
+    // before publishing so the committed file has ordinary persistence rules.
+    // SAFETY: `source` is NUL-terminated and alive for the call.
+    if unsafe { SetFileAttributesW(source.as_ptr(), FILE_ATTRIBUTE_NORMAL) } == 0 {
+        return Err(io::Error::last_os_error().to_string());
+    }
+    if let Err(error) = windows_move_file_write_through(&source_path, destination) {
+        // Best effort: preserve tempfile's cleanup behavior after a failed move.
+        // SAFETY: `source` is NUL-terminated and alive for the call.
+        let _ = unsafe { SetFileAttributesW(source.as_ptr(), FILE_ATTRIBUTE_TEMPORARY) };
+        return Err(error);
+    }
+    drop(temp_file);
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn publish_atomic_temp_file(
+    temp_file: tempfile::NamedTempFile,
+    destination: &Path,
+) -> Result<(), String> {
+    temp_file
+        .persist(destination)
+        .map(|_| ())
+        .map_err(|error| error.error.to_string())
 }
 
 fn dropbox_credential_state_path_from_secrets_path(secrets_path: &Path) -> PathBuf {
@@ -415,24 +488,36 @@ fn write_owner_only_atomic_text(path: &Path, content: &str) -> Result<(), String
     if path.exists() {
         restrict_to_owner(path, 0o600)?;
     }
-    let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-private-state-")
-        .suffix(".tmp")
-        .tempfile_in(parent)
-        .map_err(|e| e.to_string())?;
-    restrict_to_owner(temp_file.path(), 0o600)?;
-    temp_file
-        .write_all(content.as_bytes())
-        .and_then(|_| temp_file.as_file().sync_all())
-        .map_err(|e| e.to_string())?;
-    temp_file
-        .persist(path)
-        .map_err(|error| error.error.to_string())?;
-    restrict_to_owner(path, 0o600)?;
-    sync_secrets_parent_directory(parent)
+    write_atomic_text_with_hooks(
+        path,
+        content,
+        true,
+        publish_atomic_temp_file,
+        sync_config_parent_directory,
+    )
 }
 
 fn write_atomic_text(path: &Path, content: &str, owner_only: bool) -> Result<(), String> {
+    write_atomic_text_with_hooks(
+        path,
+        content,
+        owner_only,
+        publish_atomic_temp_file,
+        sync_config_parent_directory,
+    )
+}
+
+fn write_atomic_text_with_hooks<Publish, SyncParent>(
+    path: &Path,
+    content: &str,
+    owner_only: bool,
+    publish: Publish,
+    sync_parent: SyncParent,
+) -> Result<(), String>
+where
+    Publish: FnOnce(tempfile::NamedTempFile, &Path) -> Result<(), String>,
+    SyncParent: FnOnce(&Path) -> Result<(), String>,
+{
     let parent = path
         .parent()
         .ok_or_else(|| "Failed to resolve config directory".to_string())?;
@@ -449,26 +534,103 @@ fn write_atomic_text(path: &Path, content: &str, owner_only: bool) -> Result<(),
         .write_all(content.as_bytes())
         .and_then(|_| temp_file.as_file().sync_all())
         .map_err(|e| e.to_string())?;
-    temp_file
-        .persist(path)
-        .map_err(|error| error.error.to_string())?;
+    publish(temp_file, path)?;
     if owner_only {
         restrict_to_owner(path, 0o600)?;
     }
-    sync_secrets_parent_directory(parent)
+    sync_parent(parent)
+}
+
+#[cfg(windows)]
+fn config_deletion_tombstone_path(path: &Path) -> Result<PathBuf, String> {
+    use std::ffi::OsString;
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Failed to resolve config directory".to_string())?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "Failed to resolve config file name".to_string())?;
+    let mut tombstone_name = OsString::from(".");
+    tombstone_name.push(file_name);
+    tombstone_name.push(".mindwtr-delete");
+    Ok(parent.join(tombstone_name))
+}
+
+#[cfg(windows)]
+fn securely_clear_windows_deletion_tombstone(path: &Path) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Failed to resolve config directory".to_string())?;
+    let empty_file = tempfile::Builder::new()
+        .prefix(".mindwtr-delete-empty-")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(|error| error.to_string())?;
+    empty_file
+        .as_file()
+        .sync_all()
+        .map_err(|error| error.to_string())?;
+    // If a crash resurrects the final unlink, it can reveal only this durable
+    // empty replacement, never the removed credential bytes.
+    publish_atomic_temp_file(empty_file, path)?;
+    fs::remove_file(path).map_err(|error| error.to_string())
+}
+
+#[cfg(windows)]
+fn remove_config_file_for_platform(path: &Path) -> Result<bool, String> {
+    let tombstone_path = config_deletion_tombstone_path(path)?;
+    if !path.try_exists().map_err(|error| error.to_string())? {
+        if tombstone_path
+            .try_exists()
+            .map_err(|error| error.to_string())?
+        {
+            securely_clear_windows_deletion_tombstone(&tombstone_path)?;
+        }
+        return Ok(false);
+    }
+
+    // Windows has no documented directory-fsync primitive. A same-directory
+    // write-through rename makes removal of the canonical name durable. The
+    // tombstone is then durably replaced with empty content before unlinking.
+    windows_move_file_write_through(path, &tombstone_path)?;
+    securely_clear_windows_deletion_tombstone(&tombstone_path)?;
+    Ok(true)
+}
+
+#[cfg(not(windows))]
+fn remove_config_file_for_platform(path: &Path) -> Result<bool, String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn remove_file_durably(path: &Path) -> Result<(), String> {
-    match fs::remove_file(path) {
-        Ok(()) => {
-            let parent = path
-                .parent()
-                .ok_or_else(|| "Failed to resolve config directory".to_string())?;
-            sync_secrets_parent_directory(parent)
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.to_string()),
+    remove_file_durably_with_hooks(
+        path,
+        remove_config_file_for_platform,
+        sync_config_parent_directory,
+    )
+}
+
+fn remove_file_durably_with_hooks<Remove, SyncParent>(
+    path: &Path,
+    remove: Remove,
+    sync_parent: SyncParent,
+) -> Result<(), String>
+where
+    Remove: FnOnce(&Path) -> Result<bool, String>,
+    SyncParent: FnOnce(&Path) -> Result<(), String>,
+{
+    if !remove(path)? {
+        return Ok(());
     }
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Failed to resolve config directory".to_string())?;
+    sync_parent(parent)
 }
 
 fn read_config_credential_state_file(
@@ -626,7 +788,7 @@ where
         .map_err(|e| e.to_string())?;
     publish(temp_file, path)?;
     restrict(path, 0o600)?;
-    sync_secrets_parent_directory(parent)
+    sync_config_parent_directory(parent)
 }
 
 fn preflight_existing_config_toml(path: &Path) -> Result<(), String> {
@@ -3269,6 +3431,62 @@ mod tests {
             fs::read(&secrets_path).expect("secrets remain"),
             corrupt_secrets,
             "recoverable secret bytes must never be removed"
+        );
+    }
+
+    #[test]
+    fn atomic_config_publication_does_not_acknowledge_a_namespace_barrier_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+
+        let error = write_atomic_text_with_hooks(
+            &config_path,
+            "sync_backend = \"off\"\n",
+            false,
+            |temp_file, destination| {
+                temp_file
+                    .persist(destination)
+                    .map(|_| ())
+                    .map_err(|error| error.error.to_string())
+            },
+            |parent| {
+                assert_eq!(parent, dir.path());
+                Err("injected namespace durability failure".to_string())
+            },
+        )
+        .expect_err("a failed namespace barrier must not acknowledge publication");
+
+        assert_eq!(error, "injected namespace durability failure");
+        assert_eq!(
+            fs::read_to_string(&config_path).expect("rename completed before the barrier"),
+            "sync_backend = \"off\"\n"
+        );
+    }
+
+    #[test]
+    fn config_deletion_does_not_acknowledge_a_namespace_barrier_failure() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let secrets_path = dir.path().join("secrets.toml");
+        fs::write(&secrets_path, "local_api_token = \"secret\"\n").expect("seed secret");
+
+        let error = remove_file_durably_with_hooks(
+            &secrets_path,
+            |path| match fs::remove_file(path) {
+                Ok(()) => Ok(true),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+                Err(error) => Err(error.to_string()),
+            },
+            |parent| {
+                assert_eq!(parent, dir.path());
+                Err("injected deletion durability failure".to_string())
+            },
+        )
+        .expect_err("a failed namespace barrier must not acknowledge deletion");
+
+        assert_eq!(error, "injected deletion durability failure");
+        assert!(
+            !secrets_path.exists(),
+            "delete completed before the barrier"
         );
     }
 
