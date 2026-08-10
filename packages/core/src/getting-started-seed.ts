@@ -279,13 +279,14 @@ const buildFreshInstallGettingStartedData = (
 };
 
 /**
- * Builds the seedGettingStarted store action. Takes only the two pieces of
+ * Builds the seedGettingStarted store action. Takes only the three pieces of
  * SettingsActionContext it actually uses (see store-settings.ts) so this
  * module has no dependency back on the store action wiring.
  */
 export const createSeedGettingStartedAction = (
     set: (partial: Partial<TaskStore> | ((state: TaskStore) => Partial<TaskStore> | TaskStore)) => void,
-    debouncedSave: (data: AppData, onError?: (msg: string) => void) => void
+    debouncedSave: (data: AppData, onError?: (msg: string) => void) => void,
+    flushPendingSave: () => Promise<void>
 ): ((options?: { language?: string }) => Promise<StoreActionResult>) => async (options) => {
     const changeAt = Date.now();
     const nowIso = new Date().toISOString();
@@ -426,5 +427,6 @@ export const createSeedGettingStartedAction = (
         };
     });
 
+    await flushPendingSave();
     return { success: true, id: projectId };
 };

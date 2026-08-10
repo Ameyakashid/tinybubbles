@@ -3024,6 +3024,44 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState().tasks).toHaveLength(9);
     });
 
+    it('reports getting started success only after the seeded snapshot is durable', async () => {
+        let resolveSave: (() => void) | null = null;
+        mockStorage.saveData = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+            resolveSave = resolve;
+        }));
+        setStorageAdapter(mockStorage);
+
+        let settled = false;
+        const seedPromise = useTaskStore.getState().seedGettingStarted();
+        void seedPromise.finally(() => {
+            settled = true;
+        });
+
+        try {
+            await vi.advanceTimersByTimeAsync(250);
+            expect(mockStorage.saveData).toHaveBeenCalledTimes(1);
+            expect(settled).toBe(false);
+        } finally {
+            resolveSave?.();
+        }
+        await expect(seedPromise).resolves.toMatchObject({ success: true });
+        expect(settled).toBe(true);
+    });
+
+    it('rejects getting started seeding when the snapshot cannot be saved', async () => {
+        mockStorage.saveData = vi.fn().mockRejectedValue(new Error('seed write failed'));
+        setStorageAdapter(mockStorage);
+
+        const seedPromise = useTaskStore.getState().seedGettingStarted();
+        const rejection = expect(seedPromise).rejects.toThrow('seed write failed');
+        await vi.advanceTimersByTimeAsync(4_000);
+        await rejection;
+
+        expect(useTaskStore.getState().persistenceFailure).toMatchObject({
+            message: expect.stringContaining('seed write failed'),
+        });
+    });
+
     it('backfills missing getting started tasks into an existing empty project', async () => {
         const existingProject = createStoreProject('starter-project', {
             title: 'Getting Started',

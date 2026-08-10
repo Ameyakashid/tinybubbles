@@ -110,7 +110,7 @@ export const createSettingsActions = ({
     getSaveGeneration,
     getStorage,
 }: SettingsActionContext): SettingsActions => ({
-    seedGettingStarted: createSeedGettingStartedAction(set, debouncedSave),
+    seedGettingStarted: createSeedGettingStartedAction(set, debouncedSave, flushPendingSave),
 
     /**
      * Fetch all data from the configured storage adapter.
