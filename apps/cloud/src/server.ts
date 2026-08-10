@@ -1034,7 +1034,6 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         cleanupTimer.unref();
     }
 
-    logInfo(`dataDir: ${dataDir}`);
     const usingLegacyTokenVar = options.allowedAuthTokens === undefined
         && !String(process.env.MINDWTR_CLOUD_AUTH_TOKENS || '').trim()
         && !String(process.env.MINDWTR_CLOUD_AUTH_TOKENS_FILE || '').trim()
@@ -1066,9 +1065,10 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         }
     }
     if (!ensureWritableDir(dataDir)) {
-        throw new Error(`Cloud data directory is not writable: ${dataDir}`);
+        throw new Error('Cloud data directory is not writable');
     }
-    logInfo(`listening on http://${host}:${port}`);
+    logInfo('cloud data directory ready');
+    logInfo('cloud server listening', { port: String(port) });
 
     const bunRuntime = getBunRuntime();
     if (!bunRuntime) {
@@ -1484,7 +1484,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
     if (IS_MAIN_MODULE) {
         const handleSignal = (signal: NodeJS.Signals) => {
-            logInfo(`received ${signal}, shutting down`);
+            logInfo('shutdown signal received', { signal });
             void stopServer().finally(() => process.exit(0));
         };
         for (const signal of ['SIGINT', 'SIGTERM'] as NodeJS.Signals[]) {

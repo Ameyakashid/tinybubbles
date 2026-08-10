@@ -21,6 +21,7 @@ import {
     BEARER_TOKEN_PATTERN,
     CLOUD_AREA_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS,
+    CLOUD_LOG_MESSAGES,
     CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS,
     CLOUD_SECTION_CREATION_ALLOWED_PROP_KEYS,
@@ -107,6 +108,68 @@ const makeTestTask = (overrides: Pick<Task, 'id' | 'title'> & Partial<Task>): Ta
 });
 
 describe('cloud server utils', () => {
+    test('ratchets cloud logging through static allowlisted messages and the centralized writer', () => {
+        const allowlistedMessages = new Set<string>(CLOUD_LOG_MESSAGES);
+        const observedMessages = new Set<string>();
+        const violations: string[] = [];
+        const productionSources = readdirSync(testDirectory)
+            .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'));
+
+        for (const name of productionSources) {
+            const source = readFileSync(join(testDirectory, name), 'utf8');
+            if (name !== 'server-config.ts' && /process\.(?:stdout|stderr)\.write\s*\(/.test(source)) {
+                violations.push(`${name}: direct process log write`);
+            }
+            if (/\b(?:logInfo|logWarn|logFailureWarn|logError)\s*\(\s*`/.test(source)) {
+                violations.push(`${name}: dynamic log message`);
+            }
+            for (const match of source.matchAll(
+                /\b(?:logInfo|logWarn|logFailureWarn|logError)\s*\(\s*(['"])([^'"\r\n]+)\1/g,
+            )) {
+                const message = match[2];
+                if (message) observedMessages.add(message);
+                if (message && !allowlistedMessages.has(message)) {
+                    violations.push(`${name}: unallowlisted log message: ${message}`);
+                }
+            }
+        }
+
+        expect(violations).toEqual([]);
+        expect([...allowlistedMessages].filter((message) => !observedMessages.has(message))).toEqual([]);
+    });
+
+    test('startup logs do not expose the configured cloud data path', async () => {
+        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-startup-log-'));
+        const privateDataDir = join(sandbox, 'operator-private', 'cloud-root');
+        const captured: string[] = [];
+        const stdoutSpy = spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
+        });
+        const stderrSpy = spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
+        });
+        let server: Awaited<ReturnType<typeof startCloudServer>> | null = null;
+
+        try {
+            server = await startCloudServer({
+                host: '127.0.0.1',
+                port: 0,
+                dataDir: privateDataDir,
+                allowedAuthTokens: new Set(['startup-log-token-1234567890']),
+            });
+            const serializedLogs = captured.join('');
+            expect(serializedLogs).not.toContain(privateDataDir);
+            expect(serializedLogs).not.toContain('operator-private');
+        } finally {
+            server?.stop();
+            stdoutSpy.mockRestore();
+            stderrSpy.mockRestore();
+            rmSync(sandbox, { recursive: true, force: true });
+        }
+    });
+
     test('BEARER_TOKEN_PATTERN stays identical to core CLOUD_SYNC_TOKEN_PATTERN', () => {
         // server-config.ts keeps a literal copy because the dependency-free
         // schema:check CI job imports it without workspace deps installed.

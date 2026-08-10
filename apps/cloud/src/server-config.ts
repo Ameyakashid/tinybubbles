@@ -35,6 +35,41 @@ export type CloudFailureContext = {
     requestId?: string;
 };
 
+export const CLOUD_LOG_MESSAGES = [
+    'Failed to clone cloud app data cache entry',
+    'Failed to start server',
+    'MINDWTR_CLOUD_ALLOW_ANY_TOKEN is enabled. Prefer MINDWTR_CLOUD_AUTH_TOKENS for stronger access control.',
+    'MINDWTR_CLOUD_TOKEN is deprecated; use MINDWTR_CLOUD_AUTH_TOKENS instead',
+    'MINDWTR_CLOUD_TRUST_PROXY_HEADERS is enabled but no trusted proxy IPs are configured; forwarded IP headers will be ignored',
+    'Stored cloud data failed validation',
+    'Stored cloud data failed validation before attachment GC',
+    'cloud data directory is not writable',
+    'cloud data directory ready',
+    'cloud server listening',
+    'request completed',
+    'request failed',
+    'shutdown signal received',
+    'token auth allowlist enabled',
+    'token namespace mode enabled by explicit opt-in',
+    'trusting proxy IP headers for auth failure rate limiting',
+] as const;
+
+type CloudLogMessage = typeof CLOUD_LOG_MESSAGES[number];
+type CloudOperationalLogContext = Partial<Record<
+    | 'allowedTokens'
+    | 'elapsedMs'
+    | 'hint'
+    | 'maxNamespaces'
+    | 'method'
+    | 'port'
+    | 'requestId'
+    | 'route'
+    | 'signal'
+    | 'status'
+    | 'trustedProxyIps',
+    string | number
+>>;
+
 const writeLog = (entry: LogEntry) => {
     const line = `${JSON.stringify(entry)}\n`;
     if (entry.level === 'error') {
@@ -48,19 +83,19 @@ export const normalizeRevision = (value?: number): number => (
     typeof value === 'number' && Number.isFinite(value) ? value : 0
 );
 
-export const logInfo = (message: string, context?: Record<string, unknown>) => {
+export const logInfo = (message: CloudLogMessage, context?: CloudOperationalLogContext) => {
     writeLog({ ts: new Date().toISOString(), level: 'info', scope: 'cloud', message, context });
 };
 
-export const logWarn = (message: string, context?: Record<string, unknown>) => {
+export const logWarn = (message: CloudLogMessage, context?: CloudOperationalLogContext) => {
     writeLog({ ts: new Date().toISOString(), level: 'warn', scope: 'cloud', message, context });
 };
 
-export const logFailureWarn = (message: string, context: CloudFailureContext) => {
+export const logFailureWarn = (message: CloudLogMessage, context: CloudFailureContext) => {
     writeLog({ ts: new Date().toISOString(), level: 'warn', scope: 'cloud', message, context });
 };
 
-export const logError = (message: string, context: CloudFailureContext) => {
+export const logError = (message: CloudLogMessage, context: CloudFailureContext) => {
     writeLog({ ts: new Date().toISOString(), level: 'error', scope: 'cloud', message, context });
 };
 
