@@ -2,10 +2,19 @@ import { describe, expect, test } from 'bun:test';
 import { dirname } from 'path';
 import {
     durablyPublishFile,
+    ensureDurableDirectory,
     ensureDirectoryWithinRoot,
     type DurableDirectoryFileSystem,
     type DurableFileSystem,
 } from './server-storage';
+
+type DirectoryFailureStage =
+    | 'mkdir'
+    | 'verify-directory'
+    | 'realpath'
+    | 'open-parent'
+    | 'fsync-parent'
+    | 'close-parent';
 
 type FailureStage =
     | 'open-temp'
@@ -149,31 +158,46 @@ describe('durablyPublishFile', () => {
     });
 });
 
-function createDurableDirectoryFileSystem(initialDirectories: string[]) {
+function createDurableDirectoryFileSystem(
+    initialDirectories: string[],
+    failureStage?: DirectoryFailureStage,
+) {
     const directories = new Set(initialDirectories);
+    const createdDirectories = new Set<string>();
     const events: string[] = [];
     const handles = new Map<number, string>();
     let nextHandle = 1;
+
+    const failAt = (stage: DirectoryFailureStage): void => {
+        if (failureStage === stage) {
+            throw Object.assign(new Error(`injected ${stage} failure`), { code: 'EIO' });
+        }
+    };
 
     const fileSystem: DurableDirectoryFileSystem = {
         lstatSync(path) {
             if (!directories.has(path)) {
                 throw Object.assign(new Error('missing directory'), { code: 'ENOENT' });
             }
+            if (createdDirectories.has(path)) failAt('verify-directory');
             return {
                 isDirectory: () => true,
                 isSymbolicLink: () => false,
             };
         },
         mkdirSync(path) {
+            failAt('mkdir');
             events.push(`mkdir:${path}`);
             directories.add(path);
+            createdDirectories.add(path);
         },
         realpathSync(path) {
+            failAt('realpath');
             if (!directories.has(path)) throw new Error('missing directory');
             return path;
         },
         openSync(path) {
+            failAt('open-parent');
             events.push(`open-parent:${path}`);
             const handle = nextHandle++;
             handles.set(handle, path);
@@ -182,11 +206,13 @@ function createDurableDirectoryFileSystem(initialDirectories: string[]) {
         fsyncSync(handle) {
             const path = handles.get(handle);
             if (!path) throw new Error('invalid directory handle');
+            failAt('fsync-parent');
             events.push(`fsync-parent:${path}`);
         },
         closeSync(handle) {
             const path = handles.get(handle);
             if (!path) throw new Error('invalid directory handle');
+            failAt('close-parent');
             events.push(`close-parent:${path}`);
             handles.delete(handle);
         },
@@ -194,6 +220,90 @@ function createDurableDirectoryFileSystem(initialDirectories: string[]) {
 
     return { directories, events, fileSystem };
 }
+
+describe('ensureDurableDirectory', () => {
+    test('durably creates a fresh configured data root from its nearest existing ancestor', () => {
+        const harness = createDurableDirectoryFileSystem(['/cloud']);
+
+        expect(ensureDurableDirectory(
+            '/cloud/configured/data',
+            harness.fileSystem,
+        )).toBe('/cloud/configured/data');
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/configured',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+            'mkdir:/cloud/configured/data',
+            'open-parent:/cloud/configured',
+            'fsync-parent:/cloud/configured',
+            'close-parent:/cloud/configured',
+        ]);
+    });
+
+    test('durably creates the first namespace directory entry', () => {
+        const harness = createDurableDirectoryFileSystem(['/cloud/data']);
+
+        expect(ensureDurableDirectory(
+            '/cloud/data/namespace',
+            harness.fileSystem,
+        )).toBe('/cloud/data/namespace');
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/data/namespace',
+            'open-parent:/cloud/data',
+            'fsync-parent:/cloud/data',
+            'close-parent:/cloud/data',
+        ]);
+    });
+
+    test('durably creates every nested namespace directory entry', () => {
+        const harness = createDurableDirectoryFileSystem(['/cloud/data']);
+
+        expect(ensureDurableDirectory(
+            '/cloud/data/namespace/attachments/projects/task',
+            harness.fileSystem,
+        )).toBe('/cloud/data/namespace/attachments/projects/task');
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/data/namespace',
+            'open-parent:/cloud/data',
+            'fsync-parent:/cloud/data',
+            'close-parent:/cloud/data',
+            'mkdir:/cloud/data/namespace/attachments',
+            'open-parent:/cloud/data/namespace',
+            'fsync-parent:/cloud/data/namespace',
+            'close-parent:/cloud/data/namespace',
+            'mkdir:/cloud/data/namespace/attachments/projects',
+            'open-parent:/cloud/data/namespace/attachments',
+            'fsync-parent:/cloud/data/namespace/attachments',
+            'close-parent:/cloud/data/namespace/attachments',
+            'mkdir:/cloud/data/namespace/attachments/projects/task',
+            'open-parent:/cloud/data/namespace/attachments/projects',
+            'fsync-parent:/cloud/data/namespace/attachments/projects',
+            'close-parent:/cloud/data/namespace/attachments/projects',
+        ]);
+    });
+
+    for (const failureStage of [
+        'mkdir',
+        'verify-directory',
+        'realpath',
+        'open-parent',
+        'fsync-parent',
+        'close-parent',
+    ] satisfies DirectoryFailureStage[]) {
+        test(`does not acknowledge directory durability when ${failureStage} fails`, () => {
+            const harness = createDurableDirectoryFileSystem(['/cloud'], failureStage);
+
+            expect(() => ensureDurableDirectory(
+                '/cloud/data',
+                harness.fileSystem,
+            )).toThrow(`injected ${failureStage} failure`);
+        });
+    }
+});
 
 describe('ensureDirectoryWithinRoot', () => {
     test('durably publishes the first attachment directory entry', () => {

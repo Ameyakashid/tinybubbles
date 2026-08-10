@@ -3157,6 +3157,56 @@ describe('cloud server api', () => {
         expect(missingResponse.status).toBe(404);
     });
 
+    test('returns redacted retryable 5xx for attachment directory durability failures while unsafe paths stay 400', async () => {
+        const unsafeResponse = await fetch(`${baseUrl}/v1/attachments/%252e%252e/private.bin`, {
+            method: 'PUT',
+            headers: authHeaders,
+            body: new TextEncoder().encode('unsafe'),
+        });
+        expect(unsafeResponse.status).toBe(400);
+
+        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-directory-failure-'));
+        const sensitivePath = join(isolatedDataDir, 'private-namespace', 'attachments');
+        const captured: string[] = [];
+        const stderrSpy = spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
+        });
+        const isolatedServer = await startCloudServer({
+            host: '127.0.0.1',
+            port: 0,
+            dataDir: isolatedDataDir,
+            allowedAuthTokens: new Set([integrationToken]),
+            attachmentPathResolver: () => {
+                throw Object.assign(new Error(`fsync failed for ${sensitivePath}`), { code: 'EIO' });
+            },
+        });
+
+        try {
+            const response = await fetch(
+                `http://127.0.0.1:${isolatedServer.port}/v1/attachments/private.bin`,
+                {
+                    method: 'PUT',
+                    headers: authHeaders,
+                    body: new TextEncoder().encode('private bytes'),
+                },
+            );
+
+            expect(response.status).toBe(500);
+            expect((await response.json()).error).toBe('Internal server error');
+            const serializedLogs = captured.join('');
+            expect(serializedLogs).toContain('"failureClass":"filesystem"');
+            expect(serializedLogs).toContain('"failureCode":"attachment_io_failed"');
+            expect(serializedLogs).not.toContain(sensitivePath);
+            expect(serializedLogs).not.toContain('fsync failed');
+            expect(serializedLogs).not.toContain('private bytes');
+        } finally {
+            isolatedServer.stop();
+            stderrSpy.mockRestore();
+            rmSync(isolatedDataDir, { recursive: true, force: true });
+        }
+    });
+
     test('logs attachment filesystem failures without namespace hashes or paths', async () => {
         const key = tokenToKey(integrationToken);
         const privateRelativePath = 'private-folder/private-file.bin';

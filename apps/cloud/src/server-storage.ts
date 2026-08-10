@@ -181,16 +181,13 @@ function isFsErrorWithCode(error: unknown, code: string): boolean {
 function syncDirectoryEntryParent(
     parentPath: string,
     fileSystem: DurableDirectoryFileSystem,
-): boolean {
+): void {
     let handle: number | null = null;
     try {
         handle = fileSystem.openSync(parentPath, 'r');
         fileSystem.fsyncSync(handle);
         fileSystem.closeSync(handle);
         handle = null;
-        return true;
-    } catch {
-        return false;
     } finally {
         if (handle !== null) {
             try {
@@ -221,34 +218,67 @@ export function ensureDirectoryWithinRoot(
             const stat = fileSystem.lstatSync(currentPath);
             if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
         } catch (error) {
-            if (!isFsErrorWithCode(error, 'ENOENT')) return false;
+            if (!isFsErrorWithCode(error, 'ENOENT')) throw error;
             if (!create) return true;
             try {
                 fileSystem.mkdirSync(currentPath, { mode: 0o700 });
             } catch (mkdirError) {
-                if (!isFsErrorWithCode(mkdirError, 'EEXIST')) return false;
+                if (!isFsErrorWithCode(mkdirError, 'EEXIST')) throw mkdirError;
             }
-            try {
-                const stat = fileSystem.lstatSync(currentPath);
-                if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
-            } catch {
-                return false;
-            }
+            const stat = fileSystem.lstatSync(currentPath);
+            if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
         }
 
-        try {
-            const currentRealPath = fileSystem.realpathSync(currentPath);
-            if (!isPathWithinRoot(currentRealPath, rootRealPath)) return false;
-        } catch {
-            return false;
-        }
+        const currentRealPath = fileSystem.realpathSync(currentPath);
+        if (!isPathWithinRoot(currentRealPath, rootRealPath)) return false;
         // Persist the child entry itself, not only files later written inside
         // it. Re-syncing an existing segment also makes a retry safe after a
         // prior parent fsync failed while leaving the directory visible.
-        if (create && !syncDirectoryEntryParent(parentPath, fileSystem)) return false;
+        if (create) syncDirectoryEntryParent(parentPath, fileSystem);
     }
 
     return true;
+}
+
+/**
+ * Creates a directory tree from its nearest existing ancestor and durably
+ * publishes every new directory entry before returning its canonical path.
+ * Unsafe non-directory/symlink shapes return null; filesystem and durability
+ * failures throw so request handlers can classify them as retryable 5xx.
+ */
+export function ensureDurableDirectory(
+    targetDir: string,
+    fileSystem: DurableDirectoryFileSystem = nodeDurableDirectoryFileSystem,
+): string | null {
+    const absoluteTarget = resolve(targetDir);
+    let existingAncestor = absoluteTarget;
+
+    while (true) {
+        try {
+            const entry = fileSystem.lstatSync(existingAncestor);
+            const existingRealPath = fileSystem.realpathSync(existingAncestor);
+            const realEntry = entry.isSymbolicLink()
+                ? fileSystem.lstatSync(existingRealPath)
+                : entry;
+            if (realEntry.isSymbolicLink() || !realEntry.isDirectory()) return null;
+
+            const relativeTarget = relative(existingAncestor, absoluteTarget);
+            if (!relativeTarget || relativeTarget === '.') return existingRealPath;
+            const canonicalTarget = resolve(existingRealPath, relativeTarget);
+            if (!ensureDirectoryWithinRoot(
+                existingRealPath,
+                canonicalTarget,
+                true,
+                fileSystem,
+            )) return null;
+            return fileSystem.realpathSync(canonicalTarget);
+        } catch (error) {
+            if (!isFsErrorWithCode(error, 'ENOENT')) throw error;
+            const parent = dirname(existingAncestor);
+            if (parent === existingAncestor) throw error;
+            existingAncestor = parent;
+        }
+    }
 }
 
 export function normalizeAttachmentRelativePath(rawPath: string): string | null {
@@ -283,12 +313,16 @@ export function resolveAttachmentPath(
     const relativePath = normalizeAttachmentRelativePath(rawPath);
     if (!relativePath) return null;
     const dataRoot = resolve(dataDir);
+    let dataRootRealPath: string;
     if (options.create) {
-        mkdirSync(dataRoot, { recursive: true });
+        const durableDataRoot = ensureDurableDirectory(dataRoot);
+        if (!durableDataRoot) return null;
+        dataRootRealPath = durableDataRoot;
     } else if (!existsSync(dataRoot)) {
         return null;
+    } else {
+        dataRootRealPath = realpathSync(dataRoot);
     }
-    const dataRootRealPath = realpathSync(dataRoot);
     const rootDir = resolve(join(dataRootRealPath, key, 'attachments'));
     if (!ensureDirectoryWithinRoot(dataRootRealPath, rootDir, options.create)) return null;
     // rootDir may not exist yet when options.create is false (nothing was ever
@@ -473,7 +507,9 @@ export function loadAppDataUncached(filePath: string): AppData {
 }
 
 export function writeData(filePath: string, data: unknown) {
-    mkdirSync(dirname(filePath), { recursive: true });
+    if (!ensureDurableDirectory(dirname(filePath))) {
+        throw new Error('Cloud data directory is unsafe');
+    }
     const serialized = JSON.stringify(data, null, 2);
     durablyPublishFile(filePath, serialized);
 }
@@ -524,7 +560,9 @@ async function withCloudFileLock<T>(
 ): Promise<T> {
     throwIfRequestAborted(signal);
     const lockPath = getCloudLockPath(dataDir, key);
-    mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 });
+    if (!ensureDurableDirectory(dirname(lockPath))) {
+        throw new Error('Cloud lock directory is unsafe');
+    }
     const startedAt = Date.now();
     let attempt = 0;
     const { Database } = await import('bun:sqlite');
@@ -568,8 +606,15 @@ async function withCloudFileLock<T>(
 
 export function ensureWritableDir(dirPath: string): boolean {
     try {
-        mkdirSync(dirPath, { recursive: true });
-        const testPath = join(dirPath, '.mindwtr_write_test');
+        const durableDirPath = ensureDurableDirectory(dirPath);
+        if (!durableDirPath) {
+            logError('cloud data directory is not writable', {
+                failureClass: 'filesystem',
+                failureCode: 'data_dir_not_writable',
+            });
+            return false;
+        }
+        const testPath = join(durableDirPath, '.mindwtr_write_test');
         writeFileSync(testPath, 'ok');
         unlinkSync(testPath);
         return true;

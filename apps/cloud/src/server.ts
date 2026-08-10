@@ -896,6 +896,7 @@ type CloudServerOptions = {
     logAllRequests?: boolean;
     slowRequestMs?: number;
     requestCompletionSink?: (record: CloudRequestCompletion) => void;
+    attachmentPathResolver?: typeof resolveAttachmentPath;
 };
 
 type CloudServerHandle = {
@@ -908,6 +909,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const port = Number(options.port ?? flags.port ?? process.env.PORT ?? 8787);
     const host = String(options.host ?? flags.host ?? process.env.HOST ?? '0.0.0.0');
     const dataDir = String(options.dataDir ?? process.env.MINDWTR_CLOUD_DATA_DIR ?? join(process.cwd(), 'data'));
+    const attachmentPathResolver = options.attachmentPathResolver ?? resolveAttachmentPath;
 
     const windowMs = Number(options.windowMs ?? process.env.MINDWTR_CLOUD_RATE_WINDOW_MS ?? 60_000);
     const maxPerWindow = Number(options.maxPerWindow ?? process.env.MINDWTR_CLOUD_RATE_MAX ?? 120);
@@ -1408,7 +1410,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     const attachmentPathResponse = await withNamespace(req, url, attachmentPathServerConfig, async (ctx) => {
                         // Only PUT may create the namespace's attachment directory; GET and
                         // DELETE must never plant it (see resolveAttachmentPath's doc comment).
-                        const resolvedAttachmentPath = resolveAttachmentPath(dataDir, ctx.key, pathname.slice('/v1/attachments/'.length), { create: req.method === 'PUT' });
+                        const resolvedAttachmentPath = attachmentPathResolver(dataDir, ctx.key, pathname.slice('/v1/attachments/'.length), { create: req.method === 'PUT' });
                         if (!resolvedAttachmentPath) {
                             return errorResponse('Invalid attachment path', 400);
                         }
