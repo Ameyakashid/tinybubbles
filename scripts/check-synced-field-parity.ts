@@ -248,6 +248,17 @@ const compareRequiredPragmas = (label: string, source: string): string[] => REQU
     .filter((pragma) => !source.includes(pragma))
     .map((pragma) => `${label}: missing "${pragma}"`);
 
+const compareDesktopRequiredPragmas = (label: string, source: string): string[] => {
+    const failures = compareRequiredPragmas(label, source)
+        .filter((failure) => !failure.includes('PRAGMA busy_timeout = 5000;'));
+    const configuresBusyTimeout = source.includes('const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;')
+        && source.includes('busy_timeout(Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))');
+    if (!configuresBusyTimeout) {
+        failures.push(`${label}: missing 5000ms busy_timeout connection configuration`);
+    }
+    return failures;
+};
+
 // TASK_SQLITE_COLUMNS, TASK_UPSERT_UPDATE_CLAUSE, and the ensureTaskColumns migration
 // list are now generated from TASK_SYNC_FIELD_SCHEMA in sqlite-adapter.ts itself (same
 // module-load pass, same source array), so they can no longer drift from each other
@@ -812,7 +823,7 @@ for (const entity of ENTITIES) {
 }
 
 failures.push(...compareRequiredPragmas('core SQLite schema', coreSqliteSchema));
-failures.push(...compareRequiredPragmas('desktop Rust schema', desktopRustStorage));
+    failures.push(...compareDesktopRequiredPragmas('desktop Rust schema', desktopRustStorage));
 
 for (const table of ['tasks_fts', 'projects_fts']) {
     const coreDefinitions = parseFtsTableColumnLists(coreSqliteSchema, table);

@@ -122,6 +122,19 @@ describe('CloudKit production schema gate', () => {
 });
 
 describe('desktop Rust FTS parity', () => {
+    test('fails when per-connection SQLite busy timeout configuration drifts', () => {
+        const source = originalDesktopRustStorage.replace(
+            'busy_timeout(Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))',
+            'busy_timeout(Duration::from_millis(1))',
+        );
+        expect(source).not.toBe(originalDesktopRustStorage);
+
+        const result = runCheckWithDesktopRustStorage(source);
+
+        expect(result.status).toBe(1);
+        expect(result.stdout + result.stderr).toContain('5000ms busy_timeout connection configuration');
+    });
+
     test('fails when a task FTS schema omits a core column', () => {
         const source = originalDesktopRustStorage.replace(
             "  assignedTo,\n  content=''",
