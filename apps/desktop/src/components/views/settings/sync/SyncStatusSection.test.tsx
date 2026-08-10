@@ -7,6 +7,12 @@ const labels = new Proxy<Record<string, string>>({}, {
     get: (_target, key) => String(key),
 });
 
+const labelsWith = (overrides: Record<string, string>) => new Proxy(overrides, {
+    get: (target, key) => target[String(key)] ?? String(key),
+});
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function renderStatus(syncLastResultAt: string, overrides: Record<string, unknown> = {}) {
     return render(
         <SyncStatusSection
@@ -56,16 +62,22 @@ describe('SyncStatusSection', () => {
         expect(queryByText('lastSyncSuccess')).not.toBeInTheDocument();
     });
 
-    it('disables snapshot restore while sync is active', () => {
-        const snapshot = 'data.2026-07-31T12-00-00.123456789.1.snapshot.json';
+    it('gives same-minute snapshots unique accessible names and disables them during sync', () => {
+        const firstSnapshot = 'data.2026-07-31T12-00-00.123456789.1.snapshot.json';
+        const secondSnapshot = 'data.2026-07-31T12-00-00.987654321.2.snapshot.json';
         const { getByRole, queryByText } = renderStatus(new Date().toISOString(), {
             isSyncing: true,
-            snapshots: [snapshot],
+            snapshots: [firstSnapshot, secondSnapshot],
+            t: labelsWith({
+                recoverySnapshotsRestoreNamed: 'Restore snapshot {{snapshotName}}',
+            }),
         });
 
         fireEvent.click(getByRole('button', { name: 'recoverySnapshots' }));
 
-        expect(getByRole('button', { name: 'recoverySnapshotsRestore' })).toBeDisabled();
-        expect(queryByText(snapshot)).not.toBeInTheDocument();
+        expect(getByRole('button', { name: new RegExp(escapeRegex(firstSnapshot)) })).toBeDisabled();
+        expect(getByRole('button', { name: new RegExp(escapeRegex(secondSnapshot)) })).toBeDisabled();
+        expect(queryByText(firstSnapshot)).not.toBeInTheDocument();
+        expect(queryByText(secondSnapshot)).not.toBeInTheDocument();
     });
 });

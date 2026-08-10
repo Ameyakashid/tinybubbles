@@ -525,6 +525,7 @@ export const SETTINGS_LABEL_KEYS = [
     'recoverySnapshotsLoading',
     'recoverySnapshotsEmpty',
     'recoverySnapshotsRestore',
+    'recoverySnapshotsRestoreNamed',
     'recoverySnapshotsConfirm',
     'recoverySnapshotsConfirmTitle',
     'recoverySnapshotsConfirmCancel',

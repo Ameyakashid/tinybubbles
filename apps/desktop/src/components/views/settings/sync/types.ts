@@ -134,6 +134,7 @@ export type SettingsSyncLabels = {
     recoverySnapshotsLoading: string;
     recoverySnapshotsEmpty: string;
     recoverySnapshotsRestore: string;
+    recoverySnapshotsRestoreNamed: string;
     recoverySnapshotsConfirm: string;
     recoverySnapshotsConfirmTitle: string;
     recoverySnapshotsConfirmCancel: string;

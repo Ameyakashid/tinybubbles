@@ -338,19 +338,29 @@ export function SyncStatusSection({
                                 {!isLoadingSnapshots && snapshots.length === 0 && (
                                     <div className="text-xs text-muted-foreground">{t.recoverySnapshotsEmpty}</div>
                                 )}
-                                {!isLoadingSnapshots && snapshots.slice(0, 5).map((snapshot) => (
-                                    <div key={snapshot} className="flex items-center justify-between gap-2 text-xs">
-                                        <span className="text-muted-foreground font-mono truncate">{formatSnapshotLabel(snapshot)}</span>
-                                        <button
-                                            type="button"
-                                            disabled={isRestoringSnapshot || isSyncing}
-                                            onClick={() => void handleRestoreSnapshot(snapshot)}
-                                            className="px-2 py-1 rounded border border-border text-foreground hover:bg-muted/70 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {t.recoverySnapshotsRestore}
-                                        </button>
-                                    </div>
-                                ))}
+                                {!isLoadingSnapshots && snapshots.slice(0, 5).map((snapshot) => {
+                                    const displayLabel = formatSnapshotLabel(snapshot);
+                                    const accessibilityName = displayLabel === snapshot
+                                        ? snapshot
+                                        : `${displayLabel} (${snapshot})`;
+                                    const restoreLabel = t.recoverySnapshotsRestoreNamed
+                                        .replace('{{snapshotName}}', accessibilityName)
+                                        .replace('{snapshotName}', accessibilityName);
+                                    return (
+                                        <div key={snapshot} className="flex items-center justify-between gap-2 text-xs">
+                                            <span className="text-muted-foreground font-mono truncate">{displayLabel}</span>
+                                            <button
+                                                type="button"
+                                                aria-label={restoreLabel}
+                                                disabled={isRestoringSnapshot || isSyncing}
+                                                onClick={() => void handleRestoreSnapshot(snapshot)}
+                                                className="px-2 py-1 rounded border border-border text-foreground hover:bg-muted/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {t.recoverySnapshotsRestore}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
