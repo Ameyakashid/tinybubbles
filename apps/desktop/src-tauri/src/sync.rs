@@ -3943,12 +3943,12 @@ mod tests {
     fn expired_lease_content_cannot_break_an_active_sync_lock() {
         let dir = tempfile::tempdir().expect("temp dir");
         let lock_path = dir.path().join(".mindwtr.lock");
-        let first = acquire_sync_lock(dir.path()).expect("first lock");
         fs::write(
             &lock_path,
             br#"{"ownerToken":"clock-skewed-peer","pid":42,"expiresAtMs":0}"#,
         )
-        .expect("replace advisory lease metadata");
+        .expect("seed expired advisory lease metadata");
+        let first = acquire_sync_lock(dir.path()).expect("first lock");
 
         assert_eq!(
             acquire_sync_lock(dir.path()).expect_err("active OS lock must reject takeover"),
@@ -7480,6 +7480,21 @@ struct SyncFileLock {
     file: File,
 }
 
+fn is_sync_lock_contention(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        return true;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        return error.raw_os_error()
+            == Some(windows_sys::Win32::Foundation::ERROR_LOCK_VIOLATION as i32);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
 fn acquire_sync_lock(sync_dir: &Path) -> Result<SyncFileLock, String> {
     let lock_path = sync_dir.join(".mindwtr.lock");
     let file = OpenOptions::new()
@@ -7490,7 +7505,7 @@ fn acquire_sync_lock(sync_dir: &Path) -> Result<SyncFileLock, String> {
         .map_err(|error| format!("Failed to open sync lock: {error}"))?;
     match file.try_lock_exclusive() {
         Ok(()) => Ok(SyncFileLock { file }),
-        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+        Err(error) if is_sync_lock_contention(&error) => {
             Err("Sync lock held by another process".to_string())
         }
         Err(error) => Err(format!(
