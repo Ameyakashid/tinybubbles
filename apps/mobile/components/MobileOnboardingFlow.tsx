@@ -36,7 +36,12 @@ export function MobileOnboardingFlow({
   const stackFooter = fontScale >= 1.5;
 
   return (
-    <Modal animationType="fade" transparent visible={isOpen} onRequestClose={onSkip}>
+    <Modal
+      animationType="fade"
+      transparent
+      visible={isOpen}
+      onRequestClose={() => { if (!busy) onSkip(); }}
+    >
       <SafeAreaView style={styles.overlay}>
         <View style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border }]}>
           <ScrollView bounces={false}>
@@ -65,6 +70,7 @@ export function MobileOnboardingFlow({
             />
             <TouchableOpacity
               accessibilityRole="button"
+              accessibilityState={{ busy, disabled: busy }}
               activeOpacity={0.82}
               disabled={busy}
               onPress={onStartFresh}
@@ -101,6 +107,7 @@ export function MobileOnboardingFlow({
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
+                accessibilityState={{ disabled: busy }}
                 disabled={busy}
                 onPress={onSkip}
                 style={stackFooter ? styles.skipButtonStacked : null}
@@ -113,6 +120,7 @@ export function MobileOnboardingFlow({
           <Pressable
             accessibilityLabel={t('onboarding.skip')}
             accessibilityRole="button"
+            accessibilityState={{ disabled: busy }}
             disabled={busy}
             hitSlop={8}
             onPress={onSkip}
@@ -147,6 +155,7 @@ function OnboardingOption({
   return (
     <TouchableOpacity
       accessibilityRole="button"
+      accessibilityState={{ disabled: disabled === true }}
       activeOpacity={0.78}
       disabled={disabled}
       onPress={onPress}
