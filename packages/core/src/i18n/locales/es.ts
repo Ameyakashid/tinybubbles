@@ -1233,6 +1233,8 @@ export const esOverrides: Record<string, string> = {
         'settings.webdavUrlPlaceholder': 'https://example.com/remote.php/dav/files/<username>/mindwtr',
         'settings.persistentCaptureLabel': 'Captura rápida en la barra de notificaciones',
         'settings.persistentCaptureDesc': 'Mantén una notificación persistente para capturar desde cualquier lugar, incluida la pantalla de bloqueo.',
+        'settings.appSearchLabel': 'Exponer a la búsqueda del sistema',
+        'settings.appSearchDesc': 'Permite que la búsqueda del sistema Android encuentre tus tareas, proyectos y áreas activas por título. Nada sale de este dispositivo.',
         'captureNotification.title': 'Captura rápida',
         'captureNotification.text': 'Toca para capturar en tu Bandeja de entrada',
         'captureNotification.channelName': 'Captura rápida',

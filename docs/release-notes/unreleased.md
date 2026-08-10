@@ -4,7 +4,7 @@ Changes collected after `v1.1.6` and before the next version tag.
 
 ## Highlights
 
-_None yet._
+- Mobile (Android): a new opt-in "Expose to system search" setting (Settings → General → Privacy, off by default, Android 12+) lets your device's system search find Mindwtr tasks, projects, and areas by title. Only titles and minimal status/due/project metadata are indexed — never descriptions, notes, or attachments — the index lives on the device, and nothing leaves it. Tapping a result opens the item in Mindwtr; turning the switch off removes everything from the index. (#1017)
 
 ## Full Change List
 

@@ -2032,6 +2032,8 @@ export const en: Record<string, string> = {
         'settings.syncMobile.webdavEndpointIsReachable': 'WebDAV endpoint is reachable.',
         'settings.persistentCaptureLabel': 'Quick capture in notification bar',
         'settings.persistentCaptureDesc': 'Keep a persistent notification to capture from anywhere, including the lock screen.',
+        'settings.appSearchLabel': 'Expose to system search',
+        'settings.appSearchDesc': 'Let Android system search find your active tasks, projects, and areas by title. Nothing leaves this device.',
         'captureNotification.title': 'Quick capture',
         'captureNotification.text': 'Tap to capture to your Inbox',
         'captureNotification.channelName': 'Quick capture',

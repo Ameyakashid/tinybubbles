@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,8 @@ import {
 
 import { useTheme } from '@/contexts/theme-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { isAppSearchSupported, readAppSearchIndexingEnabled, writeAppSearchIndexingEnabled } from '@/lib/app-search-preference';
+import { enableAppSearchIndexing, wipeAppSearchIndex } from '@/lib/app-search-service';
 import {
     coerceMobileQuickAccessView,
     MOBILE_QUICK_ACCESS_VIEWS,
@@ -158,6 +160,26 @@ export function GeneralSettingsScreen() {
     }, [appLockBusy, settings.security, tr, updateSettings]);
     const appLockError = appLockErrorKey ? tr(appLockErrorKey) : null;
 
+    // Device-local Android integration (#1017): whether this device's active
+    // tasks/projects/areas are mirrored into Android's system-search index.
+    const [appSearchEnabled, setAppSearchEnabled] = useState(false);
+    useEffect(() => {
+        if (!isAppSearchSupported()) return;
+        readAppSearchIndexingEnabled().then(setAppSearchEnabled).catch(console.error);
+    }, []);
+    const handleAppSearchToggle = useCallback((value: boolean) => {
+        setAppSearchEnabled(value);
+        writeAppSearchIndexingEnabled(value).catch(console.error);
+        if (value) {
+            // enableAppSearchIndexing re-reads the preference after its
+            // reindex finishes, so a quick toggle-off mid-flight wins
+            // instead of resurrecting documents and re-arming after OFF.
+            enableAppSearchIndexing().catch(console.error);
+        } else {
+            wipeAppSearchIndex().catch(console.error);
+        }
+    }, []);
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: tc.bg }]} edges={['bottom']}>
             <SettingsTopBar title={t('settings.general')} />
@@ -217,6 +239,17 @@ export function GeneralSettingsScreen() {
                             trackColor={{ false: tc.secondaryText, true: tc.tint }}
                         />
                     </View>
+
+                    {isAppSearchSupported() && (
+                        <SettingToggleRow
+                            divider
+                            label={tr('settings.appSearchLabel')}
+                            description={tr('settings.appSearchDesc')}
+                            value={appSearchEnabled}
+                            onChange={handleAppSearchToggle}
+                            trackColor={{ false: tc.secondaryText, true: tc.tint }}
+                        />
+                    )}
                 </View>
 
                 <Modal

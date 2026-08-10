@@ -1312,6 +1312,8 @@ export const plOverrides: Record<string, string> = {
         'settings.webdavUrlPlaceholder': 'https://example.com/remote.php/dav/files/<username>/mindwtr',
         'settings.persistentCaptureLabel': 'Szybkie przechwytywanie na pasku powiadomień',
         'settings.persistentCaptureDesc': 'Stałe powiadomienie do przechwytywania z dowolnego miejsca, także z ekranu blokady.',
+        'settings.appSearchLabel': 'Udostępnij wyszukiwaniu systemowemu',
+        'settings.appSearchDesc': 'Pozwól wyszukiwarce systemowej Androida znaleźć Twoje aktywne zadania, projekty i obszary po tytule. Żadne dane nie opuszczają tego urządzenia.',
         'captureNotification.title': 'Szybkie przechwytywanie',
         'captureNotification.text': 'Dotknij, aby zapisać do Skrzynki',
         'captureNotification.channelName': 'Szybkie przechwytywanie',

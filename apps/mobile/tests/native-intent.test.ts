@@ -19,6 +19,12 @@ describe('redirectSystemPath', () => {
         expect(redirectSystemPath({ path: 'mindwtr://open-feature', initial: false })).toBe('/inbox');
     });
 
+    it('rewrites entity-open links to inbox so there is no Unmatched Route flash (#1017)', () => {
+        expect(redirectSystemPath({ path: 'mindwtr://open?task=abc-123', initial: true })).toBe('/inbox');
+        expect(redirectSystemPath({ path: 'mindwtr:///open?project=proj-1', initial: false })).toBe('/inbox');
+        expect(redirectSystemPath({ path: 'mindwtr://open?area=area-1', initial: false })).toBe('/inbox');
+    });
+
     it('leaves capture and unrelated links untouched', () => {
         expect(redirectSystemPath({ path: 'mindwtr://capture?title=Buy%20milk', initial: false }))
             .toBe('mindwtr://capture?title=Buy%20milk');

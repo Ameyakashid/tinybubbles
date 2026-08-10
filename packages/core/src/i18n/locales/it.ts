@@ -1568,6 +1568,8 @@ export const itOverrides: Record<string, string> = {
         'settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas': 'Importa backup CSV o ZIP di TickTick in aree, progetti e attività Mindwtr.',
         'settings.persistentCaptureLabel': 'Cattura rapida nella barra di notifica',
         'settings.persistentCaptureDesc': 'Mantieni una notifica persistente per catturare ovunque, anche dalla schermata di blocco.',
+        'settings.appSearchLabel': 'Esponi alla ricerca di sistema',
+        'settings.appSearchDesc': 'Consenti alla ricerca di sistema Android di trovare le tue attività, progetti e aree attive per titolo. Nessun dato lascia questo dispositivo.',
         'captureNotification.title': 'Cattura rapida',
         'captureNotification.text': 'Tocca per catturare nella posta in arrivo',
         'captureNotification.channelName': 'Cattura rapida',

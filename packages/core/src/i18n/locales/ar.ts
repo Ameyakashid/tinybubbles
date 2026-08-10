@@ -1316,6 +1316,8 @@ export const arOverrides: Record<string, string> = {
         'settings.webdavUrlPlaceholder': 'https://example.com/remote.php/dav/files/<username>/mindwtr',
         'settings.persistentCaptureLabel': 'التقاط سريع في شريط الإشعارات',
         'settings.persistentCaptureDesc': 'أبقِ إشعارًا دائمًا للالتقاط من أي مكان، بما في ذلك شاشة القفل.',
+        'settings.appSearchLabel': 'إتاحة البحث في نظام أندرويد',
+        'settings.appSearchDesc': 'اسمح لبحث نظام أندرويد بالعثور على مهامك ومشاريعك ومجالاتك النشطة حسب العنوان. لا تغادر أي بيانات هذا الجهاز.',
         'captureNotification.title': 'التقاط سريع',
         'captureNotification.text': 'انقر للالتقاط إلى صندوق الوارد',
         'captureNotification.channelName': 'التقاط سريع',

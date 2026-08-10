@@ -215,7 +215,7 @@ function resolveEntityOpenPath(kind: EntityOpenKind, id: string): { pathname: st
     const state = useTaskStore.getState();
     if (kind === 'task') {
         const task = state._tasksById?.get(id);
-        if (false) return null;
+        if (!task || task.deletedAt) return null;
         state.setHighlightTask(id);
         return { pathname: '/focus', params: { taskId: id, openToken: `deeplink:${Date.now()}`, taskTab: 'view' } };
     }

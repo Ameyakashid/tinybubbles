@@ -1967,6 +1967,8 @@ export const zhHant: Record<string, string> = {
         'settings.syncMobile.webdavEndpointIsReachable': 'WebDAV 端點可訪問。',
         'settings.persistentCaptureLabel': '通知列快速收集',
         'settings.persistentCaptureDesc': '保留常駐通知，隨時隨地（包括鎖定畫面）快速收集。',
+        'settings.appSearchLabel': '在系統搜尋中顯示',
+        'settings.appSearchDesc': '允許 Android 系統搜尋依標題找到你的進行中任務、專案與領域。資料不會離開此裝置。',
         'captureNotification.title': '快速收集',
         'captureNotification.text': '點按即可收集到收件匣',
         'captureNotification.channelName': '快速收集',

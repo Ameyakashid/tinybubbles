@@ -1998,6 +1998,8 @@ export const faOverrides: Record<string, string> = {
         'settings.syncMobile.webdavEndpointIsReachable': 'نقطه پایانی WebDAV در دسترس است.',
         'settings.persistentCaptureLabel': 'ثبت سریع در نوار اعلان',
         'settings.persistentCaptureDesc': 'یک اعلان پایدار برای ثبت از هر جا، از جمله صفحه قفل، نگه دار.',
+        'settings.appSearchLabel': 'نمایش در جستجوی سیستم',
+        'settings.appSearchDesc': 'به جستجوی سیستم اندروید اجازه بده کارها، پروژه‌ها و حوزه‌های فعال شما را بر اساس عنوان پیدا کند. هیچ داده‌ای از این دستگاه خارج نمی‌شود.',
         'captureNotification.title': 'ثبت سریع',
         'captureNotification.text': 'برای ثبت در صندوق ورودی خود ضربه بزنید',
         'captureNotification.channelName': 'ثبت سریع',

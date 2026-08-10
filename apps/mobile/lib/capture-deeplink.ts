@@ -118,6 +118,36 @@ export function parseOpenFeatureUrl(rawUrl: string): OpenFeaturePayload | null {
     };
 }
 
+export type EntityOpenKind = 'task' | 'project' | 'area';
+export type EntityOpenPayload = { kind: EntityOpenKind; id: string };
+
+const ENTITY_OPEN_PARAM_KINDS: EntityOpenKind[] = ['task', 'project', 'area'];
+
+// mindwtr://open?task=<id> | ?project=<id> | ?area=<id> — the deep link a
+// system-search result (#1017) or any future entity-open surface opens.
+// Distinct from open-feature (named app sections) and capture (quick-add).
+export function isEntityOpenUrl(rawUrl: string): boolean {
+    if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+
+    try {
+        const parsed = new URL(rawUrl);
+        return (parsed.protocol || '').toLowerCase() === 'mindwtr:' && normalizeRouteFromUrl(parsed) === 'open';
+    } catch {
+        return false;
+    }
+}
+
+export function parseEntityOpenUrl(rawUrl: string): EntityOpenPayload | null {
+    if (!isEntityOpenUrl(rawUrl)) return null;
+
+    const parsed = new URL(rawUrl);
+    for (const kind of ENTITY_OPEN_PARAM_KINDS) {
+        const id = trimOrUndefined(parsed.searchParams.get(kind));
+        if (id) return { kind, id };
+    }
+    return null;
+}
+
 export function resolveOpenFeaturePath(feature: string | null | undefined): string {
     const normalized = String(feature ?? '')
         .trim()

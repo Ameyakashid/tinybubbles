@@ -1365,6 +1365,8 @@ export const ruOverrides: Record<string, string> = {
         'settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas': 'Импортируйте CSV- или ZIP-резервные копии TickTick в области, проекты и задачи Mindwtr.',
         'settings.persistentCaptureLabel': 'Быстрый захват в панели уведомлений',
         'settings.persistentCaptureDesc': 'Постоянное уведомление для захвата откуда угодно, включая экран блокировки.',
+        'settings.appSearchLabel': 'Показывать в системном поиске',
+        'settings.appSearchDesc': 'Разрешить системному поиску находить ваши активные задачи, проекты и области по названию. Ничего не покидает это устройство.',
         'captureNotification.title': 'Быстрый захват',
         'captureNotification.text': 'Нажмите, чтобы записать во Входящие',
         'captureNotification.channelName': 'Быстрый захват',

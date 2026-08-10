@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+    isEntityOpenUrl,
     isOpenFeatureUrl,
     isShortcutCaptureUrl,
+    parseEntityOpenUrl,
     parseOpenFeatureUrl,
     parseShortcutCaptureUrl,
     resolveOpenFeaturePath,
@@ -63,5 +65,23 @@ describe('capture-deeplink', () => {
         expect(resolveOpenFeaturePath('today')).toBe('/focus');
         expect(resolveOpenFeaturePath('someday')).toBe('/someday');
         expect(resolveOpenFeaturePath('unknown')).toBe('/inbox');
+    });
+
+    it('parses entity-open URLs for task, project, and area (#1017)', () => {
+        expect(isEntityOpenUrl('mindwtr://open?task=abc-123')).toBe(true);
+        expect(isEntityOpenUrl('mindwtr:///open?project=abc-123')).toBe(true);
+        expect(isEntityOpenUrl('mindwtr://open-feature?feature=focus')).toBe(false);
+        expect(isEntityOpenUrl('mindwtr://capture?title=x')).toBe(false);
+
+        expect(parseEntityOpenUrl('mindwtr://open?task=abc-123')).toEqual({ kind: 'task', id: 'abc-123' });
+        expect(parseEntityOpenUrl('mindwtr:///open?project=proj-1')).toEqual({ kind: 'project', id: 'proj-1' });
+        expect(parseEntityOpenUrl('mindwtr://open?area=area-1')).toEqual({ kind: 'area', id: 'area-1' });
+    });
+
+    it('returns null for a malformed or empty entity-open URL', () => {
+        expect(parseEntityOpenUrl('mindwtr://open')).toBeNull();
+        expect(parseEntityOpenUrl('mindwtr://open?task=')).toBeNull();
+        expect(parseEntityOpenUrl('https://mindwtr.app/open?task=abc-123')).toBeNull();
+        expect(parseEntityOpenUrl('mindwtr://focus')).toBeNull();
     });
 });

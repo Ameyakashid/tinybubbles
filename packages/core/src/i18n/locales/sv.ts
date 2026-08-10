@@ -1997,6 +1997,8 @@ export const svOverrides: Record<string, string> = {
         'settings.syncMobile.webdavEndpointIsReachable': 'WebDAV-slutpunkten är nåbar.',
         'settings.persistentCaptureLabel': 'Snabbinspelning i aviseringsfältet',
         'settings.persistentCaptureDesc': 'Behåll en beständig avisering för att spela in varifrån som helst, inklusive låsskärmen.',
+        'settings.appSearchLabel': 'Exponera för systemsökning',
+        'settings.appSearchDesc': 'Låt Androids systemsökning hitta dina aktiva uppgifter, projekt och områden via titel. Inget lämnar den här enheten.',
         'captureNotification.title': 'Snabbinspelning',
         'captureNotification.text': 'Tryck för att spela in till din inkorg',
         'captureNotification.channelName': 'Snabbinspelning',

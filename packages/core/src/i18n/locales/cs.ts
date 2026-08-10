@@ -2000,6 +2000,8 @@ export const csOverrides: Record<string, string> = {
         'settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas': 'Importujte CSV nebo ZIP zálohy TickTick do oblastí, projektů a úkolů Mindwtr.',
         'settings.persistentCaptureLabel': 'Rychlé zachycení v oznamovací liště',
         'settings.persistentCaptureDesc': 'Trvalé oznámení pro zachycení odkudkoli, včetně zamčené obrazovky.',
+        'settings.appSearchLabel': 'Zpřístupnit systémovému vyhledávání',
+        'settings.appSearchDesc': 'Umožní systémovému vyhledávání Android najít vaše aktivní úkoly, projekty a oblasti podle názvu. Nic neopustí toto zařízení.',
         'captureNotification.title': 'Rychlé zachycení',
         'captureNotification.text': 'Klepnutím zachytíte do Doručené',
         'captureNotification.channelName': 'Rychlé zachycení',

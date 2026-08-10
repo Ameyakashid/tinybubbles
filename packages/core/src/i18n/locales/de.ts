@@ -1456,6 +1456,8 @@ export const deOverrides: Record<string, string> = {
         'settings.mergeBackupFailed': 'Zusammenführen fehlgeschlagen',
         'settings.persistentCaptureLabel': 'Schnellerfassung in der Benachrichtigungsleiste',
         'settings.persistentCaptureDesc': 'Dauerhafte Benachrichtigung zum Erfassen von überall, auch vom Sperrbildschirm.',
+        'settings.appSearchLabel': 'Für Systemsuche freigeben',
+        'settings.appSearchDesc': 'Lässt die Android-Systemsuche deine aktiven Aufgaben, Projekte und Bereiche anhand des Titels finden. Nichts verlässt dieses Gerät.',
         'captureNotification.title': 'Schnellerfassung',
         'captureNotification.text': 'Tippen, um in den Eingang zu erfassen',
         'captureNotification.channelName': 'Schnellerfassung',

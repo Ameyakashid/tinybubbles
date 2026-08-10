@@ -1997,6 +1997,8 @@ export const koOverrides: Record<string, string> = {
         'settings.syncMobile.webdavEndpointIsReachable': 'WebDAV 엔드포인트에 접근할 수 있습니다.',
         'settings.persistentCaptureLabel': '알림 표시줄에서 빠른 수집',
         'settings.persistentCaptureDesc': '잠금 화면을 포함해 어디서나 수집할 수 있는 고정 알림을 유지합니다.',
+        'settings.appSearchLabel': '시스템 검색에 노출',
+        'settings.appSearchDesc': 'Android 시스템 검색이 제목으로 활성 작업, 프로젝트, 영역을 찾을 수 있게 합니다. 어떤 데이터도 이 기기를 벗어나지 않습니다.',
         'captureNotification.title': '빠른 수집',
         'captureNotification.text': '탭하여 수집함에 수집',
         'captureNotification.channelName': '빠른 수집',

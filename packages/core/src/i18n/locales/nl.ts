@@ -537,6 +537,8 @@ export const nlOverrides: Record<string, string> = {
         'settings.defaultAreaNone': 'Geen gebied',
         'settings.persistentCaptureLabel': 'Snelle invoer in de notificatiebalk',
         'settings.persistentCaptureDesc': 'Houd een permanente melding om overal vast te leggen, ook op het vergrendelscherm.',
+        'settings.appSearchLabel': 'Zichtbaar maken voor systeemzoekopdracht',
+        'settings.appSearchDesc': 'Laat de systeemzoekfunctie van Android je actieve taken, projecten en gebieden op titel vinden. Niets verlaat dit apparaat.',
         'captureNotification.title': 'Snelle invoer',
         'captureNotification.text': 'Tik om vast te leggen in je Inbox',
         'captureNotification.channelName': 'Snelle invoer',

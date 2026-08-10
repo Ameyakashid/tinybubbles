@@ -1335,6 +1335,8 @@ export const trOverrides: Record<string, string> = {
         'settings.mergeBackupFailed': 'Birleştirme başarısız',
         'settings.persistentCaptureLabel': 'Bildirim çubuğunda hızlı yakalama',
         'settings.persistentCaptureDesc': 'Kilit ekranı dahil her yerden yakalamak için kalıcı bir bildirim tutun.',
+        'settings.appSearchLabel': 'Sistem aramasına aç',
+        'settings.appSearchDesc': 'Android sistem aramasının etkin görevlerini, projelerini ve alanlarını başlığa göre bulmasına izin ver. Hiçbir şey bu cihazdan çıkmaz.',
         'captureNotification.title': 'Hızlı yakalama',
         'captureNotification.text': 'Gelen kutunuza kaydetmek için dokunun',
         'captureNotification.channelName': 'Hızlı yakalama',
