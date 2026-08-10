@@ -174,7 +174,7 @@ const FLATPAK_INSTANCE_REQUEST_QUICK_ADD: &str = "quick-add\n";
 #[cfg(target_os = "linux")]
 const FLATPAK_INSTANCE_SOCKET_FILE_NAME: &str = "instance.sock";
 #[cfg(target_os = "linux")]
-const FLATPAK_TRAY_ICON_DIR_NAME: &str = "tray-icon";
+const TRAY_ICON_DIR_NAME: &str = "tray-icon";
 const QUICK_ADD_WINDOW_LABEL: &str = "quick-add";
 const QUICK_ADD_WINDOW_URL: &str = "index.html?quickAddWindow=1";
 const QUICK_ADD_TARGET_MAIN: &str = "main";
@@ -881,8 +881,8 @@ fn flatpak_instance_socket_path(runtime_dir: &Path) -> PathBuf {
 }
 
 #[cfg(target_os = "linux")]
-fn flatpak_tray_icon_temp_dir(app_cache_dir: &Path) -> PathBuf {
-    app_cache_dir.join(FLATPAK_TRAY_ICON_DIR_NAME)
+fn tray_icon_temp_dir(app_cache_dir: &Path) -> PathBuf {
+    app_cache_dir.join(TRAY_ICON_DIR_NAME)
 }
 
 #[cfg(target_os = "linux")]
@@ -1383,14 +1383,23 @@ pub fn run() {
                         .icon(tray_icon)
                         .menu(&tray_menu)
                         .show_menu_on_left_click(false);
+                    // The tray protocol hands the panel a PATH to the icon,
+                    // so the file must stay readable for the whole session.
+                    // The default temp dir breaks that in two ways: Flatpak's
+                    // /tmp is invisible to the host panel (the original reason
+                    // for this redirect), and on regular installs /tmp is
+                    // subject to cleaners and sandboxed launchers that mount a
+                    // private /tmp — a panel that re-resolves the icon later
+                    // then draws a blank slot (#1018, Cinnamon AppImage). The
+                    // app cache dir is user-owned, host-visible, and stable.
                     #[cfg(target_os = "linux")]
-                    if is_flatpak_install {
+                    {
                         match handle.path().app_cache_dir() {
                             Ok(app_cache_dir) => {
-                                let tray_icon_temp_dir = flatpak_tray_icon_temp_dir(&app_cache_dir);
+                                let tray_icon_temp_dir = tray_icon_temp_dir(&app_cache_dir);
                                 if let Err(error) = fs::create_dir_all(&tray_icon_temp_dir) {
                                     log::warn!(
-                                        "Failed to prepare Flatpak tray icon directory: {error}"
+                                        "Failed to prepare tray icon directory: {error}"
                                     );
                                 } else {
                                     tray_builder = tray_builder.temp_dir_path(tray_icon_temp_dir);
@@ -1398,7 +1407,7 @@ pub fn run() {
                             }
                             Err(error) => {
                                 log::warn!(
-                                    "Failed to resolve Flatpak tray icon cache directory: {error}"
+                                    "Failed to resolve tray icon cache directory: {error}"
                                 );
                             }
                         }
@@ -1867,11 +1876,11 @@ arch=x86_64
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn flatpak_tray_icon_path_uses_app_cache_dir() {
+    fn tray_icon_path_uses_app_cache_dir() {
         let app_cache_dir = Path::new("/home/user/.var/app/tech.dongdongbh.mindwtr/cache");
 
         assert_eq!(
-            flatpak_tray_icon_temp_dir(app_cache_dir),
+            tray_icon_temp_dir(app_cache_dir),
             PathBuf::from("/home/user/.var/app/tech.dongdongbh.mindwtr/cache/tray-icon")
         );
     }
