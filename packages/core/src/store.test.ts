@@ -1991,6 +1991,64 @@ describe('TaskStore', () => {
         expect(acknowledgeDataLoad).toHaveBeenCalledOnce();
     });
 
+    it('does not apply or acknowledge a fetched snapshot after its caller invalidates the read', async () => {
+        const nowIso = '2026-08-09T12:00:00.000Z';
+        vi.setSystemTime(new Date(nowIso));
+        const persistedData: AppData = {
+            tasks: [
+                {
+                    id: 'invalidated-fetch',
+                    title: 'Stale watcher snapshot',
+                    status: 'inbox',
+                    tags: [],
+                    contexts: [],
+                    createdAt: nowIso,
+                    updatedAt: nowIso,
+                },
+            ],
+            projects: [],
+            sections: [],
+            areas: [],
+            people: [],
+            settings: {
+                deviceId: 'device-a',
+                migrations: {
+                    version: 9999,
+                    lastAutoArchiveAt: nowIso,
+                    lastTombstoneCleanupAt: nowIso,
+                },
+                gtd: {
+                    taskEditor: { defaultsVersion: 9999 },
+                    focusGroupByDefaultsVersion: 1,
+                },
+            },
+        };
+        let resolveFetch: ((data: AppData) => void) | undefined;
+        let isResultStillRelevant = true;
+        mockStorage.getData = vi.fn(
+            () =>
+                new Promise<AppData>((resolve) => {
+                    resolveFetch = resolve;
+                }),
+        );
+        mockStorage.acknowledgeDataLoad = vi.fn();
+
+        const fetchPromise = useTaskStore.getState().fetchData({
+            silent: true,
+            isResultStillRelevant: () => isResultStillRelevant,
+        });
+        await waitForExpectation(() => {
+            expect(mockStorage.getData).toHaveBeenCalledOnce();
+        });
+
+        isResultStillRelevant = false;
+        resolveFetch?.(persistedData);
+        await fetchPromise;
+
+        expect(useTaskStore.getState()._allTasks).toEqual([]);
+        expect(mockStorage.acknowledgeDataLoad).not.toHaveBeenCalled();
+    });
+
     it('does not acknowledge a fetched snapshot when sync bookkeeping queued a save during the read', async () => {
         const nowIso = '2026-07-31T12:00:00.000Z';
         vi.setSystemTime(new Date(nowIso));

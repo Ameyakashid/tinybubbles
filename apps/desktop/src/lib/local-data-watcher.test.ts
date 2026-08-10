@@ -321,6 +321,85 @@ describe('local-data-watcher', () => {
         controller.stop();
     });
 
+    it('abandons an external merge when its watcher generation stops during the disk read', async () => {
+        const incomingTask = {
+            id: 'stale-generation-data',
+            title: 'Must not persist after stop',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            createdAt: '2026-08-09T00:00:00.000Z',
+            updatedAt: '2026-08-09T00:00:00.000Z',
+        };
+        let releaseRead: ((data: AppData) => void) | undefined;
+        let markReadStarted: (() => void) | undefined;
+        const readStarted = new Promise<void>((resolve) => {
+            markReadStarted = resolve;
+        });
+        const persistMergedData = vi.fn();
+        const controller = createLocalDataWatcherController({
+            readDataJson: () =>
+                new Promise<AppData>((resolve) => {
+                    releaseRead = resolve;
+                    markReadStarted?.();
+                }),
+            persistMergedData,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            hashPayload: async (payload) => payload,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        const refresh = controller.testUtils.triggerChangeForTests();
+        await readStarted;
+        controller.stop();
+        releaseRead?.({ ...emptyData(), tasks: [incomingTask] });
+        await refresh;
+
+        expect(persistMergedData).not.toHaveBeenCalled();
+    });
+
+    it('does not apply an in-flight SQLite snapshot after its watcher generation stops', async () => {
+        const incomingTask = {
+            id: 'stale-generation-sqlite',
+            title: 'Must not enter the store after stop',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            createdAt: '2026-08-09T00:00:00.000Z',
+            updatedAt: '2026-08-09T00:00:00.000Z',
+        };
+        let releaseRead: ((data: AppData) => void) | undefined;
+        let markReadStarted: (() => void) | undefined;
+        const readStarted = new Promise<void>((resolve) => {
+            markReadStarted = resolve;
+        });
+        setStorageAdapter({
+            ...storageAdapter,
+            getData: () =>
+                new Promise<AppData>((resolve) => {
+                    releaseRead = resolve;
+                    markReadStarted?.();
+                }),
+        });
+        const controller = createLocalDataWatcherController({
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            hashPayload: async (payload) => payload,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        const refresh = controller.testUtils.triggerSqliteChangeForTests();
+        await readStarted;
+        controller.stop();
+        releaseRead?.({ ...emptyData(), tasks: [incomingTask] });
+        await refresh;
+
+        expect(useTaskStore.getState()._allTasks).toEqual([]);
+    });
+
     it('contains throwing timer cancellation and still disposes every watcher resource', async () => {
         const sqliteUnwatch = vi.fn();
         const watchFile = vi.fn(async (path: string) => {

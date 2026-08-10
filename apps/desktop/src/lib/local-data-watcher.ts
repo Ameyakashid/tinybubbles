@@ -36,7 +36,7 @@ type FsEvent = {
 
 export type LocalDataWatcherDependencies = {
     readDataJson: () => Promise<AppData>;
-    refreshStorageData: () => Promise<void>;
+    refreshStorageData: (isResultStillRelevant?: () => boolean) => Promise<void>;
     watchFile: (path: string, callback: (event: FsEvent) => void) => Promise<unknown>;
     now: () => number;
     schedule: typeof setTimeout;
@@ -77,8 +77,12 @@ const persistMergedDataThroughStore = async (merged: AppData, now: () => number)
 
 const createDefaultDependencies = (now: () => number): LocalDataWatcherDependencies => ({
     readDataJson: () => invokeNative<AppData>('read_data_json'),
-    refreshStorageData: async () => {
-        await useTaskStore.getState().fetchData({ silent: true, throwOnError: true });
+    refreshStorageData: async (isResultStillRelevant) => {
+        await useTaskStore.getState().fetchData({
+            silent: true,
+            throwOnError: true,
+            isResultStillRelevant,
+        });
     },
     watchFile: async (path, callback) => {
         const { watch } = await import('@tauri-apps/plugin-fs');
@@ -175,13 +179,17 @@ export const createLocalDataWatcherController = (
     let pendingSqliteChangePaths: string[] = [];
     let pendingExternalChange = false;
     let mergeInFlight: Promise<void> | null = null;
+    let mergeInFlightGeneration: number | null = null;
     let sqliteRefreshInFlight: Promise<void> | null = null;
+    let sqliteRefreshInFlightGeneration: number | null = null;
     let mergedPersistRetryTimer: ReturnType<typeof setTimeout> | null = null;
     let delayedMergedPersistRetryCount = 0;
     let sqliteRefreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
     let delayedSqliteRefreshRetryCount = 0;
     let watcherGeneration = 0;
     let sqliteEditUnlockUnsubscribe: (() => void) | null = null;
+
+    const isCurrentWatcherGeneration = (generation: number): boolean => generation === watcherGeneration;
 
     const normalizePathsFromEvent = (event: FsEvent): string[] => {
         if (Array.isArray(event?.paths)) return event.paths;
@@ -354,6 +362,7 @@ export const createLocalDataWatcherController = (
 
     const scheduleIgnoreDrain = () => {
         if (!hasPendingChangeDuringIgnore) return;
+        const generation = watcherGeneration;
         if (ignoreDrainTimer) {
             const timer = ignoreDrainTimer;
             ignoreDrainTimer = null;
@@ -361,6 +370,7 @@ export const createLocalDataWatcherController = (
         }
         const remainingMs = Math.max(0, ignoreUntil - localDataWatcherDependencies.now());
         ignoreDrainTimer = localDataWatcherDependencies.schedule(() => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             ignoreDrainTimer = null;
             if (!hasPendingChangeDuringIgnore) return;
             hasPendingChangeDuringIgnore = false;
@@ -370,6 +380,7 @@ export const createLocalDataWatcherController = (
 
     const scheduleSqliteIgnoreDrain = () => {
         if (!hasPendingSqliteChangeDuringSelfWrite) return;
+        const generation = watcherGeneration;
         if (sqliteIgnoreDrainTimer) {
             const timer = sqliteIgnoreDrainTimer;
             sqliteIgnoreDrainTimer = null;
@@ -378,6 +389,7 @@ export const createLocalDataWatcherController = (
         const drainAfter = Math.max(sqliteIgnoreUntil, sqliteSelfWriteUntil);
         const remainingMs = Math.max(0, drainAfter - localDataWatcherDependencies.now());
         sqliteIgnoreDrainTimer = localDataWatcherDependencies.schedule(() => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             sqliteIgnoreDrainTimer = null;
             if (!hasPendingSqliteChangeDuringSelfWrite) return;
             hasPendingSqliteChangeDuringSelfWrite = false;
@@ -387,12 +399,17 @@ export const createLocalDataWatcherController = (
         }, remainingMs + IGNORE_DRAIN_PADDING_MS);
     };
 
-    const deferSqliteRefreshUntilEditingEnds = (paths: string[] = []): void => {
+    const deferSqliteRefreshUntilEditingEnds = (
+        paths: string[] = [],
+        generation: number = watcherGeneration,
+    ): void => {
+        if (!isCurrentWatcherGeneration(generation)) return;
         hasPendingSqliteChangeDuringSelfWrite = true;
         pendingSqliteChangePaths = paths.slice(0, 8);
         if (sqliteEditUnlockUnsubscribe) return;
 
         const drainAfterUnlock = () => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             if (localDataWatcherDependencies.getEditLockCount() > 0) return;
             const unsubscribe = sqliteEditUnlockUnsubscribe;
             sqliteEditUnlockUnsubscribe = null;
@@ -410,22 +427,36 @@ export const createLocalDataWatcherController = (
         drainAfterUnlock();
     };
 
-    const runPendingMerge = (): Promise<void> => {
-        if (mergeInFlight) return mergeInFlight;
+    const runPendingMerge = (generation: number = watcherGeneration): Promise<void> => {
+        if (!isCurrentWatcherGeneration(generation)) return Promise.resolve();
+        if (mergeInFlight) {
+            const activeMerge = mergeInFlight;
+            if (mergeInFlightGeneration === generation) return activeMerge;
+            return activeMerge.then(async () => {
+                if (isCurrentWatcherGeneration(generation) && pendingExternalChange) {
+                    await runPendingMerge(generation);
+                }
+            });
+        }
 
-        mergeInFlight = (async () => {
-            while (pendingExternalChange) {
+        const trackedMerge = (async () => {
+            while (isCurrentWatcherGeneration(generation) && pendingExternalChange) {
                 pendingExternalChange = false;
-                await mergeExternalData();
+                await mergeExternalData(generation);
             }
         })().finally(() => {
-            mergeInFlight = null;
-            if (pendingExternalChange) {
-                void runPendingMerge();
+            if (mergeInFlight === trackedMerge) {
+                mergeInFlight = null;
+                mergeInFlightGeneration = null;
+            }
+            if (isCurrentWatcherGeneration(generation) && pendingExternalChange) {
+                void runPendingMerge(generation);
             }
         });
+        mergeInFlight = trackedMerge;
+        mergeInFlightGeneration = generation;
 
-        return mergeInFlight;
+        return trackedMerge;
     };
 
     const stripSqliteRefreshBookkeeping = (data: AppData): AppData => {
@@ -534,12 +565,18 @@ export const createLocalDataWatcherController = (
         });
     };
 
-    const persistMergedDataWithRetry = async (merged: AppData): Promise<AppData> => {
+    const persistMergedDataWithRetry = async (
+        merged: AppData,
+        generation: number,
+    ): Promise<AppData | null> => {
         for (let attempt = 1; attempt <= MAX_MERGED_PERSIST_ATTEMPTS; attempt += 1) {
+            if (!isCurrentWatcherGeneration(generation)) return null;
             const pendingSelfWritesBeforeAttempt = pendingSelfWrites.slice();
             try {
-                return (await localDataWatcherDependencies.persistMergedData(merged)) ?? merged;
+                const canonical = (await localDataWatcherDependencies.persistMergedData(merged)) ?? merged;
+                return isCurrentWatcherGeneration(generation) ? canonical : null;
             } catch (error) {
+                if (!isCurrentWatcherGeneration(generation)) return null;
                 // Storage adapters mark a payload before starting their durable
                 // write. Restore the previous tokens when that write rejects so a
                 // failed attempt cannot suppress the external snapshot that still
@@ -595,28 +632,34 @@ export const createLocalDataWatcherController = (
         });
     };
 
-    async function mergeExternalData(): Promise<void> {
+    async function mergeExternalData(generation: number): Promise<void> {
         // Full-document sync, imports/restores, and this watcher all enter this
         // lane before reading their current inputs. A data transfer acquires its
         // store-write barrier only after it reaches the front of the same lane, so
         // the watcher never waits on that barrier while holding an earlier lock.
         await runSerializedSyncDocumentWriteOperation(async () => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             try {
                 await flushPendingSave();
+                if (!isCurrentWatcherGeneration(generation)) return;
 
                 const rawData = await localDataWatcherDependencies.readDataJson();
+                if (!isCurrentWatcherGeneration(generation)) return;
                 const normalizedExternal = localDataWatcherDependencies.normalize(rawData);
                 const externalPayload = toStableJson(normalizedExternal);
 
                 const matchedSelfWriteIndex = pendingSelfWrites.findIndex((entry) => entry.payload === externalPayload);
                 if (matchedSelfWriteIndex >= 0) {
-                    lastKnownHash = await localDataWatcherDependencies.hashPayload(externalPayload);
+                    const selfWriteHash = await localDataWatcherDependencies.hashPayload(externalPayload);
+                    if (!isCurrentWatcherGeneration(generation)) return;
+                    lastKnownHash = selfWriteHash;
                     pendingSelfWrites.splice(matchedSelfWriteIndex, 1);
                     clearMergedPersistRetry();
                     return;
                 }
 
                 const externalHash = await localDataWatcherDependencies.hashPayload(externalPayload);
+                if (!isCurrentWatcherGeneration(generation)) return;
                 if (externalHash === lastKnownHash) {
                     clearMergedPersistRetry();
                     return;
@@ -626,6 +669,7 @@ export const createLocalDataWatcherController = (
                 const normalizedLocal = localDataWatcherDependencies.normalize(localSnapshot);
                 const localPayload = toStableJson(normalizedLocal);
                 const localHash = await localDataWatcherDependencies.hashPayload(localPayload);
+                if (!isCurrentWatcherGeneration(generation)) return;
 
                 if (localHash === externalHash) {
                     lastKnownHash = externalHash;
@@ -637,6 +681,7 @@ export const createLocalDataWatcherController = (
                 const normalizedMerged = localDataWatcherDependencies.normalize(merged);
                 const mergedPayload = toStableJson(normalizedMerged);
                 const mergedHash = await localDataWatcherDependencies.hashPayload(mergedPayload);
+                if (!isCurrentWatcherGeneration(generation)) return;
 
                 if (mergedHash === localHash) {
                     lastKnownHash = mergedHash;
@@ -644,13 +689,17 @@ export const createLocalDataWatcherController = (
                     return;
                 }
 
-                const canonical = await persistMergedDataWithRetry(normalizedMerged);
-                lastKnownHash = await localDataWatcherDependencies.hashPayload(
+                const canonical = await persistMergedDataWithRetry(normalizedMerged, generation);
+                if (!canonical || !isCurrentWatcherGeneration(generation)) return;
+                const canonicalHash = await localDataWatcherDependencies.hashPayload(
                     toStableJson(localDataWatcherDependencies.normalize(canonical)),
                 );
+                if (!isCurrentWatcherGeneration(generation)) return;
+                lastKnownHash = canonicalHash;
                 clearMergedPersistRetry();
                 localDataWatcherDependencies.logInfo('[local-data-watcher] Merged external data.json changes');
             } catch (error) {
+                if (!isCurrentWatcherGeneration(generation)) return;
                 scheduleMergedPersistRetry(error);
                 localDataWatcherDependencies.logWarn(
                     '[local-data-watcher] Failed to merge external data: ' + String(error),
@@ -659,23 +708,39 @@ export const createLocalDataWatcherController = (
         });
     }
 
-    const runSqliteRefresh = (): Promise<void> => {
-        if (sqliteRefreshInFlight) return sqliteRefreshInFlight;
+    const runSqliteRefresh = (generation: number = watcherGeneration): Promise<void> => {
+        if (!isCurrentWatcherGeneration(generation)) return Promise.resolve();
+        if (sqliteRefreshInFlight) {
+            const activeRefresh = sqliteRefreshInFlight;
+            if (sqliteRefreshInFlightGeneration === generation) return activeRefresh;
+            return activeRefresh.then(async () => {
+                if (isCurrentWatcherGeneration(generation)) {
+                    await runSqliteRefresh(generation);
+                }
+            });
+        }
 
-        sqliteRefreshInFlight = runSerializedSyncDocumentWriteOperation(async () => {
+        const trackedRefresh = runSerializedSyncDocumentWriteOperation(async () => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             try {
                 if (localDataWatcherDependencies.getEditLockCount() > 0) {
-                    deferSqliteRefreshUntilEditingEnds();
+                    deferSqliteRefreshUntilEditingEnds([], generation);
                     return;
                 }
                 await flushPendingSave();
+                if (!isCurrentWatcherGeneration(generation)) return;
                 const beforeSummary = await buildSnapshotTraceSummary(localDataWatcherDependencies.getSnapshot());
+                if (!isCurrentWatcherGeneration(generation)) return;
                 localDataWatcherDependencies.logInfo(
                     '[local-data-watcher] SQLite refresh start',
                     prefixSnapshotTraceSummary('before', beforeSummary),
                 );
-                await localDataWatcherDependencies.refreshStorageData();
+                await localDataWatcherDependencies.refreshStorageData(
+                    () => isCurrentWatcherGeneration(generation),
+                );
+                if (!isCurrentWatcherGeneration(generation)) return;
                 const afterSummary = await buildSnapshotTraceSummary(localDataWatcherDependencies.getSnapshot());
+                if (!isCurrentWatcherGeneration(generation)) return;
                 clearSqliteRefreshRetry();
                 const changeExtra = buildSnapshotChangeTraceExtra(beforeSummary, afterSummary);
                 if (beforeSummary.dataSig === afterSummary.dataSig) {
@@ -695,6 +760,7 @@ export const createLocalDataWatcherController = (
                 );
                 localDataWatcherDependencies.logInfo('[local-data-watcher] Refreshed after SQLite change');
             } catch (error) {
+                if (!isCurrentWatcherGeneration(generation)) return;
                 scheduleSqliteRefreshRetry(error);
                 localDataWatcherDependencies.logWarn(
                     '[local-data-watcher] Failed to refresh SQLite change: ' + String(error),
@@ -702,18 +768,24 @@ export const createLocalDataWatcherController = (
                 );
             }
         }).finally(() => {
-            sqliteRefreshInFlight = null;
+            if (sqliteRefreshInFlight === trackedRefresh) {
+                sqliteRefreshInFlight = null;
+                sqliteRefreshInFlightGeneration = null;
+            }
         });
+        sqliteRefreshInFlight = trackedRefresh;
+        sqliteRefreshInFlightGeneration = generation;
 
-        return sqliteRefreshInFlight;
+        return trackedRefresh;
     };
 
     async function handleSqliteChange(options: { immediate?: boolean; paths?: string[] } = {}): Promise<void> {
+        const generation = watcherGeneration;
         const paths = options.paths ?? [];
         const now = localDataWatcherDependencies.now();
 
         if (localDataWatcherDependencies.getEditLockCount() > 0) {
-            deferSqliteRefreshUntilEditingEnds(paths);
+            deferSqliteRefreshUntilEditingEnds(paths, generation);
             localDataWatcherDependencies.logInfo(
                 '[local-data-watcher] SQLite refresh deferred while an editor is open',
                 buildSqliteWatcherTraceExtra(paths),
@@ -772,12 +844,13 @@ export const createLocalDataWatcherController = (
                 '[local-data-watcher] SQLite refresh requested immediately',
                 buildSqliteWatcherTraceExtra(paths),
             );
-            await runSqliteRefresh();
+            await runSqliteRefresh(generation);
             return;
         }
 
         const scheduledDuringRefresh = sqliteRefreshInFlight !== null;
         sqliteDebounceTimer = localDataWatcherDependencies.schedule(() => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             sqliteDebounceTimer = null;
             if (scheduledDuringRefresh && localDataWatcherDependencies.now() < sqliteIgnoreUntil) {
                 hasPendingSqliteChangeDuringSelfWrite = true;
@@ -791,7 +864,7 @@ export const createLocalDataWatcherController = (
                 );
                 return;
             }
-            void runSqliteRefresh();
+            void runSqliteRefresh(generation);
         }, DEBOUNCE_MS);
         localDataWatcherDependencies.logInfo(
             '[local-data-watcher] SQLite event scheduled refresh',
@@ -804,6 +877,7 @@ export const createLocalDataWatcherController = (
     async function handleExternalChange(
         options: { immediate?: boolean; ignoreSelfWindow?: boolean } = {},
     ): Promise<void> {
+        const generation = watcherGeneration;
         const now = localDataWatcherDependencies.now();
         pruneExpiredSelfWrites(now);
 
@@ -822,13 +896,14 @@ export const createLocalDataWatcherController = (
         }
 
         if (options.immediate) {
-            await runPendingMerge();
+            await runPendingMerge(generation);
             return;
         }
 
         debounceTimer = localDataWatcherDependencies.schedule(() => {
+            if (!isCurrentWatcherGeneration(generation)) return;
             debounceTimer = null;
-            void runPendingMerge();
+            void runPendingMerge(generation);
         }, DEBOUNCE_MS);
     }
 
@@ -1105,7 +1180,9 @@ export const createLocalDataWatcherController = (
             lastKnownHash = '';
             pendingSelfWrites = [];
             mergeInFlight = null;
+            mergeInFlightGeneration = null;
             sqliteRefreshInFlight = null;
+            sqliteRefreshInFlightGeneration = null;
             delayedSqliteRefreshRetryCount = 0;
             dataWatchChannel = createWatchChannelState();
             sqliteWatchChannel = createWatchChannelState();

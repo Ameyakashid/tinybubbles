@@ -119,6 +119,13 @@ export const createSettingsActions = ({
     fetchData: async (options) => {
         markCoreStartupPhase('core.fetch_data.start');
         const fetchInvokedAt = Date.now();
+        const isResultStillRelevant = options?.isResultStillRelevant ?? (() => true);
+        const finishIrrelevantFetch = () => {
+            markCoreStartupPhase('core.fetch_data.skipped_irrelevant');
+            if (!options?.silent) {
+                set((state) => state.isLoading ? { isLoading: false } : state);
+            }
+        };
         let flushMs = 0;
         let storageReadMs = 0;
         let setStateMs = 0;
@@ -132,6 +139,10 @@ export const createSettingsActions = ({
             markCoreStartupPhase('core.fetch_data.flush_pending_save.skipped', { reason: 'no_pending_work' });
         }
         const saveGenerationAtFetchStart = getSaveGeneration();
+        if (!isResultStillRelevant()) {
+            finishIrrelevantFetch();
+            return;
+        }
         if (options?.silent) {
             set((state) => state.error === null ? state : { error: null });
         } else {
@@ -162,6 +173,10 @@ export const createSettingsActions = ({
                 ?? await measureCoreStartupPhase('core.fetch_data.storage_get_data', async () =>
                     withTimeout(sourceStorage!.getData(), STORAGE_TIMEOUT_MS, 'Storage request timed out')
                 );
+            if (!isResultStillRelevant()) {
+                finishIrrelevantFetch();
+                return;
+            }
             storageReadMs = options?.preloadedData ? 0 : Date.now() - storageReadStartedAt;
             const postProcessStartedAt = Date.now();
             markCoreStartupPhase('core.fetch_data.post_process:start');
@@ -214,6 +229,7 @@ export const createSettingsActions = ({
             let settingsReused = false;
             let visibleTasksReused = false;
             let stateUpdateSkipped = false;
+            let resultAccepted = false;
             const setStateStartedAt = Date.now();
             const notifyProfilingEnabled = nextSettings?.diagnostics?.loggingEnabled === true;
             let notifyProfile: NotifyProfile | null = null;
@@ -222,6 +238,12 @@ export const createSettingsActions = ({
                 await measureCoreStartupPhase('core.fetch_data.zustand_set_state', async () => {
                     set((state) => {
                         const producerStartedAt = Date.now();
+                        if (!isResultStillRelevant()) {
+                            stateUpdateSkipped = true;
+                            setProducerMs = Date.now() - producerStartedAt;
+                            return state;
+                        }
+                        resultAccepted = true;
                         if (state.lastDataChangeAt > fetchStartedAt) {
                             skippedDueToConcurrentLocalChange = true;
                             setProducerMs = Date.now() - producerStartedAt;
@@ -347,6 +369,10 @@ export const createSettingsActions = ({
                 if (notifyProfilingEnabled) notifyProfile = endNotifyProfile();
             }
             setStateMs = Date.now() - setStateStartedAt;
+            if (!resultAccepted) {
+                finishIrrelevantFetch();
+                return;
+            }
             const totalFetchMs = Date.now() - fetchInvokedAt;
             // Runtime diagnostic for shared beta logs: break the load pipeline down so a
             // slow refresh can be attributed to save-flush, storage read, or JS processing.
@@ -421,6 +447,10 @@ export const createSettingsActions = ({
 
             markCoreStartupPhase('core.fetch_data.end');
         } catch (err) {
+            if (!isResultStillRelevant()) {
+                finishIrrelevantFetch();
+                return;
+            }
             markCoreStartupPhase('core.fetch_data.error');
             set({ error: getFetchDataErrorMessage(err), isLoading: false });
             if (options?.throwOnError) throw err;

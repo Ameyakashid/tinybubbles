@@ -64,6 +64,8 @@ export interface TaskStore {
         preloadedData?: AppData;
         /** Re-throw storage failures after updating store error state. */
         throwOnError?: boolean;
+        /** Skip applying or acknowledging the read when its owning lifecycle has ended. */
+        isResultStillRelevant?: () => boolean;
     }) => Promise<void>;
     /** Add the shared Getting Started project/tasks when missing, localized to the given app language. */
     seedGettingStarted: (options?: { language?: string }) => Promise<StoreActionResult>;
