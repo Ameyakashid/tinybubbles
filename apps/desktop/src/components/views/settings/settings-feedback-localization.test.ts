@@ -15,8 +15,12 @@ describe('desktop Settings feedback localization ratchet', () => {
         const directLiteralCalls = source.match(
             /\b(?:showToast|setSyncError|setCalendarError|setSpeechDownloadError)\(\s*(?:'[^']*'|"[^"]*"|`[^`]*`)/g,
         ) ?? [];
+        const indirectLiteralCalls = source.match(
+            /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(?:'[^']*'|"[^"]*"|`[^`]*`)\s*;\s*\b(?:showToast|setSyncError|setCalendarError|setSpeechDownloadError)\(\s*\1\b/g,
+        ) ?? [];
 
         expect(directLiteralCalls).toEqual([]);
+        expect(indirectLiteralCalls).toEqual([]);
         expect(source).not.toMatch(/\breportError\(/);
     });
 });

@@ -971,7 +971,10 @@ export const useSyncSettings = ({
                 } else {
                     const appKey = dropboxAppKey.trim();
                     if (!appKey) {
-                        const message = 'Dropbox app key is not configured in this build.';
+                        const message = resolveText(
+                            'settings.syncMobile.dropboxAppKeyIsNotConfiguredInThisBuild',
+                            'Dropbox app key is not configured in this build.',
+                        );
                         setSyncError(message);
                         showToast(message, 'error');
                         return;
@@ -984,7 +987,10 @@ export const useSyncSettings = ({
                         ? true
                         : await SyncService.isDropboxConnected(appKey);
                     if (!connected) {
-                        const message = 'Connect Dropbox first.';
+                        const message = resolveText(
+                            'settings.syncMobile.pleaseConnectDropboxFirst',
+                            'Please connect Dropbox first.',
+                        );
                         setSyncError(message);
                         showToast(message, 'error');
                         setDropboxConnected(false);
