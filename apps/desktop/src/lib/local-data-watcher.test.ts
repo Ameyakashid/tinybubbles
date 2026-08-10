@@ -289,6 +289,33 @@ describe('local-data-watcher', () => {
         expect(editUnlockUnsubscribe).toHaveBeenCalledTimes(1);
     });
 
+    it('contains throwing timer cancellation and still disposes every watcher resource', async () => {
+        const sqliteUnwatch = vi.fn();
+        const watchFile = vi.fn(async (path: string) => {
+            if (path.endsWith('data.json')) throw new Error('Data watch unavailable');
+            return sqliteUnwatch;
+        });
+        const cancelSchedule = vi.fn(() => {
+            throw new Error('timer cancellation failed');
+        }) as unknown as typeof clearTimeout;
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            schedule: scheduleMock,
+            cancelSchedule,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+
+        expect(() => controller.stop()).not.toThrow();
+        expect(cancelSchedule).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+        expect(() => controller.stop()).not.toThrow();
+        expect(cancelSchedule).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps controller payload and timer state isolated', () => {
         const controllerA = createLocalDataWatcherController({
             now: () => 100,

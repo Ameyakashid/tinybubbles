@@ -355,8 +355,9 @@ export const createLocalDataWatcherController = (
     const scheduleIgnoreDrain = () => {
         if (!hasPendingChangeDuringIgnore) return;
         if (ignoreDrainTimer) {
-            localDataWatcherDependencies.cancelSchedule(ignoreDrainTimer);
+            const timer = ignoreDrainTimer;
             ignoreDrainTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel data ignore-drain timer');
         }
         const remainingMs = Math.max(0, ignoreUntil - localDataWatcherDependencies.now());
         ignoreDrainTimer = localDataWatcherDependencies.schedule(() => {
@@ -370,8 +371,9 @@ export const createLocalDataWatcherController = (
     const scheduleSqliteIgnoreDrain = () => {
         if (!hasPendingSqliteChangeDuringSelfWrite) return;
         if (sqliteIgnoreDrainTimer) {
-            localDataWatcherDependencies.cancelSchedule(sqliteIgnoreDrainTimer);
+            const timer = sqliteIgnoreDrainTimer;
             sqliteIgnoreDrainTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel SQLite ignore-drain timer');
         }
         const drainAfter = Math.max(sqliteIgnoreUntil, sqliteSelfWriteUntil);
         const remainingMs = Math.max(0, drainAfter - localDataWatcherDependencies.now());
@@ -487,8 +489,9 @@ export const createLocalDataWatcherController = (
 
     const clearMergedPersistRetry = (): void => {
         if (mergedPersistRetryTimer) {
-            localDataWatcherDependencies.cancelSchedule(mergedPersistRetryTimer);
+            const timer = mergedPersistRetryTimer;
             mergedPersistRetryTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel merged-persist retry timer');
         }
         delayedMergedPersistRetryCount = 0;
     };
@@ -555,8 +558,9 @@ export const createLocalDataWatcherController = (
 
     const clearSqliteRefreshRetry = (): void => {
         if (sqliteRefreshRetryTimer) {
-            localDataWatcherDependencies.cancelSchedule(sqliteRefreshRetryTimer);
+            const timer = sqliteRefreshRetryTimer;
             sqliteRefreshRetryTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel SQLite refresh retry timer');
         }
         delayedSqliteRefreshRetryCount = 0;
     };
@@ -758,8 +762,9 @@ export const createLocalDataWatcherController = (
         }
 
         if (sqliteDebounceTimer) {
-            localDataWatcherDependencies.cancelSchedule(sqliteDebounceTimer);
+            const timer = sqliteDebounceTimer;
             sqliteDebounceTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel SQLite debounce timer');
         }
 
         if (options.immediate) {
@@ -811,8 +816,9 @@ export const createLocalDataWatcherController = (
         pendingExternalChange = true;
 
         if (debounceTimer) {
-            localDataWatcherDependencies.cancelSchedule(debounceTimer);
+            const timer = debounceTimer;
             debounceTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel data debounce timer');
         }
 
         if (options.immediate) {
@@ -873,10 +879,15 @@ export const createLocalDataWatcherController = (
         }
     }
 
+    function cancelWatcherScheduleSafely(timer: ReturnType<typeof setTimeout>, label: string): void {
+        runWatcherCleanupSafely(() => localDataWatcherDependencies.cancelSchedule(timer), label);
+    }
+
     const clearWatchRegistrationRetry = (channel: WatchChannelState): void => {
         if (channel.retryTimer) {
-            localDataWatcherDependencies.cancelSchedule(channel.retryTimer);
+            const timer = channel.retryTimer;
             channel.retryTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel file-watcher registration retry timer');
         }
     };
 
@@ -1011,20 +1022,24 @@ export const createLocalDataWatcherController = (
         disposeWatchChannel(dataWatchChannel);
         disposeWatchChannel(sqliteWatchChannel);
         if (debounceTimer) {
-            localDataWatcherDependencies.cancelSchedule(debounceTimer);
+            const timer = debounceTimer;
             debounceTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel data debounce timer');
         }
         if (sqliteDebounceTimer) {
-            localDataWatcherDependencies.cancelSchedule(sqliteDebounceTimer);
+            const timer = sqliteDebounceTimer;
             sqliteDebounceTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel SQLite debounce timer');
         }
         if (ignoreDrainTimer) {
-            localDataWatcherDependencies.cancelSchedule(ignoreDrainTimer);
+            const timer = ignoreDrainTimer;
             ignoreDrainTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel data ignore-drain timer');
         }
         if (sqliteIgnoreDrainTimer) {
-            localDataWatcherDependencies.cancelSchedule(sqliteIgnoreDrainTimer);
+            const timer = sqliteIgnoreDrainTimer;
             sqliteIgnoreDrainTimer = null;
+            cancelWatcherScheduleSafely(timer, 'cancel SQLite ignore-drain timer');
         }
         clearMergedPersistRetry();
         clearSqliteRefreshRetry();
