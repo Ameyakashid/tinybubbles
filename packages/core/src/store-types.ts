@@ -13,6 +13,13 @@ export type StoreActionResult = {
     reused?: boolean;
 };
 
+/** Device-local recovery state for a snapshot that exhausted durable-save retries. */
+export type PersistenceFailure = {
+    message: string;
+    failedAt: string;
+    retrying: boolean;
+};
+
 /**
  * Core application state interface.
  *
@@ -28,6 +35,8 @@ export interface TaskStore {
     settings: AppData['settings'];
     isLoading: boolean;
     error: string | null;
+    /** Ephemeral device-local state. This is deliberately excluded from AppData and sync. */
+    persistenceFailure: PersistenceFailure | null;
     /** Number of active edit locks (prevents fetchData from clobbering in-progress edits). */
     editLockCount: number;
     /** Updated whenever tasks/projects change (not settings) */
@@ -98,6 +107,8 @@ export interface TaskStore {
     getFocusStarAction: (task: Task, options?: { allowUnclarified?: boolean }) => FocusStarAction;
     /** Set or clear global error state */
     setError: (error: string | null) => void;
+    /** Re-enqueue the authoritative in-memory snapshot and wait for a durable save. */
+    retryPersistence: () => Promise<void>;
     /** Increment edit lock count */
     lockEditing: () => void;
     /** Decrement edit lock count */

@@ -1364,6 +1364,8 @@ export const faOverrides: Record<string, string> = {
         'errorBoundary.title': 'مشکلی پیش آمد',
         'errorBoundary.message': 'برنامه با خطای غیرمنتظره‌ای مواجه شد.',
         'errorBoundary.retry': 'دوباره امتحان کنید',
+        'persistence.failureMessage': 'آخرین تغییرات شما ذخیره نشد. Mindwtr را باز نگه دارید و دوباره تلاش کنید.',
+        'persistence.retrying': 'در حال ذخیره…',
         'audio.loading': 'در حال بارگذاری صدا...',
         'attachments.retryTranscription': 'متن‌نویسی مجدد',
         'attachments.transcribing': 'در حال متن‌نویسی...',

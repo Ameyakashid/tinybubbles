@@ -1364,6 +1364,8 @@ export const svOverrides: Record<string, string> = {
         'errorBoundary.title': 'Något gick fel',
         'errorBoundary.message': 'Appen stötte på ett oväntat fel.',
         'errorBoundary.retry': 'Försök igen',
+        'persistence.failureMessage': 'Dina senaste ändringar kunde inte sparas. Håll Mindwtr öppet och försök igen.',
+        'persistence.retrying': 'Sparar…',
         'audio.loading': 'Läser in ljud...',
         'attachments.retryTranscription': 'Transkribera igen',
         'attachments.transcribing': 'Transkriberar...',

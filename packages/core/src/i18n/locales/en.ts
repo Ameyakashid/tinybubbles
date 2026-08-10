@@ -1389,6 +1389,8 @@ export const en: Record<string, string> = {
         'errorBoundary.title': 'Something went wrong',
         'errorBoundary.message': 'The app encountered an unexpected error.',
         'errorBoundary.retry': 'Try again',
+        'persistence.failureMessage': 'Your latest changes could not be saved. Keep Mindwtr open and try again.',
+        'persistence.retrying': 'Saving…',
         'audio.loading': 'Loading audio...',
         'attachments.retryTranscription': 'Re-transcribe',
         'attachments.transcribing': 'Transcribing...',

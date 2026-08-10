@@ -47,6 +47,7 @@ import { useLanguage } from './contexts/language-context';
 import { KeybindingProvider } from './contexts/keybinding-context';
 import { QuickAddModal } from './components/QuickAddModal';
 import { CloseBehaviorModal } from './components/CloseBehaviorModal';
+import { PersistenceFailureBanner } from './components/PersistenceFailureBanner';
 import { startDesktopNotifications, stopDesktopNotifications } from './lib/notification-service';
 import {
     runFullDesktopCalendarPushSync,
@@ -1589,6 +1590,7 @@ function App() {
         <ErrorBoundary>
             <KeybindingProvider currentView={currentView} onNavigate={handleViewChange}>
                 <Layout currentView={currentView} onViewChange={handleViewChange} onOpenSyncSettings={openSyncSettings}>
+                    <PersistenceFailureBanner />
                     <Suspense
                         fallback={(
                             <LoadingFallback view={activeView} />

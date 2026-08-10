@@ -57,6 +57,7 @@ const immediateSavesInFlight = new Set<Promise<void>>();
 const immediateSaveTrackers = new Set<Set<Promise<void>>>();
 let scheduledSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorAutoClearTimer: ReturnType<typeof setTimeout> | null = null;
+let persistenceRetryInFlight: Promise<void> | null = null;
 const MAX_PENDING_SAVES = 100;
 const MAX_SAVE_RETRY_ATTEMPTS = 5;
 const INITIAL_SAVE_RETRY_DELAY_MS = 250;
@@ -90,6 +91,30 @@ const getSaveQueueOverflowMessage = ({
     + `(versions ${droppedFromVersion}-${droppedToVersion}) while keeping versions ${keptFromVersion}-${keptToVersion}.`
 );
 
+const recordPersistenceFailure = (message: string) => {
+    try {
+        useTaskStore.setState({
+            persistenceFailure: {
+                message,
+                failedAt: new Date().toISOString(),
+                retrying: false,
+            },
+        });
+    } catch {
+        // Ignore if the store is not initialized yet.
+    }
+};
+
+const clearPersistenceFailure = () => {
+    try {
+        if (useTaskStore.getState().persistenceFailure !== null) {
+            useTaskStore.setState({ persistenceFailure: null });
+        }
+    } catch {
+        // Ignore if the store is not initialized yet.
+    }
+};
+
 const enforcePendingSaveCap = () => {
     if (pendingSaves.length <= MAX_PENDING_SAVES) return;
     const overflow = pendingSaves.length - MAX_PENDING_SAVES;
@@ -121,6 +146,7 @@ const enforcePendingSaveCap = () => {
     } catch {
         // Ignore if the store is not initialized yet.
     }
+    recordPersistenceFailure(message);
     const callbacks = dropped
         .flatMap((item) => item.onErrorCallbacks)
         .filter((callback): callback is (msg: string) => void => typeof callback === 'function');
@@ -197,6 +223,7 @@ export const resetForTests = () => {
         clearTimeout(errorAutoClearTimer);
         errorAutoClearTimer = null;
     }
+    persistenceRetryInFlight = null;
 };
 
 type EntityCollectionConfig<T extends { id: string }> = {
@@ -453,6 +480,7 @@ export const flushPendingSave = async (): Promise<void> => {
             .then(() => {
                 savedVersion = targetVersion;
                 saveSucceeded = true;
+                clearPersistenceFailure();
                 markCoreStartupPhase('core.flush_pending_save.storage_save:end', { targetVersion });
             })
             .catch((e) => {
@@ -492,6 +520,7 @@ export const flushPendingSave = async (): Promise<void> => {
                 continue;
             }
             const message = toSaveErrorMessage(saveError);
+            recordPersistenceFailure(message);
             if (onErrorCallbacks.length > 0) {
                 onErrorCallbacks.forEach((callback) => {
                     try {
@@ -505,6 +534,37 @@ export const flushPendingSave = async (): Promise<void> => {
             throw saveError instanceof Error ? saveError : new Error(message);
         }
     }
+};
+
+const retryPendingPersistence = (): Promise<void> => {
+    if (persistenceRetryInFlight) return persistenceRetryInFlight;
+
+    const retry = Promise.resolve()
+        .then(async () => {
+            const currentFailure = useTaskStore.getState().persistenceFailure;
+            if (currentFailure) {
+                useTaskStore.setState({
+                    persistenceFailure: { ...currentFailure, retrying: true },
+                });
+            }
+            await useTaskStore.getState().persistSnapshot();
+            await flushPendingSave();
+        })
+        .catch((error) => {
+            recordPersistenceFailure(toSaveErrorMessage(error));
+            throw error;
+        })
+        .finally(() => {
+            persistenceRetryInFlight = null;
+            const currentFailure = useTaskStore.getState().persistenceFailure;
+            if (currentFailure?.retrying) {
+                useTaskStore.setState({
+                    persistenceFailure: { ...currentFailure, retrying: false },
+                });
+            }
+        });
+    persistenceRetryInFlight = retry;
+    return retry;
 };
 
 const STORE_WRITE_ACTION_KEYS = [
@@ -585,6 +645,7 @@ export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelec
         settings: {},
         isLoading: false,
         error: null,
+        persistenceFailure: null,
         editLockCount: 0,
         lastDataChangeAt: 0,
         highlightTaskId: null,
@@ -601,6 +662,7 @@ export const useTaskStore = createWithEqualityFn<TaskStore>()(subscribeWithSelec
         _areasById: new Map(),
         _peopleById: new Map(),
         setError: (error: string | null) => set({ error }),
+        retryPersistence: retryPendingPersistence,
         lockEditing: () => set((state) => ({ editLockCount: state.editLockCount + 1 })),
         unlockEditing: () => set((state) => ({ editLockCount: Math.max(0, state.editLockCount - 1) })),
         ...createSettingsActions({

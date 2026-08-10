@@ -89,6 +89,7 @@ describe('TaskStore', () => {
             settings: {},
             isLoading: false,
             error: null,
+            persistenceFailure: null,
             _allTasks: [],
             _allProjects: [],
             _allSections: [],
@@ -3509,9 +3510,35 @@ describe('TaskStore', () => {
         await vi.advanceTimersByTimeAsync(4_000);
         expect(mockStorage.saveData).toHaveBeenCalledTimes(5);
         expect(useTaskStore.getState().error).toContain('disk full');
+        expect(useTaskStore.getState().persistenceFailure).toMatchObject({
+            message: expect.stringContaining('disk full'),
+            retrying: false,
+        });
 
         await vi.advanceTimersByTimeAsync(10_000);
         expect(useTaskStore.getState().error).toBeNull();
+        expect(useTaskStore.getState().persistenceFailure).toMatchObject({
+            message: expect.stringContaining('disk full'),
+            retrying: false,
+        });
+    });
+
+    it('coalesces persistence retries and clears the failure after a durable save', async () => {
+        mockStorage.saveData = vi.fn().mockRejectedValue(new Error('disk full'));
+        setStorageAdapter(mockStorage);
+
+        useTaskStore.getState().addTask('Retryable task');
+        await vi.advanceTimersByTimeAsync(4_000);
+        expect(useTaskStore.getState().persistenceFailure).not.toBeNull();
+
+        mockStorage.saveData = vi.fn().mockResolvedValue(undefined);
+        const retryOne = useTaskStore.getState().retryPersistence();
+        const retryTwo = useTaskStore.getState().retryPersistence();
+
+        await Promise.all([retryOne, retryTwo]);
+
+        expect(mockStorage.saveData).toHaveBeenCalledTimes(1);
+        expect(useTaskStore.getState().persistenceFailure).toBeNull();
     });
 
     it('should add a project', () => {

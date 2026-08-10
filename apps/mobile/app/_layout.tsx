@@ -63,6 +63,7 @@ import { ThemedAlertProvider } from '@/components/themed-alert';
 import { AppAnnouncementModal } from '@/components/app-announcement-modal';
 import { MobileOnboardingFlow } from '@/components/MobileOnboardingFlow';
 import { MobileAppLockGate } from '@/components/mobile-app-lock-gate';
+import { PersistenceFailureBanner } from '@/components/persistence-failure-banner';
 import { applyAndroidSystemBars } from '@/lib/android-system-bars';
 import { isCloudKitAvailable } from '@/lib/cloudkit-sync';
 import {
@@ -1102,7 +1103,8 @@ function RootLayoutContentInner() {
       }}
     >
       <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-        <MobileAppLockGate enabled={mobileAppLockEnabled}>
+          <MobileAppLockGate enabled={mobileAppLockEnabled}>
+            <PersistenceFailureBanner />
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
             <Stack.Screen name="(drawer)" options={{ headerShown: false, animation: 'none' }} />

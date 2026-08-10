@@ -1294,6 +1294,8 @@ export const zhHans: Record<string, string> = {
         'errorBoundary.title': '出现问题',
         'errorBoundary.message': '应用遇到了意外错误。',
         'errorBoundary.retry': '重试',
+        'persistence.failureMessage': '无法保存最新更改。请保持 Mindwtr 打开并重试。',
+        'persistence.retrying': '正在保存…',
         'audio.loading': '正在加载音频...',
         'bulk.select': '选择',
         'bulk.exitSelect': '完成',

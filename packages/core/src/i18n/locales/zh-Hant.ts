@@ -1294,6 +1294,8 @@ export const zhHant: Record<string, string> = {
         'errorBoundary.title': '發生錯誤',
         'errorBoundary.message': '應用程式遇到了未預期的錯誤。',
         'errorBoundary.retry': '重試',
+        'persistence.failureMessage': '無法儲存最新變更。請保持 Mindwtr 開啟並重試。',
+        'persistence.retrying': '正在儲存…',
         'audio.loading': '正在加載音頻...',
         'bulk.select': '選擇',
         'bulk.exitSelect': '完成',
