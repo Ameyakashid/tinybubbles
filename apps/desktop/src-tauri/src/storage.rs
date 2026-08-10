@@ -2415,6 +2415,7 @@ fn normalized_rev_by(value: Option<&Value>) -> Option<String> {
 
 const DELETE_VS_LIVE_AMBIGUOUS_WINDOW_NANOS: i128 = 30_000_000_000;
 const CLOCK_SKEW_THRESHOLD_NANOS: i128 = 5 * 60 * 1_000_000_000;
+const SYNC_BACKUP_RESTORE_REV_BY: &str = "backup-restore";
 
 fn entity_has_revision(value: &Value) -> bool {
     entity_revision(value) > 0
@@ -2506,6 +2507,33 @@ fn incoming_delete_vs_live_wins_at(
 
     let current_operation_time = entity_operation_time(current, merge_now);
     let incoming_operation_time = entity_operation_time(incoming, merge_now);
+    let current_is_backup_restore = !current_deleted
+        && current
+            .get("revBy")
+            .and_then(Value::as_str)
+            .is_some_and(|rev_by| rev_by.trim() == SYNC_BACKUP_RESTORE_REV_BY);
+    let incoming_is_backup_restore = !incoming_deleted
+        && incoming
+            .get("revBy")
+            .and_then(Value::as_str)
+            .is_some_and(|rev_by| rev_by.trim() == SYNC_BACKUP_RESTORE_REV_BY);
+    let backup_restore_winner = if current_is_backup_restore {
+        Some((false, current_operation_time, incoming_operation_time))
+    } else if incoming_is_backup_restore {
+        Some((true, incoming_operation_time, current_operation_time))
+    } else {
+        None
+    };
+    if let Some((incoming_is_restore, restore_time, tombstone_time)) = backup_restore_winner {
+        let restore_is_not_older = match (restore_time, tombstone_time) {
+            (Some(restore), Some(tombstone)) => restore >= tombstone,
+            (Some(_), None) | (None, None) => true,
+            (None, Some(_)) => false,
+        };
+        if restore_is_not_older {
+            return Some(incoming_is_restore);
+        }
+    }
     let within_ambiguity_window = match (current_operation_time, incoming_operation_time) {
         (Some(current), Some(incoming)) => {
             incoming.abs_diff(current) <= DELETE_VS_LIVE_AMBIGUOUS_WINDOW_NANOS as u128
@@ -2796,8 +2824,17 @@ fn merge_data_snapshots(
     incoming: &Value,
     baseline_entities: Option<&Value>,
 ) -> Value {
-    let mut merged = incoming.as_object().cloned().unwrap_or_default();
     let merge_now = OffsetDateTime::now_utc().unix_timestamp_nanos();
+    merge_data_snapshots_at(current, incoming, baseline_entities, merge_now)
+}
+
+fn merge_data_snapshots_at(
+    current: &Value,
+    incoming: &Value,
+    baseline_entities: Option<&Value>,
+    merge_now: i128,
+) -> Value {
+    let mut merged = incoming.as_object().cloned().unwrap_or_default();
     for key in ENTITY_TABLES {
         let current_entities = current
             .get(key)
@@ -8423,6 +8460,126 @@ mod tests {
             .expect("foreign key check"),
             0
         );
+    }
+
+    #[test]
+    fn snapshot_merge_matches_shared_core_entity_arbitration_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../packages/core/src/sync-entity-arbitration-parity.fixtures.json"
+        ))
+        .expect("valid entity arbitration parity fixture");
+        assert_eq!(fixture.get("version").and_then(Value::as_u64), Some(1));
+        let cases = fixture
+            .get("cases")
+            .and_then(Value::as_array)
+            .expect("fixture cases");
+        assert_eq!(cases.len(), 16, "fixture cardinality is pinned");
+
+        let expected_category_counts = HashMap::from([
+            ("backup-resurrection", 1),
+            ("comparable-signature-tie", 1),
+            ("date-only-timestamp", 1),
+            ("delete-live", 3),
+            ("exact-signature-tie", 1),
+            ("future-clamping", 1),
+            ("invalid-timestamp", 1),
+            ("purged-at", 1),
+            ("rev-by-both", 1),
+            ("rev-by-missing", 1),
+            ("revision-dominance", 1),
+            ("revisionless-skew", 2),
+            ("timestamp-offset-equivalence", 1),
+        ]);
+        let mut category_counts = HashMap::new();
+        for test_case in cases {
+            let category = test_case
+                .get("category")
+                .and_then(Value::as_str)
+                .expect("fixture category");
+            *category_counts.entry(category).or_insert(0) += 1;
+        }
+        assert_eq!(category_counts, expected_category_counts);
+
+        let snapshot = |task: &Value| {
+            serde_json::json!({
+                "tasks": [task.clone()],
+                "projects": [],
+                "sections": [],
+                "areas": [],
+                "people": [],
+                "settings": {}
+            })
+        };
+        for test_case in cases {
+            let name = test_case
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unnamed arbitration case");
+            let now_iso = test_case
+                .get("nowIso")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| panic!("missing nowIso for {name}"));
+            let merge_now = parse_entity_timestamp(Some(&Value::String(now_iso.to_string())))
+                .unwrap_or_else(|| panic!("invalid nowIso for {name}"));
+            let left = test_case
+                .get("left")
+                .unwrap_or_else(|| panic!("missing left task for {name}"));
+            let right = test_case
+                .get("right")
+                .unwrap_or_else(|| panic!("missing right task for {name}"));
+            let expected = test_case
+                .get("expected")
+                .and_then(Value::as_object)
+                .unwrap_or_else(|| panic!("missing expected result for {name}"));
+            let expected_task = |direction: &str| {
+                let side = expected
+                    .get(direction)
+                    .and_then(Value::as_str)
+                    .unwrap_or_else(|| panic!("missing {direction} winner for {name}"));
+                match side {
+                    "left" => left,
+                    "right" => right,
+                    _ => panic!("invalid {direction} winner for {name}"),
+                }
+            };
+
+            let forward =
+                merge_data_snapshots_at(&snapshot(left), &snapshot(right), None, merge_now);
+            let reverse =
+                merge_data_snapshots_at(&snapshot(right), &snapshot(left), None, merge_now);
+            assert_eq!(
+                forward["tasks"][0],
+                *expected_task("forward"),
+                "forward arbitration for {name}"
+            );
+            assert_eq!(
+                reverse["tasks"][0],
+                *expected_task("reverse"),
+                "reverse arbitration for {name}"
+            );
+            if expected
+                .get("converges")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
+                assert_eq!(
+                    forward["tasks"][0], reverse["tasks"][0],
+                    "convergence for {name}"
+                );
+            }
+
+            if test_case.get("category").and_then(Value::as_str) == Some("exact-signature-tie") {
+                assert_eq!(left, right, "exact tie inputs for {name}");
+                assert_eq!(
+                    expected.get("forward").and_then(Value::as_str),
+                    Some("right")
+                );
+                assert_eq!(
+                    expected.get("reverse").and_then(Value::as_str),
+                    Some("left")
+                );
+            }
+        }
     }
 
     #[test]
