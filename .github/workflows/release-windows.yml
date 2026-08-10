@@ -122,9 +122,10 @@ jobs:
           GGML_F16C: "OFF"
           GGML_BMI2: "OFF"
 
-      # Authenticode signing via SignPath Foundation (#965). Runs only for
-      # official release builds in this repo with the SignPath secrets set —
-      # forks, PRs, and tagless dispatch runs build unsigned as before.
+      # Authenticode signing via SignPath Foundation (#965). Runs only after
+      # SIGNPATH_SIGNING_ENABLED is explicitly set to true and the SignPath
+      # secrets are present. Until the project certificate is active, official
+      # builds continue through the existing unsigned release path.
       #
       # Two rounds, and the order matters. Round 1 signs the app exe BEFORE the
       # installer is bundled, so the copy the installer extracts to Program
@@ -134,7 +135,7 @@ jobs:
       # release-signing asks for two approvals per release.
       - name: Stage unsigned app binary for signing
         id: stage-unsigned-exe
-        if: ${{ github.repository == 'dongdongbh/Mindwtr' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
+        if: ${{ vars.SIGNPATH_SIGNING_ENABLED == 'true' && github.repository == 'dongdongbh/Mindwtr' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path signing-unsigned-exe | Out-Null

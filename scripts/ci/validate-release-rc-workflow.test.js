@@ -207,6 +207,9 @@ test("Windows release signs and publishes exactly the current NSIS installer", (
   const windows = parse(windowsText);
   const steps = windows.jobs.standalone.steps;
   const bundleStep = steps.find((step) => step.name === "Bundle installer");
+  const stageExeStep = steps.find(
+    (step) => step.name === "Stage unsigned app binary for signing",
+  );
   const resolveStep = steps.find(
     (step) => step.name === "Resolve current NSIS installer",
   );
@@ -225,6 +228,9 @@ test("Windows release signs and publishes exactly the current NSIS installer", (
   );
   expect(bundleStep.run.indexOf("Remove-Item")).toBeLessThan(
     bundleStep.run.indexOf("bunx tauri bundle"),
+  );
+  expect(stageExeStep.if).toContain(
+    "vars.SIGNPATH_SIGNING_ENABLED == 'true'",
   );
   expect(resolveStep).toBeDefined();
   expect(resolveStep.run).toContain("tauri.conf.json");
