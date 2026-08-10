@@ -1,6 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { ActivityIndicator, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
@@ -50,6 +51,18 @@ const renderedText = (tree: renderer.ReactTestRenderer): string[] =>
     .filter((child): child is string => typeof child === 'string');
 
 describe('SyncBackupSection', () => {
+  const actionRows = [
+    ['data-transfer-export', 'settings.exportBackup', 'settings.saveToSyncFolder'],
+    ['data-transfer-restore', 'settings.syncMobile.restoreBackup', 'settings.syncMobile.replaceLocalDataFromABackupJsonFile'],
+    ['data-transfer-merge', 'settings.mergeBackup', 'settings.mergeBackupDesc'],
+    ['add-getting-started-content', 'settings.gettingStartedContentAction', 'settings.gettingStartedContentDesc'],
+    ['data-transfer-import-todoist', 'settings.syncMobile.importFromTodoist', 'settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects'],
+    ['data-transfer-import-ticktick', 'settings.syncMobile.importFromTicktick', 'settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas'],
+    ['data-transfer-import-dgt', 'settings.syncMobile.importFromDgtGtd', 'settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas'],
+    ['data-transfer-import-omnifocus', 'settings.syncMobile.importFromOmnifocus', 'settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects'],
+    ['data-transfer-import-mindwtr-csv', 'settings.syncMobile.importFromMindwtrCsv', 'settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks'],
+  ] as const;
+
   it.each([
     ['import:todoist', 'handleImportTodoist'],
     ['import:ticktick', 'handleImportTickTick'],
@@ -91,6 +104,10 @@ describe('SyncBackupSection', () => {
     expect(texts).toContain('settings.dataTransfer');
     expect(texts).not.toContain('settings.exportBackup');
     expect(texts).not.toContain('settings.syncMobile.importFromTodoist');
+    const chevron = tree.root.findByType(Ionicons);
+    expect(chevron.props.accessible).toBe(false);
+    expect(chevron.props.accessibilityElementsHidden).toBe(true);
+    expect(chevron.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
   it('reveals the transfer rows when the header is pressed', () => {
@@ -114,6 +131,39 @@ describe('SyncBackupSection', () => {
       tree.root.findAllByProps({ onPress: handleBackup })[0].props.onPress();
     });
     expect(handleBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes every revealed data action as a named button with disabled and busy state', () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SyncBackupSection
+          {...baseProps}
+          backupAction="import:ticktick"
+          isBackupBusy
+        />,
+      );
+    });
+    act(() => {
+      tree.root.findByProps({ testID: 'data-transfer-disclosure' }).props.onPress();
+    });
+
+    for (const [testID, label, hint] of actionRows) {
+      const row = tree.root.findByProps({ testID });
+      expect(row.props.accessibilityRole, testID).toBe('button');
+      expect(row.props.accessibilityLabel, testID).toBe(label);
+      expect(row.props.accessibilityHint, testID).toBe(hint);
+      expect(row.props.accessibilityState, testID).toEqual({
+        busy: testID === 'data-transfer-import-ticktick',
+        disabled: true,
+      });
+    }
+
+    for (const spinner of tree.root.findAllByType(ActivityIndicator)) {
+      expect(spinner.props.accessible).toBe(false);
+      expect(spinner.props.accessibilityElementsHidden).toBe(true);
+      expect(spinner.props.importantForAccessibility).toBe('no-hide-descendants');
+    }
   });
 
   it('offers Getting Started recovery from the normal folded data-transfer section', () => {
@@ -190,6 +240,49 @@ describe('sync settings disclosure accessibility', () => {
     expect(
       spinners[0].parent?.findAllByType(Text).some((node) => node.props.children === 'data.second.snapshot.json'),
     ).toBe(true);
+  });
+
+  it('gives every recovery snapshot a unique name and exact busy state', () => {
+    const tr = (key: string, values?: Record<string, string | number | boolean | null | undefined>) => (
+      values?.snapshotName ? `${key}:${values.snapshotName}` : key
+    );
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <RecoverySnapshotsCard
+          backupAction="snapshot:data.second.snapshot.json"
+          formatRecoverySnapshotLabel={(name) => `label:${name}`}
+          handleRestoreRecoverySnapshot={noop}
+          isBackupBusy
+          isLoadingRecoverySnapshots={false}
+          isSyncing={false}
+          recoverySnapshots={['data.first.snapshot.json', 'data.second.snapshot.json']}
+          recoverySnapshotsOpen
+          setRecoverySnapshotsOpen={noop}
+          tr={tr}
+          t={translate}
+          tc={tc}
+        />,
+      );
+    });
+
+    for (const snapshot of ['data.first.snapshot.json', 'data.second.snapshot.json']) {
+      const row = tree.root.findByProps({ testID: `recovery-snapshot-${snapshot}` });
+      expect(row.props.accessibilityRole).toBe('button');
+      expect(row.props.accessibilityLabel).toBe(
+        `settings.recoverySnapshotsRestoreNamed:label:${snapshot}`,
+      );
+      expect(row.props.accessibilityHint).toBe('settings.recoverySnapshotsConfirm');
+      expect(row.props.accessibilityState).toEqual({
+        busy: snapshot === 'data.second.snapshot.json',
+        disabled: true,
+      });
+    }
+
+    const spinner = tree.root.findByType(ActivityIndicator);
+    expect(spinner.props.accessible).toBe(false);
+    expect(spinner.props.accessibilityElementsHidden).toBe(true);
+    expect(spinner.props.importantForAccessibility).toBe('no-hide-descendants');
   });
 
   it('exposes recovery snapshots as a collapsed button and hides its decorative chevron', () => {

@@ -1544,6 +1544,7 @@ export const zhHans: Record<string, string> = {
         'settings.recoverySnapshotsLoading': '正在加载快照…',
         'settings.recoverySnapshotsEmpty': '暂无快照。',
         'settings.recoverySnapshotsRestore': '恢复',
+        'settings.recoverySnapshotsRestoreNamed': '恢复快照 {{snapshotName}}',
         'settings.recoverySnapshotsConfirm': '恢复快照 {snapshot}？这将替换当前本地数据。',
         'settings.recoverySnapshotsConfirmTitle': '恢复快照？',
         'settings.recoverySnapshotsConfirmCancel': '取消',

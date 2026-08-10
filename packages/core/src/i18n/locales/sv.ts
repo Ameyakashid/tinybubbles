@@ -1639,6 +1639,7 @@ export const svOverrides: Record<string, string> = {
         'settings.recoverySnapshotsLoading': 'Läser in ögonblicksbilder…',
         'settings.recoverySnapshotsEmpty': 'Inga ögonblicksbilder än.',
         'settings.recoverySnapshotsRestore': 'Återställ',
+        'settings.recoverySnapshotsRestoreNamed': 'Återställ ögonblicksbilden {{snapshotName}}',
         'settings.recoverySnapshotsConfirm': 'Återställ ögonblicksbild {snapshot}? Det här ersätter aktuell lokal data.',
         'settings.recoverySnapshotsConfirmTitle': 'Återställ ögonblicksbild?',
         'settings.recoverySnapshotsConfirmCancel': 'Avbryt',

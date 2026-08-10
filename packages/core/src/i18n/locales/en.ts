@@ -1673,6 +1673,7 @@ export const en: Record<string, string> = {
         'settings.recoverySnapshotsLoading': 'Loading snapshots…',
         'settings.recoverySnapshotsEmpty': 'No snapshots yet.',
         'settings.recoverySnapshotsRestore': 'Restore',
+        'settings.recoverySnapshotsRestoreNamed': 'Restore snapshot {{snapshotName}}',
         'settings.recoverySnapshotsConfirm': 'Restore snapshot {snapshot}? This will replace current local data.',
         'settings.recoverySnapshotsConfirmTitle': 'Restore snapshot?',
         'settings.recoverySnapshotsConfirmCancel': 'Cancel',

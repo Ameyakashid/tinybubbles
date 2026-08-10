@@ -12,6 +12,18 @@ import { styles } from './settings.styles';
 type Translate = (key: string) => string;
 type SettingsTranslator = (key: string, values?: Record<string, string | number | boolean | null | undefined>) => string;
 
+function renderDecorativeActivityIndicator(color: string) {
+  return (
+    <ActivityIndicator
+      size="small"
+      color={color}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    />
+  );
+}
+
 type SyncLastStatusCardProps = {
   conflictCount: number;
   conflictIds: string[];
@@ -176,7 +188,14 @@ export function SyncBackupSection({
               {t('settings.dataTransferDesc')}
             </Text>
           </View>
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={tc.secondaryText} />
+          <Ionicons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={tc.secondaryText}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
         </TouchableOpacity>
         {open && (
         <>
@@ -184,17 +203,27 @@ export function SyncBackupSection({
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleBackup}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.exportBackup')}
+            accessibilityHint={t('settings.saveToSyncFolder')}
+            accessibilityState={{ busy: backupAction === 'export', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-export"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: '#3B82F6' }]}>{t('settings.exportBackup')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.saveToSyncFolder')}</Text>
             </View>
-            {backupAction === 'export' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'export' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleRestoreBackup}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.restoreBackup')}
+            accessibilityHint={tr('settings.syncMobile.replaceLocalDataFromABackupJsonFile')}
+            accessibilityState={{ busy: backupAction === 'restore', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-restore"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.restoreBackup')}</Text>
@@ -202,12 +231,17 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.replaceLocalDataFromABackupJsonFile')}
               </Text>
             </View>
-            {backupAction === 'restore' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'restore' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleMergeBackup}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.mergeBackup')}
+            accessibilityHint={t('settings.mergeBackupDesc')}
+            accessibilityState={{ busy: backupAction === 'merge', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-merge"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.mergeBackup')}</Text>
@@ -215,26 +249,36 @@ export function SyncBackupSection({
                 {t('settings.mergeBackupDesc')}
               </Text>
             </View>
-            {backupAction === 'merge' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'merge' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleAddGettingStartedContent}
-            disabled={isGettingStartedDisabled}
+            disabled={isGettingStartedDisabled || isSyncing || isBackupBusy}
             accessibilityRole="button"
-            accessibilityState={{ busy: isGettingStartedBusy, disabled: isGettingStartedDisabled }}
+            accessibilityLabel={t('settings.gettingStartedContentAction')}
+            accessibilityHint={t('settings.gettingStartedContentDesc')}
+            accessibilityState={{
+              busy: isGettingStartedBusy,
+              disabled: isGettingStartedDisabled || isSyncing || isBackupBusy,
+            }}
             testID="add-getting-started-content"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.gettingStartedContentAction')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>{t('settings.gettingStartedContentDesc')}</Text>
             </View>
-            {isGettingStartedBusy && <ActivityIndicator size="small" color={tc.tint} />}
+            {isGettingStartedBusy && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportTodoist}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.importFromTodoist')}
+            accessibilityHint={tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
+            accessibilityState={{ busy: backupAction === 'import:todoist', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-todoist"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTodoist')}</Text>
@@ -242,12 +286,17 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
               </Text>
             </View>
-            {backupAction === 'import:todoist' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:todoist' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportTickTick}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.importFromTicktick')}
+            accessibilityHint={tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
+            accessibilityState={{ busy: backupAction === 'import:ticktick', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-ticktick"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTicktick')}</Text>
@@ -255,12 +304,17 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
               </Text>
             </View>
-            {backupAction === 'import:ticktick' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:ticktick' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportDgt}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.importFromDgtGtd')}
+            accessibilityHint={tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
+            accessibilityState={{ busy: backupAction === 'import:dgt', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-dgt"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromDgtGtd')}</Text>
@@ -268,12 +322,17 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
               </Text>
             </View>
-            {backupAction === 'import:dgt' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:dgt' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportOmniFocus}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.importFromOmnifocus')}
+            accessibilityHint={tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
+            accessibilityState={{ busy: backupAction === 'import:omnifocus', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-omnifocus"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromOmnifocus')}</Text>
@@ -281,12 +340,17 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
               </Text>
             </View>
-            {backupAction === 'import:omnifocus' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:omnifocus' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
             onPress={handleImportMindwtrCsv}
             disabled={isSyncing || isBackupBusy}
+            accessibilityRole="button"
+            accessibilityLabel={tr('settings.syncMobile.importFromMindwtrCsv')}
+            accessibilityHint={tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
+            accessibilityState={{ busy: backupAction === 'import:mindwtr-csv', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-mindwtr-csv"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromMindwtrCsv')}</Text>
@@ -294,7 +358,7 @@ export function SyncBackupSection({
                 {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
               </Text>
             </View>
-            {backupAction === 'import:mindwtr-csv' && <ActivityIndicator size="small" color={tc.tint} />}
+            {backupAction === 'import:mindwtr-csv' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
         </>
         )}
@@ -380,6 +444,16 @@ export function RecoverySnapshotsCard({
                 style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
                 onPress={() => handleRestoreRecoverySnapshot(snapshot)}
                 disabled={isSyncing || isBackupBusy}
+                accessibilityRole="button"
+                accessibilityLabel={tr('settings.recoverySnapshotsRestoreNamed', {
+                  snapshotName: formatRecoverySnapshotLabel(snapshot),
+                })}
+                accessibilityHint={tr('settings.recoverySnapshotsConfirm', { snapshot })}
+                accessibilityState={{
+                  busy: backupAction === `snapshot:${snapshot}`,
+                  disabled: isSyncing || isBackupBusy,
+                }}
+                testID={`recovery-snapshot-${snapshot}`}
               >
                 <View style={styles.settingInfo}>
                   <Text style={[styles.settingLabel, { color: tc.text }]} numberOfLines={1}>
@@ -390,7 +464,7 @@ export function RecoverySnapshotsCard({
                   </Text>
                 </View>
                 {backupAction === `snapshot:${snapshot}` ? (
-                  <ActivityIndicator size="small" color={tc.tint} />
+                  renderDecorativeActivityIndicator(tc.tint)
                 ) : (
                   <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.recoverySnapshotsRestore')}</Text>
                 )}

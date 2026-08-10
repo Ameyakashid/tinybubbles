@@ -1544,6 +1544,7 @@ export const zhHant: Record<string, string> = {
         'settings.recoverySnapshotsLoading': '正在加載快照...',
         'settings.recoverySnapshotsEmpty': '還沒有快照。',
         'settings.recoverySnapshotsRestore': '恢復',
+        'settings.recoverySnapshotsRestoreNamed': '恢復快照 {{snapshotName}}',
         'settings.recoverySnapshotsConfirm': '恢復快照{snapshot}？這將替換當前的本地資料。',
         'settings.recoverySnapshotsConfirmTitle': '恢復快照？',
         'settings.recoverySnapshotsConfirmCancel': '取消',

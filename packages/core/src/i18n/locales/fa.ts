@@ -1639,6 +1639,7 @@ export const faOverrides: Record<string, string> = {
         'settings.recoverySnapshotsLoading': 'در حال بارگذاری عکس‌های فوری…',
         'settings.recoverySnapshotsEmpty': 'هنوز عکس فوری‌ای نیست.',
         'settings.recoverySnapshotsRestore': 'بازگردانی',
+        'settings.recoverySnapshotsRestoreNamed': 'بازگردانی تصویر لحظه‌ای {{snapshotName}}',
         'settings.recoverySnapshotsConfirm': 'عکس فوری {snapshot} بازگردانی شود؟ این کار داده محلی فعلی را جایگزین می‌کند.',
         'settings.recoverySnapshotsConfirmTitle': 'عکس فوری بازگردانی شود؟',
         'settings.recoverySnapshotsConfirmCancel': 'لغو',
