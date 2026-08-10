@@ -1,3 +1,5 @@
+import { compareTasksByProjectOrder } from '@mindwtr/core';
+
 export const getBulkActionFailureMessage = (error: unknown, fallback: string): string => {
     const message = error instanceof Error ? error.message : String(error ?? '');
     const trimmed = message.trim();
@@ -111,24 +113,9 @@ export function resolveProjectReorderDropPlan<T extends { id: string }>(
     return null;
 }
 
-export function sortProjectTasksByOrder<T extends { createdAt: string; order?: number; orderNum?: number }>(tasks: T[]): T[] {
-  const sorted = [...tasks];
-  const hasOrder = sorted.some((task) => Number.isFinite(task.order) || Number.isFinite(task.orderNum));
-    return sorted.sort((a, b) => {
-        if (hasOrder) {
-            const aOrder = Number.isFinite(a.order)
-                ? (a.order as number)
-                : Number.isFinite(a.orderNum)
-                    ? (a.orderNum as number)
-                    : Number.POSITIVE_INFINITY;
-            const bOrder = Number.isFinite(b.order)
-                ? (b.order as number)
-                : Number.isFinite(b.orderNum)
-                    ? (b.orderNum as number)
-                    : Number.POSITIVE_INFINITY;
-            if (aOrder !== bOrder) return aOrder - bOrder;
-        }
-
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
+// Delegates to the one core comparator so display, reorder write plans, and
+// desktop all sort identically — including the id tie-break that keeps tied
+// (order, createdAt) rows from reshuffling with every sync merge (#784).
+export function sortProjectTasksByOrder<T extends { createdAt: string; id: string; order?: number; orderNum?: number }>(tasks: T[]): T[] {
+    return [...tasks].sort(compareTasksByProjectOrder);
 }

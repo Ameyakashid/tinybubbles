@@ -111,6 +111,18 @@ describe('task-utils', () => {
             expect(cmp(inProject, unmapped)).toBeLessThan(0);
         });
 
+        it('breaks full (order, createdAt) ties by id so array order never decides (#784)', () => {
+            // Imported duplicates carry identical order AND createdAt; a
+            // comparator returning 0 leaves stable sort at the mercy of array
+            // order, which every sync merge rebuild reshuffles — rows visibly
+            // swapped after each sync. The id tie-break pins them.
+            const tied = (id: string) => task({ id, projectId: 'p', order: 5, createdAt: '2026-01-01T00:00:00.000Z' });
+            const forward = [tied('dup-a'), tied('dup-b'), tied('dup-c')].sort(compareTasksByProjectOrder);
+            const backward = [tied('dup-c'), tied('dup-b'), tied('dup-a')].sort(compareTasksByProjectOrder);
+            expect(forward.map((t) => t.id)).toEqual(['dup-a', 'dup-b', 'dup-c']);
+            expect(backward.map((t) => t.id)).toEqual(['dup-a', 'dup-b', 'dup-c']);
+        });
+
         it('falls back to compareTasksByProjectOrder within the same project rank', () => {
             const map = new Map([['p', 0]]);
             const cmp = compareTasksByProjectThenOrder(map);

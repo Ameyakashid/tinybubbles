@@ -159,4 +159,12 @@ describe('sortProjectTasksByOrder', () => {
             { id: 'older', createdAt: '2026-01-01T00:00:00.000Z' },
         ]).map((task) => task.id)).toEqual(['older', 'newer']);
     });
+
+    it('pins full (order, createdAt) ties by id regardless of array order (#784)', () => {
+        const tied = (id: string) => ({ id, order: 5, createdAt: '2026-01-01T00:00:00.000Z' });
+        expect(sortProjectTasksByOrder([tied('dup-b'), tied('dup-c'), tied('dup-a')]).map((task) => task.id))
+            .toEqual(['dup-a', 'dup-b', 'dup-c']);
+        expect(sortProjectTasksByOrder([tied('dup-c'), tied('dup-a'), tied('dup-b')]).map((task) => task.id))
+            .toEqual(['dup-a', 'dup-b', 'dup-c']);
+    });
 });

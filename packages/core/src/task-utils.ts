@@ -286,16 +286,22 @@ export function getProjectDeadlineBoosts(
 }
 
 // Orders tasks the way a project lists them: manual order first (tasks without
-// one sort last), creation time as the tie-break. This is the order project
-// views render, so anything surfacing "the project's next action" must use it
-// too or it will contradict what the user arranged (#873).
-export function compareTasksByProjectOrder<T extends SequentialTaskOrderFields>(a: T, b: T): number {
+// one sort last), creation time as the tie-break, task id as the final one.
+// This is the order project views render, so anything surfacing "the project's
+// next action" must use it too or it will contradict what the user arranged
+// (#873). The id tie-break is load-bearing (#784): imported duplicates can
+// carry the SAME order and createdAt, and a comparator that returns 0 leaves
+// stable sort at the mercy of array order — which every sync merge rebuild
+// reshuffles, so tied rows visibly swapped positions after each sync and made
+// drags around them look like they reverted.
+export function compareTasksByProjectOrder<T extends SequentialTaskOrderFields & Pick<Task, 'id'>>(a: T, b: T): number {
     const aOrder = Number.isFinite(a.order) ? (a.order as number) : Number.isFinite(a.orderNum) ? (a.orderNum as number) : Number.POSITIVE_INFINITY;
     const bOrder = Number.isFinite(b.order) ? (b.order as number) : Number.isFinite(b.orderNum) ? (b.orderNum as number) : Number.POSITIVE_INFINITY;
     if (aOrder !== bOrder) return aOrder - bOrder;
     const aCreated = safeParseDate(a.createdAt)?.getTime() ?? Number.POSITIVE_INFINITY;
     const bCreated = safeParseDate(b.createdAt)?.getTime() ?? Number.POSITIVE_INFINITY;
-    return aCreated - bCreated;
+    if (aCreated !== bCreated) return aCreated - bCreated;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 // Ranks projects the way the sidebar and project-grouped views arrange them:
@@ -329,7 +335,7 @@ export function buildProjectOrderMap(
 // order the Next and Board views render.
 export function compareTasksByProjectThenOrder(
     orderMap: ReadonlyMap<string, number>,
-): <T extends SequentialTaskOrderFields & Pick<Task, 'projectId'>>(a: T, b: T) => number {
+): <T extends SequentialTaskOrderFields & Pick<Task, 'id' | 'projectId'>>(a: T, b: T) => number {
     return (a, b) => {
         const aProjectOrder = a.projectId ? (orderMap.get(a.projectId) ?? Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
         const bProjectOrder = b.projectId ? (orderMap.get(b.projectId) ?? Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;

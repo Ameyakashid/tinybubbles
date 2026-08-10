@@ -1,4 +1,5 @@
 import { getTaskOrder } from '../store-helpers';
+import { compareTasksByProjectOrder } from '../task-utils';
 import { mutateTasks } from '../store-tasks';
 import type { OrderingActions, Project, ProjectActionContext, Section, Task, TaskStatus } from './shared';
 import { mutateEntities } from './shared';
@@ -195,13 +196,12 @@ export const createOrderingActions = ({
                 const projectTaskIds = new Set(projectTasks.map((task) => task.id));
                 const validOrderedIds = uniqueValidIds(orderedIds, projectTaskIds);
                 if (validOrderedIds.length === 0) return [];
+                // Must sort EXACTLY like the display comparator (including its
+                // id tie-break, #784) — the plan's baseline and what the user
+                // sees must be the same arrangement or a drop is computed
+                // against rows the view never showed in that order.
                 const currentIds = projectTasks
-                    .sort((a, b) => {
-                        const aOrder = getTaskOrder(a) ?? Number.POSITIVE_INFINITY;
-                        const bOrder = getTaskOrder(b) ?? Number.POSITIVE_INFINITY;
-                        if (aOrder !== bOrder) return aOrder - bOrder;
-                        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-                    })
+                    .sort(compareTasksByProjectOrder)
                     .map((task) => task.id);
                 const nextIds = finalOrderedIds(currentIds, validOrderedIds);
                 const orderById = new Map(projectTasks.map((task) => [task.id, getTaskOrder(task)]));
