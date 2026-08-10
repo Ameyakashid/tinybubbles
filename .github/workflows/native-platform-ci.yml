@@ -55,6 +55,7 @@ jobs:
       android: ${{ steps.filter.outputs.android }}
       ios: ${{ steps.filter.outputs.ios }}
       macos: ${{ steps.filter.outputs.macos }}
+      windows: ${{ steps.filter.outputs.windows }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -73,6 +74,7 @@ jobs:
             echo "android=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "macos=true" >> "$GITHUB_OUTPUT"
+            echo "windows=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -84,10 +86,16 @@ jobs:
           android=false
           ios=false
           macos=false
+          windows=false
           while IFS= read -r path; do
             case "$path" in
               apps/desktop/src-tauri/*|packages/core/src/*|scripts/check-synced-field-parity.ts|package.json|bun.lock|.github/workflows/native-platform-ci.yml)
                 macos=true
+                ;;
+            esac
+            case "$path" in
+              apps/desktop/src-tauri/*|.github/workflows/native-platform-ci.yml)
+                windows=true
                 ;;
             esac
             case "$path" in
@@ -105,6 +113,7 @@ jobs:
           echo "android=$android" >> "$GITHUB_OUTPUT"
           echo "ios=$ios" >> "$GITHUB_OUTPUT"
           echo "macos=$macos" >> "$GITHUB_OUTPUT"
+          echo "windows=$windows" >> "$GITHUB_OUTPUT"
 
   macos-rust:
     if: needs.changes.outputs.macos == 'true'
@@ -129,6 +138,27 @@ jobs:
 
       - name: Run macOS native library tests
         run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
+
+  windows-rust:
+    if: needs.changes.outputs.windows == 'true'
+    needs: changes
+    runs-on: windows-latest
+    name: Windows Rust check
+    timeout-minutes: 35
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Check Windows Rust
+        run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 
   android-native:
     if: needs.changes.outputs.android == 'true'

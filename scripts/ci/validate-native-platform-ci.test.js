@@ -28,3 +28,29 @@ test("native CI generates clean projects and compiles Android and iOS sources", 
   expect(workflow).toContain("-sdk iphonesimulator");
   expect(workflow).toContain("CODE_SIGNING_ALLOWED=NO");
 });
+
+test("desktop Rust pull requests run a stable Windows cargo check", () => {
+  const workflow = readFileSync(".github/workflows/native-platform-ci.yml", "utf8");
+  const windowsJob = workflow.match(
+    /\n  windows-rust:\n([\s\S]*?)(?=\n  [a-z][a-z-]+:\n|$)/,
+  )?.[1];
+
+  expect(workflow.match(/- "apps\/desktop\/src-tauri\/\*\*"/g)).toHaveLength(2);
+  expect(workflow).toContain("windows: ${{ steps.filter.outputs.windows }}");
+  expect(workflow).toContain('echo "windows=true" >> "$GITHUB_OUTPUT"');
+  expect(workflow).toMatch(
+    /apps\/desktop\/src-tauri\/\*\|\.github\/workflows\/native-platform-ci\.yml\)\n\s+windows=true/,
+  );
+  expect(workflow).toContain('echo "windows=$windows" >> "$GITHUB_OUTPUT"');
+
+  expect(windowsJob).toBeDefined();
+  expect(windowsJob).toContain("if: needs.changes.outputs.windows == 'true'");
+  expect(windowsJob).toContain("needs: changes");
+  expect(windowsJob).toContain("runs-on: windows-latest");
+  expect(windowsJob).toContain(
+    "uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable",
+  );
+  expect(windowsJob).toContain(
+    "run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml",
+  );
+});
