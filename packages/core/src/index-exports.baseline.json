@@ -218,6 +218,7 @@
     "buildPerformanceLogContext",
     "buildPerformanceLogEntry",
     "buildPerformanceLogLine",
+    "buildProjectGroups",
     "buildProjectOrderMap",
     "buildRRuleString",
     "buildSaveSnapshot",

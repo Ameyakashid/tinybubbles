@@ -1078,9 +1078,8 @@ describe('large-store mobile interaction performance', () => {
       areaById: projectAreaById,
       collapsedAreas: {},
       groupedActiveProjects: [{
-        title: 'Projects',
         areaId: 'area-0',
-        data: projectsData.projects.map((project) => ({ type: 'project' as const, data: project })),
+        projects: projectsData.projects,
       }],
       groupedArchivedProjects: [],
       groupedDeferredProjects: [],

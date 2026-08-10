@@ -170,15 +170,14 @@ vi.mock('@/hooks/use-project-filtering', () => ({
     focusedCount: 0,
     groupedActiveProjects: [
       {
-        title: 'No Area',
         areaId: testArea.id,
-        data: [{ type: 'project', data: testProject }],
+        projects: [testProject],
       },
     ],
     groupedDeferredProjects: [],
     groupedArchivedProjects: [],
     projectTagOptions: [],
-    tagFilterOptions: [],
+    tagFilterOptions: { list: [], hasNoTags: false },
   }),
 }));
 

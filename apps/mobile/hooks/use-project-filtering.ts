@@ -1,95 +1,34 @@
 import { useMemo } from 'react';
-import { type Area, getUsedTaskTokens, type Project, type Task } from '@mindwtr/core';
-
-import { projectMatchesAreaFilterSelection, type AreaFilterSelection } from '@mindwtr/core';
-
-export type ProjectSectionItem = { type: 'project'; data: Project };
-
-export type ProjectSection = {
-    title: string;
-    areaId: string;
-    data: ProjectSectionItem[];
-};
-
-export function splitProjectsForMobileProjects(projects: Project[]) {
-    const active: Project[] = [];
-    const deferred: Project[] = [];
-    const archived: Project[] = [];
-
-    projects.forEach((project) => {
-        if (project.status === 'archived') {
-            archived.push(project);
-            return;
-        }
-        if (project.status === 'waiting' || project.status === 'someday') {
-            deferred.push(project);
-            return;
-        }
-        active.push(project);
-    });
-
-    return { active, deferred, archived };
-}
-
-export function groupProjectsIntoSections(
-    projects: Project[],
-    sortedAreas: Area[],
-    areaById: Map<string, Area>,
-    t: (key: string) => string,
-): ProjectSection[] {
-    const groups = new Map<string, Project[]>();
-    projects.forEach((project) => {
-        const areaId = project.areaId && areaById.has(project.areaId) ? project.areaId : 'no-area';
-        if (!groups.has(areaId)) {
-            groups.set(areaId, []);
-        }
-        groups.get(areaId)?.push(project);
-    });
-
-    const sections = sortedAreas
-        .filter((area) => (groups.get(area.id) || []).length > 0)
-        .map((area) => ({
-            title: area.name,
-            areaId: area.id,
-            data: (groups.get(area.id) || []).map((project) => ({ type: 'project' as const, data: project })),
-        }));
-
-    const noAreaProjects = groups.get('no-area') || [];
-    if (noAreaProjects.length > 0) {
-        sections.push({
-            title: t('projects.noArea'),
-            areaId: 'no-area',
-            data: noAreaProjects.map((project) => ({ type: 'project' as const, data: project })),
-        });
-    }
-
-    return sections;
-}
+import {
+    buildProjectGroups,
+    type Area,
+    type AreaFilterSelection,
+    getUsedTaskTokens,
+    type Project,
+    type ProjectTagFilter,
+    type Task,
+} from '@mindwtr/core';
 
 type UseProjectFilteringParams = {
     projects: Project[];
     tasks: Task[];
     sortedAreas: Area[];
-    areaById: Map<string, Area>;
     selectedTagFilter: string;
     selectedAreaFilter: AreaFilterSelection;
     allTagsValue: string;
     noTagsValue: string;
     focusedProjectCount: number;
-    t: (key: string) => string;
 };
 
 export function useProjectFiltering({
     projects,
     tasks,
     sortedAreas,
-    areaById,
     selectedTagFilter,
     selectedAreaFilter,
     allTagsValue,
     noTagsValue,
     focusedProjectCount,
-    t,
 }: UseProjectFilteringParams) {
     const focusedCount = focusedProjectCount;
 
@@ -110,68 +49,38 @@ export function useProjectFiltering({
         ])).filter(Boolean);
     }, [tasks, projects]);
 
-    const tagFilterOptions = useMemo<{ list: string[]; hasNoTags: boolean }>(() => {
-        const tags = new Set<string>();
-        let hasNoTags = false;
-        projects.forEach((project) => {
-            if (project.deletedAt) return;
-            const list = project.tagIds || [];
-            if (list.length === 0) {
-                hasNoTags = true;
-                return;
-            }
-            list.forEach((tag) => tags.add(tag));
-        });
-        return {
-            list: Array.from(tags).sort(),
-            hasNoTags,
-        };
-    }, [projects]);
-
     const groupedProjects = useMemo(() => {
-        const visibleProjects = projects.filter((project) => !project.deletedAt);
-        const sortedProjects = [...visibleProjects].sort((a, b) => {
-            const orderA = Number.isFinite(a.order) ? a.order : 0;
-            const orderB = Number.isFinite(b.order) ? b.order : 0;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.title.localeCompare(b.title);
+        const tagFilter: ProjectTagFilter = selectedTagFilter === allTagsValue
+            ? { kind: 'all' }
+            : selectedTagFilter === noTagsValue
+                ? { kind: 'untagged' }
+                : { kind: 'tag', value: selectedTagFilter };
+
+        return buildProjectGroups({
+            projects,
+            orderedAreas: sortedAreas,
+            areaFilter: selectedAreaFilter,
+            tagFilter,
         });
-
-        const tagFilteredProjects = sortedProjects.filter((project) => {
-            const tags = project.tagIds || [];
-            if (selectedTagFilter === allTagsValue) return true;
-            if (selectedTagFilter === noTagsValue) return tags.length === 0;
-            return tags.includes(selectedTagFilter);
-        });
-
-        const areaFilteredProjects = tagFilteredProjects.filter((project) => (
-            projectMatchesAreaFilterSelection(project, selectedAreaFilter, areaById)
-        ));
-        const { active, deferred, archived } = splitProjectsForMobileProjects(areaFilteredProjects);
-
-        return {
-            groupedActiveProjects: groupProjectsIntoSections(active, sortedAreas, areaById, t),
-            groupedDeferredProjects: groupProjectsIntoSections(deferred, sortedAreas, areaById, t),
-            groupedArchivedProjects: groupProjectsIntoSections(archived, sortedAreas, areaById, t),
-        };
     }, [
         allTagsValue,
-        areaById,
         noTagsValue,
         projects,
         selectedAreaFilter,
         selectedTagFilter,
         sortedAreas,
-        t,
     ]);
 
     return {
         areaUsage,
         focusedCount,
-        groupedActiveProjects: groupedProjects.groupedActiveProjects,
-        groupedDeferredProjects: groupedProjects.groupedDeferredProjects,
-        groupedArchivedProjects: groupedProjects.groupedArchivedProjects,
+        groupedActiveProjects: groupedProjects.active,
+        groupedDeferredProjects: groupedProjects.deferred,
+        groupedArchivedProjects: groupedProjects.archived,
         projectTagOptions,
-        tagFilterOptions,
+        tagFilterOptions: {
+            list: groupedProjects.tagInventory.values,
+            hasNoTags: groupedProjects.tagInventory.hasUntagged,
+        },
     };
 }

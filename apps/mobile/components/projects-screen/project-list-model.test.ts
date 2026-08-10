@@ -46,23 +46,20 @@ describe('buildProjectListRows', () => {
       collapsedAreas: {},
       groupedActiveProjects: [
         {
-          title: 'Research',
           areaId: 'research',
-          data: [{ type: 'project', data: buildProject('active', 'Active Project', 'active', 'research') }],
+          projects: [buildProject('active', 'Active Project', 'active', 'research')],
         },
       ],
       groupedDeferredProjects: [
         {
-          title: 'Research',
           areaId: 'research',
-          data: [{ type: 'project', data: buildProject('waiting', 'Waiting Project', 'waiting', 'research') }],
+          projects: [buildProject('waiting', 'Waiting Project', 'waiting', 'research')],
         },
       ],
       groupedArchivedProjects: [
         {
-          title: 'Research',
           areaId: 'research',
-          data: [{ type: 'project', data: buildProject('archived', 'Archived Project', 'archived', 'research') }],
+          projects: [buildProject('archived', 'Archived Project', 'archived', 'research')],
         },
       ],
       showArchivedProjects: false,
@@ -87,9 +84,8 @@ describe('buildProjectListRows', () => {
       collapsedAreas: { research: true },
       groupedActiveProjects: [
         {
-          title: 'Research',
           areaId: 'research',
-          data: [{ type: 'project', data: buildProject('active', 'Active Project', 'active', 'research') }],
+          projects: [buildProject('active', 'Active Project', 'active', 'research')],
         },
       ],
       groupedDeferredProjects: [],
@@ -113,9 +109,8 @@ describe('buildProjectListRows', () => {
       groupedActiveProjects: [],
       groupedDeferredProjects: [
         {
-          title: 'Research',
           areaId: 'research',
-          data: [{ type: 'project', data: buildProject('waiting', 'Waiting Project', 'waiting', 'research') }],
+          projects: [buildProject('waiting', 'Waiting Project', 'waiting', 'research')],
         },
       ],
       groupedArchivedProjects: [],
@@ -130,5 +125,29 @@ describe('buildProjectListRows', () => {
       'project',
     ]);
     expect(rows.find((row) => row.type === 'project' && row.project.title === 'Waiting Project')).toBeTruthy();
+  });
+
+  it('preserves the no-area sentinel while localizing its row title', () => {
+    const rows = buildProjectListRows({
+      areaById,
+      collapsedAreas: {},
+      groupedActiveProjects: [
+        {
+          projects: [buildProject('unassigned', 'Unassigned Project', 'active')],
+        },
+      ],
+      groupedDeferredProjects: [],
+      groupedArchivedProjects: [],
+      showArchivedProjects: false,
+      showDeferredProjects: false,
+      t,
+    });
+
+    expect(rows[1]).toEqual(expect.objectContaining({
+      type: 'area-header',
+      key: 'active-area-no-area',
+      title: 'No Area',
+      areaId: 'no-area',
+    }));
   });
 });

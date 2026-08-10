@@ -215,13 +215,11 @@ export default function ProjectsScreen() {
     projects,
     tasks,
     sortedAreas,
-    areaById,
     selectedTagFilter,
     selectedAreaFilter,
     allTagsValue: ALL_TAGS,
     noTagsValue: NO_TAGS,
     focusedProjectCount,
-    t,
   });
   const notesEditor = useProjectNotesEditor({
     selectedProject,

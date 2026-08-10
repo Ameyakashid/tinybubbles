@@ -42,11 +42,17 @@ import {
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
 import { useUiStore } from '../../store/ui-store';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import {
+    AREA_FILTER_ALL,
+    AREA_FILTER_NONE,
+    buildProjectGroups,
+    projectMatchesAreaFilterSelection,
+    type ProjectAreaGroup,
+    type ProjectTagFilter,
+} from '@mindwtr/core';
 import { reportError } from '../../lib/report-error';
 import { useAreaSidebarState } from './projects/useAreaSidebarState';
 import { useProjectsViewStore } from './projects/useProjectsViewStore';
-import { splitProjectsForSidebar } from './projects/project-sidebar-grouping';
 import {
     PROJECTS_SIDEBAR_COLLAPSED_WIDTH,
     PROJECTS_SIDEBAR_DEFAULT_WIDTH,
@@ -455,23 +461,36 @@ export function ProjectsView() {
     const sortAreasByName = () => reorderAreas(sortAreasByNameIds(sortedAreas));
     const sortAreasByColor = () => reorderAreas(sortAreasByColorIds(sortedAreas));
 
-    const tagOptions = useMemo(() => {
-        const visibleProjects = projects.filter(p => !p.deletedAt);
-        const tags = new Set<string>();
-        let hasNoTags = false;
-        visibleProjects.forEach((project) => {
-            const list = project.tagIds || [];
-            if (list.length === 0) {
-                hasNoTags = true;
-                return;
-            }
-            list.forEach((tag) => tags.add(tag));
+    const {
+        tagOptions,
+        groupedActiveProjects,
+        groupedDeferredProjects,
+        groupedArchivedProjects,
+    } = useMemo(() => {
+        const tagFilter: ProjectTagFilter = selectedTag === ALL_TAGS
+            ? { kind: 'all' }
+            : selectedTag === NO_TAGS
+                ? { kind: 'untagged' }
+                : { kind: 'tag', value: selectedTag };
+        const grouped = buildProjectGroups({
+            projects,
+            orderedAreas: sortedAreas,
+            areaFilter: selectedArea,
+            tagFilter,
         });
+        const toSidebarGroups = (groups: ProjectAreaGroup[]): Array<[string, Project[]]> => (
+            groups.map((group) => [group.areaId ?? NO_AREA, group.projects])
+        );
         return {
-            list: Array.from(tags).sort(),
-            hasNoTags,
+            tagOptions: {
+                list: grouped.tagInventory.values,
+                hasNoTags: grouped.tagInventory.hasUntagged,
+            },
+            groupedActiveProjects: toSidebarGroups(grouped.active),
+            groupedDeferredProjects: toSidebarGroups(grouped.deferred),
+            groupedArchivedProjects: toSidebarGroups(grouped.archived),
         };
-    }, [projects]);
+    }, [NO_AREA, projects, selectedArea, selectedTag, sortedAreas]);
 
     useEffect(() => {
         // Keep persisted tag selections through the empty startup frame; reset only after we have a real tag inventory.
@@ -479,50 +498,6 @@ export function ProjectsView() {
         if (selectedTag === ALL_TAGS || selectedTag === NO_TAGS || tagOptions.list.includes(selectedTag)) return;
         setSelectedTag(ALL_TAGS);
     }, [selectedTag, tagOptions.hasNoTags, tagOptions.list, setSelectedTag]);
-
-    const { groupedActiveProjects, groupedDeferredProjects, groupedArchivedProjects } = useMemo(() => {
-        const visibleProjects = projects.filter(p => !p.deletedAt);
-        const sorted = [...visibleProjects].sort((a, b) => {
-            const orderA = Number.isFinite(a.order) ? a.order : 0;
-            const orderB = Number.isFinite(b.order) ? b.order : 0;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.title.localeCompare(b.title);
-        });
-        const filtered = sorted.filter((project) => {
-            return projectMatchesAreaFilterSelection(project, selectedArea, areaById);
-        });
-        const filteredByTag = filtered.filter((project) => {
-            const tags = project.tagIds || [];
-            if (selectedTag === ALL_TAGS) return true;
-            if (selectedTag === NO_TAGS) return tags.length === 0;
-            return tags.includes(selectedTag);
-        });
-
-        const groupByArea = (list: typeof filtered) => {
-            const groups = new Map<string, typeof filtered>();
-            for (const project of list) {
-                const areaId = project.areaId && areaById.has(project.areaId) ? project.areaId : NO_AREA;
-                if (!groups.has(areaId)) groups.set(areaId, []);
-                groups.get(areaId)!.push(project);
-            }
-            const ordered: Array<[string, typeof filtered]> = [];
-            sortedAreas.forEach((area) => {
-                const entries = groups.get(area.id);
-                if (entries && entries.length > 0) ordered.push([area.id, entries]);
-            });
-            const noAreaEntries = groups.get(NO_AREA);
-            if (noAreaEntries && noAreaEntries.length > 0) ordered.push([NO_AREA, noAreaEntries]);
-            return ordered;
-        };
-
-        const { active, deferred, archived } = splitProjectsForSidebar(filteredByTag);
-
-        return {
-            groupedActiveProjects: groupByArea(active),
-            groupedDeferredProjects: groupByArea(deferred),
-            groupedArchivedProjects: groupByArea(archived),
-        };
-    }, [projects, selectedArea, selectedTag, ALL_AREAS, NO_AREA, ALL_TAGS, NO_TAGS, areaById, sortedAreas]);
 
     // One DndContext spans the sidebar and the workspace so task rows can be
     // dropped on sidebar projects/areas; drags carry typed data and handlers

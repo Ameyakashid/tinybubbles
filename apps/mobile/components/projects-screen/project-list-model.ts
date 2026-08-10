@@ -1,6 +1,4 @@
-import type { Area, Project, Task } from '@mindwtr/core';
-
-import type { ProjectSection } from '@/hooks/use-project-filtering';
+import type { Area, Project, ProjectAreaGroup, Task } from '@mindwtr/core';
 
 export type ProjectListRow =
   | { type: 'section-label'; key: string; title: string }
@@ -27,9 +25,9 @@ export type ProjectTaskSummary = {
 type BuildProjectListRowsParams = {
   areaById: Map<string, Area>;
   collapsedAreas: Record<string, boolean>;
-  groupedActiveProjects: ProjectSection[];
-  groupedArchivedProjects: ProjectSection[];
-  groupedDeferredProjects: ProjectSection[];
+  groupedActiveProjects: ProjectAreaGroup[];
+  groupedArchivedProjects: ProjectAreaGroup[];
+  groupedDeferredProjects: ProjectAreaGroup[];
   showArchivedProjects: boolean;
   showDeferredProjects: boolean;
   t: (key: string) => string;
@@ -37,21 +35,23 @@ type BuildProjectListRowsParams = {
 
 function buildAreaRows(
   sectionKind: 'active' | 'deferred' | 'archived',
-  groups: ProjectSection[],
+  groups: ProjectAreaGroup[],
   areaById: Map<string, Area>,
   collapsedAreas: Record<string, boolean>,
+  t: (key: string) => string,
 ): ProjectListRow[] {
   const rows: ProjectListRow[] = [];
 
   groups.forEach((group) => {
-    const area = group.areaId !== 'no-area' ? areaById.get(group.areaId) : undefined;
-    const collapsed = collapsedAreas[group.areaId] ?? false;
+    const areaId = group.areaId ?? 'no-area';
+    const area = group.areaId ? areaById.get(group.areaId) : undefined;
+    const collapsed = collapsedAreas[areaId] ?? false;
 
     rows.push({
       type: 'area-header',
-      key: `${sectionKind}-area-${group.areaId}`,
-      title: group.title,
-      areaId: group.areaId,
+      key: `${sectionKind}-area-${areaId}`,
+      title: area?.name ?? t('projects.noArea'),
+      areaId,
       collapsed,
       sectionKind,
       color: area?.color,
@@ -60,7 +60,7 @@ function buildAreaRows(
 
     if (collapsed) return;
 
-    group.data.forEach(({ data: project }) => {
+    group.projects.forEach((project) => {
       rows.push({
         type: 'project',
         key: `${sectionKind}-project-${project.id}`,
@@ -91,7 +91,7 @@ export function buildProjectListRows({
       key: 'active-projects',
       title: t('projects.activeSection'),
     });
-    rows.push(...buildAreaRows('active', groupedActiveProjects, areaById, collapsedAreas));
+    rows.push(...buildAreaRows('active', groupedActiveProjects, areaById, collapsedAreas, t));
   }
 
   if (groupedDeferredProjects.length > 0) {
@@ -103,7 +103,7 @@ export function buildProjectListRows({
       sectionKind: 'deferred',
     });
     if (showDeferredProjects) {
-      rows.push(...buildAreaRows('deferred', groupedDeferredProjects, areaById, collapsedAreas));
+      rows.push(...buildAreaRows('deferred', groupedDeferredProjects, areaById, collapsedAreas, t));
     }
   }
 
@@ -116,7 +116,7 @@ export function buildProjectListRows({
       sectionKind: 'archived',
     });
     if (showArchivedProjects) {
-      rows.push(...buildAreaRows('archived', groupedArchivedProjects, areaById, collapsedAreas));
+      rows.push(...buildAreaRows('archived', groupedArchivedProjects, areaById, collapsedAreas, t));
     }
   }
 
