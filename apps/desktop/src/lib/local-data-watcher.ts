@@ -924,9 +924,13 @@ export const createLocalDataWatcherController = (
         const generation = watcherGeneration;
         const path = channel.path;
         const callback = channel.callback;
+        const guardedCallback = (event: FsEvent) => {
+            if (generation !== watcherGeneration || channel.path !== path) return;
+            callback(event);
+        };
         const registration = (async () => {
             try {
-                const registered = await localDataWatcherDependencies.watchFile(path, callback);
+                const registered = await localDataWatcherDependencies.watchFile(path, guardedCallback);
                 const unwatch = resolveUnwatch(registered);
                 if (generation !== watcherGeneration || channel.path !== path) {
                     runWatcherCleanupSafely(unwatch, 'release stale file watcher');

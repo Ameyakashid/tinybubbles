@@ -289,6 +289,38 @@ describe('local-data-watcher', () => {
         expect(editUnlockUnsubscribe).toHaveBeenCalledTimes(1);
     });
 
+    it('ignores stale watcher callbacks after a failed unwatch and restart', async () => {
+        const callbacks: Array<(event: { path?: string; paths?: string[] }) => void> = [];
+        const watchFile = vi.fn(async (_path: string, callback: (event: { path?: string; paths?: string[] }) => void) => {
+            callbacks.push(callback);
+            return () => {
+                throw new Error('unwatch failed');
+            };
+        });
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        const staleSqliteCallback = callbacks[1];
+        controller.stop();
+
+        staleSqliteCallback?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        expect(scheduledTimers.size).toBe(0);
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        staleSqliteCallback?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        expect(scheduledTimers.size).toBe(0);
+
+        callbacks[3]?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        expect(scheduledTimers.size).toBe(1);
+        controller.stop();
+    });
+
     it('contains throwing timer cancellation and still disposes every watcher resource', async () => {
         const sqliteUnwatch = vi.fn();
         const watchFile = vi.fn(async (path: string) => {
