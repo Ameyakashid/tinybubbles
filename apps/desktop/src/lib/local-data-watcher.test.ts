@@ -6,7 +6,13 @@ import {
     useTaskStore,
 } from '@mindwtr/core';
 import type { AppData, StorageAdapter } from '@mindwtr/core';
-import { __localDataWatcherTestUtils, markLocalSqliteWrite, markLocalWrite, start } from './local-data-watcher';
+import {
+    __localDataWatcherTestUtils,
+    createLocalDataWatcherController,
+    markLocalSqliteWrite,
+    markLocalWrite,
+    start,
+} from './local-data-watcher';
 
 function getTauriMocks() {
     const globalObject = globalThis as typeof globalThis & {
@@ -158,10 +164,131 @@ afterEach(async () => {
 });
 
 describe('local-data-watcher', () => {
+    it('retries only the watcher channel whose registration failed', async () => {
+        const dataUnwatch = vi.fn();
+        const sqliteUnwatch = vi.fn();
+        const watchFile = vi
+            .fn()
+            .mockResolvedValueOnce(dataUnwatch)
+            .mockRejectedValueOnce(new Error('SQLite watch unavailable'))
+            .mockResolvedValueOnce(sqliteUnwatch);
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        expect(watchFile.mock.calls.map(([path]) => path)).toEqual(['/tmp/mindwtr/data.json', '/tmp/mindwtr']);
+
+        await flushScheduledTimers();
+
+        expect(watchFile.mock.calls.map(([path]) => path)).toEqual([
+            '/tmp/mindwtr/data.json',
+            '/tmp/mindwtr',
+            '/tmp/mindwtr',
+        ]);
+        controller.stop();
+        expect(dataUnwatch).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the SQLite watcher while retrying a failed data watcher', async () => {
+        const dataUnwatch = vi.fn();
+        const sqliteUnwatch = vi.fn();
+        let dataAttempts = 0;
+        const watchFile = vi.fn(async (path: string) => {
+            if (path.endsWith('data.json')) {
+                dataAttempts += 1;
+                if (dataAttempts === 1) throw new Error('Data watch unavailable');
+                return dataUnwatch;
+            }
+            return sqliteUnwatch;
+        });
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await flushScheduledTimers();
+
+        expect(watchFile.mock.calls.map(([path]) => path)).toEqual([
+            '/tmp/mindwtr/data.json',
+            '/tmp/mindwtr',
+            '/tmp/mindwtr/data.json',
+        ]);
+        controller.stop();
+        expect(dataUnwatch).toHaveBeenCalledTimes(1);
+        expect(sqliteUnwatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('unwatches a registration that resolves after stop', async () => {
+        let resolveRegistration: ((unwatch: () => void) => void) | undefined;
+        const lateUnwatch = vi.fn();
+        const watchFile = vi.fn(
+            () =>
+                new Promise<() => void>((resolve) => {
+                    resolveRegistration = resolve;
+                }),
+        );
+        const controller = createLocalDataWatcherController({
+            watchFile,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        const starting = controller.start('/tmp/mindwtr/data.json');
+        controller.stop();
+        resolveRegistration?.(lateUnwatch);
+        await starting;
+
+        expect(lateUnwatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps controller payload and timer state isolated', () => {
+        const controllerA = createLocalDataWatcherController({
+            now: () => 100,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+        });
+        const controllerB = createLocalDataWatcherController({
+            now: () => 200,
+            schedule: scheduleMock,
+            cancelSchedule: cancelScheduleMock,
+        });
+        const payloadA = {
+            ...emptyData(),
+            tasks: [
+                {
+                    id: 'controller-a',
+                    title: 'Controller A',
+                    status: 'next' as const,
+                    tags: [],
+                    contexts: [],
+                    createdAt: '2026-08-09T00:00:00.000Z',
+                    updatedAt: '2026-08-09T00:00:00.000Z',
+                },
+            ],
+        };
+
+        controllerA.markLocalWrite(payloadA);
+
+        expect(controllerA.testUtils.getPendingSelfWritePayloadLengthForTests()).toBeGreaterThan(0);
+        expect(controllerB.testUtils.getPendingSelfWritePayloadLengthForTests()).toBe(0);
+        controllerA.stop();
+        expect(scheduledTimers.size).toBe(0);
+    });
+
     it('retries a transient failure from the production storage adapter', async () => {
-        const getData = vi.fn()
-            .mockRejectedValueOnce(new Error('database is locked'))
-            .mockResolvedValue(emptyData());
+        const getData = vi.fn().mockRejectedValueOnce(new Error('database is locked')).mockResolvedValue(emptyData());
         setStorageAdapter({ ...storageAdapter, getData });
 
         await __localDataWatcherTestUtils.triggerSqliteChangeForTests();
@@ -176,7 +303,8 @@ describe('local-data-watcher', () => {
     });
 
     it('retries a transient SQLite refresh failure on a bounded delayed lane', async () => {
-        const refreshStorageData = vi.fn()
+        const refreshStorageData = vi
+            .fn()
             .mockRejectedValueOnce(new Error('database is locked'))
             .mockResolvedValue(undefined);
         __localDataWatcherTestUtils.setDependenciesForTests({ refreshStorageData });
@@ -190,7 +318,10 @@ describe('local-data-watcher', () => {
     });
 
     it('resets an exhausted SQLite retry budget when a fresh WAL event arrives', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const refreshStorageData = vi.fn().mockRejectedValue(new Error('database is busy'));
         __localDataWatcherTestUtils.setDependenciesForTests({
             watchFile: async (path, callback) => {
@@ -227,7 +358,10 @@ describe('local-data-watcher', () => {
     });
 
     it('refreshes the store when SQLite WAL files change', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const task = {
             id: 'mcp-1',
             title: 'From MCP',
@@ -305,7 +439,10 @@ describe('local-data-watcher', () => {
     });
 
     it('waits for an active document write before refreshing a SQLite WAL change', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const events: string[] = [];
         let releaseDocumentWrite: (() => void) | undefined;
         let markDocumentWriteStarted: (() => void) | undefined;
@@ -370,7 +507,10 @@ describe('local-data-watcher', () => {
     });
 
     it('ignores SQLite shared-memory events from read activity', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const refreshStorageData = vi.fn();
 
         __localDataWatcherTestUtils.setDependenciesForTests({
@@ -396,7 +536,10 @@ describe('local-data-watcher', () => {
     });
 
     it('defers SQLite events during a local-write window and refreshes once after it drains', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const refreshStorageData = vi.fn();
 
         __localDataWatcherTestUtils.setDependenciesForTests({
@@ -426,7 +569,10 @@ describe('local-data-watcher', () => {
     });
 
     it('drains a real WAL event that arrives during SQLite no-op suppression', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const refreshStorageData = vi.fn();
 
         __localDataWatcherTestUtils.setDependenciesForTests({
@@ -459,7 +605,10 @@ describe('local-data-watcher', () => {
     });
 
     it('drains an external WAL event that arrives during an in-flight no-op refresh', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const externalTask = {
             id: 'external-during-refresh',
             title: 'Written while refresh was in flight',
@@ -512,7 +661,10 @@ describe('local-data-watcher', () => {
     });
 
     it('does not treat sync bookkeeping-only SQLite refreshes as app data changes', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const logInfo = vi.fn();
         const refreshStorageData = vi.fn(async () => {
             useTaskStore.setState((state) => ({
@@ -551,7 +703,10 @@ describe('local-data-watcher', () => {
     });
 
     it('does not cancel a pending external SQLite refresh when a local SQLite write follows', async () => {
-        const watchers: Array<{ path: string; callback: (event: { path?: string; paths?: string[] }) => void }> = [];
+        const watchers: Array<{
+            path: string;
+            callback: (event: { path?: string; paths?: string[] }) => void;
+        }> = [];
         const refreshStorageData = vi.fn();
 
         __localDataWatcherTestUtils.setDependenciesForTests({
@@ -715,7 +870,10 @@ describe('local-data-watcher', () => {
             updatedAt: '2026-01-02T00:00:00.000Z',
         } as AppData['tasks'][number];
         const transferData = { ...emptyData(), tasks: [transferTask] } as AppData;
-        const externalSnapshot = { ...emptyData(), tasks: [externalTask] } as AppData;
+        const externalSnapshot = {
+            ...emptyData(),
+            tasks: [externalTask],
+        } as AppData;
         let currentData = emptyData();
         let releaseRefresh: (() => void) | undefined;
         let markRefreshStarted: (() => void) | undefined;
@@ -823,10 +981,12 @@ describe('local-data-watcher', () => {
 
         await __localDataWatcherTestUtils.refreshFromDiskNowForTests();
 
-        expect(useTaskStore.getState()._allTasks.map((task) => task.id).sort()).toEqual([
-            'canonical-race',
-            'external-race',
-        ]);
+        expect(
+            useTaskStore
+                .getState()
+                ._allTasks.map((task) => task.id)
+                .sort(),
+        ).toEqual(['canonical-race', 'external-race']);
 
         await useTaskStore.getState().addTask('Ordinary write after watcher');
         await flushPendingSave();
@@ -883,13 +1043,15 @@ describe('local-data-watcher', () => {
     it('does not schedule delayed retries for terminal merged-save failures', async () => {
         externalData = {
             ...emptyData(),
-            tasks: [{
-                id: 'terminal-retry',
-                title: 'Terminal retry',
-                status: 'next',
-                createdAt: '2026-01-02T00:00:00.000Z',
-                updatedAt: '2026-01-02T00:00:00.000Z',
-            }],
+            tasks: [
+                {
+                    id: 'terminal-retry',
+                    title: 'Terminal retry',
+                    status: 'next',
+                    createdAt: '2026-01-02T00:00:00.000Z',
+                    updatedAt: '2026-01-02T00:00:00.000Z',
+                },
+            ],
         } as AppData;
         let saveAttempts = 0;
         setStorageAdapter({
@@ -910,13 +1072,15 @@ describe('local-data-watcher', () => {
     it('cancels a delayed merged-save retry during watcher shutdown', async () => {
         externalData = {
             ...emptyData(),
-            tasks: [{
-                id: 'shutdown-retry',
-                title: 'Shutdown retry',
-                status: 'next',
-                createdAt: '2026-01-02T00:00:00.000Z',
-                updatedAt: '2026-01-02T00:00:00.000Z',
-            }],
+            tasks: [
+                {
+                    id: 'shutdown-retry',
+                    title: 'Shutdown retry',
+                    status: 'next',
+                    createdAt: '2026-01-02T00:00:00.000Z',
+                    updatedAt: '2026-01-02T00:00:00.000Z',
+                },
+            ],
         } as AppData;
         let saveAttempts = 0;
         setStorageAdapter({
