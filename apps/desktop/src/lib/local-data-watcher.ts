@@ -47,14 +47,22 @@ export type LocalDataWatcherDependencies = {
     getSnapshot: () => AppData;
     getEditLockCount: () => number;
     subscribeStore: (listener: () => void) => () => void;
-    persistMergedData: (merged: AppData) => Promise<AppData | void>;
+    persistMergedData: (
+        merged: AppData,
+        isResultStillRelevant?: () => boolean,
+    ) => Promise<AppData | void>;
     logInfo: (message: string, extra?: Record<string, unknown>) => void;
     logWarn: (message: string, extra?: Record<string, unknown>) => void;
 };
 
-const persistMergedDataThroughStore = async (merged: AppData, now: () => number): Promise<AppData> => {
+const persistMergedDataThroughStore = async (
+    merged: AppData,
+    now: () => number,
+    isResultStillRelevant: () => boolean = () => true,
+): Promise<AppData> => {
     const persisted = await getStorageAdapter().saveData(merged);
     const canonical = persisted ?? merged;
+    if (!isResultStillRelevant()) return canonical;
     const allTasks = Array.isArray(canonical.tasks) ? canonical.tasks : [];
     const allProjects = Array.isArray(canonical.projects) ? canonical.projects : [];
     const allSections = Array.isArray(canonical.sections) ? canonical.sections : [];
@@ -97,7 +105,9 @@ const createDefaultDependencies = (now: () => number): LocalDataWatcherDependenc
     getSnapshot: getInMemoryAppDataSnapshot,
     getEditLockCount: () => useTaskStore.getState().editLockCount,
     subscribeStore: (listener) => useTaskStore.subscribe(() => listener()),
-    persistMergedData: (merged) => persistMergedDataThroughStore(merged, now),
+    persistMergedData: (merged, isResultStillRelevant) => (
+        persistMergedDataThroughStore(merged, now, isResultStillRelevant)
+    ),
     logInfo: (message, extra) => {
         void logInfo(message, extra ? { extra } : undefined);
     },
@@ -573,7 +583,10 @@ export const createLocalDataWatcherController = (
             if (!isCurrentWatcherGeneration(generation)) return null;
             const pendingSelfWritesBeforeAttempt = pendingSelfWrites.slice();
             try {
-                const canonical = (await localDataWatcherDependencies.persistMergedData(merged)) ?? merged;
+                const canonical = (await localDataWatcherDependencies.persistMergedData(
+                    merged,
+                    () => isCurrentWatcherGeneration(generation),
+                )) ?? merged;
                 return isCurrentWatcherGeneration(generation) ? canonical : null;
             } catch (error) {
                 if (!isCurrentWatcherGeneration(generation)) return null;

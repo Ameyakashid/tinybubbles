@@ -360,6 +360,61 @@ describe('local-data-watcher', () => {
         expect(persistMergedData).not.toHaveBeenCalled();
     });
 
+    it('does not reconcile a persisted external merge after its watcher generation stops', async () => {
+        const incomingTask = {
+            id: 'stale-generation-persist',
+            title: 'Must not replace newer store state after stop',
+            status: 'inbox' as const,
+            tags: [],
+            contexts: [],
+            createdAt: '2026-08-09T00:00:00.000Z',
+            updatedAt: '2026-08-09T00:00:00.000Z',
+        };
+        const newerTask = {
+            ...incomingTask,
+            id: 'newer-local-state',
+            title: 'Created after watcher stop',
+        };
+        let releaseSave: (() => void) | undefined;
+        let markSaveStarted: (() => void) | undefined;
+        const saveGate = new Promise<void>((resolve) => {
+            releaseSave = resolve;
+        });
+        const saveStarted = new Promise<void>((resolve) => {
+            markSaveStarted = resolve;
+        });
+        setStorageAdapter({
+            ...storageAdapter,
+            saveData: async (data) => {
+                markSaveStarted?.();
+                await saveGate;
+                return data;
+            },
+        });
+        const controller = createLocalDataWatcherController({
+            readDataJson: async () => ({ ...emptyData(), tasks: [incomingTask] }),
+            getSnapshot: () => emptyData(),
+            merge: (_local, incoming) => incoming,
+            normalize: (data) => data,
+            hashPayload: async (payload) => payload,
+            logInfo: () => undefined,
+            logWarn: () => undefined,
+        });
+
+        const refresh = controller.testUtils.triggerChangeForTests();
+        await saveStarted;
+        controller.stop();
+        useTaskStore.setState({
+            tasks: [newerTask],
+            _allTasks: [newerTask],
+            lastDataChangeAt: 1,
+        });
+        releaseSave?.();
+        await refresh;
+
+        expect(useTaskStore.getState()._allTasks.map((task) => task.id)).toEqual(['newer-local-state']);
+    });
+
     it('does not apply an in-flight SQLite snapshot after its watcher generation stops', async () => {
         const incomingTask = {
             id: 'stale-generation-sqlite',
