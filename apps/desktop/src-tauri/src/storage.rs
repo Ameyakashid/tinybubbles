@@ -44,9 +44,16 @@ const STORAGE_SCHEMA_STATE_TABLE: &str = "storage_schema_state";
 const FTS_TRIGGER_MIGRATION_VERSION: i64 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SqliteFileIdentity {
+    volume: u64,
+    file: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SqliteWarmState {
     storage_version: i64,
     schema_generation: i64,
+    file_identity: Option<SqliteFileIdentity>,
 }
 
 static SQLITE_WARM_STATES: OnceLock<Mutex<HashMap<PathBuf, SqliteWarmState>>> = OnceLock::new();
@@ -422,6 +429,7 @@ fn stored_sqlite_schema_state(conn: &Connection) -> Result<Option<SqliteWarmStat
             Ok(SqliteWarmState {
                 storage_version: row.get(0)?,
                 schema_generation: row.get(1)?,
+                file_identity: None,
             })
         },
     )
@@ -551,7 +559,38 @@ fn resolved_sqlite_path(db_path: &Path) -> PathBuf {
     fs::canonicalize(db_path).unwrap_or_else(|_| db_path.to_path_buf())
 }
 
-fn ensure_sqlite_initialized(conn: &mut Connection, db_path: &Path) -> Result<(), String> {
+#[cfg(unix)]
+fn sqlite_file_identity(db_path: &Path) -> Option<SqliteFileIdentity> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = fs::metadata(db_path).ok()?;
+    Some(SqliteFileIdentity {
+        volume: metadata.dev(),
+        file: metadata.ino(),
+    })
+}
+
+#[cfg(windows)]
+fn sqlite_file_identity(db_path: &Path) -> Option<SqliteFileIdentity> {
+    use std::os::windows::fs::MetadataExt;
+
+    let metadata = fs::metadata(db_path).ok()?;
+    Some(SqliteFileIdentity {
+        volume: u64::from(metadata.volume_serial_number()?),
+        file: metadata.file_index()?,
+    })
+}
+
+#[cfg(not(any(unix, windows)))]
+fn sqlite_file_identity(_db_path: &Path) -> Option<SqliteFileIdentity> {
+    None
+}
+
+fn ensure_sqlite_initialized(
+    conn: &mut Connection,
+    db_path: &Path,
+    file_identity: Option<SqliteFileIdentity>,
+) -> Result<(), String> {
     let resolved_path = resolved_sqlite_path(db_path);
     let warm_states = SQLITE_WARM_STATES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut warm_states = warm_states
@@ -561,6 +600,8 @@ fn ensure_sqlite_initialized(conn: &mut Connection, db_path: &Path) -> Result<()
     if warm_states.get(&resolved_path).is_some_and(|state| {
         state.storage_version == STORAGE_SCHEMA_VERSION
             && state.schema_generation == schema_generation
+            && state.file_identity.is_some()
+            && state.file_identity == file_identity
     }) {
         return Ok(());
     }
@@ -570,6 +611,7 @@ fn ensure_sqlite_initialized(conn: &mut Connection, db_path: &Path) -> Result<()
             SqliteWarmState {
                 storage_version: STORAGE_SCHEMA_VERSION,
                 schema_generation,
+                file_identity,
             },
         );
         return Ok(());
@@ -581,6 +623,7 @@ fn ensure_sqlite_initialized(conn: &mut Connection, db_path: &Path) -> Result<()
         SqliteWarmState {
             storage_version: STORAGE_SCHEMA_VERSION,
             schema_generation,
+            file_identity,
         },
     );
     Ok(())
@@ -590,9 +633,16 @@ fn open_sqlite_path(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    let identity_before_open = sqlite_file_identity(db_path);
     let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    let identity_after_open = sqlite_file_identity(db_path);
+    let stable_file_identity = if identity_before_open == identity_after_open {
+        identity_after_open
+    } else {
+        None
+    };
     configure_sqlite_connection(&conn)?;
-    ensure_sqlite_initialized(&mut conn, db_path)?;
+    ensure_sqlite_initialized(&mut conn, db_path, stable_file_identity)?;
     Ok(conn)
 }
 
@@ -5832,6 +5882,47 @@ mod tests {
         assert!(repaired_generation > changed_generation);
         assert_eq!(stored_state.schema_generation, repaired_generation);
         assert_eq!(stored_state.storage_version, STORAGE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn sqlite_open_reinitializes_after_same_generation_file_replacement() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("same-generation-replacement.sqlite");
+        let initialized = open_sqlite_path(&db_path).expect("initialize database");
+        let cached_generation =
+            sqlite_schema_generation(&initialized).expect("cached schema generation");
+        drop(initialized);
+        let warmed = open_sqlite_path(&db_path).expect("warm the process cache with file identity");
+        assert_eq!(
+            sqlite_schema_generation(&warmed).expect("warmed schema generation"),
+            cached_generation,
+        );
+        drop(warmed);
+
+        let replacement_path = temp.path().join("replacement.sqlite");
+        let replacement = Connection::open(&replacement_path).expect("replacement database");
+        replacement
+            .pragma_update(None, "schema_version", cached_generation)
+            .expect("match the cached schema generation");
+        assert_eq!(
+            sqlite_schema_generation(&replacement).expect("replacement schema generation"),
+            cached_generation,
+        );
+        drop(replacement);
+
+        fs::remove_file(&db_path).expect("remove the initialized database");
+        fs::rename(&replacement_path, &db_path).expect("replace the database at the same path");
+
+        let reopened = open_sqlite_path(&db_path).expect("initialize the replacement database");
+        assert!(sqlite_table_exists(&reopened, "tasks").expect("inspect replacement schema"));
+        let stored_state = stored_sqlite_schema_state(&reopened)
+            .expect("read replacement schema state")
+            .expect("replacement schema state row");
+        assert_eq!(stored_state.storage_version, STORAGE_SCHEMA_VERSION);
+        assert_eq!(
+            stored_state.schema_generation,
+            sqlite_schema_generation(&reopened).expect("reinitialized schema generation"),
+        );
     }
 
     #[test]
