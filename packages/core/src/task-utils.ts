@@ -503,27 +503,26 @@ export function isFocusSequentialCandidate(
 }
 
 function getFocusSequentialScheduleKey(
-    task: Pick<Task, 'dueDate' | 'isFocusedToday' | 'reviewAt' | 'startTime'>,
+    task: Pick<Task, 'dueDate' | 'isFocusedToday' | 'reviewAt'>,
     now: Date,
 ): { rank: number; time: number } {
     if (task.isFocusedToday === true) {
         return { rank: 0, time: 0 };
     }
 
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    const startOfTodayMs = startOfToday.getTime();
     const endOfTodayMs = endOfToday.getTime();
     const dueMs = safeDueTime(task.dueDate, Number.NaN);
-    const startMs = safeParseDate(task.startTime)?.getTime() ?? Number.NaN;
     const reviewMs = safeParseDate(task.reviewAt)?.getTime() ?? Number.NaN;
     let scheduledTime = Number.POSITIVE_INFINITY;
 
+    // A due date or due review earns the project's one Focus slot; a start
+    // date deliberately does not — a later task becoming available today only
+    // gates that task, it must not displace an earlier task in the sequence
+    // (#1015: the displaced winner can even be hidden by its own start time,
+    // leaving the whole project missing from Focus).
     if (Number.isFinite(dueMs) && dueMs <= endOfTodayMs) {
         scheduledTime = Math.min(scheduledTime, dueMs);
-    }
-    if (Number.isFinite(startMs) && startMs >= startOfTodayMs && startMs <= endOfTodayMs) {
-        scheduledTime = Math.min(scheduledTime, startMs);
     }
     if (isDueForReview(task.reviewAt, now) && Number.isFinite(reviewMs)) {
         scheduledTime = Math.min(scheduledTime, reviewMs);
@@ -535,7 +534,7 @@ function getFocusSequentialScheduleKey(
 }
 
 export function getFocusSequentialFirstTaskIds<
-    T extends Pick<Task, 'createdAt' | 'dueDate' | 'id' | 'isFocusedToday' | 'order' | 'orderNum' | 'projectId' | 'reviewAt' | 'startTime' | 'status'> & Partial<Pick<Task, 'sectionId'>>
+    T extends Pick<Task, 'createdAt' | 'dueDate' | 'id' | 'isFocusedToday' | 'order' | 'orderNum' | 'projectId' | 'reviewAt' | 'status'> & Partial<Pick<Task, 'sectionId'>>
 >(
     tasks: T[],
     sequentialProjectIds: ReadonlySet<string>,

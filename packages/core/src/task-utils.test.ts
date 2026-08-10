@@ -1075,6 +1075,53 @@ describe('task-utils', () => {
             expect([...firstTaskIds]).toEqual(['duplicated-scheduled']);
         });
 
+        it('keeps the first task in the slot when a later task merely starts today', () => {
+            // #1015: Task A due today, Task B due tomorrow with a start date
+            // today. B's start gates only B's own visibility — it must not
+            // take the project slot from A (which hid the whole project when
+            // B's timed start also kept B itself hidden).
+            const firstTaskIds = getFocusSequentialFirstTaskIds([
+                {
+                    id: 'first-due-today',
+                    projectId: 'p1',
+                    status: 'next',
+                    dueDate: '2026-04-05T18:00:00.000Z',
+                    order: 1,
+                    orderNum: undefined,
+                    createdAt: '2026-04-01T00:00:00.000Z',
+                },
+                {
+                    id: 'second-starts-today',
+                    projectId: 'p1',
+                    status: 'next',
+                    startTime: '2026-04-05T14:00:00.000Z',
+                    dueDate: '2026-04-06T18:00:00.000Z',
+                    order: 2,
+                    orderNum: undefined,
+                    createdAt: '2026-04-02T00:00:00.000Z',
+                },
+            ], new Set(['p1']), { now });
+
+            expect([...firstTaskIds]).toEqual(['first-due-today']);
+        });
+
+        it('keeps sequence order when a later undated task starts today', () => {
+            const firstTaskIds = getFocusSequentialFirstTaskIds([
+                { id: 'first-undated', projectId: 'p1', status: 'next', order: 1, orderNum: undefined, createdAt: '2026-04-01T00:00:00.000Z' },
+                {
+                    id: 'second-starts-today',
+                    projectId: 'p1',
+                    status: 'next',
+                    startTime: '2026-04-05T09:00:00.000Z',
+                    order: 2,
+                    orderNum: undefined,
+                    createdAt: '2026-04-02T00:00:00.000Z',
+                },
+            ], new Set(['p1']), { now });
+
+            expect([...firstTaskIds]).toEqual(['first-undated']);
+        });
+
         it('keeps future-start tasks in sequence order instead of exposing later actions', () => {
             const firstTaskIds = getFocusSequentialFirstTaskIds([
                 {
