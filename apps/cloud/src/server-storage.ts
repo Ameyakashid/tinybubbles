@@ -46,6 +46,18 @@ export type DurableFileSystem = {
     unlinkSync: (path: string) => void;
 };
 
+export type DurableDirectoryFileSystem = {
+    lstatSync: (path: string) => {
+        isDirectory: () => boolean;
+        isSymbolicLink: () => boolean;
+    };
+    mkdirSync: (path: string, options?: { mode?: number }) => void;
+    realpathSync: (path: string) => string;
+    openSync: (path: string, flags: 'r') => number;
+    fsyncSync: (handle: number) => void;
+    closeSync: (handle: number) => void;
+};
+
 const nodeDurableFileSystem: DurableFileSystem = {
     openSync: (path, flags, mode) => openSync(path, flags, mode),
     writeFileSync: (handle, data) => writeFileSync(handle, data),
@@ -54,6 +66,15 @@ const nodeDurableFileSystem: DurableFileSystem = {
     renameSync,
     existsSync,
     unlinkSync,
+};
+
+const nodeDurableDirectoryFileSystem: DurableDirectoryFileSystem = {
+    lstatSync,
+    mkdirSync: (path, options) => mkdirSync(path, options),
+    realpathSync,
+    openSync: (path, flags) => openSync(path, flags),
+    fsyncSync,
+    closeSync,
 };
 
 const createDefaultData = (): AppData => ({ tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} });
@@ -157,7 +178,36 @@ function isFsErrorWithCode(error: unknown, code: string): boolean {
  * below that point, so there is no symlink to escape through, and the caller treats
  * the unresolved remainder as "not found" rather than "invalid".
  */
-function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string, create = true): boolean {
+function syncDirectoryEntryParent(
+    parentPath: string,
+    fileSystem: DurableDirectoryFileSystem,
+): boolean {
+    let handle: number | null = null;
+    try {
+        handle = fileSystem.openSync(parentPath, 'r');
+        fileSystem.fsyncSync(handle);
+        fileSystem.closeSync(handle);
+        handle = null;
+        return true;
+    } catch {
+        return false;
+    } finally {
+        if (handle !== null) {
+            try {
+                fileSystem.closeSync(handle);
+            } catch {
+                // The durability failure remains authoritative.
+            }
+        }
+    }
+}
+
+export function ensureDirectoryWithinRoot(
+    rootRealPath: string,
+    targetDir: string,
+    create = true,
+    fileSystem: DurableDirectoryFileSystem = nodeDurableDirectoryFileSystem,
+): boolean {
     if (!isPathWithinRoot(targetDir, rootRealPath)) return false;
     const rel = relative(rootRealPath, targetDir);
     if (!rel || rel === '.') return true;
@@ -165,20 +215,21 @@ function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string, crea
     let currentPath = rootRealPath;
 
     for (const segment of segments) {
+        const parentPath = currentPath;
         currentPath = join(currentPath, segment);
         try {
-            const stat = lstatSync(currentPath);
+            const stat = fileSystem.lstatSync(currentPath);
             if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
         } catch (error) {
             if (!isFsErrorWithCode(error, 'ENOENT')) return false;
             if (!create) return true;
             try {
-                mkdirSync(currentPath, { mode: 0o700 });
+                fileSystem.mkdirSync(currentPath, { mode: 0o700 });
             } catch (mkdirError) {
                 if (!isFsErrorWithCode(mkdirError, 'EEXIST')) return false;
             }
             try {
-                const stat = lstatSync(currentPath);
+                const stat = fileSystem.lstatSync(currentPath);
                 if (stat.isSymbolicLink() || !stat.isDirectory()) return false;
             } catch {
                 return false;
@@ -186,11 +237,15 @@ function ensureDirectoryWithinRoot(rootRealPath: string, targetDir: string, crea
         }
 
         try {
-            const currentRealPath = realpathSync(currentPath);
+            const currentRealPath = fileSystem.realpathSync(currentPath);
             if (!isPathWithinRoot(currentRealPath, rootRealPath)) return false;
         } catch {
             return false;
         }
+        // Persist the child entry itself, not only files later written inside
+        // it. Re-syncing an existing segment also makes a retry safe after a
+        // prior parent fsync failed while leaving the directory visible.
+        if (create && !syncDirectoryEntryParent(parentPath, fileSystem)) return false;
     }
 
     return true;

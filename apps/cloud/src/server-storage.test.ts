@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { dirname } from 'path';
 import {
     durablyPublishFile,
+    ensureDirectoryWithinRoot,
+    type DurableDirectoryFileSystem,
     type DurableFileSystem,
 } from './server-storage';
 
@@ -144,5 +146,97 @@ describe('durablyPublishFile', () => {
         ]);
         expect(harness.files.get('/cloud/data.json')).toBe('old');
         expect([...harness.files.keys()].filter((path) => path.endsWith('.tmp'))).toEqual([]);
+    });
+});
+
+function createDurableDirectoryFileSystem(initialDirectories: string[]) {
+    const directories = new Set(initialDirectories);
+    const events: string[] = [];
+    const handles = new Map<number, string>();
+    let nextHandle = 1;
+
+    const fileSystem: DurableDirectoryFileSystem = {
+        lstatSync(path) {
+            if (!directories.has(path)) {
+                throw Object.assign(new Error('missing directory'), { code: 'ENOENT' });
+            }
+            return {
+                isDirectory: () => true,
+                isSymbolicLink: () => false,
+            };
+        },
+        mkdirSync(path) {
+            events.push(`mkdir:${path}`);
+            directories.add(path);
+        },
+        realpathSync(path) {
+            if (!directories.has(path)) throw new Error('missing directory');
+            return path;
+        },
+        openSync(path) {
+            events.push(`open-parent:${path}`);
+            const handle = nextHandle++;
+            handles.set(handle, path);
+            return handle;
+        },
+        fsyncSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            events.push(`fsync-parent:${path}`);
+        },
+        closeSync(handle) {
+            const path = handles.get(handle);
+            if (!path) throw new Error('invalid directory handle');
+            events.push(`close-parent:${path}`);
+            handles.delete(handle);
+        },
+    };
+
+    return { directories, events, fileSystem };
+}
+
+describe('ensureDirectoryWithinRoot', () => {
+    test('durably publishes the first attachment directory entry', () => {
+        const harness = createDurableDirectoryFileSystem(['/cloud']);
+
+        expect(ensureDirectoryWithinRoot(
+            '/cloud',
+            '/cloud/namespace',
+            true,
+            harness.fileSystem,
+        )).toBe(true);
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/namespace',
+            'open-parent:/cloud',
+            'fsync-parent:/cloud',
+            'close-parent:/cloud',
+        ]);
+    });
+
+    test('durably publishes every nested attachment directory entry', () => {
+        const harness = createDurableDirectoryFileSystem([
+            '/cloud',
+            '/cloud/namespace',
+            '/cloud/namespace/attachments',
+        ]);
+
+        expect(ensureDirectoryWithinRoot(
+            '/cloud/namespace/attachments',
+            '/cloud/namespace/attachments/projects/task',
+            true,
+            harness.fileSystem,
+        )).toBe(true);
+
+        expect(harness.events).toEqual([
+            'mkdir:/cloud/namespace/attachments/projects',
+            'open-parent:/cloud/namespace/attachments',
+            'fsync-parent:/cloud/namespace/attachments',
+            'close-parent:/cloud/namespace/attachments',
+            'mkdir:/cloud/namespace/attachments/projects/task',
+            'open-parent:/cloud/namespace/attachments/projects',
+            'fsync-parent:/cloud/namespace/attachments/projects',
+            'close-parent:/cloud/namespace/attachments/projects',
+        ]);
     });
 });
