@@ -572,12 +572,22 @@ fn sqlite_file_identity(db_path: &Path) -> Option<SqliteFileIdentity> {
 
 #[cfg(windows)]
 fn sqlite_file_identity(db_path: &Path) -> Option<SqliteFileIdentity> {
-    use std::os::windows::fs::MetadataExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
 
-    let metadata = fs::metadata(db_path).ok()?;
+    let file = File::open(db_path).ok()?;
+    let mut metadata = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: `file` owns a valid handle for the duration of this call and
+    // `metadata` points to writable storage of the exact structure the API
+    // expects.
+    if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut metadata) } == 0 {
+        return None;
+    }
     Some(SqliteFileIdentity {
-        volume: u64::from(metadata.volume_serial_number()?),
-        file: metadata.file_index()?,
+        volume: u64::from(metadata.dwVolumeSerialNumber),
+        file: (u64::from(metadata.nFileIndexHigh) << 32) | u64::from(metadata.nFileIndexLow),
     })
 }
 
