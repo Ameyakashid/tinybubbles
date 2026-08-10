@@ -10,7 +10,7 @@ import {
     type AreaVisibilityContext,
 } from './area-filter';
 import { isTaskInActiveProject } from './project-utils';
-import { getSequentialFirstTaskIds, shouldShowTaskForStart, sortTasksBy } from './task-utils';
+import { getSequentialFirstTaskIds, isSequentialChainStatus, shouldShowTaskForStart, sortTasksBy } from './task-utils';
 import { isTaskActionable } from './task-status';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -279,8 +279,11 @@ export function getDailyReviewBuckets(
     const sequentialProjectIds = new Set(
         projects.filter((project) => project.isSequential && !project.deletedAt).map((project) => project.id),
     );
+    // Waiting tasks hold their chain slot: a waiting first step keeps a
+    // sequential project's later next tasks out of the review candidates too
+    // ("later steps aren't actionable yet" applies while waiting on someone).
     const sequentialFirstTaskIds = getSequentialFirstTaskIds(
-        activeTasks.filter((task) => task.status === 'next'),
+        activeTasks.filter((task) => isSequentialChainStatus(task.status)),
         sequentialProjectIds,
     );
 

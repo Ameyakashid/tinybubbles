@@ -458,6 +458,18 @@ export function getNextFutureStartRevealAt(
     return next;
 }
 
+/**
+ * Statuses that occupy a slot in a sequential project's chain. `next` is the
+ * actionable step; `waiting` is a committed step blocked on someone else, so
+ * it holds its place and keeps later steps out of Focus/Next until it clears
+ * — deferring by person blocks the chain exactly like deferring by date
+ * already does. Inbox (unclarified) and someday (uncommitted) deliberately do
+ * NOT hold a slot: they are not steps of the sequence yet.
+ */
+export function isSequentialChainStatus(status: TaskStatus | undefined): boolean {
+    return status === 'next' || status === 'waiting';
+}
+
 export function getSequentialFirstTaskIds<T extends Pick<Task, 'createdAt' | 'id' | 'order' | 'orderNum' | 'projectId'> & Partial<Pick<Task, 'sectionId'>>>(
     tasks: T[],
     sequentialProjectIds: ReadonlySet<string>,
@@ -498,12 +510,12 @@ export function isFocusSequentialCandidate(
     options: FocusSequentialOptions = {},
 ): boolean {
     if (task.isFocusedToday === true) return true;
-    if (task.status === 'next') return true;
+    if (isSequentialChainStatus(task.status)) return true;
     return isDueForReview(task.reviewAt, options.now);
 }
 
 function getFocusSequentialScheduleKey(
-    task: Pick<Task, 'dueDate' | 'isFocusedToday' | 'reviewAt'>,
+    task: Pick<Task, 'dueDate' | 'isFocusedToday' | 'reviewAt' | 'status'>,
     now: Date,
 ): { rank: number; time: number } {
     if (task.isFocusedToday === true) {
@@ -520,8 +532,12 @@ function getFocusSequentialScheduleKey(
     // date deliberately does not — a later task becoming available today only
     // gates that task, it must not displace an earlier task in the sequence
     // (#1015: the displaced winner can even be hidden by its own start time,
-    // leaving the whole project missing from Focus).
-    if (Number.isFinite(dueMs) && dueMs <= endOfTodayMs) {
+    // leaving the whole project missing from Focus). A waiting task's due
+    // date earns nothing either: it is not actionable, and letting it outrank
+    // an earlier actionable step would hide real work. Waiting tasks hold
+    // their slot by order alone (review-due keeps its rank — those surface in
+    // Focus's review section regardless of status).
+    if (Number.isFinite(dueMs) && dueMs <= endOfTodayMs && task.status !== 'waiting') {
         scheduledTime = Math.min(scheduledTime, dueMs);
     }
     if (isDueForReview(task.reviewAt, now) && Number.isFinite(reviewMs)) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { type Task, type TaskStatus, useTaskStore, isTaskInActiveProject, getSequentialFirstTaskIds } from '@mindwtr/core';
+import { type Task, type TaskStatus, useTaskStore, isTaskInActiveProject, getSequentialFirstTaskIds, isSequentialChainStatus } from '@mindwtr/core';
 import { useConditionalMemo } from './useConditionalMemo';
 import { useProgressiveComputation } from './useProgressiveComputation';
 
@@ -35,8 +35,10 @@ export function useListViewOptimizations(
             perfApi?.trackUseMemo?.();
             const compute = () => {
                 if (sequentialProjectIds.size === 0) return new Set<string>();
+                // Waiting tasks hold their chain slot too: a waiting first
+                // step keeps later next tasks out of the Next list.
                 return getSequentialFirstTaskIds(
-                    baseTasks.filter((task) => !task.deletedAt && task.status === 'next'),
+                    baseTasks.filter((task) => !task.deletedAt && isSequentialChainStatus(task.status)),
                     sequentialProjectIds,
                     { sectionScopedProjectIds: sequentialWithinSectionProjectIds },
                 );

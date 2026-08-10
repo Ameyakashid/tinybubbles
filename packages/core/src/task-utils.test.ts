@@ -1033,14 +1033,43 @@ describe('task-utils', () => {
     describe('getFocusSequentialFirstTaskIds', () => {
         const now = new Date('2026-04-05T12:00:00.000Z');
 
-        it('skips earlier non-Focus tasks when picking the first sequential candidate', () => {
+        it('skips earlier inbox and someday tasks when picking the first sequential candidate', () => {
             const firstTaskIds = getFocusSequentialFirstTaskIds([
                 { id: 'inbox-before', projectId: 'p1', status: 'inbox', order: 0, orderNum: undefined, createdAt: '2026-04-01T00:00:00.000Z' },
-                { id: 'waiting-before', projectId: 'p1', status: 'waiting', order: 1, orderNum: undefined, createdAt: '2026-04-02T00:00:00.000Z' },
+                { id: 'someday-before', projectId: 'p1', status: 'someday', order: 1, orderNum: undefined, createdAt: '2026-04-02T00:00:00.000Z' },
                 { id: 'next-visible', projectId: 'p1', status: 'next', order: 2, orderNum: undefined, createdAt: '2026-04-03T00:00:00.000Z' },
             ], new Set(['p1']), { now });
 
             expect([...firstTaskIds]).toEqual(['next-visible']);
+        });
+
+        it('lets a waiting first step hold the slot and block later next tasks', () => {
+            // GTD: a committed step blocked on someone else keeps its place in
+            // the sequence — the project is legitimately blocked, so nothing
+            // from it surfaces in Focus until the waiting step clears.
+            const firstTaskIds = getFocusSequentialFirstTaskIds([
+                { id: 'waiting-first', projectId: 'p1', status: 'waiting', order: 1, orderNum: undefined, createdAt: '2026-04-01T00:00:00.000Z' },
+                { id: 'next-after', projectId: 'p1', status: 'next', order: 2, orderNum: undefined, createdAt: '2026-04-02T00:00:00.000Z' },
+            ], new Set(['p1']), { now });
+
+            expect([...firstTaskIds]).toEqual(['waiting-first']);
+        });
+
+        it('never lets a later waiting task steal the slot via its due date', () => {
+            const firstTaskIds = getFocusSequentialFirstTaskIds([
+                { id: 'next-first', projectId: 'p1', status: 'next', order: 1, orderNum: undefined, createdAt: '2026-04-01T00:00:00.000Z' },
+                {
+                    id: 'waiting-due-today',
+                    projectId: 'p1',
+                    status: 'waiting',
+                    dueDate: '2026-04-05T14:00:00.000Z',
+                    order: 2,
+                    orderNum: undefined,
+                    createdAt: '2026-04-02T00:00:00.000Z',
+                },
+            ], new Set(['p1']), { now });
+
+            expect([...firstTaskIds]).toEqual(['next-first']);
         });
 
         it('keeps review-due and today-focus tasks in the sequential candidate set', () => {

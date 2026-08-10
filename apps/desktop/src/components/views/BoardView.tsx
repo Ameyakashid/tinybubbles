@@ -19,7 +19,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { TaskItem } from '../TaskItem';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, translateWithFallback, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
+import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, isSequentialChainStatus, translateWithFallback, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
 import { resolveBoardDragEnd } from './board-view-dnd';
 import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
 import { useLanguage } from '../../contexts/language-context';
@@ -353,8 +353,11 @@ export function BoardView() {
         return perf.measure('sequentialProjectFirstTasks', () => {
             if (!computeSequential) return new Set<string>();
             if (sequentialProjectIds.size === 0) return new Set<string>();
-            const nextTasks = filteredTasks.filter((task) => !task.deletedAt && task.status === 'next');
-            return getSequentialFirstTaskIds(nextTasks, sequentialProjectIds);
+            // Waiting tasks hold their chain slot too (a waiting first step
+            // blocks the later ones), so they join the slot computation even
+            // though the board never renders them in the Next column.
+            const chainTasks = filteredTasks.filter((task) => !task.deletedAt && isSequentialChainStatus(task.status));
+            return getSequentialFirstTaskIds(chainTasks, sequentialProjectIds);
         });
     }, [computeSequential, filteredTasks, sequentialProjectIds]);
 

@@ -243,10 +243,14 @@ function computeTodayFocusTasks(
         return Boolean(due && due <= endOfToday) || startsToday;
     };
 
+    // Waiting tasks hold their chain slot (a waiting first step blocks the
+    // later ones); the future-start deferral below only applies to next
+    // tasks — a waiting step blocks by existing, whenever it starts.
     const sequentialFirstTaskIds = getSequentialFirstTaskIds(
         activeTasks.filter((task) => (
-            task.status === 'next'
-            && (!isPlannedForFuture(task) || isScheduleCandidate(task))
+            task.status === 'waiting'
+            || (task.status === 'next'
+                && (!isPlannedForFuture(task) || isScheduleCandidate(task)))
         )),
         sequentialProjectIds,
         { sectionScopedProjectIds: sequentialWithinSectionProjectIds },
