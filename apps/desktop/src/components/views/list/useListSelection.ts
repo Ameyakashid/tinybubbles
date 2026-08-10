@@ -16,7 +16,7 @@ import type {
 } from '@mindwtr/core';
 
 import type { TaskListScope } from '../../../contexts/keybinding-context';
-import { useRegisteredTaskListScope } from './task-list-scope';
+import { focusTaskRowWhenMounted, useRegisteredTaskListScope } from './task-list-scope';
 import { useTaskSelection } from './useTaskSelection';
 
 type ShowToast = (
@@ -118,6 +118,8 @@ export function useListSelection({
     // already inside a task title toggle (checked at settle time), so j/k
     // navigation from the sidebar/body keeps working without focus side effects.
     const pendingSelectionFocusRef = useRef(false);
+    // Last highlight id whose row was handed DOM focus (#1014).
+    const focusedHighlightIdRef = useRef<string | null>(null);
 
     const requestSelectionScroll = useCallback(() => {
         pendingSelectionScrollRef.current = true;
@@ -244,11 +246,21 @@ export function useListSelection({
     }, [filteredTasks, selectedIndex, selectionScrollVersion]);
 
     useEffect(() => {
-        if (!highlightTaskId) return;
+        if (!highlightTaskId) {
+            focusedHighlightIdRef.current = null;
+            return;
+        }
         const index = filteredTasks.findIndex((task) => task.id === highlightTaskId);
         if (index < 0) return;
 
         setSelectedIndex(index);
+        // Focus once per highlight: the effect re-runs on list changes during
+        // the flash window, and refocusing then could steal focus from a modal
+        // the user already opened on the revealed task.
+        if (focusedHighlightIdRef.current !== highlightTaskId) {
+            focusedHighlightIdRef.current = highlightTaskId;
+            focusTaskRowWhenMounted(highlightTaskId);
+        }
         if (shouldVirtualize) {
             scrollToVirtualIndex(index, 'center');
         } else {

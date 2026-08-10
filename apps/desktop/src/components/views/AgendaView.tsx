@@ -36,7 +36,7 @@ import { StoreTaskItem } from './list/StoreTaskItem';
 import { GroupedTaskSectionHeader } from './list/GroupedTaskSections';
 import { useTaskGroupCollapse } from './list/useTaskGroupCollapse';
 import { LIST_END_GAP } from './list/list-toolbar';
-import { useTaskListScope } from './list/task-list-scope';
+import { focusTaskRowWhenMounted, useTaskListScope } from './list/task-list-scope';
 import {
     emptyCollapsedGroups,
     FOCUS_AXES,
@@ -616,6 +616,7 @@ export function AgendaView() {
         if (el && typeof (el as any).scrollIntoView === 'function') {
             el.scrollIntoView({ block: 'center' });
         }
+        focusTaskRowWhenMounted(highlightTaskId);
         const timer = window.setTimeout(() => setHighlightTask(null), 4000);
         return () => window.clearTimeout(timer);
     }, [highlightTaskId, setHighlightTask]);

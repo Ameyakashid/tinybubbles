@@ -516,14 +516,19 @@ describe('ProjectWorkspace Select mode', () => {
         vi.useFakeTimers();
         const highlightedTask = task('task-1', 'Highlighted task');
         const scrollIntoView = vi.fn();
-        let highlightQueryCount = 0;
+        // The row is "not mounted yet" until the flag flips: both the scroll
+        // retry and the focus retry (#1014) query for it, so the mock is
+        // state-based rather than call-count-based.
+        let rowMounted = false;
+        const fakeRow = {
+            scrollIntoView,
+            querySelector: () => null,
+            matches: () => false,
+        } as unknown as Element;
         const originalQuerySelector = document.querySelector.bind(document);
         const querySelectorSpy = vi.spyOn(document, 'querySelector').mockImplementation((selector) => {
             if (selector === '[data-task-id="task-1"]') {
-                highlightQueryCount += 1;
-                return highlightQueryCount === 1
-                    ? null
-                    : ({ scrollIntoView } as unknown as Element);
+                return rowMounted ? fakeRow : null;
             }
             return originalQuerySelector(selector);
         });
@@ -536,6 +541,7 @@ describe('ProjectWorkspace Select mode', () => {
 
             expect(scrollIntoView).not.toHaveBeenCalled();
 
+            rowMounted = true;
             await act(async () => {
                 await vi.advanceTimersByTimeAsync(50);
             });

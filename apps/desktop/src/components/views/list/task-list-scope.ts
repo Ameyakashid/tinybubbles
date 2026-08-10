@@ -65,19 +65,52 @@ function getFocusedTaskId(): string | null {
 
 const FOCUSABLE_ROW_SELECTOR = 'button, [tabindex]:not([tabindex="-1"])';
 
-function revealTaskRow(taskId: string): void {
-    const row = findTaskRow(taskId);
-    if (!row) return;
-    row.scrollIntoView?.({ block: 'nearest' });
+function focusTaskRowControl(row: HTMLElement): void {
     // A comma selector returns the first match in document order, which is the
     // done button — Enter would then complete the task (#847). Prefer the title
     // toggle so Enter opens the task instead. Calendar chips carry data-task-id
     // on the control itself, so fall back to the row when it is focusable: the
     // descendant lookups find nothing there.
     const focusTarget = row.querySelector<HTMLElement>('[data-task-view-toggle]')
-        ?? row.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')
+        ?? row.querySelector<HTMLElement>(FOCUSABLE_ROW_SELECTOR)
         ?? (row.matches(FOCUSABLE_ROW_SELECTOR) ? row : null);
     focusTarget?.focus();
+}
+
+function revealTaskRow(taskId: string): void {
+    const row = findTaskRow(taskId);
+    if (!row) return;
+    row.scrollIntoView?.({ block: 'nearest' });
+    focusTaskRowControl(row);
+}
+
+/**
+ * Moves keyboard focus to a task row's title toggle once the row is mounted.
+ * Highlight reveals (global search, duplicate-and-reveal) land here: the
+ * closing dialog restores focus to whatever held it before, so shortcuts and
+ * arrow keys would keep acting on that stale row instead of the revealed task
+ * (#1014). Bounded retries cover a virtualized row that mounts a frame after
+ * its scroll was requested. Never steals focus from a text field.
+ */
+export function focusTaskRowWhenMounted(taskId: string): void {
+    if (typeof document === 'undefined') return;
+    let attempts = 0;
+    const tryFocus = () => {
+        const active = document.activeElement;
+        if (
+            active instanceof HTMLElement
+            && active.closest('input, textarea, select, [contenteditable="true"]')
+        ) return;
+        const row = findTaskRow(taskId);
+        if (row) {
+            focusTaskRowControl(row);
+            return;
+        }
+        if (attempts >= 8) return;
+        attempts += 1;
+        window.setTimeout(tryFocus, 50);
+    };
+    tryFocus();
 }
 
 // Store actions report failure by returning `{ success: false }` rather than

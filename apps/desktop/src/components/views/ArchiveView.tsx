@@ -47,7 +47,7 @@ import {
     type DoneGroupBy,
     type TaskGroup,
 } from './list/next-grouping';
-import { useTaskListScope } from './list/task-list-scope';
+import { focusTaskRowWhenMounted, useTaskListScope } from './list/task-list-scope';
 import { useTaskSelection } from './list/useTaskSelection';
 import { useUiStore } from '../../store/ui-store';
 import { useLocalDayKey } from '../../hooks/useLocalDayKey';
@@ -483,6 +483,7 @@ export function ArchiveView() {
             if (rowIndex < 0) return;
             rowVirtualizer.scrollToIndex(rowIndex, { align: 'center' });
             scrolledHighlightIdRef.current = highlightTaskId;
+            focusTaskRowWhenMounted(highlightTaskId);
             return;
         }
 
@@ -495,6 +496,7 @@ export function ArchiveView() {
             if (element && typeof element.scrollIntoView === 'function') {
                 element.scrollIntoView({ block: 'center' });
                 scrolledHighlightIdRef.current = highlightTaskId;
+                focusTaskRowWhenMounted(highlightTaskId);
                 return;
             }
             // A row can be a frame behind the state change that revealed it.

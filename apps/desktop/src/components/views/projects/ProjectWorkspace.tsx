@@ -27,7 +27,7 @@ import { useUiStore } from '../../../store/ui-store';
 import { BulkSelectionToolbar } from '../list/BulkSelectionToolbar';
 import { LIST_END_GAP, SortBySelect, VIEW_FILTER_INPUT } from '../list/list-toolbar';
 import { sortDoneTasksForListView } from '../list/done-sort';
-import { useTaskListScope } from '../list/task-list-scope';
+import { focusTaskRowWhenMounted, useTaskListScope } from '../list/task-list-scope';
 import { useTaskSelection } from '../list/useTaskSelection';
 import { ListBulkActions } from '../list/ListBulkActions';
 import { TaskBulkOrganizeModal } from '../list/TaskBulkOrganizeModal';
@@ -793,6 +793,8 @@ export function ProjectWorkspace({
         [projectReferenceTasks, visibleProjectTaskList],
     );
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+    // Last highlight id whose row was handed DOM focus (#1014).
+    const focusedHighlightIdRef = useRef<string | null>(null);
     useTaskListScope({
         getTasks: () => keyboardVisibleTasks,
         getSelectedIndex: () => selectedTaskIndex,
@@ -802,9 +804,19 @@ export function ProjectWorkspace({
     });
 
     useEffect(() => {
-        if (!highlightTaskId) return;
+        if (!highlightTaskId) {
+            focusedHighlightIdRef.current = null;
+            return;
+        }
         const exists = [...orderedProjectTaskList, ...projectReferenceTasks].some((task) => task.id === highlightTaskId);
         if (!exists) return;
+        // Focus once per highlight: the effect re-runs on list changes during
+        // the flash window, and refocusing then could steal focus from a modal
+        // the user already opened on the revealed task (#1014).
+        if (focusedHighlightIdRef.current !== highlightTaskId) {
+            focusedHighlightIdRef.current = highlightTaskId;
+            focusTaskRowWhenMounted(highlightTaskId);
+        }
         let retryTimer: number | null = null;
         let cancelled = false;
         let attempts = 0;

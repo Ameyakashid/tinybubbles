@@ -34,7 +34,7 @@ const mountTaskRows = (tasks: Task[]): Map<string, HTMLButtonElement> => {
     return toggles;
 };
 
-const renderListSelection = (filteredTasks: Task[]) => {
+const renderListSelection = (filteredTasks: Task[], highlightTaskId: string | null = null) => {
     let scope: Scope = null;
     const registerTaskListScope = (next: unknown) => {
         scope = next as Scope;
@@ -47,7 +47,7 @@ const renderListSelection = (filteredTasks: Task[]) => {
         batchUpdateTasks: vi.fn(),
         deleteTask: vi.fn(),
         filteredTasks,
-        highlightTaskId: null,
+        highlightTaskId,
         isProcessing: false,
         moveTask: vi.fn(),
         prioritiesEnabled: false,
@@ -108,6 +108,33 @@ describe('useListSelection keyboard focus follows selection (#860)', () => {
         });
 
         expect(document.activeElement).toBe(before);
+        expect(document.activeElement).not.toBe(toggles.get('two'));
+    });
+});
+
+describe('highlight reveal moves keyboard focus (#1014)', () => {
+    it('focuses the highlighted task row even when a stale row still holds focus', () => {
+        const tasks = [makeTask('one'), makeTask('two')];
+        const toggles = mountTaskRows(tasks);
+        // The closing search dialog restores focus to the previously focused
+        // row; the highlight reveal must override it.
+        toggles.get('one')!.focus();
+
+        renderListSelection(tasks, 'two');
+
+        expect(document.activeElement).toBe(toggles.get('two'));
+    });
+
+    it('does not steal focus from a text field', () => {
+        const tasks = [makeTask('one'), makeTask('two')];
+        const toggles = mountTaskRows(tasks);
+        const input = document.createElement('input');
+        document.body.appendChild(input);
+        input.focus();
+
+        renderListSelection(tasks, 'two');
+
+        expect(document.activeElement).toBe(input);
         expect(document.activeElement).not.toBe(toggles.get('two'));
     });
 });
