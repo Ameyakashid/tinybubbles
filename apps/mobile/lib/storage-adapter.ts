@@ -1228,6 +1228,19 @@ const createStorage = (): StorageAdapter => {
                     const writeStartedAt = Date.now();
                     await measureStartupPhase('mobile.storage.save_data.sqlite_write', async () => adapter.saveData(data));
                     const writeMs = Date.now() - writeStartedAt;
+                    // A large-share rewrite logs even when the write is fast:
+                    // a sync-rewrite loop (#766) must stay visible in user logs
+                    // once hardware or fixes make the writes cheap, and the
+                    // diagnostic names the oscillating columns.
+                    const rewriteStats = adapter.getLastSaveDataStats?.();
+                    if (rewriteStats?.rewriteDiagnostics?.length) {
+                        logStorageInfo('[Storage] Large incremental rewrite', {
+                            writeMs: String(writeMs),
+                            rowsWritten: String(rewriteStats.writtenRows),
+                            rowsTotal: String(rewriteStats.totalRows),
+                            diagnostics: JSON.stringify(rewriteStats.rewriteDiagnostics),
+                        });
+                    }
                     if (writeMs >= SQLITE_SLOW_WRITE_LOG_THRESHOLD_MS) {
                         const stats = adapter.getLastSaveDataStats?.();
                         logStorageInfo('[Storage] Slow SQLite save', {

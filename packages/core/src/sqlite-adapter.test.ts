@@ -1629,6 +1629,53 @@ describeSqlite('SqliteAdapter incremental saveData', () => {
         });
     });
 
+    it('names the oscillating columns when a save rewrites a large share of a table (#766)', async () => {
+        const now = '2026-07-01T08:00:00.000Z';
+        const manyTasks = Array.from({ length: 200 }, (_, i) => ({
+            id: `bulk-${i}`,
+            title: `Bulk ${i}`,
+            status: 'next' as const,
+            tags: [],
+            contexts: [],
+            createdAt: now,
+            updatedAt: now,
+            rev: 1,
+            revBy: 'dev-a',
+            ...(i < 120 ? { deletedAt: now, purgedAt: now } : {}),
+        }));
+        const data = { ...baseData(), tasks: manyTasks };
+        await adapter.saveData(data);
+        expect(adapter.getLastSaveDataStats().rewriteDiagnostics).toBeUndefined();
+
+        // Flip one column on 150 pre-existing rows (120 purged + 30 live) —
+        // the rc.2 sync-loop shape. The diagnostic must name the column and
+        // count the tombstones.
+        await adapter.saveData({
+            ...data,
+            tasks: manyTasks.map((task, i) => (i < 150 ? { ...task, pushCount: 1 } : task)),
+        });
+        const diagnostics = adapter.getLastSaveDataStats().rewriteDiagnostics;
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics?.[0]).toMatchObject({
+            table: 'tasks',
+            changedRows: 150,
+            tableRows: 200,
+            changedColumns: ['pushCount'],
+            purgedChangedRows: 120,
+        });
+
+        // A handful of changed rows stays below the threshold: no diagnostic.
+        await adapter.saveData({
+            ...data,
+            tasks: manyTasks.map((task, i) => (i < 150 ? { ...task, pushCount: 2 } : { ...task, title: `Renamed ${i}` })),
+        });
+        await adapter.saveData({
+            ...data,
+            tasks: manyTasks.map((task, i) => (i < 150 ? { ...task, pushCount: 2 } : { ...task, title: `Renamed again ${i}` })),
+        });
+        expect(adapter.getLastSaveDataStats().rewriteDiagnostics).toBeUndefined();
+    });
+
     it('treats content-identical task clones as unchanged without relying on object identity (#766)', async () => {
         const data = baseData();
         await adapter.saveData(data);

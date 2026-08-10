@@ -308,12 +308,36 @@ export function mapSqliteTaskRow(row: Record<string, unknown>): Task {
     };
 }
 
+/**
+ * Emitted when an incremental save rewrites a suspiciously large share of a
+ * table — the fingerprint of a sync-rewrite loop (#766). Names the columns
+ * that actually differed on a small sample, so a user log can identify the
+ * oscillating field (the rc.2 loop would have shown `changedColumns:
+ * ["pushCount"]`, `purgedChangedRows` ≈ all) without a repro environment.
+ */
+export type SqliteRewriteDiagnostic = {
+    table: string;
+    changedRows: number;
+    tableRows: number;
+    /** Rows in the changed set whose purgedAt column is set (tombstones). */
+    purgedChangedRows?: number;
+    /** Union of differing column names across the sampled changed rows. */
+    changedColumns: string[];
+    sampleSize: number;
+};
+
+const REWRITE_DIAGNOSTIC_MIN_ROWS = 100;
+const REWRITE_DIAGNOSTIC_MIN_SHARE = 0.05;
+const REWRITE_DIAGNOSTIC_SAMPLE = 3;
+
 export type SqliteSaveDataStats = {
     incremental: boolean;
     writtenRows: number;
     removedRows: number;
     totalRows: number;
     settingsWritten: boolean;
+    /** Present only when a table tripped the large-rewrite threshold. */
+    rewriteDiagnostics?: SqliteRewriteDiagnostic[];
     /** Await time spent on BEGIN IMMEDIATE (long values point at writer-lock contention). */
     beginMs: number;
     /** Await time spent on COMMIT (long values point at fsync/checkpoint cost). */
@@ -1121,6 +1145,7 @@ export class SqliteAdapter {
                 const fingerprints = new Map<string, string>();
                 const knownVersions = new Map<string, SqliteKnownRowVersion>();
                 const changedRows: unknown[][] = [];
+                const changedSamples: Array<{ row: unknown[]; previous: string }> = [];
                 for (let i = 0; i < rows.length; i += 1) {
                     const row = rows[i];
                     const id = String(row[0]);
@@ -1136,14 +1161,58 @@ export class SqliteAdapter {
                             updatedAt: typeof rawUpdatedAt === 'string' ? rawUpdatedAt : null,
                         });
                     }
-                    if (previousRows?.get(id) !== fingerprint) {
+                    const previousFingerprint = previousRows?.get(id);
+                    if (previousFingerprint !== fingerprint) {
                         changedRows.push(row);
+                        if (previousFingerprint !== undefined && changedSamples.length < REWRITE_DIAGNOSTIC_SAMPLE) {
+                            changedSamples.push({ row, previous: previousFingerprint });
+                        }
                     }
                 }
                 nextSave.tables.set(table, fingerprints);
                 nextKnownRows.set(table, knownVersions);
                 stats.totalRows += rows.length;
                 stats.writtenRows += changedRows.length;
+                // A large-share rewrite of pre-existing rows is the fingerprint
+                // of a sync-rewrite loop (#766): name the oscillating columns
+                // from a small sample so a single user log can identify the
+                // field. Zero cost below the threshold.
+                if (
+                    changedRows.length >= REWRITE_DIAGNOSTIC_MIN_ROWS
+                    && changedRows.length >= rows.length * REWRITE_DIAGNOSTIC_MIN_SHARE
+                    && changedSamples.length > 0
+                ) {
+                    const changedColumns = new Set<string>();
+                    for (const sample of changedSamples) {
+                        try {
+                            const previousRow = JSON.parse(sample.previous) as unknown[];
+                            for (let c = 0; c < columns.length; c += 1) {
+                                if (JSON.stringify(sample.row[c]) !== JSON.stringify(previousRow[c])) {
+                                    changedColumns.add(columns[c]);
+                                }
+                            }
+                        } catch {
+                            // A malformed previous fingerprint only costs the sample.
+                        }
+                    }
+                    const purgedIndex = columns.indexOf('purgedAt');
+                    const diagnostic: SqliteRewriteDiagnostic = {
+                        table,
+                        changedRows: changedRows.length,
+                        tableRows: rows.length,
+                        changedColumns: [...changedColumns].sort(),
+                        sampleSize: changedSamples.length,
+                        ...(purgedIndex >= 0
+                            ? {
+                                purgedChangedRows: changedRows.reduce(
+                                    (count, row) => count + (row[purgedIndex] ? 1 : 0),
+                                    0,
+                                ),
+                            }
+                            : {}),
+                    };
+                    (stats.rewriteDiagnostics ??= []).push(diagnostic);
+                }
                 if (changedRows.length === 0) return;
                 const columnList = columns.join(', ');
                 const placeholders = `(${columns.map(() => '?').join(', ')})`;
