@@ -137,6 +137,16 @@ describe('useSyncSettingsBackupActions', () => {
         ]);
     });
 
+    it('formats collision-safe recovery snapshot names as dates', async () => {
+        await act(async () => {
+            create(<Harness />);
+        });
+
+        const snapshotName = 'data.2026-08-09T12-34-05.123.1.snapshot.json';
+        expect(latest?.formatRecoverySnapshotLabel(snapshotName)).not.toBe(snapshotName);
+        expect(latest?.formatRecoverySnapshotLabel('unrecognized.snapshot.json')).toBe('unrecognized.snapshot.json');
+    });
+
     it('exports the authoritative in-memory snapshot at press time', async () => {
         const snapshot = {
             tasks: [{ id: 'deleted-task', deleted: true, attachments: [{ id: 'deleted-file', deleted: true }] }],

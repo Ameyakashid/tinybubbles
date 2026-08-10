@@ -112,10 +112,12 @@ export function useSyncSettingsBackupActions({
         return diagnostic ? formatImportDiagnostic(diagnostic, tr) : String(error);
     }, [tr]);
     const formatRecoverySnapshotLabel = useCallback((fileName: string): string => {
-        const match = fileName.match(/^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})\.snapshot\.json$/i);
+        const match = fileName.match(
+            /^data\.(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})(?:\.(\d{3})(?:\.\d+)?)?\.snapshot\.json$/i,
+        );
         if (!match) return fileName;
-        const [, datePart, hour, minute, second] = match;
-        const localDate = new Date(`${datePart}T${hour}:${minute}:${second}Z`);
+        const [, datePart, hour, minute, second, milliseconds = '000'] = match;
+        const localDate = new Date(`${datePart}T${hour}:${minute}:${second}.${milliseconds}Z`);
         return `${localDate.toLocaleDateString()} ${localDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }, []);
 

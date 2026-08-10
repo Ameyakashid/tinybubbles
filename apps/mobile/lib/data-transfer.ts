@@ -51,7 +51,7 @@ import { mobileStorage } from './storage-adapter';
 
 const StorageAccessFramework = FileSystem.StorageAccessFramework;
 const SNAPSHOT_DIR_NAME = 'snapshots';
-const SNAPSHOT_FILE_PATTERN = /^data\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.snapshot\.json$/u;
+const SNAPSHOT_FILE_PATTERN = /^data\.(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:\.(\d{3})(?:\.(\d+))?)?\.snapshot\.json$/u;
 const MAX_LOCAL_SNAPSHOTS = 5;
 
 export type TransferDocument = {
@@ -90,12 +90,14 @@ const getSnapshotDirectory = (): Directory | null => {
     return new Directory(`${baseUri}/${SNAPSHOT_DIR_NAME}`);
 };
 
-const buildSnapshotFileName = (date: Date = new Date()): string => {
+const buildSnapshotFileName = (date: Date = new Date(), collisionIndex = 0): string => {
     const iso = date.toISOString();
-    const [datePart, timePartWithMs] = iso.split('T');
-    const [timePart] = (timePartWithMs || '').split('.');
-    const safeTime = String(timePart || '00:00:00').replace(/:/gu, '-');
-    return `data.${datePart}T${safeTime}.snapshot.json`;
+    const [datePart, timePartWithZone] = iso.split('T');
+    const safeTime = String(timePartWithZone || '00:00:00.000Z')
+        .replace(/Z$/u, '')
+        .replace(/:/gu, '-');
+    const collisionSuffix = collisionIndex > 0 ? `.${collisionIndex}` : '';
+    return `data.${datePart}T${safeTime}${collisionSuffix}.snapshot.json`;
 };
 
 const listSnapshotEntries = (directory: Directory): Array<{ name: string; uri: string }> => {
@@ -105,10 +107,21 @@ const listSnapshotEntries = (directory: Directory): Array<{ name: string; uri: s
         .map((entry) => {
             const uri = String(entry.uri || '');
             const name = uri.split('/').pop() || '';
-            return { name, uri };
+            const match = name.match(SNAPSHOT_FILE_PATTERN);
+            if (!match) return null;
+            return {
+                name,
+                uri,
+                timestampKey: `${match[1]}.${match[2] ?? '000'}`,
+                collisionIndex: Number(match[3] ?? 0),
+            };
         })
-        .filter((entry) => SNAPSHOT_FILE_PATTERN.test(entry.name))
-        .sort((left, right) => right.name.localeCompare(left.name));
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+        .sort((left, right) =>
+            right.timestampKey.localeCompare(left.timestampKey)
+            || right.collisionIndex - left.collisionIndex
+        )
+        .map(({ name, uri }) => ({ name, uri }));
 };
 
 const pruneSnapshots = (directory: Directory): void => {
@@ -204,12 +217,16 @@ const saveCurrentDataSnapshot = async (data: AppData): Promise<string> => {
         throw new Error('Snapshot storage is unavailable on this device.');
     }
     directory.create({ intermediates: true, idempotent: true });
-    const fileName = buildSnapshotFileName();
-    const file = new File(`${directory.uri}/${fileName}`);
-    if (file.exists) {
-        file.delete();
+    const snapshotAt = new Date();
+    let collisionIndex = 0;
+    let fileName = buildSnapshotFileName(snapshotAt);
+    let file = new File(`${directory.uri}/${fileName}`);
+    while (file.exists) {
+        collisionIndex += 1;
+        fileName = buildSnapshotFileName(snapshotAt, collisionIndex);
+        file = new File(`${directory.uri}/${fileName}`);
     }
-    file.create({ intermediates: true, overwrite: true });
+    file.create({ intermediates: true, overwrite: false });
     file.write(serializeBackupData(data));
     pruneSnapshots(directory);
     void logInfo('Recovery snapshot complete', {

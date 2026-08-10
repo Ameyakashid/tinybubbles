@@ -34,6 +34,7 @@ const logMocks = vi.hoisted(() => ({
 }));
 
 const fileSystemMocks = vi.hoisted(() => ({
+  fileContents: new Map<string, string>(),
   fileWrites: [] as string[],
   getInfoAsync: vi.fn(),
   readAsStringAsync: vi.fn(),
@@ -81,20 +82,27 @@ vi.mock('expo-file-system', () => ({
     }
 
     create() {}
-    list() { return []; }
+    list() {
+      return Array.from(fileSystemMocks.fileContents.keys())
+        .filter((uri) => uri.startsWith(`${this.uri}/`))
+        .map((uri) => ({ uri }));
+    }
   },
   File: class File {
     uri: string;
-    exists = false;
 
     constructor(uri: string) {
       this.uri = uri;
     }
 
-    create() {}
-    delete() {}
-    write(text: string) { fileSystemMocks.fileWrites.push(text); }
-    async text() { return '{}'; }
+    get exists() { return fileSystemMocks.fileContents.has(this.uri); }
+    create() { fileSystemMocks.fileContents.set(this.uri, ''); }
+    delete() { fileSystemMocks.fileContents.delete(this.uri); }
+    write(text: string) {
+      fileSystemMocks.fileWrites.push(text);
+      fileSystemMocks.fileContents.set(this.uri, text);
+    }
+    async text() { return fileSystemMocks.fileContents.get(this.uri) ?? '{}'; }
     async bytes() { return new Uint8Array(); }
   },
 }));
@@ -111,7 +119,14 @@ vi.mock('./app-log', () => ({
   logInfo: logMocks.logInfo,
 }));
 
-import { createMobileRecoverySnapshot, importTodoistData, inspectBackupDocument, inspectMindwtrCsvDocument } from './data-transfer';
+import {
+  createMobileRecoverySnapshot,
+  importTodoistData,
+  inspectBackupDocument,
+  inspectMindwtrCsvDocument,
+  listLocalDataSnapshots,
+  restoreLocalDataSnapshot,
+} from './data-transfer';
 
 const parsedProjects: ParsedTodoistProject[] = [{
   name: 'Todoist',
@@ -126,11 +141,12 @@ const parsedProjects: ParsedTodoistProject[] = [{
 }];
 
 const SNAPSHOT_FILE_NAME_PATTERN =
-  /^data\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.snapshot\.json$/u;
+  /^data\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}(?:\.\d+)?\.snapshot\.json$/u;
 
 describe('mobile data transfer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    fileSystemMocks.fileContents.clear();
     fileSystemMocks.fileWrites = [];
     fileSystemMocks.readAsStringAsync.mockResolvedValue('');
     fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true, size: 1 });
@@ -197,6 +213,26 @@ describe('mobile data transfer', () => {
     expect(fileSystemMocks.fileWrites).toHaveLength(1);
     expect(storageMocks.saveData).not.toHaveBeenCalled();
     expect(storeStateRef.current.fetchData).not.toHaveBeenCalled();
+  });
+
+  it('keeps and restores both recovery snapshots created at the same instant', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-09T12:34:05.123Z'));
+    try {
+      const firstSnapshot = await createMobileRecoverySnapshot();
+      const secondSnapshot = await createMobileRecoverySnapshot();
+
+      expect(firstSnapshot).toBe('data.2026-08-09T12-34-05.123.snapshot.json');
+      expect(secondSnapshot).toBe('data.2026-08-09T12-34-05.123.1.snapshot.json');
+      await expect(listLocalDataSnapshots()).resolves.toEqual([
+        secondSnapshot,
+        firstSnapshot,
+      ]);
+      expect(fileSystemMocks.fileContents).toHaveLength(2);
+      await expect(restoreLocalDataSnapshot(secondSnapshot)).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not write a recovery snapshot from a stale local read', async () => {
