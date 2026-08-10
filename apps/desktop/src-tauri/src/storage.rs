@@ -9,6 +9,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
 use tauri::Manager;
@@ -36,15 +37,23 @@ const SNAPSHOT_RETENTION_RECENT_COUNT: usize = 2;
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 const STORAGE_RETRY_ATTEMPTS: usize = 4;
 const STORAGE_RETRY_BASE_DELAY_MS: u64 = 120;
+const STORAGE_SCHEMA_VERSION: i64 = 5;
+const STORAGE_SCHEMA_STATE_TABLE: &str = "storage_schema_state";
 // Version 4 adds assignedTo to the desktop-native FTS schema and forces one
 // content rebuild after the corrected triggers are installed.
 const FTS_TRIGGER_MIGRATION_VERSION: i64 = 4;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SqliteWarmState {
+    storage_version: i64,
+    schema_generation: i64,
+}
+
+static SQLITE_WARM_STATES: OnceLock<Mutex<HashMap<PathBuf, SqliteWarmState>>> = OnceLock::new();
+
 const SQLITE_SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 5000;
-PRAGMA temp_store = MEMORY;
 
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
@@ -194,6 +203,12 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS storage_schema_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  storage_version INTEGER NOT NULL,
+  schema_generation INTEGER NOT NULL
+);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
   id UNINDEXED,
@@ -391,55 +406,198 @@ pub(crate) fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
     get_data_dir(app).join(DB_FILE_NAME)
 }
 
-pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> {
-    let db_path = get_db_path(app);
+fn sqlite_schema_generation(conn: &Connection) -> Result<i64, String> {
+    conn.query_row("PRAGMA schema_version", [], |row| row.get(0))
+        .map_err(|e| e.to_string())
+}
+
+fn stored_sqlite_schema_state(conn: &Connection) -> Result<Option<SqliteWarmState>, String> {
+    if !sqlite_table_exists(conn, STORAGE_SCHEMA_STATE_TABLE)? {
+        return Ok(None);
+    }
+    conn.query_row(
+        "SELECT storage_version, schema_generation FROM storage_schema_state WHERE id = 1",
+        [],
+        |row| {
+            Ok(SqliteWarmState {
+                storage_version: row.get(0)?,
+                schema_generation: row.get(1)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn sqlite_schema_state_is_current(
+    conn: &Connection,
+    schema_generation: i64,
+) -> Result<bool, String> {
+    Ok(stored_sqlite_schema_state(conn)?.is_some_and(|state| {
+        state.storage_version == STORAGE_SCHEMA_VERSION
+            && state.schema_generation == schema_generation
+    }))
+}
+
+fn record_sqlite_schema_state(conn: &Connection, schema_generation: i64) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO storage_schema_state (id, storage_version, schema_generation)
+         VALUES (1, ?1, ?2)
+         ON CONFLICT(id) DO UPDATE SET
+           storage_version = excluded.storage_version,
+           schema_generation = excluded.schema_generation",
+        params![STORAGE_SCHEMA_VERSION, schema_generation],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn initialize_sqlite_schema(conn: &mut Connection) -> Result<i64, String> {
+    conn.execute_batch("PRAGMA journal_mode = WAL;")
+        .map_err(|e| e.to_string())?;
+    let transaction = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let current_generation = sqlite_schema_generation(&transaction)?;
+        if sqlite_schema_state_is_current(&transaction, current_generation)? {
+            return Ok(current_generation);
+        }
+
+        transaction
+            .execute_batch(SQLITE_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        ensure_orphan_section_tombstones_schema(&transaction)?;
+        ensure_column(&transaction, "tasks", "energyLevel", "TEXT")?;
+        ensure_column(&transaction, "tasks", "assignedTo", "TEXT")?;
+        ensure_column(&transaction, "tasks", "textDirection", "TEXT")?;
+        ensure_column(&transaction, "tasks", "relativeStartOffset", "TEXT")?;
+        ensure_column(&transaction, "tasks", "showFutureRecurrence", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "suppressMindwtrReminders", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "repeatReminderMinutes", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "timeSpentMinutes", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "statusBeforeProjectArchive", "TEXT")?;
+        ensure_column(
+            &transaction,
+            "tasks",
+            "completedAtBeforeProjectArchive",
+            "TEXT",
+        )?;
+        ensure_column(
+            &transaction,
+            "tasks",
+            "isFocusedTodayBeforeProjectArchive",
+            "INTEGER",
+        )?;
+        ensure_column(&transaction, "tasks", "projectArchivedAt", "TEXT")?;
+        ensure_column(
+            &transaction,
+            "sections",
+            "deletedAtBeforeProjectArchive",
+            "TEXT",
+        )?;
+        ensure_column(&transaction, "sections", "projectArchivedAt", "TEXT")?;
+        ensure_column(
+            &transaction,
+            "areas",
+            "deletedAtBeforeProjectArchive",
+            "TEXT",
+        )?;
+        ensure_column(&transaction, "areas", "projectArchivedAt", "TEXT")?;
+        ensure_tasks_purged_at_column(&transaction)?;
+        ensure_tasks_order_column(&transaction)?;
+        ensure_column(&transaction, "tasks", "boardOrder", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "focusOrder", "INTEGER")?;
+        ensure_tasks_area_column(&transaction)?;
+        ensure_tasks_section_column(&transaction)?;
+        ensure_tasks_organization_indexes(&transaction)?;
+        ensure_projects_order_column(&transaction)?;
+        ensure_column(&transaction, "projects", "sequentialScope", "TEXT")?;
+        ensure_column(&transaction, "projects", "taskSortBy", "TEXT")?;
+        ensure_projects_due_date_column(&transaction)?;
+        ensure_projects_purged_at_column(&transaction)?;
+        ensure_projects_area_order_index(&transaction)?;
+        ensure_sync_revision_columns(&transaction)?;
+        ensure_fts_ready_in_transaction(&transaction)?;
+        ensure_calendar_sync_schema(&transaction)?;
+
+        let schema_generation = sqlite_schema_generation(&transaction)?;
+        record_sqlite_schema_state(&transaction, schema_generation)?;
+        Ok(schema_generation)
+    })();
+
+    match result {
+        Ok(schema_generation) => {
+            transaction.commit().map_err(|e| e.to_string())?;
+            Ok(schema_generation)
+        }
+        Err(error) => {
+            transaction.rollback().map_err(|rollback_error| {
+                format!("{error}; schema initialization rollback failed: {rollback_error}")
+            })?;
+            Err(error)
+        }
+    }
+}
+
+fn configure_sqlite_connection(conn: &Connection) -> Result<(), String> {
+    conn.busy_timeout(Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
+        .map_err(|e| e.to_string())?;
+    conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY;")
+        .map_err(|e| e.to_string())
+}
+
+fn resolved_sqlite_path(db_path: &Path) -> PathBuf {
+    fs::canonicalize(db_path).unwrap_or_else(|_| db_path.to_path_buf())
+}
+
+fn ensure_sqlite_initialized(conn: &mut Connection, db_path: &Path) -> Result<(), String> {
+    let resolved_path = resolved_sqlite_path(db_path);
+    let warm_states = SQLITE_WARM_STATES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut warm_states = warm_states
+        .lock()
+        .map_err(|_| "SQLite initialization state lock was poisoned".to_string())?;
+    let schema_generation = sqlite_schema_generation(conn)?;
+    if warm_states.get(&resolved_path).is_some_and(|state| {
+        state.storage_version == STORAGE_SCHEMA_VERSION
+            && state.schema_generation == schema_generation
+    }) {
+        return Ok(());
+    }
+    if sqlite_schema_state_is_current(conn, schema_generation)? {
+        warm_states.insert(
+            resolved_path,
+            SqliteWarmState {
+                storage_version: STORAGE_SCHEMA_VERSION,
+                schema_generation,
+            },
+        );
+        return Ok(());
+    }
+
+    let schema_generation = initialize_sqlite_schema(conn)?;
+    warm_states.insert(
+        resolved_path,
+        SqliteWarmState {
+            storage_version: STORAGE_SCHEMA_VERSION,
+            schema_generation,
+        },
+    );
+    Ok(())
+}
+
+fn open_sqlite_path(db_path: &Path) -> Result<Connection, String> {
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let mut conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-    conn.busy_timeout(Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
-        .map_err(|e| e.to_string())?;
-    conn.execute_batch(SQLITE_SCHEMA)
-        .map_err(|e| e.to_string())?;
-    ensure_orphan_section_tombstones_schema(&conn)?;
-    ensure_column(&conn, "tasks", "energyLevel", "TEXT")?;
-    ensure_column(&conn, "tasks", "assignedTo", "TEXT")?;
-    ensure_column(&conn, "tasks", "textDirection", "TEXT")?;
-    ensure_column(&conn, "tasks", "relativeStartOffset", "TEXT")?;
-    ensure_column(&conn, "tasks", "showFutureRecurrence", "INTEGER")?;
-    ensure_column(&conn, "tasks", "suppressMindwtrReminders", "INTEGER")?;
-    ensure_column(&conn, "tasks", "repeatReminderMinutes", "INTEGER")?;
-    ensure_column(&conn, "tasks", "timeSpentMinutes", "INTEGER")?;
-    ensure_column(&conn, "tasks", "statusBeforeProjectArchive", "TEXT")?;
-    ensure_column(&conn, "tasks", "completedAtBeforeProjectArchive", "TEXT")?;
-    ensure_column(
-        &conn,
-        "tasks",
-        "isFocusedTodayBeforeProjectArchive",
-        "INTEGER",
-    )?;
-    ensure_column(&conn, "tasks", "projectArchivedAt", "TEXT")?;
-    ensure_column(&conn, "sections", "deletedAtBeforeProjectArchive", "TEXT")?;
-    ensure_column(&conn, "sections", "projectArchivedAt", "TEXT")?;
-    ensure_column(&conn, "areas", "deletedAtBeforeProjectArchive", "TEXT")?;
-    ensure_column(&conn, "areas", "projectArchivedAt", "TEXT")?;
-    ensure_tasks_purged_at_column(&conn)?;
-    ensure_tasks_order_column(&conn)?;
-    ensure_column(&conn, "tasks", "boardOrder", "INTEGER")?;
-    ensure_column(&conn, "tasks", "focusOrder", "INTEGER")?;
-    ensure_tasks_area_column(&conn)?;
-    ensure_tasks_section_column(&conn)?;
-    ensure_tasks_organization_indexes(&conn)?;
-    ensure_projects_order_column(&conn)?;
-    ensure_column(&conn, "projects", "sequentialScope", "TEXT")?;
-    ensure_column(&conn, "projects", "taskSortBy", "TEXT")?;
-    ensure_projects_due_date_column(&conn)?;
-    ensure_projects_purged_at_column(&conn)?;
-    ensure_projects_area_order_index(&conn)?;
-    ensure_sync_revision_columns(&conn)?;
-    ensure_fts_ready(&mut conn)?;
-    ensure_calendar_sync_schema(&conn)?;
+    configure_sqlite_connection(&conn)?;
+    ensure_sqlite_initialized(&mut conn, db_path)?;
     Ok(conn)
+}
+
+pub(crate) fn open_sqlite(app: &tauri::AppHandle) -> Result<Connection, String> {
+    open_sqlite_path(&get_db_path(app))
 }
 
 // Sort orders are sparse and may be fractional (midpoints written by older app
@@ -1339,15 +1497,24 @@ fn ensure_fts_populated(conn: &Connection, force_rebuild: bool) -> Result<(), St
     Ok(())
 }
 
+fn ensure_fts_ready_in_transaction(conn: &Connection) -> Result<bool, String> {
+    let schema_changed = ensure_tasks_fts_schema(conn)?;
+    let triggers_changed = ensure_fts_triggers(conn)?;
+    ensure_fts_populated(conn, schema_changed || triggers_changed)?;
+    Ok(schema_changed || triggers_changed)
+}
+
 fn ensure_fts_ready(conn: &mut Connection) -> Result<bool, String> {
     let transaction = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| e.to_string())?;
     let result = (|| {
-        let schema_changed = ensure_tasks_fts_schema(&transaction)?;
-        let triggers_changed = ensure_fts_triggers(&transaction)?;
-        ensure_fts_populated(&transaction, schema_changed || triggers_changed)?;
-        Ok(schema_changed || triggers_changed)
+        let changed = ensure_fts_ready_in_transaction(&transaction)?;
+        if changed && sqlite_table_exists(&transaction, STORAGE_SCHEMA_STATE_TABLE)? {
+            let schema_generation = sqlite_schema_generation(&transaction)?;
+            record_sqlite_schema_state(&transaction, schema_generation)?;
+        }
+        Ok(changed)
     })();
 
     match result {
@@ -4521,10 +4688,15 @@ fn query_tasks_with_connection(
 
 #[tauri::command]
 pub(crate) fn search_fts(app: tauri::AppHandle, query: String) -> Result<Value, String> {
-    let conn = open_sqlite(&app)?;
+    let mut conn = open_sqlite(&app)?;
+    search_fts_with_connection(&mut conn, &query)
+}
+
+fn search_fts_with_connection(conn: &mut Connection, query: &str) -> Result<Value, String> {
     let Some(fts_query) = build_fts_query(&query) else {
         return Ok(serde_json::json!({ "tasks": [], "projects": [] }));
     };
+    ensure_fts_ready(conn)?;
 
     let mut tasks: Vec<Value> = Vec::new();
     let mut projects: Vec<Value> = Vec::new();
@@ -4614,6 +4786,7 @@ fn parse_json_relaxed(raw: &str) -> Result<Value, serde_json::Error> {
 mod tests {
     use super::*;
     use rusqlite::Connection;
+    use std::sync::{Arc, Barrier};
 
     #[test]
     fn rust_task_mapper_matches_core_schema_fixture() {
@@ -5559,6 +5732,166 @@ mod tests {
         assert!(column_names.iter().any(|name| name == "checklist"));
         assert!(column_names.iter().any(|name| name == "location"));
         assert!(column_names.iter().any(|name| name == "assignedTo"));
+    }
+
+    #[test]
+    fn warm_sqlite_open_defers_fts_drift_repair_until_search() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("warm-open.sqlite");
+        let conn = open_sqlite_path(&db_path).expect("initialize database");
+        conn.execute(
+            "INSERT INTO tasks (id, title, status, createdAt, updatedAt) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                "task-search-repair",
+                "Needle phrase",
+                "next",
+                "2026-08-09T00:00:00.000Z",
+                "2026-08-09T00:00:00.000Z"
+            ],
+        )
+        .expect("insert searchable task");
+        conn.execute("INSERT INTO tasks_fts(tasks_fts) VALUES('delete-all')", [])
+            .expect("remove FTS content without changing schema generation");
+        drop(conn);
+
+        let mut reopened = open_sqlite_path(&db_path).expect("warm reopen");
+        let before_search: i64 = reopened
+            .query_row("SELECT COUNT(*) FROM tasks_fts", [], |row| row.get(0))
+            .expect("inspect unrepaired FTS index");
+        assert_eq!(
+            before_search, 0,
+            "warm open must not scan and repair FTS content"
+        );
+
+        let result = search_fts_with_connection(&mut reopened, "needle")
+            .expect("search should repair FTS content first");
+        assert_eq!(result["tasks"][0]["id"], "task-search-repair");
+    }
+
+    #[test]
+    fn sqlite_open_reinitializes_after_schema_generation_changes() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("schema-generation.sqlite");
+        let conn = open_sqlite_path(&db_path).expect("initialize database");
+        conn.execute("DROP TRIGGER tasks_ai", [])
+            .expect("simulate external DDL");
+        let changed_generation = sqlite_schema_generation(&conn).expect("changed generation");
+        drop(conn);
+
+        let reopened = open_sqlite_path(&db_path).expect("reinitialize changed schema");
+        let trigger_count: i64 = reopened
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name = 'tasks_ai'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("inspect repaired trigger");
+        let repaired_generation = sqlite_schema_generation(&reopened).expect("repaired generation");
+        let stored_state = stored_sqlite_schema_state(&reopened)
+            .expect("read schema state")
+            .expect("schema state row");
+
+        assert_eq!(trigger_count, 1);
+        assert!(repaired_generation > changed_generation);
+        assert_eq!(stored_state.schema_generation, repaired_generation);
+        assert_eq!(stored_state.storage_version, STORAGE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn failed_sqlite_initialization_is_retried() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("retry-initialization.sqlite");
+        let conn = Connection::open(&db_path).expect("legacy connection");
+        conn.execute_batch(SQLITE_SCHEMA).expect("legacy schema");
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER tasks_ai;
+            DROP TRIGGER tasks_ad;
+            DROP TRIGGER tasks_au;
+            INSERT INTO tasks (id, title, status, checklist, createdAt, updatedAt)
+            VALUES ('task-malformed-checklist', 'Repair me', 'next', '{malformed',
+                    '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+            INSERT INTO tasks_fts (rowid, title, description, tags, contexts, checklist, location, assignedTo)
+            SELECT rowid, title, '', '', '', '', '', '' FROM tasks;
+            "#,
+        )
+        .expect("prepare failing migration");
+        drop(conn);
+
+        let error = open_sqlite_path(&db_path).expect_err("malformed FTS rebuild should fail");
+        assert!(
+            error.contains("malformed JSON"),
+            "unexpected error: {error}"
+        );
+
+        let conn = Connection::open(&db_path).expect("repair connection");
+        conn.execute(
+            "UPDATE tasks SET checklist = '[]' WHERE id = 'task-malformed-checklist'",
+            [],
+        )
+        .expect("repair malformed checklist");
+        drop(conn);
+
+        let reopened = open_sqlite_path(&db_path).expect("retry initialization");
+        let state = stored_sqlite_schema_state(&reopened)
+            .expect("read state")
+            .expect("current state");
+        assert_eq!(state.storage_version, STORAGE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn concurrent_first_sqlite_opens_share_one_current_schema() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = Arc::new(temp.path().join("concurrent-open.sqlite"));
+        let start = Arc::new(Barrier::new(3));
+        let handles = (0..2)
+            .map(|_| {
+                let db_path = Arc::clone(&db_path);
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    open_sqlite_path(db_path.as_ref()).map(drop)
+                })
+            })
+            .collect::<Vec<_>>();
+        start.wait();
+
+        for handle in handles {
+            handle
+                .join()
+                .expect("initialization thread")
+                .expect("concurrent open");
+        }
+
+        let conn = open_sqlite_path(db_path.as_ref()).expect("inspect initialized database");
+        let state_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM storage_schema_state", [], |row| {
+                row.get(0)
+            })
+            .expect("count schema state rows");
+        assert_eq!(state_count, 1);
+    }
+
+    #[test]
+    fn every_sqlite_connection_keeps_connection_local_pragmas() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("connection-pragmas.sqlite");
+
+        for _ in 0..2 {
+            let conn = open_sqlite_path(&db_path).expect("open configured connection");
+            let foreign_keys: i64 = conn
+                .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+                .expect("foreign key setting");
+            let busy_timeout: i64 = conn
+                .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+                .expect("busy timeout setting");
+            let temp_store: i64 = conn
+                .query_row("PRAGMA temp_store", [], |row| row.get(0))
+                .expect("temp store setting");
+            assert_eq!(foreign_keys, 1);
+            assert_eq!(busy_timeout, SQLITE_BUSY_TIMEOUT_MS as i64);
+            assert_eq!(temp_store, 2);
+        }
     }
 
     #[test]
