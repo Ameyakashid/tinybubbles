@@ -607,15 +607,16 @@ fn ensure_sqlite_initialized(
         .lock()
         .map_err(|_| "SQLite initialization state lock was poisoned".to_string())?;
     let schema_generation = sqlite_schema_generation(conn)?;
-    if warm_states.get(&resolved_path).is_some_and(|state| {
+    let warm_state_matches = warm_states.get(&resolved_path).is_some_and(|state| {
         state.storage_version == STORAGE_SCHEMA_VERSION
             && state.schema_generation == schema_generation
             && state.file_identity.is_some()
             && state.file_identity == file_identity
-    }) {
+    });
+    if warm_state_matches && sqlite_schema_state_is_current(conn, schema_generation)? {
         return Ok(());
     }
-    if sqlite_schema_state_is_current(conn, schema_generation)? {
+    if !warm_state_matches && sqlite_schema_state_is_current(conn, schema_generation)? {
         warm_states.insert(
             resolved_path,
             SqliteWarmState {
@@ -5928,6 +5929,47 @@ mod tests {
         let stored_state = stored_sqlite_schema_state(&reopened)
             .expect("read replacement schema state")
             .expect("replacement schema state row");
+        assert_eq!(stored_state.storage_version, STORAGE_SCHEMA_VERSION);
+        assert_eq!(
+            stored_state.schema_generation,
+            sqlite_schema_generation(&reopened).expect("reinitialized schema generation"),
+        );
+    }
+
+    #[test]
+    fn sqlite_open_reinitializes_after_same_generation_in_place_overwrite() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db_path = temp.path().join("same-generation-overwrite.sqlite");
+        let initialized = open_sqlite_path(&db_path).expect("initialize database");
+        let cached_generation =
+            sqlite_schema_generation(&initialized).expect("cached schema generation");
+        drop(initialized);
+        drop(open_sqlite_path(&db_path).expect("warm the process cache"));
+
+        let replacement_path = temp.path().join("overwrite-source.sqlite");
+        let replacement = Connection::open(&replacement_path).expect("replacement database");
+        replacement
+            .pragma_update(None, "schema_version", cached_generation)
+            .expect("match the cached schema generation");
+        drop(replacement);
+        let replacement_bytes = fs::read(&replacement_path).expect("read replacement database");
+
+        let mut destination = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&db_path)
+            .expect("open existing database object for overwrite");
+        destination
+            .write_all(&replacement_bytes)
+            .expect("overwrite database contents in place");
+        destination.sync_all().expect("sync replacement contents");
+        drop(destination);
+
+        let reopened = open_sqlite_path(&db_path).expect("initialize overwritten database");
+        assert!(sqlite_table_exists(&reopened, "tasks").expect("inspect overwritten schema"));
+        let stored_state = stored_sqlite_schema_state(&reopened)
+            .expect("read overwritten schema state")
+            .expect("overwritten schema state row");
         assert_eq!(stored_state.storage_version, STORAGE_SCHEMA_VERSION);
         assert_eq!(
             stored_state.schema_generation,
