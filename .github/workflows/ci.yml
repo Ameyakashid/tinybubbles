@@ -65,6 +65,7 @@ jobs:
         run: |
           node scripts/ci/check-package-lock-sync.js packages/core/package.json packages/core/package-lock.json --check-overrides
           node scripts/ci/check-package-lock-sync.js apps/desktop/package.json apps/desktop/package-lock.json --check-overrides
+          node scripts/ci/check-mobile-foss-lock-sync.js
 
       - name: Google Play listing metadata check
         run: |
