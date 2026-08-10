@@ -11,7 +11,7 @@ import {
     type PendingRemoteAttachmentDelete,
     type Project,
 } from '@mindwtr/core';
-import { corsOrigin, errorResponse, jsonResponse, logWarn } from './server-config';
+import { corsOrigin, errorResponse, jsonResponse, logFailureWarn } from './server-config';
 import { loadAppData } from './server-data-cache';
 import {
     isBodyReadError,
@@ -176,7 +176,10 @@ export function handleOrphanAttachmentGcRequest(dataDir: string, key: string, fi
     const data = loadAppData(filePath);
     const validated = validateAppData(data);
     if (!validated.ok) {
-        logWarn('Stored cloud data failed validation before attachment GC', { key, error: validated.error });
+        logFailureWarn('Stored cloud data failed validation before attachment GC', {
+            failureClass: 'validation',
+            failureCode: 'stored_data_invalid',
+        });
         return errorResponse('Stored data failed validation', 500);
     }
     const result = garbageCollectOrphanAttachments(dataDir, key, data);

@@ -1,7 +1,7 @@
 import { lstatSync, type Stats } from 'fs';
 import type { AppData } from '@mindwtr/core';
 
-import { corsOrigin, logWarn } from './server-config';
+import { corsOrigin, logFailureWarn } from './server-config';
 import {
     loadAppDataUncached,
     writeData,
@@ -93,13 +93,13 @@ export const isTrustedValidatedDataFile = (filePath: string): boolean => {
 
 const cloneAppData = (data: AppData): AppData => structuredClone(data) as AppData;
 
-const tryCloneAppData = (data: AppData, context: string): AppData | null => {
+const tryCloneAppData = (data: AppData): AppData | null => {
     try {
         return cloneAppData(data);
-    } catch (error) {
-        logWarn('Failed to clone cloud app data cache entry', {
-            context,
-            error: error instanceof Error ? error.message : String(error),
+    } catch {
+        logFailureWarn('Failed to clone cloud app data cache entry', {
+            failureClass: 'cache',
+            failureCode: 'cache_clone_failed',
         });
         return null;
     }
@@ -108,7 +108,7 @@ const tryCloneAppData = (data: AppData, context: string): AppData | null => {
 const rememberParsedDataFile = (filePath: string, data: AppData): void => {
     const identity = getDataFileIdentity(filePath);
     if (identity) {
-        const cachedData = tryCloneAppData(data, 'rememberParsedDataFile');
+        const cachedData = tryCloneAppData(data);
         if (!cachedData) {
             parsedDataCache.delete(filePath);
             return;
@@ -124,7 +124,7 @@ export const loadAppData = (filePath: string): AppData => {
     const identity = getDataFileIdentity(filePath);
     const cached = parsedDataCache.get(filePath);
     if (cached && sameDataFileIdentity(cached, identity)) {
-        const data = tryCloneAppData(cached.data, 'loadAppData.cacheHit');
+        const data = tryCloneAppData(cached.data);
         if (data) {
             promoteCacheEntry(parsedDataCache, filePath, cached);
             return data;

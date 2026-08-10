@@ -42,6 +42,7 @@ import {
     errorResponse,
     jsonResponse,
     logError,
+    logFailureWarn,
     logInfo,
     logWarn,
     LIST_MAX_LIMIT,
@@ -195,7 +196,6 @@ const normalizeStoredAppData = (data: AppData): AppData => ({
 
 const validateStoredAppData = (
     filePath: string,
-    key: string,
     rawData: unknown,
 ): AppData | { error: Response } => {
     if (isTrustedValidatedDataFile(filePath)) {
@@ -203,21 +203,27 @@ const validateStoredAppData = (
     }
     const validated = validateAppData(rawData);
     if (!validated.ok) {
-        logWarn('Stored cloud data failed validation', { key, error: validated.error });
+        logFailureWarn('Stored cloud data failed validation', {
+            failureClass: 'validation',
+            failureCode: 'stored_data_invalid',
+        });
         return { error: errorResponse('Stored data failed validation', 500) };
     }
     rememberValidatedDataFile(filePath);
     return normalizeStoredAppData(validated.data);
 };
 
-const loadExistingDataForMerge = (filePath: string, key: string): AppData | { error: Response } => {
+const loadExistingDataForMerge = (filePath: string): AppData | { error: Response } => {
     if (!existsSync(filePath)) return { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
     const rawData = readData(filePath);
     if (!rawData) {
-        logWarn('Stored cloud data failed validation', { key, error: 'Invalid JSON' });
+        logFailureWarn('Stored cloud data failed validation', {
+            failureClass: 'validation',
+            failureCode: 'stored_data_invalid_json',
+        });
         return { error: errorResponse('Stored data failed validation', 500) };
     }
-    return validateStoredAppData(filePath, key, rawData);
+    return validateStoredAppData(filePath, rawData);
 };
 
 type BunServer = {
@@ -1243,7 +1249,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                             } catch {
                                 return errorResponse('Failed to read data', 500);
                             }
-                            const validated = validateStoredAppData(filePath, key, data);
+                            const validated = validateStoredAppData(filePath, data);
                             if ('error' in validated) return validated.error;
                             return jsonFileResponse(rawData);
                         });
@@ -1264,7 +1270,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         if (!validated.ok) return errorResponse(validated.error, 400);
                         return await withRequestWriteLock(key, async () => {
                             throwIfRequestAborted(requestAbortController.signal);
-                            const existingDataResult = loadExistingDataForMerge(filePath, key);
+                            const existingDataResult = loadExistingDataForMerge(filePath);
                             if ('error' in existingDataResult) return existingDataResult.error;
                             const existingData = existingDataResult;
                             const incomingData = validated.data;
@@ -1419,17 +1425,28 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         if (isRequestAbortError(error)) {
                             return errorResponse(error.message, error.status);
                         }
-                        if (error && typeof error === 'object' && 'code' in error) {
-                            const code = (error as { code?: unknown }).code;
-                            if (code === 'EACCES') {
-                                logError(`permission denied writing cloud data (requestId=${requestId})`, error);
-                                return createInternalServerErrorResponse(
-                                    'Cloud data directory is not writable. Check volume permissions.',
-                                    requestId,
-                                );
-                            }
+                        const errorCode = error && typeof error === 'object' && 'code' in error
+                            ? (error as { code?: unknown }).code
+                            : undefined;
+                        if (errorCode === 'EACCES') {
+                            logError('request failed', {
+                                failureClass: 'filesystem',
+                                failureCode: 'permission_denied',
+                                requestId,
+                            });
+                            return createInternalServerErrorResponse(
+                                'Cloud data directory is not writable. Check volume permissions.',
+                                requestId,
+                            );
                         }
-                        logError(`request failed (requestId=${requestId})`, error);
+                        const isAttachmentFailure = requestRoute === '/v1/attachments/:path';
+                        logError('request failed', {
+                            failureClass: isAttachmentFailure || typeof errorCode === 'string'
+                                ? 'filesystem'
+                                : 'runtime',
+                            failureCode: isAttachmentFailure ? 'attachment_io_failed' : 'request_failed',
+                            requestId,
+                        });
                         return createInternalServerErrorResponse('Internal server error', requestId);
                     }
                 })();
@@ -1487,8 +1504,11 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
 }
 
 if (IS_MAIN_MODULE) {
-    startCloudServer().catch((err) => {
-        logError('Failed to start server', err);
+    startCloudServer().catch(() => {
+        logError('Failed to start server', {
+            failureClass: 'runtime',
+            failureCode: 'server_start_failed',
+        });
         process.exit(1);
     });
 }

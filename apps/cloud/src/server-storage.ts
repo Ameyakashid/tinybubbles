@@ -573,9 +573,11 @@ export function ensureWritableDir(dirPath: string): boolean {
         writeFileSync(testPath, 'ok');
         unlinkSync(testPath);
         return true;
-    } catch (error) {
-        logError(`cloud data dir is not writable: ${dirPath}`, error);
-        logError('ensure the volume is writable by the container user (uid 1000)');
+    } catch {
+        logError('cloud data directory is not writable', {
+            failureClass: 'filesystem',
+            failureCode: 'data_dir_not_writable',
+        });
         return false;
     }
 }

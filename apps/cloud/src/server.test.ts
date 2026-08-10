@@ -3157,6 +3157,38 @@ describe('cloud server api', () => {
         expect(missingResponse.status).toBe(404);
     });
 
+    test('logs attachment filesystem failures without namespace hashes or paths', async () => {
+        const key = tokenToKey(integrationToken);
+        const privateRelativePath = 'private-folder/private-file.bin';
+        const destinationPath = join(dataDir, key, 'attachments', privateRelativePath);
+        mkdirSync(destinationPath, { recursive: true });
+        const captured: string[] = [];
+        const stderrSpy = spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
+        });
+
+        try {
+            const response = await fetch(`${baseUrl}/v1/attachments/${privateRelativePath}`, {
+                method: 'PUT',
+                headers: authHeaders,
+                body: new TextEncoder().encode('private attachment bytes'),
+            });
+
+            expect(response.status).toBe(500);
+            const serializedLogs = captured.join('');
+            expect(serializedLogs).toContain('"failureClass":"filesystem"');
+            expect(serializedLogs).toContain('"failureCode":"attachment_io_failed"');
+            expect(serializedLogs).not.toContain(key);
+            expect(serializedLogs).not.toContain(dataDir);
+            expect(serializedLogs).not.toContain(privateRelativePath);
+            expect(serializedLogs).not.toContain(destinationPath);
+            expect(serializedLogs).not.toContain('private attachment bytes');
+        } finally {
+            stderrSpy.mockRestore();
+        }
+    });
+
     test('garbage-collects unreferenced attachment files on demand', async () => {
         const referencedPath = 'folder/referenced.bin';
         const orphanPath = 'folder/orphan.bin';
@@ -3867,31 +3899,48 @@ describe('cloud server api', () => {
             areas: [],
             settings: {},
         }));
-
-        const response = await fetch(`${baseUrl}/v1/data`, {
-            method: 'PUT',
-            headers: {
-                ...authHeaders,
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify({
-                tasks: [{
-                    id: 'valid-task',
-                    title: 'Valid task',
-                    status: 'inbox',
-                    createdAt: '2026-01-01T00:00:00.000Z',
-                    updatedAt: '2026-01-01T00:00:00.000Z',
-                }],
-                projects: [],
-                sections: [],
-                areas: [],
-                settings: {},
-            }),
+        const captured: string[] = [];
+        const stdoutSpy = spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
         });
 
-        expect(response.status).toBe(500);
-        const body = await response.json();
-        expect(body.error).toBe('Stored data failed validation');
+        try {
+            const response = await fetch(`${baseUrl}/v1/data`, {
+                method: 'PUT',
+                headers: {
+                    ...authHeaders,
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tasks: [{
+                        id: 'valid-task',
+                        title: 'Valid task',
+                        status: 'inbox',
+                        createdAt: '2026-01-01T00:00:00.000Z',
+                        updatedAt: '2026-01-01T00:00:00.000Z',
+                    }],
+                    projects: [],
+                    sections: [],
+                    areas: [],
+                    settings: {},
+                }),
+            });
+
+            expect(response.status).toBe(500);
+            const body = await response.json();
+            expect(body.error).toBe('Stored data failed validation');
+
+            const serializedLogs = captured.join('');
+            expect(serializedLogs).toContain('"failureClass":"validation"');
+            expect(serializedLogs).toContain('"failureCode":"stored_data_invalid"');
+            expect(serializedLogs).not.toContain(key);
+            expect(serializedLogs).not.toContain(filePath);
+            expect(serializedLogs).not.toContain('broken-project');
+            expect(serializedLogs).not.toContain('createdAt/updatedAt');
+        } finally {
+            stdoutSpy.mockRestore();
+        }
 
         const persisted = JSON.parse(readFileSync(filePath, 'utf8'));
         expect((persisted.tasks as Array<{ id: string }>).some((task) => task.id === 'valid-task')).toBe(false);

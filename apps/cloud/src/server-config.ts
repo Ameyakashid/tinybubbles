@@ -21,6 +21,20 @@ type LogEntry = {
     context?: Record<string, unknown>;
 };
 
+export type CloudFailureContext = {
+    failureClass: 'cache' | 'filesystem' | 'runtime' | 'validation';
+    failureCode:
+        | 'attachment_io_failed'
+        | 'cache_clone_failed'
+        | 'data_dir_not_writable'
+        | 'permission_denied'
+        | 'request_failed'
+        | 'server_start_failed'
+        | 'stored_data_invalid'
+        | 'stored_data_invalid_json';
+    requestId?: string;
+};
+
 const writeLog = (entry: LogEntry) => {
     const line = `${JSON.stringify(entry)}\n`;
     if (entry.level === 'error') {
@@ -42,21 +56,12 @@ export const logWarn = (message: string, context?: Record<string, unknown>) => {
     writeLog({ ts: new Date().toISOString(), level: 'warn', scope: 'cloud', message, context });
 };
 
-export const logError = (message: string, error?: unknown) => {
-    const context: Record<string, unknown> = {};
-    if (error instanceof Error) {
-        context.error = error.message;
-        if (error.stack) context.stack = error.stack;
-    } else if (error !== undefined) {
-        context.error = String(error);
-    }
-    writeLog({
-        ts: new Date().toISOString(),
-        level: 'error',
-        scope: 'cloud',
-        message,
-        context: Object.keys(context).length ? context : undefined,
-    });
+export const logFailureWarn = (message: string, context: CloudFailureContext) => {
+    writeLog({ ts: new Date().toISOString(), level: 'warn', scope: 'cloud', message, context });
+};
+
+export const logError = (message: string, context: CloudFailureContext) => {
+    writeLog({ ts: new Date().toISOString(), level: 'error', scope: 'cloud', message, context });
 };
 
 const configuredCorsOrigin = (process.env.MINDWTR_CLOUD_CORS_ORIGIN || '').trim();
