@@ -103,9 +103,9 @@ use platform::{
 };
 use storage::{
     create_data_snapshot, delete_calendar_sync_entry, get_all_calendar_sync_entries,
-    get_calendar_sync_entry, get_config_path_for_startup, get_data,
-    get_data_path_cmd, get_db_path_cmd, list_data_snapshots, query_tasks, read_data_json,
-    restore_data_snapshot, save_data, save_task, search_fts, upsert_calendar_sync_entry,
+    get_calendar_sync_entry, get_config_path_for_startup, get_data, get_data_path_cmd,
+    get_db_path_cmd, list_data_snapshots, query_tasks, read_data_json, restore_data_snapshot,
+    save_data, save_task, search_fts, upsert_calendar_sync_entry,
 };
 use sync::{
     clear_sync_path, cloud_get_json, cloud_put_json, connect_dropbox,
@@ -127,8 +127,8 @@ use ui::{
 #[cfg(any(target_os = "windows", target_os = "linux", test))]
 use config::read_config_toml;
 pub(crate) use config::{
-    get_keyring_secret, parse_toml_string_value, read_config, set_keyring_secret,
-    write_config_files,
+    emit_keyring_fallback_warning, parse_toml_string_value, read_bound_credential, read_config,
+    update_bound_credential, write_config_files, CredentialSecretUpdate, CredentialService,
 };
 #[cfg(test)]
 use install::parse_flatpak_install_channel;

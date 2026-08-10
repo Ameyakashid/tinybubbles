@@ -242,13 +242,6 @@ fn write_email_capture_state(
     Ok(())
 }
 
-fn read_email_capture_password(app: &tauri::AppHandle, config: &AppConfigToml) -> Option<String> {
-    match get_keyring_secret(app, KEYRING_EMAIL_CAPTURE_PASSWORD) {
-        Ok(Some(value)) => Some(value),
-        _ => config.email_capture_password.clone(),
-    }
-}
-
 /// Pick which UIDs to fetch, oldest first, bounded by `limit`.
 ///
 /// When the mailbox `UIDVALIDITY` matches the stored state, only UIDs above the
@@ -466,10 +459,9 @@ fn email_capture_status(
 
 #[tauri::command]
 pub(crate) fn get_email_capture_config(app: tauri::AppHandle) -> Result<Value, String> {
-    let config = read_config(&app);
+    let (config, password) = read_bound_credential(&app, CredentialService::Email)?;
     let payload = read_email_capture_payload(&config);
-    let has_password = read_email_capture_password(&app, &config).is_some();
-    email_capture_status(&payload, has_password)
+    email_capture_status(&payload, password.is_some())
 }
 
 // Off the UI thread: enabling capture validates the account with a real
@@ -486,7 +478,8 @@ pub(crate) fn set_email_capture_config(
         .map(normalize_email_capture_payload)
         .map_err(|error| EmailCaptureError::config(format!("Invalid email settings: {error}")))?;
 
-    let mut app_config = read_config(&app);
+    let (app_config, previous_password) =
+        read_bound_credential(&app, CredentialService::Email).map_err(EmailCaptureError::other)?;
     let previous_payload = read_email_capture_payload(&app_config);
     let previous_identity = email_capture_mailbox_identity(&previous_payload);
     let next_identity = email_capture_mailbox_identity(&payload);
@@ -498,19 +491,19 @@ pub(crate) fn set_email_capture_config(
 
     if payload.host.is_empty() {
         // Clearing the host removes the account, matching the WebDAV behavior.
-        app_config.email_capture_config = None;
-        app_config.email_capture_password = None;
-        let _ = set_keyring_secret(&app, KEYRING_EMAIL_CAPTURE_PASSWORD, None);
-        write_config_files(&get_config_path(&app), &get_secrets_path(&app), &app_config)
-            .map_err(EmailCaptureError::other)?;
+        update_bound_credential(
+            &app,
+            CredentialService::Email,
+            CredentialSecretUpdate::Replace(None),
+            |config| config.email_capture_config = None,
+        )
+        .map_err(EmailCaptureError::other)?;
         let _ = fs::remove_file(email_capture_state_path(&app));
         return email_capture_status(&EmailCaptureConfigPayload::default(), false)
             .map_err(EmailCaptureError::other);
     }
 
-    let effective_password = next_password
-        .clone()
-        .or_else(|| read_email_capture_password(&app, &app_config));
+    let effective_password = next_password.clone().or(previous_password);
 
     let mut payload = payload;
     let mut validation_error: Option<EmailCaptureError> = None;
@@ -528,31 +521,20 @@ pub(crate) fn set_email_capture_config(
         }
     }
 
-    if let Some(next_password) = next_password {
-        match set_keyring_secret(
-            &app,
-            KEYRING_EMAIL_CAPTURE_PASSWORD,
-            Some(next_password.clone()),
-        ) {
-            Ok(_) => {
-                app_config.email_capture_password = None;
-            }
-            Err(_) => {
-                app_config.email_capture_password = Some(next_password);
-                let message = "Email app password stored in plaintext because the system keyring is unavailable.";
-                if let Err(error) = app.emit("keyring-fallback-warning", message) {
-                    log::warn!("Failed to emit keyring fallback warning: {error}");
-                }
-            }
-        }
-    }
-
-    app_config.email_capture_config = Some(
-        serde_json::to_string(&payload)
-            .map_err(|error| EmailCaptureError::other(error.to_string()))?,
-    );
-    write_config_files(&get_config_path(&app), &get_secrets_path(&app), &app_config)
+    let serialized_payload = serde_json::to_string(&payload)
+        .map_err(|error| EmailCaptureError::other(error.to_string()))?;
+    let secret_update = next_password
+        .clone()
+        .map(|password| CredentialSecretUpdate::Replace(Some(password)))
+        .unwrap_or(CredentialSecretUpdate::Keep);
+    let persisted =
+        update_bound_credential(&app, CredentialService::Email, secret_update, |config| {
+            config.email_capture_config = Some(serialized_payload)
+        })
         .map_err(EmailCaptureError::other)?;
+    if persisted.email_capture_password.is_some() && next_password.is_some() {
+        emit_keyring_fallback_warning(&app, "Email app password");
+    }
 
     if let Some(error) = validation_error {
         // A failed connection check is persisted disabled so the form keeps the
@@ -590,13 +572,13 @@ pub(crate) fn set_email_capture_config(
 pub(crate) fn email_capture_poll(
     app: tauri::AppHandle,
 ) -> Result<EmailCapturePollResult, EmailCaptureError> {
-    let app_config = read_config(&app);
+    let (app_config, password) =
+        read_bound_credential(&app, CredentialService::Email).map_err(EmailCaptureError::other)?;
     let payload = read_email_capture_payload(&app_config);
     if !payload.enabled {
         return Err(EmailCaptureError::config("Email capture is disabled."));
     }
-    let password = read_email_capture_password(&app, &app_config)
-        .ok_or_else(|| EmailCaptureError::auth("No app password is stored."))?;
+    let password = password.ok_or_else(|| EmailCaptureError::auth("No app password is stored."))?;
     let state = scope_email_capture_state(
         read_email_capture_state(&app),
         &email_capture_mailbox_identity(&payload),
@@ -673,7 +655,7 @@ pub(crate) fn email_capture_commit(
     message_ids: Vec<String>,
 ) -> Result<(), String> {
     let _state_guard = lock_email_capture_state()?;
-    let app_config = read_config(&app);
+    let (app_config, _) = read_bound_credential(&app, CredentialService::Email)?;
     let payload = read_email_capture_payload(&app_config);
     let state = scope_email_capture_state(
         read_email_capture_state(&app),

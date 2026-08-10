@@ -21,8 +21,8 @@ use tauri::Manager;
 use tauri_plugin_fs::FsExt;
 
 use crate::config::{
-    get_keyring_secret, read_config, read_dropbox_credential_state, set_keyring_secret,
-    update_dropbox_credential_state, write_config_files,
+    get_keyring_secret, read_bound_credential, read_config, read_dropbox_credential_state,
+    set_keyring_secret, update_dropbox_credential_state, write_config_files, CredentialService,
 };
 use crate::storage::{get_config_path, get_secrets_path, read_json_with_retries_validated};
 #[cfg(target_os = "macos")]
@@ -35,8 +35,7 @@ use crate::{
     APP_NAME, DATA_FILE_NAME, DROPBOX_AUTH_ENDPOINT, DROPBOX_DEFAULT_TOKEN_LIFETIME_SECS,
     DROPBOX_OAUTH_TIMEOUT_SECS, DROPBOX_REDIRECT_HOST, DROPBOX_REDIRECT_PATH,
     DROPBOX_REDIRECT_PORT, DROPBOX_REVOKE_ENDPOINT, DROPBOX_SCOPES, DROPBOX_TOKEN_ENDPOINT,
-    DROPBOX_TOKEN_REFRESH_SKEW_MS, KEYRING_CLOUD_TOKEN, KEYRING_DROPBOX_TOKENS,
-    KEYRING_WEB_DAV_PASSWORD,
+    DROPBOX_TOKEN_REFRESH_SKEW_MS, KEYRING_DROPBOX_TOKENS,
 };
 
 #[derive(Debug, Default, Serialize)]
@@ -2978,19 +2977,11 @@ fn webdav_error_body_snippet(body: &str) -> String {
 }
 
 fn webdav_get_json_blocking(app: &tauri::AppHandle) -> Result<Value, String> {
-    let config = read_config(app);
+    let (config, password) = read_bound_credential(app, CredentialService::Webdav)?;
     let allow_insecure_http = webdav_allows_insecure_http(&config);
     let url = resolve_webdav_request_url(&config)?;
     let username = config.webdav_username.unwrap_or_default();
-    let password = match get_keyring_secret(app, KEYRING_WEB_DAV_PASSWORD) {
-        Ok(value) => value,
-        Err(error) => {
-            log::warn!("Failed to read WebDAV password from keyring (GET): {error}");
-            None
-        }
-    }
-    .or(config.webdav_password.clone())
-    .ok_or_else(|| "WebDAV password not configured".to_string())?;
+    let password = password.ok_or_else(|| "WebDAV password not configured".to_string())?;
 
     let client = webdav_blocking_http_client(config.proxy_url.as_deref(), allow_insecure_http)?;
     let response = client
@@ -3034,19 +3025,11 @@ fn webdav_put_json_blocking(
     app: &tauri::AppHandle,
     data: &Value,
 ) -> Result<RemoteJsonWriteResult, String> {
-    let config = read_config(app);
+    let (config, password) = read_bound_credential(app, CredentialService::Webdav)?;
     let allow_insecure_http = webdav_allows_insecure_http(&config);
     let url = resolve_webdav_request_url(&config)?;
     let username = config.webdav_username.unwrap_or_default();
-    let password = match get_keyring_secret(app, KEYRING_WEB_DAV_PASSWORD) {
-        Ok(value) => value,
-        Err(error) => {
-            log::warn!("Failed to read WebDAV password from keyring (PUT): {error}");
-            None
-        }
-    }
-    .or(config.webdav_password.clone())
-    .ok_or_else(|| "WebDAV password not configured".to_string())?;
+    let password = password.ok_or_else(|| "WebDAV password not configured".to_string())?;
 
     let payload = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to encode WebDAV payload: {e}"))?;
@@ -3096,18 +3079,6 @@ pub(crate) async fn webdav_put_json(
         .map_err(|e| e.to_string())?
 }
 
-fn read_cloud_token(app: &tauri::AppHandle, config: &AppConfigToml) -> String {
-    match get_keyring_secret(app, KEYRING_CLOUD_TOKEN) {
-        Ok(value) => value,
-        Err(error) => {
-            log::warn!("Failed to read cloud token from keyring (sync): {error}");
-            None
-        }
-    }
-    .or(config.cloud_token.clone())
-    .unwrap_or_default()
-}
-
 fn cloud_request_builder(
     client: &reqwest::blocking::Client,
     method: reqwest::Method,
@@ -3145,7 +3116,7 @@ fn parse_cloud_json_body(body: &str) -> Result<Value, String> {
 }
 
 fn cloud_get_json_blocking(app: &tauri::AppHandle) -> Result<Value, String> {
-    let config = read_config(app);
+    let (config, token) = read_bound_credential(app, CredentialService::Cloud)?;
     let url = normalize_cloud_url(&config.cloud_url.clone().unwrap_or_default());
     if url.trim().is_empty() {
         return Err("Self-hosted URL not configured".to_string());
@@ -3153,7 +3124,7 @@ fn cloud_get_json_blocking(app: &tauri::AppHandle) -> Result<Value, String> {
     let allow_insecure_http = config.cloud_allow_insecure_http.as_deref() == Some("true");
     assert_cloud_url_allowed(&url, allow_insecure_http)?;
 
-    let token = read_cloud_token(app, &config);
+    let token = token.unwrap_or_default();
     let client = blocking_http_client(config.proxy_url.as_deref())?;
     let response = cloud_request_builder(&client, reqwest::Method::GET, &url, &token)
         .send()
@@ -3188,7 +3159,7 @@ fn cloud_put_json_blocking(
     app: &tauri::AppHandle,
     data: &Value,
 ) -> Result<RemoteJsonWriteResult, String> {
-    let config = read_config(app);
+    let (config, token) = read_bound_credential(app, CredentialService::Cloud)?;
     let url = normalize_cloud_url(&config.cloud_url.clone().unwrap_or_default());
     if url.trim().is_empty() {
         return Err("Self-hosted URL not configured".to_string());
@@ -3196,7 +3167,7 @@ fn cloud_put_json_blocking(
     let allow_insecure_http = config.cloud_allow_insecure_http.as_deref() == Some("true");
     assert_cloud_url_allowed(&url, allow_insecure_http)?;
 
-    let token = read_cloud_token(app, &config);
+    let token = token.unwrap_or_default();
     let payload = serde_json::to_string_pretty(data)
         .map_err(|e| format!("Failed to encode Cloud payload: {e}"))?;
     let client = blocking_http_client(config.proxy_url.as_deref())?;

@@ -1,10 +1,14 @@
 use crate::obsidian_paths::normalize_obsidian_inbox_file;
 use crate::*;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 const KEYRING_FALLBACK_WARNING_EVENT: &str = "keyring-fallback-warning";
+const CONFIG_CREDENTIAL_STATE_FILE_NAME: &str = "config-credential-state.json";
+const CONFIG_CREDENTIAL_STATE_VERSION: u8 = 1;
 
 fn keyring_enabled() -> bool {
     !crate::storage::is_portable_mode()
@@ -135,10 +139,12 @@ pub(crate) fn read_config_toml(path: &Path) -> AppConfigToml {
     toml::from_str(&content).unwrap_or_default()
 }
 
+#[cfg(test)]
 fn write_config_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> {
     write_config_toml_with_header(path, config, "# Mindwtr desktop config")
 }
 
+#[cfg(test)]
 fn write_secrets_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> {
     write_secrets_toml_with_restrict(path, config, restrict_to_owner)
 }
@@ -156,6 +162,7 @@ fn restrict_to_owner(_path: &Path, _mode: u32) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 fn write_secrets_toml_with_restrict<F>(
     path: &Path,
     config: &AppConfigToml,
@@ -191,6 +198,201 @@ fn dropbox_credential_state_path_from_secrets_path(secrets_path: &Path) -> PathB
         .join(DROPBOX_CREDENTIAL_STATE_FILE_NAME)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConfigPublicationPending {
+    generation: u64,
+    config_fingerprint: Option<String>,
+    secrets_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CredentialBinding {
+    generation: u64,
+    endpoint_fingerprint: String,
+    credential_fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CredentialBindingPending {
+    service: String,
+    generation: u64,
+    endpoint_fingerprint: String,
+    credential_fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConfigCredentialStateFile {
+    version: u8,
+    config_generation: u64,
+    config_fingerprint: Option<String>,
+    secrets_fingerprint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_config: Option<ConfigPublicationPending>,
+    #[serde(default)]
+    credential_generation: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    bindings: BTreeMap<String, CredentialBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_credential: Option<CredentialBindingPending>,
+}
+
+impl ConfigCredentialStateFile {
+    fn from_current_files(config_path: &Path, secrets_path: &Path) -> Result<Self, String> {
+        Ok(Self {
+            version: CONFIG_CREDENTIAL_STATE_VERSION,
+            config_generation: 0,
+            config_fingerprint: fingerprint_optional_file(config_path)?,
+            secrets_fingerprint: fingerprint_optional_file(secrets_path)?,
+            pending_config: None,
+            credential_generation: 0,
+            bindings: BTreeMap::new(),
+            pending_credential: None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfigPublicationStage {
+    PendingState,
+    PublicConfig,
+    SecretConfig,
+    ReadBack,
+    CommittedState,
+}
+
+impl ConfigPublicationStage {
+    #[cfg(test)]
+    const ALL: [Self; 5] = [
+        Self::PendingState,
+        Self::PublicConfig,
+        Self::SecretConfig,
+        Self::ReadBack,
+        Self::CommittedState,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CredentialService {
+    Webdav,
+    Cloud,
+    Email,
+}
+
+impl CredentialService {
+    fn state_key(self) -> &'static str {
+        match self {
+            Self::Webdav => "webdav",
+            Self::Cloud => "cloud",
+            Self::Email => "email",
+        }
+    }
+
+    fn keyring_key(self) -> &'static str {
+        match self {
+            Self::Webdav => KEYRING_WEB_DAV_PASSWORD,
+            Self::Cloud => KEYRING_CLOUD_TOKEN,
+            Self::Email => KEYRING_EMAIL_CAPTURE_PASSWORD,
+        }
+    }
+
+    fn fallback<'a>(self, config: &'a AppConfigToml) -> Option<&'a str> {
+        match self {
+            Self::Webdav => config.webdav_password.as_deref(),
+            Self::Cloud => config.cloud_token.as_deref(),
+            Self::Email => config.email_capture_password.as_deref(),
+        }
+    }
+
+    fn set_fallback(self, config: &mut AppConfigToml, value: Option<String>) {
+        match self {
+            Self::Webdav => config.webdav_password = value,
+            Self::Cloud => config.cloud_token = value,
+            Self::Email => config.email_capture_password = value,
+        }
+    }
+
+    fn endpoint_identity(self, config: &AppConfigToml) -> Value {
+        match self {
+            Self::Webdav => serde_json::json!({
+                "url": config.webdav_url.as_deref().unwrap_or("").trim(),
+                "username": config.webdav_username.as_deref().unwrap_or("").trim(),
+                "allowInsecureHttp": config.webdav_allow_insecure_http.as_deref() == Some("true"),
+                "allowWeakFingerprint": config.webdav_allow_weak_fingerprint.as_deref() != Some("false"),
+            }),
+            Self::Cloud => serde_json::json!({
+                "url": config.cloud_url.as_deref().unwrap_or("").trim(),
+                "allowInsecureHttp": config.cloud_allow_insecure_http.as_deref() == Some("true"),
+            }),
+            Self::Email => serde_json::json!({
+                "config": config
+                    .email_capture_config
+                    .as_deref()
+                    .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+                    .unwrap_or(Value::Null),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CredentialSecretUpdate {
+    Keep,
+    Replace(Option<String>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CredentialPublicationStage {
+    PendingState,
+    SecretStore,
+    ConfigPair,
+    ReadBack,
+    CommittedState,
+}
+
+impl CredentialPublicationStage {
+    #[cfg(test)]
+    const ALL: [Self; 5] = [
+        Self::PendingState,
+        Self::SecretStore,
+        Self::ConfigPair,
+        Self::ReadBack,
+        Self::CommittedState,
+    ];
+}
+
+fn config_credential_state_path_from_secrets_path(secrets_path: &Path) -> PathBuf {
+    secrets_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(CONFIG_CREDENTIAL_STATE_FILE_NAME)
+}
+
+fn config_rollback_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("config");
+    path.parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!(".{name}.mindwtr-rollback"))
+}
+
+fn fingerprint_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn fingerprint_optional_file(path: &Path) -> Result<Option<String>, String> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(fingerprint_bytes(&bytes))),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("Failed to fingerprint {}: {error}", path.display())),
+    }
+}
+
 pub(crate) fn get_dropbox_credential_state_path(app: &tauri::AppHandle) -> PathBuf {
     crate::storage::get_config_dir(app).join(DROPBOX_CREDENTIAL_STATE_FILE_NAME)
 }
@@ -205,7 +407,7 @@ fn write_owner_only_atomic_text(path: &Path, content: &str) -> Result<(), String
         restrict_to_owner(path, 0o600)?;
     }
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-dropbox-state-")
+        .prefix(".mindwtr-private-state-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|e| e.to_string())?;
@@ -219,6 +421,107 @@ fn write_owner_only_atomic_text(path: &Path, content: &str) -> Result<(), String
         .map_err(|error| error.error.to_string())?;
     restrict_to_owner(path, 0o600)?;
     sync_secrets_parent_directory(parent)
+}
+
+fn write_atomic_text(path: &Path, content: &str, owner_only: bool) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Failed to resolve config directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let mut temp_file = tempfile::Builder::new()
+        .prefix(".mindwtr-config-")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(|e| e.to_string())?;
+    if owner_only {
+        restrict_to_owner(temp_file.path(), 0o600)?;
+    }
+    temp_file
+        .write_all(content.as_bytes())
+        .and_then(|_| temp_file.as_file().sync_all())
+        .map_err(|e| e.to_string())?;
+    temp_file
+        .persist(path)
+        .map_err(|error| error.error.to_string())?;
+    if owner_only {
+        restrict_to_owner(path, 0o600)?;
+    }
+    sync_secrets_parent_directory(parent)
+}
+
+fn remove_file_durably(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => {
+            let parent = path
+                .parent()
+                .ok_or_else(|| "Failed to resolve config directory".to_string())?;
+            sync_secrets_parent_directory(parent)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn read_config_credential_state_file(
+    path: &Path,
+) -> Result<Option<ConfigCredentialStateFile>, String> {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("Failed to inspect config credential state".to_string()),
+    };
+    let state: ConfigCredentialStateFile =
+        serde_json::from_str(&raw).map_err(|_| "Config credential state is invalid".to_string())?;
+    if state.version != CONFIG_CREDENTIAL_STATE_VERSION {
+        return Err("Config credential state has an unsupported version".to_string());
+    }
+    Ok(Some(state))
+}
+
+fn write_config_credential_state_file(
+    path: &Path,
+    state: &ConfigCredentialStateFile,
+) -> Result<(), String> {
+    if state.version != CONFIG_CREDENTIAL_STATE_VERSION {
+        return Err("Config credential state has an unsupported version".to_string());
+    }
+    let payload = serde_json::to_string(state)
+        .map_err(|_| "Failed to serialize config credential state".to_string())?;
+    write_owner_only_atomic_text(path, &payload)?;
+    let persisted = read_config_credential_state_file(path)?
+        .ok_or_else(|| "Config credential state is missing after write".to_string())?;
+    if persisted != *state {
+        return Err("Config credential state failed durable read-back verification".to_string());
+    }
+    Ok(())
+}
+
+fn read_optional_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("Failed to read {}: {error}", path.display())),
+    }
+}
+
+fn restore_optional_file(
+    path: &Path,
+    bytes: Option<&[u8]>,
+    owner_only: bool,
+) -> Result<(), String> {
+    match bytes {
+        Some(bytes) => {
+            let content = std::str::from_utf8(bytes)
+                .map_err(|_| format!("Failed to restore {}", path.display()))?;
+            write_atomic_text(path, content, owner_only)
+        }
+        None => remove_file_durably(path),
+    }
+}
+
+fn cleanup_config_rollback_files(config_path: &Path, secrets_path: &Path) {
+    let _ = remove_file_durably(&config_rollback_path(config_path));
+    let _ = remove_file_durably(&config_rollback_path(secrets_path));
 }
 
 fn read_dropbox_credential_state_file(
@@ -278,6 +581,7 @@ fn write_dropbox_credential_state_file(
     Ok(())
 }
 
+#[cfg(test)]
 fn write_secrets_toml_with_hooks<F, P>(
     path: &Path,
     config: &AppConfigToml,
@@ -354,6 +658,7 @@ fn serialize_config_toml_with_header(
     Ok(format!("{header}\n{body}"))
 }
 
+#[cfg(test)]
 fn write_config_toml_with_header(
     path: &Path,
     config: &AppConfigToml,
@@ -393,12 +698,15 @@ fn merge_config(base: &mut AppConfigToml, overrides: AppConfigToml) {
 }
 
 pub(crate) fn read_config(app: &tauri::AppHandle) -> AppConfigToml {
-    let mut config = read_config_toml(&get_config_path(app));
+    let config_path = get_config_path(app);
     let secrets_path = get_secrets_path(app);
-    if secrets_path.exists() {
-        let secrets = read_config_toml(&secrets_path);
-        merge_config(&mut config, secrets);
-    }
+    let mut config = match read_config_files_verified(&config_path, &secrets_path) {
+        Ok(config) => config,
+        Err(error) => {
+            log::error!("Config generation verification failed: {error}");
+            return AppConfigToml::default();
+        }
+    };
     if get_dropbox_credential_state_path(app).exists() {
         config.dropbox_tokens = None;
         config.dropbox_promotion_journal = None;
@@ -442,6 +750,219 @@ fn config_has_values(config: &AppConfigToml) -> bool {
     *config != AppConfigToml::default()
 }
 
+fn config_pair_matches_state(
+    config_path: &Path,
+    secrets_path: &Path,
+    config_fingerprint: &Option<String>,
+    secrets_fingerprint: &Option<String>,
+) -> Result<bool, String> {
+    Ok(
+        fingerprint_optional_file(config_path)? == *config_fingerprint
+            && fingerprint_optional_file(secrets_path)? == *secrets_fingerprint,
+    )
+}
+
+fn recover_config_publication_unlocked(
+    config_path: &Path,
+    secrets_path: &Path,
+) -> Result<Option<ConfigCredentialStateFile>, String> {
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    let Some(mut state) = read_config_credential_state_file(&state_path)? else {
+        return Ok(None);
+    };
+
+    if let Some(pending) = state.pending_config.clone() {
+        let committed_matches = config_pair_matches_state(
+            config_path,
+            secrets_path,
+            &state.config_fingerprint,
+            &state.secrets_fingerprint,
+        )?;
+        let target_matches = config_pair_matches_state(
+            config_path,
+            secrets_path,
+            &pending.config_fingerprint,
+            &pending.secrets_fingerprint,
+        )?;
+        if target_matches {
+            state.config_generation = pending.generation;
+            state.config_fingerprint = pending.config_fingerprint;
+            state.secrets_fingerprint = pending.secrets_fingerprint;
+        } else if !committed_matches {
+            let config_backup = read_optional_bytes(&config_rollback_path(config_path))?;
+            let secrets_backup = read_optional_bytes(&config_rollback_path(secrets_path))?;
+            if state.config_fingerprint.is_some() && config_backup.is_none() {
+                return Err("Config transaction rollback file is missing".to_string());
+            }
+            if state.secrets_fingerprint.is_some() && secrets_backup.is_none() {
+                return Err("Secrets transaction rollback file is missing".to_string());
+            }
+            restore_optional_file(config_path, config_backup.as_deref(), false)?;
+            restore_optional_file(secrets_path, secrets_backup.as_deref(), true)?;
+            if !config_pair_matches_state(
+                config_path,
+                secrets_path,
+                &state.config_fingerprint,
+                &state.secrets_fingerprint,
+            )? {
+                return Err("Config transaction rollback verification failed".to_string());
+            }
+        }
+        state.pending_config = None;
+        write_config_credential_state_file(&state_path, &state)?;
+        cleanup_config_rollback_files(config_path, secrets_path);
+    }
+
+    if !config_pair_matches_state(
+        config_path,
+        secrets_path,
+        &state.config_fingerprint,
+        &state.secrets_fingerprint,
+    )? {
+        return Err("Config files do not match their committed generation".to_string());
+    }
+    cleanup_config_rollback_files(config_path, secrets_path);
+    Ok(Some(state))
+}
+
+fn read_config_files_verified_unlocked(
+    config_path: &Path,
+    secrets_path: &Path,
+) -> Result<AppConfigToml, String> {
+    recover_config_publication_unlocked(config_path, secrets_path)?;
+    read_config_files_unlocked(config_path, secrets_path)
+}
+
+fn read_config_files_verified(
+    config_path: &Path,
+    secrets_path: &Path,
+) -> Result<AppConfigToml, String> {
+    let _credential_guard = lock_dropbox_credential_state()?;
+    read_config_files_verified_unlocked(config_path, secrets_path)
+}
+
+fn rollback_config_publication(
+    config_path: &Path,
+    secrets_path: &Path,
+    previous_config: Option<&[u8]>,
+    previous_secrets: Option<&[u8]>,
+    state_path: &Path,
+) -> Result<(), String> {
+    restore_optional_file(config_path, previous_config, false)?;
+    restore_optional_file(secrets_path, previous_secrets, true)?;
+    let mut state = read_config_credential_state_file(state_path)?
+        .ok_or_else(|| "Config credential state is missing during rollback".to_string())?;
+    state.config_generation = state
+        .config_generation
+        .checked_add(1)
+        .ok_or_else(|| "Config generation overflowed".to_string())?;
+    state.config_fingerprint = previous_config.map(fingerprint_bytes);
+    state.secrets_fingerprint = previous_secrets.map(fingerprint_bytes);
+    state.pending_config = None;
+    write_config_credential_state_file(state_path, &state)?;
+    if !config_pair_matches_state(
+        config_path,
+        secrets_path,
+        &state.config_fingerprint,
+        &state.secrets_fingerprint,
+    )? {
+        return Err("Config rollback read-back verification failed".to_string());
+    }
+    cleanup_config_rollback_files(config_path, secrets_path);
+    Ok(())
+}
+
+fn publish_config_pair_unlocked<AfterStage>(
+    config_path: &Path,
+    secrets_path: &Path,
+    public_content: &str,
+    secrets_content: Option<&str>,
+    mut after_stage: AfterStage,
+) -> Result<(), String>
+where
+    AfterStage: FnMut(ConfigPublicationStage) -> Result<(), String>,
+{
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    let recovered_state = recover_config_publication_unlocked(config_path, secrets_path)?;
+    let previous_config = read_optional_bytes(config_path)?;
+    let previous_secrets = read_optional_bytes(secrets_path)?;
+    restore_optional_file(
+        &config_rollback_path(config_path),
+        previous_config.as_deref(),
+        true,
+    )?;
+    restore_optional_file(
+        &config_rollback_path(secrets_path),
+        previous_secrets.as_deref(),
+        true,
+    )?;
+
+    let mut state = recovered_state.unwrap_or(ConfigCredentialStateFile::from_current_files(
+        config_path,
+        secrets_path,
+    )?);
+    let next_generation = state
+        .config_generation
+        .checked_add(1)
+        .ok_or_else(|| "Config generation overflowed".to_string())?;
+    state.pending_config = Some(ConfigPublicationPending {
+        generation: next_generation,
+        config_fingerprint: Some(fingerprint_bytes(public_content.as_bytes())),
+        secrets_fingerprint: secrets_content.map(|content| fingerprint_bytes(content.as_bytes())),
+    });
+    write_config_credential_state_file(&state_path, &state)?;
+
+    let publication = (|| -> Result<(), String> {
+        after_stage(ConfigPublicationStage::PendingState)?;
+        write_atomic_text(config_path, public_content, false)?;
+        after_stage(ConfigPublicationStage::PublicConfig)?;
+        if let Some(content) = secrets_content {
+            write_atomic_text(secrets_path, content, true)?;
+        } else {
+            remove_file_durably(secrets_path)?;
+        }
+        after_stage(ConfigPublicationStage::SecretConfig)?;
+
+        let pending = state
+            .pending_config
+            .as_ref()
+            .expect("pending config publication exists");
+        if !config_pair_matches_state(
+            config_path,
+            secrets_path,
+            &pending.config_fingerprint,
+            &pending.secrets_fingerprint,
+        )? {
+            return Err("Config publication failed durable read-back verification".to_string());
+        }
+        after_stage(ConfigPublicationStage::ReadBack)?;
+        state.config_generation = pending.generation;
+        state.config_fingerprint = pending.config_fingerprint.clone();
+        state.secrets_fingerprint = pending.secrets_fingerprint.clone();
+        state.pending_config = None;
+        write_config_credential_state_file(&state_path, &state)?;
+        after_stage(ConfigPublicationStage::CommittedState)?;
+        cleanup_config_rollback_files(config_path, secrets_path);
+        Ok(())
+    })();
+
+    if let Err(error) = publication {
+        if let Err(rollback_error) = rollback_config_publication(
+            config_path,
+            secrets_path,
+            previous_config.as_deref(),
+            previous_secrets.as_deref(),
+            &state_path,
+        ) {
+            return Err(format!(
+                "{error}; rollback failed and credentials remain fail-closed: {rollback_error}"
+            ));
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
 fn lock_dropbox_credential_state() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     DROPBOX_CREDENTIAL_STATE_MUTEX
         .lock()
@@ -455,6 +976,26 @@ pub(crate) fn write_config_files(
 ) -> Result<(), String> {
     let _credential_guard = lock_dropbox_credential_state()?;
     write_config_files_unlocked(config_path, secrets_path, config)
+}
+
+#[cfg(test)]
+fn write_config_files_with_stage_hook<AfterStage>(
+    config_path: &Path,
+    secrets_path: &Path,
+    config: &AppConfigToml,
+    after_stage: AfterStage,
+) -> Result<(), String>
+where
+    AfterStage: FnMut(ConfigPublicationStage) -> Result<(), String>,
+{
+    let _credential_guard = lock_dropbox_credential_state()?;
+    write_config_files_with_backend_authority_unlocked_with_hook(
+        config_path,
+        secrets_path,
+        config,
+        true,
+        after_stage,
+    )
 }
 
 fn write_config_files_unlocked(
@@ -471,6 +1012,25 @@ fn write_config_files_with_backend_authority_unlocked(
     config: &AppConfigToml,
     preserve_dedicated_backend: bool,
 ) -> Result<(), String> {
+    write_config_files_with_backend_authority_unlocked_with_hook(
+        config_path,
+        secrets_path,
+        config,
+        preserve_dedicated_backend,
+        |_| Ok(()),
+    )
+}
+
+fn write_config_files_with_backend_authority_unlocked_with_hook<AfterStage>(
+    config_path: &Path,
+    secrets_path: &Path,
+    config: &AppConfigToml,
+    preserve_dedicated_backend: bool,
+    after_stage: AfterStage,
+) -> Result<(), String>
+where
+    AfterStage: FnMut(ConfigPublicationStage) -> Result<(), String>,
+{
     // These two files form one logical configuration document. Validate both
     // before mutating either so a corrupt or unreadable secrets file cannot be
     // interpreted as an empty split and deleted after config.toml is changed.
@@ -495,15 +1055,344 @@ fn write_config_files_with_backend_authority_unlocked(
         }
     }
     let (public_config, secrets_config) = split_config_for_secrets(&sanitized);
-    write_config_toml(config_path, &public_config)?;
+    let public_content =
+        serialize_config_toml_with_header(config_path, &public_config, "# Mindwtr desktop config")?;
+    let secrets_content = if config_has_values(&secrets_config) {
+        Some(serialize_config_toml_with_header(
+            secrets_path,
+            &secrets_config,
+            "# Mindwtr desktop secrets",
+        )?)
+    } else {
+        None
+    };
+    publish_config_pair_unlocked(
+        config_path,
+        secrets_path,
+        &public_content,
+        secrets_content.as_deref(),
+        after_stage,
+    )
+}
 
-    if config_has_values(&secrets_config) {
-        write_secrets_toml(secrets_path, &secrets_config)?;
-    } else if secrets_path.exists() {
-        fs::remove_file(secrets_path).map_err(|e| e.to_string())?;
+fn endpoint_fingerprint(service: CredentialService, config: &AppConfigToml) -> String {
+    let encoded = serde_json::to_vec(&service.endpoint_identity(config))
+        .expect("credential endpoint identity serializes infallibly");
+    fingerprint_bytes(&encoded)
+}
+
+fn credential_fingerprint(secret: Option<&str>) -> String {
+    let mut digest = Sha256::new();
+    match secret {
+        Some(secret) => {
+            digest.update(b"mindwtr-credential-present\0");
+            digest.update(secret.as_bytes());
+        }
+        None => digest.update(b"mindwtr-credential-absent\0"),
+    }
+    format!("{:x}", digest.finalize())
+}
+
+fn load_config_credential_state_unlocked(
+    config_path: &Path,
+    secrets_path: &Path,
+) -> Result<ConfigCredentialStateFile, String> {
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    if let Some(state) = recover_config_publication_unlocked(config_path, secrets_path)? {
+        return Ok(state);
+    }
+    let state = ConfigCredentialStateFile::from_current_files(config_path, secrets_path)?;
+    write_config_credential_state_file(&state_path, &state)?;
+    Ok(state)
+}
+
+fn select_secret_for_fingerprint(
+    expected_fingerprint: &str,
+    keyring: Result<Option<String>, String>,
+    fallback: Option<String>,
+) -> Result<Option<String>, String> {
+    if expected_fingerprint == credential_fingerprint(None) {
+        return Ok(None);
+    }
+    if let Ok(Some(secret)) = &keyring {
+        if credential_fingerprint(Some(secret)) == expected_fingerprint {
+            return Ok(Some(secret.clone()));
+        }
+    }
+    if let Some(secret) = fallback {
+        if credential_fingerprint(Some(&secret)) == expected_fingerprint {
+            return Ok(Some(secret));
+        }
+    }
+    Err("Credential binding does not match any available secret authority".to_string())
+}
+
+fn resolve_bound_credential_unlocked(
+    config_path: &Path,
+    secrets_path: &Path,
+    config: &AppConfigToml,
+    service: CredentialService,
+    keyring: Result<Option<String>, String>,
+) -> Result<Option<String>, String> {
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    let mut state = load_config_credential_state_unlocked(config_path, secrets_path)?;
+    if state.pending_credential.is_some() {
+        return Err("Credential update was interrupted and remains fail-closed".to_string());
+    }
+    let service_key = service.state_key();
+    let current_endpoint_fingerprint = endpoint_fingerprint(service, config);
+    if let Some(binding) = state.bindings.get(service_key) {
+        if binding.endpoint_fingerprint != current_endpoint_fingerprint {
+            return Err(format!(
+                "{} endpoint does not match its committed credential binding",
+                service_key
+            ));
+        }
+        return select_secret_for_fingerprint(
+            &binding.credential_fingerprint,
+            keyring,
+            service.fallback(config).map(str::to_string),
+        );
     }
 
-    Ok(())
+    let fallback = service.fallback(config).map(str::to_string);
+    let effective = match keyring {
+        Ok(Some(secret)) => Some(secret),
+        Ok(None) => fallback,
+        Err(_) if fallback.is_some() => fallback,
+        Err(_) => {
+            return Err(format!(
+                "{} credential authority is unavailable",
+                service_key
+            ))
+        }
+    };
+    state.credential_generation = state
+        .credential_generation
+        .checked_add(1)
+        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    state.bindings.insert(
+        service_key.to_string(),
+        CredentialBinding {
+            generation: state.credential_generation,
+            endpoint_fingerprint: current_endpoint_fingerprint,
+            credential_fingerprint: credential_fingerprint(effective.as_deref()),
+        },
+    );
+    write_config_credential_state_file(&state_path, &state)?;
+    Ok(effective)
+}
+
+fn read_bound_credential_paths_with<ReadSecret>(
+    config_path: &Path,
+    secrets_path: &Path,
+    service: CredentialService,
+    mut read_secret: ReadSecret,
+) -> Result<(AppConfigToml, Option<String>), String>
+where
+    ReadSecret: FnMut() -> Result<Option<String>, String>,
+{
+    let _credential_guard = lock_dropbox_credential_state()?;
+    let config = read_config_files_verified_unlocked(config_path, secrets_path)?;
+    let secret = resolve_bound_credential_unlocked(
+        config_path,
+        secrets_path,
+        &config,
+        service,
+        read_secret(),
+    )?;
+    Ok((config, secret))
+}
+
+fn restore_credential_transaction<WriteSecret>(
+    config_path: &Path,
+    secrets_path: &Path,
+    previous_config: &AppConfigToml,
+    previous_keyring: &Result<Option<String>, String>,
+    secret_store_changed: bool,
+    previous_credential_generation: u64,
+    previous_bindings: &BTreeMap<String, CredentialBinding>,
+    write_secret: &mut WriteSecret,
+) -> Result<(), String>
+where
+    WriteSecret: FnMut(Option<String>) -> Result<(), String>,
+{
+    if secret_store_changed {
+        let previous = previous_keyring.as_ref().map_err(|_| {
+            "Previous keyring value was opaque, so rollback cannot be verified".to_string()
+        })?;
+        write_secret(previous.clone())?;
+    }
+    write_config_files_unlocked(config_path, secrets_path, previous_config)?;
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    let mut state = load_config_credential_state_unlocked(config_path, secrets_path)?;
+    state.credential_generation = previous_credential_generation;
+    state.bindings = previous_bindings.clone();
+    state.pending_credential = None;
+    write_config_credential_state_file(&state_path, &state)
+}
+
+fn update_bound_credential_paths_with<MutateConfig, ReadSecret, WriteSecret, AfterStage>(
+    config_path: &Path,
+    secrets_path: &Path,
+    service: CredentialService,
+    secret_update: CredentialSecretUpdate,
+    mutate_config: MutateConfig,
+    mut read_secret: ReadSecret,
+    mut write_secret: WriteSecret,
+    mut after_stage: AfterStage,
+) -> Result<AppConfigToml, String>
+where
+    MutateConfig: FnOnce(&mut AppConfigToml),
+    ReadSecret: FnMut() -> Result<Option<String>, String>,
+    WriteSecret: FnMut(Option<String>) -> Result<(), String>,
+    AfterStage: FnMut(CredentialPublicationStage) -> Result<(), String>,
+{
+    let _credential_guard = lock_dropbox_credential_state()?;
+    let previous_config = read_config_files_verified_unlocked(config_path, secrets_path)?;
+    let previous_keyring = read_secret();
+    let previous_effective_result = resolve_bound_credential_unlocked(
+        config_path,
+        secrets_path,
+        &previous_config,
+        service,
+        previous_keyring.clone(),
+    );
+    let previous_effective = match previous_effective_result {
+        Ok(secret) => secret,
+        Err(_) if matches!(&secret_update, CredentialSecretUpdate::Replace(_)) => None,
+        Err(error) => return Err(error),
+    };
+    let previous_state = load_config_credential_state_unlocked(config_path, secrets_path)?;
+    let mut next_config = previous_config.clone();
+    mutate_config(&mut next_config);
+    let next_secret = match &secret_update {
+        CredentialSecretUpdate::Keep => previous_effective,
+        CredentialSecretUpdate::Replace(secret) => secret.clone(),
+    };
+    let target_endpoint_fingerprint = endpoint_fingerprint(service, &next_config);
+    let target_credential_fingerprint = credential_fingerprint(next_secret.as_deref());
+    let state_path = config_credential_state_path_from_secrets_path(secrets_path);
+    let mut state = previous_state.clone();
+    let next_generation = state
+        .credential_generation
+        .checked_add(1)
+        .ok_or_else(|| "Credential generation overflowed".to_string())?;
+    state.pending_credential = Some(CredentialBindingPending {
+        service: service.state_key().to_string(),
+        generation: next_generation,
+        endpoint_fingerprint: target_endpoint_fingerprint.clone(),
+        credential_fingerprint: target_credential_fingerprint.clone(),
+    });
+    write_config_credential_state_file(&state_path, &state)?;
+
+    let mut secret_store_changed = false;
+    let transaction = (|| -> Result<AppConfigToml, String> {
+        after_stage(CredentialPublicationStage::PendingState)?;
+        if matches!(&secret_update, CredentialSecretUpdate::Replace(_)) {
+            match write_secret(next_secret.clone()) {
+                Ok(()) => {
+                    secret_store_changed = true;
+                    service.set_fallback(&mut next_config, None);
+                }
+                Err(_) => service.set_fallback(&mut next_config, next_secret.clone()),
+            }
+        }
+        after_stage(CredentialPublicationStage::SecretStore)?;
+        write_config_files_unlocked(config_path, secrets_path, &next_config)?;
+        after_stage(CredentialPublicationStage::ConfigPair)?;
+
+        let readback_config = read_config_files_verified_unlocked(config_path, secrets_path)?;
+        if endpoint_fingerprint(service, &readback_config) != target_endpoint_fingerprint {
+            return Err("Credential endpoint failed durable read-back verification".to_string());
+        }
+        select_secret_for_fingerprint(
+            &target_credential_fingerprint,
+            read_secret(),
+            service.fallback(&readback_config).map(str::to_string),
+        )?;
+        after_stage(CredentialPublicationStage::ReadBack)?;
+
+        let mut committed_state = load_config_credential_state_unlocked(config_path, secrets_path)?;
+        let pending = committed_state
+            .pending_credential
+            .as_ref()
+            .ok_or_else(|| "Credential pending marker disappeared before commit".to_string())?;
+        if pending.service != service.state_key()
+            || pending.generation != next_generation
+            || pending.endpoint_fingerprint != target_endpoint_fingerprint
+            || pending.credential_fingerprint != target_credential_fingerprint
+        {
+            return Err("Credential pending marker changed before commit".to_string());
+        }
+        committed_state.credential_generation = next_generation;
+        committed_state.bindings.insert(
+            service.state_key().to_string(),
+            CredentialBinding {
+                generation: next_generation,
+                endpoint_fingerprint: target_endpoint_fingerprint,
+                credential_fingerprint: target_credential_fingerprint,
+            },
+        );
+        committed_state.pending_credential = None;
+        write_config_credential_state_file(&state_path, &committed_state)?;
+        after_stage(CredentialPublicationStage::CommittedState)?;
+        Ok(readback_config)
+    })();
+
+    match transaction {
+        Ok(config) => Ok(config),
+        Err(error) => {
+            if let Err(rollback_error) = restore_credential_transaction(
+                config_path,
+                secrets_path,
+                &previous_config,
+                &previous_keyring,
+                secret_store_changed,
+                previous_state.credential_generation,
+                &previous_state.bindings,
+                &mut write_secret,
+            ) {
+                return Err(format!(
+                    "{error}; rollback failed and credentials remain fail-closed: {rollback_error}"
+                ));
+            }
+            Err(error)
+        }
+    }
+}
+
+pub(crate) fn read_bound_credential(
+    app: &tauri::AppHandle,
+    service: CredentialService,
+) -> Result<(AppConfigToml, Option<String>), String> {
+    read_bound_credential_paths_with(
+        &get_config_path(app),
+        &get_secrets_path(app),
+        service,
+        || get_keyring_secret(app, service.keyring_key()),
+    )
+}
+
+pub(crate) fn update_bound_credential<MutateConfig>(
+    app: &tauri::AppHandle,
+    service: CredentialService,
+    secret_update: CredentialSecretUpdate,
+    mutate_config: MutateConfig,
+) -> Result<AppConfigToml, String>
+where
+    MutateConfig: FnOnce(&mut AppConfigToml),
+{
+    update_bound_credential_paths_with(
+        &get_config_path(app),
+        &get_secrets_path(app),
+        service,
+        secret_update,
+        mutate_config,
+        || get_keyring_secret(app, service.keyring_key()),
+        |secret| set_keyring_secret(app, service.keyring_key(), secret),
+        |_| Ok(()),
+    )
 }
 
 fn read_config_toml_optional_strict(path: &Path) -> Result<AppConfigToml, String> {
@@ -558,6 +1447,10 @@ fn load_or_migrate_dropbox_credential_state_paths_unlocked(
     secrets_path: &Path,
     state_path: &Path,
 ) -> Result<DropboxCredentialStateFile, String> {
+    // Dropbox's dedicated marker is layered on top of the public/private
+    // config pair. Recover that lower-level transaction before either reading
+    // the raw backend or deriving legacy state from it.
+    recover_config_publication_unlocked(config_path, secrets_path)?;
     if let Some(state) = read_dropbox_credential_state_file(state_path)? {
         return Ok(state);
     }
@@ -836,6 +1729,7 @@ fn normalize_sync_cloud_provider(value: &str) -> Option<&str> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 enum SyncSnapshotSecret {
     Known(String),
     Opaque,
@@ -895,6 +1789,7 @@ fn sync_configuration_snapshot_value(
     })
 }
 
+#[cfg(test)]
 fn sync_snapshot_secret_with(
     keyring: Result<Option<String>, String>,
     fallback: Result<Option<String>, String>,
@@ -908,6 +1803,7 @@ fn sync_snapshot_secret_with(
     }
 }
 
+#[cfg(test)]
 fn read_snapshot_config_paths(
     config_path: &Path,
     secrets_path: &Path,
@@ -938,6 +1834,7 @@ fn read_snapshot_config_paths(
     }
 }
 
+#[cfg(test)]
 fn read_sync_configuration_pair_paths_with<AfterStateRead>(
     config_path: &Path,
     secrets_path: &Path,
@@ -982,21 +1879,49 @@ fn read_sync_configuration_pair(
     app: &tauri::AppHandle,
 ) -> Result<
     (
-        (
-            AppConfigToml,
-            Result<Option<String>, String>,
-            Result<Option<String>, String>,
-        ),
+        AppConfigToml,
+        SyncSnapshotSecret,
+        SyncSnapshotSecret,
         DropboxCredentialStateFile,
     ),
     String,
 > {
-    read_sync_configuration_pair_paths_with(
-        &get_config_path(app),
-        &get_secrets_path(app),
-        &get_dropbox_credential_state_path(app),
+    let config_path = get_config_path(app);
+    let secrets_path = get_secrets_path(app);
+    let state_path = get_dropbox_credential_state_path(app);
+    let _credential_guard = lock_dropbox_credential_state()?;
+    let (_, provider_state) = read_sync_backend_publication_state_paths_unlocked_with(
+        &config_path,
+        &secrets_path,
+        &state_path,
         || {},
-    )
+    )?;
+    let mut config = read_config_files_verified_unlocked(&config_path, &secrets_path)?;
+    config.sync_backend = Some(
+        normalize_backend(provider_state.sync_backend_marker.trim())
+            .expect("validated Dropbox backend marker")
+            .to_string(),
+    );
+    let webdav_password = resolve_bound_credential_unlocked(
+        &config_path,
+        &secrets_path,
+        &config,
+        CredentialService::Webdav,
+        get_keyring_secret(app, KEYRING_WEB_DAV_PASSWORD),
+    )?;
+    let cloud_token = resolve_bound_credential_unlocked(
+        &config_path,
+        &secrets_path,
+        &config,
+        CredentialService::Cloud,
+        get_keyring_secret(app, KEYRING_CLOUD_TOKEN),
+    )?;
+    Ok((
+        config,
+        SyncSnapshotSecret::Known(webdav_password.unwrap_or_default()),
+        SyncSnapshotSecret::Known(cloud_token.unwrap_or_default()),
+        provider_state,
+    ))
 }
 
 fn read_raw_sync_backend_path_unlocked(config_path: &Path) -> Result<String, String> {
@@ -1028,7 +1953,7 @@ where
     let marker = normalize_backend(state.sync_backend_marker.trim())
         .expect("validated Dropbox backend marker");
     if raw_backend.trim() != marker {
-        let mut config = read_config_files_unlocked(config_path, secrets_path)?;
+        let mut config = read_config_files_verified_unlocked(config_path, secrets_path)?;
         config.sync_backend = Some(marker.to_string());
         write_config_files_with_backend_authority_unlocked(
             config_path,
@@ -1093,7 +2018,7 @@ where
     // config while still holding the caller's mutex. Only the backend field is
     // changed, so another native setter's unrelated update cannot be lost.
     load_or_migrate_dropbox_credential_state_paths_unlocked(config_path, secrets_path, state_path)?;
-    let mut config = read_config_files_unlocked(config_path, secrets_path)?;
+    let mut config = read_config_files_verified_unlocked(config_path, secrets_path)?;
     config.sync_backend = Some(normalized.to_string());
     write_config_files_with_backend_authority_unlocked(config_path, secrets_path, &config, false)?;
     if read_raw_sync_backend_path_unlocked(config_path)?.trim() != normalized {
@@ -1270,16 +2195,8 @@ pub(crate) fn get_sync_configuration_snapshot(
     require_webdav_password: Option<bool>,
     require_cloud_token: Option<bool>,
 ) -> Result<Value, String> {
-    let ((config, webdav_fallback, cloud_fallback), provider_state) =
+    let (config, webdav_password, cloud_token, provider_state) =
         read_sync_configuration_pair(&app)?;
-    let webdav_password = sync_snapshot_secret_with(
-        get_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD),
-        webdav_fallback,
-    );
-    let cloud_token = sync_snapshot_secret_with(
-        get_keyring_secret(&app, KEYRING_CLOUD_TOKEN),
-        cloud_fallback,
-    );
     if require_webdav_password.unwrap_or(false)
         && matches!(webdav_password, SyncSnapshotSecret::Opaque)
     {
@@ -1463,23 +2380,7 @@ pub(crate) fn check_obsidian_vault_marker(vault_path: String) -> Result<bool, St
 
 #[tauri::command]
 pub(crate) fn get_webdav_config(app: tauri::AppHandle) -> Result<Value, String> {
-    let mut config = read_config(&app);
-    let mut password = match get_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD) {
-        Ok(value) => value,
-        Err(error) => {
-            log::warn!("Failed to read WebDAV password from keyring: {error}");
-            None
-        }
-    };
-    if password.is_none() {
-        if let Some(legacy) = config.webdav_password.clone() {
-            if set_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD, Some(legacy.clone())).is_ok() {
-                config.webdav_password = None;
-                write_config_files(&get_config_path(&app), &get_secrets_path(&app), &config)?;
-            }
-            password = Some(legacy);
-        }
-    }
+    let (config, password) = read_bound_credential(&app, CredentialService::Webdav)?;
     Ok(serde_json::json!({
         "url": config.webdav_url.unwrap_or_default(),
         "username": config.webdav_username.unwrap_or_default(),
@@ -1509,86 +2410,59 @@ pub(crate) fn set_webdav_config(
     let url = url.trim().to_string();
     let allow_insecure_http = allow_insecure_http.unwrap_or(false);
     validate_webdav_config_url(&url, allow_insecure_http)?;
-    let config_path = get_config_path(&app);
-    let mut config = read_config(&app);
-
-    if url.is_empty() {
-        config.webdav_url = None;
-        config.webdav_username = None;
-        config.webdav_password = None;
-        config.webdav_allow_insecure_http = None;
-        config.webdav_allow_weak_fingerprint = None;
-        let _ = set_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD, None);
+    let should_replace_password = replace_password.unwrap_or(false) || !password.trim().is_empty();
+    let next_password = if password.trim().is_empty() {
+        None
     } else {
-        config.webdav_url = Some(url);
-        config.webdav_username = Some(username.trim().to_string());
-        config.webdav_allow_insecure_http = Some(if allow_insecure_http {
-            "true".to_string()
-        } else {
-            "false".to_string()
-        });
-        if let Some(allow_weak_fingerprint) = allow_weak_fingerprint {
-            config.webdav_allow_weak_fingerprint = Some(if allow_weak_fingerprint {
+        Some(password.trim().to_string())
+    };
+    let secret_update = if url.is_empty() {
+        CredentialSecretUpdate::Replace(None)
+    } else if should_replace_password {
+        CredentialSecretUpdate::Replace(next_password.clone())
+    } else {
+        CredentialSecretUpdate::Keep
+    };
+    let username = username.trim().to_string();
+    let persisted =
+        update_bound_credential(&app, CredentialService::Webdav, secret_update, |config| {
+            if url.is_empty() {
+                config.webdav_url = None;
+                config.webdav_username = None;
+                config.webdav_allow_insecure_http = None;
+                config.webdav_allow_weak_fingerprint = None;
+                return;
+            }
+            config.webdav_url = Some(url);
+            config.webdav_username = Some(username);
+            config.webdav_allow_insecure_http = Some(if allow_insecure_http {
                 "true".to_string()
             } else {
                 "false".to_string()
             });
-        }
-        let should_replace_password = replace_password.unwrap_or(false);
-        if should_replace_password || !password.trim().is_empty() {
-            let next_password = if password.trim().is_empty() {
-                None
-            } else {
-                Some(password.trim().to_string())
-            };
-            match set_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD, next_password.clone()) {
-                Ok(_) => {
-                    config.webdav_password = None;
-                }
-                Err(_) => {
-                    config.webdav_password = next_password;
-                    if config.webdav_password.is_some() {
-                        emit_keyring_fallback_warning(&app, "WebDAV password");
-                    }
-                }
+            if let Some(allow_weak_fingerprint) = allow_weak_fingerprint {
+                config.webdav_allow_weak_fingerprint = Some(if allow_weak_fingerprint {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                });
             }
-        }
+        })?;
+    if persisted.webdav_password.is_some() && next_password.is_some() {
+        emit_keyring_fallback_warning(&app, "WebDAV password");
     }
-
-    write_config_files(&config_path, &get_secrets_path(&app), &config)?;
     Ok(true)
 }
 
 #[tauri::command]
 pub(crate) fn get_webdav_password(app: tauri::AppHandle) -> Result<String, String> {
-    let config = read_config(&app);
-    let password = match get_keyring_secret(&app, KEYRING_WEB_DAV_PASSWORD) {
-        Ok(value) => value,
-        Err(_) => None,
-    }
-    .or(config.webdav_password);
+    let (_, password) = read_bound_credential(&app, CredentialService::Webdav)?;
     Ok(password.unwrap_or_default())
 }
 
 #[tauri::command]
 pub(crate) fn get_cloud_config(app: tauri::AppHandle) -> Result<Value, String> {
-    let mut config = read_config(&app);
-    let mut token = match get_keyring_secret(&app, KEYRING_CLOUD_TOKEN) {
-        Ok(value) => value,
-        Err(error) => {
-            log::warn!("Failed to read cloud token from keyring: {error}");
-            None
-        }
-    };
-    if token.is_none() {
-        if let Some(legacy) = config.cloud_token.clone() {
-            if set_keyring_secret(&app, KEYRING_CLOUD_TOKEN, Some(legacy.clone())).is_ok() {
-                config.cloud_token = None;
-                write_config_files(&get_config_path(&app), &get_secrets_path(&app), &config)?;
-            }
-            token = Some(legacy);
-        }
-    }
+    let (config, token) = read_bound_credential(&app, CredentialService::Cloud)?;
     Ok(serde_json::json!({
         "url": config.cloud_url.unwrap_or_default(),
         "token": token.unwrap_or_default(),
@@ -1604,8 +2478,6 @@ pub(crate) fn set_cloud_config(
     allow_insecure_http: Option<bool>,
 ) -> Result<bool, String> {
     let url = url.trim().to_string();
-    let config_path = get_config_path(&app);
-    let mut config = read_config(&app);
     let next_token = {
         let trimmed = token.trim().to_string();
         if trimmed.is_empty() {
@@ -1615,32 +2487,32 @@ pub(crate) fn set_cloud_config(
         }
     };
 
-    if url.is_empty() {
-        config.cloud_url = None;
-        config.cloud_token = None;
-        config.cloud_allow_insecure_http = None;
-        let _ = set_keyring_secret(&app, KEYRING_CLOUD_TOKEN, None);
-    } else {
-        config.cloud_url = Some(url);
-        config.cloud_allow_insecure_http = Some(if allow_insecure_http.unwrap_or(false) {
-            "true".to_string()
+    let allow_insecure_http = allow_insecure_http.unwrap_or(false);
+    let persisted = update_bound_credential(
+        &app,
+        CredentialService::Cloud,
+        CredentialSecretUpdate::Replace(if url.is_empty() {
+            None
         } else {
-            "false".to_string()
-        });
-        match set_keyring_secret(&app, KEYRING_CLOUD_TOKEN, next_token.clone()) {
-            Ok(_) => {
-                config.cloud_token = None;
+            next_token.clone()
+        }),
+        |config| {
+            if url.is_empty() {
+                config.cloud_url = None;
+                config.cloud_allow_insecure_http = None;
+            } else {
+                config.cloud_url = Some(url);
+                config.cloud_allow_insecure_http = Some(if allow_insecure_http {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                });
             }
-            Err(_) => {
-                config.cloud_token = next_token;
-                if config.cloud_token.is_some() {
-                    emit_keyring_fallback_warning(&app, "Cloud token");
-                }
-            }
-        }
+        },
+    )?;
+    if persisted.cloud_token.is_some() && next_token.is_some() {
+        emit_keyring_fallback_warning(&app, "Cloud token");
     }
-
-    write_config_files(&config_path, &get_secrets_path(&app), &config)?;
     Ok(true)
 }
 
@@ -2271,6 +3143,479 @@ mod tests {
             corrupt_secrets,
             "recoverable secret bytes must never be removed"
         );
+    }
+
+    #[test]
+    fn config_pair_publication_rolls_back_every_failed_stage() {
+        for failed_stage in ConfigPublicationStage::ALL {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let config_path = dir.path().join("config.toml");
+            let secrets_path = dir.path().join("secrets.toml");
+            let previous = AppConfigToml {
+                local_api_port: Some("1111".to_string()),
+                local_api_token: Some("old-secret".to_string()),
+                ..AppConfigToml::default()
+            };
+            write_config_files(&config_path, &secrets_path, &previous).expect("seed config");
+            let replacement = AppConfigToml {
+                local_api_port: Some("2222".to_string()),
+                local_api_token: Some("new-secret".to_string()),
+                ..AppConfigToml::default()
+            };
+
+            let result = write_config_files_with_stage_hook(
+                &config_path,
+                &secrets_path,
+                &replacement,
+                |stage| {
+                    if stage == failed_stage {
+                        Err(format!("injected {stage:?} failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+
+            assert!(
+                result.is_err(),
+                "{failed_stage:?} must not acknowledge success"
+            );
+            let recovered = read_config_files_verified(&config_path, &secrets_path)
+                .expect("ordinary publication failure rolls back or recovers");
+            assert_eq!(recovered, previous, "{failed_stage:?} exposed a torn pair");
+        }
+    }
+
+    #[test]
+    fn config_pair_reader_recovers_a_crash_between_file_publications() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let previous = AppConfigToml {
+            local_api_port: Some("1111".to_string()),
+            local_api_token: Some("old-secret".to_string()),
+            ..AppConfigToml::default()
+        };
+        write_config_files(&config_path, &secrets_path, &previous).expect("seed config");
+        let replacement = AppConfigToml {
+            local_api_port: Some("2222".to_string()),
+            local_api_token: Some("new-secret".to_string()),
+            ..AppConfigToml::default()
+        };
+        let (public, private) = split_config_for_secrets(&replacement);
+        let public_content =
+            serialize_config_toml_with_header(&config_path, &public, "# Mindwtr desktop config")
+                .expect("serialize public");
+        let private_content =
+            serialize_config_toml_with_header(&secrets_path, &private, "# Mindwtr desktop secrets")
+                .expect("serialize private");
+        restore_optional_file(
+            &config_rollback_path(&config_path),
+            read_optional_bytes(&config_path).unwrap().as_deref(),
+            true,
+        )
+        .unwrap();
+        restore_optional_file(
+            &config_rollback_path(&secrets_path),
+            read_optional_bytes(&secrets_path).unwrap().as_deref(),
+            true,
+        )
+        .unwrap();
+        let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+        let mut state = read_config_credential_state_file(&state_path)
+            .unwrap()
+            .expect("state exists");
+        state.pending_config = Some(ConfigPublicationPending {
+            generation: state.config_generation + 1,
+            config_fingerprint: Some(fingerprint_bytes(public_content.as_bytes())),
+            secrets_fingerprint: Some(fingerprint_bytes(private_content.as_bytes())),
+        });
+        write_config_credential_state_file(&state_path, &state).unwrap();
+        write_atomic_text(&config_path, &public_content, false).unwrap();
+
+        let recovered = read_config_files_verified(&config_path, &secrets_path)
+            .expect("partial generation recovers from durable backups");
+        assert_eq!(recovered, previous);
+    }
+
+    #[test]
+    fn sync_backend_reader_recovers_config_pair_before_reconciling_marker() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let dropbox_state_path = dir.path().join(DROPBOX_CREDENTIAL_STATE_FILE_NAME);
+        let previous = AppConfigToml {
+            sync_backend: Some("off".to_string()),
+            local_api_port: Some("1111".to_string()),
+            local_api_token: Some("old-secret".to_string()),
+            ..AppConfigToml::default()
+        };
+        write_config_files(&config_path, &secrets_path, &previous).expect("seed config");
+        write_dropbox_credential_state_file(
+            &dropbox_state_path,
+            &DropboxCredentialStateFile::default(),
+        )
+        .expect("seed backend marker");
+
+        let replacement = AppConfigToml {
+            sync_backend: Some("cloud".to_string()),
+            local_api_port: Some("2222".to_string()),
+            local_api_token: Some("new-secret".to_string()),
+            ..AppConfigToml::default()
+        };
+        let (public, private) = split_config_for_secrets(&replacement);
+        let public_content =
+            serialize_config_toml_with_header(&config_path, &public, "# Mindwtr desktop config")
+                .expect("serialize public");
+        let private_content =
+            serialize_config_toml_with_header(&secrets_path, &private, "# Mindwtr desktop secrets")
+                .expect("serialize private");
+        restore_optional_file(
+            &config_rollback_path(&config_path),
+            read_optional_bytes(&config_path).unwrap().as_deref(),
+            true,
+        )
+        .unwrap();
+        restore_optional_file(
+            &config_rollback_path(&secrets_path),
+            read_optional_bytes(&secrets_path).unwrap().as_deref(),
+            true,
+        )
+        .unwrap();
+        let config_state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+        let mut config_state = read_config_credential_state_file(&config_state_path)
+            .unwrap()
+            .expect("state exists");
+        config_state.pending_config = Some(ConfigPublicationPending {
+            generation: config_state.config_generation + 1,
+            config_fingerprint: Some(fingerprint_bytes(public_content.as_bytes())),
+            secrets_fingerprint: Some(fingerprint_bytes(private_content.as_bytes())),
+        });
+        write_config_credential_state_file(&config_state_path, &config_state).unwrap();
+        write_atomic_text(&config_path, &public_content, false).unwrap();
+
+        let (raw_backend, _) = read_sync_backend_publication_state_paths_with(
+            &config_path,
+            &secrets_path,
+            &dropbox_state_path,
+            || {},
+        )
+        .expect("backend reader recovers config transaction first");
+        let recovered = read_config_files_verified(&config_path, &secrets_path)
+            .expect("recovered config remains readable");
+
+        assert_eq!(raw_backend, "off");
+        assert_eq!(recovered, previous);
+    }
+
+    #[test]
+    fn bound_credential_update_never_exposes_a_mixed_endpoint_and_secret() {
+        for failed_stage in CredentialPublicationStage::ALL {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let config_path = dir.path().join("config.toml");
+            let secrets_path = dir.path().join("secrets.toml");
+            let keyring = std::cell::RefCell::new(None::<String>);
+            write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+                .expect("seed config");
+            update_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                CredentialService::Webdav,
+                CredentialSecretUpdate::Replace(Some("old-password".to_string())),
+                |config| {
+                    config.webdav_url = Some("https://old.example/dav".to_string());
+                    config.webdav_username = Some("alice".to_string());
+                },
+                || Ok(keyring.borrow().clone()),
+                |secret| {
+                    *keyring.borrow_mut() = secret;
+                    Ok(())
+                },
+                |_| Ok(()),
+            )
+            .expect("seed bound credential");
+
+            let result = update_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                CredentialService::Webdav,
+                CredentialSecretUpdate::Replace(Some("new-password".to_string())),
+                |config| {
+                    config.webdav_url = Some("https://new.example/dav".to_string());
+                    config.webdav_username = Some("bob".to_string());
+                },
+                || Ok(keyring.borrow().clone()),
+                |secret| {
+                    *keyring.borrow_mut() = secret;
+                    Ok(())
+                },
+                |stage| {
+                    if stage == failed_stage {
+                        Err(format!("injected {stage:?} failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(
+                result.is_err(),
+                "{failed_stage:?} must not acknowledge success"
+            );
+
+            if let Ok((config, password)) = read_bound_credential_paths_with(
+                &config_path,
+                &secrets_path,
+                CredentialService::Webdav,
+                || Ok(keyring.borrow().clone()),
+            ) {
+                assert_eq!(
+                    config.webdav_url.as_deref(),
+                    Some("https://old.example/dav")
+                );
+                assert_eq!(config.webdav_username.as_deref(), Some("alice"));
+                assert_eq!(password.as_deref(), Some("old-password"));
+            }
+        }
+    }
+
+    #[test]
+    fn bound_credential_uses_private_fallback_when_keyring_is_unavailable() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+
+        update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            CredentialSecretUpdate::Replace(Some("fallback-token".to_string())),
+            |config| config.cloud_url = Some("https://cloud.example".to_string()),
+            || Err("keyring unavailable".to_string()),
+            |_| Err("keyring unavailable".to_string()),
+            |_| Ok(()),
+        )
+        .expect("plaintext fallback remains a supported transaction");
+
+        let (config, token) = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            || Err("keyring unavailable".to_string()),
+        )
+        .expect("committed fallback binding is readable");
+        assert_eq!(config.cloud_url.as_deref(), Some("https://cloud.example"));
+        assert_eq!(token.as_deref(), Some("fallback-token"));
+        assert!(read_config_toml(&config_path).cloud_token.is_none());
+        assert_eq!(
+            read_config_toml(&secrets_path).cloud_token.as_deref(),
+            Some("fallback-token")
+        );
+    }
+
+    #[test]
+    fn bound_credential_keeps_then_clears_without_trusting_a_stale_keyring_value() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let keyring = std::cell::RefCell::new(None::<String>);
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+        update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Webdav,
+            CredentialSecretUpdate::Replace(Some("kept-password".to_string())),
+            |config| config.webdav_url = Some("https://old.example".to_string()),
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("seed binding");
+        update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Webdav,
+            CredentialSecretUpdate::Keep,
+            |config| config.webdav_url = Some("https://new.example".to_string()),
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("rebind kept password to new endpoint");
+        let (kept_config, kept_password) = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Webdav,
+            || Ok(keyring.borrow().clone()),
+        )
+        .expect("kept binding reads");
+        assert_eq!(
+            kept_config.webdav_url.as_deref(),
+            Some("https://new.example")
+        );
+        assert_eq!(kept_password.as_deref(), Some("kept-password"));
+
+        update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Webdav,
+            CredentialSecretUpdate::Replace(None),
+            |config| config.webdav_url = None,
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                if secret.is_none() {
+                    return Err("injected keyring delete failure".to_string());
+                }
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("clear commits an absent credential binding");
+        assert_eq!(
+            keyring.borrow().as_deref(),
+            Some("kept-password"),
+            "the test keeps a stale keyring value to prove it is non-authoritative"
+        );
+        let (cleared_config, cleared_password) = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Webdav,
+            || Ok(keyring.borrow().clone()),
+        )
+        .expect("cleared binding reads");
+        assert!(cleared_config.webdav_url.is_none());
+        assert!(cleared_password.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn credential_binding_state_is_owner_only_and_contains_no_endpoint_or_secret_bytes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let keyring = std::cell::RefCell::new(None::<String>);
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+        update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            CredentialSecretUpdate::Replace(Some("never-persist-this-token".to_string())),
+            |config| config.cloud_url = Some("https://private-endpoint.example".to_string()),
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("commit binding");
+
+        let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+        let raw = fs::read_to_string(&state_path).expect("read state");
+        assert!(!raw.contains("never-persist-this-token"));
+        assert!(!raw.contains("private-endpoint.example"));
+        assert_eq!(
+            fs::metadata(&state_path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::metadata(dir.path()).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn bound_credential_reader_fails_closed_after_endpoint_only_change() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let keyring = std::cell::RefCell::new(None::<String>);
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+        let mut committed = update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            CredentialSecretUpdate::Replace(Some("cloud-token".to_string())),
+            |config| config.cloud_url = Some("https://trusted.example".to_string()),
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("commit binding");
+        committed.cloud_url = Some("https://wrong.example".to_string());
+        write_config_files(&config_path, &secrets_path, &committed)
+            .expect("publish unrelated whole-config snapshot");
+
+        let result = read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            || Ok(keyring.borrow().clone()),
+        );
+        assert!(
+            result.is_err(),
+            "a stale token must never reach the changed endpoint"
+        );
+    }
+
+    #[test]
+    fn bound_credential_reader_rejects_an_interrupted_pending_generation() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let config_path = dir.path().join("config.toml");
+        let secrets_path = dir.path().join("secrets.toml");
+        let keyring = std::cell::RefCell::new(None::<String>);
+        write_config_files(&config_path, &secrets_path, &AppConfigToml::default())
+            .expect("seed config");
+        let committed = update_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            CredentialSecretUpdate::Replace(Some("old-token".to_string())),
+            |config| config.cloud_url = Some("https://old.example".to_string()),
+            || Ok(keyring.borrow().clone()),
+            |secret| {
+                *keyring.borrow_mut() = secret;
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .expect("commit binding");
+        let mut interrupted = committed;
+        interrupted.cloud_url = Some("https://new.example".to_string());
+        let state_path = config_credential_state_path_from_secrets_path(&secrets_path);
+        let mut state = read_config_credential_state_file(&state_path)
+            .unwrap()
+            .expect("state exists");
+        state.pending_credential = Some(CredentialBindingPending {
+            service: CredentialService::Cloud.state_key().to_string(),
+            generation: state.credential_generation + 1,
+            endpoint_fingerprint: endpoint_fingerprint(CredentialService::Cloud, &interrupted),
+            credential_fingerprint: credential_fingerprint(Some("new-token")),
+        });
+        write_config_credential_state_file(&state_path, &state).unwrap();
+        *keyring.borrow_mut() = Some("new-token".to_string());
+
+        assert!(read_bound_credential_paths_with(
+            &config_path,
+            &secrets_path,
+            CredentialService::Cloud,
+            || Ok(keyring.borrow().clone()),
+        )
+        .is_err());
     }
 
     #[test]
