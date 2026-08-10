@@ -2,10 +2,14 @@ import { addDays, format } from 'date-fns';
 
 import type { ReviewSnapshotItem } from './ai/types';
 import type { ExternalCalendarEvent } from './ics';
-import type { Project, Task, TaskSortBy } from './types';
+import type { Area, Project, Task, TaskSortBy } from './types';
 import { hasTimeComponent, isDueForReview, safeParseDate, safeParseDueDate } from './date';
-import { isTaskVisibleInArea, type AreaVisibilityContext } from './area-filter';
-import { filterProjectsNeedingNextAction, isTaskInActiveProject } from './project-utils';
+import {
+    isTaskVisibleInArea,
+    type AreaFilterSelection,
+    type AreaVisibilityContext,
+} from './area-filter';
+import { isTaskInActiveProject } from './project-utils';
 import { getSequentialFirstTaskIds, shouldShowTaskForStart, sortTasksBy } from './task-utils';
 import { isTaskActionable } from './task-status';
 
@@ -77,62 +81,56 @@ export type WeeklyReviewSummary = {
     staleWaitingCount: number;
 };
 
-/**
- * Factual snapshot for the weekly review's completed step. Every count mirrors
- * the filter a review step itself uses, so the summary can never disagree with
- * what the user just saw:
- * - `inboxCount` matches the inbox step's `inboxTasks` filter.
- * - `projectsWithoutNextAction` matches the projects step's next-action predicate.
- * - `staleWaitingCount` is derived from `getStaleItems`, inheriting its
- *   future-reviewAt/startTime exemption rather than re-deriving staleness.
- */
-export function getWeeklyReviewSummary(
+export type WeeklyReviewProjectEntry = {
+    project: Project;
+    tasks: Task[];
+    hasNextAction: boolean;
+};
+
+type WeeklyReviewDerivation = {
+    inbox: Task[];
+    projectEntries: WeeklyReviewProjectEntry[];
+    staleItems: ReviewSnapshotItem[];
+    summary: WeeklyReviewSummary;
+};
+
+function deriveWeeklyReview(
     tasks: Task[],
     projects: Project[],
-    now: Date = new Date(),
-): WeeklyReviewSummary {
+    staleThresholdDays: number,
+    now: Date,
+): WeeklyReviewDerivation {
     const projectMap = new Map(projects.map((project) => [project.id, project]));
-
-    const inboxCount = tasks.filter((task) => (
-        task.status === 'inbox'
-        && !task.deletedAt
-        && isTaskInActiveProject(task, projectMap)
-    )).length;
-
     const activeProjects = projects.filter((project) => project.status === 'active' && !project.deletedAt);
-    const projectsWithoutNextAction = filterProjectsNeedingNextAction(projects, tasks).length;
-
-    const staleWaitingCount = getStaleItems(tasks, projects, 14, now)
-        .filter((item) => item.status === 'waiting').length;
-
-    return {
-        inboxCount,
-        activeProjectCount: activeProjects.length,
-        projectsWithoutNextAction,
-        staleWaitingCount,
-    };
-}
-
-export function getStaleItems(
-    tasks: Task[],
-    projects: Project[],
-    staleThresholdDays = 14,
-    now: Date = new Date(),
-): ReviewSnapshotItem[] {
-    const items: ReviewSnapshotItem[] = [];
-    const projectMap = new Map(projects.map((project) => [project.id, project]));
+    const projectTasksById = new Map(activeProjects.map((project) => [project.id, [] as Task[]]));
+    const inbox: Task[] = [];
+    const staleItems: ReviewSnapshotItem[] = [];
 
     tasks.forEach((task) => {
-        if (task.deletedAt) return;
-        if (task.status !== 'next' && task.status !== 'waiting') return;
-        if (!isTaskInActiveProject(task, projectMap)) return;
-        // An explicit future review or start date outranks the staleness heuristic.
-        if (isFutureDate(task.reviewAt, now) || isFutureDate(task.startTime, now)) return;
+        const belongsToActiveProject = isTaskInActiveProject(task, projectMap);
+        if (!task.deletedAt && belongsToActiveProject && task.status === 'inbox') {
+            inbox.push(task);
+        }
+        if (
+            task.projectId
+            && !task.deletedAt
+            && task.status !== 'done'
+            && task.status !== 'reference'
+        ) {
+            projectTasksById.get(task.projectId)?.push(task);
+        }
+        if (
+            task.deletedAt
+            || !belongsToActiveProject
+            || (task.status !== 'next' && task.status !== 'waiting')
+            || isFutureDate(task.reviewAt, now)
+            || isFutureDate(task.startTime, now)
+        ) return;
         const updated = new Date(task.updatedAt || task.createdAt);
         if (Number.isNaN(updated.getTime())) return;
         const daysStale = Math.ceil((now.getTime() - updated.getTime()) / DAY_MS);
         if (daysStale <= staleThresholdDays) return;
-        items.push({
+        staleItems.push({
             id: task.id,
             title: task.title,
             daysStale,
@@ -143,15 +141,13 @@ export function getStaleItems(
         });
     });
 
-    projects.forEach((project) => {
-        if (project.deletedAt) return;
-        if (project.status !== 'active') return;
+    activeProjects.forEach((project) => {
         if (isFutureDate(project.reviewAt, now)) return;
         const updated = new Date(project.updatedAt || project.createdAt);
         if (Number.isNaN(updated.getTime())) return;
         const daysStale = Math.ceil((now.getTime() - updated.getTime()) / DAY_MS);
         if (daysStale <= staleThresholdDays) return;
-        items.push({
+        staleItems.push({
             id: `project:${project.id}`,
             title: project.title,
             daysStale,
@@ -160,8 +156,52 @@ export function getStaleItems(
             reviewAt: project.reviewAt,
         });
     });
+    staleItems.sort((left, right) => right.daysStale - left.daysStale);
 
-    return items.sort((a, b) => b.daysStale - a.daysStale);
+    const dueProjects = activeProjects.filter((project) => isDueForReview(project.reviewAt, now));
+    const futureProjects = activeProjects.filter((project) => !isDueForReview(project.reviewAt, now));
+    const projectEntries = [...dueProjects, ...futureProjects].map((project) => {
+        const projectTasks = projectTasksById.get(project.id) ?? [];
+        return {
+            project,
+            tasks: projectTasks,
+            hasNextAction: projectTasks.some((task) => task.status === 'next'),
+        };
+    });
+    const summary: WeeklyReviewSummary = {
+        inboxCount: inbox.length,
+        activeProjectCount: projectEntries.length,
+        projectsWithoutNextAction: projectEntries.filter((entry) => !entry.hasNextAction).length,
+        staleWaitingCount: staleItems.filter((item) => item.status === 'waiting').length,
+    };
+
+    return { inbox, projectEntries, staleItems, summary };
+}
+
+/**
+ * Factual snapshot for the weekly review's completed step. Every count mirrors
+ * the filter a review step itself uses, so the summary can never disagree with
+ * what the user just saw:
+ * - `inboxCount` matches the inbox step's `inboxTasks` filter.
+ * - `projectsWithoutNextAction` matches the projects step's next-action predicate.
+ * - `staleWaitingCount` shares the stale-items derivation, including its
+ *   future-reviewAt/startTime exemption.
+ */
+export function getWeeklyReviewSummary(
+    tasks: Task[],
+    projects: Project[],
+    now: Date = new Date(),
+): WeeklyReviewSummary {
+    return deriveWeeklyReview(tasks, projects, 14, now).summary;
+}
+
+export function getStaleItems(
+    tasks: Task[],
+    projects: Project[],
+    staleThresholdDays = 14,
+    now: Date = new Date(),
+): ReviewSnapshotItem[] {
+    return deriveWeeklyReview(tasks, projects, staleThresholdDays, now).staleItems;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,16 +352,17 @@ export type WeeklyReviewBuckets = {
     inbox: Task[];
     waitingGroups: ReviewSchedulePartition<Task>;
     somedayGroups: ReviewSchedulePartition<Task>;
-    orderedProjects: Project[];
+    projectEntries: WeeklyReviewProjectEntry[];
+    staleItems: ReviewSnapshotItem[];
+    summary: WeeklyReviewSummary;
     contextGroups: ContextReviewGroup[];
     calendarItems: CalendarReviewEntry[];
 };
 
 /**
- * Weekly Review's per-step task/project lists (ADR 0021's stale-item and
- * candidate surfaces). `getStaleItems` and `getWeeklyReviewSummary` already
- * cover the stale-items step and the completion summary; this covers the
- * other six steps that desktop and mobile filtered identically.
+ * Weekly Review's complete per-step task/project model (ADR 0021's stale-item
+ * and candidate surfaces), including the completion summary. Standalone stale
+ * and summary helpers delegate to the same derivation for compatibility.
  */
 export function getWeeklyReviewBuckets(
     tasks: Task[],
@@ -329,6 +370,7 @@ export function getWeeklyReviewBuckets(
     opts: ReviewBucketOptions = {},
 ): WeeklyReviewBuckets {
     const now = opts.now ?? new Date();
+    const weekly = deriveWeeklyReview(tasks, projects, 14, now);
     const projectMap = new Map(projects.map((project) => [project.id, project]));
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const upcomingEnd = new Date(startOfToday);
@@ -342,16 +384,11 @@ export function getWeeklyReviewBuckets(
         && isTaskInActiveProject(task, projectMap)
     );
 
-    const inboxTasks = tasks.filter((task) => task.status === 'inbox' && !task.deletedAt && isTaskInActiveProject(task, projectMap));
+    const inboxTasks = weekly.inbox;
     const waitingTasks = tasks.filter((task) => task.status === 'waiting' && !task.deletedAt && isTaskInActiveProject(task, projectMap));
     const somedayTasks = tasks.filter((task) => task.status === 'someday' && !task.deletedAt && isTaskInActiveProject(task, projectMap));
     const waitingGroups = partitionByReviewDate(waitingTasks, now);
     const somedayGroups = partitionByReviewDate(somedayTasks, now);
-
-    const activeProjects = projects.filter((project) => project.status === 'active' && !project.deletedAt);
-    const dueProjects = activeProjects.filter((project) => isDueForReview(project.reviewAt, now));
-    const futureProjects = activeProjects.filter((project) => !isDueForReview(project.reviewAt, now));
-    const orderedProjects = [...dueProjects, ...futureProjects];
 
     const contextGroupsByName = new Map<string, Task[]>();
     tasks.forEach((task) => {
@@ -383,7 +420,126 @@ export function getWeeklyReviewBuckets(
         .filter((entry) => entry.date >= startOfToday && entry.date < upcomingEnd)
         .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    return { inbox: inboxTasks, waitingGroups, somedayGroups, orderedProjects, contextGroups, calendarItems };
+    return {
+        inbox: inboxTasks,
+        waitingGroups,
+        somedayGroups,
+        projectEntries: weekly.projectEntries,
+        staleItems: weekly.staleItems,
+        summary: weekly.summary,
+        contextGroups,
+        calendarItems,
+    };
+}
+
+export type ReviewOverviewProjectGroup = {
+    project?: Project;
+    tasks: Task[];
+    hasNextAction: boolean;
+};
+
+export type ReviewOverviewAreaGroup = {
+    areaId?: string;
+    projectGroups: ReviewOverviewProjectGroup[];
+    taskCount: number;
+    projectCount: number;
+    needsActionCount: number;
+};
+
+export type GetReviewOverviewGroupsParams = {
+    tasks: Task[];
+    projects: Project[];
+    orderedAreas: Area[];
+    areaFilter: AreaFilterSelection;
+    sortBy: TaskSortBy;
+};
+
+/**
+ * The Review overview's complete task hierarchy. Core owns visibility,
+ * sorting, container resolution, ordering, and health counts; callers add
+ * platform labels, colors, and rendering ids only.
+ */
+export function getReviewOverviewGroups({
+    tasks,
+    projects,
+    orderedAreas,
+    areaFilter,
+    sortBy,
+}: GetReviewOverviewGroupsParams): ReviewOverviewAreaGroup[] {
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    const areaById = new Map(orderedAreas.map((area) => [area.id, area]));
+    const areaOrderById = new Map(orderedAreas.map((area, index) => [area.id, index]));
+    const visibleTasks = sortTasksBy(
+        tasks.filter((task) => (
+            isTaskVisibleInArea(task, {
+                areaById,
+                projectById,
+                resolvedAreaFilter: areaFilter,
+            })
+            && task.status !== 'done'
+            && task.status !== 'reference'
+        )),
+        sortBy,
+    );
+    type MutableAreaGroup = {
+        areaId?: string;
+        firstSeen: number;
+        projectGroups: Map<string, ReviewOverviewProjectGroup>;
+        taskCount: number;
+    };
+    const areaGroups = new Map<string, MutableAreaGroup>();
+
+    visibleTasks.forEach((task) => {
+        const project = task.projectId ? projectById.get(task.projectId) : undefined;
+        const areaId = project?.areaId || task.areaId;
+        const areaKey = areaId ?? '';
+        const areaGroup = areaGroups.get(areaKey) ?? {
+            areaId,
+            firstSeen: areaGroups.size,
+            projectGroups: new Map<string, ReviewOverviewProjectGroup>(),
+            taskCount: 0,
+        };
+        const projectKey = project?.id ?? '';
+        const projectGroup = areaGroup.projectGroups.get(projectKey) ?? {
+            project,
+            tasks: [],
+            hasNextAction: false,
+        };
+        projectGroup.tasks.push(task);
+        projectGroup.hasNextAction ||= task.status === 'next';
+        areaGroup.projectGroups.set(projectKey, projectGroup);
+        areaGroup.taskCount += 1;
+        areaGroups.set(areaKey, areaGroup);
+    });
+
+    return Array.from(areaGroups.values())
+        .sort((left, right) => {
+            if (!left.areaId) return right.areaId ? -1 : left.firstSeen - right.firstSeen;
+            if (!right.areaId) return 1;
+            const leftOrder = areaOrderById.get(left.areaId) ?? Number.MAX_SAFE_INTEGER;
+            const rightOrder = areaOrderById.get(right.areaId) ?? Number.MAX_SAFE_INTEGER;
+            return (leftOrder - rightOrder) || (left.firstSeen - right.firstSeen);
+        })
+        .map((areaGroup) => {
+            const projectGroups = Array.from(areaGroup.projectGroups.values())
+                .sort((left, right) => {
+                    if (!left.project) return right.project ? 1 : 0;
+                    if (!right.project) return -1;
+                    return (left.project.order - right.project.order)
+                        || left.project.title.localeCompare(right.project.title);
+                });
+            const projectCount = projectGroups.filter((group) => Boolean(group.project)).length;
+            const needsActionCount = projectGroups.filter(
+                (group) => Boolean(group.project) && !group.hasNextAction,
+            ).length;
+            return {
+                areaId: areaGroup.areaId,
+                projectGroups,
+                taskCount: areaGroup.taskCount,
+                projectCount,
+                needsActionCount,
+            };
+        });
 }
 
 /**
@@ -477,7 +633,6 @@ export type DailyReviewStepsOptions = {
 export type WeeklyReviewStepsOptions = {
     kind: 'weekly';
     includeContextStep?: boolean;
-    staleItemCount?: number;
     externalCalendarDayCount?: number;
     externalCalendarHasError?: boolean;
 };
@@ -529,7 +684,7 @@ export function buildReviewSteps(
     const somedayHasWork = b.somedayGroups.due.length + b.somedayGroups.unscheduled.length > 0;
     const steps: ReviewStepFlags[] = [
         { id: 'inbox', hasWork: b.inbox.length > 0 },
-        { id: 'stale', hasWork: (opts.staleItemCount ?? 0) > 0 },
+        { id: 'stale', hasWork: b.staleItems.length > 0 },
         { id: 'calendar', hasWork: calendarHasWork },
         { id: 'waiting', hasWork: waitingHasWork },
     ];
@@ -537,7 +692,7 @@ export function buildReviewSteps(
         steps.push({ id: 'contexts', hasWork: b.contextGroups.length > 0 });
     }
     steps.push(
-        { id: 'projects', hasWork: b.orderedProjects.length > 0 },
+        { id: 'projects', hasWork: b.projectEntries.length > 0 },
         { id: 'someday', hasWork: somedayHasWork },
         { id: 'completed', hasWork: true },
     );

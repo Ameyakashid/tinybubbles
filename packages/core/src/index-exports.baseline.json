@@ -402,6 +402,7 @@
     "getRecurrenceUntilValue",
     "getRecurringTaskPreviewDate",
     "getReferenceTaskFieldClears",
+    "getReviewOverviewGroups",
     "getSequentialFirstTaskIds",
     "getSequentialProjectTaskCues",
     "getStaleItems",

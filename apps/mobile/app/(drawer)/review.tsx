@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   DEFAULT_AREA_COLOR,
+  getReviewOverviewGroups,
   useTaskStore,
-  sortTasksBy,
   shallow,
   tFallback,
   type Task,
@@ -24,7 +24,6 @@ import { logError } from '../../lib/app-log';
 
 import { TaskEditModal } from '@/components/task-edit-modal';
 import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
-import { buildReviewTaskGroups, getReviewOverviewTasks } from '@/components/review/review-task-groups';
 import { TaskListBulkOrganizeModal } from '@/components/task-list/TaskListBulkOrganizeModal';
 import { TokenPickerModal } from '@/components/token-picker-modal';
 import { useTaskListSelection } from '@/components/use-task-list-selection';
@@ -58,11 +57,6 @@ export default function ReviewScreen() {
   const filledButton = useFilledButtonColors();
   const insets = useSafeAreaInsets();
   const { areaById, resolvedAreaFilter, sortedAreas } = useMobileAreaFilter();
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-  const areaOrderById = useMemo(
-    () => new Map(sortedAreas.map((area, index) => [area.id, index])),
-    [sortedAreas],
-  );
 
   const tasksById = useMemo(() => {
     return tasks.reduce((acc, task) => {
@@ -176,15 +170,14 @@ export default function ReviewScreen() {
 
   const bulkStatuses: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done', 'reference'];
 
-  const activeTasks = useMemo(() => getReviewOverviewTasks({
-    areaById,
-    projectById,
-    resolvedAreaFilter,
-    tasks,
-  }), [areaById, projectById, resolvedAreaFilter, tasks]);
-
   const sortBy = resolveNonDoneTaskSortBy(settings?.taskSortBy);
-  const sortedTasks = sortTasksBy(activeTasks, sortBy);
+  const reviewOverviewGroups = useMemo(() => getReviewOverviewGroups({
+    tasks,
+    projects,
+    orderedAreas: sortedAreas,
+    areaFilter: resolvedAreaFilter,
+    sortBy,
+  }), [projects, resolvedAreaFilter, sortBy, sortedAreas, tasks]);
   const noAreaLabel = t('review.noArea');
   const singleActionsLabel = t('review.singleActions');
   const translateOr = useCallback((key: string, fallback: string) => {
@@ -202,17 +195,29 @@ export default function ReviewScreen() {
   const collapseEverythingLabel = translateOr('review.collapseEverything', 'Collapse all');
   const unassignedAreaColor = settings?.appearance?.unassignedAreaColor || DEFAULT_AREA_COLOR;
   const reviewTaskGroups = useMemo(() => {
-    return buildReviewTaskGroups({
-      areaById,
-      areaOrderById,
-      fallbackAreaColor: tc.tint,
-      noAreaLabel: unassignedLabel || noAreaLabel,
-      projectById,
-      singleActionsLabel,
-      sortedTasks,
-      unassignedAreaColor,
+    return reviewOverviewGroups.map((group) => {
+      const area = group.areaId ? areaById.get(group.areaId) : undefined;
+      const representativeProject = group.projectGroups.find(({ project }) => project)?.project;
+      const areaKey = group.areaId ? `area:${group.areaId}` : 'area:none';
+
+      return {
+        ...group,
+        color: group.areaId
+          ? (area?.color || representativeProject?.color || tc.tint)
+          : unassignedAreaColor,
+        id: areaKey,
+        isUnassigned: !group.areaId,
+        projectGroups: group.projectGroups.map((projectGroup) => ({
+          ...projectGroup,
+          id: projectGroup.project ? `project:${projectGroup.project.id}` : `single:${areaKey}`,
+          isSingleActions: !projectGroup.project,
+          projectId: projectGroup.project?.id,
+          title: projectGroup.project?.title || singleActionsLabel,
+        })),
+        title: area?.name || representativeProject?.areaTitle || unassignedLabel || noAreaLabel,
+      };
     });
-  }, [areaById, areaOrderById, noAreaLabel, projectById, singleActionsLabel, sortedTasks, tc.tint, unassignedAreaColor, unassignedLabel]);
+  }, [areaById, noAreaLabel, reviewOverviewGroups, singleActionsLabel, tc.tint, unassignedAreaColor, unassignedLabel]);
 
   const areaGroupIds = useMemo(() => reviewTaskGroups.map((group) => group.id), [reviewTaskGroups]);
   const projectGroupIds = useMemo(

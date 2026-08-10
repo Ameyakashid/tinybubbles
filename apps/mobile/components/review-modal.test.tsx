@@ -111,14 +111,6 @@ vi.mock('@mindwtr/core', async (importOriginal) => ({
     createAIProvider: vi.fn(),
     formatI18nTemplate: vi.fn((template: string, values: Record<string, string | number>) =>
         template.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (match, key) => String(values[key] ?? match))),
-    getStaleItems: vi.fn(() => []),
-    getWeeklyReviewSummary: vi.fn(() => ({
-        inboxCount: 0,
-        activeProjectCount: 0,
-        projectsWithoutNextAction: 0,
-        staleWaitingCount: 0,
-    })),
-    isDueForReview: vi.fn(() => false),
     partitionByReviewDate: vi.fn((items: unknown[]) => ({ due: [], scheduled: [], unscheduled: items })),
     isTaskInActiveProject: vi.fn(() => true),
     safeFormatDate: vi.fn(() => '2026-03-15'),
@@ -141,11 +133,31 @@ vi.mock('@mindwtr/core', async (importOriginal) => ({
                 contextGroupsByName.set(context, list);
             });
         });
+        const projectEntries = activeProjects.map((project: any) => {
+            const projectTasks = tasks.filter((task: any) => (
+                task.projectId === project.id
+                && !task.deletedAt
+                && task.status !== 'done'
+                && task.status !== 'reference'
+            ));
+            return {
+                project,
+                tasks: projectTasks,
+                hasNextAction: projectTasks.some((task: any) => task.status === 'next'),
+            };
+        });
         return {
             inbox,
             waitingGroups: { due: [], scheduled: [], unscheduled: waiting },
             somedayGroups: { due: [], scheduled: [], unscheduled: someday },
-            orderedProjects: activeProjects,
+            projectEntries,
+            staleItems: [],
+            summary: {
+                inboxCount: inbox.length,
+                activeProjectCount: projectEntries.length,
+                projectsWithoutNextAction: projectEntries.filter((entry: any) => !entry.hasNextAction).length,
+                staleWaitingCount: 0,
+            },
             contextGroups: Array.from(contextGroupsByName.entries()).map(([context, contextTasks]) => ({ context, tasks: contextTasks })),
             calendarItems: [],
         };
@@ -166,7 +178,7 @@ vi.mock('@mindwtr/core', async (importOriginal) => ({
         }
         const weeklySteps: Array<{ id: string; hasWork: boolean }> = [
             { id: 'inbox', hasWork: buckets.inbox.length > 0 },
-            { id: 'stale', hasWork: (opts.staleItemCount ?? 0) > 0 },
+            { id: 'stale', hasWork: buckets.staleItems.length > 0 },
             {
                 id: 'calendar',
                 hasWork: buckets.calendarItems.length > 0
@@ -179,7 +191,7 @@ vi.mock('@mindwtr/core', async (importOriginal) => ({
             weeklySteps.push({ id: 'contexts', hasWork: buckets.contextGroups.length > 0 });
         }
         weeklySteps.push(
-            { id: 'projects', hasWork: buckets.orderedProjects.length > 0 },
+            { id: 'projects', hasWork: buckets.projectEntries.length > 0 },
             { id: 'someday', hasWork: buckets.somedayGroups.due.length + buckets.somedayGroups.unscheduled.length > 0 },
             { id: 'completed', hasWork: true },
         );

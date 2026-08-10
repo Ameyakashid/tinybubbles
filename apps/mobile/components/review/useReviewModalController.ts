@@ -6,18 +6,15 @@ import {
     createAIProvider,
     filterReviewSuggestionsToKnownIds,
     getExternalCalendarDaySummaries,
-    getStaleItems,
     getWeeklyReviewBuckets,
-    getWeeklyReviewSummary,
-    isDueForReview,
     parseProjectNextActionInput,
     resolveReviewStepSession,
     type AIProviderId,
     type ExternalCalendarEvent,
-    type Project,
     type ReviewSuggestion,
     type Task,
     type TaskStatus,
+    type WeeklyReviewProjectEntry,
     useTaskStore,
 } from '@mindwtr/core';
 import {
@@ -69,11 +66,8 @@ export type {
     ExternalCalendarDaySummary,
 } from '@mindwtr/core';
 
-export type ReviewProjectEntry = {
+export type ReviewProjectEntry = WeeklyReviewProjectEntry & {
     areaColor: string;
-    hasNextAction: boolean;
-    project: Project;
-    tasks: Task[];
 };
 
 type UseReviewModalControllerParams = {
@@ -256,8 +250,14 @@ export function useReviewModalController({
         }, 650);
     }, [handleClose]);
 
-    const staleItems = useMemo(() => getStaleItems(tasks, projects), [tasks, projects]);
-    const reviewSummary = useMemo(() => getWeeklyReviewSummary(tasks, projects), [tasks, projects]);
+    // Core owns the complete Weekly Review model; mobile only decorates the
+    // shared project entries with a theme-aware color for rendering.
+    const weeklyBuckets = useMemo(
+        () => getWeeklyReviewBuckets(tasks, projects),
+        [tasks, projects],
+    );
+    const staleItems = weeklyBuckets.staleItems;
+    const reviewSummary = weeklyBuckets.summary;
     const staleItemTitleMap = useMemo(() => staleItems.reduce((acc, item) => {
         acc[item.id] = item.title;
         return acc;
@@ -352,12 +352,6 @@ export function useReviewModalController({
         await batchUpdateTasks(updates);
     }, [aiSelectedIds, aiSuggestions, batchUpdateTasks, isActionableSuggestion]);
 
-    // Single source of Weekly Review's per-step candidate lists (ADR 0021):
-    // shared with desktop so these six filters can't drift apart.
-    const weeklyBuckets = useMemo(
-        () => getWeeklyReviewBuckets(tasks, projects),
-        [tasks, projects],
-    );
     const inboxTasks = weeklyBuckets.inbox;
     const waitingGroups = weeklyBuckets.waitingGroups;
     const visibleWaitingTasks = useMemo(
@@ -381,7 +375,6 @@ export function useReviewModalController({
         () => [...somedayGroups.due, ...somedayGroups.scheduled, ...somedayGroups.unscheduled],
         [somedayGroups],
     );
-    const orderedProjects = weeklyBuckets.orderedProjects;
     const calendarReviewItems = weeklyBuckets.calendarItems;
     const externalCalendarReviewItems = useMemo(
         () => getExternalCalendarDaySummaries(externalCalendarEvents),
@@ -389,29 +382,24 @@ export function useReviewModalController({
     );
     const contextReviewGroups = weeklyBuckets.contextGroups;
 
-    const projectReviewEntries = useMemo<ReviewProjectEntry[]>(() => orderedProjects.map((project) => {
-        const projectTasks = tasks.filter(
-            (task) =>
-                task.projectId === project.id
-                && task.status !== 'done'
-                && task.status !== 'reference'
-                && !task.deletedAt,
-        );
-        return {
-            areaColor: (project.areaId ? areaById.get(project.areaId)?.color : undefined) || tc.tint,
-            hasNextAction: projectTasks.some((task) => task.status === 'next'),
-            project,
-            tasks: projectTasks,
-        };
-    }), [areaById, orderedProjects, tasks, tc.tint]);
+    const projectReviewEntries = useMemo<ReviewProjectEntry[]>(
+        () => weeklyBuckets.projectEntries.map((entry) => ({
+            ...entry,
+            areaColor: (
+                entry.project.areaId
+                    ? areaById.get(entry.project.areaId)?.color
+                    : undefined
+            ) || tc.tint,
+        })),
+        [areaById, tc.tint, weeklyBuckets.projectEntries],
+    );
 
     const stepFlags = useMemo(() => buildReviewSteps(weeklyBuckets, {
         kind: 'weekly',
         includeContextStep,
-        staleItemCount: staleItems.length,
         externalCalendarDayCount: externalCalendarReviewItems.length,
         externalCalendarHasError: Boolean(externalCalendarError),
-    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, staleItems.length, weeklyBuckets]);
+    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, weeklyBuckets]);
     const stepHasWork = useMemo(() => new Map(stepFlags.map((flag) => [flag.id, flag.hasWork])), [stepFlags]);
     const steps = useMemo<ReviewStepDefinition[]>(() => {
         const list: ReviewStepDefinition[] = [

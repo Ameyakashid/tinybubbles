@@ -7,10 +7,8 @@ import {
     filterReviewSuggestionsToKnownIds,
     formatI18nTemplate,
     getExternalCalendarDaySummaries,
-    getStaleItems,
     getUsedTaskTokens,
     getWeeklyReviewBuckets,
-    getWeeklyReviewSummary,
     isTaskInActiveProject,
     parseProjectNextActionInput,
     resolveReviewStepSession,
@@ -109,7 +107,13 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
     const aiEnabled = settings?.ai?.enabled === true;
     const includeContextStep = settings?.gtd?.weeklyReview?.includeContextStep !== false;
     const aiProvider = (settings?.ai?.provider ?? 'openai') as AIProviderId;
-    const staleItems = useMemo(() => getStaleItems(tasks, projects), [tasks, projects]);
+    // One core derivation owns every Weekly Review candidate, project-health,
+    // stale-item, and completion-summary decision.
+    const weeklyBuckets = useMemo(
+        () => getWeeklyReviewBuckets(tasks, projects),
+        [tasks, projects],
+    );
+    const staleItems = weeklyBuckets.staleItems;
     const staleItemTitleMap = useMemo(() => {
         return staleItems.reduce((acc, item) => {
             acc[item.id] = item.title;
@@ -127,16 +131,10 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
         () => staleItems.filter((item) => item.id.startsWith('project:')),
         [staleItems],
     );
-    // Single source of Weekly Review's per-step candidate lists (ADR 0021):
-    // shared with mobile so these six filters can't drift apart.
-    const weeklyBuckets = useMemo(
-        () => getWeeklyReviewBuckets(tasks, projects),
-        [tasks, projects],
-    );
     const inboxTasks = weeklyBuckets.inbox;
     const waitingGroups = weeklyBuckets.waitingGroups;
     const somedayGroups = weeklyBuckets.somedayGroups;
-    const orderedProjects = weeklyBuckets.orderedProjects;
+    const projectEntries = weeklyBuckets.projectEntries;
     const contextReviewGroups = weeklyBuckets.contextGroups;
     const calendarReviewItems = weeklyBuckets.calendarItems;
     // Only used for the "nothing waiting/someday at all" empty state; the
@@ -154,15 +152,14 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
         () => getExternalCalendarDaySummaries(externalCalendarEvents),
         [externalCalendarEvents],
     );
-    const reviewSummary = useMemo(() => getWeeklyReviewSummary(tasks, projects), [tasks, projects]);
+    const reviewSummary = weeklyBuckets.summary;
 
     const stepFlags = useMemo(() => buildReviewSteps(weeklyBuckets, {
         kind: 'weekly',
         includeContextStep,
-        staleItemCount: staleItems.length,
         externalCalendarDayCount: externalCalendarReviewItems.length,
         externalCalendarHasError: Boolean(externalCalendarError),
-    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, staleItems.length, weeklyBuckets]);
+    }), [externalCalendarError, externalCalendarReviewItems.length, includeContextStep, weeklyBuckets]);
     const stepHasWork = useMemo(() => new Map(stepFlags.map((flag) => [flag.id, flag.hasWork])), [stepFlags]);
     const steps = useMemo<ReviewStepDefinition[]>(() => {
         const list: ReviewStepDefinition[] = [
@@ -830,15 +827,7 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
                     <div className="space-y-6">
                         <p className="text-muted-foreground">{t('review.projectsHint')}</p>
                         <div className="space-y-4">
-                            {orderedProjects.map((project) => {
-                                const projectTasks = tasks.filter((task) => (
-                                    task.projectId === project.id
-                                    && !task.deletedAt
-                                    && task.status !== 'done'
-                                    && task.status !== 'reference'
-                                ));
-                                const hasNextAction = projectTasks.some((task) => task.status === 'next');
-
+                            {projectEntries.map(({ project, tasks: projectTasks, hasNextAction }) => {
                                 return (
                                     <div key={project.id} className="border border-border rounded-lg p-4">
                                         <div className="flex items-center justify-between gap-3 mb-3">

@@ -4,13 +4,14 @@ import {
     getAdvancedReviewDate,
     getDailyReviewBuckets,
     getExternalCalendarDaySummaries,
+    getReviewOverviewGroups,
     getStaleItems,
     getWeeklyReviewBuckets,
     getWeeklyReviewSummary,
     partitionByReviewDate,
     resolveReviewStepSession,
 } from './review-utils';
-import type { Project, Task } from './types';
+import type { Area, Project, Task } from './types';
 
 const staleUpdatedAt = '2026-01-01T00:00:00.000Z';
 const now = new Date('2026-03-01T00:00:00.000Z');
@@ -33,6 +34,16 @@ const createProject = (overrides: Partial<Project> = {}): Project => ({
     color: '#3B82F6',
     order: 0,
     tagIds: [],
+    createdAt: staleUpdatedAt,
+    updatedAt: staleUpdatedAt,
+    ...overrides,
+});
+
+const createArea = (overrides: Partial<Area> = {}): Area => ({
+    id: 'area-1',
+    name: 'Area',
+    color: '#3B82F6',
+    order: 0,
     createdAt: staleUpdatedAt,
     updatedAt: staleUpdatedAt,
     ...overrides,
@@ -303,19 +314,88 @@ describe('getDailyReviewBuckets', () => {
 describe('getWeeklyReviewBuckets', () => {
     const weeklyNow = new Date(2026, 2, 1);
 
-    it('splits inbox, waiting and someday tasks and orders due-first projects ahead of future ones', () => {
+    it('returns due-first project entries with live tasks and next-action health', () => {
         const activeProject = createProject({ id: 'p-active', status: 'active' });
         const dueProject = createProject({ id: 'p-due', status: 'active', reviewAt: '2026-02-01' });
+        const secondDueProject = createProject({ id: 'p-due-2', status: 'active', reviewAt: '2026-02-15' });
+        const deferredProject = createProject({ id: 'p-deferred', status: 'someday' });
+        const archivedProject = createProject({ id: 'p-archived', status: 'archived' });
+        const deletedProject = createProject({ id: 'p-deleted', status: 'active', deletedAt: staleUpdatedAt });
         const inbox = createTask({ id: 'inbox-1', status: 'inbox' });
         const waiting = createTask({ id: 'waiting-1', status: 'waiting' });
         const someday = createTask({ id: 'someday-1', status: 'someday' });
+        const dueWaiting = createTask({ id: 'due-waiting', status: 'waiting', projectId: dueProject.id });
+        const deletedNext = createTask({
+            id: 'due-deleted-next',
+            status: 'next',
+            projectId: dueProject.id,
+            deletedAt: staleUpdatedAt,
+        });
+        const activeInbox = createTask({ id: 'active-inbox', status: 'inbox', projectId: activeProject.id });
+        const activeNext = createTask({ id: 'active-next', status: 'next', projectId: activeProject.id });
+        const completed = createTask({ id: 'active-done', status: 'done', projectId: activeProject.id });
+        const deferredTask = createTask({ id: 'deferred-task', status: 'next', projectId: deferredProject.id });
+        const deletedProjectTask = createTask({ id: 'deleted-project-task', status: 'next', projectId: deletedProject.id });
 
-        const buckets = getWeeklyReviewBuckets([inbox, waiting, someday], [activeProject, dueProject], { now: weeklyNow });
+        const reviewTasks = [
+            inbox,
+            waiting,
+            someday,
+            dueWaiting,
+            deletedNext,
+            activeInbox,
+            activeNext,
+            completed,
+            deferredTask,
+            deletedProjectTask,
+        ];
+        const reviewProjects = [
+            activeProject,
+            dueProject,
+            secondDueProject,
+            deferredProject,
+            archivedProject,
+            deletedProject,
+        ];
+        const buckets = getWeeklyReviewBuckets(
+            reviewTasks,
+            reviewProjects,
+            { now: weeklyNow },
+        );
 
-        expect(buckets.inbox.map((task) => task.id)).toEqual(['inbox-1']);
-        expect(buckets.waitingGroups.unscheduled.map((task) => task.id)).toEqual(['waiting-1']);
+        expect(buckets.inbox.map((task) => task.id)).toEqual(['inbox-1', 'active-inbox']);
+        expect(buckets.waitingGroups.unscheduled.map((task) => task.id)).toEqual(['waiting-1', 'due-waiting']);
         expect(buckets.somedayGroups.unscheduled.map((task) => task.id)).toEqual(['someday-1']);
-        expect(buckets.orderedProjects.map((project) => project.id)).toEqual(['p-due', 'p-active']);
+        expect(buckets.projectEntries.map((entry) => entry.project.id)).toEqual([
+            'p-due',
+            'p-due-2',
+            'p-active',
+        ]);
+        expect(buckets.projectEntries.map((entry) => ({
+            id: entry.project.id,
+            taskIds: entry.tasks.map((task) => task.id),
+            hasNextAction: entry.hasNextAction,
+        }))).toEqual([
+            { id: 'p-due', taskIds: ['due-waiting'], hasNextAction: false },
+            { id: 'p-due-2', taskIds: [], hasNextAction: false },
+            { id: 'p-active', taskIds: ['active-inbox', 'active-next'], hasNextAction: true },
+        ]);
+        expect(buckets.staleItems.map((item) => item.id)).toEqual([
+            'waiting-1',
+            'due-waiting',
+            'active-next',
+            'project:p-active',
+            'project:p-due',
+            'project:p-due-2',
+        ]);
+        expect(buckets.summary).toEqual({
+            inboxCount: 2,
+            activeProjectCount: 3,
+            projectsWithoutNextAction: 2,
+            staleWaitingCount: 2,
+        });
+        expect(buckets.staleItems).toEqual(getStaleItems(reviewTasks, reviewProjects, 14, weeklyNow));
+        expect(buckets.summary).toEqual(getWeeklyReviewSummary(reviewTasks, reviewProjects, weeklyNow));
     });
 
     it('groups reviewable tasks by context, dropping done/archived/reference tasks', () => {
@@ -334,6 +414,101 @@ describe('getWeeklyReviewBuckets', () => {
         const buckets = getWeeklyReviewBuckets([withinWindow, outsideWindow], [], { now: weeklyNow });
 
         expect(buckets.calendarItems.map((entry) => entry.task.id)).toEqual(['due-soon']);
+    });
+});
+
+describe('getReviewOverviewGroups', () => {
+    it('groups sorted tasks by area and project with single actions last', () => {
+        const work = createArea({ id: 'area-work', name: 'Work' });
+        const personal = createArea({ id: 'area-personal', name: 'Personal' });
+        const alpha = createProject({ id: 'project-alpha', title: 'Alpha', areaId: work.id, order: 1 });
+        const zeta = createProject({ id: 'project-zeta', title: 'Zeta', areaId: work.id, order: 1 });
+        const personalProject = createProject({
+            id: 'project-personal',
+            title: 'Personal project',
+            areaId: personal.id,
+            order: 0,
+        });
+        const unknownAreaProject = createProject({
+            id: 'project-unknown-area',
+            title: 'Unknown area project',
+            areaId: 'area-unknown',
+            order: 0,
+        });
+
+        const groups = getReviewOverviewGroups({
+            tasks: [
+                createTask({ id: 'zeta-next', title: 'B next', projectId: zeta.id, areaId: personal.id }),
+                createTask({ id: 'zeta-inbox', title: 'A inbox', status: 'inbox', projectId: zeta.id }),
+                createTask({ id: 'alpha-waiting', title: 'Needs action', status: 'waiting', projectId: alpha.id }),
+                createTask({ id: 'work-single', title: 'Work single', status: 'inbox', areaId: work.id }),
+                createTask({ id: 'personal-project', title: 'Personal project task', projectId: personalProject.id }),
+                createTask({ id: 'missing-project', title: 'A missing project', projectId: 'missing', areaId: personal.id }),
+                createTask({ id: 'personal-single', title: 'Z personal single', areaId: personal.id }),
+                createTask({ id: 'unassigned', title: 'Unassigned', status: 'inbox' }),
+                createTask({ id: 'unknown-area', title: 'Unknown', projectId: unknownAreaProject.id }),
+                createTask({ id: 'done', title: 'Done', status: 'done', projectId: alpha.id }),
+                createTask({ id: 'reference', title: 'Reference', status: 'reference', projectId: alpha.id }),
+            ],
+            projects: [zeta, alpha, personalProject, unknownAreaProject],
+            orderedAreas: [work, personal],
+            areaFilter: { included: [], excluded: [] },
+            sortBy: 'title',
+        });
+
+        expect(groups.map((group) => group.areaId)).toEqual([
+            undefined,
+            'area-work',
+            'area-personal',
+            'area-unknown',
+        ]);
+        expect(groups[1]).toMatchObject({
+            taskCount: 4,
+            projectCount: 2,
+            needsActionCount: 1,
+        });
+        expect(groups[1].projectGroups.map((group) => ({
+            projectId: group.project?.id,
+            taskIds: group.tasks.map((task) => task.id),
+            hasNextAction: group.hasNextAction,
+        }))).toEqual([
+            { projectId: 'project-alpha', taskIds: ['alpha-waiting'], hasNextAction: false },
+            { projectId: 'project-zeta', taskIds: ['zeta-inbox', 'zeta-next'], hasNextAction: true },
+            { projectId: undefined, taskIds: ['work-single'], hasNextAction: false },
+        ]);
+        expect(groups[2].projectGroups.map((group) => ({
+            projectId: group.project?.id,
+            taskIds: group.tasks.map((task) => task.id),
+        }))).toEqual([
+            { projectId: 'project-personal', taskIds: ['personal-project'] },
+            { projectId: undefined, taskIds: ['missing-project', 'personal-single'] },
+        ]);
+    });
+
+    it('honors area filtering and excludes tasks owned by deferred or archived projects', () => {
+        const work = createArea({ id: 'area-work', name: 'Work' });
+        const personal = createArea({ id: 'area-personal', name: 'Personal' });
+        const active = createProject({ id: 'active', areaId: work.id });
+        const deferred = createProject({ id: 'deferred', areaId: work.id, status: 'someday' });
+        const archived = createProject({ id: 'archived', areaId: work.id, status: 'archived' });
+
+        const groups = getReviewOverviewGroups({
+            tasks: [
+                createTask({ id: 'visible', projectId: active.id }),
+                createTask({ id: 'personal', areaId: personal.id }),
+                createTask({ id: 'deferred', projectId: deferred.id }),
+                createTask({ id: 'archived', projectId: archived.id }),
+                createTask({ id: 'deleted', projectId: active.id, deletedAt: staleUpdatedAt }),
+            ],
+            projects: [active, deferred, archived],
+            orderedAreas: [work, personal],
+            areaFilter: { included: [work.id], excluded: [] },
+            sortBy: 'default',
+        });
+
+        expect(groups).toHaveLength(1);
+        expect(groups[0].areaId).toBe(work.id);
+        expect(groups[0].projectGroups.flatMap((group) => group.tasks.map((task) => task.id))).toEqual(['visible']);
     });
 });
 
@@ -381,6 +556,26 @@ describe('buildReviewSteps', () => {
         const steps = buildReviewSteps(buckets, { kind: 'weekly', includeContextStep: false });
 
         expect(steps.find((step) => step.id === 'waiting')?.hasWork).toBe(false);
+    });
+
+    it('derives weekly stale and project step work from the deep bucket model', () => {
+        const buckets = getWeeklyReviewBuckets(
+            [createTask({ id: 'stale-next', status: 'next', updatedAt: staleUpdatedAt })],
+            [createProject({ id: 'active-project', updatedAt: '2026-02-28T00:00:00.000Z' })],
+            { now },
+        );
+
+        const steps = buildReviewSteps(buckets, { kind: 'weekly', includeContextStep: false });
+
+        expect(steps).toEqual([
+            { id: 'inbox', hasWork: false },
+            { id: 'stale', hasWork: true },
+            { id: 'calendar', hasWork: false },
+            { id: 'waiting', hasWork: false },
+            { id: 'projects', hasWork: true },
+            { id: 'someday', hasWork: false },
+            { id: 'completed', hasWork: true },
+        ]);
     });
 });
 
