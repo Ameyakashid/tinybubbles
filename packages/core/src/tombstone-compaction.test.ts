@@ -4,6 +4,7 @@ import { compactPurgedTaskForLocalStorage, hasUncompactedPurgedTaskTombstone } f
 import { normalizeTaskForLoad } from './task-status';
 import { normalizeTaskForSyncMerge } from './sync-normalization';
 import { mergeAppDataWithStats } from './sync';
+import { taskToSqliteRow } from './task-sync-schema';
 
 const nowIso = '2026-08-04T00:00:00.000Z';
 
@@ -22,15 +23,19 @@ const purgedTask: Task = {
 };
 
 describe('purged tombstone compaction is stable across load cycles', () => {
-    // normalizeTaskForLoad backfills pushCount: 0 on every load; the compaction
-    // check must treat that as neutral, or every purged tombstone takes a rev
-    // bump on every merge and each cycle re-triggers the next one (#766).
+    // normalizeTaskForLoad no longer backfills pushCount: 0 onto purged
+    // tombstones (that oscillation rewrote every purged row each cycle — see
+    // the round-trip test below). Rows saved before that fix still carry a
+    // stored 0, so the compaction check keeps its neutral-zero carve-out and
+    // must accept BOTH shapes without flagging a rev-bumping repair (#766).
     it('does not flag a loaded compacted tombstone as uncompacted', () => {
         const compacted = compactPurgedTaskForLocalStorage(purgedTask);
         expect(hasUncompactedPurgedTaskTombstone(compacted, true)).toBe(false);
         const loaded = normalizeTaskForLoad(compacted, nowIso);
-        expect(loaded.pushCount).toBe(0);
+        expect(loaded.pushCount).toBeUndefined();
         expect(hasUncompactedPurgedTaskTombstone(loaded, true)).toBe(false);
+        // Legacy shape: a tombstone stored with pushCount 0 by an older build.
+        expect(hasUncompactedPurgedTaskTombstone({ ...compacted, pushCount: 0 }, true)).toBe(false);
     });
 
     it('keeps rev stable across repeated load -> merge cycles', () => {
@@ -62,5 +67,41 @@ describe('purged tombstone compaction is stable across load cycles', () => {
         expect(first.title).toBe('(deleted)');
         const second = normalizeTaskForSyncMerge(normalizeTaskForLoad(first, nowIso), nowIso, true);
         expect(second.rev).toBe(6);
+    });
+
+    // The rc.2 log shape from #766: 2,737 purged tombstones, tombstoneRepairs 0,
+    // yet every merge cycle rewrote every tombstone row and requeued sync. The
+    // rev stayed stable but the CONTENT oscillated: load backfilled
+    // pushCount: 0, merge stripped it, and the SQLite row fingerprint differed
+    // every cycle. A loaded compacted tombstone must round-trip through merge
+    // byte-identical — and produce the identical SQLite row — or sync never
+    // converges.
+    it('a compacted tombstone round-trips load -> merge with an identical SQLite row', () => {
+        const emptyData: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
+        const compacted = compactPurgedTaskForLocalStorage(purgedTask);
+        const loaded = normalizeTaskForLoad(compacted, nowIso);
+        expect(loaded.pushCount).toBeUndefined();
+
+        const base: AppData = { ...emptyData, tasks: [loaded] };
+        const first = mergeAppDataWithStats(base, base, { nowIso });
+        const merged = first.data.tasks[0];
+        expect(first.stats.tombstoneRepairs).toBe(0);
+        expect(JSON.stringify(taskToSqliteRow(merged))).toBe(JSON.stringify(taskToSqliteRow(loaded)));
+
+        const reloaded = normalizeTaskForLoad(merged, nowIso);
+        const secondBase: AppData = { ...emptyData, tasks: [reloaded] };
+        const second = mergeAppDataWithStats(secondBase, secondBase, { nowIso: '2026-08-10T12:05:00.000Z' });
+        expect(JSON.stringify(second.data.tasks[0])).toBe(JSON.stringify(merged));
+    });
+
+    it('live tasks still get the pushCount backfill on load', () => {
+        const live = normalizeTaskForLoad({
+            id: 'live-1',
+            title: 'still here',
+            status: 'next',
+            createdAt: nowIso,
+            updatedAt: nowIso,
+        } as Task, nowIso);
+        expect(live.pushCount).toBe(0);
     });
 });

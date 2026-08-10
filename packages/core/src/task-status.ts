@@ -132,7 +132,13 @@ export function normalizeTaskForLoad(task: Task, nowIso: string = new Date().toI
         rev,
         ...(revBy ? { revBy } : {}),
         ...(textDirection ? { textDirection } : {}),
-        ...(hasValidPushCount ? {} : { pushCount: 0 }),
+        // Purged tombstones stay in their compacted shape: backfilling
+        // pushCount: 0 here while the merge normalizers strip it again made
+        // every loaded tombstone differ from its merged twin, so each sync
+        // cycle rewrote every purged row and requeued itself (#766 — the
+        // content-oscillation sibling of the rev-bump loop fixed earlier;
+        // stats.tombstoneRepairs stayed 0 because rev never changed).
+        ...(hasValidPushCount || task.purgedAt ? {} : { pushCount: 0 }),
     };
 
     // focusOrder only means something while a task is in Today's Focus
