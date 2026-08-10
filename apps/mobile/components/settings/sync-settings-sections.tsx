@@ -438,7 +438,12 @@ export function RecoverySnapshotsCard({
             </View>
           )}
           {!isLoadingRecoverySnapshots &&
-            recoverySnapshots.map((snapshot) => (
+            recoverySnapshots.map((snapshot) => {
+              const displayLabel = formatRecoverySnapshotLabel(snapshot);
+              const accessibilityName = displayLabel === snapshot
+                ? snapshot
+                : `${displayLabel} (${snapshot})`;
+              return (
               <TouchableOpacity
                 key={snapshot}
                 style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
@@ -446,7 +451,7 @@ export function RecoverySnapshotsCard({
                 disabled={isSyncing || isBackupBusy}
                 accessibilityRole="button"
                 accessibilityLabel={tr('settings.recoverySnapshotsRestoreNamed', {
-                  snapshotName: formatRecoverySnapshotLabel(snapshot),
+                  snapshotName: accessibilityName,
                 })}
                 accessibilityHint={tr('settings.recoverySnapshotsConfirm', { snapshot })}
                 accessibilityState={{
@@ -457,7 +462,7 @@ export function RecoverySnapshotsCard({
               >
                 <View style={styles.settingInfo}>
                   <Text style={[styles.settingLabel, { color: tc.text }]} numberOfLines={1}>
-                    {formatRecoverySnapshotLabel(snapshot)}
+                    {displayLabel}
                   </Text>
                   <Text style={[styles.settingDescription, { color: tc.secondaryText }]} numberOfLines={1}>
                     {snapshot}
@@ -469,7 +474,8 @@ export function RecoverySnapshotsCard({
                   <Text style={[styles.settingLabel, { color: tc.tint }]}>{t('settings.recoverySnapshotsRestore')}</Text>
                 )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
         </>
       )}
     </View>

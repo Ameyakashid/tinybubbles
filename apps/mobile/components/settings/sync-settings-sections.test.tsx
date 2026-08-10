@@ -242,21 +242,24 @@ describe('sync settings disclosure accessibility', () => {
     ).toBe(true);
   });
 
-  it('gives every recovery snapshot a unique name and exact busy state', () => {
+  it('gives same-minute recovery snapshots unique names and exact busy and disabled states', () => {
     const tr = (key: string, values?: Record<string, string | number | boolean | null | undefined>) => (
       values?.snapshotName ? `${key}:${values.snapshotName}` : key
     );
+    const firstSnapshot = 'data.2026-08-09T12-34-05.snapshot.json';
+    const secondSnapshot = 'data.2026-08-09T12-34-52.snapshot.json';
+    const visualMinuteLabel = '8/9/2026 12:34 PM';
     let tree!: renderer.ReactTestRenderer;
     act(() => {
       tree = renderer.create(
         <RecoverySnapshotsCard
-          backupAction="snapshot:data.second.snapshot.json"
-          formatRecoverySnapshotLabel={(name) => `label:${name}`}
+          backupAction={`snapshot:${secondSnapshot}`}
+          formatRecoverySnapshotLabel={() => visualMinuteLabel}
           handleRestoreRecoverySnapshot={noop}
           isBackupBusy
           isLoadingRecoverySnapshots={false}
           isSyncing={false}
-          recoverySnapshots={['data.first.snapshot.json', 'data.second.snapshot.json']}
+          recoverySnapshots={[firstSnapshot, secondSnapshot]}
           recoverySnapshotsOpen
           setRecoverySnapshotsOpen={noop}
           tr={tr}
@@ -266,18 +269,19 @@ describe('sync settings disclosure accessibility', () => {
       );
     });
 
-    for (const snapshot of ['data.first.snapshot.json', 'data.second.snapshot.json']) {
+    for (const snapshot of [firstSnapshot, secondSnapshot]) {
       const row = tree.root.findByProps({ testID: `recovery-snapshot-${snapshot}` });
       expect(row.props.accessibilityRole).toBe('button');
       expect(row.props.accessibilityLabel).toBe(
-        `settings.recoverySnapshotsRestoreNamed:label:${snapshot}`,
+        `settings.recoverySnapshotsRestoreNamed:${visualMinuteLabel} (${snapshot})`,
       );
       expect(row.props.accessibilityHint).toBe('settings.recoverySnapshotsConfirm');
       expect(row.props.accessibilityState).toEqual({
-        busy: snapshot === 'data.second.snapshot.json',
+        busy: snapshot === secondSnapshot,
         disabled: true,
       });
     }
+    expect(tree.root.findAllByType(Text).filter((node) => node.props.children === visualMinuteLabel)).toHaveLength(2);
 
     const spinner = tree.root.findByType(ActivityIndicator);
     expect(spinner.props.accessible).toBe(false);
