@@ -220,6 +220,13 @@ function syncDirectoryEntryParent(
     }
 }
 
+export function durablySyncDirectory(
+    directoryPath: string,
+    fileSystem: DurableDirectorySyncFileSystem = nodeDurableRemovalFileSystem,
+): void {
+    syncDirectoryEntryParent(directoryPath, fileSystem);
+}
+
 function durablyRemoveEntry(
     targetPath: string,
     remove: (path: string) => void,

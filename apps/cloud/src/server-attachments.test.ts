@@ -352,6 +352,45 @@ describe('garbageCollectOrphanAttachments', () => {
         });
     });
 
+    test('re-publishes a retained directory after a prior unlink parent fsync failure', () => {
+        withSandbox((dataDir) => {
+            const key = 'gc-file-durability-retry';
+            const attachmentsRoot = join(dataDir, key, 'attachments');
+            const mixedDir = join(attachmentsRoot, 'mixed');
+            const stalePath = join(mixedDir, 'stale.bin');
+            const retainedPath = join(mixedDir, 'retained.bin');
+            mkdirSync(mixedDir, { recursive: true });
+            writeFileSync(stalePath, 'stale');
+            writeFileSync(retainedPath, 'retained');
+            expireFile(stalePath);
+            const data = emptyAppData();
+            data.tasks = [makeTask({
+                id: 'retained-task',
+                title: 'Retained',
+                attachments: [makeFileAttachment({ id: 'retained', cloudKey: 'mixed/retained.bin' })],
+            })];
+            let failMixedFsync = true;
+            const removal = createRemovalFileSystem((stage, path) => {
+                if (stage !== 'fsync-parent' || path !== mixedDir || !failMixedFsync) return false;
+                failMixedFsync = false;
+                return true;
+            });
+
+            const first = garbageCollectOrphanAttachments(dataDir, key, data, removal.fileSystem);
+            expect(first.deleted).toBe(0);
+            expect(first.errors).toHaveLength(1);
+            expect(existsSync(stalePath)).toBe(false);
+            expect(existsSync(retainedPath)).toBe(true);
+            const retryEventStart = removal.events.length;
+
+            const second = garbageCollectOrphanAttachments(dataDir, key, data, removal.fileSystem);
+
+            expect(second.errors).toEqual([]);
+            expect(second.deleted).toBe(0);
+            expect(removal.events.slice(retryEventStart)).toContain(`fsync-parent:${mixedDir}`);
+        });
+    });
+
     test('reports a pruned-directory durability failure', () => {
         withSandbox((dataDir) => {
             const key = 'gc-directory-durability-failure';

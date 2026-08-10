@@ -3,7 +3,7 @@
 // stored AppData still references. Pulled out of server.ts so these rules — previously
 // reachable only by spinning up a live server — have a direct test surface.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from 'fs';
-import { join, relative } from 'path';
+import { dirname, join, relative } from 'path';
 import {
     validateAttachmentForUpload,
     type Attachment,
@@ -16,6 +16,7 @@ import { loadAppData } from './server-data-cache';
 import {
     durablyRemoveDirectory,
     durablyRemoveFile,
+    durablySyncDirectory,
     isBodyReadError,
     isPathWithinRoot,
     normalizeAttachmentRelativePath,
@@ -132,6 +133,7 @@ export function garbageCollectOrphanAttachments(
     const rootRealPath = realpathSync(rootDir);
     const referenced = collectReferencedAttachmentCloudKeys(data);
     const errors: string[] = [];
+    const failedDirectorySyncs = new Set<string>();
     let deleted = 0;
     let kept = 0;
     let scanned = 0;
@@ -157,6 +159,7 @@ export function garbageCollectOrphanAttachments(
                         ? String((error as { code?: unknown }).code ?? '')
                         : '';
                     if (code !== 'ENOTEMPTY' && code !== 'EEXIST') {
+                        failedDirectorySyncs.add(dirname(entryPath));
                         errors.push(`${relative(rootRealPath, entryPath)}: ${(error as Error).message}`);
                     }
                 }
@@ -178,8 +181,19 @@ export function garbageCollectOrphanAttachments(
                     deleted += 1;
                 }
             } catch (error) {
+                failedDirectorySyncs.add(dirname(entryPath));
                 errors.push(`${relativePath}: ${(error as Error).message}`);
             }
+        }
+        if (failedDirectorySyncs.has(dirPath)) return;
+        try {
+            // Publish the directory even when a prior run already made an unlink
+            // visible before its parent fsync failed. Otherwise GC loses the absent
+            // file as a retry target and can falsely report a durable clean pass.
+            durablySyncDirectory(dirPath, removalFileSystem);
+        } catch (error) {
+            const relativeDir = relative(rootRealPath, dirPath).replace(/\\/g, '/') || '.';
+            errors.push(`${relativeDir}: ${(error as Error).message}`);
         }
     };
 
