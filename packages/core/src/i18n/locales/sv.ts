@@ -2242,6 +2242,7 @@ export const svOverrides: Record<string, string> = {
         'settings.attachmentsCleanupPendingDeletes': 'Väntande borttagningar på servern',
         'settings.attachmentsCleanupPendingDeletesClear': 'Rensa väntande borttagningar',
         'settings.attachmentsCleanupPendingDeletesConfirm': 'Rensa bara de här om du inte längre vill att Mindwtr ska ta bort de filerna från den gamla synkmetoden. Det här tar inte bort några filer.',
+        'settings.attachmentsCleanupPendingDeletesConfirmAction': 'Fortsätt',
         'settings.attachmentsCleanupPendingDeletesConfirmTitle': 'Rensa väntande bilageborttagningar?',
         'settings.calendarChooseLocalFile': 'Välj lokal .ics-fil',
         'settings.calendarPushTitle': 'Skicka uppgifter till systemkalender',

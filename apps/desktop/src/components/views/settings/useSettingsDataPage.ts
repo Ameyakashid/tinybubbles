@@ -30,6 +30,7 @@ type UseSettingsDataPageOptions = {
         | 'analyticsHeartbeatDisableConfirm'
         | 'analyticsHeartbeatKeepEnabled'
         | 'attachmentsCleanupPendingDeletesConfirm'
+        | 'attachmentsCleanupPendingDeletesConfirmAction'
         | 'attachmentsCleanupPendingDeletesConfirmTitle'
         | 'gettingStartedContentConfirm'
         | 'gettingStartedContentConfirmDesc'
@@ -154,7 +155,7 @@ export function useSettingsDataPage({
         const confirmed = await requestConfirmation({
             title: t.attachmentsCleanupPendingDeletesConfirmTitle,
             description: t.attachmentsCleanupPendingDeletesConfirm,
-            confirmLabel: 'Continue',
+            confirmLabel: t.attachmentsCleanupPendingDeletesConfirmAction,
             cancelLabel,
         });
         if (!confirmed) return;
@@ -175,6 +176,7 @@ export function useSettingsDataPage({
         settings?.attachments,
         showSaved,
         t.attachmentsCleanupPendingDeletesConfirm,
+        t.attachmentsCleanupPendingDeletesConfirmAction,
         t.attachmentsCleanupPendingDeletesConfirmTitle,
         updateSettings,
     ]);

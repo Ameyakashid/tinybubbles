@@ -374,6 +374,7 @@ export const SETTINGS_LABEL_KEYS = [
     'attachmentsCleanupPendingDeletes',
     'attachmentsCleanupPendingDeletesClear',
     'attachmentsCleanupPendingDeletesConfirm',
+    'attachmentsCleanupPendingDeletesConfirmAction',
     'attachmentsCleanupPendingDeletesConfirmTitle',
     'attachmentsCleanupRun',
     'attachmentsCleanupRunning',

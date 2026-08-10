@@ -2243,6 +2243,7 @@ export const faOverrides: Record<string, string> = {
         'settings.attachmentsCleanupPendingDeletes': 'حذف‌های راه‌دور در انتظار',
         'settings.attachmentsCleanupPendingDeletesClear': 'پاک کردن حذف‌های در انتظار',
         'settings.attachmentsCleanupPendingDeletesConfirm': 'این‌ها را فقط زمانی پاک کنید که دیگر نمی‌خواهید Mindwtr آن فایل‌ها را از زیرساخت همگام‌سازی قبلی حذف کند. این کار هیچ فایلی را حذف نمی‌کند.',
+        'settings.attachmentsCleanupPendingDeletesConfirmAction': 'ادامه',
         'settings.attachmentsCleanupPendingDeletesConfirmTitle': 'حذف‌های در انتظار پیوست پاک شوند؟',
         'settings.calendarChooseLocalFile': 'انتخاب فایل .ics محلی',
         'settings.calendarPushTitle': 'ارسال کارها به تقویم سیستم',

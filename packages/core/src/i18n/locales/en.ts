@@ -2281,6 +2281,7 @@ export const en: Record<string, string> = {
         'settings.attachmentsCleanupPendingDeletes': 'Pending remote deletes',
         'settings.attachmentsCleanupPendingDeletesClear': 'Clear pending deletes',
         'settings.attachmentsCleanupPendingDeletesConfirm': 'Only clear these if you no longer want Mindwtr to delete those files from the old sync backend. This does not delete any files.',
+        'settings.attachmentsCleanupPendingDeletesConfirmAction': 'Continue',
         'settings.attachmentsCleanupPendingDeletesConfirmTitle': 'Clear pending attachment deletes?',
         'settings.calendarChooseLocalFile': 'Choose local .ics file',
         'settings.calendarPushTitle': 'Push tasks to system calendar',

@@ -148,6 +148,7 @@ export type SettingsSyncLabels = {
     attachmentsCleanupPendingDeletes: string;
     attachmentsCleanupPendingDeletesClear: string;
     attachmentsCleanupPendingDeletesConfirm: string;
+    attachmentsCleanupPendingDeletesConfirmAction: string;
     attachmentsCleanupPendingDeletesConfirmTitle: string;
     attachmentsCleanupRun: string;
     attachmentsCleanupRunning: string;

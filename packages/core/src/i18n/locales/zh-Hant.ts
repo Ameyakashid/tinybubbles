@@ -2214,6 +2214,7 @@ export const zhHant: Record<string, string> = {
         'settings.attachmentsCleanupPendingDeletes': '待處理遠程刪除',
         'settings.attachmentsCleanupPendingDeletesClear': '清除待處理刪除',
         'settings.attachmentsCleanupPendingDeletesConfirm': '仅当你不再希望 Mindwtr 从旧同步后端删除这些文件时才清除。此操作不会删除任何文件。',
+        'settings.attachmentsCleanupPendingDeletesConfirmAction': '繼續',
         'settings.attachmentsCleanupPendingDeletesConfirmTitle': '清除待处理的附件删除？',
         'settings.calendarChooseLocalFile': '選擇本地 .ics 文件',
         'settings.calendarPushTitle': '推送任务到系统日历',
