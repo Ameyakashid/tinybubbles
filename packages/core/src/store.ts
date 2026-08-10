@@ -367,9 +367,14 @@ const schedulePendingSaveFlush = () => {
 
 const trackImmediateSave = (save: Promise<void>): Promise<void> => {
     let trackedSave: Promise<void>;
-    trackedSave = save.finally(() => {
-        immediateSavesInFlight.delete(trackedSave);
-    });
+    trackedSave = save
+        .catch((error) => {
+            recordPersistenceFailure(toSaveErrorMessage(error));
+            throw error;
+        })
+        .finally(() => {
+            immediateSavesInFlight.delete(trackedSave);
+        });
     immediateSaveTrackers.forEach((tracker) => tracker.add(trackedSave));
     immediateSavesInFlight.add(trackedSave);
     markCoreStartupPhase('core.immediate_save.enqueued', {

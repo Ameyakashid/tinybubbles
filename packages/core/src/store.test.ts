@@ -3541,6 +3541,55 @@ describe('TaskStore', () => {
         expect(useTaskStore.getState().persistenceFailure).toBeNull();
     });
 
+    it('keeps an incremental task save failure visible until the latest snapshot is durably retried', async () => {
+        const task = createStoreTask('incremental-failure');
+        useTaskStore.setState({
+            tasks: [task],
+            _allTasks: [task],
+            _tasksById: buildEntityMap([task]),
+        });
+        mockStorage.saveTask = vi.fn().mockRejectedValue(new Error('secret adapter detail'));
+        setStorageAdapter(mockStorage);
+
+        await expect(runWithImmediateSaveTracking(
+            () => useTaskStore.getState().updateTask(task.id, { title: 'First edit' })
+        )).rejects.toThrow('secret adapter detail');
+
+        expect(useTaskStore.getState().persistenceFailure).toMatchObject({
+            message: expect.stringContaining('secret adapter detail'),
+            retrying: false,
+        });
+
+        mockStorage.saveTask = vi.fn().mockResolvedValue(undefined);
+        await runWithImmediateSaveTracking(
+            () => useTaskStore.getState().updateTask(task.id, { title: 'Latest edit' })
+        );
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(useTaskStore.getState().error).toBeNull();
+        expect(useTaskStore.getState().persistenceFailure).not.toBeNull();
+
+        let resolveRetry: (() => void) | null = null;
+        mockStorage.saveData = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+            resolveRetry = resolve;
+        }));
+        const retryOne = useTaskStore.getState().retryPersistence();
+        const retryTwo = useTaskStore.getState().retryPersistence();
+
+        await waitForExpectation(() => {
+            expect(mockStorage.saveData).toHaveBeenCalledTimes(1);
+        });
+        expect(useTaskStore.getState().persistenceFailure?.retrying).toBe(true);
+        const retriedSnapshot = (mockStorage.saveData as unknown as { mock: { calls: any[][] } }).mock.calls[0]?.[0];
+        expect(retriedSnapshot.tasks).toHaveLength(1);
+        expect(retriedSnapshot.tasks[0].title).toBe('Latest edit');
+
+        resolveRetry?.();
+        await Promise.all([retryOne, retryTwo]);
+
+        expect(mockStorage.saveData).toHaveBeenCalledTimes(1);
+        expect(useTaskStore.getState().persistenceFailure).toBeNull();
+    });
+
     it('should add a project', () => {
         const { addProject } = useTaskStore.getState();
         addProject('New Project', '#ff0000');
