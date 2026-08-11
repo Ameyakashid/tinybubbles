@@ -265,6 +265,119 @@
     --badge-info-fg: 217.5 26.7% 94.1%;
   }
 
+  /* Catppuccin Macchiato. Surfaces climb base -> surface0 -> surface1 ->
+     surface2; mauve is the accent (the flavor's own default), blue carries the
+     informational role. Badge backgrounds take an accent's hue at surface
+     lightness, as the Nord block above does. */
+  :root.theme-catppuccin-macchiato {
+    color-scheme: dark;
+    --background: 231.8 23.4% 18.4%;
+    --foreground: 227.4 68.3% 87.6%;
+    --card: 230.4 18.8% 26.1%;
+    --card-foreground: 227.4 68.3% 87.6%;
+    --popover: 230.4 18.8% 26.1%;
+    --popover-foreground: 227.4 68.3% 87.6%;
+    --primary: 266.5 82.7% 79.6%;
+    --primary-foreground: 231.8 23.4% 18.4%;
+    --secondary: 231.1 15.6% 33.9%;
+    --secondary-foreground: 228 39.2% 80%;
+    --muted: 231.1 15.6% 33.9%;
+    --muted-foreground: 227.4 26.8% 72.2%;
+    --accent: 229.7 13.7% 41.4%;
+    --accent-foreground: 227.4 68.3% 87.6%;
+    --destructive: 351.2 73.9% 72.9%;
+    --destructive-foreground: 231.8 23.4% 18.4%;
+    --success: 105.2 48.3% 72%;
+    --success-foreground: 231.8 23.4% 18.4%;
+    --warning: 40.3 69.9% 77.8%;
+    --warning-foreground: 231.8 23.4% 18.4%;
+    --focus-star: 40.3 69.9% 77.8%;
+    --focus-star-outline: 21.4 85.5% 72.9%;
+    --info: 220.2 82.8% 74.9%;
+    --info-foreground: 231.8 23.4% 18.4%;
+    --border: 229.7 13.7% 41.4%;
+    --input: 229.7 13.7% 41.4%;
+    --ring: 266.5 82.7% 79.6%;
+    --status-inbox: 220.2 82.8% 74.9%;
+    --status-next: 105.2 48.3% 72%;
+    --status-waiting: 40.3 69.9% 77.8%;
+    --status-someday: 266.5 82.7% 79.6%;
+    --status-reference: 188.8 59.4% 72.9%;
+    --status-done: 228.3 20% 64.7%;
+    --status-archived: 220.2 82.8% 74.9%;
+    --badge-project-bg: 230.4 18.8% 26.1%;
+    --badge-project-fg: 227.4 68.3% 87.6%;
+    --badge-context-bg: 266.5 20% 30%;
+    --badge-context-fg: 227.4 68.3% 87.6%;
+    --badge-tag-bg: 230.4 18.8% 26.1%;
+    --badge-tag-fg: 227.4 68.3% 87.6%;
+    --badge-priority-bg: 21.4 30% 30%;
+    --badge-priority-fg: 21.4 85.5% 72.9%;
+    --badge-estimate-bg: 105.2 25% 28%;
+    --badge-estimate-fg: 105.2 48.3% 72%;
+    --badge-age-bg: 40.3 30% 28%;
+    --badge-age-fg: 40.3 69.9% 77.8%;
+    --badge-info-bg: 230.4 18.8% 26.1%;
+    --badge-info-fg: 227.4 68.3% 87.6%;
+  }
+
+  /* Dracula. Surfaces are the reference theme's own background/bgLight/
+     bgLighter/selection ladder; purple is the accent. `comment` is Dracula's
+     de-emphasis color but only reaches 3:1 on the background, so it stays on
+     structural roles (done badges) and secondary text uses a lighter blend of
+     it — see DRACULA_STATUS_COLORS in core's theme-scheme.ts. */
+  :root.theme-dracula {
+    color-scheme: dark;
+    --background: 231.4 14.9% 18.4%;
+    --foreground: 60 30% 96.1%;
+    --card: 230 14.8% 23.9%;
+    --card-foreground: 60 30% 96.1%;
+    --popover: 230 14.8% 23.9%;
+    --popover-foreground: 60 30% 96.1%;
+    --primary: 264.7 89.5% 77.6%;
+    --primary-foreground: 231.4 14.9% 18.4%;
+    --secondary: 231.4 9.6% 28.6%;
+    --secondary-foreground: 224 22.4% 73.7%;
+    --muted: 231.4 9.6% 28.6%;
+    --muted-foreground: 224 22.4% 73.7%;
+    --accent: 231.8 13.9% 31%;
+    --accent-foreground: 60 30% 96.1%;
+    --destructive: 0 100% 66.7%;
+    --destructive-foreground: 231.4 14.9% 18.4%;
+    --success: 135.2 94.4% 64.7%;
+    --success-foreground: 231.4 14.9% 18.4%;
+    --warning: 31 100% 71.2%;
+    --warning-foreground: 231.4 14.9% 18.4%;
+    --focus-star: 64.9 91.7% 76.5%;
+    --focus-star-outline: 31 100% 71.2%;
+    --info: 190.5 96.6% 76.9%;
+    --info-foreground: 231.4 14.9% 18.4%;
+    --border: 231.8 13.9% 31%;
+    --input: 231.8 13.9% 31%;
+    --ring: 264.7 89.5% 77.6%;
+    --status-inbox: 224 22.4% 73.7%;
+    --status-next: 135.2 94.4% 64.7%;
+    --status-waiting: 31 100% 71.2%;
+    --status-someday: 264.7 89.5% 77.6%;
+    --status-reference: 190.5 96.6% 76.9%;
+    --status-done: 225.5 26.6% 51.4%;
+    --status-archived: 224 22.4% 73.7%;
+    --badge-project-bg: 230 14.8% 23.9%;
+    --badge-project-fg: 60 30% 96.1%;
+    --badge-context-bg: 264.7 22% 30%;
+    --badge-context-fg: 60 30% 96.1%;
+    --badge-tag-bg: 230 14.8% 23.9%;
+    --badge-tag-fg: 60 30% 96.1%;
+    --badge-priority-bg: 31 35% 30%;
+    --badge-priority-fg: 31 100% 71.2%;
+    --badge-estimate-bg: 135.2 30% 26%;
+    --badge-estimate-fg: 135.2 94.4% 64.7%;
+    --badge-age-bg: 64.9 25% 26%;
+    --badge-age-fg: 64.9 91.7% 76.5%;
+    --badge-info-bg: 230 14.8% 23.9%;
+    --badge-info-fg: 60 30% 96.1%;
+  }
+
   :root.theme-sepia {
     color-scheme: light;
     --background: 42.9 56% 90.2%;

@@ -71,6 +71,8 @@ export function GeneralSettingsScreen() {
         { value: 'material3-dark', label: t('settings.material3Dark'), icon: 'color-palette-outline' },
         { value: 'eink', label: t('settings.eink'), icon: 'document-text-outline' },
         { value: 'nord', label: t('settings.nord'), icon: 'snow-outline' },
+        { value: 'catppuccin-macchiato', label: t('settings.catppuccinMacchiato'), icon: 'cafe-outline' },
+        { value: 'dracula', label: t('settings.dracula'), icon: 'wine-outline' },
         { value: 'sepia', label: t('settings.sepia'), icon: 'book-outline' },
         { value: 'oled', label: t('settings.oled'), icon: 'contrast-outline' },
     ];

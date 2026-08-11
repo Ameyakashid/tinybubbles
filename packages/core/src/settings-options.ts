@@ -28,6 +28,8 @@ const THEME_VALUE_FLAGS: Record<ThemeValue, true> = {
     'material3-light': true,
     'material3-dark': true,
     oled: true,
+    'catppuccin-macchiato': true,
+    dracula: true,
 };
 
 const WEEK_START_VALUE_FLAGS: Record<WeekStartValue, true> = {

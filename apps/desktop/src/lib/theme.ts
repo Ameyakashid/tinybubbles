@@ -3,7 +3,7 @@ import { resolveThemeColorScheme } from '@mindwtr/core';
 
 import { invokeNative } from './tauri-invoke';
 
-export type DesktopThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia';
+export type DesktopThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia' | 'catppuccin-macchiato' | 'dracula';
 export type SystemThemePreference = 'light' | 'dark' | null;
 type NativeThemePreference = Exclude<SystemThemePreference, null>;
 type NativeThemeSetter = (theme?: NativeThemePreference | null) => Promise<void>;
@@ -33,6 +33,8 @@ const isDesktopThemeMode = (value: string | null | undefined): value is DesktopT
     || value === 'eink'
     || value === 'nord'
     || value === 'sepia'
+    || value === 'catppuccin-macchiato'
+    || value === 'dracula'
 );
 
 // Desktop has no material3-* or oled theme of its own; collapse those into the
@@ -213,28 +215,35 @@ export const watchSystemThemeCommandPreference = (
     };
 };
 
+// One entry per theme with its own CSS variable block in index.css. This single
+// map drives both the reset and the apply below, so a new theme can't end up in
+// one list and not the other — and whether it renders dark comes from core's
+// classification, not a second hand-maintained list here.
+const THEME_MODE_CLASSES = {
+    eink: 'theme-eink',
+    nord: 'theme-nord',
+    sepia: 'theme-sepia',
+    'catppuccin-macchiato': 'theme-catppuccin-macchiato',
+    dracula: 'theme-dracula',
+} as const satisfies Partial<Record<DesktopThemeMode, string>>;
+
 export const applyThemeMode = (mode: DesktopThemeMode | null, systemTheme?: SystemThemePreference) => {
     const root = document.documentElement;
-    root.classList.remove('theme-eink', 'theme-nord', 'theme-sepia');
+    root.classList.remove(...Object.values(THEME_MODE_CLASSES));
 
     const prefersDark = resolveSystemThemePreference(systemTheme) === 'dark';
-    if (mode === 'system' || mode === null) {
-        root.classList.toggle('dark', prefersDark);
-    } else if (mode === 'dark' || mode === 'nord') {
-        root.classList.add('dark');
-    } else {
-        root.classList.remove('dark');
-    }
+    root.classList.toggle(
+        'dark',
+        mode === 'system' || mode === null ? prefersDark : resolveThemeColorScheme(mode, 'light') === 'dark',
+    );
 
-    if (mode === 'eink') root.classList.add('theme-eink');
-    if (mode === 'nord') root.classList.add('theme-nord');
-    if (mode === 'sepia') root.classList.add('theme-sepia');
+    const themeClass = THEME_MODE_CLASSES[mode as keyof typeof THEME_MODE_CLASSES];
+    if (themeClass) root.classList.add(themeClass);
 };
 
 export const resolveNativeTheme = (mode: DesktopThemeMode | null): 'light' | 'dark' | null => {
     if (!mode || mode === 'system') return null;
-    if (mode === 'dark' || mode === 'nord') return 'dark';
-    return 'light';
+    return resolveThemeColorScheme(mode, 'light');
 };
 
 export const applyNativeTheme = async (

@@ -35,6 +35,9 @@ export const allowedEnglishMirrorTerms = [
     'Vim',
     'Emacs',
     'Nord',
+    'Catppuccin',
+    'Macchiato',
+    'Dracula',
 ] as const;
 
 export const allowedEnglishMirrorKeysByLocale: Record<string, readonly string[]> = {

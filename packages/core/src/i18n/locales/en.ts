@@ -926,6 +926,8 @@ export const en: Record<string, string> = {
         'settings.theme': 'Theme',
         'settings.eink': 'E-Ink',
         'settings.nord': 'Nord',
+        'settings.catppuccinMacchiato': 'Catppuccin Macchiato',
+        'settings.dracula': 'Dracula',
         'settings.sepia': 'Sepia',
         'settings.oled': 'OLED / Midnight',
         'settings.material3Light': 'Material 3 (Light)',

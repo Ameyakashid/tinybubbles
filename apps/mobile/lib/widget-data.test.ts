@@ -138,7 +138,7 @@ describe('widget-data', () => {
         expect(payload.palette.accent).toBe('#956735');
     });
 
-    // These themes (nord/oled/eink) all classify as "dark" or "light" under
+    // These preset themes all classify as "dark" or "light" under
     // resolveThemeColorScheme, but the widget must render their real preset
     // colors, not the generic dark/light fallback (the Android/iOS parity bug).
     it('keeps the widget palette aligned with Nord theme settings', () => {
@@ -147,6 +147,22 @@ describe('widget-data', () => {
         expect(payload.palette.text).toBe('#ECEFF4');
         expect(payload.palette.mutedText).toBe('#D8DEE9');
         expect(payload.palette.accent).toBe('#88C0D0');
+    });
+
+    it('keeps the widget palette aligned with Catppuccin Macchiato theme settings', () => {
+        const payload = buildWidgetPayload({ ...baseData, settings: { theme: 'catppuccin-macchiato' } }, 'en');
+        expect(payload.palette.background).toBe('#363A4F');
+        expect(payload.palette.text).toBe('#CAD3F5');
+        expect(payload.palette.mutedText).toBe('#A5ADCB');
+        expect(payload.palette.accent).toBe('#C6A0F6');
+    });
+
+    it('keeps the widget palette aligned with Dracula theme settings', () => {
+        const payload = buildWidgetPayload({ ...baseData, settings: { theme: 'dracula' } }, 'en');
+        expect(payload.palette.background).toBe('#343746');
+        expect(payload.palette.text).toBe('#F8F8F2');
+        expect(payload.palette.mutedText).toBe('#ADB5CB');
+        expect(payload.palette.accent).toBe('#BD93F9');
     });
 
     it('keeps the widget palette aligned with OLED theme settings', () => {

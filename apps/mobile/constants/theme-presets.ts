@@ -1,4 +1,4 @@
-export type ThemePresetName = 'default' | 'eink' | 'nord' | 'sepia' | 'oled';
+export type ThemePresetName = 'default' | 'eink' | 'nord' | 'sepia' | 'oled' | 'catppuccin-macchiato' | 'dracula';
 export type ThemePresetColor = `#${string}`;
 
 export type ThemePresetColors = {
@@ -56,6 +56,48 @@ export const THEME_PRESETS: Record<Exclude<ThemePresetName, 'default'>, ThemePre
         icon: '#D8DEE9',
         tabIconDefault: '#D8DEE9',
         tabIconSelected: '#88C0D0',
+    },
+    // Surfaces climb the flavor's own base -> surface0 -> surface1 -> surface2
+    // ladder; mauve is Macchiato's default accent.
+    'catppuccin-macchiato': {
+        bg: '#24273A',
+        cardBg: '#363A4F',
+        taskItemBg: '#363A4F',
+        text: '#CAD3F5',
+        secondaryText: '#A5ADCB',
+        border: '#5B6078',
+        tint: '#C6A0F6',
+        onTint: '#24273A',
+        inputBg: '#494D64',
+        danger: '#ED8796',
+        success: '#A6DA95',
+        warning: '#EED49F',
+        filterBg: '#494D64',
+        icon: '#A5ADCB',
+        tabIconDefault: '#A5ADCB',
+        tabIconSelected: '#C6A0F6',
+    },
+    // background / bgLight / bgLighter / selection from the reference Dracula
+    // theme. secondaryText is `comment` blended halfway to `foreground`:
+    // comment itself is 3:1 on the background, which is fine for the code
+    // comments it was drawn for but not for due dates and project names.
+    dracula: {
+        bg: '#282A36',
+        cardBg: '#343746',
+        taskItemBg: '#343746',
+        text: '#F8F8F2',
+        secondaryText: '#ADB5CB',
+        border: '#44475A',
+        tint: '#BD93F9',
+        onTint: '#282A36',
+        inputBg: '#424450',
+        danger: '#FF5555',
+        success: '#50FA7B',
+        warning: '#FFB86C',
+        filterBg: '#424450',
+        icon: '#ADB5CB',
+        tabIconDefault: '#ADB5CB',
+        tabIconSelected: '#BD93F9',
     },
     sepia: {
         bg: '#F4ECD8',

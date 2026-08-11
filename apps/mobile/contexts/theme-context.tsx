@@ -5,8 +5,8 @@ import { resolveThemeColorScheme, useTaskStore } from '@mindwtr/core';
 import { logError } from '../lib/app-log';
 import { markStartupPhase, measureStartupPhase } from '../lib/startup-profiler';
 
-type ThemeMode = 'system' | 'light' | 'dark' | 'material3-light' | 'material3-dark' | 'eink' | 'nord' | 'sepia' | 'oled';
-type ThemePreset = 'default' | 'eink' | 'nord' | 'sepia' | 'oled';
+type ThemeMode = 'system' | 'light' | 'dark' | 'material3-light' | 'material3-dark' | 'eink' | 'nord' | 'sepia' | 'oled' | 'catppuccin-macchiato' | 'dracula';
+type ThemePreset = 'default' | 'eink' | 'nord' | 'sepia' | 'oled' | 'catppuccin-macchiato' | 'dracula';
 type ThemeStyle = 'default' | 'material3';
 type ColorScheme = 'light' | 'dark';
 
@@ -41,11 +41,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
     const [syncedTheme, setSyncedTheme] = useState<ThemeMode | undefined>(() => readSyncedTheme());
 
+    // Every mode that has a THEME_PRESETS entry is its own preset; the rest
+    // ('system', 'light', 'dark', both material3 modes) fall back to 'default'.
     const themePreset: ThemePreset =
         themeMode === 'eink' ? 'eink' :
         themeMode === 'nord' ? 'nord' :
         themeMode === 'sepia' ? 'sepia' :
         themeMode === 'oled' ? 'oled' :
+        themeMode === 'catppuccin-macchiato' ? 'catppuccin-macchiato' :
+        themeMode === 'dracula' ? 'dracula' :
         'default';
 
     // Determine actual color scheme based on mode and system

@@ -35,6 +35,46 @@ export const NORD_CONTEXT_COLOR_PALETTE = [
     '#ebcb8b',
 ];
 
+/** Catppuccin Macchiato stand-ins, slot-for-slot with the canonical palette. */
+export const CATPPUCCIN_MACCHIATO_CONTEXT_COLOR_PALETTE = [
+    '#8aadf4',
+    '#8bd5ca',
+    '#a6da95',
+    '#f5bde6',
+    '#f5a97f',
+    '#ed8796',
+    '#91d7e3',
+    '#c6a0f6',
+    // The canonical palette spends slots 2 and 8 on two greens; Macchiato only
+    // ships one, so this slot takes sapphire -- the remaining accent furthest
+    // from every hue already used above.
+    '#7dc4e4',
+    '#eed49f',
+];
+
+/** Dracula stand-ins, slot-for-slot with the canonical palette. */
+export const DRACULA_CONTEXT_COLOR_PALETTE = [
+    '#6272a4',
+    '#8be9fd',
+    '#50fa7b',
+    '#ff79c6',
+    '#ffb86c',
+    '#ff5555',
+    // ANSI bright cyan and bright green, from the same official Dracula spec as
+    // the eleven base colors -- the base set alone is one hue short of the ten
+    // distinct slots this palette needs.
+    '#a4ffff',
+    '#bd93f9',
+    '#69ff94',
+    '#f1fa8c',
+];
+
+const CONTEXT_COLOR_PALETTES_BY_THEME = new Map<string, readonly string[]>([
+    ['nord', NORD_CONTEXT_COLOR_PALETTE],
+    ['catppuccin-macchiato', CATPPUCCIN_MACCHIATO_CONTEXT_COLOR_PALETTE],
+    ['dracula', DRACULA_CONTEXT_COLOR_PALETTE],
+]);
+
 function hashText(value: string): number {
     let hash = 0;
     for (let index = 0; index < value.length; index += 1) {
@@ -45,7 +85,7 @@ function hashText(value: string): number {
 }
 
 export function getContextColor(context: string, theme?: string): string {
-    const palette = theme === 'nord' ? NORD_CONTEXT_COLOR_PALETTE : CONTEXT_COLOR_PALETTE;
+    const palette = (theme && CONTEXT_COLOR_PALETTES_BY_THEME.get(theme)) ?? CONTEXT_COLOR_PALETTE;
     const normalized = context.trim().toLowerCase();
     if (!normalized) return palette[0];
     const hash = hashText(normalized);

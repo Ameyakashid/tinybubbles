@@ -28,6 +28,8 @@ export const NON_MATERIAL_CASES: { name: string; theme: Resolvable; expected: Re
   { name: 'default-dark', theme: { isDark: true, themeStyle: 'default', themePreset: 'default', themeMode: 'dark' }, expected: DEFAULT_DARK },
   { name: 'eink', theme: { isDark: false, themeStyle: 'default', themePreset: 'eink', themeMode: 'eink' }, expected: THEME_PRESETS.eink },
   { name: 'nord', theme: { isDark: true, themeStyle: 'default', themePreset: 'nord', themeMode: 'nord' }, expected: THEME_PRESETS.nord },
+  { name: 'catppuccin-macchiato', theme: { isDark: true, themeStyle: 'default', themePreset: 'catppuccin-macchiato', themeMode: 'catppuccin-macchiato' }, expected: THEME_PRESETS['catppuccin-macchiato'] },
+  { name: 'dracula', theme: { isDark: true, themeStyle: 'default', themePreset: 'dracula', themeMode: 'dracula' }, expected: THEME_PRESETS.dracula },
   { name: 'sepia', theme: { isDark: false, themeStyle: 'default', themePreset: 'sepia', themeMode: 'sepia' }, expected: THEME_PRESETS.sepia },
   { name: 'oled', theme: { isDark: true, themeStyle: 'default', themePreset: 'oled', themeMode: 'oled' }, expected: THEME_PRESETS.oled },
 ];

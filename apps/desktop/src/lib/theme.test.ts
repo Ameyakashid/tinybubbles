@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     applyNativeTheme,
     applyThemeMode,
+    coerceDesktopThemeMode,
     coerceSystemThemePreference,
     resolveDesktopThemeMode,
+    resolveNativeTheme,
     resolveSystemThemeCommandPreference,
     resolveSystemThemePreference,
     watchSystemThemeCommandPreference,
@@ -62,6 +64,32 @@ describe('applyThemeMode', () => {
         expect(document.documentElement.classList.contains('dark')).toBe(false);
     });
 
+    // Tailwind is darkMode:'class', so a preset theme that forgets the `dark`
+    // class paints light-mode utilities over dark CSS variables.
+    it.each([
+        ['nord', 'theme-nord'],
+        ['catppuccin-macchiato', 'theme-catppuccin-macchiato'],
+        ['dracula', 'theme-dracula'],
+    ] as const)('marks %s as a dark theme and applies its class', (mode, className) => {
+        applyThemeMode(mode, 'light');
+
+        expect(document.documentElement.classList.contains('dark')).toBe(true);
+        expect(document.documentElement.classList.contains(className)).toBe(true);
+    });
+
+    it('drops the previous theme class when switching between preset themes', () => {
+        applyThemeMode('dracula', 'light');
+        applyThemeMode('catppuccin-macchiato', 'light');
+
+        expect(document.documentElement.classList.contains('theme-dracula')).toBe(false);
+        expect(document.documentElement.classList.contains('theme-catppuccin-macchiato')).toBe(true);
+
+        applyThemeMode('light', 'dark');
+
+        expect(document.documentElement.classList.contains('theme-catppuccin-macchiato')).toBe(false);
+        expect(document.documentElement.classList.contains('dark')).toBe(false);
+    });
+
     it('reuses the last native system preference when the webview reports stale light mode', () => {
         const originalMatchMedia = window.matchMedia;
         window.matchMedia = vi.fn().mockReturnValue({ matches: false } as MediaQueryList);
@@ -93,6 +121,32 @@ describe('resolveDesktopThemeMode', () => {
         expect(resolveDesktopThemeMode('material3-light', null)).toBe('light');
         expect(resolveDesktopThemeMode('oled', null)).toBe('dark');
         expect(resolveDesktopThemeMode(undefined, 'material3-light')).toBe('light');
+    });
+
+    it('carries the new preset themes through sync and local storage untouched', () => {
+        expect(resolveDesktopThemeMode('catppuccin-macchiato', null)).toBe('catppuccin-macchiato');
+        expect(resolveDesktopThemeMode('dracula', null)).toBe('dracula');
+        expect(resolveDesktopThemeMode(undefined, 'catppuccin-macchiato')).toBe('catppuccin-macchiato');
+        expect(resolveDesktopThemeMode(undefined, 'dracula')).toBe('dracula');
+    });
+});
+
+describe('coerceDesktopThemeMode', () => {
+    it('accepts the preset themes and rejects an unknown value', () => {
+        expect(coerceDesktopThemeMode('catppuccin-macchiato')).toBe('catppuccin-macchiato');
+        expect(coerceDesktopThemeMode('dracula')).toBe('dracula');
+        // A one-letter drift in either identifier must not silently resolve.
+        expect(coerceDesktopThemeMode('catpuccin-macchiato')).toBeNull();
+        expect(coerceDesktopThemeMode('draculaa')).toBeNull();
+    });
+});
+
+describe('resolveNativeTheme', () => {
+    it('reports the preset themes to the native window as dark', () => {
+        expect(resolveNativeTheme('catppuccin-macchiato')).toBe('dark');
+        expect(resolveNativeTheme('dracula')).toBe('dark');
+        expect(resolveNativeTheme('sepia')).toBe('light');
+        expect(resolveNativeTheme('system')).toBeNull();
     });
 });
 

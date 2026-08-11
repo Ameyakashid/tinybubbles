@@ -26,6 +26,22 @@ describe('resolveStatusColors', () => {
         expect(nord.done.text).toBe('#A3BE8C');
     });
 
+    it('uses each new preset theme own accents rather than the generic dark palette', () => {
+        const dark = resolveStatusColors({ themePreset: 'default', isDark: true });
+
+        const catppuccin = resolveStatusColors({ themePreset: 'catppuccin-macchiato', isDark: true });
+        expect(catppuccin.next.text).toBe('#8aadf4');
+        expect(catppuccin.someday.text).toBe('#c6a0f6');
+        expect(catppuccin.done.text).toBe('#a6da95');
+        expect(catppuccin).not.toEqual(dark);
+
+        const dracula = resolveStatusColors({ themePreset: 'dracula', isDark: true });
+        expect(dracula.next.text).toBe('#bd93f9');
+        expect(dracula.reference.text).toBe('#8be9fd');
+        expect(dracula.done.text).toBe('#50fa7b');
+        expect(dracula).not.toEqual(dark);
+    });
+
     it('stays monochrome on eink and earthy on sepia', () => {
         const eink = resolveStatusColors({ themePreset: 'eink', isDark: false });
         for (const status of STATUSES) expect(eink[status].text).toBe('#000000');
@@ -39,6 +55,8 @@ describe('resolveStatusColors', () => {
             { themePreset: 'sepia', isDark: false },
             { themePreset: 'eink', isDark: false },
             { themePreset: 'oled', isDark: true },
+            { themePreset: 'catppuccin-macchiato', isDark: true },
+            { themePreset: 'dracula', isDark: true },
         ] as const;
         for (const theme of themes) {
             const palette = resolveStatusColors(theme);

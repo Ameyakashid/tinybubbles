@@ -75,11 +75,11 @@ export function resolveExternalCalendarColor(
 }
 
 /**
- * Nord stand-ins for the 8 pickable swatches (#974). Display only — the map is
- * applied to the *output* of `resolveExternalCalendarColor`, never to what gets
- * stored, so a pick made under Nord is still the canonical hex on every other
- * theme. A feed-provided COLOR hint is arbitrary hex, misses this map, and
- * passes through unchanged.
+ * Per-theme stand-ins for the 8 pickable swatches (#974). Display only — the
+ * maps are applied to the *output* of `resolveExternalCalendarColor`, never to
+ * what gets stored, so a pick made under one of these themes is still the
+ * canonical hex on every other theme. A feed-provided COLOR hint is arbitrary
+ * hex, misses these maps, and passes through unchanged.
  */
 export const NORD_EXTERNAL_CALENDAR_COLOR_MAP: Record<string, string> = {
     '#2563eb': '#5e81ac',
@@ -92,9 +92,38 @@ export const NORD_EXTERNAL_CALENDAR_COLOR_MAP: Record<string, string> = {
     '#65a30d': '#a3be8c',
 };
 
+export const CATPPUCCIN_MACCHIATO_EXTERNAL_CALENDAR_COLOR_MAP: Record<string, string> = {
+    '#2563eb': '#8aadf4',
+    '#7c3aed': '#c6a0f6',
+    '#db2777': '#f5bde6',
+    '#ea580c': '#f5a97f',
+    '#059669': '#8bd5ca',
+    '#0891b2': '#91d7e3',
+    '#4f46e5': '#b7bdf8',
+    '#65a30d': '#a6da95',
+};
+
+export const DRACULA_EXTERNAL_CALENDAR_COLOR_MAP: Record<string, string> = {
+    '#2563eb': '#8be9fd',
+    '#7c3aed': '#bd93f9',
+    '#db2777': '#ff79c6',
+    '#ea580c': '#ffb86c',
+    '#059669': '#50fa7b',
+    '#0891b2': '#a4ffff',
+    '#4f46e5': '#6272a4',
+    '#65a30d': '#f1fa8c',
+};
+
+const EXTERNAL_CALENDAR_COLOR_MAPS_BY_THEME = new Map<string, Record<string, string>>([
+    ['nord', NORD_EXTERNAL_CALENDAR_COLOR_MAP],
+    ['catppuccin-macchiato', CATPPUCCIN_MACCHIATO_EXTERNAL_CALENDAR_COLOR_MAP],
+    ['dracula', DRACULA_EXTERNAL_CALENDAR_COLOR_MAP],
+]);
+
 export function themeExternalCalendarDisplayColor(color: string, theme?: string): string {
-    if (theme !== 'nord') return color;
-    return NORD_EXTERNAL_CALENDAR_COLOR_MAP[color.toLowerCase()] ?? color;
+    const map = theme ? EXTERNAL_CALENDAR_COLOR_MAPS_BY_THEME.get(theme) : undefined;
+    if (!map) return color;
+    return map[color.toLowerCase()] ?? color;
 }
 
 /**

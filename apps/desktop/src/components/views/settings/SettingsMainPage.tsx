@@ -10,7 +10,7 @@ import { SettingRow, SettingsCard, SettingsSectionHeader } from './SettingRow';
 
 const FLATPAK_QUICK_ADD_COMMAND = 'flatpak run tech.dongdongbh.mindwtr --quick-add';
 
-type ThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia';
+type ThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia' | 'catppuccin-macchiato' | 'dracula';
 type DensityMode = 'comfortable' | 'compact' | 'condensed';
 type TextSizeMode = 'small' | 'default' | 'large' | 'extra-large';
 type WeekStart = 'system' | 'sunday' | 'monday' | 'saturday';
@@ -42,6 +42,8 @@ type Labels = {
     dark: string;
     eink: string;
     nord: string;
+    catppuccinMacchiato: string;
+    dracula: string;
     sepia: string;
     language: string;
     weekStart: string;
@@ -206,7 +208,7 @@ export function SettingsMainPage({
                 <SettingRow padded
                     settingsKey="appearance"
                     title={t.appearance}
-                    description={`${t.system} / ${t.light} / ${t.dark} / ${t.eink} / ${t.nord} / ${t.sepia}`}
+                    description={`${t.system} / ${t.light} / ${t.dark} / ${t.eink} / ${t.nord} / ${t.catppuccinMacchiato} / ${t.dracula} / ${t.sepia}`}
                 >
                     <select
                         aria-label={t.appearance}
@@ -219,6 +221,8 @@ export function SettingsMainPage({
                         <option value="dark">{t.dark}</option>
                         <option value="eink">{t.eink}</option>
                         <option value="nord">{t.nord}</option>
+                        <option value="catppuccin-macchiato">{t.catppuccinMacchiato}</option>
+                        <option value="dracula">{t.dracula}</option>
                         <option value="sepia">{t.sepia}</option>
                     </select>
                 </SettingRow>

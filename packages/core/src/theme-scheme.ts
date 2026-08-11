@@ -9,13 +9,13 @@ import type { AppTheme, TaskStatus } from './types';
 
 export type ThemeColorScheme = 'light' | 'dark';
 
-/** The four themes with a bespoke, non-Material color identity. */
-export type ThemeStatusPreset = 'eink' | 'nord' | 'sepia' | 'oled';
+/** The themes with a bespoke, non-Material color identity. */
+export type ThemeStatusPreset = 'eink' | 'nord' | 'sepia' | 'oled' | 'catppuccin-macchiato' | 'dracula';
 
 export type StatusColorSet = { bg: string; text: string; border: string };
 export type StatusPalette = Record<TaskStatus, StatusColorSet>;
 
-const DARK_THEMES = new Set<AppTheme>(['dark', 'nord', 'oled', 'material3-dark']);
+const DARK_THEMES = new Set<AppTheme>(['dark', 'nord', 'oled', 'material3-dark', 'catppuccin-macchiato', 'dracula']);
 const LIGHT_THEMES = new Set<AppTheme>(['light', 'eink', 'sepia', 'material3-light']);
 
 /**
@@ -89,6 +89,38 @@ const SEPIA_STATUS_COLORS = buildPalette({
     archived: '#9C6F3C',
 });
 
+// Catppuccin Macchiato accents. Inbox/archived take overlay2 rather than an
+// accent: it is the palette's muted neutral and still clears 5:1 on `base`,
+// where overlay1 lands under 4.5:1.
+const CATPPUCCIN_MACCHIATO_STATUS_COLORS = buildPalette({
+    inbox: '#939ab7',
+    next: '#8aadf4',
+    waiting: '#eed49f',
+    someday: '#c6a0f6',
+    reference: '#91d7e3',
+    done: '#a6da95',
+    archived: '#939ab7',
+});
+
+// Dracula accents. `next` takes purple (the theme's primary accent, same as
+// Nord's `next` takes its tint), which frees cyan for `reference` and pink for
+// `someday`; waiting takes orange because Dracula's yellow is a pale lime that
+// reads as neither caution nor amber next to green.
+const DRACULA_STATUS_COLORS = buildPalette({
+    // Dracula's own de-emphasis color, `comment` (#6272a4), is 3.0:1 on the
+    // theme background -- fine for the code comments it was drawn for, not for
+    // a badge. This is comment blended 50/50 with `foreground` (#f8f8f2), the
+    // same "official hue, mechanically adjusted for legibility" move
+    // NORD_CONTEXT_COLOR_PALETTE's slot 8 makes.
+    inbox: '#adb5cb',
+    next: '#bd93f9',
+    waiting: '#ffb86c',
+    someday: '#ff79c6',
+    reference: '#8be9fd',
+    done: '#50fa7b',
+    archived: '#adb5cb',
+});
+
 const EINK_STATUS_COLORS = buildPalette({
     inbox: '#000000',
     next: '#000000',
@@ -111,4 +143,6 @@ export const STATUS_COLORS_BY_THEME: Record<ThemeStatusPreset | ThemeColorScheme
     sepia: SEPIA_STATUS_COLORS,
     eink: EINK_STATUS_COLORS,
     oled: DARK_STATUS_COLORS,
+    'catppuccin-macchiato': CATPPUCCIN_MACCHIATO_STATUS_COLORS,
+    dracula: DRACULA_STATUS_COLORS,
 };

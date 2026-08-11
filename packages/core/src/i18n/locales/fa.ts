@@ -903,6 +903,8 @@ export const faOverrides: Record<string, string> = {
         'settings.theme': 'تم',
         'settings.eink': 'E-Ink',
         'settings.nord': 'Nord',
+        'settings.catppuccinMacchiato': 'Catppuccin Macchiato',
+        'settings.dracula': 'Dracula',
         'settings.sepia': 'سپیا',
         'settings.oled': 'OLED / نیمه‌شب',
         'settings.material3Light': 'متریال ۳ (روشن)',

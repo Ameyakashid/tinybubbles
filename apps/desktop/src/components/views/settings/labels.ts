@@ -607,6 +607,8 @@ export const SETTINGS_LABEL_KEYS = [
     'dark',
     'eink',
     'nord',
+    'catppuccinMacchiato',
+    'dracula',
     'sepia',
     'close',
 ] as const;

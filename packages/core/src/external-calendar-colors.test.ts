@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    CATPPUCCIN_MACCHIATO_EXTERNAL_CALENDAR_COLOR_MAP,
+    DRACULA_EXTERNAL_CALENDAR_COLOR_MAP,
     EXTERNAL_CALENDAR_COLORS,
     getExternalCalendarColorForId,
     hasExplicitExternalCalendarColor,
@@ -92,12 +94,20 @@ describe('themeExternalCalendarDisplayColor', () => {
         expect(themeExternalCalendarDisplayColor('#2563EB', 'nord')).toBe('#5e81ac');
     });
 
-    it('covers all 8 pickable swatches with distinct colors', () => {
-        const mapped = EXTERNAL_CALENDAR_COLORS.map((color) => themeExternalCalendarDisplayColor(color, 'nord'));
-        expect(mapped).not.toContain(undefined);
-        expect(mapped.every((color, index) => color !== EXTERNAL_CALENDAR_COLORS[index])).toBe(true);
-        expect(new Set(mapped).size).toBe(EXTERNAL_CALENDAR_COLORS.length);
+    it.each(['nord', 'catppuccin-macchiato', 'dracula'])(
+        'covers all 8 pickable swatches with distinct colors under %s',
+        (theme) => {
+            const mapped = EXTERNAL_CALENDAR_COLORS.map((color) => themeExternalCalendarDisplayColor(color, theme));
+            expect(mapped).not.toContain(undefined);
+            expect(mapped.every((color, index) => color !== EXTERNAL_CALENDAR_COLORS[index])).toBe(true);
+            expect(new Set(mapped).size).toBe(EXTERNAL_CALENDAR_COLORS.length);
+        },
+    );
+
+    it('keys every themed map on the full pickable swatch set', () => {
         expect(Object.keys(NORD_EXTERNAL_CALENDAR_COLOR_MAP)).toHaveLength(EXTERNAL_CALENDAR_COLORS.length);
+        expect(Object.keys(CATPPUCCIN_MACCHIATO_EXTERNAL_CALENDAR_COLOR_MAP)).toHaveLength(EXTERNAL_CALENDAR_COLORS.length);
+        expect(Object.keys(DRACULA_EXTERNAL_CALENDAR_COLOR_MAP)).toHaveLength(EXTERNAL_CALENDAR_COLORS.length);
     });
 
     it('passes an unmapped color through — a feed COLOR hint is arbitrary hex', () => {

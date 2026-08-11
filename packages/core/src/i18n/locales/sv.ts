@@ -903,6 +903,8 @@ export const svOverrides: Record<string, string> = {
         'settings.theme': 'Tema',
         'settings.eink': 'E-Ink',
         'settings.nord': 'Nord',
+        'settings.catppuccinMacchiato': 'Catppuccin Macchiato',
+        'settings.dracula': 'Dracula',
         'settings.sepia': 'Sepia',
         'settings.oled': 'OLED / Midnatt',
         'settings.material3Light': 'Material 3 (ljust)',
