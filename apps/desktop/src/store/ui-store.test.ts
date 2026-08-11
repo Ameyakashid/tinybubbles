@@ -121,3 +121,38 @@ describe('useUiStore list options', () => {
         expect(options.referenceGroupBy).toBe('area');
     });
 });
+
+describe('useUiStore project layouts (#1019)', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+        vi.resetModules();
+    });
+
+    it('hydrates the per-project layout and drops entries it does not recognize', async () => {
+        window.localStorage.setItem('mindwtr:project-layouts:v1', JSON.stringify({
+            'project-1': 'columns',
+            'project-2': 'list',
+            'project-3': 'kanban',
+            'project-4': 7,
+        }));
+
+        const { useUiStore } = await import('./ui-store');
+
+        expect(useUiStore.getState().projectLayouts).toEqual({
+            'project-1': 'columns',
+            'project-2': 'list',
+        });
+    });
+
+    it('persists a layout change without disturbing other projects', async () => {
+        window.localStorage.setItem('mindwtr:project-layouts:v1', JSON.stringify({ 'project-1': 'columns' }));
+        const { PROJECT_LAYOUTS_STORAGE_KEY, useUiStore } = await import('./ui-store');
+
+        useUiStore.getState().setProjectLayout('project-2', 'columns');
+
+        expect(JSON.parse(window.localStorage.getItem(PROJECT_LAYOUTS_STORAGE_KEY) || '{}')).toEqual({
+            'project-1': 'columns',
+            'project-2': 'columns',
+        });
+    });
+});

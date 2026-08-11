@@ -147,18 +147,30 @@ function getSequenceCuePresentation(
     return { taskContainerClassName: 'flex-1 min-w-0' };
 }
 
+// A row's actions strip is `shrink-0`, so in a container as narrow as a section
+// column it takes its full width out of the row and the title — the only
+// `min-w-0` sibling — collapses to nothing and wraps a character per line.
+// `actionsOverlay` lifts the strip out of the flow instead, which is how Board
+// columns have always fit a task row into ~40ch.
+const NARROW_TASK_ITEM_PROPS = {
+    actionsOverlay: true,
+    showStatusSelect: false,
+} as const;
+
 export function SortableProjectTaskRow({
     task,
     project,
     sequenceCue,
     availableSequenceLabel,
     laterSequenceLabel,
+    narrow,
 }: {
     task: Task;
     project: Project;
     sequenceCue?: ProjectSequenceTaskCue;
     availableSequenceLabel: string;
     laterSequenceLabel: string;
+    narrow?: boolean;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: task.id,
@@ -188,6 +200,7 @@ export function SortableProjectTaskRow({
                     enableDoubleClickEdit
                     showProjectBadgeInActions={false}
                     showProjectBadgeInMetadata={false}
+                    {...(narrow ? NARROW_TASK_ITEM_PROPS : {})}
                     dragHandle={(
                         <button
                             type="button"
@@ -214,12 +227,14 @@ export function DraggableProjectTaskRow({
     sequenceCue,
     availableSequenceLabel,
     laterSequenceLabel,
+    narrow,
 }: {
     task: Task;
     project: Project;
     sequenceCue?: ProjectSequenceTaskCue;
     availableSequenceLabel: string;
     laterSequenceLabel: string;
+    narrow?: boolean;
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: task.id,
@@ -243,6 +258,7 @@ export function DraggableProjectTaskRow({
                     enableDoubleClickEdit
                     showProjectBadgeInActions={false}
                     showProjectBadgeInMetadata={false}
+                    {...(narrow ? NARROW_TASK_ITEM_PROPS : {})}
                     dragHandle={(
                         <button
                             type="button"

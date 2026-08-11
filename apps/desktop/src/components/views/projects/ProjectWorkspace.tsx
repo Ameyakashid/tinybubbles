@@ -16,7 +16,7 @@ import { Attachment,
     splitCompletedTasks, tFallback, } from '@mindwtr/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, FileText, Folder, PanelLeftOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Columns3, FileText, Folder, PanelLeftOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
 
 import { PromptModal } from '../../PromptModal';
 import { browseForLinkTarget } from '../../../lib/attachment-import';
@@ -34,6 +34,7 @@ import { TaskBulkOrganizeModal } from '../list/TaskBulkOrganizeModal';
 import { normalizeAttachmentInput } from '../../../lib/attachment-utils';
 import { cn } from '../../../lib/utils';
 import { reportError } from '../../../lib/report-error';
+import { useMiddleMousePan } from './use-column-pan';
 import { useProjectAttachmentActions } from './useProjectAttachmentActions';
 import { useProjectSectionActions } from './useProjectSectionActions';
 import { useProjectWorkspaceStore } from './useProjectWorkspaceStore';
@@ -278,6 +279,47 @@ function ProjectTaskRows({ tasks, renderTask, scrollRef, pinnedTaskId }: Project
     );
 }
 
+// Renders one section as a board column. The column body is its own vertical
+// scroller, so the shared ProjectTaskRows virtualizer measures against the
+// column instead of the page — columns need no task-count ceiling of their own.
+function ProjectSectionColumn({
+    id,
+    dashed,
+    header,
+    notes,
+    collapsed,
+    children,
+}: {
+    id: string;
+    dashed?: boolean;
+    header: ReactNode;
+    notes?: ReactNode;
+    collapsed?: boolean;
+    children: (scrollRef: RefObject<HTMLDivElement | null>) => ReactNode;
+}) {
+    const columnScrollRef = useRef<HTMLDivElement | null>(null);
+
+    return (
+        <SectionDropZone
+            id={id}
+            className={cn(
+                'flex w-96 flex-none flex-col self-start rounded-lg border',
+                dashed ? 'border-dashed border-border/70' : 'border-border/60',
+            )}
+        >
+            <div className="border-b border-border/50 px-3 py-2">{header}</div>
+            {notes}
+            {!collapsed && (
+                <div ref={columnScrollRef} className="max-h-[60vh] min-h-[5rem] overflow-y-auto p-3">
+                    {children(columnScrollRef)}
+                </div>
+            )}
+        </SectionDropZone>
+    );
+}
+
+type RenderProjectTasks = (list: Task[], scrollRef?: RefObject<HTMLDivElement | null>) => ReactNode;
+
 type BulkTokenPickerState = {
     field: 'tags' | 'contexts';
     action: 'add' | 'remove';
@@ -379,6 +421,10 @@ export function ProjectWorkspace({
     } = useProjectWorkspaceStore(selectedProjectId);
     const showToast = useUiStore((state) => state.showToast);
     const setProjectView = useUiStore((state) => state.setProjectView);
+    const storedProjectLayout = useUiStore((state) => (
+        selectedProjectId ? state.projectLayouts[selectedProjectId] : undefined
+    ));
+    const setProjectLayout = useUiStore((state) => state.setProjectLayout);
     const setSelectedProjectId = useCallback(
         (value: string | null) => setProjectView({ selectedProjectId: value }),
         [setProjectView],
@@ -579,6 +625,13 @@ export function ProjectWorkspace({
             });
     }, [sections, selectedProjectId]);
 
+    // Progressive disclosure: the layout toggle exists only where sections do,
+    // and a project that loses its last section falls back to the list.
+    const hasProjectSections = projectSections.length > 0;
+    const columnsLayout = hasProjectSections && storedProjectLayout === 'columns';
+    const columnsScrollRef = useRef<HTMLDivElement | null>(null);
+    const handleColumnsPointerDown = useMiddleMousePan(columnsScrollRef);
+
     const handleMoveSection = useCallback((sectionId: string, offset: -1 | 1) => {
         if (!selectedProject) return;
         const currentIndex = projectSections.findIndex((section) => section.id === sectionId);
@@ -652,17 +705,20 @@ export function ProjectWorkspace({
                 : [...orderedProjectTasks, ...completedProjectTasks];
         }
         const combined: Task[] = [];
+        // Keyboard order follows reading order, so the unsectioned tasks come
+        // first in columns mode (leftmost column) and last in list mode.
+        if (columnsLayout) combined.push(...sectionTaskGroups.unsectioned);
         sectionTaskGroups.sections.forEach((group) => {
             if (!group.section.isCollapsed) {
                 combined.push(...group.tasks);
             }
         });
-        combined.push(...sectionTaskGroups.unsectioned);
+        if (!columnsLayout) combined.push(...sectionTaskGroups.unsectioned);
         if (!completedTasksCollapsed) {
             combined.push(...completedProjectTasks);
         }
         return combined;
-    }, [completedProjectTasks, completedTasksCollapsed, orderedProjectTasks, projectSections.length, sectionTaskGroups.sections, sectionTaskGroups.unsectioned]);
+    }, [columnsLayout, completedProjectTasks, completedTasksCollapsed, orderedProjectTasks, projectSections.length, sectionTaskGroups.sections, sectionTaskGroups.unsectioned]);
     const visibleProjectTaskIds = useMemo(
         () => visibleProjectTaskList.map((task) => task.id),
         [visibleProjectTaskList],
@@ -933,17 +989,18 @@ export function ProjectWorkspace({
         };
     }, [handleTaskDragEnd, taskDragEndRef]);
 
-    const renderSortableTasks = (list: Task[]) => (
+    const renderSortableTasks: RenderProjectTasks = (list, scrollRef = projectScrollRef) => (
         <SortableContext items={list.map((task) => task.id)} strategy={verticalListSortingStrategy}>
             <ProjectTaskRows
                 tasks={list}
-                scrollRef={projectScrollRef}
+                scrollRef={scrollRef}
                 pinnedTaskId={editingTaskId ?? highlightTaskId}
                 renderTask={(task) => (
                     <SortableProjectTaskRow
                         key={task.id}
                         task={task}
                         project={selectedProject!}
+                        narrow={columnsLayout}
                         sequenceCue={projectTaskSequenceCues.get(task.id)}
                         availableSequenceLabel={availableSequenceLabel}
                         laterSequenceLabel={laterSequenceLabel}
@@ -953,16 +1010,17 @@ export function ProjectWorkspace({
         </SortableContext>
     );
 
-    const renderDraggableTasks = (list: Task[]) => (
+    const renderDraggableTasks: RenderProjectTasks = (list, scrollRef = projectScrollRef) => (
         <ProjectTaskRows
             tasks={list}
-            scrollRef={projectScrollRef}
+            scrollRef={scrollRef}
             pinnedTaskId={editingTaskId ?? highlightTaskId}
             renderTask={(task) => (
                 <DraggableProjectTaskRow
                     key={task.id}
                     task={task}
                     project={selectedProject!}
+                    narrow={columnsLayout}
                     sequenceCue={projectTaskSequenceCues.get(task.id)}
                     availableSequenceLabel={availableSequenceLabel}
                     laterSequenceLabel={laterSequenceLabel}
@@ -971,10 +1029,10 @@ export function ProjectWorkspace({
         />
     );
 
-    const renderSelectableTasks = (list: Task[]) => (
+    const renderSelectableTasks: RenderProjectTasks = (list, scrollRef = projectScrollRef) => (
         <ProjectTaskRows
             tasks={list}
-            scrollRef={projectScrollRef}
+            scrollRef={scrollRef}
             pinnedTaskId={editingTaskId ?? highlightTaskId}
             renderTask={(task) => (
                 <TaskItem
@@ -992,10 +1050,10 @@ export function ProjectWorkspace({
         />
     );
 
-    const renderStaticTasks = (list: Task[]) => (
+    const renderStaticTasks: RenderProjectTasks = (list, scrollRef = projectScrollRef) => (
         <ProjectTaskRows
             tasks={list}
-            scrollRef={projectScrollRef}
+            scrollRef={scrollRef}
             pinnedTaskId={editingTaskId ?? highlightTaskId}
             renderTask={(task) => (
                 <TaskItem
@@ -1047,7 +1105,190 @@ export function ProjectWorkspace({
         );
     };
 
-    const renderProjectSections = (renderTasks: (list: Task[]) => ReactNode) => {
+    // One header for both layouts; only the reorder arrows change axis, because
+    // in columns the same section order reads left-to-right.
+    const renderSectionHeader = (
+        group: { section: Section; tasks: Task[] },
+        index: number,
+        orientation: 'vertical' | 'horizontal',
+    ) => {
+        const isCollapsed = group.section.isCollapsed;
+        const hasNotes = Boolean(group.section.description?.trim());
+        const notesOpen = sectionNotesOpen[group.section.id] ?? false;
+        const canMoveBack = index > 0;
+        const canMoveForward = index < sectionTaskGroups.sections.length - 1;
+        const isHorizontal = orientation === 'horizontal';
+        const moveBackLabel = isHorizontal
+            ? resolveText('projects.moveSectionLeft', 'Move section left')
+            : resolveText('projects.moveSectionUp', 'Move section up');
+        const moveForwardLabel = isHorizontal
+            ? resolveText('projects.moveSectionRight', 'Move section right')
+            : resolveText('projects.moveSectionDown', 'Move section down');
+        const MoveBackIcon = isHorizontal ? ArrowLeft : ArrowUp;
+        const MoveForwardIcon = isHorizontal ? ArrowRight : ArrowDown;
+        const disabledArrow = 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground';
+
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                    type="button"
+                    onClick={() => handleToggleSection(group.section)}
+                    className="flex min-w-0 items-center gap-2 text-sm font-semibold"
+                >
+                    {isCollapsed ? (
+                        <ChevronRight className="h-4 w-4 flex-none text-muted-foreground" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4 flex-none text-muted-foreground" />
+                    )}
+                    <span className="truncate">{group.section.title}</span>
+                    <span className="text-xs text-muted-foreground">{group.tasks.length}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                    {sectionTaskGroups.sections.length > 1 && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => handleMoveSection(group.section.id, -1)}
+                                disabled={!canMoveBack}
+                                className={cn(
+                                    "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                                    !canMoveBack && disabledArrow,
+                                )}
+                                aria-label={`${moveBackLabel}: ${group.section.title}`}
+                                title={moveBackLabel}
+                            >
+                                <MoveBackIcon className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleMoveSection(group.section.id, 1)}
+                                disabled={!canMoveForward}
+                                className={cn(
+                                    "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                                    !canMoveForward && disabledArrow,
+                                )}
+                                aria-label={`${moveForwardLabel}: ${group.section.title}`}
+                                title={moveForwardLabel}
+                            >
+                                <MoveForwardIcon className="h-3.5 w-3.5" />
+                            </button>
+                        </>
+                    )}
+                    <button
+                        type="button"
+                        data-add-task-trigger
+                        onClick={() => openProjectQuickAdd(group.section.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                        aria-label={t('projects.addTask')}
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleToggleSectionNotes(group.section.id)}
+                        className={cn(
+                            'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                            (hasNotes || notesOpen) && 'text-primary',
+                        )}
+                        aria-label={t('projects.sectionNotes')}
+                    >
+                        <FileText className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleRenameSection(group.section)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                        aria-label={t('common.edit')}
+                    >
+                        <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleDeleteSection(group.section)}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={t('common.delete')}
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // Every section body in both layouts shows this: an empty *section* is not
+    // an empty project, so it must not borrow the project-level empty copy.
+    const sectionEmptyState = (
+        <div className="py-2 text-xs text-muted-foreground">
+            {t('projects.sectionEmpty')}
+        </div>
+    );
+
+    const renderSectionNotes = (section: Section) => {
+        if (!(sectionNotesOpen[section.id] ?? false)) return null;
+        return (
+            <div className="border-b border-border/50 px-3 py-2">
+                <textarea
+                    className="min-h-[90px] w-full resize-y rounded border border-border bg-background p-2 text-xs focus:bg-accent/5 focus:outline-none"
+                    placeholder={t('projects.sectionNotesPlaceholder')}
+                    defaultValue={section.description || ''}
+                    onBlur={(event) => {
+                        const nextValue = event.target.value.trimEnd();
+                        updateSection(section.id, { description: nextValue || undefined });
+                    }}
+                />
+            </div>
+        );
+    };
+
+    // Sections as side-by-side columns (#1019). The drop containers, the
+    // sortable contexts and the drag-end resolver are the list layout's — only
+    // the box the sections sit in changes, so cross-column drops are the same
+    // cross-section drops the stacked layout already performed.
+    const renderProjectSectionColumns = (renderTasks: RenderProjectTasks) => (
+        <div className="space-y-3">
+            <div
+                ref={columnsScrollRef}
+                data-project-section-columns
+                onPointerDown={handleColumnsPointerDown}
+                className="flex items-start gap-3 overflow-x-auto pb-2"
+            >
+                {sectionTaskGroups.unsectioned.length > 0 && (
+                    <ProjectSectionColumn
+                        id={NO_SECTION_CONTAINER}
+                        dashed
+                        header={(
+                            <div className="flex items-center gap-2 text-sm font-semibold">
+                                <span className="truncate">{t('projects.noSection')}</span>
+                                <span className="text-xs text-muted-foreground">
+                                    {sectionTaskGroups.unsectioned.length}
+                                </span>
+                            </div>
+                        )}
+                    >
+                        {(scrollRef) => renderTasks(sectionTaskGroups.unsectioned, scrollRef)}
+                    </ProjectSectionColumn>
+                )}
+                {sectionTaskGroups.sections.map((group, index) => (
+                    <ProjectSectionColumn
+                        key={group.section.id}
+                        id={getSectionContainerId(group.section.id)}
+                        header={renderSectionHeader(group, index, 'horizontal')}
+                        notes={renderSectionNotes(group.section)}
+                        collapsed={group.section.isCollapsed}
+                    >
+                        {(scrollRef) => (group.tasks.length > 0 ? (
+                            renderTasks(group.tasks, scrollRef)
+                        ) : (
+                            sectionEmptyState
+                        ))}
+                    </ProjectSectionColumn>
+                ))}
+            </div>
+            {renderCompletedTaskGroup()}
+        </div>
+    );
+
+    const renderProjectSections = (renderTasks: RenderProjectTasks) => {
         if (projectSections.length === 0) {
             return (
                 <div className="space-y-3">
@@ -1070,132 +1311,27 @@ export function ProjectWorkspace({
 
         return (
             <div className="space-y-3">
-                {sectionTaskGroups.sections.map((group, index) => {
-                    const isCollapsed = group.section.isCollapsed;
-                    const taskCount = group.tasks.length;
-                    const hasNotes = Boolean(group.section.description?.trim());
-                    const notesOpen = sectionNotesOpen[group.section.id] ?? false;
-                    const canMoveUp = index > 0;
-                    const canMoveDown = index < sectionTaskGroups.sections.length - 1;
-                    const moveSectionUpLabel = resolveText('projects.moveSectionUp', 'Move section up');
-                    const moveSectionDownLabel = resolveText('projects.moveSectionDown', 'Move section down');
-
-                    return (
-                        <SectionDropZone
-                            key={group.section.id}
-                            id={getSectionContainerId(group.section.id)}
-                            className="rounded-lg border border-border/60"
-                        >
-                            <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-                                <button
-                                    type="button"
-                                    onClick={() => handleToggleSection(group.section)}
-                                    className="flex items-center gap-2 text-sm font-semibold"
-                                >
-                                    {isCollapsed ? (
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                    ) : (
-                                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                    )}
-                                    <span>{group.section.title}</span>
-                                    <span className="text-xs text-muted-foreground">{taskCount}</span>
-                                </button>
-                                <div className="flex items-center gap-2">
-                                    {sectionTaskGroups.sections.length > 1 && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleMoveSection(group.section.id, -1)}
-                                                disabled={!canMoveUp}
-                                                className={cn(
-                                                    "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-                                                    !canMoveUp && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground"
-                                                )}
-                                                aria-label={`${moveSectionUpLabel}: ${group.section.title}`}
-                                                title={moveSectionUpLabel}
-                                            >
-                                                <ArrowUp className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleMoveSection(group.section.id, 1)}
-                                                disabled={!canMoveDown}
-                                                className={cn(
-                                                    "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-                                                    !canMoveDown && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground"
-                                                )}
-                                                aria-label={`${moveSectionDownLabel}: ${group.section.title}`}
-                                                title={moveSectionDownLabel}
-                                            >
-                                                <ArrowDown className="h-3.5 w-3.5" />
-                                            </button>
-                                        </>
-                                    )}
-                                    <button
-                                        type="button"
-                                        data-add-task-trigger
-                                        onClick={() => openProjectQuickAdd(group.section.id)}
-                                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                                        aria-label={t('projects.addTask')}
-                                    >
-                                        <Plus className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleSectionNotes(group.section.id)}
-                                        className={cn(
-                                            'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                                            (hasNotes || notesOpen) && 'text-primary',
-                                        )}
-                                        aria-label={t('projects.sectionNotes')}
-                                    >
-                                        <FileText className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRenameSection(group.section)}
-                                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                                        aria-label={t('common.edit')}
-                                    >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDeleteSection(group.section)}
-                                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                        aria-label={t('common.delete')}
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
+                {sectionTaskGroups.sections.map((group, index) => (
+                    <SectionDropZone
+                        key={group.section.id}
+                        id={getSectionContainerId(group.section.id)}
+                        className="rounded-lg border border-border/60"
+                    >
+                        <div className="border-b border-border/50 px-3 py-2">
+                            {renderSectionHeader(group, index, 'vertical')}
+                        </div>
+                        {renderSectionNotes(group.section)}
+                        {!group.section.isCollapsed && (
+                            <div className="p-3">
+                                {group.tasks.length > 0 ? (
+                                    renderTasks(group.tasks)
+                                ) : (
+                                    sectionEmptyState
+                                )}
                             </div>
-                            {notesOpen && (
-                                <div className="border-b border-border/50 px-3 py-2">
-                                    <textarea
-                                        className="min-h-[90px] w-full resize-y rounded border border-border bg-background p-2 text-xs focus:bg-accent/5 focus:outline-none"
-                                        placeholder={t('projects.sectionNotesPlaceholder')}
-                                        defaultValue={group.section.description || ''}
-                                        onBlur={(event) => {
-                                            const nextValue = event.target.value.trimEnd();
-                                            updateSection(group.section.id, { description: nextValue || undefined });
-                                        }}
-                                    />
-                                </div>
-                            )}
-                            {!isCollapsed && (
-                                <div className="p-3">
-                                    {taskCount > 0 ? (
-                                        renderTasks(group.tasks)
-                                    ) : (
-                                        <div className="py-2 text-xs text-muted-foreground">
-                                            {t('projects.noActiveTasks')}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </SectionDropZone>
-                    );
-                })}
+                        )}
+                    </SectionDropZone>
+                ))}
                 <SectionDropZone
                     id={NO_SECTION_CONTAINER}
                     className="rounded-lg border border-dashed border-border/70"
@@ -1212,9 +1348,7 @@ export function ProjectWorkspace({
                         {sectionTaskGroups.unsectioned.length > 0 ? (
                             renderTasks(sectionTaskGroups.unsectioned)
                         ) : (
-                            <div className="py-2 text-xs text-muted-foreground">
-                                {t('projects.noActiveTasks')}
-                            </div>
+                            sectionEmptyState
                         )}
                     </div>
                 </SectionDropZone>
@@ -1228,12 +1362,13 @@ export function ProjectWorkspace({
         );
     };
 
-    const tasksContent = selectionMode ? (
-        renderProjectSections(renderSelectableTasks)
-    ) : !canReorderProjectTasks ? (
-        renderProjectSections(renderDraggableTasks)
-    ) : (
-        renderProjectSections(renderSortableTasks)
+    const renderSectionLayout = columnsLayout ? renderProjectSectionColumns : renderProjectSections;
+    const tasksContent = renderSectionLayout(
+        selectionMode
+            ? renderSelectableTasks
+            : !canReorderProjectTasks
+                ? renderDraggableTasks
+                : renderSortableTasks,
     );
 
     const visibleAttachments = (selectedProject?.attachments || []).filter((attachment) => !attachment.deletedAt);
@@ -1372,6 +1507,28 @@ export function ProjectWorkspace({
     const tokenPickerPlaceholder = bulkTokenPicker?.field === 'tags'
         ? t('taskEdit.tagsPlaceholder')
         : t('taskEdit.contextsPlaceholder');
+
+    const columnsLayoutLabel = resolveText('projects.layoutColumns', 'Columns');
+    const projectLayoutToggle = hasProjectSections && selectedProjectId ? (
+        <button
+            type="button"
+            data-project-layout-toggle
+            onClick={() => {
+                captureProjectScrollBeforeLayoutChange();
+                setProjectLayout(selectedProjectId, columnsLayout ? 'list' : 'columns');
+            }}
+            aria-pressed={columnsLayout}
+            className={cn(
+                'inline-flex items-center gap-2 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                columnsLayout
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+            )}
+        >
+            <Columns3 className="h-3.5 w-3.5" />
+            {columnsLayoutLabel}
+        </button>
+    ) : null;
 
     const clearSearchLabel = resolveText('common.clearSearch', 'Clear search');
     const projectAddTaskButton = !isArchivedProject ? (
@@ -1572,6 +1729,7 @@ export function ProjectWorkspace({
                                                 onChange={handleProjectTaskSortByChange}
                                                 t={t}
                                             />
+                                            {projectLayoutToggle}
                                             {selectProjectTasksButton}
                                             {!isArchivedProject && (
                                                 <>

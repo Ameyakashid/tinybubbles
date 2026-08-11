@@ -29,6 +29,12 @@ type ListOptions = {
 
 export const LIST_OPTIONS_STORAGE_KEY = 'mindwtr:list-options:v1';
 
+// Sections-as-columns is a per-project *presentation* choice, so it stays
+// device-local next to the other view options rather than becoming a synced
+// Project field (#1019).
+export type ProjectLayout = 'list' | 'columns';
+export const PROJECT_LAYOUTS_STORAGE_KEY = 'mindwtr:project-layouts:v1';
+
 const DEFAULT_LIST_OPTIONS: ListOptions = {
     showDetails: false,
     nextGroupBy: 'none',
@@ -38,7 +44,7 @@ const DEFAULT_LIST_OPTIONS: ListOptions = {
     focusTop3Only: false,
 };
 
-function getListOptionsStorage(): Storage | null {
+function getPersistentStorage(): Storage | null {
     if (typeof window === 'undefined') return null;
     try {
         return window.localStorage;
@@ -48,7 +54,7 @@ function getListOptionsStorage(): Storage | null {
 }
 
 function readStoredListOptions(): ListOptions {
-    const storage = getListOptionsStorage();
+    const storage = getPersistentStorage();
     if (!storage) return DEFAULT_LIST_OPTIONS;
     try {
         const raw = storage.getItem(LIST_OPTIONS_STORAGE_KEY);
@@ -76,12 +82,40 @@ function readStoredListOptions(): ListOptions {
 }
 
 function saveStoredListOptions(options: ListOptions) {
-    const storage = getListOptionsStorage();
+    const storage = getPersistentStorage();
     if (!storage) return;
     try {
         storage.setItem(LIST_OPTIONS_STORAGE_KEY, JSON.stringify(options));
     } catch {
         // View options are convenience state; storage failures should not block UI updates.
+    }
+}
+
+function readStoredProjectLayouts(): Record<string, ProjectLayout> {
+    const storage = getPersistentStorage();
+    if (!storage) return {};
+    try {
+        const raw = storage.getItem(PROJECT_LAYOUTS_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+        if (!parsed || typeof parsed !== 'object') return {};
+        const layouts: Record<string, ProjectLayout> = {};
+        for (const [projectId, value] of Object.entries(parsed)) {
+            if (value === 'list' || value === 'columns') layouts[projectId] = value;
+        }
+        return layouts;
+    } catch {
+        return {};
+    }
+}
+
+function saveStoredProjectLayouts(layouts: Record<string, ProjectLayout>) {
+    const storage = getPersistentStorage();
+    if (!storage) return;
+    try {
+        storage.setItem(PROJECT_LAYOUTS_STORAGE_KEY, JSON.stringify(layouts));
+    } catch {
+        // Layout choice is convenience state; storage failures should not block UI updates.
     }
 }
 
@@ -124,6 +158,8 @@ interface UiState {
         selectedProjectId: string | null;
     };
     setProjectView: (partial: Partial<UiState['projectView']>) => void;
+    projectLayouts: Record<string, ProjectLayout>;
+    setProjectLayout: (projectId: string, layout: ProjectLayout) => void;
 }
 
 export const useUiStore = createWithEqualityFn<UiState>()((set) => ({
@@ -214,4 +250,11 @@ export const useUiStore = createWithEqualityFn<UiState>()((set) => ({
     },
     setProjectView: (partial) =>
         set((state) => ({ projectView: { ...state.projectView, ...partial } })),
+    projectLayouts: readStoredProjectLayouts(),
+    setProjectLayout: (projectId, layout) =>
+        set((state) => {
+            const projectLayouts = { ...state.projectLayouts, [projectId]: layout };
+            saveStoredProjectLayouts(projectLayouts);
+            return { projectLayouts };
+        }),
 }));
